@@ -47,12 +47,15 @@ app packaged. Tests 7/7 PASS + smoke test end-to-end thành công.
 - affected version/environment distribution;
 - knowledge entry và fix history.
 
-## M5 - Agent Tool Layer
+## M5 - Agent Tool Layer — DONE
 
-- controlled tools có input/output schema;
-- path sandbox, command allowlist, network/resource restrictions;
-- authorization, audit log;
-- không có arbitrary shell/delete/secrets.
+- Tool catalog (`tool-definitions.js`): 19 controlled tools, mỗi tool có authority/sideEffects/risk + strict arg schema; không có arbitrary shell/delete/network/secret tool.
+- Supervisor (`supervisor.js`): pipeline deny-by-default — resolve tool → validate args → authorization qua policy → path boundary → resource budget. Chưa bao giờ tự thực thi.
+- Sandbox (`sandbox.js`): path boundary + command policy + resource budget (iteration/duration).
+- Command policy (`command-policy.js`): executable allowlist, forbidden patterns, forbidden subtokens, chặn `node --eval/-e`.
+- Audit logging qua `audit.js` (append-only, redacted, hash) cho mọi call/denial.
+- Entrypoint `agent-tool-layer.js`: `executeToolCall()` dispatch read-only backend; write/release authority vẫn disabled.
+- Tests: 5/5 PASS (`npm test` trong `auto-fix/agent/`).
 
 ## M6 - AI Debug Agent
 
