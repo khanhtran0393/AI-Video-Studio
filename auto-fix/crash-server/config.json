@@ -1,0 +1,32 @@
+{
+  "server": {
+    "host": "127.0.0.1",
+    "port": 4873,
+    "maxBodyBytes": 262144
+  },
+  "database": {
+    "file": "crash-db.json",
+    "auditFile": "crash-audit.log"
+  },
+  "retention": {
+    "maxCrashRecords": 10000,
+    "maxAgeDays": 90,
+    "maxSamplesPerFingerprint": 5
+  },
+  "rateLimit": {
+    "windowMs": 60000,
+    "maxPerWindowPerClient": 120,
+    "maxPerWindowPerIp": 120,
+    "maxPerWindowPerFingerprint": 30,
+    "maxBurst": 10
+  },
+  "auth": {
+    "clients": [
+      {
+        "clientId": "dev-client",
+        "keyHash": "ae34ccfe34cdf9237dfa0714f0a01ab88e633109c37316950526992be3fcfc88",
+        "scopes": ["crash:write", "crash:read"]
+      }
+    ]
+  }
+}

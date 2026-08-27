@@ -1,0 +1,11 @@
+{
+  "name": "ai-video-studio-crash-server",
+  "version": "0.3.0",
+  "private": true,
+  "description": "Crash ingestion server: authenticated API, file-backed database, server-side sanitization, rate limiting, deduplication. Standalone and not wired to a public endpoint.",
+  "main": "server.js",
+  "scripts": {
+    "make-api-key": "node scripts/make-api-key.js",
+    "test": "node test/schema.test.js && node test/sanitizer.test.js && node test/fingerprint.test.js && node test/database.test.js && node test/rate-limit.test.js && node test/auth.test.js && node test/api.test.js"
+  }
+}

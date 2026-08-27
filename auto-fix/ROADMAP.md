@@ -28,13 +28,18 @@ Canonical repository/branch/baseline đã được đăng ký và local clean-cl
 - offline queue, retry/backoff, local dedupe;
 - HTTPS upload sau khi có server contract.
 
-## M3 - Crash Server
+## M3 - Crash Server — DONE
 
 - authenticated API;
 - schema validation, rate limit, abuse protection;
 - sanitization server-side;
 - database và retention/deletion/access audit;
 - fingerprint/deduplication.
+
+Đã triển khai standalone trong `auto-fix/crash-server/` (schema, sanitizer,
+fingerprint, database file-backed, rate-limit, auth bearer hashed, api HTTP,
+server bootstrap, make-api-key). Không kết nối public endpoint, không wire vào
+app packaged. Tests 7/7 PASS + smoke test end-to-end thành công.
 
 ## M4 - Bug Intelligence
 
