@@ -10,9 +10,9 @@ Lộ trình này bám theo Master Specification và được điều chỉnh the
 
 ## M1 - Git + CI — BLOCKED
 
-Canonical repository/branch/baseline đã được đăng ký và local clean-clone validation đã thành công. M1 vẫn cần:
+Canonical repository/branch/baseline đã được đăng ký và local clean-clone validation đã thành công. Test pipeline đã được hợp nhất (`npm --prefix auto-fix run test:all` chạy cả control-plane và client error reporter suite) và CI `M1 Validation` dùng cùng entrypoint. M1 vẫn cần:
 
-- workflow definitions đã có; vẫn cần successful controlled-runner logs/artifacts và required-check enforcement;
+- successful controlled-runner logs/artifacts và required-check enforcement;
 - protected canonical/release branch;
 - CI lint/static/unit/integration/build evidence;
 - successful artifact hashes/provenance/attestation evidence;

@@ -55,10 +55,13 @@ Thư mục riêng để quản lý chức năng **Autonomous AI Auto-Fix Platfor
 Chạy toàn bộ kiểm tra:
 
 ```powershell
-npm --prefix auto-fix test
+npm --prefix auto-fix run test:all
 npm --prefix auto-fix run check:policy
 npm --prefix auto-fix run check:readiness
 ```
+
+`test:all` chạy control-plane test suite cộng với client error reporter test
+suite (`client-error-reporter/`). CI `M1 Validation` sử dụng cùng entrypoint này.
 
 `check:readiness` kết thúc với mã `2` khi trạng thái là `BLOCKED`/`FAIL`; đó là hành vi fail-closed. Canonical-source gate có thể `PASS` riêng trong khi toàn bộ M1 vẫn `BLOCKED` hoặc `FAIL` do worktree, CI, security và governance gates.
 

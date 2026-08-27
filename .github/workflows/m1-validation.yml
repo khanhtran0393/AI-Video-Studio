@@ -39,8 +39,8 @@ jobs:
       - name: Validate deny-by-default policy
         run: npm --prefix auto-fix run check:policy
 
-      - name: Run Auto-Fix control-plane tests
-        run: npm --prefix auto-fix test
+      - name: Run Auto-Fix test pipeline (control-plane + client reporter)
+        run: npm --prefix auto-fix run test:all
 
       - name: Run application checks
         run: |
