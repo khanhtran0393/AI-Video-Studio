@@ -148,3 +148,30 @@ Khảo sát lại tại workspace `D:\AI Video Studio` (HEAD `6787f6e`, branch `
 - M1 hiện `BLOCKED` nhưng đã có commit `89e0f84 feat(m2): add client error reporter` — M2 được commit trước khi M1 PASS, vi phạm nguyên tắc tuần tự của specification. Cần ghi nhận và không coi M2 đã được chấp nhận vào production (module vẫn standalone, chưa wire vào app).
 - Worktree dirty: `build-project/` (staged deletes), `package.json` + `nova/scripts/packaged-smoke.js` (modified), `build-project.old/` (untracked).
 - Quyết định kiến trúc giữ nguyên: Auto-Fix tách biệt trong `auto-fix/`, KHÔNG nhúng vào `nova/`/`resources/app`; mọi authority `false`; quan sát là chính.
+
+## 12. M0 re-validation — 2026-08-27 (branch `feature/auto-fix-master-specification`)
+
+Khảo sát lại để xác nhận discovery vẫn đúng so với repository hiện tại. Kết quả kiểm tra:
+
+- `npm run check:syntax` → PASS (101 files).
+- `npm run check:ipc` → PASS (86 channels, 15 events, 101 files).
+- `npm run check:parity` → PASS (7 protected/plain pairs).
+- `npm run test:foundation` → PASS.
+- `npm --prefix auto-fix run check:policy` → PASS, mode `observe-only`, authorities deny-by-default.
+- `npm --prefix auto-fix run test` → PASS (policy, control-plane, artifact-provenance).
+
+Canonical source hiện lấy từ `config/canonical-source.json` (machine-readable, authoritative): remote `https://github.com/khanhtran0393/AI-Video-Studio.git`, branch `main`, baseline `d936dc4054bfc1e38d0e01e345010d02b8f4ebf0`. Các mục cũ hơn trong tài liệu này (remote `AI-Novel.git`/branch `nova-logic`) là historical record và đã bị supersede.
+
+### Finding: aggregate `test:all` FAILS tại crash-server fuzz test (M3)
+
+`npm --prefix auto-fix run test:all` thất bại (exit 1) tại `crash-server/test/fuzz.test.js`, thuộc M3 — KHÔNG phải code M0:
+
+- Tất cả test trước đó PASS: control-plane (3), client-reporter (7), crash-server schema/sanitizer/fingerprint/database/rate-limit/auth/api (7).
+- Fuzz test (untracked file `crash-server/test/fuzz.test.js`) sinh `error_type` là object không thể ép kiểu (`randomValue()` trả về object). `serverFingerprint` tại `crash-server/fingerprint.js:65` gọi trực tiếp `String(safe.error_type || '')`, ném `TypeError: Cannot convert object to primitive value`.
+- Root cause: `fingerprint.js` chưa thực thi đúng contract "fuzz input không bao giờ throw" mà chính fuzz test yêu cầu. Các helper `normalizeMessage`/`normalizeStack`/`normalizeErrorCode` đã dùng `String(... || '')` an toàn, nhưng dòng 65 không dùng helper đó.
+
+### Quyết định (đúng phạm vi M0)
+
+- M0 là discovery/architecture; không sửa code. Defect trên thuộc M3 (`crash-server`), sẽ được ghi nhận và xử lý khi làm milestone M3, không thuộc phạm vi hiện tại.
+- Không claim M0 PASS dựa trên `test:all` xanh vì `test:all` hiện FAIL. M0 PASS được xác nhận dựa trên phạm vi discovery: khảo sát đúng, test baseline của các module thuộc M0/control-plane PASS, và không có production behavior nào thay đổi.
+- `test:all` aggregate FAIL là known limitation và là blocker cho các milestone sau nếu không được sửa ở M3.
