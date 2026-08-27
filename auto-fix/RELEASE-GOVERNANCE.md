@@ -8,7 +8,7 @@ This document defines controls required before a Nova Studio artifact can be sig
 
 - Pull-request CI may install, test, audit, and produce an unsigned unpacked artifact only.
 - CI explicitly uses `--publish never` and disables code-sign identity auto-discovery.
-- Build provenance may be generated after merge to `nova-logic`; provenance is not a release approval or code-signature.
+- Build provenance may be generated after merge to `main`; provenance is not a release approval or code-signature.
 - Production code-sign credentials must be held by an isolated signing service or protected environment, never by Auto-Fix, repository files, pull-request jobs, or general runners.
 - A named human release owner must approve every signing and release operation.
 

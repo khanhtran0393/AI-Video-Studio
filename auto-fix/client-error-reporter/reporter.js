@@ -35,6 +35,13 @@ class ErrorReporter {
 
   captureException(error, extra = {}) {
     const fp = fingerprintException(error);
+    // Record the exception event and mark it as the final failing event.
+    this.buffer.record('exception', {
+      error_type: fp.errorType,
+      error_code: fp.errorCode,
+      message: fp.normalizedMessage,
+      stack_trace: sanitizeString(String((error && (error.stack || error.message)) || ''), { maxStringLength: 8192 }),
+    }, { isFinal: true });
     const report = {
       crash_id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
       app_version: this.appVersion,
@@ -42,6 +49,8 @@ class ErrorReporter {
       fingerprint: fp.fingerprint,
       timestamp: new Date().toISOString(),
       error_type: fp.errorType,
+      error_code: fp.errorCode,
+      module: fp.module,
       message: fp.normalizedMessage,
       stack_trace: sanitizeString(String((error && (error.stack || error.message)) || ''), { maxStringLength: 8192 }),
       environment_id: this.environment.environment_id,

@@ -7,10 +7,19 @@
   "scripts": {
     "check:policy": "node scripts/policy-check.js",
     "check:readiness": "node scripts/readiness.js ..",
-    "test": "node test/policy.test.js && node test/control-plane.test.js && node test/artifact-provenance.test.js",
+    "test": "node test/policy.test.js && node test/control-plane.test.js && node test/artifact-provenance.test.js && node test/secret-management.test.js && node test/dependency-scan.test.js",
     "test:client-reporter": "npm --prefix client-error-reporter test",
+    "test:crash-server": "npm --prefix crash-server test",
     "test:reproduction-lab": "npm --prefix reproduction-lab test",
-    "test:all": "npm run test && npm run test:client-reporter && npm run test:bug-intelligence",
-    "test:bug-intelligence": "npm --prefix bug-intelligence test"
+    "test:all": "npm run test && npm run test:client-reporter && npm run test:crash-server && npm run test:bug-intelligence && npm run test:auto-patch-loop && npm run test:regression-engine && npm run test:agent && npm run test:reproduction-lab && npm run test:updater && npm run test:canary-monitoring && npm run test:build-release && npm run test:autonomous && npm run test:telemetry",
+    "test:build-release": "npm --prefix build-release test",
+    "test:auto-patch-loop": "npm --prefix auto-patch-loop test",
+    "test:bug-intelligence": "npm --prefix bug-intelligence test",
+    "test:regression-engine": "npm --prefix regression-engine test",
+    "test:agent": "npm --prefix agent test",
+    "test:updater": "npm --prefix updater test",
+    "test:canary-monitoring": "npm --prefix canary-monitoring test",
+    "test:autonomous": "npm --prefix autonomous test",
+    "test:telemetry": "npm --prefix telemetry test"
   }
 }

@@ -53,9 +53,22 @@
     "native-process-boundary",
     "cookie-token-session"
   ],
+  "cost": {
+    "simpleModel": "gpt-4o-mini",
+    "complexModel": "gpt-4o",
+    "simpleTokenLimitPerJob": 10000,
+    "complexTokenLimitPerJob": 50000,
+    "maxJobCost": 1.0,
+    "maxDailyCost": 10.0,
+    "pricing": {
+      "gpt-4o-mini": { "input": 0.00015, "output": 0.0006 },
+      "gpt-4o": { "input": 0.005, "output": 0.015 }
+    }
+  },
   "notes": [
     "Observe-only policy for Milestone 1 readiness; validation exists but runtime is not connected.",
     "Never place secrets, tokens, cookies, private keys or credentials in this file.",
-    "Authority changes require a completed milestone and an audit/review record."
+    "Authority changes require a completed milestone and an audit/review record.",
+    "Cost control added per spec section 31: routing by complexity, per-job and per-day budgets."
   ]
 }

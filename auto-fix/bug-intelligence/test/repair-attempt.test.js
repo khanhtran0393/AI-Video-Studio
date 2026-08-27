@@ -17,6 +17,8 @@ try {
     branch: 'fix/123',
     patch: { files: ['main.js'], diff: '...' },
     tests: { passed: true },
+    reproduction_result: { reproduced: true, environment_id: 'env-1' },
+    regression_result: { passed: true, suite: 'regression' },
     build: { status: 'success' },
     risk_score: 0.2,
     ai_confidence: { root_cause_confidence: 0.9, reproduction_confidence: 0.8, patch_confidence: 0.7, release_confidence: 0.6 },
@@ -29,6 +31,10 @@ try {
   assert.strictEqual(created.status, 'draft');
   assert.strictEqual(created.risk_score, 0.2);
   assert.strictEqual(created.ai_confidence.root_cause_confidence, 0.9);
+  assert.strictEqual(created.reproduction_result.reproduced, true);
+  assert.strictEqual(created.reproduction_result.environment_id, 'env-1');
+  assert.strictEqual(created.regression_result.passed, true);
+  assert.strictEqual(created.regression_result.suite, 'regression');
 
   // duplicate attempt must fail
   assert.throws(() => store.create({ attempt_id: 'att-1', bug_id: 'BUG-123' }), /already exists/);
@@ -37,10 +43,14 @@ try {
   const updated = store.update('att-1', {
     status: 'verified',
     risk_score: 0.1,
+    reproduction_result: { reproduced: true, environment_id: 'env-2' },
+    regression_result: { passed: true, suite: 'regression' },
     ai_confidence: { root_cause_confidence: 0.95, reproduction_confidence: 0.9, patch_confidence: 0.8, release_confidence: 0.7 },
   });
   assert.strictEqual(updated.status, 'verified');
   assert.strictEqual(updated.risk_score, 0.1);
+  assert.strictEqual(updated.reproduction_result.environment_id, 'env-2');
+  assert.strictEqual(updated.regression_result.passed, true);
   assert.strictEqual(updated.ai_confidence.root_cause_confidence, 0.95);
 
   // get

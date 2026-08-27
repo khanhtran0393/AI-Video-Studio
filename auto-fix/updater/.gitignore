@@ -1,0 +1,4 @@
+update-history.json
+update-history.json.*.tmp
+update-install/
+*.log

@@ -5,6 +5,8 @@ const path = require('path');
 const { createServer } = require('./api');
 const { CrashDatabase } = require('./database');
 const { RateLimiter } = require('./rate-limit');
+const { AbuseProtector } = require('./abuse-protection');
+const { resolveTlsOptions } = require('./tls');
 const { loadPolicy, policyPath } = require('../policy');
 const { createAuditRecord, appendAuditRecord } = require('../audit');
 
@@ -37,16 +39,22 @@ function start(configFile) {
   });
 
   const rateLimiter = new RateLimiter(config.rateLimit);
+  const abuseProtector = new AbuseProtector(config.abuseProtection || {});
+  const tls = resolveTlsOptions(config, base);
+
   const server = createServer({
     authClients: config.auth.clients,
     database,
     rateLimiter,
+    abuseProtector,
+    tls: tls.enabled ? tls.options : null,
     maxBodyBytes: config.server.maxBodyBytes,
   });
 
   server.listen(config.server.port, config.server.host, () => {
     const address = server.address();
-    console.log(`crash server listening on http://${address.address}:${address.port}`);
+    const scheme = tls.enabled ? 'https' : 'http';
+    console.log(`crash server listening on ${scheme}://${address.address}:${address.port}`);
   });
 
   return server;

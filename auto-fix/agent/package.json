@@ -5,6 +5,6 @@
   "description": "Controlled agent tool layer: tool catalog, sandbox, path/command policy, supervisor, audit logging. Deny-by-default; no arbitrary shell/delete/network/secret access.",
   "main": "agent-tool-layer.js",
   "scripts": {
-    "test": "node test/tool-definitions.test.js && node test/command-policy.test.js && node test/sandbox.test.js && node test/supervisor.test.js && node test/agent-tool-layer.test.js"
+    "test": "node test/tool-definitions.test.js && node test/command-policy.test.js && node test/sandbox.test.js && node test/supervisor.test.js && node test/agent-tool-layer.test.js && node test/cost-control.test.js"
   }
 }

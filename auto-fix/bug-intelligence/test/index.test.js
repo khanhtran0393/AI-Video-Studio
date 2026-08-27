@@ -85,6 +85,7 @@ try {
   const bug2 = bi.bugCases.get(result.attachment.bugId);
   assert.strictEqual(bug2.occurrences, 2);
   assert.ok(bug2.sample_installation_ids.includes('inst-2'));
+  assert.strictEqual(bug2.environment_distribution['env-win10'], 2);
 
   // Check audit events
   assert.ok(auditEvents.some(e => e.event === 'bug-intelligence-ingest'));

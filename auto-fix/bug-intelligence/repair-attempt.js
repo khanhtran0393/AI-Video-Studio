@@ -52,6 +52,12 @@ class RepairAttemptStore extends JsonStore {
       branch: typeof attempt.branch === 'string' ? attempt.branch.slice(0, 256) : null,
       patch: attempt.patch && typeof attempt.patch === 'object' ? JSON.parse(JSON.stringify(attempt.patch)) : null,
       tests: attempt.tests && typeof attempt.tests === 'object' ? JSON.parse(JSON.stringify(attempt.tests)) : null,
+      reproduction_result: attempt.reproduction_result && typeof attempt.reproduction_result === 'object'
+        ? JSON.parse(JSON.stringify(attempt.reproduction_result))
+        : null,
+      regression_result: attempt.regression_result && typeof attempt.regression_result === 'object'
+        ? JSON.parse(JSON.stringify(attempt.regression_result))
+        : null,
       build: attempt.build && typeof attempt.build === 'object' ? JSON.parse(JSON.stringify(attempt.build)) : null,
       risk_score: normalizeScore(attempt.risk_score, 'risk_score'),
       ai_confidence: normalizeConfidence(attempt.ai_confidence),
@@ -71,7 +77,7 @@ class RepairAttemptStore extends JsonStore {
     const entry = db.attempts[attemptId];
     if (!entry) throw new Error('attempt not found');
 
-    for (const key of ['branch', 'patch', 'tests', 'build', 'status', 'risk_score', 'ai_confidence']) {
+    for (const key of ['branch', 'patch', 'tests', 'reproduction_result', 'regression_result', 'build', 'status', 'risk_score', 'ai_confidence']) {
       if (!Object.prototype.hasOwnProperty.call(patch, key)) continue;
       if (key === 'status') {
         if (!STATUSES.includes(patch.status)) throw new Error(`unknown attempt status: ${patch.status}`);

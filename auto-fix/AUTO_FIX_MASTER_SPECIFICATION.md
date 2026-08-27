@@ -65,7 +65,7 @@ M1 is **BLOCKED** until all Git, CI, security, provenance, and governance eviden
 - no Auto-Fix write, commit, signing, release, or rollout authority;
 - a documented `BLOCKED`/`FAIL` result when a required gate cannot run.
 
-The registered `nova-logic` baseline installs, passes local checks/tests, and produces an unpacked Windows build with publishing disabled. CI workflows and governance runbooks are now defined, but definitions are not operational evidence. Remaining blockers are recorded in `M1-READINESS-REPORT.md`: workflow-run/required-check and branch-protection evidence, approved source provenance, controlled signing/release infrastructure, and completed security review.
+The registered `main` baseline installs, passes local checks/tests, and produces an unpacked Windows build with publishing disabled. CI workflows and governance runbooks are now defined, but definitions are not operational evidence. Remaining blockers are recorded in `M1-READINESS-REPORT.md`: workflow-run/required-check and branch-protection evidence, approved source provenance, controlled signing/release infrastructure, and completed security review.
 
 ## 6. Change workflow
 

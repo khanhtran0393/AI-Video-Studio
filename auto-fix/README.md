@@ -6,7 +6,7 @@ Thư mục riêng để quản lý chức năng **Autonomous AI Auto-Fix Platfor
 
 - Milestone hiện tại: **M1 - Git + CI (BLOCKED)**
 - CI definition: **đã thêm, chưa có run/protection evidence**
-- Canonical Electron source: **đã đăng ký** — `origin/nova-logic` tại baseline `d936dc4054bfc1e38d0e01e345010d02b8f4ebf0`
+- Canonical Electron source: **đã đăng ký** — `origin/main` tại baseline `d936dc4054bfc1e38d0e01e345010d02b8f4ebf0`
 - Chế độ: **observe-only**
 - Tác động vào app: **không có**
 - AI read/write/command/build authority: **tắt**
@@ -51,11 +51,18 @@ Thư mục riêng để quản lý chức năng **Autonomous AI Auto-Fix Platfor
 - `RELEASE-GOVERNANCE.md`: kiểm soát signing/release/rollout/rollback, không cấp authority.
 - `.github/workflows/`: clean validation, unsigned Windows packaging và post-merge artifact attestation.
 - `.github/BRANCH-PROTECTION.md`: runbook cấu hình ruleset; file này không tự bảo vệ branch.
+- `crash-server/`: Milestone 3 — ingestion API với auth, schema validation, sanitization, fingerprint/dedupe, rate-limit, file-backed database. Tests 7/7 PASS. Standalone, chưa kết nối public endpoint.
+- `reproduction-lab/`: Milestone 7 — hồ sơ môi trường (user-like, clean, golden, compatibility matrix), replay engine xác định, snapshot/restore có integrity check. Tests 4/4 PASS. Standalone, không thực thi process tùy ý.
+- `build-release/`: Milestone 10 — packaging descriptor, artifact registry, separated signing integration, release metadata. **Hoàn thành:** 6 module, 5 test, đã wire vào `test:all`, tests PASS.
+- `updater/`: Milestone 11 — version check, staging + hash/signature verification, install với backup, health check và rollback. Tests 5/5 PASS. Standalone, disconnected, deny-by-default; không chạm production install.
+- `canary-monitoring/`: Milestone 12 — staged rollout 5/25/50/100%, metric capture, threshold breach, automatic stop/rollback. Tests 5/5 PASS. Deny-by-default; không tự thực hiện network/release actions.
+- `PROJECT-STRUCTURE.md`: cấu trúc project đã điều chỉnh theo app Electron hiện có (adapt section 4 của spec, không ép cây thư mục generic).
 
 Chạy toàn bộ kiểm tra:
 
 ```powershell
 npm --prefix auto-fix run test:all
+npm --prefix auto-fix run test:reproduction-lab
 npm --prefix auto-fix run check:policy
 npm --prefix auto-fix run check:readiness
 ```

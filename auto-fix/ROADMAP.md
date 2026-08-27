@@ -57,19 +57,26 @@ app packaged. Tests 7/7 PASS + smoke test end-to-end thành công.
 - Entrypoint `agent-tool-layer.js`: `executeToolCall()` dispatch read-only backend; write/release authority vẫn disabled.
 - Tests: 5/5 PASS (`npm test` trong `auto-fix/agent/`).
 
-## M6 - AI Debug Agent
+## M6 - AI Debug Agent — DONE
 
-- load bug context, history, logs và source qua tools;
-- diagnosis/reproduction/patch proposal có confidence;
-- write/release authority vẫn disabled lúc đầu;
-- escalation khi evidence không đủ.
+- `context.js` — bounded/sanitized context builder với redaction và giới hạn dữ liệu.
+- `diagnosis.js` — deterministic rule-based diagnosis, parse stack trace, hypotheses ordered by confidence.
+- `source-search.js` / `history-search.js` — deterministic search over bounded excerpts và git history.
+- `patch-proposal.js` — proposal-only patch suggestion với riskLevel (high-risk subsystems escalate).
+- `reasoning.js` — structured reasoning output với confidence block (root_cause, reproduction, patch, release).
+- `debug-agent.js` — orchestrator thuần read-only, fail-closed khi write/release authority bật.
+- `agent-tools.js` — read-only tool descriptors, deny-by-default, tách biệt khỏi M5 tool-registry.
+- Tests: **12/12 PASS** (`npm test` trong `auto-fix/agent/`).
+- Đã tích hợp vào root test suite: `npm run test:agent` và `npm run test:all`.
+- write/commit/build/release authority vẫn disabled (policy observe-only).
 
-## M7 - Reproduction Lab
+## M7 - Reproduction Lab — DONE
 
 - user-like, clean, golden và compatibility profiles;
 - replay event sequence;
 - snapshot/restore;
 - không clone dữ liệu cá nhân tùy ý.
+Đã triển khai standalone trong `auto-fix/reproduction-lab/` (`profiles.js`, `replay.js`, `snapshots.js`, `lab.js`). Tests 4/4 PASS.
 
 ## M8 - Auto Patch Loop
 
@@ -78,31 +85,58 @@ app packaged. Tests 7/7 PASS + smoke test end-to-end thành công.
 - reproduction + regression + risk gate;
 - không sửa production branch.
 
-## M9 - Regression Engine
+## M9 - Regression Engine — DONE
 
 - regression/reproduction test cho mỗi bug đã xác nhận;
 - lưu vĩnh viễn trong suite;
 - chạy historical regression suite.
 
-## M10 - Build / Release
+Đã triển khai standalone trong `auto-fix/regression-engine/` (`case.js` permanent
+immutable store, `generate.js` deterministic generator, `suite.js` historical
+suite runner qua M7 ReplayEngine, `index.js` orchestrator có back-link
+`regression_test_refs` vào BugCaseStore M4). Không có delete API; case chỉ được
+thêm, không bao giờ bị xóa khỏi suite.
 
-- clean-machine và smoke test;
-- artifact hash, SBOM/security scan;
-- signing qua service tách biệt;
-- release candidate metadata.
+## M10 - Build / Release — DONE
 
-## M11 - Updater
+- packaging descriptor chỉ đọc, không chạy electron-builder;
+- artifact registry bất biến (không delete/mutable update);
+- separated-signing integration: build request + public-key verification (không lưu private key);
+- append-only release metadata với rollout/rollback state;
+- orchestrator deny-by-default (build/sign/release/rollout/rollback đều false theo mặc định);
+- tests: artifact, signing, release, metadata, index — **5/5 PASS**;
+- đã tích hợp vào `test:all`.
 
-- metadata check, secure download;
-- hash/signature verification;
-- separate updater process;
-- health check và rollback.
+## M11 - Updater — DONE
 
-## M12 - Canary / Monitoring
+- version check và metadata validation (untrusted input);
+- download-model staging trong sandbox;
+- SHA-256 hash + size verification;
+- Ed25519 detached-signature verification fail-closed;
+- backup/install atomic qua `current`/`previous`/`staging`;
+- deterministic health check (critical probes);
+- automatic rollback khi health check FAIL;
+- append-only update + rollback incident history.
 
-- staged rollout `5% -> 25% -> 50% -> 100%`;
-- crash/error/startup/update/performance metrics;
-- threshold stop, feature flag, kill switch, rollback.
+Đã triển khai standalone trong `auto-fix/updater/` (`metadata.js`, `verify.js`,
+`installer.js`, `health-check.js`, `history.js`, `index.js`). Không spawn
+process, không network I/O, không chạm install production. Tests 5/5 PASS.
+Quyền rollout/rollback runtime vẫn OFF theo `CONTROL.md`; module chỉ mô hình
+hóa lifecycle trong sandbox do caller cấp.
+
+## M12 - Canary / Monitoring — DONE
+
+- staged rollout `5% -> 25% -> 50% -> 100%` (pure `rollout-policy.js`);
+- crash/error/startup/update/performance/feature metrics;
+- threshold breach detection vs. previous stable baseline (`thresholds.js`);
+- durable rollout state + append-only history (`rollout-store.js`);
+- automatic promote/stop/rollback decisions (`rollout-controller.js`);
+- rollback incident can be recorded as a permanent regression case
+  (`source_kind: "rollback-incident"` via the M9 engine).
+
+Đã triển khai standalone trong `auto-fix/canary-monitoring/`. Controller không
+tự thực hiện network/release/client action — chỉ ghi RolloutStore và audit;
+deny-by-default giữ nguyên. Tests assert-based, dùng `mkdtempSync` temp dirs.
 
 ## M13 - Autonomous Mode
 

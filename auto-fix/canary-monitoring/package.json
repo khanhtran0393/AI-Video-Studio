@@ -1,0 +1,10 @@
+{
+  "name": "ai-video-studio-canary-monitoring",
+  "version": "0.12.0",
+  "private": true,
+  "description": "Canary rollout and production monitoring: staged rollout (5/25/50/100%), metric capture, threshold breach detection vs. baseline, automatic stop, and rollback. Deny-by-default; produces decisions and records only, never performs network or release actions itself.",
+  "main": "index.js",
+  "scripts": {
+    "test": "node test/rollout-policy.test.js && node test/thresholds.test.js && node test/rollout-store.test.js && node test/rollout-controller.test.js && node test/index.test.js"
+  }
+}

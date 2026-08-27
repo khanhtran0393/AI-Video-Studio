@@ -1,11 +1,13 @@
 'use strict';
 
 const http = require('http');
+const https = require('https');
 const { URL } = require('url');
 const { authenticate, authorize } = require('./auth');
 const { validateCrashReport } = require('./schema');
 const { sanitizeReport } = require('./sanitizer');
 const { serverFingerprint, dedupKeyFor } = require('./fingerprint');
+const { AbuseProtector } = require('./abuse-protection');
 
 function sendJson(res, status, body, extraHeaders = {}) {
   const payload = Buffer.from(JSON.stringify(body), 'utf8');
@@ -42,10 +44,12 @@ function createServer(options) {
     authClients = [],
     database = null,
     rateLimiter = null,
+    abuseProtector = null,
+    tls = null,
     maxBodyBytes = 262144,
   } = options;
 
-  return http.createServer(async (req, res) => {
+  const handler = async (req, res) => {
     const url = new URL(req.url || '/', 'http://localhost');
     const ip = (req.socket && req.socket.remoteAddress) || 'unknown';
 
@@ -85,6 +89,11 @@ function createServer(options) {
         const validation = validateCrashReport(body);
         if (!validation.valid) return sendJson(res, 400, { error: 'invalid-report', details: validation.errors });
 
+        if (abuseProtector) {
+          const abuse = abuseProtector.check(body, { clientId: auth.clientId, ip });
+          if (!abuse.allowed) return sendJson(res, 403, { error: abuse.reason, findings: abuse.findings });
+        }
+
         const fingerprint = dedupKeyFor(body);
         if (rateLimiter) {
           const fpRate = rateLimiter.checkFingerprint(fingerprint);
@@ -122,7 +131,10 @@ function createServer(options) {
       }
       if (!res.headersSent) sendJson(res, 500, { error: 'internal-error' });
     }
-  });
+  };
+
+  if (tls) return https.createServer(tls, handler);
+  return http.createServer(handler);
 }
 
 module.exports = { createServer };

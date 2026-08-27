@@ -1,0 +1,10 @@
+{
+  "name": "ai-video-studio-regression-engine",
+  "version": "0.9.0",
+  "private": true,
+  "description": "Regression engine: deterministic regression test generation from confirmed bugs, permanent reproduction case storage, and execution of the historical regression suite. Standalone, disconnected, deny-by-default.",
+  "main": "index.js",
+  "scripts": {
+    "test": "node test/case.test.js && node test/generate.test.js && node test/suite.test.js && node test/index.test.js"
+  }
+}

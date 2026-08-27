@@ -18,4 +18,16 @@ assert.notStrictEqual(fingerprintException(a).fingerprint, fingerprintException(
 // Normalization strips volatile tokens.
 assert.strictEqual(normalizeMessage('error at 0x1A2B line 99'), 'error at <HEX> line <N>');
 
+// Relevant error codes are included in the fingerprint basis.
+const stack = 'TypeError: boom\n    at read (read.js:1:1)';
+const withCodeA = new TypeError('boom');
+withCodeA.code = 'ENOENT';
+withCodeA.stack = stack;
+const withCodeB = new TypeError('boom');
+withCodeB.code = 'EACCES';
+withCodeB.stack = stack;
+assert.strictEqual(fingerprintException(withCodeA).errorCode, 'ENOENT');
+assert.strictEqual(fingerprintException(withCodeB).errorCode, 'EACCES');
+assert.notStrictEqual(fingerprintException(withCodeA).fingerprint, fingerprintException(withCodeB).fingerprint);
+
 console.log('fingerprint tests: passed');

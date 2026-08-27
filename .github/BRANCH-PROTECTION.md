@@ -2,7 +2,7 @@
 
 **Configuration status: NOT YET CONFIRMED ON GITHUB**
 
-Apply an active GitHub ruleset to `nova-logic`. Repository files can document the required settings, but only a repository administrator can enforce and verify them.
+Apply an active GitHub ruleset to `main`. Repository files can document the required settings, but only a repository administrator can enforce and verify them.
 
 ## Required rules
 
@@ -17,7 +17,7 @@ Apply an active GitHub ruleset to `nova-logic`. Repository files can document th
 - Require signed commits or a reviewed equivalent source-provenance control.
 - Do not grant routine bypass permission; any emergency bypass must be owner-approved and recorded.
 
-The conditional `Windows Package / windows-attestation` job is intentionally not a pull-request required check. It runs only after a commit reaches `nova-logic`, where GitHub can issue signed artifact provenance without exposing an OIDC-capable job to untrusted pull-request code.
+The conditional `Windows Package / windows-attestation` job is intentionally not a pull-request required check. It runs only after a commit reaches `main`, where GitHub can issue signed artifact provenance without exposing an OIDC-capable job to untrusted pull-request code.
 
 ## Verification evidence
 

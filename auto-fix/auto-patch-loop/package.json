@@ -1,0 +1,10 @@
+{
+  "name": "ai-video-studio-auto-patch-loop",
+  "version": "0.8.0",
+  "private": true,
+  "description": "Auto patch loop: isolated ai-fix branch validation, controlled patch application, targeted/reproduction/regression testing, iterative repair with max-iteration policy and escalation. Deny-by-default; never modifies the production branch.",
+  "main": "index.js",
+  "scripts": {
+    "test": "node test/patch-policy.test.js && node test/patch-loop.test.js"
+  }
+}

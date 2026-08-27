@@ -55,7 +55,7 @@ assert.ok(currentRepository.branch || currentRepository.branch === 'DETACHED');
 assert.strictEqual(typeof currentRepository.dirty, 'boolean');
 assert.strictEqual(currentRepository.sourceStatus, 'canonical-source-confirmed');
 assert.match(currentRepository.canonicalSource.baselineCommit, /^[0-9a-f]{40}$/);
-assert.strictEqual(currentRepository.canonicalSource.remote, 'github.com/khanhtran0393/AI-Novel');
+assert.strictEqual(currentRepository.canonicalSource.remote, 'github.com/khanhtran0393/AI-Video-Studio');
 
 const report = evaluateReadiness({ policy, repository });
 assert.strictEqual(report.status, STATUS.BLOCKED);

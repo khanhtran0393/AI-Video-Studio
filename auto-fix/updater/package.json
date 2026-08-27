@@ -1,0 +1,10 @@
+{
+  "name": "ai-video-studio-updater",
+  "version": "0.11.0",
+  "private": true,
+  "description": "Updater: version check, secure download/staging, hash and signature verification, staged install, deterministic health check, and automatic rollback. Standalone, disconnected, deny-by-default; never touches the production install and never grants rollout authority.",
+  "main": "index.js",
+  "scripts": {
+    "test": "node test/metadata.test.js && node test/verify.test.js && node test/installer.test.js && node test/health-check.test.js && node test/index.test.js"
+  }
+}

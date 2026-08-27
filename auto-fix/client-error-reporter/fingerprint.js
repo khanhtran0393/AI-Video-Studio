@@ -14,6 +14,13 @@ function normalizeMessage(message) {
     .slice(0, 512);
 }
 
+function normalizeErrorCode(error) {
+  const code = error && (error.code || error.errno || error.exitCode || error.hResult);
+  return code === null || code === undefined || code === ''
+    ? ''
+    : String(code).replace(/[^A-Za-z0-9_.-]/g, '').slice(0, 64);
+}
+
 function normalizeFrame(frame) {
   if (!frame) return '';
   const file = String(frame.file || frame.fileName || '')
@@ -59,15 +66,17 @@ function fingerprintException(error) {
     || (error && error.constructor && error.constructor.name)
     || 'Error',
   );
-  const basis = [errorType, normalizedMessage, normalizedFrames, moduleName].join('\n');
+  const errorCode = normalizeErrorCode(error);
+  const basis = [errorType, errorCode, normalizedMessage, normalizedFrames, moduleName].join('\n');
   const hash = crypto.createHash('sha256').update(basis, 'utf8').digest('hex');
   return {
     fingerprint: hash.slice(0, 32),
     errorType,
+    errorCode,
     normalizedMessage,
     frames: frames.map(normalizeFrame),
     module: moduleName,
   };
 }
 
-module.exports = { fingerprintException, normalizeMessage, normalizeFrame, extractFrames };
+module.exports = { fingerprintException, normalizeMessage, normalizeFrame, normalizeErrorCode, extractFrames };

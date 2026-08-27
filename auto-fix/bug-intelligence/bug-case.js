@@ -70,6 +70,7 @@ class BugCaseStore extends JsonStore {
       aliases: [],
       affected_versions: [],
       affected_environments: [],
+      environment_distribution: {},
       affected_users: 0,
       sample_installation_ids: [],
       occurrences: 0,
@@ -158,9 +159,15 @@ class BugCaseStore extends JsonStore {
     }
 
     const envId = crash && (crash.environment_id || (crash.environment && crash.environment.environment_id));
-    if (isString(envId, MAX_ENV_ID) && !entry.affected_environments.includes(envId)) {
-      entry.affected_environments.push(envId);
-      if (entry.affected_environments.length > MAX_ENVIRONMENTS) entry.affected_environments = entry.affected_environments.slice(-MAX_ENVIRONMENTS);
+    if (isString(envId, MAX_ENV_ID)) {
+      if (!entry.affected_environments.includes(envId)) {
+        entry.affected_environments.push(envId);
+        if (entry.affected_environments.length > MAX_ENVIRONMENTS) entry.affected_environments = entry.affected_environments.slice(-MAX_ENVIRONMENTS);
+      }
+      if (!entry.environment_distribution || typeof entry.environment_distribution !== 'object' || Array.isArray(entry.environment_distribution)) {
+        entry.environment_distribution = {};
+      }
+      entry.environment_distribution[envId] = (entry.environment_distribution[envId] || 0) + 1;
     }
 
     const installId = crash && crash.client_installation_id;

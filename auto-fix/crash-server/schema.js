@@ -11,6 +11,8 @@ const MAX_INSTALL_ID = 256;
 const MAX_ENV_ID = 128;
 const MAX_EVENT_SEQ_ID = 128;
 const MAX_EVENTS = 200;
+const MAX_ERROR_CODE = 64;
+const MAX_MODULE = 128;
 
 const REQUIRED_FIELDS = [
   'crash_id',
@@ -60,6 +62,8 @@ function validateCrashReport(body) {
   if (body.client_installation_id !== undefined && !isString(body.client_installation_id, MAX_INSTALL_ID)) errors.push('client_installation_id must be a non-empty string (<=256 chars)');
   if (body.environment_id !== undefined && body.environment_id !== null && !isString(body.environment_id, MAX_ENV_ID)) errors.push('environment_id must be a string (<=128 chars)');
   if (body.event_sequence_id !== undefined && body.event_sequence_id !== null && !isString(body.event_sequence_id, MAX_EVENT_SEQ_ID)) errors.push('event_sequence_id must be a string (<=128 chars)');
+  if (body.error_code !== undefined && body.error_code !== null && !isString(body.error_code, MAX_ERROR_CODE)) errors.push(`error_code must be a non-empty string (<=${MAX_ERROR_CODE} chars)`);
+  if (body.module !== undefined && body.module !== null && !isString(body.module, MAX_MODULE)) errors.push(`module must be a non-empty string (<=${MAX_MODULE} chars)`);
 
   if (body.sanitized_logs !== undefined && body.sanitized_logs !== null) {
     if (typeof body.sanitized_logs !== 'object' || Array.isArray(body.sanitized_logs)) {

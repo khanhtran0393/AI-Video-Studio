@@ -40,6 +40,7 @@ try {
   assert.ok(updated.affected_environments.includes('env-1'));
   assert.ok(updated.sample_installation_ids.includes('inst-1'));
   assert.strictEqual(updated.affected_users, 1);
+  assert.deepStrictEqual(updated.environment_distribution, { 'env-1': 1 });
 
   // attach a crash with a new fingerprint creates a new case
   const crash2 = {

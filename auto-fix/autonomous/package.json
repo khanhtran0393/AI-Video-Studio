@@ -1,0 +1,10 @@
+{
+  "name": "ai-video-studio-autonomous",
+  "version": "0.13.0",
+  "private": true,
+  "description": "Milestone 13 – Autonomous Mode: low-risk auto release, high-risk human approval, autonomous repair loops, automatic regression generation, production feedback loop. Deny-by-default; respects policy.runtimeEnabled and authorities.",
+  "main": "index.js",
+  "scripts": {
+    "test": "node test/risk-engine.test.js && node test/autonomous-controller.test.js && node test/index.test.js"
+  }
+}

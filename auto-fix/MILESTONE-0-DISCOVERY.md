@@ -175,3 +175,30 @@ Canonical source hiện lấy từ `config/canonical-source.json` (machine-reada
 - M0 là discovery/architecture; không sửa code. Defect trên thuộc M3 (`crash-server`), sẽ được ghi nhận và xử lý khi làm milestone M3, không thuộc phạm vi hiện tại.
 - Không claim M0 PASS dựa trên `test:all` xanh vì `test:all` hiện FAIL. M0 PASS được xác nhận dựa trên phạm vi discovery: khảo sát đúng, test baseline của các module thuộc M0/control-plane PASS, và không có production behavior nào thay đổi.
 - `test:all` aggregate FAIL là known limitation và là blocker cho các milestone sau nếu không được sửa ở M3.
+
+## 13. M0 re-validation #2 — 2026-08-27 (crash-server fuzz resolved; agent cost-control failure)
+
+Chạy lại toàn bộ test để xác nhận trạng thái hiện tại. Kết quả:
+
+- `npm run check:syntax` → PASS (101 files).
+- `npm run check:ipc` → PASS (86 channels, 15 events, 101 files).
+- `npm run check:parity` → PASS (7 protected/plain pairs).
+- `npm run test:foundation` → PASS.
+- `npm --prefix auto-fix run check:policy` → PASS, mode `observe-only`, authorities deny-by-default.
+- `npm --prefix auto-fix run test` → PASS (policy, control-plane, artifact-provenance, secret-management, dependency-scan).
+- `npm --prefix auto-fix run test:crash-server` → PASS — **finding ở section 12 đã được resolve**: fuzz test (`crash-server/test/fuzz.test.js`) hiện PASS; `serverFingerprint` không còn throw trên input object.
+
+### Finding mới: aggregate `test:all` FAILS tại agent cost-control test (M6)
+
+`npm --prefix auto-fix run test:all` thất bại (exit 1) tại `agent/test/cost-control.test.js:14`, thuộc M6 — KHÔNG phải code M0:
+
+- Tất cả suite trước đó PASS: control-plane, client-reporter (7), crash-server (10 incl. fuzz/abuse/tls), bug-intelligence (6), auto-patch-loop (patch-policy + patch-loop), regression-engine (4), agent tool-definitions/command-policy/sandbox/supervisor/agent-tool-layer.
+- `agent/test/cost-control.test.js` import `{ CostController, classifyTask, calculateCost, COMPLEXITY_SIMPLE, COMPLEXITY_COMPLEX }` từ `../cost-control`, nhưng `agent/cost-control.js` chỉ export `{ CostController, classifyTask, getModel, calcCost, SIMPLE, COMPLEX }`.
+- Mismatch: `calculateCost` (test) vs `calcCost` (module); `COMPLEXITY_SIMPLE`/`COMPLEXITY_COMPLEX` (test) vs `SIMPLE`/`COMPLEX` (module).
+- Error trực tiếp: `assert.strictEqual(classifyTask('classification of errors'), COMPLEXITY_SIMPLE)` → `classifyTask` trả `'simple'` (actual), `COMPLEXITY_SIMPLE` là `undefined` (expected) → `AssertionError`.
+
+### Quyết định (đúng phạm vi M0)
+
+- M0 là discovery/architecture; không sửa code. Defect trên thuộc M6 (`agent/cost-control.js` vs `agent/test/cost-control.test.js`, cả hai đều untracked), sẽ được ghi nhận và xử lý khi làm milestone M6.
+- Không claim M0 PASS dựa trên `test:all` xanh vì `test:all` hiện FAIL. M0 PASS được xác nhận dựa trên phạm vi discovery: khảo sát đúng, test baseline của các module thuộc M0/control-plane PASS, và không có production behavior nào thay đổi.
+- `test:all` aggregate FAIL là known limitation; nguyên nhân hiện tại nằm ở M6 (cost-control), cần sửa khi làm M6.

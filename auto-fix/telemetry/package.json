@@ -1,0 +1,10 @@
+{
+  "name": "ai-video-studio-telemetry",
+  "version": "0.13.0",
+  "private": true,
+  "description": "Telemetry and observability: aggregate metrics (crash rate, error rate, startup success, startup duration, feature failures, update success, rollback rate, release health, environment distribution), retention, deletion, access control, audit.",
+  "main": "index.js",
+  "scripts": {
+    "test": "node test/store.test.js && node test/aggregator.test.js && node test/access.test.js"
+  }
+}

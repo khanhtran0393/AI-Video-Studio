@@ -35,8 +35,8 @@ The repository does not treat the current packaged application as canonical sour
 
 The same Git repository now contains the canonical Electron source under `nova/`. The approved remote, branch, immutable baseline, and required tracked files are registered in `config/canonical-source.json`:
 
-- remote: `https://github.com/khanhtran0393/AI-Novel.git`;
-- canonical branch: `nova-logic`;
+- remote: `https://github.com/khanhtran0393/AI-Video-Studio.git`;
+- canonical branch: `main`;
 - baseline: `d936dc4054bfc1e38d0e01e345010d02b8f4ebf0`;
 - Electron entry point: `nova/main.plain.js`.
 

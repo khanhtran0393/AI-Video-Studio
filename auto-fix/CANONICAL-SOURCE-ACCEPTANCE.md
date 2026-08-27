@@ -8,18 +8,18 @@ This record accepts a reproducible Git checkout as canonical Electron source. It
 
 ## Registered identity
 
-- Repository: `https://github.com/khanhtran0393/AI-Novel.git`
-- Canonical branch: `nova-logic`
+- Repository: `https://github.com/khanhtran0393/AI-Video-Studio.git`
+- Canonical branch: `main`
 - Immutable baseline: `d936dc4054bfc1e38d0e01e345010d02b8f4ebf0`
 - Electron entry point: `nova/main.plain.js`
 - Machine-readable record: `config/canonical-source.json`
 
-`repository-adapter.js` accepts a checkout only when the manifest and live read-only Git evidence agree: normalized `origin`, `origin/nova-logic`, baseline commit, baseline ancestry, tracked required paths, and files present in the worktree.
+`repository-adapter.js` accepts a checkout only when the manifest and live read-only Git evidence agree: normalized `origin`, `origin/main`, baseline commit, baseline ancestry, tracked required paths, and files present in the worktree.
 
 ## Evidence completed on 2026-08-27
 
 - [x] Repository URL, branch, and immutable source baseline recorded.
-- [x] Primary checkout and `origin/nova-logic` resolved to the baseline SHA.
+- [x] Primary checkout and `origin/main` resolved to the baseline SHA.
 - [x] Independent clean clone created at `D:\AI Video Studio Source`.
 - [x] Lockfile-based `npm ci` completed from the independent clone.
 - [x] `package-lock.json` lockfile v3 and `electron-builder.json` are tracked.

@@ -1,0 +1,10 @@
+{
+  "name": "ai-video-studio-build-release",
+  "version": "0.10.0",
+  "private": true,
+  "description": "Build / Release: read-only packaging descriptor, immutable artifact registry, separated-signing integration (request + public-key verification only, never key custody), and append-only release metadata. Deny-by-default; build/sign/release/rollout/rollback authority stays disabled.",
+  "main": "index.js",
+  "scripts": {
+    "test": "node test/artifact.test.js && node test/signing.test.js && node test/release.test.js && node test/metadata.test.js && node test/index.test.js"
+  }
+}

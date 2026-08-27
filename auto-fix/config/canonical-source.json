@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "status": "approved",
-  "repositoryUrl": "https://github.com/khanhtran0393/AI-Novel.git",
-  "canonicalBranch": "nova-logic",
+  "repositoryUrl": "https://github.com/khanhtran0393/AI-Video-Studio.git",
+  "canonicalBranch": "main",
   "baselineCommit": "d936dc4054bfc1e38d0e01e345010d02b8f4ebf0",
   "applicationRoot": ".",
   "requiredTrackedPaths": [

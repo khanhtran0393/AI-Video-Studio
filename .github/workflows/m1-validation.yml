@@ -2,9 +2,9 @@ name: M1 Validation
 
 on:
   pull_request:
-    branches: [nova-logic]
+    branches: [main]
   push:
-    branches: [nova-logic]
+    branches: [main]
   workflow_dispatch:
 
 concurrency:

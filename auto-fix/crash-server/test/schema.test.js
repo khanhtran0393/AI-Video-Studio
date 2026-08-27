@@ -43,4 +43,9 @@ assert.ok(!validateCrashReport(overflow).valid, 'event overflow must fail');
 assert.strictEqual(validateCrashReport(validReport()).valid, true);
 assert.strictEqual(validateCrashReport(validReport({ environment_id: null, event_sequence_id: null })).valid, true);
 
+assert.ok(!validateCrashReport(validReport({ error_code: 123 })).valid, 'non-string error_code must fail');
+assert.ok(!validateCrashReport(validReport({ module: '' })).valid, 'empty module must fail');
+assert.strictEqual(validateCrashReport(validReport({ error_code: 'ENOENT', module: 'run.js' })).valid, true);
+assert.strictEqual(validateCrashReport(validReport({ error_code: null, module: null })).valid, true);
+
 console.log('schema tests: passed');
