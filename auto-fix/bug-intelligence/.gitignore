@@ -1,0 +1,8 @@
+bug-cases.json
+bug-cases.json.*.tmp
+environments.json
+environments.json.*.tmp
+sequences.json
+sequences.json.*.tmp
+repair-attempts.json
+repair-attempts.json.*.tmp

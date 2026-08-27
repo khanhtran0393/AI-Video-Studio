@@ -9,6 +9,8 @@
     "check:readiness": "node scripts/readiness.js ..",
     "test": "node test/policy.test.js && node test/control-plane.test.js && node test/artifact-provenance.test.js",
     "test:client-reporter": "npm --prefix client-error-reporter test",
-    "test:all": "npm run test && npm run test:client-reporter"
+    "test:reproduction-lab": "npm --prefix reproduction-lab test",
+    "test:all": "npm run test && npm run test:client-reporter && npm run test:bug-intelligence",
+    "test:bug-intelligence": "npm --prefix bug-intelligence test"
   }
 }

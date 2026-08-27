@@ -1,0 +1,10 @@
+{
+  "name": "ai-video-studio-bug-intelligence",
+  "version": "0.4.0",
+  "private": true,
+  "description": "Bug Intelligence: fingerprint reconciliation, bug cases, environment profiles, event sequences, repair attempt history. Standalone and not wired to a public endpoint.",
+  "main": "index.js",
+  "scripts": {
+    "test": "node test/fingerprint.test.js && node test/bug-case.test.js && node test/environment-profile.test.js && node test/event-sequence.test.js && node test/repair-attempt.test.js && node test/index.test.js"
+  }
+}
