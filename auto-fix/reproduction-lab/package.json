@@ -1,0 +1,10 @@
+{
+  "name": "ai-video-studio-reproduction-lab",
+  "version": "0.7.0",
+  "private": true,
+  "description": "Isolated reproduction lab: environment profiles (user-like, clean, golden, compatibility matrix), deterministic in-process event replay, snapshot/restore. Standalone and disconnected; no arbitrary process execution.",
+  "main": "lab.js",
+  "scripts": {
+    "test": "node test/profiles.test.js && node test/replay.test.js && node test/snapshots.test.js && node test/lab.test.js"
+  }
+}
