@@ -195,7 +195,18 @@ async function main() {
 
     await closeApp(cdp, child);
     cdp.close(); cdp = null;
-    if (child.exitCode === null) throw new Error('Packaged app did not exit after Browser.close.');
+    // If the app hasn't exited after Browser.close, force-kill the entire process tree
+    if (child.exitCode === null) {
+      console.warn('Packaged app did not exit after Browser.close; force-killing process tree...');
+      await forceKill(child.pid);
+      await sleep(500); // give OS a moment to terminate
+      const after = await processTable();
+      const alive = new Set(after.map((row) => Number(row.ProcessId)));
+      const leakedPids = appPids.filter((pid) => alive.has(pid));
+      if (leakedPids.length) {
+        throw new Error(`Packaged process leak detected after force-kill: ${leakedPids.join(', ')}.`);
+      }
+    }
     report.app.exitCode = child.exitCode;
     report.app.signalCode = child.signalCode;
 

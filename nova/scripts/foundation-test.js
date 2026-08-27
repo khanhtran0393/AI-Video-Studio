@@ -27,6 +27,8 @@ async function main() {
   assert(mainSource.includes("com.aivideostudio.independent"), 'main process must use the independent app id');
   assert(mainSource.includes("persist:ai-video-studio-independent"), 'main window must use an independent browser partition');
   assert(!mainSource.includes('com.novastudio.independent'), 'legacy Windows app id must not be reused');
+  assert(mainSource.includes('AI_VIDEO_STUDIO_ERROR_REPORTING'), 'main process must gate the client error reporter behind an env flag');
+  assert(mainSource.includes("require('../auto-fix/client-error-reporter/reporter')"), 'main process must load the M2 client error reporter');
   const flowSource = fs.readFileSync(path.join(__dirname, '..', 'flow-native.plain.js'), 'utf8');
   assert(!flowSource.includes("persist:flow-"), 'Flow account partitions must not reuse the legacy namespace');
   const runtimePorts = [

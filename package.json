@@ -1,6 +1,6 @@
 {
   "name": "ai-video-studio",
-  "version": "0.1.34",
+  "version": "1.0.1",
   "description": "AI Video Studio desktop application",
   "private": true,
   "main": "nova/main.plain.js",

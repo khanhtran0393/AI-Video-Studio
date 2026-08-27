@@ -58,6 +58,7 @@ function _friendlyMainError(err) {
   return null; // không phải lỗi "đã biết" → để cơ chế mặc định xử lý
 }
 process.on('uncaughtException', (err) => {
+  if (errorReporter) { try { errorReporter.report(err); } catch (_) {} }
   const friendly = _friendlyMainError(err);
   if (friendly) {
     try { closeSplashWindow(true); } catch (_) {}
@@ -69,6 +70,13 @@ process.on('uncaughtException', (err) => {
   console.error('[uncaught]', err);
 });
 process.on('unhandledRejection', (reason) => {
+  if (errorReporter) {
+    try {
+      const _err = reason instanceof Error ? reason : new Error(String(reason));
+      _err.name = 'UnhandledRejection';
+      errorReporter.report(_err);
+    } catch (_) {}
+  }
   const friendly = _friendlyMainError(reason);
   if (friendly) {
     try { closeSplashWindow(true); } catch (_) {}
@@ -85,9 +93,48 @@ let serverPort = 0;
 let localServer = null;
 let isQuitting = false;
 let splashCloseTimer = null;
+let errorReporter = null;
 
 const SPLASH_MIN_MS = 1400;
 const SPLASH_MAX_MS = 12000;
+
+// Milestone 2: Client Error Reporter. Mac dinh TAT de khong doi hanh vi san xuat.
+// Bat bang AI_VIDEO_STUDIO_ERROR_REPORTING=1. Khong co upload URL thi chi ghi
+// queue cuc bo (KHONG gui len mang). Moi loi deu bi nuot, khong lam hong app.
+function setupErrorReporter() {
+  let reporterModule = null;
+  try {
+    reporterModule = require('../auto-fix/client-error-reporter/reporter');
+  } catch (_) {
+    return null; // module chua duoc dong goi (ban dev/ goi cu)
+  }
+  const { ErrorReporter, Uploader } = reporterModule;
+
+  let clientInstallationId = '';
+  const idFile = path.join(app.getPath('userData'), 'installation-id.json');
+  try { clientInstallationId = fs.readFileSync(idFile, 'utf8').trim(); } catch (_) {}
+  if (!clientInstallationId) {
+    try {
+      const crypto = require('crypto');
+      clientInstallationId = `${Date.now().toString(36)}-${crypto.randomBytes(8).toString('hex')}`;
+      fs.writeFileSync(idFile, clientInstallationId, 'utf8');
+    } catch (_) {}
+  }
+
+  const uploadUrl = process.env.AI_VIDEO_STUDIO_ERROR_UPLOAD_URL;
+  const uploader = uploadUrl ? new Uploader({ endpoint: uploadUrl, timeoutMs: 10000 }) : null;
+
+  let version = '0.0.0';
+  try { version = app.getVersion() || version; } catch (_) {}
+
+  return new ErrorReporter({
+    appVersion: version,
+    buildId: app.isPackaged ? 'packaged' : 'dev',
+    clientInstallationId: clientInstallationId || 'unknown',
+    queueFile: path.join(app.getPath('userData'), 'crash-queue.json'),
+    uploader,
+  });
+}
 
 function ensureBrandAsset() {
   const target = path.join(WEB_DIR, 'brand-logo.ico');
@@ -747,6 +794,15 @@ app.whenReady().then(async () => {
   // Bản private không đọc app-update.yml/repository của AI Video Studio.
   // Khi có release server riêng, bật lại bằng AI_VIDEO_STUDIO_ENABLE_UPDATES=1.
   if (app.isPackaged && process.env.AI_VIDEO_STUDIO_ENABLE_UPDATES === '1') setupAutoUpdate();
+  // Milestone 2: Error Reporter. Mac dinh tat, chi bat khi co env flag.
+  if (process.env.AI_VIDEO_STUDIO_ERROR_REPORTING === '1') {
+    try {
+      errorReporter = setupErrorReporter();
+      if (errorReporter) {
+        try { errorReporter.recordEvent('app_start', { platform: process.platform }); } catch (_) {}
+      }
+    } catch (e) { console.warn('[error-reporter] setup:', e && e.message); }
+  }
   app.on('activate', async () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(await resolveStartUrl()); });
 });
 

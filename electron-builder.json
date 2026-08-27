@@ -9,6 +9,8 @@
   "files": [
     "package.json",
     "nova/**/*",
+    "auto-fix/redaction.js",
+    "auto-fix/client-error-reporter/*.js",
     "!nova/**/*.map",
     "!nova/node_modules{,/**/*}",
     "!nova/upscaler-bin{,/**/*}",

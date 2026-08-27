@@ -46,3 +46,39 @@ During implementation the report is expected to be `FAIL` because the worktree i
 ## Authority confirmation
 
 All authorities in `config/policy.json` remain `false`; `runtimeEnabled` remains `false`; mode remains `observe-only`. The control plane is not imported by or connected to the Electron application.
+
+## Follow-up verification — 2026-08-27 (HEAD `801812c`)
+
+Re-verified after `801812c feat(m1): unify test pipeline across control-plane and client error reporter`.
+
+### Fresh local evidence (all reproducible from this checkout)
+
+- HEAD: `801812c058c7f2523a7ae443809c255bc5dd0681` (branch `feature/auto-fix-master-specification`).
+- `origin/nova-logic` at `6787f6eec6d9b35c6d104f21942eabcdeadb1054`; canonical baseline `d936dc4054bfc1e38d0e01e345010d02b8f4ebf0` ancestry confirmed.
+- `npm run check:syntax` → PASS (101 files).
+- `npm run check:ipc` → PASS (86 channels, 15 events, 101 files).
+- `npm run check:parity` → PASS (7 protected/plain pairs).
+- `npm run test:foundation` → PASS.
+- `npm --prefix auto-fix run test:all` → PASS (policy, control-plane, artifact-provenance, plus all 7 client-reporter tests).
+- `npm audit --omit=dev --audit-level=high` → 0 vulnerabilities.
+- `node auto-fix/scripts/readiness.js .` → overall `FAIL`, exit 2 (fail-closed). Rationale: `clean-worktree` is `FAIL` because the worktree is dirty, and all governance gates are `BLOCKED` because no external evidence is supplied by the CLI — this is the intended behavior for a local checkout.
+
+### Local-implementable portion: COMPLETE
+
+The CI pipeline definitions, test unification, policy/readiness gates, CODEOWNERS, Dependabot, and the branch-protection runbook are all present and correct. Locally everything that can be verified passes.
+
+### Remaining blockers are external and must be completed by the repository owner/administrator
+
+| Gate | Required external action |
+|------|--------------------------|
+| `ciHost` | Enable GitHub Actions on `github.com/khanhtran0393/AI-Novel` and push this branch so the workflows execute. |
+| `ciEvidenceRetention` | Confirm a real workflow run retains the readiness artifact (30-day) and package artifact (14-day). |
+| `dependencyInstall` / `staticChecks` / `tests` / `securityScan` | Confirm a green run of `M1 Validation` (it runs `npm ci`, policy, `test:all`, app checks, `npm audit`). |
+| `buildVerification` / `artifactVerification` | Confirm a green run of `Windows Package` (unpacked build + provenance), and a successful `windows-attestation` job after merge to `nova-logic`. |
+| `branchProtection` | Apply the active GitHub ruleset documented in `.github/BRANCH-PROTECTION.md`; record ruleset URL/JSON, enforcement state, and required checks. |
+| `sourceProvenance` | Enable signed commits or record an owner-approved equivalent provenance policy. |
+| `signingSetup` | Provision a controlled signing environment with key custody outside the repo; never expose keys to CI/AI. |
+| `releaseGovernance` | Record a named human release owner and exercised release/rollback approvals. |
+| `securityReview` | Complete the `SECURITY-REVIEW.md` evidence table with a named reviewer, date, commit SHA, findings, and disposition per boundary. |
+
+None of these external gates can be satisfied by editing repository files. Until the owner completes and records them, `M1` remains `BLOCKED` by design, and no authority transitions occur.

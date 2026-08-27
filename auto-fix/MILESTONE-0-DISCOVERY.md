@@ -116,3 +116,35 @@ Khảo sát ban đầu ở trên phản ánh packaged workspace trước khi sou
 - build config `electron-builder.json` và lockfile v3.
 
 Independent clone đã qua `npm ci`, syntax/IPC/parity/foundation checks và unpacked Windows build với publishing disabled. CI definitions và governance runbooks đã được thêm sau discovery, nhưng M1 vẫn `BLOCKED` do chưa có workflow-run/required-check evidence, branch protection, approved provenance, controlled signing/release infrastructure và completed security review. Không bật crash upload hay bất kỳ AI write/build/release authority nào.
+
+## 11. Kiến trúc chi tiết theo repository hiện tại (xác minh 2026-08-27)
+
+Khảo sát lại tại workspace `D:\AI Video Studio` (HEAD `6787f6e`, branch `feature/auto-fix-master-specification`, tracked `origin/nova-logic`).
+
+### 11.1 Công nghệ & build (xác minh)
+- Electron desktop; root `package.json` khai báo `electron ^43.0.0` (devDependency) — packaged runtime cũ ghi nhận 33.4.11; entry `nova/main.plain.js`, CommonJS.
+- Runtime deps: `electron-updater ^6.3.9`, `ffmpeg-static`, `ffprobe-static`, `onnxruntime-node ^1.27.0`, `ws ^8.21.1`.
+- Packager `electron-builder ^26.0.0` qua `electron-builder.json`: target NSIS + portable (x64), `asar: true`, `publish: null` (chưa signing/update server).
+- `node nova/scripts/syntax-check.js` → PASS, 101 files (doc cũ ghi 97; số mới phản ánh source đã sync).
+
+### 11.2 Test hiện có (xác minh)
+- App checks: `syntax-check`, `ipc-inventory`, `parity-check`, `foundation-test`, `packaged-smoke` — Node scripts dùng `assert`, không có Jest/Vitest/Playwright.
+- Auto-Fix control plane: `npm --prefix auto-fix test` → PASS (policy, control-plane, artifact-provenance); `check:policy` → PASS, mode `observe-only`, authorities deny-by-default.
+- Client error reporter (M2, standalone): 7 test files `assert`-based.
+
+### 11.3 Kiến trúc ánh xạ theo specification
+- Client plane: `nova/main.plain.js` (global error handlers + `setupAutoUpdate()`), `nova/preload.js` (contextBridge allowlist), `nova/editor-pro/ipc-*.js` (IPC handlers), `nova/storage/settings-store.js`. Điểm gắn ErrorReporter/Updater đã được định vị nhưng CHƯA sửa.
+- Control plane: `auto-fix/` — policy, gates, repository-adapter, path-boundary, redaction, audit, tool-registry, canonical-source manifest. Chưa kết nối runtime Electron.
+- Execution plane: chưa tồn tại (cần sandbox/worktree/reproduction VM/CI runner/signing service — thuộc M5-M10).
+
+### 11.4 Các module nhạy cảm (HIGH risk)
+- `nova/flow-chrome.js`, `nova/flow-cft.plain.js`: Chrome/CDP, token/cookie/session, process spawn.
+- `nova/storage/settings-store.js`: API key/config trong userData.
+- `nova/main.plain.js` + `nova/preload.js`: main process, IPC, updater.
+- Native/child-process boundaries: `native-tools`, `voice-native`, `watermark-native`, `cli-bridge-native`, `mcp-bridge-native`.
+- `nova/mcp-server/`: bắt buộc review riêng trước mọi AI/tool integration.
+
+### 11.5 Quan sát trình tự & rủi ro
+- M1 hiện `BLOCKED` nhưng đã có commit `89e0f84 feat(m2): add client error reporter` — M2 được commit trước khi M1 PASS, vi phạm nguyên tắc tuần tự của specification. Cần ghi nhận và không coi M2 đã được chấp nhận vào production (module vẫn standalone, chưa wire vào app).
+- Worktree dirty: `build-project/` (staged deletes), `package.json` + `nova/scripts/packaged-smoke.js` (modified), `build-project.old/` (untracked).
+- Quyết định kiến trúc giữ nguyên: Auto-Fix tách biệt trong `auto-fix/`, KHÔNG nhúng vào `nova/`/`resources/app`; mọi authority `false`; quan sát là chính.
