@@ -1,0 +1,125 @@
+"""Voice Bank — lưu/nạp/xoá preset giọng dưới dạng JSON + file mẫu âm thanh."""
+from __future__ import annotations
+
+import json
+import shutil
+import time
+import uuid
+from pathlib import Path
+from typing import Optional
+
+from config import VOICEBANK_DIR
+
+# Thư mục giọng "nhà máy" đóng gói theo app (đọc-only nguồn) — nạp vào VoiceBank khi khởi động.
+PRESETS_DIR = Path(__file__).resolve().parent / "presets"
+
+
+def _preset_path(pid: str) -> Path:
+    return VOICEBANK_DIR / f"{pid}.json"
+
+
+def seed_factory() -> int:
+    """Nạp giọng NHÀ MÁY (presets/presets.json + file .wav) vào VoiceBank. Idempotent, chạy mỗi lần mở app.
+    Bỏ qua mục nào chưa có file mẫu (dev/khách chưa bỏ vào) → an toàn khi ship manifest trước."""
+    manifest = PRESETS_DIR / "presets.json"
+    if not manifest.exists():
+        return 0
+    try:
+        items = json.loads(manifest.read_text(encoding="utf-8"))
+    except Exception:
+        return 0
+    n = 0
+    for it in items:
+        pid = it.get("id")
+        wav_name = it.get("file")
+        if not pid or not wav_name:
+            continue
+        src = PRESETS_DIR / wav_name
+        if not src.exists():
+            continue  # chưa có file mẫu → bỏ qua, không tạo giọng rỗng
+        dst = VOICEBANK_DIR / f"{pid}{src.suffix or '.wav'}"
+        try:
+            if (not dst.exists()) or dst.stat().st_size != src.stat().st_size:
+                shutil.copy(src, dst)
+        except Exception:
+            continue
+        prev = get_voice(pid) or {}
+        voice = {
+            "id": pid,
+            "name": it.get("name", pid),
+            "ref_audio": str(dst),
+            "ref_text": it.get("ref_text", ""),
+            "tags": it.get("tags", []),
+            "attributes": it.get("attributes", {}),
+            "is_favorite": bool(it.get("is_favorite", False)),
+            "is_factory": True,
+            "created_at": prev.get("created_at", time.time()),
+        }
+        _preset_path(pid).write_text(json.dumps(voice, ensure_ascii=False, indent=2), encoding="utf-8")
+        n += 1
+    return n
+
+
+def list_voices() -> list[dict]:
+    out = []
+    for p in sorted(VOICEBANK_DIR.glob("*.json")):
+        try:
+            out.append(json.loads(p.read_text(encoding="utf-8")))
+        except Exception:
+            continue
+    # Yêu thích lên đầu.
+    out.sort(key=lambda v: (not v.get("is_favorite", False), v.get("name", "")))
+    return out
+
+
+def get_voice(pid: str) -> Optional[dict]:
+    p = _preset_path(pid)
+    if not p.exists():
+        return None
+    return json.loads(p.read_text(encoding="utf-8"))
+
+
+def save_voice(name: str, ref_audio: Optional[str] = None, ref_text: str = "",
+               tags: Optional[list[str]] = None, attributes: Optional[dict] = None) -> dict:
+    pid = "spk_" + uuid.uuid4().hex[:8]
+    stored_ref = None
+    if ref_audio and Path(ref_audio).exists():
+        dst = VOICEBANK_DIR / f"{pid}{Path(ref_audio).suffix or '.wav'}"
+        shutil.copy(ref_audio, dst)
+        stored_ref = str(dst)
+    voice = {
+        "id": pid,
+        "name": name,
+        "ref_audio": stored_ref,
+        "ref_text": ref_text,
+        "tags": tags or [],
+        "attributes": attributes or {},
+        "is_favorite": False,
+        "is_factory": False,
+        "created_at": time.time(),
+    }
+    _preset_path(pid).write_text(json.dumps(voice, ensure_ascii=False, indent=2), encoding="utf-8")
+    return voice
+
+
+def update_voice(pid: str, **fields) -> Optional[dict]:
+    v = get_voice(pid)
+    if v is None:
+        return None
+    v.update(fields)
+    _preset_path(pid).write_text(json.dumps(v, ensure_ascii=False, indent=2), encoding="utf-8")
+    return v
+
+
+def delete_voice(pid: str) -> bool:
+    v = get_voice(pid)
+    if v is None:
+        return False
+    if v.get("is_factory"):
+        return False  # giọng nhà máy (có sẵn) — không cho xoá
+    # Xoá file mẫu kèm theo nếu nằm trong voicebank.
+    ref = v.get("ref_audio")
+    if ref and Path(ref).parent == VOICEBANK_DIR and Path(ref).exists():
+        Path(ref).unlink(missing_ok=True)
+    _preset_path(pid).unlink(missing_ok=True)
+    return True

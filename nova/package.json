@@ -8,7 +8,10 @@
     "check:ipc": "node scripts/ipc-inventory.js",
     "check:parity": "node scripts/parity-check.js",
     "check:syntax": "node scripts/syntax-check.js",
-    "test:foundation": "node scripts/foundation-test.js"
+    "test:foundation": "node scripts/foundation-test.js",
+    "test:voice": "node scripts/voice-contract-test.js",
+    "test:voice:live": "node scripts/voice-live-test.js",
+    "test:documentary": "node documentary/test.js"
   },
   "dependencies": {
     "electron-updater": "^6.3.9",

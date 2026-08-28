@@ -1,0 +1,28 @@
+[
+  {
+    "id": "factory_en_male_narrator",
+    "name": "⭐ English — Male, Narrator (ready)",
+    "file": "en-male-narrator.wav",
+    "ref_text": "",
+    "tags": ["english", "male", "narrator"],
+    "attributes": { "lang": "en" },
+    "is_favorite": true
+  },
+  {
+    "id": "factory_en_male_deep",
+    "name": "⭐ English — Male, Deep (ready)",
+    "file": "en-male-deep.wav",
+    "ref_text": "",
+    "tags": ["english", "male", "deep"],
+    "attributes": { "lang": "en" },
+    "is_favorite": true
+  },
+  {
+    "id": "factory_en_male_casual",
+    "name": "⭐ English — Male, Casual (ready)",
+    "file": "en-male-casual.wav",
+    "ref_text": "",
+    "tags": ["english", "male", "casual"],
+    "attributes": { "lang": "en" }
+  }
+]

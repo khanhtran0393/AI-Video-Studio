@@ -11,7 +11,9 @@ const http = require('http');
 let electronApp = null; try { electronApp = require('electron').app; } catch {}
 
 const PORT = 8771;
+const LEGACY_PORT = 8770;   // backend đã cài từ bản Nova cũ chạy ở cổng này
 const URL = 'http://127.0.0.1:' + PORT;
+let activeUrl = URL;        // URL backend đang chạy thật (8771 hoặc 8770 nếu backend cũ)
 let proc = null;
 
 // ── Đường dẫn voice-studio KHÁCH tự chọn (lưu ở userData/voice-root.txt) ──
@@ -35,8 +37,10 @@ function voiceRoot() {
   if (custom) return custom;
   const candidates = [
     path.join(__dirname, '..', 'voice-studio'),
-    '/Users/user/Documents/tool/voice-studio',
+    path.join(__dirname, 'voice-studio'),   // nơi app TỰ CÀI backend (nút "Cài backend vào máy" không cần chọn thư mục)
   ];
+  try { if (electronApp) candidates.push(path.join(electronApp.getPath('userData'), 'voice-studio')); } catch {}
+  candidates.push('/Users/user/Documents/tool/voice-studio');
   for (const c of candidates) { try { if (_isValidRoot(c)) return c; } catch {} }
   return null;
 }
@@ -56,15 +60,34 @@ function venvPython(root) {
 function probe() { const root = voiceRoot(); return { root: root || null, hasRoot: !!root, hasPython: root ? !!venvPython(root) : false }; }
 
 function health() {
+  return resolveUrl().then((u) => !!u);
+}
+// Dò /api/health và xác nhận body {status:ok} để không nhận nhầm dịch vụ khác trên cùng cổng.
+function _probe(url) {
   return new Promise((res) => {
-    const r = http.get(URL + '/', () => { res(true); r.destroy(); });
+    const r = http.get(url + '/api/health', (resp) => {
+      let body = '';
+      resp.on('data', (c) => { body += c; });
+      resp.on('end', () => {
+        try { res(resp.statusCode === 200 && JSON.parse(body).status === 'ok'); }
+        catch { res(false); }
+      });
+    });
     r.on('error', () => res(false));
     r.setTimeout(1500, () => { r.destroy(); res(false); });
   });
 }
+// Kiểm tra cả cổng mới (8771) lẫn cổng cũ (8770 — backend đã cài từ bản Nova cũ).
+async function resolveUrl() {
+  if (await _probe(URL)) { activeUrl = URL; return URL; }
+  const legacy = 'http://127.0.0.1:' + LEGACY_PORT;
+  if (await _probe(legacy)) { activeUrl = legacy; return legacy; }
+  return null;
+}
 
 async function start() {
-  if (await health()) return { ok: true, url: URL };
+  const existing = await resolveUrl();
+  if (existing) return { ok: true, url: existing };
   const root = voiceRoot();
   if (!root) return { error: 'Không tìm thấy thư mục voice-studio. Hãy chọn thư mục backend trong AI Video Studio.' };
   const py = venvPython(root);
@@ -98,12 +121,13 @@ async function start() {
   // Chờ backend sẵn sàng (nạp model OmniVoice lần đầu có thể mất ~30-60s).
   for (let i = 0; i < 90; i++) {
     await new Promise((r) => setTimeout(r, 1000));
-    if (await health()) return { ok: true, url: URL };
+    const u = await resolveUrl();
+    if (u) return { ok: true, url: u };
   }
   return { error: 'Backend giọng nói khởi động quá lâu — thử lại (hoặc kiểm tra voice-studio).' };
 }
 
-function status() { return health().then((ok) => ({ running: ok, url: URL })); }
+async function status() { const u = await resolveUrl(); return { running: !!u, url: u || URL }; }
 function stop() { if (proc) { try { proc.kill(); } catch {} proc = null; } }
 
-module.exports = { start, status, stop, onLog, setRoot, probe, PORT, URL };
+module.exports = { start, status, stop, onLog, setRoot, probe, PORT, URL, LEGACY_PORT, resolveUrl };

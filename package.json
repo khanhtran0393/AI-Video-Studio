@@ -13,6 +13,8 @@
     "check:ipc": "node nova/scripts/ipc-inventory.js",
     "check:parity": "node nova/scripts/parity-check.js",
     "test:foundation": "node nova/scripts/foundation-test.js",
+    "test:voice": "node nova/scripts/voice-contract-test.js",
+    "test:voice:live": "node nova/scripts/voice-live-test.js",
     "build:win": "electron-builder --config electron-builder.json --win",
     "build": "electron-builder --config electron-builder.json",
     "smoke:packaged": "node nova/scripts/packaged-smoke.js",

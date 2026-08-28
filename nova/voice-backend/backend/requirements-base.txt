@@ -1,0 +1,4 @@
+# Chạy được ngay với engine "mock" — không cần model AI.
+fastapi>=0.110
+uvicorn[standard]>=0.27
+python-multipart>=0.0.9

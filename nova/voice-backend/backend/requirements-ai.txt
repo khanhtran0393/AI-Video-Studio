@@ -1,0 +1,11 @@
+# Model AI thật. CẦN Python 3.11 (PyTorch chưa có bản cho 3.14).
+# Version đã ghim để tránh xung đột transformers/torchcodec (đã kiểm chứng trên Apple Silicon).
+torch==2.13.0
+torchaudio==2.11.0
+torchcodec
+coqui-tts==0.27.5
+transformers==4.57.1
+huggingface_hub
+# ASR — Apple Silicon dùng mlx-whisper (GPU Metal); nền khác dùng faster-whisper:
+mlx-whisper; sys_platform == "darwin" and platform_machine == "arm64"
+faster-whisper>=1.0
