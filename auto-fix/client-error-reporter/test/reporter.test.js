@@ -18,6 +18,7 @@ try {
     appVersion: '0.1.34',
     buildId: 'build-1',
     clientInstallationId: 'inst-1',
+    releaseIdentity: { git_commit_sha: 'a'.repeat(40), artifact_sha256: 'b'.repeat(64), build_id: 'must-not-override' },
     queueFile: path.join(temp, 'crash-queue.json'),
   });
 
@@ -32,8 +33,14 @@ try {
   assert.ok(report.fingerprint);
   assert.strictEqual(report.app_version, '0.1.34');
   assert.strictEqual(report.build_id, 'build-1');
+  assert.strictEqual(report.git_commit_sha, 'a'.repeat(40));
+  assert.strictEqual(report.artifact_sha256, 'b'.repeat(64));
   assert.strictEqual(report.client_installation_id, 'inst-1');
   assert.strictEqual(report.status, 'queued');
+  const canonical = reporter.captureException(error, { crash_id: 'caller-id', build_id: 'caller-build', status: 'completed' });
+  assert.notStrictEqual(canonical.crash_id, 'caller-id');
+  assert.strictEqual(canonical.build_id, 'build-1');
+  assert.strictEqual(canonical.status, 'queued');
   assert.ok(!JSON.stringify(report).includes('hunter2'), 'secrets must not leak into the report');
   assert.ok(report.stack_trace.includes('[REDACTED]') || !report.stack_trace.includes('hunter2'));
 

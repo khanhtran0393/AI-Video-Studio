@@ -94,13 +94,16 @@ let localServer = null;
 let isQuitting = false;
 let splashCloseTimer = null;
 let errorReporter = null;
+let splashShownAt = 0;   // thời điểm logo splash THỰC SỰ hiện ra (ready-to-show)
 
-const SPLASH_MIN_MS = 1400;
+// Logo phải hiển thị tối thiểu 5 giây khi khởi động; nếu app tải lâu hơn thì
+// splash giữ nguyên cho tới khi trang chính tải xong (reveal chờ did-finish-load).
+const SPLASH_MIN_MS = 5000;
 const SPLASH_MAX_MS = 12000;
 
 // Milestone 2: Client Error Reporter. Mac dinh TAT de khong doi hanh vi san xuat.
-// Bat bang AI_VIDEO_STUDIO_ERROR_REPORTING=1. Khong co upload URL thi chi ghi
-// queue cuc bo (KHONG gui len mang). Moi loi deu bi nuot, khong lam hong app.
+// Bat bang AI_VIDEO_STUDIO_ERROR_REPORTING=1. Khong co HTTPS upload URL hoac
+// bearer token thi chi ghi queue cuc bo. Moi loi deu bi nuot, khong lam hong app.
 function setupErrorReporter() {
   let reporterModule = null;
   try {
@@ -109,29 +112,46 @@ function setupErrorReporter() {
     return null; // module chua duoc dong goi (ban dev/ goi cu)
   }
   const { ErrorReporter, Uploader } = reporterModule;
+  const { resolveReleaseIdentity } = require('../auto-fix/client-error-reporter/release-identity');
 
   let clientInstallationId = '';
-  const idFile = path.join(app.getPath('userData'), 'installation-id.json');
+  const idFile = path.join(app.getPath('userData'), 'installation-id');
+  const legacyIdFile = path.join(app.getPath('userData'), 'installation-id.json');
   try { clientInstallationId = fs.readFileSync(idFile, 'utf8').trim(); } catch (_) {}
+  if (!clientInstallationId) {
+    try { clientInstallationId = fs.readFileSync(legacyIdFile, 'utf8').trim(); } catch (_) {}
+  }
   if (!clientInstallationId) {
     try {
       const crypto = require('crypto');
-      clientInstallationId = `${Date.now().toString(36)}-${crypto.randomBytes(8).toString('hex')}`;
-      fs.writeFileSync(idFile, clientInstallationId, 'utf8');
+      clientInstallationId = crypto.randomBytes(32).toString('base64url');
     } catch (_) {}
   }
+  if (clientInstallationId && !fs.existsSync(idFile)) {
+    try { fs.writeFileSync(idFile, clientInstallationId, { encoding: 'utf8', mode: 0o600, flag: 'wx' }); } catch (_) {}
+  }
 
-  const uploadUrl = process.env.AI_VIDEO_STUDIO_ERROR_UPLOAD_URL;
-  const uploader = uploadUrl ? new Uploader({ endpoint: uploadUrl, timeoutMs: 10000 }) : null;
+  const uploadUrl = String(process.env.AI_VIDEO_STUDIO_ERROR_UPLOAD_URL || '').trim();
+  const uploadToken = String(process.env.AI_VIDEO_STUDIO_ERROR_UPLOAD_TOKEN || '').trim();
+  // Fail closed: never send the dedicated bearer token without HTTPS or when
+  // either half of the upload configuration is absent.
+  const uploader = uploadUrl.startsWith('https://') && uploadToken ? new Uploader({
+    endpoint: uploadUrl,
+    headers: { Authorization: `Bearer ${uploadToken}` },
+    timeoutMs: 10000,
+  }) : null;
 
   let version = '0.0.0';
   try { version = app.getVersion() || version; } catch (_) {}
+  const release = resolveReleaseIdentity({ version, isPackaged: app.isPackaged });
 
   return new ErrorReporter({
     appVersion: version,
-    buildId: app.isPackaged ? 'packaged' : 'dev',
+    buildId: release.buildId,
+    releaseIdentity: release.releaseIdentity,
     clientInstallationId: clientInstallationId || 'unknown',
     queueFile: path.join(app.getPath('userData'), 'crash-queue.json'),
+    queue: { dedupWindowMs: 0 },
     uploader,
   });
 }
@@ -183,6 +203,7 @@ function brandIconPath() {
 function createSplashWindow() {
   if (isQuitting) return null;
   ensureBrandAsset();
+  splashShownAt = 0;
   splashWindow = new BrowserWindow({
     width: 820,
     height: 360,
@@ -206,7 +227,10 @@ function createSplashWindow() {
   splashWindow.loadFile(path.join(__dirname, 'electron', 'splash.html'));
   // Không ghi đè logo vì splash.html đã có src đúng.
   splashWindow.once('ready-to-show', () => {
-    if (splashWindow && !splashWindow.isDestroyed()) splashWindow.show();
+    if (splashWindow && !splashWindow.isDestroyed()) {
+      splashShownAt = Date.now();   // mốc tính "hiển thị đủ 5 giây" là lúc logo thực sự lên màn hình
+      splashWindow.show();
+    }
   });
   splashWindow.webContents.once('did-fail-load', () => closeSplashWindow(true));
   splashWindow.on('closed', () => { splashWindow = null; });
@@ -340,8 +364,19 @@ function createWindow(startUrl) {
   const startedAt = Date.now();
   const reveal = () => {
     if (shown || !mainWindow || mainWindow.isDestroyed()) return;
+    // Nếu splash chưa kịp hiện (ready-to-show chưa chạy) thì đợi thêm một nhịp rồi
+    // thử lại, để mốc 5 giây tính từ lúc logo THỰC SỰ lên màn hình. Splash bị lỗi
+    // (did-fail-load → đóng, splashWindow = null) thì hết điều kiện chờ, dùng startedAt.
+    if (!splashShownAt && splashWindow && !splashWindow.isDestroyed()) {
+      setTimeout(reveal, 100);
+      return;
+    }
     shown = true;
-    const wait = Math.max(0, SPLASH_MIN_MS - (Date.now() - startedAt));
+    // Đếm 5 giây từ lúc splash THỰC SỰ hiện (splashShownAt), không phải từ lúc
+    // createWindow được gọi — nếu trang tải nhanh, logo vẫn phải đủ 5 giây thực tế.
+    // Nếu splash không hiện được (did-fail-load) thì quay về startedAt để không chờ vô hạn.
+    const base = splashShownAt || startedAt;
+    const wait = Math.max(0, SPLASH_MIN_MS - (Date.now() - base));
     setTimeout(() => {
       if (!mainWindow || mainWindow.isDestroyed()) return;
       mainWindow.show();
@@ -663,14 +698,21 @@ ipcMain.handle('voice-pick-root', async () => {
     return voiceNative.setRoot(r.filePaths[0]);
   } catch (e) { return { error: String(e) }; }
 });
-// Chép backend giọng nói (đóng gói sẵn trong app) ra máy khách + tự đặt đường dẫn
+// Thử ghi vào thư mục để biết có cài được "trong app" không (VD cài ở Program Files thì không ghi được)
+function _canWriteDir(dir) {
+  try { fs.mkdirSync(dir, { recursive: true }); const t = path.join(dir, '.ghi-thu'); fs.writeFileSync(t, 'ok'); fs.unlinkSync(t); return true; }
+  catch { return false; }
+}
+// Chép backend giọng nói (đóng gói sẵn trong app) TỰ ĐỘNG vào thư mục trong app — khách KHÔNG cần chọn nơi lưu
 ipcMain.handle('voice-install-backend', async () => {
   try {
-    const r = await dialog.showOpenDialog(mainWindow, { title: 'Chọn nơi cài backend giọng nói (sẽ tạo thư mục voice-studio)', properties: ['openDirectory', 'createDirectory'] });
-    if (r.canceled || !r.filePaths || !r.filePaths[0]) return { canceled: true };
-    const dest = path.join(r.filePaths[0], 'voice-studio');
-    // File nằm trong app.asar.unpacked (asarUnpack) — dùng đường dẫn THẬT để cpSync/opendir đọc được
+    // File nằm trong app.asar.unpacked (asarUnpack) — dùng đường dẫn THẬT để cpSync/opendir đọc/ghi được
     const base = __dirname.includes('app.asar') ? __dirname.replace('app.asar', 'app.asar.unpacked') : __dirname;
+    // Nơi cài cố định: <thư mục app>/voice-studio. Không ghi được thì dùng userData/voice-studio.
+    let dest = path.join(base, 'voice-studio');
+    if (!_canWriteDir(base)) {
+      try { dest = path.join(app.getPath('userData'), 'voice-studio'); } catch { return { error: 'Không xác định được thư mục cài.' }; }
+    }
     let src = path.join(base, 'voice-backend');
     if (!fs.existsSync(path.join(src, 'backend', 'app.py'))) {
       const alt = path.join(__dirname, 'voice-backend');   // dự phòng (dev/npm start)
@@ -683,14 +725,16 @@ ipcMain.handle('voice-install-backend', async () => {
     return { ok: true, path: dest, warn: set && set.error ? set.error : null };
   } catch (e) { return { error: String(e) }; }
 });
-// Chép extension Flow (đóng gói sẵn trong app) ra máy khách để "Tải tiện ích chưa đóng gói" vào Chrome
+// Chép extension Flow (đóng gói sẵn trong app) TỰ ĐỘNG vào thư mục trong app để "Tải tiện ích chưa đóng gói" vào Chrome
 ipcMain.handle('flow-ext-export', async () => {
   try {
-    const r = await dialog.showOpenDialog(mainWindow, { title: 'Chọn nơi lưu Extension (sẽ tạo thư mục nova-studio)', properties: ['openDirectory', 'createDirectory'] });
-    if (r.canceled || !r.filePaths || !r.filePaths[0]) return { canceled: true };
-    const dest = path.join(r.filePaths[0], 'nova-studio');
-    // File nằm trong app.asar.unpacked (asarUnpack) — dùng đường dẫn THẬT để cpSync đọc được
+    // File nằm trong app.asar.unpacked (asarUnpack) — dùng đường dẫn THẬT để cpSync đọc/ghi được
     const base = __dirname.includes('app.asar') ? __dirname.replace('app.asar', 'app.asar.unpacked') : __dirname;
+    // Nơi lưu cố định: <thư mục app>/chrome-extension. Không ghi được thì dùng userData/chrome-extension.
+    let dest = path.join(base, 'chrome-extension');
+    if (!_canWriteDir(base)) {
+      try { dest = path.join(app.getPath('userData'), 'chrome-extension'); } catch { return { error: 'Không xác định được thư mục lưu.' }; }
+    }
     let src = path.join(base, 'flow-extension');
     if (!fs.existsSync(path.join(src, 'manifest.json'))) {
       const alt = path.join(__dirname, 'flow-extension');   // dự phòng (dev/npm start)
@@ -800,6 +844,8 @@ app.whenReady().then(async () => {
       errorReporter = setupErrorReporter();
       if (errorReporter) {
         try { errorReporter.recordEvent('app_start', { platform: process.platform }); } catch (_) {}
+        // Retry reports retained from previous offline/failed sessions.
+        errorReporter.flush().catch(() => {});
       }
     } catch (e) { console.warn('[error-reporter] setup:', e && e.message); }
   }

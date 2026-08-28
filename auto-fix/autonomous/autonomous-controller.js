@@ -86,7 +86,8 @@ class AutonomousController {
     }
 
     // Check if already processed
-    if (bug.status === 'resolved' || bug.status === 'closed') {
+    const bugStatus = bug.current_status || bug.status;
+    if (bugStatus === 'resolved' || bugStatus === 'closed') {
       return { status: 'skipped', reason: 'bug-already-resolved', bug_id: id };
     }
 
@@ -159,7 +160,9 @@ class AutonomousController {
           sequence_id: bug.sequence_id || null,
           expected_fingerprint: bug.fingerprint || `fp-${id}`,
           sequence: bug.event_sequence || null,
-          environment: bug.environment_id ? { environment_id: bug.environment_id } : null,
+          environment: (bug.environment_id || bug.affected_environments?.[0])
+            ? { environment_id: bug.environment_id || bug.affected_environments[0] }
+            : null,
         },
         replay_spec: input.replaySpec || [],
         knowledge: {
@@ -194,7 +197,7 @@ class AutonomousController {
     const riskInput = {
       patch: loopResult.final_result || {},
       affectedAreas: input.affectedAreas || [],
-      aiConfidence: bug.ai_confidence || null,
+      aiConfidence: bug.confidence || bug.ai_confidence || null,
       reproductionResult: loopResult.final_result?.reproduction || null,
       policyHighRiskAreas: this.highRiskAreas,
       limits: this.patchLimits,
@@ -204,7 +207,7 @@ class AutonomousController {
     if (attempt && this.repairAttempts) {
       this.repairAttempts.update(attemptId, {
         risk_score: riskEval.total / 10, // normalize to [0,1] roughly
-        ai_confidence: bug.ai_confidence || null,
+        ai_confidence: bug.confidence || bug.ai_confidence || null,
       });
     }
 

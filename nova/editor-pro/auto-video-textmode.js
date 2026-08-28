@@ -9,7 +9,22 @@ const TMP=path.join(os.tmpdir(),'nova-auto2'); fs.mkdirSync(TMP,{recursive:true}
 const run=(b,a,timeoutMs=900000)=>new Promise((res,rej)=>{const p=spawn(b,a,{windowsHide:true});let e='';p.stderr.on('data',d=>e+=d);p.on('error',rej);const _to=setTimeout(()=>{try{p.kill('SIGKILL');}catch(_){}rej(new Error('ffmpeg quá '+Math.round(timeoutMs/60000)+' phút — nghi treo, đã kill'));},timeoutMs);p.on('close',c=>{clearTimeout(_to);c===0?res():rej(new Error(e.slice(-250)));});});
 const durOf=f=>{try{const o=execSync(`"${FFPROBE}" -v quiet -print_format json -show_format "${f}"`).toString();return parseFloat(JSON.parse(o).format.duration)||3;}catch(_){return 3;}};
 async function say(t,out){const aiff=out+'.aiff',tf=out+'.txt';fs.writeFileSync(tf,t);await run('say',['-v','Linh','-o',aiff,'-f',tf]);await run(FFMPEG,['-i',aiff,'-codec:a','libmp3lame','-y',out]);try{fs.unlinkSync(aiff);fs.unlinkSync(tf);}catch(_){}return out;}
-async function claude(sys,u){const r=await fetch('http://127.0.0.1:8790/chat/completions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({messages:[{role:'system',content:sys},{role:'user',content:u}],model:'sonnet'})});const d=await r.json();return (d.choices&&d.choices[0]&&d.choices[0].message.content)||'';}
+// Claude qua CLI bridge nội bộ app — thử cổng mới 8795 trước, fallback cổng cũ 8790.
+async function claude(sys,u){
+  const candidates=['http://127.0.0.1:8795/chat/completions','http://127.0.0.1:8790/chat/completions'];
+  let lastErr;
+  for(const url of candidates){
+    try{
+      const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({messages:[{role:'system',content:sys},{role:'user',content:u}],model:'sonnet'})});
+      if(!r.ok)throw new Error('cli-bridge HTTP '+r.status);
+      const d=await r.json();
+      if(d&&d.error)throw new Error(typeof d.error==='string'?d.error:(d.error.message||'cli-bridge lỗi'));
+      if(d&&d.choices&&d.choices[0])return d.choices[0].message.content||'';
+      return '';
+    }catch(e){lastErr=e;}
+  }
+  throw lastErr||new Error('cli-bridge không phản hồi (8795/8790).');
+}
 function wrap(t,n=34){const w=t.split(' ');let L=[],c='';for(const x of w){if((c+' '+x).trim().length>n){L.push(c.trim());c=x;}else c+=' '+x;}if(c.trim())L.push(c.trim());return L.join('\n');}
 const COLORS=[['#1a2980','#26d0ce'],['#c31432','#240b36'],['#0f2027','#2c5364'],['#42275a','#734b6d'],['#141e30','#243b55'],['#c2410c','#7c2d12']];
 const esc=p=>String(p).replace(/'/g,"\\'").replace(/:/g,'\\:');

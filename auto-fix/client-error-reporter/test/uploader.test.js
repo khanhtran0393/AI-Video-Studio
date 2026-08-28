@@ -19,8 +19,11 @@ const { Uploader, httpsPostJson } = require('../uploader');
   assert.strictEqual(result.status, 200);
   assert.strictEqual(recovery, 2, 'must succeed on retry');
 
+  assert.throws(() => httpsPostJson({ url: 'file:///tmp/crash.json' }), /HTTP or HTTPS/);
+
   // Real HTTP transport against a local server (also exercises httpsPostJson).
   const server = http.createServer((req, res) => {
+    assert.strictEqual(req.headers.authorization, 'Bearer uploader-secret');
     let body = '';
     req.on('data', (chunk) => { body += chunk; });
     req.on('end', () => {
@@ -31,7 +34,11 @@ const { Uploader, httpsPostJson } = require('../uploader');
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   try {
     const port = server.address().port;
-    const post = httpsPostJson({ url: `http://127.0.0.1:${port}/crash`, timeoutMs: 5000 });
+    const post = httpsPostJson({
+      url: `http://127.0.0.1:${port}/crash`,
+      headers: { Authorization: 'Bearer uploader-secret' },
+      timeoutMs: 5000,
+    });
     const resp = await post({ crash_id: 'c1', fingerprint: 'f1' });
     assert.strictEqual(resp.status, 200);
     assert.deepStrictEqual(JSON.parse(resp.body).received, { crash_id: 'c1', fingerprint: 'f1' });

@@ -8,7 +8,22 @@ function run(args, timeoutMs = 120000) {
   return new Promise((res, rej) => { const ps = spawn(YTDLP, args, { windowsHide: true }); let o = '', e = ''; const t = setTimeout(() => { try { ps.kill('SIGKILL'); } catch (_) {} rej(new Error('yt-dlp timeout')); }, timeoutMs);
     ps.stdout.on('data', d => o += d); ps.stderr.on('data', d => e += d); ps.on('error', rej); ps.on('close', c => { clearTimeout(t); c === 0 ? res(o) : rej(new Error(e.split('\n').slice(-2).join(' '))); }); });
 }
-async function claude(sys, u) { const r = await fetch('http://127.0.0.1:8790/chat/completions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: 'sonnet', messages: [{ role: 'system', content: sys }, { role: 'user', content: u }] }) }); const d = await r.json(); return (d.choices && d.choices[0] && d.choices[0].message.content) || ''; }
+// Claude qua CLI bridge nội bộ app — thử cổng mới 8795 trước, fallback cổng cũ 8790.
+async function claude(sys, u) {
+  const candidates = ['http://127.0.0.1:8795/chat/completions', 'http://127.0.0.1:8790/chat/completions'];
+  let lastErr;
+  for (const url of candidates) {
+    try {
+      const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: 'sonnet', messages: [{ role: 'system', content: sys }, { role: 'user', content: u }] }) });
+      if (!r.ok) throw new Error('cli-bridge HTTP ' + r.status);
+      const d = await r.json();
+      if (d && d.error) throw new Error(typeof d.error === 'string' ? d.error : (d.error.message || 'cli-bridge lỗi'));
+      if (d && d.choices && d.choices[0]) return d.choices[0].message.content || '';
+      return '';
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr || new Error('cli-bridge không phản hồi (8795/8790).');
+}
 const normChannel = (u) => { u = String(u || '').trim(); if (!/^https?:/.test(u)) u = u.startsWith('@') ? 'https://www.youtube.com/' + u : 'https://www.youtube.com/@' + u; return u.replace(/\/(videos|featured|streams)?\/?$/, '') + '/videos'; };
 
 async function analyzeCompetitor(channelUrl, onProgress = () => {}, count = 20) {

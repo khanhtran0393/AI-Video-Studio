@@ -11,6 +11,7 @@ const { URL } = require('url');
 function httpsPostJson(options) {
   const { url, headers = {}, timeoutMs = 10000 } = options;
   const parsed = new URL(url);
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') throw new Error('upload URL must use HTTP or HTTPS');
   const mod = parsed.protocol === 'http:' ? http : https;
 
   return function post(payload) {
@@ -56,7 +57,11 @@ class Uploader {
   constructor(options = {}) {
     this.endpoint = options.endpoint || null;
     this.transport = options.transport
-      || (this.endpoint ? httpsPostJson({ url: this.endpoint, timeoutMs: options.timeoutMs }) : null);
+      || (this.endpoint ? httpsPostJson({
+        url: this.endpoint,
+        headers: options.headers,
+        timeoutMs: options.timeoutMs,
+      }) : null);
     this.maxAttempts = options.maxAttempts != null ? options.maxAttempts : 3;
     this.baseDelayMs = options.baseDelayMs != null ? options.baseDelayMs : 500;
     this.maxDelayMs = options.maxDelayMs != null ? options.maxDelayMs : 10000;

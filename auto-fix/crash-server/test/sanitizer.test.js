@@ -18,6 +18,11 @@ assert.ok(!JSON.stringify(out).includes('supersecret'));
 assert.ok(!JSON.stringify(out).includes('abcdef123456'));
 assert.ok(!JSON.stringify(out).includes('hunter2'));
 
+const digests = sanitizeReport({ fingerprint: 'A'.repeat(64), git_commit_sha: 'B'.repeat(40), artifact_sha256: 'C'.repeat(64) });
+assert.strictEqual(digests.fingerprint, 'a'.repeat(64));
+assert.strictEqual(digests.git_commit_sha, 'b'.repeat(40));
+assert.strictEqual(digests.artifact_sha256, 'c'.repeat(64));
+
 assert.deepStrictEqual(sanitizeReport(null), {}, 'non-object input must degrade to empty object');
 
 console.log('sanitizer tests: passed');

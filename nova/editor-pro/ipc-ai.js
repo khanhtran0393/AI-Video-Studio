@@ -23,20 +23,30 @@ function registerEditorProAI(ipcMain, opts = {}) {
   const emptyList = async () => [];
 
   // Điểm gọi AI TRUNG TÂM của "Tạo với AI" (script/cảnh) → route sang cli-bridge Nova (Claude/Codex CLI).
-  const CLI_BRIDGE = { claude: 'http://127.0.0.1:8790/chat/completions', codex: 'http://127.0.0.1:8791/chat/completions' };
+  // Bridge mới của app chạy ở 8795/8796 (cli-bridge-native.plain.js); giữ 8790/8791 làm fallback cho bản cũ.
+  const CLI_BRIDGE = {
+    claude: ['http://127.0.0.1:8795/chat/completions', 'http://127.0.0.1:8790/chat/completions'],
+    codex: ['http://127.0.0.1:8796/chat/completions', 'http://127.0.0.1:8791/chat/completions'],
+  };
   async function runPromptViaCliBridge({ system = '', user = '', model = '', json = false }) {
     const messages = [];
     if (system) messages.push({ role: 'system', content: system });
     messages.push({ role: 'user', content: String(user || '') + (json ? '\n\nCHỈ trả về JSON hợp lệ, KHÔNG giải thích, KHÔNG ```.' : '') });
     const engine = String(model || '').toLowerCase().includes('codex') || String(model || '').toLowerCase().includes('gpt') ? 'codex' : 'claude';
-    const url = CLI_BRIDGE[engine] || CLI_BRIDGE.claude;
+    const urls = CLI_BRIDGE[engine] || CLI_BRIDGE.claude;
     const m = (model === 'opus' || model === 'sonnet') ? model : 'sonnet';
-    const resp = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages, model: m }) });
-    if (!resp.ok) throw new Error('cli-bridge HTTP ' + resp.status);
-    const data = await resp.json();
-    const content = (data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '';
-    if (!content) throw new Error((data && data.error && data.error.message) || 'cli-bridge không trả nội dung (Claude CLI đã đăng nhập chưa?)');
-    return content;
+    let lastErr;
+    for (const url of urls) {
+      try {
+        const resp = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages, model: m }) });
+        if (!resp.ok) throw new Error('cli-bridge HTTP ' + resp.status);
+        const data = await resp.json();
+        const content = (data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '';
+        if (!content) throw new Error((data && data.error && data.error.message) || 'cli-bridge không trả nội dung (Claude CLI đã đăng nhập chưa?)');
+        return content;
+      } catch (e) { lastErr = e; }
+    }
+    throw lastErr || new Error('cli-bridge không phản hồi (8795/8790).');
   }
 
   const H = {

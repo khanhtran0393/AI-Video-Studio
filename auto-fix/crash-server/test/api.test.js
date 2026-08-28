@@ -93,7 +93,7 @@ function validReport(overrides = {}) {
     assert.strictEqual(fetched.status, 200);
     assert.strictEqual(fetched.body.crash.crash_id, 'crash-it-1');
     assert.strictEqual(fetched.body.crash.fingerprint, 'ffffffffffffffffffffffffffffffff');
-    assert.match(fetched.body.crash.server_fingerprint, /^[0-9a-f]{32}$/);
+    assert.match(fetched.body.crash.server_fingerprint, /^[0-9a-f]{64}$/);
     assert.notStrictEqual(fetched.body.crash.server_fingerprint, fetched.body.crash.fingerprint);
 
     const missing = await request('GET', '/v1/crashes/nope');

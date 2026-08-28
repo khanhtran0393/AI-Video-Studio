@@ -69,8 +69,11 @@ class LocalQueue {
     const now = Date.now();
     const last = this._lastSent.get(fingerprint) || 0;
     if (now - last < this.minIntervalMs) return false;
-    this._lastSent.set(fingerprint, now);
     return true;
+  }
+
+  markSent(fingerprint) {
+    this._lastSent.set(fingerprint, Date.now());
   }
 }
 

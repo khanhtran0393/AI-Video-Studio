@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aivideostudio.local/schemas/documentary-project.schema.json",
+  "title": "Nova Documentary Project",
+  "type": "object",
+  "required": ["schemaVersion", "projectId", "title", "script", "settings", "assets", "alignment", "timeline", "qa", "pipeline"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "projectId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,119}$" },
+    "title": { "type": "string" },
+    "status": { "type": "string" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" },
+    "settings": {
+      "type": "object",
+      "required": ["width", "height", "fps", "language"],
+      "properties": {
+        "width": { "type": "number", "exclusiveMinimum": 0 },
+        "height": { "type": "number", "exclusiveMinimum": 0 },
+        "fps": { "type": "number", "exclusiveMinimum": 0 },
+        "language": { "type": "string" }
+      }
+    },
+    "script": {
+      "type": "object",
+      "required": ["scriptId", "narration"],
+      "properties": {
+        "scriptId": { "type": "string", "minLength": 1 },
+        "narration": { "type": "string" },
+        "contentHash": { "type": ["string", "null"] },
+        "lockedAt": { "type": ["string", "null"] }
+      }
+    },
+    "assets": { "type": "array", "items": { "type": "object" } },
+    "alignment": {
+      "type": "object",
+      "required": ["provider", "words", "segments"],
+      "properties": {
+        "provider": { "type": "string" },
+        "confidence": { "type": "number" },
+        "words": { "type": "array", "items": { "type": "object" } },
+        "segments": { "type": "array", "items": { "type": "object" } }
+      }
+    },
+    "timeline": {
+      "type": "object",
+      "required": ["durationSec", "scenes", "tracks"],
+      "properties": {
+        "durationSec": { "type": "number", "minimum": 0 },
+        "scenes": { "type": "array", "items": { "type": "object" } },
+        "tracks": { "type": "array", "items": { "type": "object" } }
+      }
+    },
+    "render": { "type": "object" },
+    "qa": { "type": "object" },
+    "pipeline": { "type": "object" }
+  }
+}

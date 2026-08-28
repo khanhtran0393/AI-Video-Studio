@@ -29,6 +29,10 @@ async function main() {
   assert(!mainSource.includes('com.novastudio.independent'), 'legacy Windows app id must not be reused');
   assert(mainSource.includes('AI_VIDEO_STUDIO_ERROR_REPORTING'), 'main process must gate the client error reporter behind an env flag');
   assert(mainSource.includes("require('../auto-fix/client-error-reporter/reporter')"), 'main process must load the M2 client error reporter');
+  assert(mainSource.includes('AI_VIDEO_STUDIO_ERROR_UPLOAD_TOKEN'), 'main process must support the dedicated crash uploader token');
+  assert(mainSource.includes('Authorization: `Bearer ${uploadToken}`'), 'main process must authenticate crash uploads');
+  assert(mainSource.includes('resolveReleaseIdentity'), 'main process must attach validated release identity');
+  assert(mainSource.includes('errorReporter.flush()'), 'main process must retry the persistent queue at startup');
   const flowSource = fs.readFileSync(path.join(__dirname, '..', 'flow-native.plain.js'), 'utf8');
   assert(!flowSource.includes("persist:flow-"), 'Flow account partitions must not reuse the legacy namespace');
   const runtimePorts = [

@@ -109,6 +109,15 @@ class BugCaseStore extends JsonStore {
     if (db.byFingerprint[caseData.fingerprint]) throw new Error(`fingerprint already assigned to ${db.byFingerprint[caseData.fingerprint]}`);
 
     const entry = this._newCaseEntry(caseData.bug_id, caseData.fingerprint, now);
+    const confidence = caseData.confidence !== undefined ? caseData.confidence : caseData.ai_confidence;
+    if (confidence !== undefined) entry.confidence = normalizeConfidence(confidence);
+    if (caseData.current_status !== undefined) {
+      if (!CASE_STATUSES.includes(caseData.current_status)) throw new Error(`unknown status: ${caseData.current_status}`);
+      entry.current_status = caseData.current_status;
+    } else if (CASE_STATUSES.includes(caseData.status)) {
+      // Accept recognized legacy status values while storing only the canonical field.
+      entry.current_status = caseData.status;
+    }
     db.cases[entry.bug_id] = entry;
     db.byFingerprint[entry.fingerprint] = entry.bug_id;
     this.write(db);

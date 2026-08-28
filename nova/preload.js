@@ -66,6 +66,15 @@ contextBridge.exposeInMainWorld('native', {
   previewLayers: (p) => ipcRenderer.invoke('nova:previewLayers', p),                            // danh mục mẫu đồ hoạ cho AI chọn
   onRemotionProgress2: (cb) => ipcRenderer.on('remotion:progress', (_e, s) => cb(s)),
   onRemotionProgress: (cb) => ipcRenderer.on('remotion:progress', (_e, s) => cb && cb(s)),
+  // Documentary automation vertical slice: project CRUD, deterministic pipeline, Nova Scene render.
+  documentary: {
+    create: (payload) => ipcRenderer.invoke('documentary:create', payload),
+    list: () => ipcRenderer.invoke('documentary:list'),
+    read: (projectId) => ipcRenderer.invoke('documentary:read', { projectId }),
+    run: (payload) => ipcRenderer.invoke('documentary:run', payload),
+    render: (payload) => ipcRenderer.invoke('documentary:render', payload),
+    onProgress: (cb) => ipcRenderer.on('documentary:progress', (_e, update) => cb && cb(update)),
+  },
   // Thư viện Hiệu ứng âm thanh (SFX) dựng sẵn.
   sfxLibrary: () => ipcRenderer.invoke('nova:sfxLibrary:list'),
   // Flow tích hợp sẵn (trình duyệt nhúng) — UI gọi flowBridge → window.native.flow.

@@ -38,6 +38,11 @@ function sanitizeCrashReport(report) {
   if (sanitized && typeof sanitized === 'object') {
     if (sanitized.stack_trace) sanitized.stack_trace = sanitizeString(String(sanitized.stack_trace), { maxStringLength: 8192 });
     if (sanitized.message) sanitized.message = sanitizeString(String(sanitized.message), { maxStringLength: 2048 });
+    // Known digest fields are identifiers, not credentials. Restore only strict
+    // hexadecimal forms after generic secret redaction to preserve diagnostics.
+    if (typeof report.fingerprint === 'string' && /^[0-9a-f]{16,64}$/i.test(report.fingerprint)) sanitized.fingerprint = report.fingerprint.toLowerCase();
+    if (typeof report.git_commit_sha === 'string' && /^[0-9a-f]{40,64}$/i.test(report.git_commit_sha)) sanitized.git_commit_sha = report.git_commit_sha.toLowerCase();
+    if (typeof report.artifact_sha256 === 'string' && /^[0-9a-f]{64}$/i.test(report.artifact_sha256)) sanitized.artifact_sha256 = report.artifact_sha256.toLowerCase();
   }
   return sanitized;
 }

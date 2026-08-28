@@ -102,7 +102,7 @@ async function _goiApi(content, kho) {
 
 
 async function _goiCauNoi(content, kho) {
-  const ep = String(kho.api_cli_endpoint || 'http://127.0.0.1:8790').replace(/\/+$/, '');
+  const ep = String(kho.api_cli_endpoint || 'http://127.0.0.1:8795').replace(/\/+$/, '');
   const r = await fetch(ep + '/chat/completions', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ model: 'sonnet', messages: [{ role: 'user', content }] }),

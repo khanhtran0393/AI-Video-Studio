@@ -15,13 +15,25 @@ function run(args, timeoutMs = 150000) {
     ps.on('error', rej); ps.on('close', c => { clearTimeout(t); c === 0 ? res(o) : rej(new Error(e.split('\n').slice(-2).join(' '))); });
   });
 }
+// Claude qua CLI bridge nội bộ app. App mới chạy bridge ở 8795 (xem cli-bridge-native.plain.js),
+// bản build cũ/nhánh khác có thể còn 8790 → thử cả hai để Nghiên cứu Ngách luôn chạy được.
 async function claude(sys, content) {
-  const r = await fetch('http://127.0.0.1:8790/chat/completions', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: 'sonnet', messages: [{ role: 'system', content: sys }, { role: 'user', content }] })
-  });
-  const d = await r.json();
-  return (d.choices && d.choices[0] && d.choices[0].message.content) || '';
+  const candidates = ['http://127.0.0.1:8795/chat/completions', 'http://127.0.0.1:8790/chat/completions'];
+  let lastErr;
+  for (const url of candidates) {
+    try {
+      const r = await fetch(url, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: 'sonnet', messages: [{ role: 'system', content: sys }, { role: 'user', content }] })
+      });
+      if (!r.ok) throw new Error('cli-bridge HTTP ' + r.status);
+      const d = await r.json();
+      if (d && d.error) throw new Error(typeof d.error === 'string' ? d.error : (d.error.message || 'cli-bridge lỗi'));
+      if (d && d.choices && d.choices[0]) return d.choices[0].message.content || '';
+      return '';
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr || new Error('cli-bridge không phản hồi (8795/8790). Mở Cài đặt → AI để đăng nhập Claude CLI.');
 }
 function safeJson(txt, fallback) {
   try { return JSON.parse(txt); } catch (_) {}

@@ -19,6 +19,13 @@ class ErrorReporter {
     this.appVersion = options.appVersion || '0.0.0';
     this.buildId = options.buildId || 'dev';
     this.clientInstallationId = options.clientInstallationId || 'unknown';
+    const identity = options.releaseIdentity && typeof options.releaseIdentity === 'object'
+      ? options.releaseIdentity
+      : {};
+    this.releaseIdentity = {
+      ...(typeof identity.git_commit_sha === 'string' ? { git_commit_sha: identity.git_commit_sha } : {}),
+      ...(typeof identity.artifact_sha256 === 'string' ? { artifact_sha256: identity.artifact_sha256 } : {}),
+    };
     this.buffer = options.buffer || new EventBuffer({ maxSize: options.eventBufferSize });
     this.queue = options.queue
       || new LocalQueue(options.queueFile || path.join(process.cwd(), 'crash-queue.json'), options.queue);
@@ -43,6 +50,7 @@ class ErrorReporter {
       stack_trace: sanitizeString(String((error && (error.stack || error.message)) || ''), { maxStringLength: 8192 }),
     }, { isFinal: true });
     const report = {
+      ...extra,
       crash_id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
       app_version: this.appVersion,
       build_id: this.buildId,
@@ -57,8 +65,8 @@ class ErrorReporter {
       event_sequence_id: this.buffer.sequenceId,
       sanitized_logs: sanitizeCrashReport(this.buffer.snapshot()),
       client_installation_id: this.clientInstallationId,
+      ...this.releaseIdentity,
       status: 'queued',
-      ...extra,
     };
     return sanitizeCrashReport(report);
   }
@@ -91,6 +99,7 @@ class ErrorReporter {
         }
         try {
           await this.uploader.send(item);
+          this.queue.markSent(item.fingerprint);
           this.queue.remove(item.id);
           sent++;
         } catch (_) {
@@ -104,7 +113,8 @@ class ErrorReporter {
   }
 
   // Install process-level handlers on an injectable emitter (default: process).
-  // Returns an uninstall function. Not wired into the packaged app yet.
+  // Returns an uninstall function. Electron currently uses its existing global
+  // handlers to preserve host error UX while forwarding reports here.
   installGlobalHandlers(target = process) {
     const uncaught = (error) => { this.report(error); };
     const rejection = (reason) => {

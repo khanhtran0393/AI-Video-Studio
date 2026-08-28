@@ -86,11 +86,12 @@ try {
   // We can set a high cost by recording large token counts.
   // However, our pricing is low, so we need to add many tokens.
   // We'll just simulate by reducing maxDailyCost in test.
-  const controllerSmall = new CostController({ baseDir, policy: { cost: { maxDailyCost: 0.001, pricing: { 'gpt-4o-mini': { input: 0.00015, output: 0.0006 } } } } });
+  const smallBaseDir = fs.mkdtempSync(path.join(temp, 'cost-control-small-'));
+  const controllerSmall = new CostController({ baseDir: smallBaseDir, policy: { cost: { maxDailyCost: 0.001, pricing: { 'gpt-4o-mini': { input: 0.00015, output: 0.0006 } } } } });
   const startSmall = controllerSmall.startJob('job3', 'classification');
   assert.strictEqual(startSmall.allowed, true);
   // Record usage that exceeds daily.
-  controllerSmall.recordUsage('job3', 10000, 0); // cost ~ 0.0015? actually 10000/1000*0.00015 = 0.0015 > 0.001
+  controllerSmall.recordUsage('job3', 7000, 0); // cost 0.00105 > 0.001 while remaining below the 10000-token job limit
   const continueSmall = controllerSmall.canContinueJob('job3');
   assert.strictEqual(continueSmall.allowed, false);
   assert.strictEqual(continueSmall.reason, 'daily-budget-exceeded');
@@ -107,9 +108,10 @@ try {
 
   // But if daily is already exceeded, canStartJob should block.
   // Already tested via canContinueJob; we can also test directly:
-  const controllerExceeded = new CostController({ baseDir, policy: { cost: { maxDailyCost: 0.001, pricing: { 'gpt-4o-mini': { input: 0.00015, output: 0.0006 } } } } });
+  const exceededBaseDir = fs.mkdtempSync(path.join(temp, 'cost-control-exceeded-'));
+  const controllerExceeded = new CostController({ baseDir: exceededBaseDir, policy: { cost: { maxDailyCost: 0.001, pricing: { 'gpt-4o-mini': { input: 0.00015, output: 0.0006 } } } } });
   controllerExceeded.startJob('job5', 'classification');
-  controllerExceeded.recordUsage('job5', 10000, 0);
+  controllerExceeded.recordUsage('job5', 7000, 0);
   const startExceeded = controllerExceeded.canStartJob('job6', 'classification');
   assert.strictEqual(startExceeded.allowed, false);
   assert.strictEqual(startExceeded.reason, 'daily-budget-exceeded');

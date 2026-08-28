@@ -1,0 +1,11 @@
+{
+  "name": "ai-video-studio-observe-worker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local polling worker for observe-only crash diagnosis",
+  "main": "index.js",
+  "scripts": {
+    "start": "node cli.js",
+    "test": "node test/worker.test.js"
+  }
+}

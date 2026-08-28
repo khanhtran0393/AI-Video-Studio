@@ -54,6 +54,9 @@ Thumbs.db
 rebrand-backup/
 rebrand-report.txt
 
+# Downloaded runtime binaries (yt-dlp, upscaler, inpaint, sqlite, onnx)
+nova/*-bin/
+
 # Python bytecode caches
 __pycache__/
 *.pyc

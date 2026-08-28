@@ -43,7 +43,9 @@ try {
   // Rate limiting per fingerprint.
   const q2 = new LocalQueue(path.join(temp, 'q2.json'), { minIntervalMs: 1000 });
   assert.strictEqual(q2.allowSend('x'), true);
-  assert.strictEqual(q2.allowSend('x'), false, 'send within interval must be rejected');
+  assert.strictEqual(q2.allowSend('x'), true, 'an attempted send is not rate-limited until success');
+  q2.markSent('x');
+  assert.strictEqual(q2.allowSend('x'), false, 'successful send within interval must be rejected');
   assert.strictEqual(q2.allowSend('y'), true);
 
   // Corrupt file recovers to empty.

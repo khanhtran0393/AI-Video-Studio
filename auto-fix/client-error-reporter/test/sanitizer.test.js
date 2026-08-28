@@ -38,5 +38,9 @@ assert.strictEqual(report.error_type, 'TypeError');
 assert.strictEqual(report.api_key, '[REDACTED]');
 assert.strictEqual(report.nested.token, '[REDACTED]');
 assert.strictEqual(report.nested.safe, 1);
+const digests = sanitizeCrashReport({ fingerprint: 'a'.repeat(64), git_commit_sha: 'b'.repeat(40), artifact_sha256: 'c'.repeat(64) });
+assert.strictEqual(digests.fingerprint, 'a'.repeat(64));
+assert.strictEqual(digests.git_commit_sha, 'b'.repeat(40));
+assert.strictEqual(digests.artifact_sha256, 'c'.repeat(64));
 
 console.log('sanitizer tests: passed');

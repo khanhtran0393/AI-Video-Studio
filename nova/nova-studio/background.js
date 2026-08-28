@@ -71,7 +71,6 @@ async function restore() {
     seenTokens.add(flowKey);
   }
 }
-restore();
 
 chrome.action.onClicked.addListener(() => {
   chrome.tabs.create({ url: chrome.runtime.getURL('app.html') });
@@ -422,7 +421,7 @@ async function _setOverlay(active, label, count) {
   try {
     await chrome.scripting.executeScript({
       target: { tabId }, world: 'MAIN',
-      func: (on, lbl, n) => {
+      func: (on, lbl, n, iconUrl) => {
         let el = document.getElementById('__nova_ov');
         if (!el) {
           el = document.createElement('div'); el.id = '__nova_ov';
@@ -433,13 +432,13 @@ async function _setOverlay(active, label, count) {
         const status = on
           ? '<div style="font-size:14px;color:#4ade80;margin-bottom:8px">● Đang xử lý…</div><div style="font-size:24px;font-weight:800;color:#60a5fa;margin-bottom:14px">' + (lbl || 'Đang chạy') + (n != null ? ' #' + n : '') + '</div><div style="font-size:12.5px;color:#8b95a5">🤖 App đang tự động tạo qua tab này</div>'
           : '<div style="font-size:14px;color:#4ade80;margin-bottom:8px">● Sẵn sàng</div><div style="font-size:20px;font-weight:800;color:#60a5fa;margin-bottom:14px">AI Video Studio đang giữ tab</div><div style="font-size:12.5px;color:#8b95a5">🤖 Tab này để app tạo ảnh/video tự động</div>';
-        el.innerHTML = '<div style="width:66px;height:66px;margin:0 auto 13px;border-radius:18px;background:linear-gradient(135deg,#7c3aed,#c2410c);display:flex;align-items:center;justify-content:center;font-size:34px;font-weight:800;color:#fff">N</div>'
+        el.innerHTML = '<div style="width:66px;height:66px;margin:0 auto 13px;border-radius:18px;background:linear-gradient(135deg,#7c3aed,#c2410c);display:flex;align-items:center;justify-content:center;overflow:hidden"><img src="' + iconUrl + '" alt="" style="width:100%;height:100%;object-fit:cover;display:block"/></div>'
           + '<div style="font-weight:800;font-size:19px">AI Video Studio</div>'
           + '<div style="font-size:11px;letter-spacing:1.8px;color:#94a3b8;margin-bottom:15px">TỰ ĐỘNG XÁC THỰC</div>'
           + status
           + '<div style="font-size:12px;color:#8b95a5;margin-top:5px">Tab do AI Video Studio quản lý — <b style="color:#fca5a5">ĐỪNG TẮT</b></div>';
       },
-      args: [active, label || 'Đang chạy', (typeof count === 'number' ? count : null)],
+      args: [active, label || 'Đang chạy', (typeof count === 'number' ? count : null), chrome.runtime.getURL('icon128.png')],
     });
   } catch {}
 }
@@ -985,7 +984,7 @@ async function _resolveVideoFromTab(projectId, mediaId, wantData) {
       const rr = await chrome.scripting.executeScript({
         target: { tabId },
         func: async (u) => {
-          try { const r = await fetch(u, { credentials: 'include' }); if (!r.ok) return { err: 'HTTP_' + r.status }; const b = await r.blob(); const buf = await b.arrayBuffer(); let bin = ''; const a = new Uint8Array(buf); for (let j = 0; j < a.length; j++) bin += String.fromCharCode(a[j]); return { b64: btoa(bin), mime: b.type || 'video/mp4', size: a.length }; }
+          try { const r = await fetch(u, { credentials: 'include' }); if (!r.ok) return { err: 'HTTP_' + r.status }; const b = await r.blob(); const buf = await b.arrayBuffer(); const a = new Uint8Array(buf); let bin = ''; for (let j = 0; j < a.length; j += 32768) bin += String.fromCharCode.apply(null, a.subarray(j, j + 32768)); return { b64: btoa(bin), mime: b.type || 'video/mp4', size: a.length }; }
           catch (e) { return { err: String(e && e.message) }; }
         },
         args: [vurl],
@@ -1000,8 +999,8 @@ async function _resolveVideoFromTab(projectId, mediaId, wantData) {
 async function fetchVideoToDataUrl(url) {
   const r = await fetch(url); if (!r.ok) throw new Error('VID_HTTP_' + r.status);
   const b = await r.blob(); const buf = await b.arrayBuffer();
-  let bin = ''; const u = new Uint8Array(buf);
-  for (let i = 0; i < u.length; i++) bin += String.fromCharCode(u[i]);
+  const u = new Uint8Array(buf); let bin = '';
+  for (let i = 0; i < u.length; i += 32768) bin += String.fromCharCode.apply(null, u.subarray(i, i + 32768));
   const b64 = btoa(bin); const mime = b.type || 'video/mp4';
   return { b64, mime, dataUrl: `data:${mime};base64,${b64}`, size: u.length };
 }
@@ -1277,11 +1276,14 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
 // AI Video Studio chạy server riêng 127.0.0.1:8793; extension long-poll lấy lệnh → chạy → trả kết quả.
 
 const APP_BRIDGE = 'http://127.0.0.1:8793';
+// Secret dùng chung với app (nova/flow-bridge.plain.js) — chặn tiến trình lạ chiếm cổng giả mạo bridge.
+// Server cũ không đọc header này nên vẫn tương thích ngược; server mới từ chối request thiếu/sai secret (403).
+const BRIDGE_SECRET = 'a920967907aa4445b66fd6ae835c7768780531677ee9a332';
 let _bridgeRunning = false;
 const EXT_VER = (() => { try { return chrome.runtime.getManifest().version; } catch { return '0'; } })();   // báo cho app để nhắc cập nhật khi lệch
 
 function bridgePostReply(id, result) {
-  fetch(`${APP_BRIDGE}/bridge/reply`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id, result }) }).catch(() => {});
+  fetch(`${APP_BRIDGE}/bridge/reply`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-bridge-secret': BRIDGE_SECRET }, body: JSON.stringify({ id, result }) }).catch(() => {});
 }
 
 async function bridgeLoop() {
@@ -1290,7 +1292,7 @@ async function bridgeLoop() {
   console.log('[FlowImageGen] app-bridge loop → ' + APP_BRIDGE);
   while (_bridgeRunning) {
     try {
-      const r = await fetch(`${APP_BRIDGE}/bridge/poll?v=${EXT_VER}`, { method: 'GET' });
+      const r = await fetch(`${APP_BRIDGE}/bridge/poll?v=${EXT_VER}`, { method: 'GET', headers: { 'x-bridge-secret': BRIDGE_SECRET } });
       if (!r.ok) { await sleep(2000); continue; }
       const cmd = await r.json();
       if (cmd && cmd.id && cmd.action) {
@@ -1305,7 +1307,7 @@ async function bridgeLoop() {
   }
 }
 
-function bridgePing() { fetch(`${APP_BRIDGE}/bridge/ping?v=${EXT_VER}`).catch(() => {}); }
+function bridgePing() { fetch(`${APP_BRIDGE}/bridge/ping?v=${EXT_VER}`, { headers: { 'x-bridge-secret': BRIDGE_SECRET } }).catch(() => {}); }
 
 // Giữ service worker sống + tự khởi động lại vòng lặp mỗi khi SW bị đánh thức.
 // (Antidetect như GPM hay để SW ngủ → alarm 30s + mọi event khởi động lại loop.)

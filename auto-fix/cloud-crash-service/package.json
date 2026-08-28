@@ -1,0 +1,12 @@
+{
+  "name": "ai-video-studio-cloud-crash-service",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Vercel crash ingestion and durable PostgreSQL job API",
+  "scripts": {
+    "test": "node test/domain.test.js && node test/handler.test.js && node test/postgres.integration.test.js"
+  },
+  "dependencies": {
+    "pg": "^8.16.3"
+  }
+}

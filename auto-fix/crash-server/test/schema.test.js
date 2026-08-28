@@ -46,6 +46,9 @@ assert.strictEqual(validateCrashReport(validReport({ environment_id: null, event
 assert.ok(!validateCrashReport(validReport({ error_code: 123 })).valid, 'non-string error_code must fail');
 assert.ok(!validateCrashReport(validReport({ module: '' })).valid, 'empty module must fail');
 assert.strictEqual(validateCrashReport(validReport({ error_code: 'ENOENT', module: 'run.js' })).valid, true);
+assert.strictEqual(validateCrashReport(validReport({ git_commit_sha: 'a'.repeat(40), artifact_sha256: 'b'.repeat(64) })).valid, true);
+assert.ok(!validateCrashReport(validReport({ git_commit_sha: 'not-a-sha' })).valid);
+assert.ok(!validateCrashReport(validReport({ artifact_sha256: 'a'.repeat(63) })).valid);
 assert.strictEqual(validateCrashReport(validReport({ error_code: null, module: null })).valid, true);
 
 console.log('schema tests: passed');

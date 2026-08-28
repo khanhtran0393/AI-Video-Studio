@@ -46,7 +46,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["injected.js"],
+      "resources": ["injected.js", "icon16.png", "icon48.png", "icon128.png"],
       "matches": ["https://labs.google/*"]
     }
   ],

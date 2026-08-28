@@ -13,6 +13,9 @@
 const http = require('http');
 
 const PORT = 8793;
+// Secret dùng chung với extension (nova/flow-extension/background.js) — chỉ nhận lệnh từ extension của app.
+// Extension luôn gửi header 'x-bridge-secret'; request thiếu/sai secret bị từ chối (403) để chặn tiến trình lạ chiếm cổng.
+const BRIDGE_SECRET = 'a920967907aa4445b66fd6ae835c7768780531677ee9a332';
 let server = null;
 let extLastSeen = 0;
 let extVersion = null;   // version extension đang kết nối (báo qua ?v=… lúc poll/ping) → so với bản mới để nhắc cập nhật
@@ -70,9 +73,11 @@ function start() {
   return new Promise((resolve) => {
     server = http.createServer((req, res) => {
       res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Access-Control-Allow-Headers', 'content-type');
+      res.setHeader('Access-Control-Allow-Headers', 'content-type, x-bridge-secret');
       res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
       if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
+      // Chỉ tin extension của app: header secret phải khớp (chặn tiến trình lạ chiếm cổng mạo danh bridge).
+      if (req.headers['x-bridge-secret'] !== BRIDGE_SECRET) { res.writeHead(403); return res.end(); }
       const url = (req.url || '').split('?')[0];
       if (url === '/bridge/poll' && req.method === 'GET') { handlePoll(req, res); return; }
       if (url === '/bridge/reply' && req.method === 'POST') { readBody(req, (b) => { handleReply(b); res.writeHead(200); res.end('{}'); }); return; }

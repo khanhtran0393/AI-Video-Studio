@@ -7660,7 +7660,7 @@ function tsToScenes(){
 }
 
 // ── Tạo giọng nói (OmniVoice) — UI native, gọi thẳng backend Voice Studio ──
-const VOICE_URL = 'http://127.0.0.1:8771';
+let VOICE_URL = 'http://127.0.0.1:8771';   // cổng mặc định; voiceInit() thay bằng URL thật từ main (hỗ trợ backend cũ ở 8770)
 // ⚠️ ĐỔI link này thành trang tải + hướng dẫn cài backend giọng nói (voice-studio) của bạn
 const VOICE_SETUP_URL = 'https://github.com/khanhtran0393/AI-Novel#giong-noi';
 let _voiceReady = false;
@@ -7675,7 +7675,7 @@ async function voiceInit(){
   }
   // Xác minh backend còn sống (không chỉ dựa cờ cũ — phòng khi backend đã tắt/khởi động lại).
   const cur = await window.native.voiceStatus().catch(() => null);
-  if (cur?.running){ _voiceReady = true; if (st) st.innerHTML = '<span style="color:var(--green)">● Giọng nói sẵn sàng (OmniVoice)</span>'; voiceLoadVoices(); return; }
+  if (cur?.running){ _voiceReady = true; if (cur?.url) VOICE_URL = cur.url; if (st) st.innerHTML = '<span style="color:var(--green)">● Giọng nói sẵn sàng (OmniVoice)</span>'; voiceLoadVoices(); return; }
   _voiceReady = false;
   // Đã cài backend trên máy chưa? (thay vì báo lỗi đỏ → hiện panel hướng dẫn cài)
   const pb = window.native.voiceProbe ? await window.native.voiceProbe().catch(() => null) : null;
@@ -7685,7 +7685,7 @@ async function voiceInit(){
   if (st) st.innerHTML = '⏳ Đang khởi động backend giọng nói (OmniVoice)… lần đầu ~30-60s, giữ app mở.';
   if (!_voiceStarting) _voiceStarting = window.native.voiceStart();
   const r = await _voiceStarting; _voiceStarting = null;
-  if (r?.ok){ _voiceReady = true; if (st) st.innerHTML = '<span style="color:var(--green)">● Giọng nói sẵn sàng (OmniVoice)</span>'; voiceLoadVoices(); }
+  if (r?.ok){ _voiceReady = true; if (r?.url) VOICE_URL = r.url; if (st) st.innerHTML = '<span style="color:var(--green)">● Giọng nói sẵn sàng (OmniVoice)</span>'; voiceLoadVoices(); }
   else if (st) st.innerHTML = '<span style="color:var(--red)">Lỗi khởi động: ' + escapeHtml(r?.error || '') + '</span>';
 }
 
@@ -7696,7 +7696,7 @@ function voiceShowSetup(kind){
   const needPy = kind === 'need-python';
   const msg = needPy
     ? 'Đã tìm thấy thư mục voice-studio nhưng <b>chưa cài môi trường Python</b>. Mở voice-studio và chạy file cài đặt (setup) một lần, rồi bấm “Kiểm tra lại”.'
-    : 'Giọng nói AI chạy <b>ngay trên máy bạn</b> (đọc bao nhiêu cũng miễn phí). Cần tải backend về + cài một lần. Cài xong bấm “Đã cài — chọn thư mục” hoặc mở lại app.';
+    : 'Giọng nói AI chạy <b>ngay trên máy bạn</b> (đọc bao nhiêu cũng miễn phí). Bấm <b>“Cài backend vào máy”</b> — app tự cài vào thư mục của app, <b>không cần chọn nơi lưu</b>. Chỉ cài một lần là xong.';
   st.innerHTML = `
     <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:16px 18px;text-align:left;max-width:720px">
       <div style="font-weight:800;font-size:14px;color:var(--text);margin-bottom:6px">🎙 Cần cài backend giọng nói (OmniVoice) trên máy</div>

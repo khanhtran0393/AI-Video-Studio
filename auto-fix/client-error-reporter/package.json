@@ -2,9 +2,9 @@
   "name": "ai-video-studio-client-error-reporter",
   "version": "0.2.0",
   "private": true,
-  "description": "Client-side error reporter: exception capture, event buffer, environment fingerprint, local queue, HTTPS upload, privacy sanitization. Standalone and not yet wired into the packaged Electron app.",
+  "description": "Electron crash reporter with exception capture, event buffer, persistent queue, authenticated HTTPS upload, and privacy sanitization.",
   "main": "reporter.js",
   "scripts": {
-    "test": "node test/sanitizer.test.js && node test/event-buffer.test.js && node test/fingerprint.test.js && node test/environment.test.js && node test/queue.test.js && node test/uploader.test.js && node test/reporter.test.js"
+    "test": "node test/sanitizer.test.js && node test/event-buffer.test.js && node test/fingerprint.test.js && node test/environment.test.js && node test/release-identity.test.js && node test/queue.test.js && node test/uploader.test.js && node test/reporter.test.js"
   }
 }

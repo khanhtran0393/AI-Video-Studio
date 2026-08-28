@@ -70,7 +70,7 @@ function fingerprintException(error) {
   const basis = [errorType, errorCode, normalizedMessage, normalizedFrames, moduleName].join('\n');
   const hash = crypto.createHash('sha256').update(basis, 'utf8').digest('hex');
   return {
-    fingerprint: hash.slice(0, 32),
+    fingerprint: hash,
     errorType,
     errorCode,
     normalizedMessage,

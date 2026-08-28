@@ -9,6 +9,7 @@ a.stack = 'TypeError: Cannot read property 0x12 of undefined\n    at render (C:\
 const b = new TypeError('Cannot read property 0x99 of undefined');
 b.stack = 'TypeError: Cannot read property 0x99 of undefined\n    at render (C:\\app\\nova\\render.js:42:7)';
 assert.strictEqual(fingerprintException(a).fingerprint, fingerprintException(b).fingerprint);
+assert.match(fingerprintException(a).fingerprint, /^[0-9a-f]{64}$/, 'fingerprints must retain the full SHA-256 digest');
 
 // Different error types yield different fingerprints.
 const c = new RangeError('Invalid array length 5');
