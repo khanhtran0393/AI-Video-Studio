@@ -6652,8 +6652,10 @@ async function _withRetry(fn){
       if (!retryable || attempt >= MAX) throw e;
       try { if (typeof novaLog === 'function') novaLog(`  ↻ AI lỗi tạm (${msg.slice(0, 40)}) — thử lại lần ${attempt + 1}/${MAX}…`, 'warn'); } catch(_){}
       const isDup = /\bAPI 409\b/.test(msg);   // request trùng đang được server xử lý → đợi LÂU hơn cho request gốc xong
-      const wait = isDup ? Math.max(12000, delay * 4) : Math.min(delay + Math.random() * 400, 10000);
-      await new Promise(r => setTimeout(r, wait));   // 409: đợi ~12s+; còn lại trần 10s giữa các lần
+      // 409 duplicate: request gốc (model reasoning) có thể còn xử lý 2-3 phút → chờ tăng dần 15/30/60s.
+      // Trước đây chỉ chờ ~12s mỗi lần → cả 4 lần thử đều dính 409 và lỗi lộ thẳng ra UI.
+      const wait = isDup ? [15000, 30000, 60000, 60000][Math.min(attempt - 1, 3)] : Math.min(delay + Math.random() * 400, 10000);
+      await new Promise(r => setTimeout(r, wait));   // 409: chờ cửa sổ dedup của server khép; còn lại trần 10s giữa các lần
       delay *= 2;
     }
   }
@@ -6715,11 +6717,12 @@ async function callLLM(prompt, opts = {}){
   const doCall = () => {
     if (provider === 'anthropic') return callAnthropic(messages, model, key, maxTokens);   // callAnthropic tự đọc Base URL bên trong
     // Có Base URL → OpenAI/DeepSeek đi QUA gateway (/v1/chat/completions), KHÔNG gọi thẳng api.openai.com/deepseek.
+    // stream:true giữ connection qua giai đoạn model reasoning nghĩ (né 500 → retry → 409 duplicate của gateway).
     if (_baseUrl && (provider === 'openai' || provider === 'deepseek'))
-      return callOpenAICompat(messages, model, key, maxTokens, _chatEndpoint(_baseUrl), { thinking, json });
+      return callOpenAICompat(messages, model, key, maxTokens, _chatEndpoint(_baseUrl), { thinking, json, stream: true });
     if (provider === 'openai')    return callOpenAI(messages, model, key, maxTokens, { json });
-    if (provider === 'gemini')    return callOpenAICompat(messages, model, key, maxTokens, 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', { json });
-    if (provider === 'deepseek')  return callOpenAICompat(messages, model, key, maxTokens, 'https://api.deepseek.com/v1/chat/completions', { thinking, json });
+    if (provider === 'gemini')    return callOpenAICompat(messages, model, key, maxTokens, 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', { json, stream: true });
+    if (provider === 'deepseek')  return callOpenAICompat(messages, model, key, maxTokens, 'https://api.deepseek.com/v1/chat/completions', { thinking, json, stream: true });
     // Các provider OpenAI-compatible
     const BASE_URLS = {
       openrouter:  'https://openrouter.ai/api/v1',
@@ -6732,12 +6735,12 @@ async function callLLM(prompt, opts = {}){
     };
     if (provider in BASE_URLS) {
       const base = _baseUrl || BASE_URLS[provider];
-      return callOpenAICompat(messages, model, key, maxTokens, _chatEndpoint(base), { thinking, json });
+      return callOpenAICompat(messages, model, key, maxTokens, _chatEndpoint(base), { thinking, json, stream: true });
     }
     // OpenAI Compatible Custom: bắt buộc phải có Base URL
     if (provider === 'openai-compatible') {
       if (!_baseUrl) throw new Error('Vui lòng nhập Base URL cho OpenAI Compatible.');
-      return callOpenAICompat(messages, model, key, maxTokens, _chatEndpoint(_baseUrl), { thinking, json });
+      return callOpenAICompat(messages, model, key, maxTokens, _chatEndpoint(_baseUrl), { thinking, json, stream: true });
     }
     throw new Error('Provider không hỗ trợ: ' + provider);
   };
@@ -6949,6 +6952,11 @@ async function callOpenAICompat(messages, model, key, maxTokens, endpoint, opts 
   if (opts.thinking === true) payload.thinking = { type: 'enabled' };
   // Ép trả JSON hợp lệ (tránh model trả văn xuôi → parse lỗi)
   if (opts.jsonObj) payload.response_format = { type: 'json_object' };   // ⚠️ chế độ này KHÔNG trả được MẢNG top-level → mặc định TẮT
+  // 🌊 stream:true — model reasoning (vd DeepSeek V4) nghĩ rất lâu trước token đầu; non-stream bị gateway
+  // (vd xkiro) cắt ở ~30s → 500 → _withRetry gửi lại → bị chặn "duplicate request". Stream giữ connection
+  // sống qua giai đoạn nghĩ. CLI bridge KHÔNG hỗ trợ SSE → chỉ bật khi caller truyền opts.stream=true
+  // (các đường gateway/relay trực tiếp). llm-fetch ở main đệm trọn SSE rồi trả → parse cả JSON lẫn SSE đều OK.
+  if (opts.stream === true) payload.stream = true;
   const body = JSON.stringify(payload);
   // ⏱ Timeout: CLI bridge có thể TREO (process Claude/ChatGPT kẹt) → nếu không có giới hạn, gọi sẽ đứng VÔ HẠN.
   // Cho ngưỡng rộng (mặc định 240s) để cuộc gọi lớn qua CLI vẫn kịp, nhưng treo thật thì bung lỗi rõ.
@@ -6962,7 +6970,10 @@ async function callOpenAICompat(messages, model, key, maxTokens, endpoint, opts 
       body, signal: ctrl.signal, timeoutMs: opts.timeoutMs || LLM_TIMEOUT_MS
     });
     if (!r.ok) { const e = await r.text(); throw new Error(`API ${r.status}: ${e.slice(0, 600)}`); }
-    d = await r.json();
+    // Nhận cả 2 dạng phản hồi: JSON thường (non-stream / relay bỏ stream) VÀ SSE (data: {...} từng dòng).
+    // Phụ thuộc hình dạng thân, không xem content-type: nhiều relay trả SSE mà header sai.
+    const raw = await r.text();
+    d = _parseOaStreamBody(raw);
   } catch (e) {
     if (e && (e.name === 'AbortError' || /aborted/i.test(e.message || ''))) throw new Error('Quá thời gian chờ AI (CLI bridge có thể bị treo). Thử lại, hoặc chuyển sang API key ở Cài đặt.');
     throw e;
@@ -6971,6 +6982,28 @@ async function callOpenAICompat(messages, model, key, maxTokens, endpoint, opts 
   const msg = d.choices?.[0]?.message || {};
   // Model thinking trả lời ở content; phần suy luận nằm ở reasoning_content (bỏ qua, chỉ lấy đáp án)
   return msg.content || msg.reasoning_content || '';
+}
+
+// Đọc thân phản hồi OpenAI-compatible: JSON thường → dùng nguyên; SSE (stream:true) → gộp delta.content.
+// Một số relay stream vẫn trả message ở chunk cuối → cũng lấy (dự phòng khi delta rỗng).
+function _parseOaStreamBody(raw){
+  const s = String(raw || '');
+  try { const j = JSON.parse(s); if (j && (j.choices || j.usage || j.error)) return j; } catch (_) {}
+  let acc = '', usage = null;
+  for (const line of s.split('\n')) {
+    const t = line.trim();
+    if (!t.startsWith('data:')) continue;
+    const p = t.slice(5).trim();
+    if (!p || p === '[DONE]') continue;
+    try {
+      const j = JSON.parse(p);
+      if (j.usage) usage = j.usage;
+      const ch = (j.choices && j.choices[0]) || {};
+      if (ch.delta && ch.delta.content) acc += ch.delta.content;
+      else if (ch.message && ch.message.content) acc += ch.message.content;
+    } catch (_) {}
+  }
+  return { choices: [{ message: { content: acc } }], usage };
 }
 
 // Backward-compatible alias (logic cũ dùng callClaude)
@@ -9129,7 +9162,7 @@ async function notifyDone(title, body){
   }
   if (perm !== 'granted') return;
   try {
-    new Notification(title, { body, icon: '/favicon.ico', tag: 'novastudio' });
+    new Notification(title, { body, icon: '/brand-logo.ico', tag: 'aivideostudio' });
   } catch(e) {}
 }
 

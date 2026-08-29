@@ -68,7 +68,7 @@ async function main() {
   const ipcMain = { removeHandler: channel => handlers.delete(channel), handle: (channel, handler) => handlers.set(channel, handler) };
   let rendered = false;
   const channels = registerDocumentaryIpc(ipcMain, { rootDir, render: async payload => { rendered = payload.scenes.length > 0; return { ok: true, outputPath: 'test.mp4' }; } });
-  assert.deepStrictEqual(channels, ['documentary:create', 'documentary:list', 'documentary:read', 'documentary:run', 'documentary:render']);
+  assert.deepStrictEqual(channels, ['documentary:create', 'documentary:list', 'documentary:read', 'documentary:run', 'documentary:runFull', 'documentary:unlock', 'documentary:versions', 'documentary:rollback', 'documentary:override', 'documentary:presets', 'documentary:providers', 'documentary:openWindow', 'documentary:render']);
   const read = await handlers.get('documentary:read')(null, { projectId: 'demo_1' });
   assert.strictEqual(read.title, 'Demo');
   const renderResult = await handlers.get('documentary:render')(null, { projectId: 'demo_1' });

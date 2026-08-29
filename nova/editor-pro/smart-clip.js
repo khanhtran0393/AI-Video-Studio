@@ -44,7 +44,18 @@ const _NHA_CC = {
   gemini:     { kieu: 'oa', url: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
                 khoa: 'api_key_gemini', mac: 'gemini-2.5-flash-lite' },
   anthropic:  { kieu: 'an', url: 'https://api.anthropic.com/v1/messages',           khoa: 'api_key_anthropic',  mac: 'claude-haiku-4.5' },
+  // relay tự nhập URL (kiểu đang cấu hình ở tab API) — cần api_base_url; model ưu tiên api_model_clip,
+  // không có mới lấy api_model chung của app (vì mac rỗng).
+  'openai-compatible': { kieu: 'oa', url: '', khoa: 'api_key', mac: '' },
 };
+// Chuẩn hoá URL như tab Cài đặt của app: https://host → …/v1/chat/completions (đủ /v1 thì không thêm nữa).
+function _oaUrlX(base) {
+  let b = String(base || '').trim().replace(/\/+$/, '');
+  b = b.replace(/([^:])\/{2,}/g, '$1/');
+  if (/\/chat\/completions$/i.test(b)) return b;
+  if (/\/v1$/i.test(b)) return b + '/chat/completions';
+  return b + '/v1/chat/completions';
+}
 
 /* Anthropic nhận ảnh theo kiểu KHÁC OpenAI. Nội dung trong smart-clip vốn viết
    theo kiểu OpenAI, nên phải đổi khi gửi sang Anthropic:
@@ -63,8 +74,26 @@ function _sangAnthropic(content) {
 
 
 async function _goiApi(content, kho) {
+  // Relay có khi lỗi 5xx tạm thời hoặc chặn "duplicate request" — thử tối đa 4 lần (5xx 2/5/8s; duplicate 5s).
+  let err;
+  for (let i = 0; i < 4; i++) {
+    try { return await _goiApiMot(content, kho); }
+    catch (e) {
+      err = e;
+      const m = String((e && e.message) || '');
+      if (!/HTTP 5\d\d|duplicate/i.test(m)) break;
+      const dl = /duplicate/i.test(m) ? 5000 : [2000, 5000, 8000][i] || 8000;
+      await new Promise(r => setTimeout(r, dl));
+    }
+  }
+  throw err;
+}
+async function _goiApiMot(content, kho) {
   const nc = _NHA_CC[String(kho.api_provider || '').trim().toLowerCase()];
   if (!nc) return null;
+  // openai-compatible mà thiếu base URL → không gọi được, lùi về CLI bridge.
+  const goc0 = String(kho.api_base_url || '').trim().replace(/\/+$/, '');
+  if (nc.kieu !== 'an' && !nc.url && !goc0) return null;
   /* Ô key trong app cho phép NHIỀU khoá, mỗi khoá một dòng ("nhiều key =
      chạy song song"). Lấy nguyên khối là gửi cả xâu xuống dòng làm khoá → 401.
      smart-clip chạy tuần tự nên chỉ cần khoá đầu tiên còn dùng được.        */
@@ -73,7 +102,8 @@ async function _goiApi(content, kho) {
   if (!key) return null;
   // Ưu tiên model riêng của smart-clip; KHÔNG lấy api_model chung của app —
   // model chung thường là loại mạnh/đắt, chạy hàng trăm lượt thì phí và chậm.
-  const model = String(kho.api_model_clip || '').trim() || nc.mac;
+  const model = String(kho.api_model_clip || '').trim() || nc.mac || String(kho.api_model || '').trim();
+  if (!model) return null;
   // Base URL tuỳ chọn (dùng API bên thứ ba) — cùng ô người dùng đã nhập ở tab API.
   const goc = String(kho.api_base_url || '').trim().replace(/\/+$/, '');
 
@@ -89,15 +119,43 @@ async function _goiApi(content, kho) {
     return ((d && d.content) || []).filter((b) => b.type === 'text').map((b) => b.text).join('\n');
   }
 
-  const url = goc ? goc + '/chat/completions' : nc.url;
-  const r = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
-    body: JSON.stringify({ model, messages: [{ role: 'user', content }] }),
-  });
-  const d = await r.json().catch(() => null);
-  if (!r.ok) throw new Error((d && d.error && d.error.message) || ('HTTP ' + r.status));
-  return (d && d.choices && d.choices[0] && d.choices[0].message && d.choices[0].message.content) || '';
+  const url = goc ? _oaUrlX(goc) : nc.url;   // base tuỳ chọn: tự thêm /v1 nếu thiếu (vd https://xkiro.com → /v1/chat/completions)
+  // stream:true — model reasoning nghĩ rất lâu trước token đầu; non-stream bị gateway cắt ~30s → 500,
+  // retry lại bị chặn "duplicate request". Stream giữ connection sống.
+  const ctl = new AbortController();
+  const killer = setTimeout(() => ctl.abort(), 300000);
+  try {
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
+      body: JSON.stringify({ model, stream: true, messages: [{ role: 'user', content }] }),
+      signal: ctl.signal,
+    });
+    if (!r.ok) {
+      const t = await r.text().catch(() => '');
+      let msg = 'HTTP ' + r.status;
+      try { const j = JSON.parse(t); if (j && j.error) msg = typeof j.error === 'string' ? j.error : (j.error.message || msg); } catch (_) {}
+      throw new Error(msg);
+    }
+    let acc = '', buf = '';
+    const dec = new TextDecoder();
+    const reader = r.body.getReader();
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop() || '';
+      for (const line of lines) {
+        const s = line.trim();
+        if (!s.startsWith('data:')) continue;
+        const d = s.slice(5).trim();
+        if (d === '[DONE]') continue;
+        try { const j = JSON.parse(d); const c = j.choices && j.choices[0] && j.choices[0].delta && j.choices[0].delta.content; if (c) acc += c; } catch (_) {}
+      }
+    }
+    return acc;
+  } finally { clearTimeout(killer); }
 }
 
 

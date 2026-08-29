@@ -17,14 +17,17 @@ const MAX_CONCURRENT = 2;
 const TIMEOUT_MS = 900000;   // 15 phút — kịch bản dài + prompt phong cách nặng có thể lâu (gói Claude/ChatGPT chậm hơn API)
 
 // GUI app (mở từ Dock/Start) có PATH nghèo → bổ sung nơi hay cài CLI để tìm thấy `claude`/`codex`.
+// LƯU Ý Windows: env key có sẵn là "Path" (viết hoa P). Nếu gán env.PATH sẽ tạo THÊM key "PATH"
+// song song → env block có 2 biến trùng tên → cmd.exe mất PATH, spawn `claude` fail
+// "'claude' is not recognized". Phải ghi đè đúng key đang có.
 function goodEnv() {
   const home = os.homedir();
   const extra = ['/usr/local/bin', '/opt/homebrew/bin', '/usr/bin', '/bin',
     path.join(home, '.npm-global/bin'), path.join(home, '.local/bin'),
     path.join(home, '.bun/bin'), path.join(home, '.deno/bin')];
   const env = { ...process.env };
-  const cur = env.PATH || '';
-  env.PATH = [cur, ...extra].filter(Boolean).join(path.delimiter);
+  const pathKey = Object.keys(env).find((k) => k.toLowerCase() === 'path') || 'PATH';
+  env[pathKey] = [env[pathKey] || '', ...extra].filter(Boolean).join(path.delimiter);
   return env;
 }
 
@@ -96,7 +99,8 @@ function createBridge(engine, port) {
       cp.stdout.on('data', (d) => (out += d));
       cp.stderr.on('data', (d) => (err += d));
       cp.on('error', (e) => finish(reject, new Error(e.code === 'ENOENT' ? ('Chưa cài ' + cmd + ' CLI trên máy.') : e.message)));
-      cp.on('close', (code) => code === 0 ? finish(resolve, out.trim()) : finish(reject, new Error(err.trim() || ('exit ' + code))));
+      // CLI in "API Error: ..." ra STDOUT khi lỗi (exit != 0) → phải đưa stdout vào error để chẩn đoán.
+      cp.on('close', (code) => code === 0 ? finish(resolve, out.trim()) : finish(reject, new Error((err.trim() || out.trim() || ('exit ' + code)).slice(0, 600))));
       if (useStdin) { try { cp.stdin.write(prompt); } catch {} }
       try { cp.stdin.end(); } catch {}
     }));

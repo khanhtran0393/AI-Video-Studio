@@ -18,7 +18,9 @@
     "!nova/sqlite-bin{,/**/*}",
     "!nova/onnx-bin{,/**/*}",
     "!nova/ytdlp-bin{,/**/*}",
-    "!nova/editor-pro/remotion-browser{,/**/*}"
+    "!nova/editor-pro/remotion-browser{,/**/*}",
+    "!nova/voice-studio/.venv-omni{,/**/*}",
+    "!nova/voice-studio/data{,/**/*}"
   ],
   "asar": true,
   "asarUnpack": [

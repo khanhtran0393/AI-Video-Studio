@@ -454,6 +454,13 @@ function buildMenu() {
       { role: 'resetZoom', label: 'Cỡ mặc định' }, { role: 'zoomIn', label: 'Phóng to' }, { role: 'zoomOut', label: 'Thu nhỏ' },
       { type: 'separator' }, { role: 'togglefullscreen', label: 'Toàn màn hình' },
     ] },
+    // Menu Cửa sổ: mở các panel phụ (pattern documentary:openWindow / videoAgent:openWindow).
+    { label: 'Cửa sổ', submenu: [
+      { label: 'Nova Video Agent', click: () => {
+        try { require('./video-agent/window').openVideoAgentWindow(); }
+        catch (e) { console.warn('[menu] mở Video Agent lỗi:', e && e.message); }
+      } },
+    ] },
   ]));
 }
 

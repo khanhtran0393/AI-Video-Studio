@@ -1,0 +1,1 @@
+﻿D:\AI Video Studio\node_modules\@remotion\compositor-win32-x64-msvc\ffmpeg.exe

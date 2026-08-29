@@ -32,7 +32,8 @@ function makeTimeline(scenes, alignment, options = {}) {
   };
 }
 
-function validateTimeline(timeline) {
+function validateTimeline(timeline, options = {}) {
+  const maxGapSec = Number(options.maxGapSec) !== undefined ? Number(options.maxGapSec) : 0.5; // im lặng giữa từ là bình thường
   const errors = [];
   let end = 0;
   for (const scene of (timeline && timeline.scenes) || []) {
@@ -41,7 +42,7 @@ function validateTimeline(timeline) {
     const sceneEnd = Number(scene.endSec);
     if (![start, duration, sceneEnd].every(Number.isFinite) || start < 0 || duration <= 0) errors.push({ code: 'invalid-timing', sceneId: scene.sceneId });
     if (start < end - 0.001) errors.push({ code: 'overlap', sceneId: scene.sceneId });
-    if (start > end + 0.001) errors.push({ code: 'gap', sceneId: scene.sceneId });
+    if (start > end + maxGapSec) errors.push({ code: 'gap', sceneId: scene.sceneId });
     if (Math.abs(sceneEnd - (start + duration)) > 0.002) errors.push({ code: 'end-mismatch', sceneId: scene.sceneId });
     end = Math.max(end, sceneEnd);
   }
