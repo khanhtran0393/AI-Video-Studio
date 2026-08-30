@@ -50,7 +50,7 @@ function createVideoJob({ projectDir, adapters = {}, options = {} }) {
     try {
       const dir = path.join(projectDir, 'output'); fs.mkdirSync(dir, { recursive: true });
       fs.writeFileSync(path.join(dir, 'job.json'), JSON.stringify({ ...out, status: state, progress: PROGRESS[state] || 0, stage: state,
-        url, output, options, updatedAt: new Date().toISOString(), events: events.slice(-40) }, null, 2));
+        url, output, options: redactSecrets(options), updatedAt: new Date().toISOString(), events: events.slice(-40) }, null, 2));
     } catch (_) {}
   }
   const result = (status, error) => ({ jobId: out.jobId, status, stage: state, progress: PROGRESS[state] || 0,
@@ -68,7 +68,7 @@ function createVideoJob({ projectDir, adapters = {}, options = {} }) {
           const e = new Error('Không đủ dung lượng trống để render (cần tối thiểu ' + minFreeBytes + ' byte).'); e.code = 'VA_DISK_SPACE'; throw e;
         }
       }
-      const A = await runAnalysis(projectDir, { step, adapters, options });
+      const A = await runAnalysis(projectDir, { step, adapters, options, signal: abortController.signal });
       const { project, tts, manifest, versions, validate } = A;
       out.chapterId = project.chapterId;
       timeline = await step('BUILDING_TIMELINE', () => buildTimeline(A.spec));
@@ -141,5 +141,26 @@ function createVideoJob({ projectDir, adapters = {}, options = {} }) {
     get qa() { return qaReport; }, get url() { return url; }, get events() { return events; } };
 }
 
-module.exports = { createVideoJob, PROGRESS };
+function isSecretKey(key) {
+  const normalized = String(key).replace(/[^a-z0-9]/gi, '').toLowerCase();
+  return normalized === 'authorization' || normalized === 'password' || normalized === 'token' ||
+    normalized.endsWith('apikey') || normalized.endsWith('secret') || normalized.endsWith('authtoken') ||
+    normalized.includes('accesskey') || normalized.includes('privatekey') || normalized.includes('credential');
+}
+
+function redactSecrets(value, ancestors = new WeakSet()) {
+  if (!value || typeof value !== 'object') return value;
+  if (ancestors.has(value)) return '[Circular]';
+  ancestors.add(value);
+  try {
+    if (Array.isArray(value)) return value.map(item => redactSecrets(item, ancestors));
+    const out = {};
+    for (const [key, item] of Object.entries(value)) {
+      out[key] = isSecretKey(key) ? '[REDACTED]' : redactSecrets(item, ancestors);
+    }
+    return out;
+  } finally { ancestors.delete(value); }
+}
+
+module.exports = { createVideoJob, PROGRESS, redactSecrets };
 

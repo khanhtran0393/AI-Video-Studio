@@ -59,17 +59,25 @@ async function buildVisualPlan(storyPlan, manifest, config = {}, options = {}) {
   const used = new Map();
   let plans = storyPlan.scenes.map((s, i) => visualsFor(s, i, manifest, used, config));
   if (typeof options.planVisual === 'function') {
-    const refined = await Promise.all(plans.map(async (p) => {
-      try { return Object.assign({}, p, { visuals: await options.planVisual(p, storyPlan) }); } catch (_) { return p; }
+    const assetContext = (manifest.assets || []).map(a => ({ assetId: a.assetId, type: a.type, tags: a.tags || [], characterId: a.characterId || null }));
+    const refined = await Promise.all(plans.map(async (baseline) => {
+      try {
+        const candidate = await options.planVisual({ ...baseline, aiContext: { assets: assetContext } }, storyPlan);
+        return { baseline, candidate: candidate || {} };
+      } catch (_) { return { baseline, candidate: baseline.visuals }; }
     }));
-    plans = refined.map((r) => {
-      const v = r.visuals || {};
-      return { sceneId: r.sceneId, visuals: {
-        background: v.background != null ? String(v.background) : r.visuals.background,
-        character: Array.isArray(v.character) ? v.character.map(String) : r.visuals.character,
-        camera: grammar.isCamera(v.camera) ? v.camera : r.visuals.camera,
-        characterAnimation: grammar.isAnim(v.characterAnimation) ? v.characterAnimation : r.visuals.characterAnimation,
-        transition: grammar.isTransition(v.transition) ? v.transition : r.visuals.transition,
+    const backgroundIds = new Set((manifest.assets || []).filter(a => a.type === 'background' || a.type === 'scene').map(a => String(a.assetId)));
+    const characterIds = new Set((manifest.assets || []).filter(a => a.type === 'character').map(a => String(a.assetId)));
+    plans = refined.map(({ baseline, candidate }) => {
+      const v = candidate || {};
+      const background = v.background == null ? baseline.visuals.background : String(v.background);
+      const characters = Array.isArray(v.character) ? v.character.map(String) : baseline.visuals.character;
+      return { sceneId: baseline.sceneId, visuals: {
+        background: background === null || backgroundIds.has(background) ? background : baseline.visuals.background,
+        character: characters.every(id => characterIds.has(id)) ? characters : baseline.visuals.character,
+        camera: grammar.isCamera(v.camera) ? v.camera : baseline.visuals.camera,
+        characterAnimation: grammar.isAnim(v.characterAnimation) ? v.characterAnimation : baseline.visuals.characterAnimation,
+        transition: grammar.isTransition(v.transition) ? v.transition : baseline.visuals.transition,
       } };
     });
   }

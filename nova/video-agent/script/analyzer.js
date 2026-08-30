@@ -66,7 +66,7 @@ async function analyzeScript(scriptPath, config = {}, options = {}) {
   // LLM tinh chỉnh (optional): chạy song song từng cảnh.
   if (typeof options.analyze === 'function') {
     const refined = await Promise.all(scenes.map(async (s) => {
-      try { return Object.assign({}, s, await options.analyze(s.text, { config })); } catch (_) { return s; }
+      try { return Object.assign({}, s, await options.analyze(s.text, { config, fallback: s })); } catch (_) { return s; }
     }));
     scenes = refined.map((r, i) => Object.assign({}, scenes[i], {
       // giữ trường do engine quyết định (id/importance) — LLM chỉ thêm metadata.

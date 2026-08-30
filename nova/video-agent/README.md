@@ -66,6 +66,21 @@ node nova/video-agent/test-phases.js # Phase 3/4/5 acceptance — 52/52 PASS (d�
 transition id bóc từ `transitions.json` + legacy map) — render thật cần Electron + `@remotion/renderer`
 (không có ở môi trường dev plain-node).
 
+## V5 Phase B — AI Gateway + Provider Registry
+- `ai-gateway/registry.js` đăng ký/routing provider theo capability flags `vision`, `structuredOutput`, `toolCalling`;
+  thứ tự chọn ổn định theo preferred provider → priority → name. `describe()` chỉ trả metadata công khai, không trả API key.
+- `ai-gateway/gateway.js` là cổng planning duy nhất: validate JSON theo schema, repair một lần, failover sang provider tiếp
+  theo capability, rồi luôn có `local-deterministic` làm safety net. Pipeline vì vậy vẫn chạy offline và reproducible.
+- Provider có sẵn: OpenAI-compatible (OpenAI, DeepSeek, Gemini OpenAI endpoint, local/CLI bridge tùy `baseUrl`) và
+  Anthropic native. HTTP dùng `fetch` có timeout, retry/backoff, AbortSignal; không thêm dependency.
+- Orchestrator tự nối AI vào `script.plan`, `scene.plan`, `behavior.plan`. AI chỉ đề xuất: visual grammar lọc scene plan;
+  `validateVideoSpec()` + constraint solver là authority cuối cho behavior graph. Adapter inject cũ vẫn được ưu tiên.
+- Cấu hình trong `config.json` hoặc `options.ai`: `{ "providers": [{ "type": "openai", "model": "gpt-4o-mini" }] }`.
+  Key lấy từ `OPENAI_API_KEY`, `DEEPSEEK_API_KEY`, `GEMINI_API_KEY`, `ANTHROPIC_API_KEY`; cũng có thể inject `apiKey`
+  runtime. Provider thiếu cả key lẫn custom `baseUrl` không được đăng ký, nên không có request mạng ngoài ý muốn.
+- Acceptance: `test-ai-gateway.js` kiểm capability routing, malformed JSON failover, local fallback, request OpenAI-compatible,
+  và tích hợp đủ ba planner trong orchestrator.
+
 ## Render thật (đã chạy PASS trên Windows)
 Cần: `@remotion/renderer` + `@remotion/bundler` + `remotion` + `@remotion/transitions` + `react` cùng version
 (4.0.518, cài ở root `node_modules`), bundle rebuild bằng `node editor-pro/nova-remotion/build.js`.

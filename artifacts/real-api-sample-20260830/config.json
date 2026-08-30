@@ -1,0 +1,16 @@
+{
+  "chapterId": "real-api-dawn-signal",
+  "characters": [
+    { "id": "MAYA", "name": "Maya" }
+  ],
+  "transitions": ["cut"],
+  "style": {
+    "bg": "#07111f",
+    "accent": "#ffd166",
+    "text": "#f8fafc",
+    "font": "Arial",
+    "fps": 30,
+    "width": 854,
+    "height": 480
+  }
+}
