@@ -1,0 +1,46 @@
+﻿function renderResult(r) {
+    if (!r) { resBox.className = 'meta'; resBox.textContent = 'Chưa chạy.'; return; }
+    resBox.className = '';
+    resBox.innerHTML = '';
+    const rows = [
+      ['Trạng thái', r.status, r.status === 'COMPLETED' ? 'ok' : (r.status === 'FAILED' ? 'err' : 'warn')],
+      ['URL', r.url ? '<code>' + r.url + '</code>' : '—', ''],
+      ['Output', r.output || '—', ''],
+      ['Mất', r.elapsedMs != null ? (r.elapsedMs / 1000).toFixed(1) + 's' : '—', ''],
+      ['Lỗi', r.error ? JSON.stringify(r.error) : '—', r.error ? 'err' : ''],
+    ];
+    for (const item of rows) resBox.append(el('div', { class: item[2] },
+      el('b', {}, item[0] + ': '), el('span', { html: String(item[1]) })));
+  }
+
+  function renderSpec(spec) {
+    const t = document.getElementById('sceneTable');
+    t.innerHTML = '<tr><th>id</th><th>start</th><th>end</th><th>camera</th><th>transition</th><th>yếu tố</th><th>caption</th></tr>';
+    for (const s of (spec && spec.scenes) || []) {
+      t.insertAdjacentHTML('beforeend',
+        '<tr><td>' + s.id + '</td><td>' + fmt(s.start) + '</td><td>' + fmt(s.end) +
+        '</td><td>' + (s.camera && s.camera.type || '—') + '</td><td>' + (s.transition || '—') +
+        '</td><td>' + (s.elements || []).length + '</td><td>' + (s.captions || []).length + '</td></tr>');
+    }
+  }
+  function renderTimeline(timeline) {
+    const t = document.getElementById('timelineTable');
+    t.innerHTML = '<tr><th>cảnh</th><th>bắt đầu</th><th>kết thúc</th><th>giây</th></tr>';
+    for (const c of (timeline && timeline.clips) || []) {
+      t.insertAdjacentHTML('beforeend',
+        '<tr><td>' + (c.sceneId || c.id || '—') + '</td><td>' + fmt(c.start) + '</td><td>' + fmt(c.end) +
+        '</td><td>' + fmt(c.duration != null ? c.duration : (c.end - c.start)) + '</td></tr>');
+    }
+  }
+  function renderQA(q) {
+    if (!q) { qaBox.textContent = '—'; qaBox.className = 'meta'; return; }
+    qaBox.className = q.status === 'pass' ? 'ok' : (q.status === 'fail' ? 'err' : 'warn');
+    qaBox.innerHTML = '<b>' + (q.status || '—') + '</b>';
+    if (q.errors && q.errors.length) qaBox.innerHTML += ' · ' + q.errors.length + ' lỗi';
+    if (q.warnings && q.warnings.length) qaBox.innerHTML += ' · ' + q.warnings.length + ' cảnh báo';
+    if (q.errors && q.errors.length) qaBox.innerHTML += '<br><span class="err">' + q.errors.slice(0, 5).join(' · ') + '</span>';
+  }
+
+  function applyInspection(r) {
+    if (!r || !r.ok) {
+      

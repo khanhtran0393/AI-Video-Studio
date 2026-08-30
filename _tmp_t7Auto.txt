@@ -1,0 +1,23 @@
+﻿ip đẹp hơn, chậm hơn)</label>
+            <div id="t7AutoStatus" style="font-size:12.5px;color:var(--accent);min-height:18px"></div>
+            <div style="display:flex;justify-content:flex-end;gap:10px">
+              <button class="btn ghost sm" id="t7AutoCancel" onclick="document.getElementById('t7AutoModal').style.display='none'">Đóng</button>
+              <button class="btn primary sm" id="t7AutoGo" onclick="t7AutoRun()">⚡ Tạo</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TIMELINE -->
+      <!-- Dòng thời gian ĐÃ GỠ khỏi tab này (23/08). Giữ DOM, chỉ ẩn: hàng chục hàm
+           t7Render*/t7Drag* vẫn trỏ vào các phần tử bên trong, xoá hẳn là null-crash
+           rải rác. Tab Edit Video (bàn dựng cũ) đã gỡ hẳn ở 0.1.33. -->
+      <div class="t7-tl" id="t7Tl" style="display:none">
+        <div class="t7-tlbar">
+          <span class="lb">Dòng thời gian</span>
+          <button class="t7-tlbtn" id="t7UndoBtn" title="Hoàn tác (Ctrl/⌘+Z)" onclick="t7Undo()">↶</button>
+          <button class="t7-tlbtn" id="t7RedoBtn" title="Làm lại (Ctrl/⌘+Shift+Z)" onclick="t7Redo()">↷</button>
+          <button class="t7-tlbtn" title="Cắt tại playhead (S)" onclick="t7SplitAtPlayhead()">✂ Tách</button>
+          <button class="t7-tlbtn" title="Nhân đôi clip đang chọn" onclick="t7DupSel()">⧉ Nhân đôi</button>
+          <button class="t7-tlbtn" title="Xoá clip đang chọn (Delete)" onclick="t7DeleteSel()">🗑 Xoá</button>
+          <button class="t7-tlbtn" title="Thêm ảnh đè (full-frame) lên video" onclick="document.getElementById('t7OverlayInput').clic

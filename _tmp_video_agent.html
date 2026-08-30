@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<title>Nova Video Agent</title>
+<style>
+  :root { --bg:#0b0d12; --panel:#141821; --panel2:#1b212c; --line:#2a313e; --text:#eef0f4; --dim:#9aa3b2; --accent:#f5c542; --ok:#6fbf73; --warn:#e0b046; --err:#e06a5a; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font:14px/1.5 system-ui, sans-serif; padding:16px; }
+  header { display:flex; align-items:center; gap:12px; margin-bottom:14px; flex-wrap:wrap; }
+  header h1 { font-size:18px; letter-spacing:.5px; }
+  header .spacer { flex:1; }
+  .grid { display:grid; grid-template-columns:repeat(3, 1fr); gap:12px; }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:12px; min-height:110px; }
+  .panel h2 { font-size:12px; text-transform:uppercase; letter-spacing:1px; color:var(--accent); margin-bottom:8px; display:flex; justify-content:space-between; }
+  .panel h2 .num { color:var(--dim); }
+  .wide { grid-column:span 2; } .full { grid-column:span 3; }
+  textarea, input, select, button { font:inherit; }
+  textarea, input, select { width:100%; background:var(--panel2); color:var(--text); border:1px solid var(--line); border-radius:6px; padding:8px; }
+  textarea { min-height:60px; resize:vertical; }
+  button { background:var(--accent); color:#1b1108; border:none; border-radius:6px; padding:8px 14px; font-weight:700; cursor:pointer; }
+  button.secondary { background:var(--panel2); color:var(--text); border:1px solid var(--line); }
+  button:disabled { opacity:.45; cursor:default; }
+  .row { display:flex; gap:8px; margin-top:8px; flex-wrap:wrap; align-items:center; }
+  .row > label { display:flex; align-items:center; gap:4px; color:var(--dim); font-size:12px; }
+  .meta { color:var(--dim); font-size:12px; }
+  #progressBar { height:8px; background:var(--panel2); border-radius:4px; overflow:hidden; flex:1; min-width:200px; }
+  #progressFill { height:100%; width:0; background:var(--accent); transition:width .3s; }
+  table { width:100%; border-collapse:collapse; font-size:12px; }
+  th, td { text-align:left; padding:4px 6px; border-bottom:1px solid var(--line); }
+  th { color:var(--dim); font-weight:600; }
+  ul { list-style:none; max-height:240px; overflow:auto; }
+  ul li { padding:3px 0; border-bottom:1px dashed var(--line); font-size:12.5px; }
+  .ok { color:var(--ok); } .warn { color:var(--warn); } .err { color:var(--err); }
+  #notice { display:none; background:#3a2c14; border:1px solid var(--warn); border-radius:8px; padding:12px; margin-bottom:12px; }
+  code { background:var(--panel2); padding:1px 5px; border-radius:4px; font-size:12px; }
+</style>
+</head>
+<body>
+<div id="notice"></div>
+<header>
+  <h1>🎬 Nova Video Agent</h1>
+  <div id="progressBar"><div id="progressFill"></div></div>
+  <span id="progressLabel" class="meta">idle</span>
+  <span class="spacer"></span>
+  <button id="btnCancel" class="secondary" disabled>Huỷ</button>
+  <button id="btnRetry" class="secondary" disabled>Thử lại</button>
+  <button id="btnRun">Chạy pipeline</button>
+</header>
+<div class="grid" id="panels"></div>
+<script>
+(function () {
+  'use strict';
+  /* §25 UI — mọi thao tác qua window.native.videoAgent (preload bridge). */
+  const native = window.native && window.native.videoAgent;
+  const notice = document.getElementById('notice');
+  const panelsEl = document.getElementById('panels');
+  const progressFill = document.getElementById('progressFill');
+  const progressLabel = document.getElementById('progressLabel');
+  const btnRun = document.getElementById('btnRun');
+  const btnRetry = document.getElementById('btnRetry');
+  const btnCancel = document.getElementById('btnCancel');
+  let jobId = null;
+  let acceptingEvents = false;
+
+  if (!native) {
+    notice.style.display = 'block';
+    notice.innerHTML = '<b>⚠ Chưa có native bridge.</b> Mở trang này từ Electron app (Nova) — kênh videoAgent:openWindow.';
+  }
+
+  function el(tag, attrs, ...kids) {
+    const n = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs || {})) {
+      if (k === 'class') n.className = v;
+      else if (k === 'html') n.innerHTML = v;
+      else if (k.startsWith('on')) n.addEventListener(k.slice(2), v);
+      else n.setAttribute(k, v);
+    }
+    n.append(...kids);
+    return n;
+  }
+  function panel(num, title, cls) {
+    const body = el('div');
+    panelsEl.append(el('section', { class: 'panel ' + (cls || '') },
+      el('h2', {}, title, el('span', { class: 'num' }, num)), body));
+    return body;
+  }
+  function setProgress(stage, pct) {
+    progressFill.style.width = Math.max(0, Math.min(100, Number(pct) || 0)) + '%';
+    progressLabel.textContent = stage || 'idle';
+  }
+  function fmt(n) { return Number(n || 0).toFixed(2); }
+
+  // ── 01 Dự án & tuỳ chọn ──
+  const cfg = panel('01', 'Dự án & tuỳ chọn', 'wide');
+  cfg.append(el('div', { class: 'meta' }, 'Thư mục dự án (chứa script/, tts/, images/…):'));
+  const dirInput = el('textarea', { placeholder: 'Đường dẫn tuyệt đối tới thư mục dự án' });
+  cfg.append(dirInput);
+  const projectInfo = el('div', { class: 'meta', style: 'margin-top:6px' }, 'Chưa kiểm tra dự án.');
+  cfg.append(el('div', { class: 'row' },
+    el('button', { id: 'btnPickProject', class: 'secondary' }, 'Chọn thư mục…'),
+    el('button', { id: 'btnInspectProject', class: 'secondary' }, 'Kiểm tra cấu trúc'),
+  ));
+  cfg.append(projectInfo);
+  cfg.append(el('div', { class: 'row' },
+    el('label', {}, el('input', { id: 'optSkip', type: 'checkbox' }), 'Bỏ preview/QA (xuất thẳng)'),
+    el('label', {}, el('input', { id: 'optForce', type: 'checkbox' }), 'Upload cả khi final QA fail'),
+    el('label', {}, 'Auto-fix tối đa ', el('input', { id: 'optMax', type: 'number', value: '5', style: 'width:48px' }), ' lần'),
+  ));
+  cfg.append(el('div', { class: 'row' },
+    el('button', { class: 'secondary', onclick: () => loadVersions() }, 'Nạp versions'),
+    el('span', { id: 'versionCount', class: 'meta' }, '—'),
+  ));
+
+  // ── 02 Tiến trình ──
+  const prog = panel('02', 'Tiến trình (17 state)');
+  const eventList = el('ul');
+  prog.append(eventList);
+
+  // ── 03 Kết quả ──
+  const res = panel('03', 'Kết quả');
+  const resBox = el('div', { class: 'meta' }, 'Chưa chạy.');
+  res.append(resBox);
+
+  // ── 04 Scenes (từ spec) ──
+  const sc = panel('04', 'Scenes (spec)', 'wide');
+  sc.append(el('table', { id: 'sceneTable' }, el('tr', {},
+    el('th', {}, 'id'), el('th', {}, 'start'), el('th', {}, 'end'),
+    el('th', {}, 'camera'), el('th', {}, 'transition'), el('th', {}, 'yếu tố'), el('th', {}, 'caption'))));
+
+  // ── 05 Timeline ──
+  const tl = panel('05', 'Timeline');
+  tl.append(el('table', { id: 'timelineTable' }, el('tr', {},
+    el('th', {}, 'cảnh'), el('th', {}, 'bắt đầu'), el('th', {}, 'kết thúc'), el('th', {}, 'giây'))));
+
+  // ── 06 QA ──
+  const qa = panel('06', 'QA report');
+  const qaBox = el('div', { class: 'meta' }, '—');
+  qa.append(qaBox);
+
+  // ── 07 Versions ──
+  const vs = panel('07', 'Versions', 'wide');
+  vs.append(el('div', { class: 'meta' }, 'Chọn version rồi bấm Xem spec:'));
+  const verSelect = el('select');
+  const verBtn = el('button', { class: 'secondary' }, 'Xem spec (restore)');
+  vs.append(el('div', { class: 'row' }, verSelect, verBtn));
+  const verBox = el('div', { class: 'meta', style: 'margin-top:8px' });
+  vs.append(verBox);
+
+  // ── hành động ──
+  function logEvent(ev) {
+    const li = el('li', {}, el('b', {}, ev.stage || '—'),
+      ' · ' + (ev.progress != null ? ev.progress + '%' : ''),
+      ev.payload ? ' · ' + JSON.stringify(ev.payload) : '');
+    if (ev.stage === 'FAILED' || (ev.payload && ev.payload.code)) li.className = 'err';
+    else if (ev.stage === 'COMPLETED') li.className = 'ok';
+    eventList.prepend(li);
+    setProgress(ev.stage, ev.progress);
+  }
+  if (native) native.onEvent((ev) => {
+    if (acceptingEvents && ev.jobId) jobId = ev.jobId;
+    if (acceptingEvents || !jobId || ev.jobId === jobId) logEvent(ev);
+  });
+
+  function renderResult(r) {
+    if (!r) { resBox.className = 'meta'; resBox.textContent = 'Chưa chạy.'; return; }
+    resBox.className = '';
+    resBox.innerHTML = '';
+    const rows = [
+      ['Trạng thái', r.status, r.status === 'COMPLETED' ? 'ok' : (r.status === 'FAILED' ? 'err' : 'warn')],
+      ['URL', r.url ? '<code>' + r.url + '</code>' : '—', ''],
+      ['Output', r.output || '—', ''],
+      ['Mất', r.elapsedMs != null ? (r.elapsedMs / 1000).toFixed(1) + 's' : '—', ''],
+      ['Lỗi', r.error ? JSON.stringify(r.error) : '—', r.error ? 'err' : ''],
+    ];
+    for (const item of rows) resBox.append(el('div', { class: item[2] },
+      el('b', {}, item[0] + ': '), el('span', { html: String(item[1]) })));
+  }
+
+  function renderSpec(spec) {
+    const t = document.getElementById('sceneTable');
+    t.innerHTML = '<tr><th>id</th><th>start</th><th>end</th><th>camera</th><th>transition</th><th>yếu tố</th><th>caption</th></tr>';
+    for (const s of (spec && spec.scenes) || []) {
+      t.insertAdjacentHTML('beforeend',
+        '<tr><td>' + s.id + '</td><td>' + fmt(s.start) + '</td><td>' + fmt(s.end) +
+        '</td><td>' + (s.camera && s.camera.type || '—') + '</td><td>' + (s.transition || '—') +
+        '</td><td>' + (s.elements || []).length + '</td><td>' + (s.captions || []).length + '</td></tr>');
+    }
+  }
+  function renderTimeline(timeline) {
+    const t = document.getElementById('timelineTable');
+    t.innerHTML = '<tr><th>cảnh</th><th>bắt đầu</th><th>kết thúc</th><th>giây</th></tr>';
+    for (const c of (timeline && timeline.clips) || []) {
+      t.insertAdjacentHTML('beforeend',
+        '<tr><td>' + (c.sceneId || c.id || '—') + '</td><td>' + fmt(c.start) + '</td><td>' + fmt(c.end) +
+        '</td><td>' + fmt(c.duration != null ? c.duration : (c.end - c.start)) + '</td></tr>');
+    }
+  }
+  function renderQA(q) {
+    if (!q) { qaBox.textContent = '—'; qaBox.className = 'meta'; return; }
+    qaBox.className = q.status === 'pass' ? 'ok' : (q.status === 'fail' ? 'err' : 'warn');
+    qaBox.innerHTML = '<b>' + (q.status || '—') + '</b>';
+    if (q.errors && q.errors.length) qaBox.innerHTML += ' · ' + q.errors.length + ' lỗi';
+    if (q.warnings && q.warnings.length) qaBox.innerHTML += ' · ' + q.warnings.length + ' cảnh báo';
+    if (q.errors && q.errors.length) qaBox.innerHTML += '<br><span class="err">' + q.errors.slice(0, 5).join(' · ') + '</span>';
+  }
+
+  function applyInspection(r) {
+    if (!r || !r.ok) {
+      projectInfo.className = 'err'; projectInfo.textContent = (r && (r.error || r.code)) || 'Dự án không hợp lệ.';
+      return false;
+    }
+    const f = r.project.files;
+    projectInfo.className = 'ok';
+    projectInfo.textContent = 'Hợp lệ · script: ' + (f.script || '—') + ' · voice: ' + (f.ttsAudio || 'fallback') +
+      ' · timestamps: ' + (f.ttsTimestamps || 'tự căn') + ' · ảnh: ' + (f.images || []).length + ' · nhạc: ' + (f.music || []).length;
+    if (r.job && r.job.jobId) {
+      jobId = r.job.jobId; btnRetry.disabled = false;
+      renderResult({ ...r.job, output: r.job.output || r.job.outputPath });
+      setProgress(r.job.stage || r.job.status, r.job.progress);
+    }
+    return true;
+  }
+  async function inspectCurrent() {
+    if (!native || !dirInput.value.trim()) return false;
+    return applyInspection(await native.inspect(dirInput.value.trim()));
+  }
+  document.getElementById('btnPickProject').onclick = async () => {
+    if (!native) return;
+    const r = await native.pickProject();
+    if (r && r.canceled) return;
+    if (r && r.projectDir) dirInput.value = r.projectDir;
+    applyInspection(r);
+    if (r && r.ok) loadVersions();
+  };
+  document.getElementById('btnInspectProject').onclick = () => inspectCurrent();
+
+  async function loadVersions() {
+    const dir = dirInput.value.trim();
+    if (!dir || !native) return;
+    const r = await native.versions(dir);
+    if (!r.ok) { document.getElementById('versionCount').textContent = 'lỗi'; return; }
+    document.getElementById('versionCount').textContent = (r.versions || []).length + ' version';
+    verSelect.innerHTML = '';
+    for (const v of r.versions || []) verSelect.append(el('option', { value: v.version }, 'v' + v.version));
+  }
+  verBtn.onclick = async () => {
+    if (!native || !verSelect.value) return;
+    const r = await native.restore(dirInput.value.trim(), Number(verSelect.value));
+    if (r.ok) { verBox.className = ''; verBox.textContent = 'v' + r.version + ' · ' + ((r.spec.scenes || []).length) + ' cảnh'; renderSpec(r.spec); }
+    else { verBox.className = 'err'; verBox.textContent = r.error || 'lỗi'; }
+  };
+
+  async function runJob() {
+    const dir = dirInput.value.trim();
+    if (!dir) { notice.style.display = 'block'; notice.innerHTML = '<b>⚠ Chọn thư mục dự án.</b>'; return; }
+    if (!native || !await inspectCurrent()) return;
+    notice.style.display = 'none';
+    btnRun.disabled = btnRetry.disabled = true; btnCancel.disabled = false; acceptingEvents = true;
+    eventList.innerHTML = ''; setProgress('STARTING', 0);
+    const options = {
+      skipPreview: document.getElementById('optSkip').checked,
+      forceUpload: document.getElementById('optForce').checked,
+      maxAutoFixAttempts: Number(document.getElementById('optMax').value) || 5,
+    };
+    const r = await native.run({ projectDir: dir, options });
+    acceptingEvents = false; if (r.jobId) jobId = r.jobId;
+    btnRun.disabled = false; btnRetry.disabled = !jobId; btnCancel.disabled = true;
+    renderResult(r);
+    if (r.spec) renderSpec(r.spec);
+    if (r.timeline) renderTimeline(r.timeline);
+    if (r.qa) renderQA(r.qa);
+  }
+  btnRun.onclick = () => runJob();
+  btnRetry.onclick = async () => {
+    if (!jobId || !native) return;
+    btnRun.disabled = btnRetry.disabled = true; btnCancel.disabled = false; acceptingEvents = true;
+    eventList.innerHTML = ''; setProgress('RETRYING', 0);
+    const r = await native.retry(jobId);
+    acceptingEvents = false; if (r.jobId) jobId = r.jobId;
+    btnRun.disabled = false; btnRetry.disabled = !jobId; btnCancel.disabled = true;
+    renderResult(r);
+    if (r.spec) renderSpec(r.spec);
+    if (r.timeline) renderTimeline(r.timeline);
+    if (r.qa) renderQA(r.qa);
+  };
+  btnCancel.onclick = async () => {
+    if (!jobId || !native) return;
+    const r = await native.cancel(jobId);
+    if (!r.ok) { notice.style.display = 'block'; notice.textContent = r.error || 'Không thể huỷ job.'; }
+  };
+})();
+</script>
+</body>
+</html>

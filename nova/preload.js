@@ -191,4 +191,20 @@ contextBridge.exposeInMainWorld('native', {
   onUpdate: (cb) => ipcRenderer.on('update-status', (_e, s) => cb(s)),
   updateDownload: () => ipcRenderer.invoke('update-download'),
   updateInstall: () => ipcRenderer.invoke('update-install'),
+  // Video Agent — 12 channel §25.
+  videoAgent: {
+    run: (payload) => ipcRenderer.invoke('videoAgent:run', payload),
+    status: (payload) => ipcRenderer.invoke('videoAgent:status', payload),
+    spec: (payload) => ipcRenderer.invoke('videoAgent:spec', payload),
+    timeline: (payload) => ipcRenderer.invoke('videoAgent:timeline', payload),
+    qa: (payload) => ipcRenderer.invoke('videoAgent:qa', payload),
+    cancel: (payload) => ipcRenderer.invoke('videoAgent:cancel', payload),
+    retry: (payload) => ipcRenderer.invoke('videoAgent:retry', payload),
+    restore: (payload) => ipcRenderer.invoke('videoAgent:restore', payload),
+    versions: (payload) => ipcRenderer.invoke('videoAgent:versions', payload),
+    inspect: (payload) => ipcRenderer.invoke('videoAgent:inspect', payload),
+    pickProject: () => ipcRenderer.invoke('videoAgent:pickProject'),
+    openWindow: () => ipcRenderer.invoke('videoAgent:openWindow'),
+    onEvent: (cb) => ipcRenderer.on('videoAgent:event', (_e, ev) => cb(ev)),
+  },
 });

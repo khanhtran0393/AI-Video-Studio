@@ -1,0 +1,46 @@
+
+=== t7ExportBtn ===
+ class="btn ghost" id="t7AiDesignBtn" onclick="t7AiPropose()" title="Trợ lý đọc lời từng cảnh, đề xuất mẫu chuyển động kèm LÝ DO — bạn duyệt từng cảnh rồi mới gắn">✨ Trợ lý dựng</button>
+          <button class="btn ghost" onclick="t7Save()">🗂 Lưu</button>
+          <button class="btn primary" id="t7ExportBtn" onclick="t7OpenExport()">⬆ Xuất Video</button>
+        </div>
+        <select id="t7Aspect" style="display:none" onchange="t7Build()">
+          <option value="16:9" selected>16:9</option><option value="9:16">9:16</option><option value="1:1">1:1</option>
+        </select>
+      </div>
+
+      <div class="t7-grid">
+        <!-- Thanh biểu tượng: chọn KHO nào hiện ở cột bên cạnh. Số nhỏ = số mục thật trong kho đó. -->
+        <nav class="t7-rail" id="t7Rail" aria-label="Kho tài nguyên"></nav>
+        <!-- BIN: scenes + media library -->
+        <section class="t7-panel">
+          <div class="t7-ph2" style="gap:6px">
+            <span class="t7-lbl" id="t7BinTitle">Cảnh</span><span class="t7-chip" id="t7BinCount">0</span>
+            <div class="t7-tabs" style="display:none">
+              <button id="t7TabScenes" class="on" onclick="t7SetMediaTab('scenes')">Cảnh <span class="t7-chip" id="t7SceneCount">0</span></button>
+              <button id="t7TabMedia" onclick="t7SetMediaTab('media')">Thư viện <span class="t7-chip" id="t7MediaCount">0</span></button>
+              <button id="t7TabFx" onclick="t7SetMediaTab('fx')">Hiệu ứng <span class="t7-chip" id="t7FxCount">—</span
+
+=== function t7RenderPreview ===
+
+  if (L.kind === 'bit') return `<div style="${w}"><div style="width:100%;height:100%;border:0.3cqh dashed rgba(255,255,255,.5);border-radius:1cqh;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.75);font-size:2cqh">✨ ${escapeHtml(L.name)}</div></div>`;
+  return '';
+}
+
+function t7RenderPreview(){
+  _t7UpdateOverlay();
+  try { _t7DrawGfx(); } catch (e) {}   // 🖼 ảnh đè full-frame lên trên
+  try { _t7DrawSel(); } catch (e) {}   // 🖱 khung 8 nút của lớp đang chọn (kéo/co trực tiếp) (nếu playhead nằm trong khoảng của nó)
+  // Ảnh/video hiển thị = clip tại playhead (nhất quán khi phát/tua/chọn).
+  const at = _t7ClipAt(t7State.playT);
+  const c = (at && at.clip) || t7State.clips.find(x => x.id === t7State.selClip) || t7State.clips[0];
+  // Nhãn "Cảnh N" ở giữa bản xem trước LUÔN khớp clip đang hiện (kể cả khi tua/phát) — hết kẹt nhãn cũ.
+  const _stage = document.getElementById('t7StageChip'); if (_stage) _stage.textContent = c ? _t7ClipLabel(c) : '—';
+  // Lời thoại + dịch tiếng Việt dưới bản xem trước (chỉ để kiểm tra, KHÔNG ghi vào video).
+  const vo = (c && _t7ClipText(c) || '').trim();
+  const vi = (c && state.sceneTrans && state.sceneTrans[c.sceneId] || '').trim();
+  const subOn = !!document.getElementById('t7ExpSubs')?.checked;   // đang burn phụ đề vào video?
+  // Phụ đề ĐÈ LÊN video xem trước — GIỐNG y hệt lúc xuất (WYSIWYG). Chỉ hiện khi bật "Ghi phụ đề vào video".
+  const subEl = document.getElementById('t7PreviewSub');
+  if (subEl){
+    c
