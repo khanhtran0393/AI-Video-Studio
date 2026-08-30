@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-29T14:33:34.680Z",
+  "generatedAt": "2026-08-30T06:17:56.164Z",
   "sourceFiles": [
     "bundle.js",
     "chrome-extension/app.js",
@@ -1236,7 +1236,9 @@
     "upscale-run",
     "videoAgent:cancel",
     "videoAgent:event",
+    "videoAgent:inspect",
     "videoAgent:openWindow",
+    "videoAgent:pickProject",
     "videoAgent:qa",
     "videoAgent:restore",
     "videoAgent:retry",

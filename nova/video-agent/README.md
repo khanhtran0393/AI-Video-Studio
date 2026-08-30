@@ -26,24 +26,36 @@ const job = createVideoJob({ projectDir: 'D:/projects/chapter-001', adapters: { 
 job.on(e => console.log(e.stage, e.progress));
 const res = await job.run(); // res.url, res.output, res.spec, res.timeline, res.qa
 ```
-Trong Electron: `registerVideoAgentIpc(ipcMain, { adapters })` → 10 channel `videoAgent:*` (§25).
+Trong Electron: `registerVideoAgentIpc(ipcMain, { adapters })` → 12 channel `videoAgent:*` (§25), gồm native project picker/inspect.
 
 ## Nối vào app Electron (đã wire sẵn)
 - **Main process**: `nova/editor-pro/register.js` gọi `registerVideoAgentIpc(ipcMain, { adapters: opts.videoAgentAdapters })`
   (chạy cùng `registerEditorPro` từ `main.plain.js` — không cần sửa main).
-- **Preload bridge**: `window.native.videoAgent` — `run/status/spec/timeline/qa/cancel/retry/restore/versions/openWindow`
+- **Preload bridge**: `window.native.videoAgent` — `run/status/spec/timeline/qa/cancel/retry/restore/versions/inspect/pickProject/openWindow`
   + `onEvent(cb)` stream kênh `videoAgent:event` (mỗi stage/job event).
 - **UI**: cửa sổ riêng `nova/web/video-agent.html` (7 panel: cấu hình → tiến trình 17-state → kết quả → scenes →
   timeline → QA → versions/restore), mở qua kênh `videoAgent:openWindow` (`nova/video-agent/window.js`).
+- **Job runtime**: metadata ghi tại `output/job.json`, được `inspect` khôi phục để retry sau restart; mặc định tối đa 1 job,
+  mỗi stage timeout 30 phút và preflight yêu cầu tối thiểu 1 GiB trống (đều cấu hình qua options).
+- **Cancel thật**: truyền xuống Remotion `cancelSignal`, ffmpeg mux và S3 `AbortSignal`; partial output/temp/staged assets được dọn.
 - **Renderer thật**: adapter mặc định lazy-require `renderNovaScenes` (engine Nova Scene) — chạy được trong Electron
   main process (bundle `nova-remotion/bundle` + `@remotion/renderer` có sẵn trong app); ngoài Electron trả
   `VA_RENDERER_UNAVAILABLE` — test dùng mock. `renderNovaScenes` tự chép asset cục bộ vào bundle và mux
   voice/music qua ffmpeg, nên bridge chỉ cần truyền `scenes + voiceB64/musicB64`.
 
+## V5 core — Behavior + Frame Engine
+- `behavior-engine/` là registry renderer-independent gồm contract, validator capability/timing, resolver property track,
+  deterministic executor và bridge từ Visual Grammar cũ. MVP có 12 behavior đăng ký (`transform.*`, `character.*`,
+  `camera.*`, `visual.*`, `caption.*`); AI chỉ được phát type có trong registry.
+- `frame-engine/` tạo World State, kiểm property ownership/conflict/dependency/visual budget, biên dịch giây → frame
+  và resolve `FrameState` có trace `entity.property → behaviorId → beatId/reason`.
+- `VideoSpec` mới có `elementId`, `capabilities`, canonical `behaviors`; spec cũ không có behaviors vẫn được dịch tự động.
+  `timeline.behaviorGraph` chứa hash/status/error để behavior thay đổi làm thay đổi timeline hash.
+
 ## Test
 ```
 node nova/video-agent/test.js        # §33 acceptance — 29/29 PASS
-node nova/video-agent/test-ipc.js    # IPC-SMOKE-OK (10 channel)
+node nova/video-agent/test-ipc.js    # IPC-SMOKE-OK (12 channel)
 node nova/video-agent/test-bridge.js # BRIDGE-CONTRACT-OK — specToNovaScenes() khớp hợp đồng NovaScene thật
 node nova/video-agent/test-render-real.js  # (qua Electron: npx electron nova/video-agent/test-render-real.js)
                                        # REAL-RENDER-OK — render Remotion THẬT: bridge → renderNovaScenes → mp4 1080p

@@ -54,7 +54,7 @@ try {
   };
 
   const result = bi.ingestCrash(crash);
-  assert.strictEqual(result.reconciliation.canonicalFingerprint.length, 32);
+  assert.match(result.reconciliation.canonicalFingerprint, /^[0-9a-f]{64}$/);
   assert.ok(result.attachment);
   assert.strictEqual(result.errors.length, 0);
 

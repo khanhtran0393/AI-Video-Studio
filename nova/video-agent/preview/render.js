@@ -21,13 +21,13 @@ function buildPreviewSpec(spec, opts = {}) {
   };
 }
 
-async function renderPreview({ adapter, spec, manifest, projectDir, voicePath, musicPath, opts = {}, onProgress }) {
+async function renderPreview({ adapter, spec, manifest, projectDir, voicePath, musicPath, opts = {}, onProgress, registerCancel, signal }) {
   const previewSpec = buildPreviewSpec(spec, opts);
   if (!previewSpec) return { ok: false, code: 'VA_PREVIEW_EMPTY', error: 'Không có cảnh để preview' };
   const fs = require('fs'), path = require('path');
   const outDir = path.join(projectDir, 'output'); try { fs.mkdirSync(outDir, { recursive: true }); } catch (_) {}
   const outputPath = path.join(outDir, `preview-${Date.now()}.mp4`);
-  const r = await adapter.render({ spec: previewSpec, manifest, outputPath, quality: 'preview', voicePath, musicPath, onProgress });
+  const r = await adapter.render({ spec: previewSpec, manifest, outputPath, quality: 'preview', voicePath, musicPath, onProgress, registerCancel, signal });
   return Object.assign({}, r, { preview: true, outputPath: r.outputPath || outputPath });
 }
 

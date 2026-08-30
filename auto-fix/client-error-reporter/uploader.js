@@ -4,6 +4,19 @@ const https = require('https');
 const http = require('http');
 const { URL } = require('url');
 
+function isRetryableStatus(statusCode) {
+  const status = Number(statusCode) || 0;
+  return status === 408 || status === 425 || status === 429 || status >= 500;
+}
+
+function isRetryableUploadError(error) {
+  if (!error) return true;
+  if (typeof error.retryable === 'boolean') return error.retryable;
+  if (error.statusCode != null) return isRetryableStatus(error.statusCode);
+  if (['ENOTFOUND', 'EAI_AGAIN', 'ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT', 'EPIPE', 'ENETDOWN', 'ENETUNREACH', 'EHOSTUNREACH'].includes(error.code)) return true;
+  return true; // Unknown transport failures are conservatively treated as transient.
+}
+
 /**
  * Build a JSON POST transport from a URL. Supports both http (used in tests)
  * and https (production). Returns `post(payload) -> Promise<{status, body}>`.
@@ -37,7 +50,10 @@ function httpsPostJson(options) {
           if (res.statusCode >= 200 && res.statusCode < 300) {
             resolve({ status: res.statusCode, body: data });
           } else {
-            reject(new Error(`upload failed: HTTP ${res.statusCode}`));
+            const error = new Error(`upload failed: HTTP ${res.statusCode}`);
+            error.statusCode = res.statusCode;
+            error.retryable = isRetryableStatus(res.statusCode);
+            reject(error);
           }
         });
       });
@@ -75,7 +91,9 @@ class Uploader {
         return await this.transport(report);
       } catch (error) {
         lastError = error;
-        if (attempt === this.maxAttempts) break;
+        const retryable = isRetryableUploadError(error);
+        if (error && typeof error.retryable !== 'boolean') error.retryable = retryable;
+        if (!retryable || attempt === this.maxAttempts) break;
         const delay = Math.min(this.baseDelayMs * Math.pow(2, attempt - 1), this.maxDelayMs);
         await new Promise((resolve) => setTimeout(resolve, delay));
       }
@@ -84,4 +102,4 @@ class Uploader {
   }
 }
 
-module.exports = { Uploader, httpsPostJson };
+module.exports = { Uploader, httpsPostJson, isRetryableStatus, isRetryableUploadError };

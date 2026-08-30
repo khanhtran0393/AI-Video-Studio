@@ -84,7 +84,7 @@ function s3Upload(opts = {}) {
     accessKeyId: creds.accessKeyId, secretAccessKey: creds.secretAccessKey, sessionToken: creds.sessionToken,
     body, extraHeaders: { 'content-type': contentType } });
 
-  return fetch(url, { method: 'PUT', headers: signed.headers, body })
+  return fetch(url, { method: 'PUT', headers: signed.headers, body, signal: opts.signal })
     .then(async (res) => {
       if (!res.ok) {
         const text = await res.text().catch(() => '');

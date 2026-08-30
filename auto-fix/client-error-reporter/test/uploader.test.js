@@ -2,7 +2,7 @@
 
 const assert = require('assert');
 const http = require('http');
-const { Uploader, httpsPostJson } = require('../uploader');
+const { Uploader, httpsPostJson, isRetryableStatus } = require('../uploader');
 
 // Retry + backoff behavior verified with an injected transport; no network needed.
 (async () => {
@@ -18,6 +18,15 @@ const { Uploader, httpsPostJson } = require('../uploader');
   const result = await uploader2.send({ ok: 1 });
   assert.strictEqual(result.status, 200);
   assert.strictEqual(recovery, 2, 'must succeed on retry');
+
+  let permanentCalls = 0;
+  const permanent = async () => { permanentCalls++; const error = new Error('bad request'); error.statusCode = 400; error.retryable = false; throw error; };
+  const uploader3 = new Uploader({ transport: permanent, maxAttempts: 3, baseDelayMs: 1 });
+  await assert.rejects(() => uploader3.send({ ok: 1 }), /bad request/);
+  assert.strictEqual(permanentCalls, 1, 'permanent HTTP errors must not retry');
+  assert.strictEqual(isRetryableStatus(429), true);
+  assert.strictEqual(isRetryableStatus(503), true);
+  assert.strictEqual(isRetryableStatus(401), false);
 
   assert.throws(() => httpsPostJson({ url: 'file:///tmp/crash.json' }), /HTTP or HTTPS/);
 

@@ -18,7 +18,7 @@ const report = {
 };
 const result = reconcileReport(report);
 assert.strictEqual(result.clientFingerprint, 'ab12cd34ef56ab12cd34ef56ab12cd34');
-assert.ok(result.serverFingerprint && result.serverFingerprint.length === 32);
+assert.match(result.serverFingerprint, /^[0-9a-f]{64}$/, 'canonical server fingerprint must retain the full SHA-256 digest');
 assert.strictEqual(result.canonicalFingerprint, result.serverFingerprint);
 
 // Volatile details should not change server fingerprint.

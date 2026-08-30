@@ -76,6 +76,32 @@ async function main() {
   const cres = await cjob.run();
   assert('Cancellation: returns CANCELLED', cres.status === 'CANCELLED', cres.status);
 
+  // Cancellation while a renderer is active must invoke its registered kill hook.
+  let killCalled = false;
+  const blockingRenderer = { render: ({ registerCancel }) => new Promise((resolve) => {
+    registerCancel(() => { killCalled = true; resolve({ ok: false, code: 'VA_CANCELLED' }); });
+  }) };
+  const activeCancel = createVideoJob({ projectDir: root, adapters: { render: blockingRenderer, upload }, options: { skipPreview: true } });
+  const activePromise = activeCancel.run();
+  while (activeCancel.state !== 'FULL_RENDER') await new Promise((resolve) => setTimeout(resolve, 2));
+  activeCancel.cancel();
+  const activeResult = await activePromise;
+  assert('Cancellation: propagates to renderer', killCalled && activeResult.status === 'CANCELLED', activeResult.status);
+
+  // Stage timeout also invokes the same cancellation hook and reports a structured failure.
+  let timeoutKill = false;
+  const timeoutRenderer = { render: ({ registerCancel }) => new Promise((resolve) => {
+    registerCancel(() => { timeoutKill = true; resolve({ ok: false, code: 'VA_CANCELLED' }); });
+  }) };
+  const timeoutJob = createVideoJob({ projectDir: root, adapters: { render: timeoutRenderer, upload }, options: { skipPreview: true, stageTimeoutMs: 10 } });
+  const timeoutResult = await timeoutJob.run();
+  assert('Timeout: structured VA_STAGE_TIMEOUT', timeoutKill && timeoutResult.status === 'FAILED' && timeoutResult.error.code === 'VA_STAGE_TIMEOUT', timeoutResult.error);
+
+  // Disk preflight uses a configurable threshold so it can be tested without filling a drive.
+  const diskJob = createVideoJob({ projectDir: root, adapters: { render: renderer, upload }, options: { minFreeBytes: Number.MAX_SAFE_INTEGER } });
+  const diskResult = await diskJob.run();
+  assert('Disk preflight: refuses insufficient space', diskResult.status === 'FAILED' && diskResult.error.code === 'VA_DISK_SPACE', diskResult.error);
+
   const { pass, fail } = counters();
   console.log('\n=== NOVA VIDEO AGENT — Phase 1 acceptance (§33) ===');
   console.log('PASS: ' + pass + '  FAIL: ' + fail);

@@ -36,6 +36,23 @@ function findBrowser() {
 }
 const BROWSER = findBrowser();
 
+// Trong app đóng gói, binary @remotion/compositor-* nằm trong app.asar → Remotion gọi
+// execa (child_process.spawn) không chạy được (Electron KHÔNG patch spawn cho asar).
+// Trỏ `binariesDirectory` sang bản đã asarUnpack (xem electron-builder.json asarUnpack)
+// để ffmpeg/remotion/ffprobe thật được spawn từ đĩa. Dev: require.resolve trả đường dẫn
+// thật (không chứa 'app.asar') → trả undefined → dùng mặc định của Remotion.
+function remotionBinariesDirectory() {
+  try {
+    const pkg = require.resolve('@remotion/compositor-win32-x64-msvc/package.json');
+    if (pkg.includes('app.asar') && !pkg.includes('app.asar.unpacked')) {
+      const unpacked = pkg.replace('app.asar', 'app.asar.unpacked');
+      if (fs.existsSync(unpacked)) return path.dirname(unpacked);
+    }
+  } catch (_) {}
+  return undefined;
+}
+const REMOTION_BIN_DIR = remotionBinariesDirectory();
+
 async function renderRemotionFull({ composition, outputPath, onProgress }) {
   // remotion-bundle đã gỡ khỏi bản này (chỉ bàn dựng Editor Pro dùng, mà bàn
   // dựng đó không còn lối vào). App chính xuất video bằng renderNovaScenes.
@@ -47,10 +64,10 @@ async function renderRemotionFull({ composition, outputPath, onProgress }) {
   const { selectComposition, renderMedia } = require('@remotion/renderer');
   const inputProps = { composition };
   const browserExecutable = BROWSER || undefined;
-  const comp = await selectComposition({ serveUrl: BUNDLE, id: 'VideoShuffleComposition', inputProps, browserExecutable });
+  const comp = await selectComposition({ serveUrl: BUNDLE, id: 'VideoShuffleComposition', inputProps, browserExecutable, binariesDirectory: REMOTION_BIN_DIR });
   const out = outputPath || path.join(TMP, `nova-export-${Date.now()}.mp4`);
   await renderMedia({
-    composition: comp, serveUrl: BUNDLE, codec: 'h264', outputLocation: out, inputProps, browserExecutable,
+    composition: comp, serveUrl: BUNDLE, codec: 'h264', outputLocation: out, inputProps, browserExecutable, binariesDirectory: REMOTION_BIN_DIR,
     concurrency: Math.max(2, Math.min(6, (os.cpus() || []).length - 2)),
     onProgress: ({ progress }) => { try { onProgress && onProgress(Math.round(progress * 100), 'Đang render (Remotion)…'); } catch (_) {} },
   });
@@ -69,6 +86,7 @@ const NOVA_BUNDLE = onDisk(path.join('nova-remotion', 'bundle'));
 function stageLocalAssets(scenes) {
   const dir = path.join(NOVA_BUNDLE, 'assets');
   let staged = 0;
+  const runId = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7);
   const map = new Map();
   const fix = (src) => {
     const s = String(src || '');
@@ -78,7 +96,7 @@ function stageLocalAssets(scenes) {
     if (map.has(abs)) return map.get(abs);
     try {
       fs.mkdirSync(dir, { recursive: true });
-      const name = 'a' + staged + '_' + path.basename(abs).replace(/[^\w.-]/g, '_');
+      const name = runId + '-a' + staged + '_' + path.basename(abs).replace(/[^\w.-]/g, '_');
       fs.copyFileSync(abs, path.join(dir, name));
       const rel = 'assets/' + name;
       map.set(abs, rel); staged++;
@@ -102,15 +120,15 @@ function stageLocalAssets(scenes) {
     }
   };
   (Array.isArray(scenes) ? scenes : []).forEach(sp => (sp && Array.isArray(sp.layers) ? sp.layers : []).forEach(walk));
-  return staged;
+  return { count: staged, files: [...map.values()].map((rel) => path.join(NOVA_BUNDLE, rel)) };
 }
 
 // Nova Scene render ra video CÂM (Remotion chỉ dựng hình từ spec). Ghép giọng đọc + nhạc nền
 // bằng ffmpeg ngay sau đó, để bản xuất dùng được luôn chứ không phải tự ghép tay.
-function muxAudio({ videoPath, voiceB64, musicB64, musicVolume = 0.22 }) {
+async function muxAudio({ videoPath, voiceB64, musicB64, musicVolume = 0.22, registerCancel, signal }) {
   if (!voiceB64 && !musicB64) return videoPath;
   const FFMPEG = require('./ff-path').FFMPEG;   // đường dẫn đã gỡ khỏi app.asar (spawn được)
-  const { spawnSync } = require('child_process');
+  const { spawn } = require('child_process');
   const write = (b64, ext) => {
     if (!b64) return null;
     const raw = String(b64).replace(/^data:[^,]+,/, '');
@@ -124,41 +142,78 @@ function muxAudio({ videoPath, voiceB64, musicB64, musicVolume = 0.22 }) {
   if (voice) args.push('-i', voice);
   if (music) args.push('-i', music);
   if (voice && music) {
-    // Nhạc nền hạ âm lượng và cắt theo độ dài video; giọng đọc giữ nguyên.
     args.push('-filter_complex', `[2:a]volume=${musicVolume}[m];[1:a][m]amix=inputs=2:duration=first:dropout_transition=0[a]`, '-map', '0:v', '-map', '[a]');
   } else {
     args.push('-map', '0:v', '-map', '1:a');
     if (music && !voice) args.push('-filter:a', `volume=${musicVolume}`);
   }
   args.push('-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-shortest', out);
-  const r = spawnSync(FFMPEG, args, { stdio: 'ignore' });
-  [voice, music].forEach(f => { if (f) try { fs.unlinkSync(f); } catch (_) {} });
-  if (r.status !== 0 || !fs.existsSync(out)) return videoPath;      // ghép hỏng → trả bản câm, đừng mất công render lại
-  try { fs.unlinkSync(videoPath); } catch (_) {}
-  try { fs.renameSync(out, videoPath); return videoPath; } catch (_) { return out; }
+  let cancelled = !!(signal && signal.aborted), child = null;
+  const cancel = () => { cancelled = true; try { if (child) child.kill('SIGKILL'); } catch (_) {} };
+  if (typeof registerCancel === 'function') registerCancel(cancel);
+  if (signal && !signal.aborted) signal.addEventListener('abort', cancel, { once: true });
+  try {
+    if (cancelled) { const e = new Error('ffmpeg mux đã huỷ'); e.code = 'VA_CANCELLED'; throw e; }
+    const status = await new Promise((resolve, reject) => {
+      child = spawn(FFMPEG, args, { stdio: 'ignore', windowsHide: true });
+      child.once('error', reject);
+      child.once('close', (code) => resolve(code));
+      if (cancelled) cancel();
+    });
+    if (cancelled) { const e = new Error('ffmpeg mux đã huỷ'); e.code = 'VA_CANCELLED'; throw e; }
+    if (status !== 0 || !fs.existsSync(out)) { try { if (fs.existsSync(out)) fs.unlinkSync(out); } catch (_) {} return videoPath; }
+    try { fs.unlinkSync(videoPath); } catch (_) {}
+    try { fs.renameSync(out, videoPath); return videoPath; } catch (_) { return out; }
+  } catch (error) {
+    try { if (fs.existsSync(out)) fs.unlinkSync(out); } catch (_) {}
+    throw error;
+  } finally {
+    if (signal) signal.removeEventListener('abort', cancel);
+    [voice, music].forEach(f => { if (f) try { fs.unlinkSync(f); } catch (_) {} });
+    if (cancelled) try { if (fs.existsSync(out)) fs.unlinkSync(out); } catch (_) {}
+  }
 }
 
-async function renderNovaScenes({ scenes, globals, outputPath, onProgress, voiceB64, musicB64, musicVolume }) {
+async function renderNovaScenes({ scenes, globals, outputPath, onProgress, voiceB64, musicB64, musicVolume, registerCancel, signal }) {
   if (!fs.existsSync(NOVA_BUNDLE)) return { ok: false, error: 'Thiếu nova-remotion/bundle — chạy: node editor-pro/nova-remotion/build.js' };
-  try { const n = stageLocalAssets(scenes); if (n) onProgress && onProgress(1, `Đã đưa ${n} file media vào bundle…`); } catch (_) {}
+  let staged = { count: 0, files: [] };
+  try { staged = stageLocalAssets(scenes); if (staged.count) onProgress && onProgress(1, `Đã đưa ${staged.count} file media vào bundle…`); } catch (_) {}
+  const cleanupStaged = () => (staged.files || []).forEach((file) => { try { fs.unlinkSync(file); } catch (_) {} });
   if (fs.existsSync(COMPOSITOR)) {
     process.env.DYLD_LIBRARY_PATH = COMPOSITOR + (process.env.DYLD_LIBRARY_PATH ? ':' + process.env.DYLD_LIBRARY_PATH : '');
   }
-  const { selectComposition, renderMedia } = require('@remotion/renderer');
+  const { selectComposition, renderMedia, makeCancelSignal } = require('@remotion/renderer');
+  const cancellation = makeCancelSignal();
+  if (typeof registerCancel === 'function') registerCancel(cancellation.cancel);
+  const abort = () => cancellation.cancel();
+  if (signal) {
+    if (signal.aborted) abort();
+    else signal.addEventListener('abort', abort, { once: true });
+  }
   const inputProps = { scenes: Array.isArray(scenes) ? scenes : [], globals: Array.isArray(globals) ? globals : [] };
   const browserExecutable = BROWSER || undefined;
-  const comp = await selectComposition({ serveUrl: NOVA_BUNDLE, id: 'NovaSequence', inputProps, browserExecutable });
   const out = outputPath || path.join(TMP, `nova-scene-${Date.now()}.mp4`);
-  await renderMedia({
-    composition: comp, serveUrl: NOVA_BUNDLE, codec: 'h264', outputLocation: out, inputProps, browserExecutable,
-    concurrency: Math.max(2, Math.min(6, (os.cpus() || []).length - 2)),
-    onProgress: ({ progress }) => { try { onProgress && onProgress(Math.round(progress * 100), 'Đang render (Nova Scene)…'); } catch (_) {} },
-  });
-  let finalPath = out;
-  if (voiceB64 || musicB64) {
-    try { onProgress && onProgress(98, 'Ghép giọng đọc + nhạc nền…'); finalPath = muxAudio({ videoPath: out, voiceB64, musicB64, musicVolume }); } catch (_) {}
+  let comp;
+  try {
+    comp = await selectComposition({ serveUrl: NOVA_BUNDLE, id: 'NovaSequence', inputProps, browserExecutable, binariesDirectory: REMOTION_BIN_DIR });
+    await renderMedia({
+      composition: comp, serveUrl: NOVA_BUNDLE, codec: 'h264', outputLocation: out, inputProps, browserExecutable, binariesDirectory: REMOTION_BIN_DIR,
+      concurrency: Math.max(1, Math.min(4, Math.max(1, (os.cpus() || []).length - 2))), cancelSignal: cancellation.cancelSignal,
+      onProgress: ({ progress }) => { try { onProgress && onProgress(Math.round(progress * 100), 'Đang render (Nova Scene)…'); } catch (_) {} },
+    });
+    let finalPath = out;
+    if (voiceB64 || musicB64) {
+      onProgress && onProgress(98, 'Ghép giọng đọc + nhạc nền…');
+      finalPath = await muxAudio({ videoPath: out, voiceB64, musicB64, musicVolume, registerCancel, signal });
+    }
+    return { ok: true, outputPath: finalPath, engine: 'nova-scene', durationInFrames: comp.durationInFrames, fps: comp.fps, hasAudio: !!(voiceB64 || musicB64) };
+  } catch (error) {
+    try { if (fs.existsSync(out)) fs.unlinkSync(out); } catch (_) {}
+    throw error;
+  } finally {
+    if (signal) signal.removeEventListener('abort', abort);
+    cleanupStaged();
   }
-  return { ok: true, outputPath: finalPath, engine: 'nova-scene', durationInFrames: comp.durationInFrames, fps: comp.fps, hasAudio: !!(voiceB64 || musicB64) };
 }
 
 function registerEditorProRemotion(ipcMain) {

@@ -36,7 +36,7 @@ function registerEditorPro(ipcMain, opts = {}) {
   mark(registerNguonWeb(ipcMain));              // 50 nguồn web: tìm + đọc thông tin + tải clip (yt-dlp)
   mark(registerKhopLoi(ipcMain));               // khớp lời: tìm đúng giây trong video nguồn
   mark(registerDocumentaryIpc(ipcMain, { userDataDir: opts.userDataDir, render: opts.documentaryRender, openWindow: opts.documentaryOpenWindow || require('../documentary/window').openDocumentaryWindow }));
-  mark(registerVideoAgentIpc(ipcMain, { adapters: opts.videoAgentAdapters }));   // Nova Video Agent — story → video (§25)
+  mark(registerVideoAgentIpc(ipcMain, { adapters: opts.videoAgentAdapters, userDataDir: opts.userDataDir }));   // Nova Video Agent — story → video (§25)
 
   // Phủ default cho mọi kênh còn lại (các tool khác, ít dùng trong editor)
   let all = [];

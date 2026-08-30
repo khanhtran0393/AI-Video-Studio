@@ -18,6 +18,8 @@ function createVideoJob({ projectDir, adapters = {}, options = {} }) {
   const upload = adapters.upload || ((x) => createUploader().upload(x));
   const events = []; const listeners = [];
   let state = 'CREATED', cancelled = false, spec = null, timeline = null, qaReport = null, output = null, url = null;
+  let cancelCurrent = null;
+  const abortController = new AbortController();
   const out = { jobId: 'va_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), projectDir };
 
   const on = (fn) => listeners.push(fn);
@@ -25,16 +27,30 @@ function createVideoJob({ projectDir, adapters = {}, options = {} }) {
     const e = { stage, state, progress: PROGRESS[stage] != null ? PROGRESS[stage] : 0, at: new Date().toISOString(), payload: payload || null };
     events.push(e); for (const fn of listeners) { try { fn(e); } catch (_) {} }
   }
-  const setState = (s) => { state = s; emit(s); };
+  const setState = (s) => { state = s; emit(s); persist(); };
+  function cancelledError(stage) { const err = new Error('Job huỷ ở ' + stage); err.code = 'VA_CANCELLED'; return err; }
   function checkCancel(stage) {
-    if (cancelled) { state = 'CANCELLED'; emit('CANCELLED'); const err = new Error('Job huỷ ở ' + stage); err.code = 'VA_CANCELLED'; throw err; }
+    if (cancelled || abortController.signal.aborted) throw cancelledError(stage);
   }
-  async function step(stage, fn) { checkCancel(stage); setState(stage); const r = await fn(); checkCancel(stage); return r; }
+  function registerCancel(fn) { cancelCurrent = typeof fn === 'function' ? fn : null; }
+  async function step(stage, fn) {
+    checkCancel(stage); setState(stage);
+    const timeoutMs = Number(options.stageTimeoutMs) || 30 * 60 * 1000;
+    let timer = null;
+    try {
+      const work = Promise.resolve().then(fn);
+      const timed = new Promise((_, reject) => { timer = setTimeout(() => {
+        try { if (cancelCurrent) cancelCurrent(); } catch (_) {}
+        const error = new Error('Stage quá thời gian ' + timeoutMs + 'ms: ' + stage); error.code = 'VA_STAGE_TIMEOUT'; reject(error);
+      }, timeoutMs); });
+      const r = await Promise.race([work, timed]); checkCancel(stage); return r;
+    } finally { if (timer) clearTimeout(timer); cancelCurrent = null; }
+  }
   async function persist() {
     try {
       const dir = path.join(projectDir, 'output'); fs.mkdirSync(dir, { recursive: true });
       fs.writeFileSync(path.join(dir, 'job.json'), JSON.stringify({ ...out, status: state, progress: PROGRESS[state] || 0, stage: state,
-        url, output, events: events.slice(-40) }, null, 2));
+        url, output, options, updatedAt: new Date().toISOString(), events: events.slice(-40) }, null, 2));
     } catch (_) {}
   }
   const result = (status, error) => ({ jobId: out.jobId, status, stage: state, progress: PROGRESS[state] || 0,
@@ -42,6 +58,16 @@ function createVideoJob({ projectDir, adapters = {}, options = {} }) {
 
   async function run() {
     try {
+      // Rendering may temporarily need several times the final file size. Refuse
+      // to start on a nearly-full volume to avoid partial/corrupt output.
+      if (typeof fs.statfsSync === 'function' && options.skipDiskPreflight !== true) {
+        const disk = fs.statfsSync(path.resolve(projectDir));
+        const freeBytes = Number(disk.bavail) * Number(disk.bsize);
+        const minFreeBytes = Number(options.minFreeBytes) || 1024 * 1024 * 1024;
+        if (Number.isFinite(freeBytes) && freeBytes < minFreeBytes) {
+          const e = new Error('Không đủ dung lượng trống để render (cần tối thiểu ' + minFreeBytes + ' byte).'); e.code = 'VA_DISK_SPACE'; throw e;
+        }
+      }
       const A = await runAnalysis(projectDir, { step, adapters, options });
       const { project, tts, manifest, versions, validate } = A;
       out.chapterId = project.chapterId;
@@ -65,7 +91,7 @@ function createVideoJob({ projectDir, adapters = {}, options = {} }) {
       if (options.skipPreview !== true) {
         const preview = await step('PREVIEW_RENDER', () => renderPreview({ adapter: render, spec, manifest, projectDir,
           voicePath: project.files.ttsAudio, musicPath: (project.files.music || [])[0], opts: options.preview || {},
-          onProgress: (p) => emit('PREVIEW_RENDER', { percent: p }) }));
+          onProgress: (p) => emit('PREVIEW_RENDER', { percent: p }), registerCancel, signal: abortController.signal }));
         if (!preview.ok) { const e = new Error('Preview render lỗi: ' + (preview.error || preview.code)); e.code = preview.code || 'VA_PREVIEW_FAIL'; throw e; }
         out.previewPath = preview.outputPath;
         visionStats = grabFrames(preview.outputPath); // Phase 4: frame thật từ preview
@@ -82,7 +108,7 @@ function createVideoJob({ projectDir, adapters = {}, options = {} }) {
 
       const rendered = await step('FULL_RENDER', () => render.render({ spec, manifest, projectDir,
         voicePath: project.files.ttsAudio, musicPath: (project.files.music || [])[0],
-        onProgress: (p) => emit('FULL_RENDER', { percent: p }) }));
+        onProgress: (p) => emit('FULL_RENDER', { percent: p }), registerCancel, signal: abortController.signal }));
       if (!rendered.ok) { const e = new Error('Full render lỗi: ' + (rendered.error || rendered.code)); e.code = rendered.code || 'VA_RENDER_FAIL'; throw e; }
       output = rendered.outputPath; out.outputPath = output;
       visionStats = grabFrames(output); // Phase 4: FINAL_QA chạy trên frame của bản full
@@ -92,20 +118,25 @@ function createVideoJob({ projectDir, adapters = {}, options = {} }) {
       if (finalQA.status === 'fail' && options.forceUpload !== true) {
         const e = new Error('Final QA FAIL — không upload (§32.12)'); e.code = 'VA_FINAL_QA_FAIL'; e.qa = finalQA; throw e;
       }
-      const up = await step('UPLOADING', () => upload({ filePath: output, projectRoot: projectDir }));
+      const up = await step('UPLOADING', () => upload({ filePath: output, projectRoot: projectDir, signal: abortController.signal, registerCancel }));
       if (!up.ok) { const e = new Error('Upload lỗi: ' + (up.error || '')); e.code = up.code || 'VA_UPLOAD_FAIL'; throw e; }
       url = up.url; out.url = url;
       setState('COMPLETED'); await persist();
       return result('COMPLETED');
     } catch (e) {
-      state = (e.code === 'VA_CANCELLED') ? 'CANCELLED' : 'FAILED';
+      state = (cancelled || abortController.signal.aborted || e.code === 'VA_CANCELLED') ? 'CANCELLED' : 'FAILED';
+      if (state === 'CANCELLED' && e.code !== 'VA_CANCELLED') e = cancelledError(state);
       out.error = { code: e.code || 'VA_UNKNOWN', stage: state, message: e.message, details: e.details || (e.qa && e.qa.errors) };
       emit(state, out.error); await persist();
       return result(state, out.error);
     }
   }
 
-  return { jobId: out.jobId, on, run, cancel: () => { cancelled = true; }, result,
+  return { jobId: out.jobId, on, run, cancel: () => {
+    cancelled = true;
+    try { abortController.abort(); } catch (_) {}
+    try { if (cancelCurrent) cancelCurrent(); } catch (_) {}
+  }, result,
     get state() { return state; }, get spec() { return spec; }, get timeline() { return timeline; },
     get qa() { return qaReport; }, get url() { return url; }, get events() { return events; } };
 }

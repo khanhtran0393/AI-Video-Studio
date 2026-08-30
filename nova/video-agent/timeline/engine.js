@@ -2,6 +2,7 @@
 // §16 Timeline Engine — deterministic, frame-accurate. Cùng input → cùng output (hash ổn định).
 const crypto = require('crypto');
 const grammar = require('../visual-grammar/grammar');
+const { compileFrameEngine } = require('../frame-engine');
 
 const frameAt = (sec, fps) => Math.round(sec * fps);
 
@@ -34,13 +35,16 @@ function buildTimeline(spec) {
       transition: t.id, transDur: t.dur, layers };
   });
   const totalFrames = scenes.length ? scenes[scenes.length - 1].endFrame : 0;
-  const timeline = { fps, durationSec: +(totalFrames / fps).toFixed(3), totalFrames, scenes, renderer: 'nova-scene-1' };
+  const frameEngine = compileFrameEngine(spec);
+  const behaviorGraph = { hash: frameEngine.hash, status: frameEngine.constraints.status,
+    count: frameEngine.behaviors.length, errors: frameEngine.constraints.errors, warnings: frameEngine.constraints.warnings };
+  const timeline = { fps, durationSec: +(totalFrames / fps).toFixed(3), totalFrames, scenes, behaviorGraph, renderer: 'nova-scene-1' };
   timeline.hash = hashTimeline(timeline);
   return timeline;
 }
 
 function hashTimeline(tl) {
-  const canonical = JSON.stringify({ fps: tl.fps, scenes: tl.scenes, renderer: tl.renderer });
+  const canonical = JSON.stringify({ fps: tl.fps, scenes: tl.scenes, behaviorGraph: tl.behaviorGraph, renderer: tl.renderer });
   return crypto.createHash('sha1').update(canonical).digest('hex');
 }
 

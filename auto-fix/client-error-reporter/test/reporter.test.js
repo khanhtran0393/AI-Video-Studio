@@ -7,6 +7,7 @@ const path = require('path');
 const { ErrorReporter } = require('../reporter');
 
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'err-reporter-'));
+(async () => {
 try {
   const fakeEmitter = {
     handlers: new Map(),
@@ -37,6 +38,7 @@ try {
   assert.strictEqual(report.artifact_sha256, 'b'.repeat(64));
   assert.strictEqual(report.client_installation_id, 'inst-1');
   assert.strictEqual(report.status, 'queued');
+  assert.strictEqual(Object.prototype.hasOwnProperty.call(report, 'error_code'), false, 'empty optional error_code must be omitted');
   const canonical = reporter.captureException(error, { crash_id: 'caller-id', build_id: 'caller-build', status: 'completed' });
   assert.notStrictEqual(canonical.crash_id, 'caller-id');
   assert.strictEqual(canonical.build_id, 'build-1');
@@ -61,8 +63,45 @@ try {
   uninstall();
   assert.strictEqual(fakeEmitter.handlers.size, 0);
 
+  // A concurrent shutdown joins the active flush instead of returning early.
+  let releaseUpload;
+  const slowReporter = new ErrorReporter({
+    queueFile: path.join(temp, 'slow.json'),
+    uploader: { send: () => new Promise((resolve) => { releaseUpload = resolve; }) },
+  });
+  slowReporter.queue.enqueue({ id: 'slow', fingerprint: 'slow-fp' });
+  const activeFlush = slowReporter.flush();
+  while (!releaseUpload) await new Promise((resolve) => setImmediate(resolve));
+  const shutdown = slowReporter.shutdown(200);
+  releaseUpload({ status: 200 });
+  assert.strictEqual((await activeFlush).sent, 1);
+  assert.strictEqual((await shutdown).sent, 1);
+
+  // Online recovery immediately retries reports retained after a transient error.
+  let uploads = 0;
+  const online = { handlers: new Map(), on(n, f) { this.handlers.set(n, f); }, removeListener(n, f) { if (this.handlers.get(n) === f) this.handlers.delete(n); } };
+  const recoveryReporter = new ErrorReporter({
+    queueFile: path.join(temp, 'recovery.json'), flushIntervalMs: 10000,
+    uploader: { send: async () => { uploads++; if (uploads === 1) throw new Error('offline'); return { status: 200 }; } },
+  });
+  recoveryReporter.queue.enqueue({ id: 'recovery', fingerprint: 'recovery-fp' });
+  await recoveryReporter.flush();
+  assert.strictEqual(recoveryReporter.queue.peek().length, 1);
+  recoveryReporter.startLifecycle({ networkTarget: online });
+  online.handlers.get('online')();
+  while (recoveryReporter.queue.peek().length) await new Promise((resolve) => setTimeout(resolve, 2));
+  recoveryReporter.stopLifecycle();
+  assert.strictEqual(uploads >= 2, true);
+  assert.strictEqual(online.handlers.size, 0);
+
+  const timeoutReporter = new ErrorReporter({ queueFile: path.join(temp, 'timeout.json'), uploader: { send: () => new Promise(() => {}) } });
+  timeoutReporter.queue.enqueue({ id: 'timeout', fingerprint: 'timeout-fp' });
+  const timedOut = await timeoutReporter.shutdown(5);
+  assert.strictEqual(timedOut.timedOut, true);
+
 } finally {
   fs.rmSync(temp, { recursive: true, force: true });
 }
 
 console.log('reporter tests: passed');
+})().catch((error) => { console.error(error); process.exitCode = 1; });

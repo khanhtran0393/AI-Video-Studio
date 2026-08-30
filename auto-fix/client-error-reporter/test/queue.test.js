@@ -48,6 +48,15 @@ try {
   assert.strictEqual(q2.allowSend('x'), false, 'successful send within interval must be rejected');
   assert.strictEqual(q2.allowSend('y'), true);
 
+  // Even when time-window dedup is disabled, one fingerprint cannot fill the queue.
+  const q3 = new LocalQueue(path.join(temp, 'q3.json'), { dedupWindowMs: 0, maxPendingPerFingerprint: 2, maxSize: 10 });
+  assert.strictEqual(q3.enqueue({ fingerprint: 'hot' }).queued, true);
+  assert.strictEqual(q3.enqueue({ fingerprint: 'hot' }).queued, true);
+  const capped = q3.enqueue({ fingerprint: 'hot' });
+  assert.strictEqual(capped.queued, false);
+  assert.strictEqual(capped.reason, 'fingerprint-limit');
+  assert.strictEqual(q3.enqueue({ fingerprint: 'other' }).queued, true);
+
   // Corrupt file recovers to empty.
   fs.writeFileSync(path.join(temp, 'bad.json'), '{not json', 'utf8');
   assert.deepStrictEqual(new LocalQueue(path.join(temp, 'bad.json')).read(), []);

@@ -41,6 +41,7 @@ const voiceNative = require('./voice-native.plain');
 const watermarkNative = require('./watermark-native');
 const { userDataPath } = require('./core/paths');
 const { registerSettingsIpc } = require('./storage/settings-store');
+const { registerElectronErrorBridge } = require('../auto-fix/client-error-reporter/electron-bridge');
 
 const WEB_DIR = path.join(__dirname, 'web');
 // Bundle "Nova Scene" — bộ THÔNG DỊCH cảnh do ta tự build (editor-pro/nova-remotion).
@@ -94,6 +95,9 @@ let localServer = null;
 let isQuitting = false;
 let splashCloseTimer = null;
 let errorReporter = null;
+let unregisterErrorBridge = null;
+let reporterShutdownPromise = null;
+let reporterQuitReady = false;
 let splashShownAt = 0;   // thời điểm logo splash THỰC SỰ hiện ra (ready-to-show)
 
 // Logo phải hiển thị tối thiểu 5 giây khi khởi động; nếu app tải lâu hơn thì
@@ -151,7 +155,7 @@ function setupErrorReporter() {
     releaseIdentity: release.releaseIdentity,
     clientInstallationId: clientInstallationId || 'unknown',
     queueFile: path.join(app.getPath('userData'), 'crash-queue.json'),
-    queue: { dedupWindowMs: 0 },
+    queue: { dedupWindowMs: 15 * 60 * 1000, maxPendingPerFingerprint: 3 },
     uploader,
   });
 }
@@ -802,15 +806,27 @@ function shutdownOwnedResources() {
   try { flowChrome.closeGuestCaptcha && flowChrome.closeGuestCaptcha(); } catch (_) {}
 }
 
-app.on('before-quit', () => {
+app.on('before-quit', (event) => {
   isQuitting = true;
   try { closeSplashWindow(true); } catch (_) {}
   try { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.hide(); } catch (_) {}
   try { if (localServer) { localServer.close(); localServer = null; } } catch (_) {}
   shutdownOwnedResources();
+  // Electron does not await event handlers. Delay quit once while the reporter
+  // joins any active flush, but never keep the app alive beyond the timeout.
+  if (errorReporter && !reporterQuitReady) {
+    event.preventDefault();
+    if (!reporterShutdownPromise) {
+      reporterShutdownPromise = errorReporter.shutdown(2000).catch(() => {}).finally(() => {
+        reporterQuitReady = true;
+        app.quit();
+      });
+    }
+  }
 });
 app.on('will-quit', () => {
   isQuitting = true;
+  if (unregisterErrorBridge) { try { unregisterErrorBridge(); } catch (_) {} unregisterErrorBridge = null; }
   try { closeSplashWindow(true); } catch (_) {}
   try { if (localServer) { localServer.close(); localServer = null; } } catch (_) {}
   try {
@@ -821,6 +837,22 @@ app.on('will-quit', () => {
 });
 
 app.whenReady().then(async () => {
+  // Observe-only error reporter. Initialize before IPC registration/window creation
+  // so startup and renderer failures are not missed. Disabled unless explicitly
+  // opted in; missing/invalid upload configuration remains local-only.
+  if (process.env.AI_VIDEO_STUDIO_ERROR_REPORTING === '1') {
+    try {
+      errorReporter = setupErrorReporter();
+      if (errorReporter) {
+        try { errorReporter.recordEvent('app_start', { platform: process.platform }); } catch (_) {}
+        errorReporter.startLifecycle({ networkTarget: app, onlineEvent: 'online' });
+      }
+    } catch (e) { console.warn('[error-reporter] setup:', e && e.message); }
+  }
+  try {
+    unregisterErrorBridge = registerElectronErrorBridge({ app, ipcMain, getReporter: () => errorReporter });
+  } catch (e) { console.warn('[error-reporter] bridge:', e && e.message); }
+
   // Không tạo BrowserWindow splash riêng. Cửa sổ frameless tạm thời có thể bị
   // Windows giữ lại thành một mảng đen nếu tiến trình cũ bị kill/crash. Giao diện
   // chính vẫn được giữ show:false và chỉ hiện sau khi load xong ở createWindow().
@@ -845,17 +877,6 @@ app.whenReady().then(async () => {
   // Bản private không đọc app-update.yml/repository của AI Video Studio.
   // Khi có release server riêng, bật lại bằng AI_VIDEO_STUDIO_ENABLE_UPDATES=1.
   if (app.isPackaged && process.env.AI_VIDEO_STUDIO_ENABLE_UPDATES === '1') setupAutoUpdate();
-  // Milestone 2: Error Reporter. Mac dinh tat, chi bat khi co env flag.
-  if (process.env.AI_VIDEO_STUDIO_ERROR_REPORTING === '1') {
-    try {
-      errorReporter = setupErrorReporter();
-      if (errorReporter) {
-        try { errorReporter.recordEvent('app_start', { platform: process.platform }); } catch (_) {}
-        // Retry reports retained from previous offline/failed sessions.
-        errorReporter.flush().catch(() => {});
-      }
-    } catch (e) { console.warn('[error-reporter] setup:', e && e.message); }
-  }
   app.on('activate', async () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(await resolveStartUrl()); });
 });
 

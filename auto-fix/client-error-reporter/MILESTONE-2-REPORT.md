@@ -5,11 +5,11 @@ STATUS: PASS
 ## Scope
 
 Implements the client-side error reporting layer from the master specification
-(section 6, 7, 8, 28) as a **standalone, disconnected module**. It is not yet
-wired into the packaged Electron application: `electron-builder.json` ships only
-`nova/**/*`, M1 remains BLOCKED, and the repo operating rules forbid modifying
-the running app merely to enable Auto-Fix. Production wiring is deferred to a
-later milestone that passes the integration and security gates.
+(section 6, 7, 8, 28). The observe-only reporter is packaged and wired into the
+Electron main and renderer processes behind `AI_VIDEO_STUDIO_ERROR_REPORTING=1`.
+It remains disabled by default and grants no mutation, release, rollout, or
+rollback authority. Without both a valid HTTPS endpoint and bearer token,
+reports stay only in the bounded local queue under Electron `userData`.
 
 ## Components
 
@@ -17,11 +17,11 @@ later milestone that passes the integration and security gates.
 |------|----------------|
 | `sanitizer.js` | Privacy sanitization on top of `auto-fix/redaction.js`: JWT/AWS/GitHub/Slack token patterns, bearer/basic credential redaction, local-path normalization. |
 | `event-buffer.js` | Bounded in-memory event ring buffer with sequence ids and copy-on-snapshot. |
-| `fingerprint.js` | Stable technical fingerprint: exception type + normalized message + normalized stack frames + originating module (SHA-256, 32 hex chars). Volatile tokens (hex addresses, numbers, paths, emails) are normalized away so many reports collapse to one fingerprint. |
+| `fingerprint.js` | Stable technical fingerprint: exception type + normalized message + normalized stack frames + originating module (full SHA-256, 64 hex chars). Volatile tokens (hex addresses, numbers, paths, emails) are normalized away so many reports collapse to one fingerprint. |
 | `environment.js` | Environment fingerprint: platform, OS build, arch, runtime versions, configuration hash. Locale/timezone identifiers are intentionally NOT collected (only numeric UTC offset). |
-| `queue.js` | Persistent local JSON-array queue for offline reporting, with in-window dedup per fingerprint, max-size trimming, and per-fingerprint rate limiting. |
-| `uploader.js` | HTTPS JSON POST transport (http supported for tests) with retry and exponential backoff. |
-| `reporter.js` | Orchestrator: `recordEvent`, `captureException`, `report` (never throws), `flush`, and injectable global handlers (`uncaughtException`/`unhandledRejection`). |
+| `queue.js` | Persistent local JSON-array queue for offline reporting, with in-window dedup, a pending cap per fingerprint, max-size trimming, and per-fingerprint rate limiting. |
+| `uploader.js` | HTTPS JSON POST transport (http supported for tests) with retry/error classification and exponential backoff. |
+| `reporter.js` | Orchestrator: capture/report, joined flushes, periodic/network-aware lifecycle retry with backoff, bounded shutdown flush, and injectable global handlers. |
 
 ## Verification
 
@@ -70,14 +70,22 @@ All modules also pass `node --check` syntax validation.
 - The module exposes no upload endpoint by default; an endpoint must be
   injected (`endpoint` or `transport` option), and no secrets are embedded.
 
+## Runtime configuration
+
+- `AI_VIDEO_STUDIO_ERROR_REPORTING=1` enables observe-only collection.
+- `AI_VIDEO_STUDIO_ERROR_UPLOAD_URL=https://<host>/v1/crashes` and
+  `AI_VIDEO_STUDIO_ERROR_UPLOAD_TOKEN=<dedicated uploader token>` are both
+  required to upload. HTTP and partial configuration fail closed to local queue.
+- Optional CI release identity: `AI_VIDEO_STUDIO_BUILD_ID`,
+  `AI_VIDEO_STUDIO_GIT_COMMIT_SHA`, `AI_VIDEO_STUDIO_ARTIFACT_SHA256`.
+- Never commit any raw token, TLS private key, or `.env` file.
+
 ## Known limitations
 
-- Not integrated into `nova/main.plain.js`; a real packaged client would need a
-  gated wiring step, an upload endpoint, and an installation id source.
-- Fingerprint stability is heuristic and should be reconciled with the
-  server-side fingerprinter in Milestone 4.
-- The local queue file path defaults to `process.cwd()`; a production wiring
-  must pass an explicit path under Electron's `userData`.
+- Fingerprint stability is heuristic; Milestone 4 stores the independent full
+  SHA-256 server fingerprint as canonical and retains the client value as alias.
+- Plain `ErrorReporter` consumers default the queue to `process.cwd()`; Electron
+  wiring explicitly places `crash-queue.json` under `app.getPath('userData')`.
 
 ## Next milestone
 

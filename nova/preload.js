@@ -5,6 +5,29 @@
  */
 const { contextBridge, ipcRenderer } = require('electron');
 
+// Observe-only error forwarding. The private channel is not exposed through
+// window.native, payloads are bounded here and sanitized again by the reporter.
+const RENDERER_ERROR_CHANNEL = '__nova:renderer-error';
+const NETWORK_ONLINE_CHANNEL = '__nova:network-online';
+function sendRendererError(value, fallbackName) {
+  try {
+    const source = value && typeof value === 'object' ? value : {};
+    ipcRenderer.send(RENDERER_ERROR_CHANNEL, {
+      name: String(source.name || fallbackName || 'RendererError').slice(0, 128),
+      message: String(source.message || value || 'Renderer error').slice(0, 2048),
+      stack: String(source.stack || '').slice(0, 8192),
+      code: String(source.code || '').slice(0, 64),
+    });
+  } catch (_) {}
+}
+window.addEventListener('error', (event) => {
+  sendRendererError(event.error || { message: event.message }, 'RendererError');
+});
+window.addEventListener('unhandledrejection', (event) => {
+  sendRendererError(event.reason, 'UnhandledRejection');
+});
+window.addEventListener('online', () => { try { ipcRenderer.send(NETWORK_ONLINE_CHANNEL); } catch (_) {} });
+
 // Kho cài đặt bền (API key…) — đọc NGAY tại preload (sendSync) để trang có dữ liệu
 // từ dòng script đầu tiên. localStorage gắn với origin http://localhost:<port>,
 // port đổi hoặc Chromium dọn kho là mất key; file trong userData thì không.
@@ -84,7 +107,7 @@ contextBridge.exposeInMainWorld('native', {
     onProgress: (cb) => ipcRenderer.on('documentary:progress', (_e, update) => cb && cb(update)),
     onJob: (cb) => ipcRenderer.on('documentary:job', (_e, update) => cb && cb(update)),
   },
-  // Nova Video Agent (§25): pipeline story → video, 10 kênh invoke + 1 kênh event stream.
+  // Nova Video Agent (§25): pipeline story → video, 12 kênh invoke + 1 kênh event stream.
   videoAgent: {
     run: (payload) => ipcRenderer.invoke('videoAgent:run', payload),
     status: (jobId) => ipcRenderer.invoke('videoAgent:status', { jobId }),
@@ -95,8 +118,14 @@ contextBridge.exposeInMainWorld('native', {
     retry: (jobId, adapters) => ipcRenderer.invoke('videoAgent:retry', { jobId, adapters }),
     restore: (projectDir, version) => ipcRenderer.invoke('videoAgent:restore', { projectDir, version }),
     versions: (projectDir) => ipcRenderer.invoke('videoAgent:versions', { projectDir }),
+    inspect: (projectDir) => ipcRenderer.invoke('videoAgent:inspect', { projectDir }),
+    pickProject: () => ipcRenderer.invoke('videoAgent:pickProject'),
     openWindow: () => ipcRenderer.invoke('videoAgent:openWindow'),
-    onEvent: (cb) => ipcRenderer.on('videoAgent:event', (_e, update) => cb && cb(update)),
+    onEvent: (cb) => {
+      const listener = (_e, update) => cb && cb(update);
+      ipcRenderer.on('videoAgent:event', listener);
+      return () => ipcRenderer.removeListener('videoAgent:event', listener);
+    },
   },
   // Thư viện Hiệu ứng âm thanh (SFX) dựng sẵn.
   sfxLibrary: () => ipcRenderer.invoke('nova:sfxLibrary:list'),

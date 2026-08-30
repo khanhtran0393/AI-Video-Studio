@@ -32,7 +32,8 @@ async function main() {
   assert(mainSource.includes('AI_VIDEO_STUDIO_ERROR_UPLOAD_TOKEN'), 'main process must support the dedicated crash uploader token');
   assert(mainSource.includes('Authorization: `Bearer ${uploadToken}`'), 'main process must authenticate crash uploads');
   assert(mainSource.includes('resolveReleaseIdentity'), 'main process must attach validated release identity');
-  assert(mainSource.includes('errorReporter.flush()'), 'main process must retry the persistent queue at startup');
+  assert(mainSource.includes('errorReporter.startLifecycle('), 'main process must start persistent queue retry at startup');
+  assert(mainSource.includes('errorReporter.shutdown(2000)'), 'main process must await a bounded reporter shutdown flush');
   const flowSource = fs.readFileSync(path.join(__dirname, '..', 'flow-native.plain.js'), 'utf8');
   assert(!flowSource.includes("persist:flow-"), 'Flow account partitions must not reuse the legacy namespace');
   const runtimePorts = [

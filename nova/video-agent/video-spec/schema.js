@@ -1,6 +1,9 @@
 'use strict';
 // §15 Video Spec schema + validation (§32.17 structured error codes). Không có zod ở root → tự viết validator nhẹ.
 const grammar = require('../visual-grammar/grammar');
+const { buildWorldState } = require('../frame-engine/world-state');
+const { solveConstraints } = require('../frame-engine/constraint-solver');
+const { validateBehaviors } = require('../behavior-engine/validator');
 const EPS = 0.04; // dung sai giây khi kiểm tra liền nhau (round 3 decimals).
 
 function fail(errors, code, path, message) { errors.push({ code, path, message }); }
@@ -67,6 +70,16 @@ function validateVideoSpec(spec, { audioDuration } = {}) {
   });
   if (Number.isFinite(audioDuration) && lastEnd > audioDuration + EPS)
     fail(errors, 'VA_SPEC_AUDIO_BOUND', 'scenes', `tổng thời lượng (${lastEnd}) vượt audio (${audioDuration}) — vi phạm §1.1 TTS master clock`);
+  if (Array.isArray(s.behaviors)) {
+    const world = buildWorldState(s);
+    const checked = validateBehaviors(s.behaviors, { entities: world.entities,
+      duration: Number.isFinite(audioDuration) ? audioDuration : lastEnd });
+    errors.push(...checked.errors);
+    s.behaviors = checked.behaviors;
+    const constraints = solveConstraints({ behaviors: checked.behaviors, world,
+      duration: Number.isFinite(audioDuration) ? audioDuration : lastEnd, visualBudget: s.visualBudget || {} });
+    errors.push(...constraints.errors.filter(e => !errors.some(existing => existing.code === e.code && existing.behaviorId === e.behaviorId)));
+  }
   return { ok: !errors.length, errors, spec: s };
 }
 

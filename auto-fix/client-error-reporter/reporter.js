@@ -31,7 +31,14 @@ class ErrorReporter {
       || new LocalQueue(options.queueFile || path.join(process.cwd(), 'crash-queue.json'), options.queue);
     this.uploader = options.uploader || null;
     this.environment = options.environment || environmentProfile();
-    this._sending = false;
+    this.flushIntervalMs = options.flushIntervalMs != null ? options.flushIntervalMs : 30 * 1000;
+    this.retryBaseMs = options.retryBaseMs != null ? options.retryBaseMs : 5 * 1000;
+    this.retryMaxMs = options.retryMaxMs != null ? options.retryMaxMs : 5 * 60 * 1000;
+    this._flushPromise = null;
+    this._timer = null;
+    this._failureCount = 0;
+    this._lifecycleActive = false;
+    this._lifecycleCleanup = null;
   }
 
   // Sanitize before recording so no raw sensitive content enters the buffer.
@@ -57,8 +64,8 @@ class ErrorReporter {
       fingerprint: fp.fingerprint,
       timestamp: new Date().toISOString(),
       error_type: fp.errorType,
-      error_code: fp.errorCode,
-      module: fp.module,
+      ...(fp.errorCode ? { error_code: fp.errorCode } : {}),
+      ...(fp.module ? { module: fp.module } : {}),
       message: fp.normalizedMessage,
       stack_trace: sanitizeString(String((error && (error.stack || error.message)) || ''), { maxStringLength: 8192 }),
       environment_id: this.environment.environment_id,
@@ -86,12 +93,13 @@ class ErrorReporter {
     }
   }
 
-  async flush() {
-    if (this._sending || !this.uploader) return { sent: 0, skipped: 0 };
-    this._sending = true;
-    try {
+  flush() {
+    if (!this.uploader) return Promise.resolve({ sent: 0, skipped: 0, failed: 0 });
+    if (this._flushPromise) return this._flushPromise;
+    this._flushPromise = (async () => {
       let sent = 0;
       let skipped = 0;
+      let failed = 0;
       for (const item of this.queue.peek()) {
         if (!this.queue.allowSend(item.fingerprint)) {
           skipped++;
@@ -102,13 +110,71 @@ class ErrorReporter {
           this.queue.markSent(item.fingerprint);
           this.queue.remove(item.id);
           sent++;
-        } catch (_) {
-          break; // keep the report queued for the next flush
+        } catch (error) {
+          failed++;
+          if (error && error.retryable === false) {
+            // A malformed/unauthorized report cannot recover by waiting. Drop it
+            // so it cannot permanently block newer reports in the FIFO queue.
+            this.queue.remove(item.id);
+            continue;
+          }
+          break; // transient failure: retain current and later reports
         }
       }
-      return { sent, skipped };
+      this._failureCount = failed ? this._failureCount + 1 : 0;
+      return { sent, skipped, failed };
+    })().finally(() => { this._flushPromise = null; });
+    return this._flushPromise;
+  }
+
+  _schedule(delayMs) {
+    if (!this.uploader || !this._lifecycleActive || this._timer) return;
+    this._timer = setTimeout(async () => {
+      this._timer = null;
+      const result = await this.flush().catch(() => ({ failed: 1 }));
+      const failures = result && result.failed ? this._failureCount : 0;
+      const delay = failures
+        ? Math.min(this.retryBaseMs * Math.pow(2, Math.max(0, failures - 1)), this.retryMaxMs)
+        : this.flushIntervalMs;
+      this._schedule(delay);
+    }, Math.max(0, Number(delayMs) || 0));
+    if (this._timer && typeof this._timer.unref === 'function') this._timer.unref();
+  }
+
+  startLifecycle(options = {}) {
+    if (!this.uploader) return () => {};
+    this.stopLifecycle();
+    this._lifecycleActive = true;
+    const networkTarget = options.networkTarget;
+    const onlineEvent = options.onlineEvent || 'online';
+    const onOnline = () => { this.flush().catch(() => {}); };
+    if (networkTarget && typeof networkTarget.on === 'function') networkTarget.on(onlineEvent, onOnline);
+    this._schedule(0);
+    const cleanup = () => {
+      this._lifecycleActive = false;
+      if (this._timer) { clearTimeout(this._timer); this._timer = null; }
+      if (networkTarget && typeof networkTarget.removeListener === 'function') networkTarget.removeListener(onlineEvent, onOnline);
+    };
+    this._lifecycleCleanup = cleanup;
+    return cleanup;
+  }
+
+  stopLifecycle() {
+    if (this._lifecycleCleanup) this._lifecycleCleanup();
+    this._lifecycleCleanup = null;
+  }
+
+  async shutdown(timeoutMs = 2000) {
+    this.stopLifecycle();
+    if (!this.uploader) return { sent: 0, skipped: 0, failed: 0 };
+    let timer = null;
+    try {
+      return await Promise.race([
+        this.flush(),
+        new Promise((resolve) => { timer = setTimeout(() => resolve({ sent: 0, skipped: 0, failed: 0, timedOut: true }), Math.max(0, timeoutMs)); }),
+      ]);
     } finally {
-      this._sending = false;
+      if (timer) clearTimeout(timer);
     }
   }
 

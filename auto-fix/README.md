@@ -8,16 +8,16 @@ Thư mục riêng để quản lý chức năng **Autonomous AI Auto-Fix Platfor
 - CI definition: **đã thêm, chưa có run/protection evidence**
 - Canonical Electron source: **đã đăng ký** — `origin/main` tại baseline `d936dc4054bfc1e38d0e01e345010d02b8f4ebf0`
 - Chế độ: **observe-only**
-- Tác động vào app: **không có**
+- Tích hợp app: **error reporting opt-in, tắt mặc định**; không có mutation authority
 - AI read/write/command/build authority: **tắt**
 - Signing/release/rollout/rollback authority: **tắt**
 - Auto-update/rollback runtime mới: **chưa kết nối**
 
-Đây là lớp quản lý độc lập. Ở trạng thái hiện tại, app không tự đọc hoặc thực thi các file trong thư mục này.
+Control plane và mọi quyền Auto-Fix vẫn độc lập, deny-by-default. App chỉ nạp `client-error-reporter` observe-only khi `AI_VIDEO_STUDIO_ERROR_REPORTING=1`; không có endpoint HTTPS + token hợp lệ thì dữ liệu chỉ vào queue cục bộ. Việc này không bật AI, patch, release, rollout hay rollback.
 
 ## Quy tắc an toàn
 
-1. Không sửa `main.js`, `main.plain.js`, `preload.js` hoặc module đang chạy chỉ để bật Auto-Fix.
+1. Không nối mutation/release authority vào `main.js`, `main.plain.js`, `preload.js` hoặc module đang chạy; telemetry observe-only phải opt-in và fail-closed.
 2. Không cho AI quyền shell tùy ý, quyền xóa file, quyền truy cập secret hoặc code-signing key.
 3. Mọi thay đổi tương lai phải đi theo từng milestone, có test, kiểm tra bảo mật, tài liệu và báo cáo PASS/FAIL.
 4. AI chỉ làm việc trong workspace/branch cô lập; không sửa production branch trực tiếp.
@@ -67,8 +67,24 @@ npm --prefix auto-fix run check:policy
 npm --prefix auto-fix run check:readiness
 ```
 
-`test:all` chạy control-plane test suite cộng với client error reporter test
-suite (`client-error-reporter/`). CI `M1 Validation` sử dụng cùng entrypoint này.
+`test:all` chạy control-plane test suite cùng toàn bộ module Auto-Fix, bao gồm
+client reporter, Electron wiring contract, reporter→server schema contract và
+crash-server security tests. CI `M1 Validation` sử dụng cùng entrypoint này.
+
+Error reporting runtime (không bật Auto-Fix authority):
+
+```powershell
+$env:AI_VIDEO_STUDIO_ERROR_REPORTING='1'
+# Chỉ đặt hai biến sau trong secret/runtime environment, không commit:
+$env:AI_VIDEO_STUDIO_ERROR_UPLOAD_URL='https://<deployment>/v1/crashes'
+$env:AI_VIDEO_STUDIO_ERROR_UPLOAD_TOKEN='<dedicated-uploader-token>'
+npm start
+```
+
+Thiếu URL HTTPS hoặc token thì uploader không được tạo và report được giữ tại
+`crash-queue.json` trong Electron `userData`. Release CI có thể thêm
+`AI_VIDEO_STUDIO_BUILD_ID`, `AI_VIDEO_STUDIO_GIT_COMMIT_SHA` và
+`AI_VIDEO_STUDIO_ARTIFACT_SHA256`.
 
 `check:readiness` kết thúc với mã `2` khi trạng thái là `BLOCKED`/`FAIL`; đó là hành vi fail-closed. Canonical-source gate có thể `PASS` riêng trong khi toàn bộ M1 vẫn `BLOCKED` hoặc `FAIL` do worktree, CI, security và governance gates.
 

@@ -58,14 +58,14 @@ function createRendererAdapter() {
     return _fn;
   }
   return {
-    render: async ({ spec, manifest, outputPath, quality, voicePath, musicPath, musicVolume, onProgress }) => {
+    render: async ({ spec, manifest, outputPath, quality, voicePath, musicPath, musicVolume, onProgress, registerCancel, signal }) => {
       const fn = resolve();
       if (typeof fn !== 'function') return { ok: false, code: 'VA_RENDERER_UNAVAILABLE',
         error: 'renderNovaScenes không nạp được trong môi trường này: ' + (fn.__error || '—') };
       const { scenes, globals, audio } = specToNovaScenes(spec, manifest);
       const fs = require('fs');
       const toB64 = (p) => { if (!p) return null; try { return 'data:audio/mp3;base64,' + fs.readFileSync(p).toString('base64'); } catch (_) { return null; } };
-      return fn({ scenes, globals, outputPath, voiceB64: toB64(voicePath || audio.voice), musicB64: toB64(musicPath), musicVolume: musicVolume != null ? musicVolume : 0.22, onProgress });
+      return fn({ scenes, globals, outputPath, voiceB64: toB64(voicePath || audio.voice), musicB64: toB64(musicPath), musicVolume: musicVolume != null ? musicVolume : 0.22, onProgress, registerCancel, signal });
     },
   };
 }

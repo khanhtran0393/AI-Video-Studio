@@ -13,6 +13,7 @@ class LocalQueue {
     this.file = path.resolve(file);
     this.maxSize = options.maxSize != null ? options.maxSize : 50;
     this.dedupWindowMs = options.dedupWindowMs != null ? options.dedupWindowMs : 60 * 60 * 1000;
+    this.maxPendingPerFingerprint = options.maxPendingPerFingerprint != null ? options.maxPendingPerFingerprint : 3;
     this.minIntervalMs = options.minIntervalMs != null ? options.minIntervalMs : 1000;
     this._lastSent = new Map();
   }
@@ -44,10 +45,14 @@ class LocalQueue {
     const items = this.read();
     const fingerprint = report && report.fingerprint;
     const now = Date.now();
-    const duplicate = items.some(
-      (item) => item.fingerprint === fingerprint && (now - (item.queued_at || 0)) < this.dedupWindowMs,
+    const sameFingerprint = items.filter((item) => item.fingerprint === fingerprint);
+    const duplicate = sameFingerprint.some(
+      (item) => (now - (item.queued_at || 0)) < this.dedupWindowMs,
     );
     if (duplicate) return { queued: false, reason: 'duplicate', count: items.length };
+    if (sameFingerprint.length >= this.maxPendingPerFingerprint) {
+      return { queued: false, reason: 'fingerprint-limit', count: items.length };
+    }
     const entry = { ...report, queued_at: now, id: `${now}-${Math.random().toString(36).slice(2, 8)}` };
     items.push(entry);
     const trimmed = items.slice(-this.maxSize);
