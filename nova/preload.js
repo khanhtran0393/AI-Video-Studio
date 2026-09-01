@@ -204,7 +204,6 @@ contextBridge.exposeInMainWorld('native', {
     versions: (payload) => ipcRenderer.invoke('videoAgent:versions', payload),
     inspect: (payload) => ipcRenderer.invoke('videoAgent:inspect', payload),
     pickProject: () => ipcRenderer.invoke('videoAgent:pickProject'),
-    openWindow: () => ipcRenderer.invoke('videoAgent:openWindow'),
     onEvent: (cb) => ipcRenderer.on('videoAgent:event', (_e, ev) => cb(ev)),
   },
 });

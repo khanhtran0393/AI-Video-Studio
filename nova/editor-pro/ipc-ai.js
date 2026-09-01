@@ -168,7 +168,7 @@ function registerEditorProAI(ipcMain, opts = {}) {
       catch (e) { return { ok: false, error: 'AI (cli-bridge Nova): ' + String(e && e.message || e) }; }
     },
     // TTS / voiceover — dùng macOS say (offline, giọng Việt "Linh", không cần key)
-    'ai:ttsGenerate': async (_e, payload = {}) => {
+    'editor-pro:ttsGenerate': async (_e, payload = {}) => {
       try {
         const text = String(payload.text || payload.script || payload.content || '').trim();
         if (!text) return { ok: false, error: 'Thiếu văn bản' };

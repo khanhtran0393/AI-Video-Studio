@@ -1,3 +1,6 @@
+  <!-- Video Agent Panel - loaded once -->
+  <script src="video-agent-panel.js"></script>
+
 <!DOCTYPE html>
 <html lang="vi">
 <head>
@@ -145,6 +148,7 @@ html.dark .prescan {
   background: rgba(124, 58, 237, 0.08);
   border-left-color: var(--violet);
 }
+
 html.dark .status-bar.ok { background: rgba(74, 222, 128, 0.1); color: var(--green); }
 html.dark .status-bar.error { background: rgba(248, 113, 113, 0.1); color: var(--red); }
 html.dark .status-bar.working { background: rgba(167, 139, 250, 0.1); color: var(--violet); }
@@ -705,6 +709,7 @@ html.dark .pc-ico.i-rule{background:#3a1414;color:#f87171}
 .dproj{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)}
 .dproj:last-child{border-bottom:none}
 .dproj .th{width:44px;height:44px;border-radius:10px;background:linear-gradient(135deg,#5b4633,#2a2018);flex:none;display:grid;place-items:center;font-size:18px}
+
 .dproj .pn{font-weight:700;font-size:13.5px}.dproj .pd{font-size:11px;color:var(--text-dim)}
 
 /* ============ PROFILE SELECTOR ROW (top of Tool 1, 2, 3) ============ */
@@ -1531,10 +1536,30 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
       <div id="novaLogBox" style="background:#0d0f1a;color:#cdd6e4;font-size:11.5px;line-height:1.65;padding:14px;border-radius:10px;height:62vh;overflow:auto;white-space:pre-wrap;word-break:break-all;font-family:ui-monospace,Menlo,monospace"></div>
     </div>
 
+    <!-- VIDEO AGENT TOOL -->
+    <div class="tool" id="tool-toolvideoagent">
+      <div class="tool-head">
+        <div class="tool-title">🎬 Video Agent</div>
+        <div class="tool-subtitle">Pipeline tự động tạo phim tài liệu từ kịch bản và assets</div>
+      </div>
+      <div id="notice" style="display:none;background:#3a2c14;border:1px solid var(--warn);border-radius:8px;padding:12px;margin-bottom:12px;"></div>
+      <div style="display:flex;gap:12px;align-items:center;margin-bottom:12px;">
+        <div id="progressBar" style="height:8px;background:var(--panel2);border-radius:4px;overflow:hidden;flex:1;min-width:200px;">
+          <div id="progressFill" style="height:100%;width:0;background:var(--accent);transition:width .3s;"></div>
+        </div>
+        <span id="progressLabel" class="meta">idle</span>
+        <button id="btnNew" class="btn secondary">Dự án mới</button>
+        <button id="btnRunFull" class="btn primary">Chạy pipeline</button>
+        <button id="renderBtn" class="btn secondary">Render video</button>
+      </div>
+      <div class="grid" id="panels" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;"></div>
+    </div>
+
     <!-- TOOL 1: PROFILE KÊNH -->
     <!-- DASHBOARD -->
     <div class="tool active" id="tool-tooldash">
       <div id="dashBody"></div>
+
     </div>
 
     <div class="tool" id="tool-tool1">
@@ -7729,7 +7754,7 @@ async function voicePickRoot(){
    Chỉ giữ OmniVoice local (chạy máy, cổng 8771). Danh sách giọng là toàn bộ
    giọng có trong backend voice-studio.
 
-   Ghim tên engine chủ yếu để tương thích UI cũ; ở đây luôn là OmniVoice. */
+   Đã gỡ legacy: ElevenLabs/OpenAI khỏi luồng giọng nói. */
 
 const _TTS_TEN = { omni: 'OmniVoice' };
 const _GIONG_THU = 'Xin chào, đây là giọng đọc thử của AI Video Studio.';
@@ -7765,12 +7790,7 @@ async function giongTaiDS(){
         factory: !!v.is_factory,
       });
     }
-  } catch (e){ /* backend chưa lên — vẫn hiện giọng đám mây */ }
-  for (const v of _giongCloud()){
-    ds.push({ key: v.engine + ':' + v.id, engine: v.engine, id: v.id, name: v.name,
-      src: 'Giọng dựng sẵn', kind: 'san', tags: Array.isArray(v.tags) ? v.tags.slice(0, 3) : [],
-      lang: v.lang || 'vi', factory: false, model: v.model || '' });
-  }
+  } catch (e){ /* backend chưa lên — giữ trống để thao tác khởi tạo sau */ }
   _giongDS = ds;
   if (!_giongDS.some(v => v.key === _giongChon)) _giongChon = (_giongDS[0] || {}).key || '';
   giongVe();
@@ -7792,7 +7812,7 @@ function giongVe(){
   if (chips){
     const dem = f => _giongDS.filter(v => { const c = _giongLoc; _giongLoc = f; const k = _giongHop(v); _giongLoc = c; return k; }).length;
     const muc = [['*', 'Tất cả']];
-    for (const e of ['omni','elevenlabs','openai']) if (_giongDS.some(v => v.engine === e)) muc.push(['e:' + e, _TTS_TEN[e]]);
+    if (_giongDS.some(v => v.engine === 'omni')) muc.push(['e:omni', _TTS_TEN.omni]);
     for (const [k, t] of [['k:clone','Clone'],['k:design','Thiết kế']]) if (_giongDS.some(v => v.kind === k.slice(2))) muc.push([k, t]);
     const nhan = {};
     for (const v of _giongDS) for (const t of (v.tags || [])) nhan[t] = (nhan[t] || 0) + 1;

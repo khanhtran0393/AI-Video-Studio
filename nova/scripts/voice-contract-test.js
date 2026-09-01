@@ -63,4 +63,25 @@ for (const ch of ['voice-start', 'voice-status', 'voice-probe', 'voice-install-b
 assert(mainPlain.includes("replace('app.asar', 'app.asar.unpacked')"),
   'voice-install-backend phải giải đường dẫn app.asar.unpacked');
 
+// 8. Editor Pro TTS chạy ở main process: không được gọi window/preload TTS từ IPC handler.
+const editorAi = read('editor-pro/ipc-ai.js');
+assert(editorAi.includes("'editor-pro:ttsGenerate': async"),
+  'Editor Pro TTS phải dùng channel riêng, không dùng namespace ai chung');
+assert(!editorAi.includes("'ai:ttsGenerate':"),
+  'Editor Pro không được đăng ký lại channel ai:ttsGenerate');
+assert(editorAi.includes('const mp3 = await sayToMp3(text, voice);'),
+  'Editor Pro TTS phải dùng helper main-process sayToMp3');
+assert(!editorAi.includes('window.novaStore'),
+  'Editor Pro IPC không được truy cập window.novaStore');
+assert(!editorAi.includes('window.native.ttsFetch'),
+  'Editor Pro IPC không được gọi window.native.ttsFetch');
+const editorChannels = read('editor-pro/_channels.json');
+assert(editorChannels.includes("editor-pro:ttsGenerate'"),
+  'Catalog Editor Pro phải chứa channel TTS riêng');
+assert(!editorChannels.includes("ai:ttsGenerate'"),
+  'Catalog Editor Pro không được chứa channel TTS dùng chung cũ');
+const novaWeb = read('web/index.html');
+assert(!novaWeb.includes('ai:ttsGenerate'),
+  'Voice Studio renderer không được gọi channel TTS của Editor Pro');
+
 console.log('voice contract tests: passed');

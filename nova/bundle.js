@@ -73315,7 +73315,7 @@ const FeatureDemo = ({ type, active = true }) => {
     case "ai-images":
       return /* @__PURE__ */ react.createElement(AIImagesDemo, { active, frame, fps, appear });
     case "voiceover":
-      return /* @__PURE__ */ react.createElement(VoiceoverDemo, { active, frame, fps, appear });
+      return /* @__PURE__ */ react.createElement(VoiceoverDemo, { active, frame, fps, appear, title: "Chuyển TTS" });
     case "effects":
       return /* @__PURE__ */ react.createElement(EffectsDemo, { active, frame, fps, appear });
     case "captions":

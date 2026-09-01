@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-01T09:53:32.794Z",
+  "generatedAt": "2026-09-01T14:43:59.441Z",
   "sourceFiles": [
     "bundle.js",
     "chrome-extension/app.js",
@@ -1169,7 +1169,8 @@
     "watermark-native.js",
     "web/documentary-panel.js",
     "web/fractal-engine.js",
-    "web/nguon-web.js"
+    "web/nguon-web.js",
+    "web/video-agent-panel.js"
   ],
   "channels": [
     "app-version",

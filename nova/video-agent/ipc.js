@@ -114,9 +114,11 @@ function registerVideoAgentIpc(ipcMain, { adapters = {}, openWindow, maxConcurre
     } catch (err) { return { ok: false, error: String(err && err.message || err) }; }
   });
 
-  return ['videoAgent:run', 'videoAgent:status', 'videoAgent:spec', 'videoAgent:timeline', 'videoAgent:qa',
+  return [
+    'videoAgent:run', 'videoAgent:status', 'videoAgent:spec', 'videoAgent:timeline', 'videoAgent:qa',
     'videoAgent:cancel', 'videoAgent:retry', 'videoAgent:restore', 'videoAgent:versions', 'videoAgent:inspect',
-    'videoAgent:pickProject', 'videoAgent:openWindow'];
+    'videoAgent:pickProject', 'videoAgent:openWindow'
+  ];
 }
 
 module.exports = { registerVideoAgentIpc };
