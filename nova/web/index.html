@@ -3886,10 +3886,10 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
         #tool-toolvoice .ghint{font-size:12.5px;color:var(--text-dim);line-height:1.6;margin-top:12px}
       </style>
 
-      <div class="tool-head">
-        <div class="tool-title">🎙 Giọng nói</div>
-        <div class="tool-subtitle">Clone giọng, thiết kế giọng, đọc kịch bản thành tiếng. OmniVoice chạy trong máy; ElevenLabs và OpenAI làm đường lui.</div>
-      </div>
+       <div class="tool-head">
+         <div class="tool-title">🎙 Giọng nói</div>
+         <div class="tool-subtitle">Clone giọng, thiết kế giọng, đọc kịch bản thành tiếng. OmniVoice chạy trong máy.</div>
+       </div>
 
       <div id="voiceBackendStatus" style="font-size:12.5px;margin-bottom:14px;color:var(--text-muted)">Đang chuẩn bị…</div>
 
@@ -3903,19 +3903,15 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
 
           <div id="giongThemBox" style="display:none;margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
             <div class="grid-2" style="gap:12px">
-              <div>
-                <label class="label">CÁCH TẠO</label>
                 <select id="giongThemCach" onchange="giongThemDoi()">
                   <option value="clone">Clone từ file mẫu 5–15 giây (OmniVoice)</option>
                   <option value="design">Thiết kế từ mô tả bằng chữ (OmniVoice)</option>
-                  <option value="nhanban">Nhân bản giọng đám mây về máy (dán voice id) — trả tiền 1 lần</option>
-                  <option value="nhap">Dùng giọng đám mây qua API — làm đường lui khi backend máy hỏng</option>
                 </select>
               </div>
               <div><label class="label">TÊN GIỌNG</label><input type="text" id="gtTen" placeholder="vd: Nam trầm kể chuyện — dán voice id là tự điền" autocomplete="off" oninput="_giongTenTay = true"></div>
             </div>
 
-            <div id="gtClone" style="margin-top:12px">
+              <div id="gtClone" style="margin-top:12px">
               <label class="label">FILE GIỌNG MẪU (5–15 giây, wav/mp3)</label>
               <input type="file" id="gtFile" accept="audio/*,.mp3,.wav,.m4a,.ogg">
             </div>
@@ -3923,42 +3919,8 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
               <label class="label">MÔ TẢ GIỌNG</label>
               <input type="text" id="gtMoTa" placeholder="vd: giọng nam trầm ấm, kể chuyện chậm rãi, cảm xúc" autocomplete="off">
             </div>
-            <div id="gtNhap" style="display:none;margin-top:12px">
-              <div class="grid-3" style="gap:12px">
-                <div><label class="label">NHÀ CUNG CẤP</label>
-                  <select id="gtEngine" onchange="giongThemDoi()"><option value="elevenlabs">ElevenLabs</option><option value="openai">OpenAI</option></select></div>
-                <div>
-                  <label class="label">VOICE ID</label>
-                  <input type="text" id="gtVoiceId" placeholder="dán voice id — Nova tự tra tên" autocomplete="off" spellcheck="false" oninput="giongDoVoiceId()">
-                  <select id="gtVoiceSel" style="display:none">
-                    <option>alloy</option><option>ash</option><option>ballad</option><option>coral</option>
-                    <option>echo</option><option>fable</option><option>nova</option><option>onyx</option>
-                    <option>sage</option><option>shimmer</option><option>verse</option>
-                  </select>
-                </div>
-                <div><label class="label">MODEL (để trống là mặc định)</label><input type="text" id="gtModel" placeholder="eleven_multilingual_v2" autocomplete="off" spellcheck="false"></div>
-              </div>
-              <div id="gtVoiceTT" style="font-size:12.5px;margin-top:8px;min-height:18px;color:var(--text-dim)"></div>
-            </div>
-
-            <div id="gtKeyRow" style="display:none;margin-top:12px">
-              <label class="label">KEY <span id="gtKeyNha">ELEVENLABS</span> <span id="gtKeyTT" style="text-transform:none;letter-spacing:0;font-weight:400"></span></label>
-              <div style="display:flex;gap:8px">
-                <input type="password" id="gtKey" placeholder="dán key vào đây" autocomplete="off" spellcheck="false" style="flex:1">
-                <button class="btn ghost" onclick="giongHienKey()" id="gtKeyMat" title="Hiện / ẩn key">👁</button>
-                <button class="btn" onclick="giongLuuKey()">Lưu key</button>
-                <button class="btn ghost" onclick="giongXoaKey()" style="color:var(--red)" title="Xoá key đang lưu ở ô này">Xoá</button>
-              </div>
-              <div style="font-size:11.5px;color:var(--text-dim);margin-top:6px">
-                Key lưu trong máy bạn (<code>nova-settings.json</code>), không gửi đi đâu ngoài chính nhà cung cấp đó.
-                Lấy key ElevenLabs ở <b>elevenlabs.io → Profile → API Key</b>; OpenAI thì Nova tự mượn key ở tab Cài đặt nếu đã có.
-              </div>
-            </div>
-            <div id="gtNhanBanNote" style="display:none;margin-top:10px;font-size:12.5px;color:var(--text-dim);line-height:1.6;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:10px 12px">
-              Nova sẽ nhờ nhà cung cấp đọc <b>một đoạn ~230 ký tự</b> bằng đúng voice id đó, rồi lấy file ấy làm mẫu cho OmniVoice clone.
-              Trả tiền <b>đúng một lần</b> (~230 ký tự, gói miễn phí ElevenLabs 10.000 ký tự/tháng) — sau đó đọc bao nhiêu cũng miễn phí và chạy offline.
-              Chất giọng là bản sao của bản sao nên giống mà không trùng; nếu bạn có file gốc người thu thì dùng "Clone từ file mẫu" vẫn tốt hơn.
-              Ngôn ngữ đoạn mẫu lấy theo ô <b>NGÔN NGỮ</b> ở khung Đọc bên dưới.
+            <div id="gtDesignInfo" style="display:none;margin-top:10px;font-size:12.5px;color:var(--text-dim);line-height:1.6;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:10px 12px">
+              Thiết kế giọng bằng mô tả chữ tạo giọng mới trong OmniVoice — bạn không cần key API.
             </div>
             <div style="display:flex;gap:10px;margin-top:14px">
               <button class="btn primary" onclick="giongThemLuu()">Lưu giọng</button>
@@ -3996,18 +3958,6 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
               <input type="range" id="voiceGap" min="0" max="1000" step="50" value="300"
                 oninput="document.getElementById('vGapVal').textContent=this.value+' ms'">
               <div class="why">Chỉ OmniVoice có</div>
-            </div>
-            <div class="sl" id="slOnDinh">
-              <div class="slh"><b>Ổn định</b><span id="vOdVal">0.50</span></div>
-              <input type="range" id="voiceOnDinh" min="0" max="1" step="0.05" value="0.5"
-                oninput="document.getElementById('vOdVal').textContent=(+this.value).toFixed(2)">
-              <div class="why">Chỉ ElevenLabs có</div>
-            </div>
-            <div class="sl" id="slTuongDong">
-              <div class="slh"><b>Tương đồng</b><span id="vTdVal">0.75</span></div>
-              <input type="range" id="voiceTuongDong" min="0" max="1" step="0.05" value="0.75"
-                oninput="document.getElementById('vTdVal').textContent=(+this.value).toFixed(2)">
-              <div class="why">Chỉ ElevenLabs có</div>
             </div>
             <div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border)">
               <label class="label">NGÔN NGỮ</label>
@@ -7776,21 +7726,13 @@ async function voicePickRoot(){
 }
 
 /* ══ TAB GIỌNG NÓI ═══════════════════════════════════════════════════════════
-   Ba engine: OmniVoice (chạy máy, cổng 8771) · ElevenLabs · OpenAI.
-   Giọng của cả ba gộp thành MỘT danh sách, khoá dạng "engine:id".
-   OmniVoice giữ giọng trong backend của nó; giọng đám mây lưu ở localStorage
-   khoá 'api_tts_voices' — tiền tố api_ để được ghi ra nova-settings.json,
-   không thì thoát app là mất (xem khối đồng bộ ở đầu tệp).                   */
+   Chỉ giữ OmniVoice local (chạy máy, cổng 8771). Danh sách giọng là toàn bộ
+   giọng có trong backend voice-studio.
 
-const _TTS_KHOA = { elevenlabs: 'api_tts_elevenlabs', openai: 'api_tts_openai' };
-const _TTS_TEN  = { omni: 'OmniVoice', elevenlabs: 'ElevenLabs', openai: 'OpenAI' };
+   Ghim tên engine chủ yếu để tương thích UI cũ; ở đây luôn là OmniVoice. */
+
+const _TTS_TEN = { omni: 'OmniVoice' };
 const _GIONG_THU = 'Xin chào, đây là giọng đọc thử của AI Video Studio.';
-// Đoạn đọc dùng làm MẪU khi nhân bản giọng đám mây về máy. Cần 12–18 giây thì
-// OmniVoice mới bắt được chất giọng, nên khoảng 45 từ. Trả tiền đúng một lần.
-const _GIONG_MAU_CLONE = {
-  vi: 'Trong một buổi chiều tháng Chín, khi những cơn gió đầu mùa bắt đầu thổi qua thành phố, tôi chợt nhận ra rằng có những điều rất nhỏ lại ở lại rất lâu trong trí nhớ, lâu hơn cả những chuyện tưởng chừng quan trọng hơn nhiều.',
-  en: 'On a quiet afternoon in September, when the first cold wind began to move through the city, I realised that the smallest things often stay with us the longest, far longer than the events we once believed were far more important.',
-};
 
 let _giongDS = [];            // danh sách hợp nhất
 let _giongChon = '';          // khoá giọng đang chọn
@@ -7799,24 +7741,8 @@ let _giongPhat = '';          // khoá đang phát thử
 let _giongAudio = null;       // thẻ audio dùng chung cho nghe thử
 const _giongMau = new Map();  // khoá → objectURL mẫu 4 giây (khỏi gọi lại)
 let _giongSu = [];            // lịch sử bản đã tạo trong phiên
-let _giongTT = { omni: 'no', elevenlabs: 'no', openai: 'no' };
-let _giongTTLoi = {};   // engine → câu lỗi thật của nhà cung cấp
-// Key ElevenLabs bắt đầu bằng sk_ (gạch dưới), OpenAI bằng sk- (gạch ngang).
-// Dán nhầm ô là ghi đè key của nhà kia — đã xảy ra, nên chặn ngay lúc lưu.
-const _TTS_DAU = { elevenlabs: /^sk_/, openai: /^sk-/ };
+let _giongTT = { omni: 'no' };
 let _giongThemMo = false;
-
-function _ttsKey(e){
-  const k = (localStorage.getItem(_TTS_KHOA[e]) || '').trim();
-  // OpenAI: mượn luôn key của provider AI nếu tab API đã có, khỏi nhập hai lần.
-  if (!k && e === 'openai') return (localStorage.getItem('api_key_openai') || '').split('\n')[0].trim();
-  return k.split('\n')[0].trim();
-}
-function _giongCloud(){
-  try { const a = JSON.parse(localStorage.getItem('api_tts_voices') || '[]'); return Array.isArray(a) ? a : []; }
-  catch (e){ return []; }
-}
-function _giongCloudLuu(ds){ try { localStorage.setItem('api_tts_voices', JSON.stringify(ds)); } catch (e){} }
 
 // ── Danh sách hợp nhất ──────────────────────────────────────────────
 async function giongTaiDS(){
