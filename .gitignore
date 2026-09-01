@@ -76,3 +76,5 @@ venv*/
 nova/voice-backend/data/
 "= Get-ChildItem*"
 *.err
+.tmp*
+nova_scan_tmp*
