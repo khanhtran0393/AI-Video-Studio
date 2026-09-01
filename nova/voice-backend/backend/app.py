@@ -87,6 +87,33 @@ def _resolve_voice(payload: dict) -> tuple[Optional[str], Optional[str], dict]:
     return payload.get("ref_audio"), payload.get("ref_text"), payload.get("attributes", {})
 
 
+def _normalize_device_preference(value) -> Optional[str]:
+    if not value:
+        return None
+    v = str(value).strip().lower()
+    if v in ("auto", "cpu", "mps", "cuda"):
+        return v if v != "auto" else None
+    return None
+
+
+def _resolve_tts_engine(payload: dict) -> tuple[str, object]:
+    requested = (payload.get("engine") or "").strip().lower()
+    candidates = [requested] if requested else []
+    fallback = (config.TTS_ENGINE or "mock").strip().lower()
+    candidates.append(fallback)
+    last_err = None
+    for engine_name in candidates:
+        if not engine_name:
+            continue
+        try:
+            return engine_name, get_tts_engine(engine_name)
+        except Exception as e:
+            last_err = e
+            continue
+
+    raise ValueError(f"Engine TTS không hợp lệ ({requested!r}) và không thể fallback vào '{fallback}'.") from last_err
+
+
 def _chunk_sentences(sentences: list[str], max_chars: int = 240) -> list[str]:
     """Gộp nhiều câu liên tiếp thành 1 khối (<= max_chars) → ít lần gọi model → NHANH hơn nhiều."""
     chunks, cur = [], ""
@@ -115,10 +142,15 @@ def _run_tts(task: dict) -> None:
     task["total"] = len(sentences)
 
     ref_audio, ref_text, attributes = _resolve_voice(p)
-    engine = get_tts_engine(config.TTS_ENGINE)
+    engine_name, engine = _resolve_tts_engine(p)
     lang = p.get("language", "vi")
     speed = float(p.get("speed", 1.0))
     gap_ms = int(p.get("gap_ms", 100))
+    device_preference = _normalize_device_preference(p.get("device_preference"))
+    try:
+        engine.set_device_preference(device_preference)
+    except Exception:
+        pass
 
     job_dir = config.OUTPUT_DIR / task["id"]
     job_dir.mkdir(parents=True, exist_ok=True)
@@ -127,8 +159,15 @@ def _run_tts(task: dict) -> None:
     for i, sent in enumerate(sentences):
         wav = job_dir / f"line_{i:03d}.wav"
         engine.synthesize(
-            TTSRequest(text=sent, language=lang, ref_audio=ref_audio,
-                       ref_text=ref_text, speed=speed, attributes=attributes),
+            TTSRequest(
+                text=sent,
+                language=lang,
+                ref_audio=ref_audio,
+                ref_text=ref_text,
+                device_preference=device_preference,
+                speed=speed,
+                attributes=attributes,
+            ),
             wav,
         )
         dur = wav_duration(wav)
@@ -180,8 +219,10 @@ class TTSBody(BaseModel):
     text: str
     language: str = "vi"
     preset_id: Optional[str] = None
+    engine: Optional[str] = None
     ref_audio: Optional[str] = None
     ref_text: Optional[str] = None
+    device_preference: Optional[str] = None
     speed: float = 1.0
     gap_ms: int = 100
     attributes: dict = {}
@@ -287,3 +328,4 @@ def api_file(tid: str, name: str):
 # Nếu mount khi thiếu thư mục, StaticFiles ném RuntimeError khi import app → uvicorn không khởi động được.
 if config.UI_DIR.exists():
     app.mount("/", StaticFiles(directory=str(config.UI_DIR), html=True), name="ui")
+

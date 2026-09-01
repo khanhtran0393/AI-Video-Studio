@@ -6,6 +6,8 @@ torchcodec
 coqui-tts==0.27.5
 transformers==4.57.1
 huggingface_hub
+# VieNeu-TTS — tiếng Việt native + voice cloning (v3 Turbo 48kHz, CPU qua ONNX):
+vieneu
 # ASR — Apple Silicon dùng mlx-whisper (GPU Metal); nền khác dùng faster-whisper:
 mlx-whisper; sys_platform == "darwin" and platform_machine == "arm64"
 faster-whisper>=1.0

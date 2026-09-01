@@ -25,6 +25,10 @@ def get_tts_engine(name: str) -> TTSEngine:
         from .omnivoice import OmniVoiceEngine  # cần venv .venv-omni
 
         eng = OmniVoiceEngine()
+    elif name == "vieneu":
+        from .vieneu import VieNeuEngine  # tiếng Việt native + voice cloning
+
+        eng = VieNeuEngine()
     else:
         raise ValueError(f"Unknown TTS engine: {name!r}")
 

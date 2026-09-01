@@ -14,6 +14,8 @@ class TTSRequest:
     ref_audio: Optional[str] = None
     # Văn bản của đoạn mẫu (một số engine cần, vd XTTS thì không).
     ref_text: Optional[str] = None
+    # Ưu tiên thiết bị theo request: cpu/mps/cuda. None/không hợp lệ => tự chọn.
+    device_preference: Optional[str] = None
     speed: float = 1.0
     # Thuộc tính thiết kế giọng khi không có mẫu (gender, age, pitch...).
     attributes: dict = field(default_factory=dict)
@@ -26,6 +28,13 @@ class TTSEngine:
 
     def load(self) -> None:
         """Nạp model vào bộ nhớ (lazy). Gọi trước lần synth đầu tiên."""
+
+    def set_device_preference(self, device_preference: Optional[str]) -> None:
+        """Phương thức mặc định để nhận device preference từ request.
+
+        Các engine override này để tự nạp theo thiết bị thích hợp.
+        """
+        return
 
     def unload(self) -> None:
         """Giải phóng model khỏi bộ nhớ khi nhàn rỗi."""
