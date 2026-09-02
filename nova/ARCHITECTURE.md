@@ -89,6 +89,25 @@ Thứ tự nạp: nen-tang → ve-1 → ve-2 → chuyen. Trang render ghi đè `
 khi nạp (thay nền gradient bằng ảnh thật) — function declaration là global
 nên ghi đè xuyên file vẫn đúng, đừng đổi thành `const`.
 
+## editor-pro/niche — tách module CommonJS (khác kiểu với web renderer)
+
+`editor-pro/niche.js` (517 dòng, Tìm Ngách/Niche Finder) là module **CommonJS
+của main process**, không phải script thường: tên không global mà nằm trong
+scope module, nên cách tách khác hẳn phần web ở trên — chia bằng
+`require`/`module.exports` thay vì thứ tự nạp HTML.
+
+| File | Nội dung |
+|---|---|
+| `editor-pro/niche/loi.js` | Nguyên 243 dòng đầu bản gốc: `run` (spawn yt-dlp), AI `_KHO`/`_NHA_CC`/`_goiApi`/`claude` (API cấu hình trước, CLI bridge lùi), `safeJson`/`cookies`/`daysSince`/`kfmt`, cache TTL 6h, `searchVideos`, `median`, `sweepQueries`. Xuất các hàm dùng chung cho 2 file dưới. |
+| `editor-pro/niche/kenh.js` | Phần KÊNH: `channelScorecard` (5 chỉ số VPS/VPH/longform/ổn định/xu hướng) + `similarChannels` (đồng xuất hiện). |
+| `editor-pro/niche/thi-truong.js` | `hotTopics` (chủ đề bùng), `bwScore` (chấm ý tưởng đen–trắng), `attentionMarkets` (tệp khán giả động). |
+| `editor-pro/niche/index.js` | Điểm vào: gộp lại và tái xuất **đúng hợp đồng `module.exports` cũ** (8 tên, gồm `claude`/`_goiApi`/`_KHO` cho test). |
+| `editor-pro/niche.js` | **Shim**: `module.exports = require('./niche/index.js')` + khối CLI `require.main`. Giữ nguyên mọi đường require cũ — `require('./niche')` (ipc-niche.js) lẫn `require('./nova/editor-pro/niche.js')` (test ở root) đều ra module như xưa (Node ưu tiên file trước thư mục). |
+
+Lưu ý khi tách module CommonJS: file dời sâu 1 cấp phải sửa require tương đối
+nội bộ (`./ytdlp-path` → `../ytdlp-path` — 3 dòng duy nhất không giữ nguyên
+byte); còn thân hàm giữ nguyên byte vì tên hứng qua destructuring `require('./loi')`.
+
 ## Kiểm tra
 
 ```bash
