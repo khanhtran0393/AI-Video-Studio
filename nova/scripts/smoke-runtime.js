@@ -99,10 +99,22 @@ function findPackagedExe(root, explicit) {
 }
 
 async function processTable() {
-  const command = 'Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,Name | ConvertTo-Json -Compress';
+  const command = 'Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,Name,ExecutablePath | ConvertTo-Json -Compress';
   const { stdout } = await execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command], { windowsHide: true, maxBuffer: 4 * 1024 * 1024 });
   const parsed = JSON.parse(stdout || '[]');
   return Array.isArray(parsed) ? parsed : [parsed];
+}
+
+// Name-based sweep for packaged app executables under a specific install dir.
+// The descendant-tree walk misses orphans whose parent already exited
+// (observed: a re-parented "AI Video Studio.exe" survived a "clean" smoke run),
+// so shutdown checks must also sweep by executable path.
+function appExeRows(table, installDir) {
+  const prefix = String(installDir || '').toLowerCase();
+  return table.filter((row) =>
+    /^AI Video Studio\.exe$/i.test(String(row.Name || ''))
+    && prefix
+    && String(row.ExecutablePath || '').toLowerCase().startsWith(prefix));
 }
 
 function descendants(table, rootPid) {
@@ -119,8 +131,17 @@ function descendants(table, rootPid) {
   return [...found];
 }
 
+async function killAppExes(installDir) {
+  const table = await processTable();
+  const rows = appExeRows(table, installDir);
+  for (const row of rows) {
+    await forceKill(Number(row.ProcessId));
+  }
+  return rows.map((row) => Number(row.ProcessId));
+}
+
 async function forceKill(pid) {
   try { await execFileAsync('taskkill.exe', ['/PID', String(pid), '/T', '/F'], { windowsHide: true }); } catch (_) {}
 }
 
-module.exports = { closeServer, descendants, findPackagedExe, forceKill, httpJson, isPortOpen, listen, processTable, redact, sleep, waitForJson, waitForPort };
+module.exports = { appExeRows, closeServer, descendants, findPackagedExe, forceKill, httpJson, isPortOpen, killAppExes, listen, processTable, redact, sleep, waitForJson, waitForPort };

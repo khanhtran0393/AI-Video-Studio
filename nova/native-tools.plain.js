@@ -128,8 +128,15 @@ async function renderVideo(payload, win) {
   // Nơi lưu: có outPath thì dùng thẳng (khung Xuất tự chọn), không thì mở hộp thoại.
   let outPath = payload.outPath;
   if (!outPath) {
+    // Downloads có thể bị xoá/redirect (OneDrive…) → getPath('downloads') ném lỗi và làm
+    // chết cả hộp thoại lưu. Thử lần lượt, chỉ dùng giá trị có được.
+    let defaultDir = '';
+    for (const key of ['downloads', 'home']) {
+      try { const p = app.getPath(key); if (p) { defaultDir = p; break; } } catch (e) {}
+    }
+    const defaultName = 'video-' + Date.now() + '.mp4';
     const save = await dialog.showSaveDialog(win || BrowserWindow.getFocusedWindow(), {
-      title: 'Lưu video MP4', defaultPath: path.join(app.getPath('downloads'), 'video-' + Date.now() + '.mp4'),
+      title: 'Lưu video MP4', defaultPath: defaultDir ? path.join(defaultDir, defaultName) : defaultName,
       filters: [{ name: 'MP4', extensions: ['mp4'] }],
     });
     if (save.canceled || !save.filePath) return { canceled: true };

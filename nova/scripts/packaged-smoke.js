@@ -3,12 +3,12 @@
 const fs = require('fs');
 const http = require('http');
 const path = require('path');
-const { spawn } = require('child_process');
+const { spawn, execFile } = require('child_process');
 const { CdpClient } = require('./smoke-cdp');
 const { runMcpChecks } = require('./smoke-mcp');
 const {
-  closeServer, descendants, findPackagedExe, forceKill, httpJson, isPortOpen,
-  listen, processTable, redact, sleep, waitForJson, waitForPort,
+  appExeRows, closeServer, descendants, findPackagedExe, forceKill, httpJson, isPortOpen,
+  killAppExes, listen, processTable, redact, sleep, waitForJson, waitForPort,
 } = require('./smoke-runtime');
 
 const ROOT = path.resolve(__dirname, '..', '..');
@@ -16,6 +16,19 @@ const FIXED_PORTS = [8793, 8794, 8795, 8796];
 const MOCK_KEY = 'smoke-secret-loopback-only';
 const OUTPUT_MARKER = 'NOVA_SMOKE_UI_OUTPUT_2026';
 const MOCK_CONTENT = '```text\n' + OUTPUT_MARKER + ' confirms that the packaged renderer reached the loopback OpenAI-compatible API through Electron IPC.\n\nThe response was parsed, cleaned, and written into the real script output control.\n```';
+// tooladmin chỉ mở cho admin; clean profile không có admin nên tab này được phép không kích hoạt.
+const OPTIONAL_ACTIVATION_TOOLS = new Set(['tooladmin']);
+
+// Console error benign đã biết của Electron khi DevTools/CDP gắn vào renderer
+// sandboxed (sandbox_bundle ném "preloadScripts ... null" trong target DevTools).
+// Xuất hiện ngay cả ở các run hoàn toàn khoẻ (VD: 2026-09-02T03-12 pass) nên
+// không được tính là lỗi app.
+const KNOWN_BENIGN_CONSOLE_ERRORS = [
+  /^error: Electron sandboxed_renderer\.bundle\.js script failed to run$/,
+  /^error: TypeError: Cannot destructure property 'preloadScripts' of 'binding\.startupData' as it is null\./,
+];
+const isRendererConsoleError = (line) =>
+  String(line).startsWith('error') && !KNOWN_BENIGN_CONSOLE_ERRORS.some((re) => re.test(String(line)));
 
 function stamp() {
   return new Date().toISOString().replace(/[:.]/g, '-');
@@ -66,6 +79,103 @@ function startMock() {
   return { server, requests };
 }
 
+/**
+ * Clean-room environment: mô phỏng máy trắng / user mới cài.
+ * - PATH đúng bằng PATH chuẩn của Windows mới cài: system32, Windows, Wbem,
+ *   WindowsPowerShell\v1.0 và OpenSSH — powershell.exe phải gọi được (unzip
+ *   Chrome-for-Testing của flow dùng Expand-Archive qua powershell); vẫn KHÔNG
+ *   chứa node/python/ffmpeg/claude… → app không thể "ăn nhờ" dev tools.
+ * - USERPROFILE trỏ vào profile riêng của run, có đủ cấu trúc như profile
+ *   Windows thật: AppData\Roaming + AppData\Local\Temp (Electron suy ra appData
+ *   từ USERPROFILE — thiếu AppData\Roaming thì getPath('appData') ném lỗi và app
+ *   crash) + Downloads + Videos (known-folder mà 'export-dir' đọc).
+ * - APPDATA/LOCALAPPDATA/TEMP/TMP trỏ đồng nhất vào các thư mục con đó.
+ * - Không kế thừa biến môi trường dev (NOVA_STUDIO_DEV_URL, proxy, v.v.).
+ */
+function buildCleanEnv(profileRoot) {
+  const systemRoot = process.env.SystemRoot || process.env.windir || 'C:\\Windows';
+  const restrictedPath = [
+    path.join(systemRoot, 'System32'),
+    systemRoot,
+    path.join(systemRoot, 'System32', 'Wbem'),
+    path.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0'),
+    path.join(systemRoot, 'System32', 'OpenSSH'),
+  ].join(path.delimiter);
+  const userprofile = path.join(profileRoot, 'userprofile');
+  const roaming = path.join(userprofile, 'AppData', 'Roaming');
+  const local = path.join(userprofile, 'AppData', 'Local');
+  const temp = path.join(local, 'Temp');
+  const downloads = path.join(userprofile, 'Downloads');
+  const videos = path.join(userprofile, 'Videos');
+  for (const dir of [roaming, local, temp, downloads, videos]) fs.mkdirSync(dir, { recursive: true });
+  return {
+    SystemRoot: systemRoot,
+    windir: systemRoot,
+    SYSTEMDRIVE: process.env.SYSTEMDRIVE || 'C:',
+    PATHEXT: process.env.PATHEXT || '.COM;.EXE;.BAT;.CMD',
+    OS: process.env.OS || 'Windows_NT',
+    NUMBER_OF_PROCESSORS: String(process.env.NUMBER_OF_PROCESSORS || 4),
+    PROCESSOR_ARCHITECTURE: process.env.PROCESSOR_ARCHITECTURE || 'AMD64',
+    COMPUTERNAME: process.env.COMPUTERNAME || 'NOVA-CLEANROOM',
+    USERNAME: 'CleanRoom',
+    PATH: restrictedPath,
+    USERPROFILE: userprofile,
+    APPDATA: roaming,
+    LOCALAPPDATA: local,
+    TEMP: temp,
+    TMP: temp,
+    AI_VIDEO_STUDIO_ENABLE_UPDATES: '0',
+    ELECTRON_ENABLE_LOGGING: '1',
+  };
+}
+
+// Tự kiểm tra: với PATH đã hạn chế, where.exe PHẢI KHÔNG tìm thấy dev tools.
+// Nếu tìm thấy thì clean-room không sạch → hủy chạy thay vì ra kết quả giả.
+function assertCleanPath(restrictedPath) {
+  const tools = ['node.exe', 'python.exe', 'ffmpeg.exe', 'claude.exe', 'codex.exe'];
+  return Promise.all(tools.map((tool) => new Promise((resolve) => {
+    execFile('where.exe', [tool], { env: { PATH: restrictedPath, SystemRoot: process.env.SystemRoot || 'C:\\Windows' }, windowsHide: true }, (error) => resolve({ tool, leaked: !error }));
+  }))).then((results) => {
+    const leaked = results.filter((item) => item.leaked);
+    if (leaked.length) {
+      throw new Error(`Clean-room PATH is not clean; dev tools still resolvable: ${leaked.map((item) => item.tool).join(', ')}.`);
+    }
+    return { ok: true, checked: results.map((item) => item.tool) };
+  });
+}
+
+/**
+ * Quét toàn bộ tool nav của app như người dùng thật: click từng tab, chờ panel
+ * kích hoạt, ghi lại mọi exception/console-error phát sinh trong lúc init của
+ * tool đó. toolvideoagent còn phải dựng đủ 12 panel (#panels .panel) — guard
+ * hồi quy cho lỗi "panelsEl is null" từng làm panel Video Agent chết toàn bộ.
+ */
+async function runToolSweep(cdp, report) {
+  const tools = await cdp.evaluate(`(() => [...document.querySelectorAll('.nav-item[data-tool]')].map((el) => el.dataset.tool))()`);
+  if (!Array.isArray(tools) || tools.length < 10) {
+    throw new Error(`Expected the full tool navigation in packaged UI, found: ${JSON.stringify(tools)}`);
+  }
+  const results = [];
+  for (const tool of tools) {
+    const excBefore = report.diagnostics.rendererExceptions.length;
+    const errBefore = report.diagnostics.rendererConsole.filter(isRendererConsoleError).length;
+    await cdp.click(`[data-tool="${tool}"]`);
+    if (OPTIONAL_ACTIVATION_TOOLS.has(tool)) {
+      await sleep(300);
+      const active = await cdp.evaluate(`(() => { const el = document.getElementById(${JSON.stringify('tool-' + tool)}); return !!el && el.classList.contains('active'); })()`);
+      results.push({ tool, activated: active, optional: true });
+      continue;
+    }
+    await cdp.waitFor(`(() => { const el = document.getElementById(${JSON.stringify('tool-' + tool)}); return !!el && el.classList.contains('active'); })()`, `tool ${tool} activation`, 5000);
+    await sleep(400);   // cho các hàm init của tool (voiceInit, nicheInit, animInit…) chạy bậc async
+    const exceptions = report.diagnostics.rendererExceptions.slice(excBefore);
+    const consoleErrors = report.diagnostics.rendererConsole.filter(isRendererConsoleError).slice(errBefore);
+    results.push({ tool, activated: true, exceptions, consoleErrors });
+  }
+  const videoAgentResult = await cdp.evaluate(`document.querySelectorAll('#panels .panel').length`);
+  return { tools: results, videoAgentPanels: videoAgentResult };
+}
+
 async function closeApp(cdp, child) {
   if (cdp) {
     try { await cdp.send('Browser.close', {}, 5000); } catch (_) {}
@@ -79,7 +189,6 @@ async function main() {
   const runDir = path.join(ROOT, 'smoke-results', stamp());
   const profileRoot = path.join(runDir, 'profile');
   fs.mkdirSync(profileRoot, { recursive: true });
-  for (const name of ['appdata', 'localappdata', 'temp']) fs.mkdirSync(path.join(profileRoot, name), { recursive: true });
 
   const report = {
     schemaVersion: 1,
@@ -97,10 +206,29 @@ async function main() {
 
   try {
     report.executable = findPackagedExe(ROOT, process.env.NOVA_SMOKE_EXE || process.argv[2]);
+    report.installDir = path.dirname(report.executable);
     const occupied = [];
     for (const port of FIXED_PORTS) if (await isPortOpen(port)) occupied.push(port);
     if (occupied.length) throw new Error(`Smoke preflight refused to disturb occupied Nova ports: ${occupied.join(', ')}.`);
     report.checks.preflightPorts = { ok: true, closed: FIXED_PORTS };
+
+    const env = buildCleanEnv(profileRoot);
+    report.checks.cleanRoom = { ok: true, ...(await assertCleanPath(env.PATH)), path: env.PATH };
+
+    // Seed Chrome-for-Testing vào profile sạch nếu máy có sẵn bản ghim: profile mới →
+    // flow-cft sẽ tự tải ~180MB từ mạng (chậm, phụ thuộc mạng). Đây chỉ là binary
+    // cache (không phải app state/cookie) — code path cachedCft() vẫn được test; muốn
+    // test cả nhánh tải về thì unset NOVA_SMOKE_CFT_SEED và xoá seed mặc định.
+    const cftSeedSource = process.env.NOVA_SMOKE_CFT_SEED
+      || path.join(process.env.APPDATA || '', 'AI Video Studio Independent', 'cft');
+    const cftSeedTarget = path.join(profileRoot, 'userprofile', 'AppData', 'Roaming', 'AI Video Studio Independent', 'cft');
+    report.checks.cftSeed = { ok: true, seeded: false };
+    try {
+      if (fs.existsSync(path.join(cftSeedSource, 'PINNED_VERSION'))) {
+        fs.cpSync(cftSeedSource, cftSeedTarget, { recursive: true });
+        report.checks.cftSeed = { ok: true, seeded: true, from: cftSeedSource };
+      }
+    } catch (e) { report.checks.cftSeed = { ok: false, seeded: false, error: redact(e.message) }; }
 
     mock = startMock();
     const mockPort = await listen(mock.server, 0);
@@ -110,17 +238,8 @@ async function main() {
     report.mock = { baseUrl: `http://127.0.0.1:${mockPort}`, port: mockPort };
     report.cdpPort = cdpPort;
 
-    const env = {
-      ...process.env,
-      APPDATA: path.join(profileRoot, 'appdata'),
-      LOCALAPPDATA: path.join(profileRoot, 'localappdata'),
-      TEMP: path.join(profileRoot, 'temp'),
-      TMP: path.join(profileRoot, 'temp'),
-      AI_VIDEO_STUDIO_ENABLE_UPDATES: '0',
-      ELECTRON_ENABLE_LOGGING: '1',
-    };
     child = spawn(report.executable, [`--remote-debugging-port=${cdpPort}`, '--no-first-run'], {
-      cwd: path.dirname(report.executable), env, windowsHide: false, stdio: ['ignore', 'pipe', 'pipe'],
+      cwd: report.installDir, env, windowsHide: false, stdio: ['ignore', 'pipe', 'pipe'],
     });
     child.stdout?.on('data', (chunk) => { report.diagnostics.appStdout = (report.diagnostics.appStdout + redact(chunk)).slice(-16000); });
     child.stderr?.on('data', (chunk) => { report.diagnostics.appStderr = (report.diagnostics.appStderr + redact(chunk)).slice(-16000); });
@@ -147,6 +266,16 @@ async function main() {
     await cdp.send('Page.enable');
     await cdp.waitFor(`document.readyState === 'complete' && !!document.querySelector('[data-tool="toolsettings"]')`, 'Nova UI readiness', 30000);
     report.checks.uiReady = { ok: true, url: page.url, title: page.title };
+
+    // Quét UI như người dùng thật: click toàn bộ 11 tool, bắt lỗi từng tool.
+    const sweep = await runToolSweep(cdp, report);
+    const sweepFailures = sweep.tools.filter((entry) => (entry.exceptions && entry.exceptions.length) || (entry.consoleErrors && entry.consoleErrors.length));
+    if (sweep.videoAgentPanels < 12) throw new Error(`Video Agent panel regression: expected 12 panels in #panels, found ${sweep.videoAgentPanels}.`);
+    if (sweepFailures.length) {
+      const detail = sweepFailures.map((entry) => `${entry.tool}: ${[...(entry.exceptions || []), ...(entry.consoleErrors || [])].join(' | ')}`).join('\n');
+      throw new Error(`UI tool sweep surfaced renderer errors:\n${detail}`);
+    }
+    report.checks.toolSweep = { ok: true, tools: sweep.tools.map((entry) => entry.tool), videoAgentPanels: sweep.videoAgentPanels };
 
     await cdp.click('[data-tool="toolsettings"]');
     await cdp.waitFor(`getComputedStyle(document.querySelector('#apiSection')).display !== 'none'`, 'API settings visibility', 10000);
@@ -188,6 +317,43 @@ async function main() {
     fs.writeFileSync(screenshotPath, Buffer.from(screenshot.data, 'base64'));
     report.checks.screenshot = { ok: true, path: screenshotPath, bytes: fs.statSync(screenshotPath).size };
 
+    // Cổng chặn: bất kỳ exception/error nào phát sinh trong renderer đều làm hỏng
+    // smoke — không được nuốt lỗi để ra kết quả "passed" giả nữa.
+    if (report.diagnostics.rendererExceptions.length) {
+      throw new Error(`Renderer exceptions occurred during the packaged run:\n${report.diagnostics.rendererExceptions.join('\n---\n')}`);
+    }
+    // Nhiễu nội bộ Electron (KHÔNG phải code app): Electron 43 log các dòng này từ
+    // sandbox bundle của chính nó trong frame phụ khi CDP bật Runtime (lỗi đã biết,
+    // electron#36198). Preload của app vẫn chạy đúng — mọi check IPC/UI phía trên
+    // đã chứng minh window.native hoạt động. Chỉ cho đúng 2 mẫu này qua cổng chặn.
+    const isElectronInternalNoise = (line) =>
+      line.includes('sandboxed_renderer.bundle.js script failed to run') ||
+      line.includes("Cannot destructure property 'preloadScripts' of 'binding.startupData'");
+    const allConsoleErrorLines = report.diagnostics.rendererConsole.filter((line) => line.startsWith('error'));
+    const consoleErrorLines = allConsoleErrorLines.filter((line) => !isElectronInternalNoise(line));
+    if (consoleErrorLines.length) {
+      throw new Error(`Renderer console errors occurred during the packaged run:\n${consoleErrorLines.join('\n---\n')}`);
+    }
+    report.checks.rendererClean = {
+      ok: true,
+      exceptions: 0,
+      consoleErrors: 0,
+      electronInternalNoiseIgnored: allConsoleErrorLines.length - consoleErrorLines.length,
+    };
+
+    // Cổng chặn tương tự cho MAIN process: "Error occurred in handler for 'x'" là
+    // exception thoát khỏi ipcMain.handle (ví dụ lỗi cũ export-dir → getPath('downloads')
+    // ném trong catch), "Uncaught exception"/"Unhandled promise rejection" trong main
+    // cũng là bug thật — không được coi smoke là passed khi chúng xuất hiện.
+    const mainErrorLines = report.diagnostics.appStderr
+      .split('\n')
+      .filter((line) => /Error occurred in handler for|Uncaught exception|Unhandled promise rejection|Failed to get '.+?' path/i.test(line))
+      .map((line) => line.trim());
+    if (mainErrorLines.length) {
+      throw new Error(`Main-process errors occurred during the packaged run:\n${mainErrorLines.join('\n---\n')}`);
+    }
+    report.checks.mainProcessClean = { ok: true, stderrErrorLines: 0 };
+
     report.checks.mcp = { ok: true, ...(await runMcpChecks(report.executable, env)) };
     const table = await processTable();
     appPids = descendants(table, child.pid);
@@ -200,12 +366,7 @@ async function main() {
       console.warn('Packaged app did not exit after Browser.close; force-killing process tree...');
       await forceKill(child.pid);
       await sleep(500); // give OS a moment to terminate
-      const after = await processTable();
-      const alive = new Set(after.map((row) => Number(row.ProcessId)));
-      const leakedPids = appPids.filter((pid) => alive.has(pid));
-      if (leakedPids.length) {
-        throw new Error(`Packaged process leak detected after force-kill: ${leakedPids.join(', ')}.`);
-      }
+      if (child.exitCode === null) throw new Error('Packaged app process did not exit after Browser.close and force-kill.');
     }
     report.app.exitCode = child.exitCode;
     report.app.signalCode = child.signalCode;
@@ -214,8 +375,13 @@ async function main() {
     const after = await processTable();
     const alive = new Set(after.map((row) => Number(row.ProcessId)));
     const leakedPids = appPids.filter((pid) => alive.has(pid));
-    if (leakedPids.length) throw new Error(`Packaged process leak detected: ${leakedPids.join(', ')}.`);
-    report.checks.shutdown = { ok: true, portsClosed: FIXED_PORTS, leakedPids: [] };
+    if (leakedPids.length) throw new Error(`Packaged process leak detected (descendant scan): ${leakedPids.join(', ')}.`);
+    // Name-based sweep: tree walk misses re-parented orphans (a leaked
+    // "AI Video Studio.exe" survived a previous "passed" run), so also verify no
+    // executable from this install dir remains on the machine.
+    const orphanRows = appExeRows(after, report.installDir);
+    if (orphanRows.length) throw new Error(`Packaged app orphans survived shutdown (name scan): ${orphanRows.map((row) => `${row.ProcessId} (${row.ExecutablePath})`).join(', ')}.`);
+    report.checks.shutdown = { ok: true, portsClosed: FIXED_PORTS, leakedPids: [], orphans: [] };
     report.status = 'passed';
   } catch (error) {
     report.status = 'failed';
@@ -225,6 +391,7 @@ async function main() {
     try { if (cdp) await closeApp(cdp, child); } catch (_) {}
     try { cdp?.close(); } catch (_) {}
     if (child && child.exitCode === null) await forceKill(child.pid);
+    try { await killAppExes(report.installDir); } catch (_) {}   // dọn cả orphan đã re-parent
     if (mock) await closeServer(mock.server);
     report.finishedAt = new Date().toISOString();
     report.durationMs = Date.now() - startedAt.getTime();
