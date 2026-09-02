@@ -26,8 +26,8 @@ assert(!fs.existsSync(path.join(backendDir, 'backend', '__pycache__')), 'không 
 assert(read('voice-backend/backend/app.py').includes('config.UI_DIR.exists()'),
   'app.py phải mount StaticFiles chỉ khi UI_DIR tồn tại');
 
-// 3. voice-native.plain.js: cổng 8771 chính, tương thích 8770, health dùng /api/health.
-const voiceNative = read('voice-native.plain.js');
+// 3. voice-native (đã tách module + shim): cổng 8771 chính, tương thích 8770, health dùng /api/health.
+const voiceNative = read('voice-native/server.js') + '\n' + read('voice-native/index.js');
 assert(voiceNative.includes('const PORT = 8771'), 'voice-native phải dùng cổng chính 8771');
 assert(voiceNative.includes('LEGACY_PORT = 8770'), 'voice-native phải khai cổng cũ 8770');
 assert(voiceNative.includes('/api/health'), 'voice-native phải dò /api/health');

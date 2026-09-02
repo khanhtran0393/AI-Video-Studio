@@ -7,7 +7,7 @@ const fs = require('fs');
 const { app, shell, dialog, ipcMain } = require('electron');
 const state = require('../state');
 const { novaRoot, unpackedNovaRoot, canWriteDir } = require('../fs-utils');
-const voiceNative = require('../../voice-native.plain');
+const voiceNative = require('../../voice-native');
 
 function hasVoiceBackend(root) {
   if (!root) return false;

@@ -13,7 +13,7 @@ const { execSync, spawn } = require('child_process');
 const NOVA = path.resolve(__dirname, '..');
 const ROOT = path.resolve(NOVA, '..');
 const OUT_DIR = path.join(ROOT, 'tts-demo');
-const voiceNative = require('../voice-native.plain');
+const voiceNative = require('../voice-native');
 
 const ENGINE = process.argv[2] || process.env.VOICE_TTS_ENGINE || 'mock';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

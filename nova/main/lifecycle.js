@@ -6,7 +6,7 @@
 const flowExtBridge = require('../flow-bridge.plain');
 const cliBridge = require('../cli-bridge-native');
 const mcpBridge = require('../mcp-bridge-native');
-const voiceNative = require('../voice-native.plain');
+const voiceNative = require('../voice-native');
 const watermarkNative = require('../watermark-native');
 const flowChrome = require('../flow-chrome');
 const { stopFlowAutoPush } = require('./ipc/flow');

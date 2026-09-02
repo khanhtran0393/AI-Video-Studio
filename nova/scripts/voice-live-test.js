@@ -17,7 +17,7 @@ const path = require('path');
 
 const NOVA = path.resolve(__dirname, '..');
 const ROOT = path.resolve(NOVA, '..');
-const voiceNative = require('../voice-native.plain');
+const voiceNative = require('../voice-native');
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 

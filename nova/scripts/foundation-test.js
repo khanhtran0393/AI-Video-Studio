@@ -55,7 +55,7 @@ async function main() {
   const runtimePorts = [
     require('../flow-bridge.plain').PORT,
     require('../mcp-bridge-native').PORT,
-    require('../voice-native.plain').PORT,
+    require('../voice-native').PORT,
   ];
   assert.strictEqual(new Set(runtimePorts).size, runtimePorts.length, 'Nova runtime services must use distinct ports');
 
