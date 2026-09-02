@@ -11,6 +11,21 @@ const { JsonStore } = require('../storage/json-store');
 const { createSettingsStore, registerSettingsIpc } = require('../storage/settings-store');
 const { register, registerSync } = require('../ipc/register');
 
+// main.plain.js giờ là composition root: logic tách theo chức năng dưới nova/main/.
+// Đối chiếu chuỗi phải quét toàn bộ nguồn main-process, không chỉ file gốc.
+function readMainProcessSource() {
+  const parts = [fs.readFileSync(path.join(__dirname, '..', 'main.plain.js'), 'utf8')];
+  const walk = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (entry.isFile() && entry.name.endsWith('.js')) parts.push(fs.readFileSync(full, 'utf8'));
+    }
+  };
+  walk(path.join(__dirname, '..', 'main'));
+  return parts.join('\n');
+}
+
 async function main() {
   assert.deepStrictEqual(ok(7), { ok: true, data: 7 });
   assert.deepStrictEqual(fail(new Error('bad')), { ok: false, error: 'bad' });
@@ -23,12 +38,12 @@ async function main() {
   assert.strictEqual(userDataPath({ getPath: () => 'X:\\data' }), 'X:\\data');
   assert.strictEqual(userDataPath({ getPath: () => { throw new Error('x'); } }, 'fallback'), 'fallback');
 
-  const mainSource = fs.readFileSync(path.join(__dirname, '..', 'main.plain.js'), 'utf8');
+  const mainSource = readMainProcessSource();
   assert(mainSource.includes("com.aivideostudio.independent"), 'main process must use the independent app id');
   assert(mainSource.includes("persist:ai-video-studio-independent"), 'main window must use an independent browser partition');
   assert(!mainSource.includes('com.novastudio.independent'), 'legacy Windows app id must not be reused');
   assert(mainSource.includes('AI_VIDEO_STUDIO_ERROR_REPORTING'), 'main process must gate the client error reporter behind an env flag');
-  assert(mainSource.includes("require('../auto-fix/client-error-reporter/reporter')"), 'main process must load the M2 client error reporter');
+  assert(mainSource.includes('auto-fix/client-error-reporter/reporter'), 'main process must load the M2 client error reporter');
   assert(mainSource.includes('AI_VIDEO_STUDIO_ERROR_UPLOAD_TOKEN'), 'main process must support the dedicated crash uploader token');
   assert(mainSource.includes('Authorization: `Bearer ${uploadToken}`'), 'main process must authenticate crash uploads');
   assert(mainSource.includes('resolveReleaseIdentity'), 'main process must attach validated release identity');

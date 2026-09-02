@@ -45,11 +45,42 @@ main.plain.js  ──┬── main/identity.js      app.setName / setAppUserMod
 
 - CLI bridge (8795/8796), MCP bridge (8794), Flow extension bridge (flow-bridge.plain).
 
+## Các thư mục extension Chrome — ai là NGUỒN, ai là OUTPUT
+
+| Thư mục | Vai trò |
+|---|---|
+| `nova/flow-extension/` | **NGUỒN** chính (chỉnh sửa ở đây). `flow-ext-export` cpSync sang `<app>/chrome-extension` để user "Tải tiện ích chưa đóng gói" vào Chrome. Ship qua `scripts/sync-extension.mjs`. |
+| `nova/nova-studio/` | **BIẾN THỂ CÓ CHỦ Ý** của flow-extension (logic captcha/aborted khác) — README sync-extension ghi rõ "KHÔNG copy chéo giữa 2 dòng extension". Chỉnh sửa độc lập. |
+| `nova/chrome-extension/` | **OUTPUT runtime** (dev) — được sinh bởi IPC `flow-ext-export`, Chrome tự thêm `_metadata/` khi load. Đã `.gitignore` + untrack; KHÔNG coi là nguồn, KHÔNG edit tay. |
+
+Tương tự, `flow-chrome.js` (điều khiển Chrome đa profile — `flowChrome.handle(...)`) và `flow-native.plain.js` là **2 module khác nhau**, không phải bản sao của nhau — cả hai được `main/ipc/flow.js` require song song.
+
 ## Kiểm tra
 
 ```bash
 cd nova
 npm run check:syntax   # node --check toàn bộ .js nguồn (trừ node_modules/bundle/build)
 npm run check:ipc      # sinh ipc-inventory.json: mọi kênh IPC của main + renderer
+npm run check:shared   # tên dùng chung: state keys, hằng số, cổng, env — xem bên dưới
 npm start              # smoke test: splash ≥5s → main window → IPC → quit sạch
 ```
+
+## Bảo vệ TÊN DÙNG CHUNG (check:shared)
+
+`nova/scripts/shared-names-check.js` cưỡng chế các hợp đồng tên giữa `nova/main/` và
+`main.plain.js` — fail ngay khi có vi phạm:
+
+- `state.<key>` và destructuring từ `state` phải khớp key khai báo trong `main/state.js`;
+  key khai báo mà không module nào dùng cũng bị báo (state chết phải xoá).
+- Không module main được ghi biến `global.*` — mọi trạng thái chia sẻ qua `state.js`.
+- Hằng số của `state.js` (WEB_DIR, NOVA_REMOTION_DIR, AUTH_HOSTS, SPLASH_MIN_MS,
+  SPLASH_MAX_MS) chỉ được định nghĩa một nơi duy nhất.
+- Cổng bridge 8793/8794/8795/8796 cấm hardcode trong `main/` (chủ sở hữu: module bridge
+  gốc ở `nova/`); cổng web 47280–47283 chỉ được đặt trong `main/server.js` (PREFERRED).
+  Comment không tính là vi phạm.
+- `process.env.<TÊN>` phải theo tiền tố `AI_VIDEO_STUDIO_` / `NOVA_` / `ELECTRON_` /
+  `NODE_` — chặn typo tên biến môi trường.
+
+Lệnh gộp: `npm run check` = syntax + ipc + parity + shared. CI (`m1-validation.yml`)
+chạy `check:shared` ở bước "Run application checks".
+

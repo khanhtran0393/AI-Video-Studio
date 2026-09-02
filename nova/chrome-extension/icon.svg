@@ -1,6 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
-     width="128" height="128" viewBox="0 0 128 128" role="img" aria-label="AI Video Studio">
-  <title>AI Video Studio</title>
-  <!-- Wrapper tham chiếu icon128.png (logo brand mới) để icon.svg luôn khớp PNG. -->
-  <image href="icon128.png" x="0" y="0" width="128" height="128" xlink:href="icon128.png"/>
-</svg>
