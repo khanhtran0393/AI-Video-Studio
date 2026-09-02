@@ -13,7 +13,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const SCRIPT_ROOT = path.resolve(__dirname, '..');           // .../nova
+const SCRIPT_ROOT = path.resolve(__dirname, '..');           // ...\nova
 const PROJECT_ROOT = path.resolve(SCRIPT_ROOT, '..');        // workspace root
 const { novaRoot, unpackedNovaRoot } = require(path.join(SCRIPT_ROOT, 'main', 'fs-utils'));
 
@@ -48,10 +48,15 @@ function hasVoiceBackend(root) {
 function assertVoiceBackend() {
   const label = 'voice-backend source root';
   const candidates = uniq([
-    path.join(SCRIPT_ROOT, 'voice-backend'),
-    path.join(novaRoot(), 'voice-backend'),
-    path.join(unpackedNovaRoot(), 'voice-backend'),
-    path.join(PROJECT_ROOT, 'nova', 'voice-backend'),
+    // Dev layouts
+    path.join(SCRIPT_ROOT, 'voice-backend'),                // D:\\repo\\nova\\voice-backend
+    path.join(PROJECT_ROOT, 'nova', 'voice-backend'),       // explicit root fallback
+
+    // Canonical via fs-utils
+    path.join(novaRoot(), 'nova', 'voice-backend'),         // project path in unpacked/prod or dev
+    path.join(novaRoot(), 'voice-backend'),                 // backward-compat for legacy callsites
+    path.join(unpackedNovaRoot(), 'voice-backend'),         // packaged: ...app.asar.unpacked\\nova\\voice-backend
+    path.join(unpackedNovaRoot(), 'nova', 'voice-backend'), // defensive if novaRoot() already includes nova
   ]);
 
   let found = null;
@@ -69,16 +74,17 @@ function assertVoiceBackend() {
 
   ok(label, found);
 
+  const up = unpackedNovaRoot();
   if (String(found).includes('app.asar') && !String(found).includes('app.asar.unpacked')) {
     fail(label + ' (packaged)', `điểm backend vẫn đang trong app.asar: ${found}`);
     return;
   }
 
   if (found.includes('app.asar.unpacked')) {
-    if (String(found).startsWith(String(unpackedNovaRoot()))) {
-      ok(label + ' (packaged)', `đường dẫn unpacked đúng -> ${found}`);
+    if (String(found).startsWith(String(up))) {
+      ok(label + ' (packaged)', `đúng app.asar.unpacked/nova -> ${found}`);
     } else {
-      fail(label + ' (packaged)', `điểm đã nằm trong app.asar.unpacked nhưng không đúng nova root: ${found}`);
+      fail(label + ' (packaged)', `điểm nằm trong app.asar.unpacked nhưng không đúng thư mục nova: ${found}`);
     }
   } else {
     ok(label + ' (dev)', `đường dẫn dev -> ${found}`);
@@ -88,10 +94,15 @@ function assertVoiceBackend() {
 function assertParallaxSource() {
   const label = 'parallax-native.py source';
   const candidates = uniq([
+    // Dev + source root
     path.join(SCRIPT_ROOT, 'parallax-native.py'),
-    path.join(unpackedNovaRoot(), 'parallax-native.py'),
-    path.join(novaRoot(), 'parallax-native.py'),
     path.join(PROJECT_ROOT, 'nova', 'parallax-native.py'),
+
+    // Canonical via fs-utils
+    path.join(novaRoot(), 'nova', 'parallax-native.py'),
+    path.join(novaRoot(), 'parallax-native.py'),
+    path.join(unpackedNovaRoot(), 'parallax-native.py'),
+    path.join(unpackedNovaRoot(), 'nova', 'parallax-native.py'),
   ]);
 
   const found = candidates.find((p) => exists(p));
@@ -115,7 +126,7 @@ function assertParallaxSource() {
     /~\/omnivoice-venv\b/i,
     /path\.join\(os\.homedir\(\),\s*['"]\.omnivoice-venv['"]/, // old Unix hardcode
     /\/opt\/homebrew\/bin\/python3/,
-    /['"]\/usr\/local\/bin\/python3['"]/, 
+    /['"]\/usr\/local\/bin\/python3['"]/,
   ];
 
   for (const re of bannedPatterns) {
