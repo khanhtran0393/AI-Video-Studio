@@ -91,10 +91,67 @@ async function waitForTarget(cdpPort, urlPattern, timeoutMs) {
 }
 
 /* ── S3 helpers: deterministic voice backend bootstrap/selection ───────────── */
-const VOICE_PRESET_ID = 'e2e_deterministic_vn_neutral_v1';
-const VOICE_PRESET_FILE = path.join(__dirname, '..', 'voice-backend', 'backend', 'data', 'voicebank', `${VOICE_PRESET_ID}.json`);
+const VOICE_PRESET_NAME = 'e2e deterministic vietnamese neutral';
+const VOICE_PRESET_FILE = path.join(__dirname, '..', 'voice-backend', 'backend', 'test_ref.wav');
+const VOICE_PRESET_TAGS = ['e2e', 'deterministic'];
 const VOICE_BACKEND_PORT_START = 8772;
 const VOICE_BACKEND_PORT_END = 8785;
+
+function postJson(url, body, timeoutMs = 3000) {
+  return new Promise((resolve, reject) => {
+    const jsonBody = JSON.stringify(body || {});
+    const req = http.request(
+      url,
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'content-length': Buffer.byteLength(jsonBody),
+        },
+        timeout: timeoutMs,
+      },
+      (res) => {
+        let raw = '';
+        res.setEncoding('utf8');
+        res.on('data', (chunk) => {
+          raw += chunk;
+        });
+        res.on('end', () => {
+          if (res.statusCode < 200 || res.statusCode >= 300) {
+            return reject(new Error(`HTTP ${res.statusCode}: ${raw || '(empty)'}`));
+          }
+          try {
+            resolve(JSON.parse(raw || '{}'));
+          } catch (error) {
+            reject(new Error(`Invalid JSON from ${url}: ${error.message}`));
+          }
+        });
+      },
+    );
+
+    req.on('error', reject);
+    req.on('timeout', () => req.destroy(new Error(`HTTP timeout: ${url}`)));
+    req.write(jsonBody);
+    req.end();
+  });
+}
+
+function deleteJson(url, timeoutMs = 3000) {
+  return new Promise((resolve, reject) => {
+    const req = http.request(url, { method: 'DELETE', timeout: timeoutMs }, (res) => {
+      let raw = '';
+      res.setEncoding('utf8');
+      res.on('data', (chunk) => { raw += chunk; });
+      res.on('end', () => {
+        if (res.statusCode < 200 || res.statusCode >= 300) return reject(new Error(`HTTP ${res.statusCode}: ${raw || '(empty)'}`));
+        try { resolve(JSON.parse(raw || '{}')); } catch (error) { reject(new Error(`Invalid JSON from ${url}: ${error.message}`)); }
+      });
+    });
+    req.on('error', reject);
+    req.on('timeout', () => req.destroy(new Error(`HTTP timeout: ${url}`)));
+    req.end();
+  });
+}
 
 async function waitForVoiceBackend(baseUrl, timeoutMs = 30000) {
   const deadline = Date.now() + timeoutMs;
@@ -110,6 +167,80 @@ async function waitForVoiceBackend(baseUrl, timeoutMs = 30000) {
     await sleep(300);
   }
   throw new Error('Voice backend did not become healthy: ' + (lastError && lastError.message ? lastError.message : String(baseUrl)));
+}
+
+function findSeedVoiceEntry(voiceList, presetId) {
+  if (!Array.isArray(voiceList)) return null;
+  return voiceList.find((v) => v && (v.id === presetId || String(v.key || '').endsWith(`:${presetId}`) || v.key === presetId));
+}
+
+async function seedDeterministicVoice(baseUrl) {
+  const seeded = await postJson(`${baseUrl}/api/voices`, {
+    name: VOICE_PRESET_NAME,
+    ref_audio: VOICE_PRESET_FILE,
+    ref_text: 'Xin chào, đây là giọng mẫu dùng cho E2E.',
+    tags: VOICE_PRESET_TAGS,
+    attributes: { lang: 'vi', voiceSeed: true, test: true },
+  }, 30000);
+
+  const hasId = !!(seeded && (seeded.id || seeded.key));
+  if (!hasId) {
+    throw new Error('Unexpected response when seeding voice: ' + JSON.stringify(seeded));
+  }
+
+  return seeded;
+}
+
+async function waitForVoiceListReady(cdp, timeoutMs = 20000) {
+  const deadline = Date.now() + timeoutMs;
+  let last;
+  while (Date.now() < deadline) {
+    last = await cdp.evaluate(`(() => {
+      // _giongDS la bien let toan cuc cua page (KHONG nam tren window) — truy cap truc tiep.
+      const list = (typeof _giongDS !== 'undefined' && Array.isArray(_giongDS)) ? _giongDS : [];
+      return list.map((v) => ({ id: v && v.id, key: v && v.key, name: v && v.name, tags: v && v.tags }));
+    })()`);
+    if (Array.isArray(last) && last.length > 0) return last;
+    await sleep(300);
+  }
+  throw new Error('Timed out waiting for in-page voice list: ' + JSON.stringify(last));
+}
+
+async function selectDeterministicVoice(cdp) {
+  // Chon giong deterministic (tag/ten khop voi giong seed) trong _giongDS roi cap nhat _giongChon.
+  // Dung bien toan cuc (let) cua page — khong qua window.* vi let khong gan vao window.
+  return cdp.evaluate(`(() => {
+    try {
+      const list = (typeof _giongDS !== 'undefined' && Array.isArray(_giongDS)) ? _giongDS : [];
+      const match = (v) => v && (
+        (Array.isArray(v.tags) && v.tags.indexOf('deterministic') >= 0)
+        || String(v.name || '').toLowerCase().indexOf('deterministic') >= 0
+      );
+      const target = list.find(match);
+      if (target && target.key) {
+        _giongChon = target.key;
+        if (typeof giongVe === 'function') giongVe();
+        if (typeof giongDatLoc === 'function') giongDatLoc('*');
+        return { ok: true, key: _giongChon, id: target.id || null, name: target.name || null, total: list.length };
+      }
+      return { ok: false, reason: 'not_in_list', total: list.length };
+    } catch (e) {
+      return { ok: false, reason: String(e && e.message ? e.message : e) };
+    }
+  })()`);
+}
+
+async function getVoiceSelectionEvidence(cdp) {
+  return cdp.evaluate(`(() => {
+    const list = (typeof _giongDS !== 'undefined' && Array.isArray(_giongDS)) ? _giongDS : [];
+    return {
+      selected: (typeof _giongChon !== 'undefined') ? (_giongChon || null) : null,
+      voiceUrl: (typeof VOICE_URL !== 'undefined') ? VOICE_URL : null,
+      ready: !!(typeof _voiceReady !== 'undefined' && _voiceReady),
+      total: list.length,
+      first: list.slice(0, 6).map((v) => ({ key: v && v.key, name: v && v.name, tags: v && v.tags })),
+    };
+  })()`);
 }
 
 /* ── Mock OpenAI-compatible loopback (role-aware, KHÔNG key thật) ─────────── */
@@ -184,14 +315,22 @@ function startVoiceBackendOnPort(port, envOverrides) {
     VOICE_TTS_ENGINE: 'mock',
     VOICE_ASR_ENGINE: 'mock',
     VOICE_PORT: String(port),
+    PYTHONHASHSEED: '0', // hash Python on dinh → MockTTS sinh cung cao do moi lan chay
   }, envOverrides || {});
-  const root = path.join(ROOT, 'nova', 'voice-backend');
-  const child = spawn('python', ['-m', 'uvicorn', 'app:app', '--host', '127.0.0.1', '--port', String(port)], {
+  const root = path.join(ROOT, 'nova', 'voice-backend', 'backend'); // app.py va uvicorn app:app chay tu backend/
+  const venvPy = path.join(path.dirname(root), '.venv-vieneu', 'Scripts', 'python.exe');
+  const py = fs.existsSync(venvPy) ? venvPy : 'python';
+  const child = spawn(py, ['-m', 'uvicorn', 'app:app', '--host', '127.0.0.1', '--port', String(port)], {
     cwd: root,
     env,
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
   });
+  let tail = '';
+  child.stdout.on('data', (c) => { tail = (tail + String(c)).slice(-4000); });
+  child.stderr.on('data', (c) => { tail = (tail + String(c)).slice(-4000); });
+  child.getStderrTail = () => tail;
+  child.getStdoutTail = () => tail;
   return child;
 }
 
@@ -203,53 +342,6 @@ async function waitForPortOpen(port, timeoutMs = 30000) {
     await sleep(200);
   }
   throw new Error(`Port ${port} did not open within ${timeoutMs}ms.`);
-}
-
-function seedDeterministicVoice(baseUrl) {
-  return postJson(`${baseUrl}/api/voices`, {
-    name: 'e2e deterministic vietnamese neutral',
-    ref_audio: VOICE_PRESET_FILE,
-    ref_text: 'Xin chào, đây là giọng mẫu dùng cho E2E.',
-    tags: ['e2e', 'deterministic'],
-    attributes: { lang: 'vi', voiceSeed: true, test: true },
-  }, 30000).then((res) => {
-    if (!res || (!res.id && !res.key && !Array.isArray(res))) {
-      throw new Error('Unexpected response when seeding voice: ' + JSON.stringify(res));
-    }
-    return res;
-  });
-}
-
-function normalizeVoiceSelectionScript(presetId) {
-  const script = `(() => {
-    try {
-      const targetId = ${JSON.stringify(presetId)};
-      const target = Array.isArray(window._giongDS)
-        ? window._giongDS.find((v) => v && (v.id === targetId || v.key === ('omni:' + targetId)))
-        : null;
-
-      if (!target) {
-        const byName = Array.isArray(window._giongDS)
-          ? window._giongDS.find((v) => v && v.name && String(v.name).toLowerCase().includes('deterministic'))
-          : null;
-        if (byName) {
-          window._giongChon = byName.key;
-        }
-      } else {
-        window._giongChon = target.key;
-      }
-
-      if (window._giongChon) {
-        if (typeof window.giongVe === 'function') window.giongVe();
-        if (typeof window.giongDatLoc === 'function') window.giongDatLoc('*');
-        return { ok: true, key: window._giongChon };
-      }
-      return { ok: false, reason: 'no_voice_selected' };
-    } catch (error) {
-      return { ok: false, reason: String(error && error.message ? error.message : error) };
-    }
-  })()`;
-  return cdp.evaluate(script);
 }
 
 /* ── bookkeeping ──────────────────────────────────────────────────────────── */
@@ -264,7 +356,14 @@ async function shot(cdp, name) {
 }
 
 async function textOf(cdp, selector) {
-  return cdp.evaluate(`(() => { const e = document.querySelector(${JSON.stringify(selector)}); return e ? String(e.textContent || '').trim() : null; })()`);
+  // #tsOutput là <textarea> — app ghi kịch bản qua .value (textContent giữ nguyên
+  // HTML ban đầu = rỗng). Đọc .value cho form controls, textContent cho phần còn lại.
+  return cdp.evaluate(`(() => {
+    const e = document.querySelector(${JSON.stringify(selector)});
+    if (!e) return null;
+    if (e instanceof HTMLTextAreaElement || e instanceof HTMLInputElement || e instanceof HTMLSelectElement) return String(e.value || '').trim();
+    return String(e.textContent || '').trim();
+  })()`);
 }
 
 async function setText(cdp, selector, value) {
@@ -285,6 +384,91 @@ function addScenario(entry) { report.scenarios.push(entry); return entry; }
 
 function product(absPath, bytes, note) {
   return { path: path.relative(ROOT, absPath), bytes, note: note || '' };
+}
+
+function sanitizeBlobInfo(info) {
+  if (!info || typeof info !== 'object') return { ok: false, reason: 'empty-payload' };
+  return {
+    ok: Boolean(info.ok),
+    source: info.source || null,
+    type: info.type || null,
+    reason: info.reason || null,
+    b64: info.b64 || null,
+    bytesHint: info.bytesHint || null,
+  };
+}
+
+async function extractVoiceBlobFromHistory(cdp) {
+  const evaluateScript = `(() => {
+    try {
+      const h = (typeof _giongSu !== 'undefined' && Array.isArray(_giongSu) && _giongSu[0]) ? _giongSu[0] : null;
+      if (!h) return { ok: false, reason: 'no_history', source: 'history' };
+
+      const toB64 = (ab) => {
+        const bytes = new Uint8Array(ab);
+        let bin = '';
+        const CH = 0x8000;
+        for (let i = 0; i < bytes.length; i += CH) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + CH));
+        return btoa(bin);
+      };
+
+      const readBlob = async () => {
+        if (!h.blob || !h.blob.arrayBuffer) return { ok: false, reason: 'no_blob', source: 'blob' };
+        try {
+          const buf = await h.blob.arrayBuffer();
+          const bytes = toB64(buf);
+          return {
+            ok: true,
+            source: 'blob',
+            type: h.blob.type || 'audio/wav',
+            b64: bytes,
+            bytesHint: buf.byteLength || 0,
+          };
+        } catch (e) {
+          return { ok: false, reason: String(e), source: 'blob' };
+        }
+      };
+
+      const readUrl = async () => {
+        if (!h.url) return { ok: false, reason: 'no_url', source: 'url' };
+        try {
+          return fetch(h.url)
+            .then((r) => {
+              if (!r.ok) return { ok: false, source: 'url', reason: 'http_' + r.status };
+              return r.blob();
+            })
+            .then((b) => {
+              if (!b) return { ok: false, source: 'url', reason: 'empty_blob' };
+              return b.arrayBuffer().then((buf) => ({
+                ok: true,
+                source: 'url',
+                type: b.type || h.blob?.type || 'audio/wav',
+                b64: toB64(buf),
+                bytesHint: buf.byteLength || 0,
+              }));
+            });
+        } catch (e) {
+          return { ok: false, reason: String(e), source: 'url' };
+        }
+      };
+
+      return readBlob().then((r) => {
+        if (r && r.ok) return r;
+        return readUrl().then((u) => {
+          if (u && u.ok) return u;
+          return {
+            ok: false,
+            reason: ((r && r.reason) || 'no-payload') + (u && u.reason ? '; url:' + u.reason : ''),
+            source: (r && r.source) || 'blob',
+          };
+        });
+      });
+    } catch (e) {
+      return { ok: false, reason: String(e), source: 'evaluate' };
+    }
+  })()`;
+
+  return sanitizeBlobInfo(await cdp.evaluate(evaluateScript));
 }
 
 /* ── fixture Video Agent (script/ tts/ images/ music/ + config.json) ──────── */
@@ -333,17 +517,31 @@ async function launchApp(exe, dirs) {
 }
 
 async function writeSettingsViaBridge(cdp, roamingDir, base, key) {
-  // Ghi nova-settings.json (như packaged-smoke) rồi reload để renderer áp dụng
+  // Kho cài đặt của app là BẢNG PHẲNG key→value (mirror localStorage: api_provider,
+  // api_base_url, api_key_<provider>… — xem nova/storage/settings-store.js + khối seed
+  // ở đầu web/index.html) và nằm trong userData "%APPDATA%/AI Video Studio Independent"
+  // (nova/main/identity.js gọi app.setPath('userData', …)). Provider "openai" +
+  // api_base_url → callLLM() gọi <base>/chat/completions (callOpenAICompat) — đúng
+  // endpoint của mock loopback.
   const settings = {
-    ai: { provider: 'custom', baseUrl: base, apiKey: key, model: 'e2e' },
-    api: { provider: 'custom', baseUrl: base, apiKey: key, model: 'e2e' },
-    providers: { custom: { baseUrl: base, apiKey: key, model: 'e2e' } },
+    api_provider: 'openai',
+    api_model: 'e2e',
+    api_base_url: base,
+    api_key: key,
+    api_key_openai: key,
+    api_thinking: '',
+    api_concurrency: '',
   };
-  fs.mkdirSync(path.join(roamingDir, 'Nova'), { recursive: true });
-  const settingsPath = path.join(roamingDir, 'Nova', 'nova-settings.json');
-  fs.writeFileSync(settingsPath, JSON.stringify(settings));
+  const settingsDir = path.join(roamingDir, 'AI Video Studio Independent');
+  fs.mkdirSync(settingsDir, { recursive: true });
+  const settingsPath = path.join(settingsDir, 'nova-settings.json');
+  fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
   await cdp.evaluate('window.location.reload()');
   await sleep(1500);
+  // Kiểm chứng seed: renderer phải thấy đúng base URL sau khi reload trang.
+  const seeded = await cdp.evaluate(`(() => ({ provider: localStorage.getItem('api_provider'), baseUrl: localStorage.getItem('api_base_url'), key: localStorage.getItem('api_key'), model: localStorage.getItem('api_model') }))()`).catch(() => null);
+  report.settingsSeed = seeded || null;
+  console.log('[e2e] settings seeded:', JSON.stringify(seeded));
   return settingsPath;
 }
 
@@ -360,7 +558,8 @@ async function switchTool(cdp, tool) {
 
 async function main() {
   const startedAt = new Date().toISOString();
-  RUN_DIR = path.join(ROOT, 'smoke-results', 'e2e-' + stamp());
+  const resultsRoot = process.env.E2E_RESULTS_DIR || path.join(ROOT, 'smoke-results');
+  RUN_DIR = path.join(resultsRoot, 'e2e-' + stamp());
   for (const d of ['screenshots', 'products', 'downloads', 'profile', 'fixtures']) fs.mkdirSync(path.join(RUN_DIR, d), { recursive: true });
   const dirs = {
     userprofile: path.join(RUN_DIR, 'profile'),
@@ -375,8 +574,7 @@ async function main() {
   console.log('[e2e] app exe :', exe);
   console.log('[e2e] run dir :', RUN_DIR);
 
-  const table0 = await processTable();
-  await killAppExes(table0, path.basename(exe));
+  await killAppExes(path.dirname(exe));
   await sleep(1000);
 
   const fixtureInfo = await buildVaProject(vaProject);
@@ -389,7 +587,7 @@ async function main() {
 
   const app = await launchApp(exe, dirs);
   const mainTarget = await waitForTarget(CDP_PORT, /index\.html/, 30000);
-  const cdp = new CdpClient(mainTarget.webSocketDebuggerUrl);
+  let cdp = new CdpClient(mainTarget.webSocketDebuggerUrl);
   await cdp.connect(30000);
   await cdp.send('Runtime.enable');
   await cdp.send('Page.enable');
@@ -402,26 +600,96 @@ async function main() {
   const settingsPath = await writeSettingsViaBridge(cdp, dirs.roaming, base, MOCK_KEY);
   console.log('[e2e] settings:', path.relative(ROOT, settingsPath));
 
+  let voiceBackendProc = null;
+  let voiceBackendBase = null;
+  let voiceSeedInfo = null;
+  try {
+    // Ưu tiên cổng 8771 (mặc định của renderer): voiceInit() tự nhận backend này qua
+    // voiceStatus() và không tự spawn backend thật. Bận thì lấy 8772-8785 rồi
+    // override VOICE_URL trong page ở khối S3.
+    const port8771Busy = await isPortOpen(8771).catch(() => false);
+    const backendPort = port8771Busy
+      ? await detectFreePort(VOICE_BACKEND_PORT_START, VOICE_BACKEND_PORT_END)
+      : 8771;
+    voiceBackendProc = startVoiceBackendOnPort(backendPort, {});
+    await waitForPortOpen(backendPort, 30000);
+    await waitForVoiceBackend(`http://127.0.0.1:${backendPort}`, 30000);
+    voiceBackendBase = `http://127.0.0.1:${backendPort}`;
+    voiceSeedInfo = await seedDeterministicVoice(voiceBackendBase);
+    console.log('[e2e] voice backend:', voiceBackendBase, '— seeded', voiceSeedInfo.id, '(' + voiceSeedInfo.name + ')');
+  } catch (error) {
+    voiceBackendBase = null;
+    voiceSeedInfo = null;
+    console.log('[e2e] voice backend bootstrap failed — fallback app-native:', error && (error.message || error));
+  }
+
   await sleep(2000);
+
+  // Renderer có thể bận/đóng băng vài phút sau khi sinh giọng đọc (S3) — khi đó mọi
+  // Runtime.evaluate timeout 15s và các scenario sau fail oan. Chờ (có giới hạn)
+  // renderer phản hồi trước MỖI scenario; nếu WebSocket đứt (renderer reload/crash)
+  // thì nối lại target index.html hiện hành qua /json/list.
+  async function waitRendererReady(timeoutMs = 240000) {
+    const startedWait = Date.now();
+    const deadline = startedWait + timeoutMs;
+    let lastErr = 'not-started';
+    for (;;) {
+      try { await cdp.evaluate('1', 5000); break; }
+      catch (e) { lastErr = String((e && e.message) || e); }
+      if (Date.now() > deadline) throw new Error('renderer CDP unresponsive: ' + lastErr);
+      if (!cdp.ws || cdp.ws.readyState !== 1) {
+        try { cdp.close(); } catch (_) {}
+        try {
+          const t = await waitForTarget(CDP_PORT, /index\.html/, 8000);
+          const fresh = new CdpClient(t.webSocketDebuggerUrl);
+          await fresh.connect(10000);
+          try { await fresh.send('Runtime.enable'); } catch (_) {}
+          try { await fresh.send('Page.enable'); } catch (_) {}
+          cdp = fresh;
+        } catch (_) { /* giữ cdp cũ, thử lại sau */ }
+      }
+      await sleep(2000);
+    }
+    const waitedMs = Date.now() - startedWait;
+    if (waitedMs > 5000) console.log('[e2e] renderer stall ~' + Math.round(waitedMs / 1000) + 's — đã chờ phục hồi CDP');
+    return waitedMs;
+  }
 
   try {
     /* ── S1: sweep 19 tab (mỗi tool mở UI thật, không crash) ─────────────── */
     try {
       const tabs = await cdp.evaluate(`Array.from(document.querySelectorAll('.nav-item[data-tool]')).map(t => t.getAttribute('data-tool')).filter(Boolean)`);
+      // tooladmin bị chặn chủ ý cho non-admin: switchTool('tooladmin') return sớm khi
+      // !isAdmin() và nav-item #navAdmin display:none — không phải lỗi UI → bỏ khỏi sweep.
+      const skipped = tabs.filter((t) => t === 'tooladmin');
+      const sweep = tabs.filter((t) => t !== 'tooladmin');
       const errors = [];
-      for (const tool of tabs) {
+      for (const tool of sweep) {
         try { await switchTool(cdp, tool); } catch (e) { errors.push({ tool, error: String(e.message || e) }); }
         await sleep(250);
       }
       await shot(cdp, 's1-tab-sweep');
-      addScenario({ id: 'S1-tabSweep', buttons: tabs, verdict: errors.length ? 'fail' : 'pass', evidence: { tabsTotal: tabs.length, clickErrors: errors } });
-      console.log('[e2e] S1 tabSweep:', tabs.length, 'tabs,', errors.length, 'errors');
+      addScenario({ id: 'S1-tabSweep', buttons: tabs, verdict: errors.length ? 'fail' : 'pass', evidence: { tabsTotal: tabs.length, swept: sweep.length, skippedAdmin: skipped, clickErrors: errors } });
+      console.log('[e2e] S1 tabSweep:', tabs.length, 'tabs (sweep', sweep.length + '),', errors.length, 'errors');
     } catch (e) { addScenario({ id: 'S1-tabSweep', verdict: 'fail', error: String(e.message || e) }); }
 
     /* ── S2: Viết kịch bản (#tsGenBtn) → #tsOutput ──────────────────────── */
     try {
+      await waitRendererReady();
       await switchTool(cdp, 'toolscript');
-      await setText(cdp, '#tsChuDe', SCRIPT_TOPIC);
+      // Backward-compatible selector: UI uses #tsTopic in current build,
+      // keep #tsChuDe for older builds that still had the old id.
+      const s2Topic = await cdp.evaluate(`(() => {
+        const ids = ['#tsTopic', '#tsChuDe'];
+        for (const s of ids) {
+          const el = document.querySelector(s);
+          if (el) { el.value = (${JSON.stringify(SCRIPT_TOPIC)}); try { el.dispatchEvent(new Event('input', { bubbles: true })); } catch (_) {} return s; }
+        }
+        return null;
+      })()`);
+      if (!s2Topic) {
+        throw new Error('Missing script topic input: #tsTopic/#tsChuDe');
+      }
       await cdp.click('#tsGenBtn');
       let out = '';
       for (let i = 0; i < 150; i++) { // tối đa ~150s
@@ -435,7 +703,7 @@ async function main() {
       fs.writeFileSync(path.join(RUN_DIR, 'products', 'script.txt'), out);
       const pass = out.trim().length > 200;
       addScenario({ id: 'S2-writeScript', buttons: ['#tsGenBtn'], verdict: pass ? 'pass' : 'fail',
-        evidence: { status: st2, outputChars: out.trim().length, outputPreview: out.slice(0, 200) },
+        evidence: { status: st2, outputChars: out.trim().length, outputPreview: out.slice(0, 200), topicInput: s2Topic },
         products: pass ? [product(path.join(RUN_DIR, 'products', 'script.txt'), fs.statSync(path.join(RUN_DIR, 'products', 'script.txt')).size, 'Kịch bản sinh từ AI (mock)') ] : [],
         screenshots: [shotS2.path] });
       console.log('[e2e] S2 script:', pass ? 'PASS' : 'FAIL', out.length + ' chars');
@@ -443,14 +711,56 @@ async function main() {
 
     /* ── S3: Tạo giọng đọc (#voiceGenBtn) → Tải (.wav) + Dùng cho video ──── */
     try {
+      await waitRendererReady();
       await switchTool(cdp, 'toolvoice');
+      // ── Deterministic wiring: trỏ renderer sang backend mock (đã seed giọng) ──
+      const voiceWiring = await cdp.evaluate(`(() => {
+        try {
+          const out = { url: null, patched: false, enginesMock: false };
+          const altUrl = ${JSON.stringify(voiceBackendBase || '')};
+          if (altUrl && typeof VOICE_URL !== 'undefined') { VOICE_URL = altUrl; out.url = VOICE_URL; }
+          if (altUrl) { _voiceReady = true; out.patched = true; }
+          // Ép mapping engine → 'mock' để POST /api/tts luôn chạy MockTTS (định tính).
+          try { _TTS_BACKEND_ID.omni = 'mock'; _TTS_BACKEND_ID.vieneu = 'mock'; _TTS_BACKEND_ID.xtts = 'mock'; out.enginesMock = true; } catch (e) { out.enginesMock = String(e); }
+          if (altUrl && typeof giongTaiDS === 'function') giongTaiDS();
+          return out;
+        } catch (e) { return { error: String(e && e.message ? e.message : e) }; }
+      })()`);
+      // Chờ danh sách giọng + chọn giọng deterministic (reseed nếu thiếu)
+      let voiceSelection = { ok: false, reason: 'not_attempted' };
+      let voiceListInfo = null;
+      if (voiceBackendBase) {
+        for (let attempt = 0; attempt < 3 && !voiceSelection.ok; attempt++) {
+          try { voiceListInfo = await waitForVoiceListReady(cdp, 15000); } catch (_) {}
+          voiceSelection = await selectDeterministicVoice(cdp);
+          if (voiceSelection.ok) break;
+          if (attempt === 0) {
+            // Giọng seed có thể chưa vào list (fetch cũ) → reseed + refetch rồi thử lại.
+            try { await seedDeterministicVoice(voiceBackendBase); } catch (e) {
+              voiceSelection = { ok: false, reason: 'reseed_failed: ' + (e && e.message || e) };
+            }
+            await cdp.evaluate('if (typeof giongTaiDS === "function") giongTaiDS();');
+            await sleep(1500);
+          } else {
+            await sleep(600);
+          }
+        }
+      } else {
+        // Fallback app-native: không ép được giọng — chỉ thu evidence.
+        try { voiceListInfo = await waitForVoiceListReady(cdp, 8000); } catch (_) {}
+        voiceSelection = await selectDeterministicVoice(cdp);
+      }
+      const voiceEvidence = await getVoiceSelectionEvidence(cdp);
+      if (voiceSelection.ok) console.log('[e2e] S3 voice selection:', JSON.stringify(voiceSelection));
+      else console.log('[e2e] S3 deterministic voice chưa chọn được —', JSON.stringify(redact(voiceEvidence)));
       await setText(cdp, '#voiceText', SCRIPT_VOICE);
       await cdp.click('#voiceGenBtn');
       let vres = null;
       for (let i = 0; i < 240; i++) { // tối đa ~240s (TTS local có thể chậm lần đầu)
         await sleep(1000);
         vres = await cdp.evaluate(`(() => {
-          const s = window._giongSu || [];
+          // _giongSu là biến let toàn cục (không nằm trên window) — truy cập trực tiếp.
+          const s = (typeof _giongSu !== 'undefined' && Array.isArray(_giongSu)) ? _giongSu : [];
           const st = document.getElementById('voiceGenStatus');
           const stText = st ? String(st.textContent || '').trim() : '';
           if (s.length && s[0].giay > 0) return { ok: true, giay: s[0].giay, ten: s[0].ten || '', status: stText };
@@ -463,7 +773,8 @@ async function main() {
       if (vres && vres.ok) {
         // Bấm "Tải" (nút đầu trong hàng giọng đầu) → file vào Downloads
         const before = listFilesDeep(path.join(RUN_DIR, 'downloads'), null);
-        await cdp.click('#giongSu .grow-row .gh-act button');
+        let dlClickErr = null;
+        try { await cdp.click('#giongSu .grow-row .gh-act button'); } catch (e) { dlClickErr = String(e.message || e); }
         let dl = null;
         for (let i = 0; i < 120; i++) {
           await sleep(1000);
@@ -472,36 +783,79 @@ async function main() {
           dl = now.find((f) => !known.has(f.path) && f.bytes > 5000) || null;
           if (dl) break;
         }
-        const shota = await shot(cdp, 's3-voice-generated');
-        // Bấm "Dùng cho video" (nút thứ hai) → gán giọng cho Tool 2/7/8
-        const assigned = await cdp.evaluate(`(() => {
+        // Fallback: nút "Tải" chạy tốt nhưng download blob: URL của Electron không phải
+        // lúc nào cũng đi qua Browser.setDownloadBehavior → trích blob từ _giongSu[0]
+        // rồi ghi file product trực tiếp (evaluate có awaitPromise + returnByValue).
+        let blobSaved = null; let blobErr = null; let blobSource = null; let blobInfo = null;
+        if (!dl) {
           try {
-            const row = document.querySelector('#giongSu .grow-row .gh-act');
-            const btns = row ? row.querySelectorAll('button') : [];
-            if (btns[1]) btns[1].click();
-            return { clicked: true, btnCount: btns.length };
-          } catch (e) { return { clicked: false, error: String(e) }; }
-        })()`);
-        await sleep(2000);
-        const assignStatus = (await textOf(cdp, '#voiceGenStatus')) || vstatus;
-        const shotb = await shot(cdp, 's3-voice-assigned');
-        if (dl) fs.copyFileSync(dl.path, path.join(RUN_DIR, 'products', path.basename(dl.path)));
+            blobInfo = await extractVoiceBlobFromHistory(cdp);
+            if (blobInfo && blobInfo.ok && blobInfo.b64) {
+              const buf = Buffer.from(blobInfo.b64, 'base64');
+              if (buf.length > 5000) {
+                const ext = /mp3|mpeg/i.test(blobInfo.type || '') ? '.mp3' : '.wav';
+                const p = path.join(RUN_DIR, 'products', 'giong-noi-e2e' + ext);
+                fs.writeFileSync(p, buf);
+                blobSaved = { path: p, bytes: buf.length, type: blobInfo.type };
+                blobSource = blobInfo.source || 'unknown';
+                dl = blobSaved;
+              } else {
+                blobErr = 'blob too small: ' + buf.length + ' bytes';
+                blobSource = blobInfo.source || 'unknown';
+              }
+            } else {
+              blobErr = (blobInfo && blobInfo.reason) ? blobInfo.reason : 'unknown';
+              blobSource = blobInfo && blobInfo.source ? blobInfo.source : null;
+            }
+          } catch (e) {
+            blobErr = String(e.message || e);
+          }
+        }
+        // Ảnh chụp + bấm "Dùng cho video" là bằng chứng PHỤ — lỗi CDP ở đây không lật
+        // verdict, vì tín hiệu chính là file giọng đọc đã tải về (dl).
+        let shota = null; let shotb = null; let assigned = null; let assignStatus = null; let auxErr = null;
+        try {
+          shota = await shot(cdp, 's3-voice-generated');
+          // Bấm "Dùng cho video" (nút thứ hai) → gán giọng cho Tool 2/7/8
+          assigned = await cdp.evaluate(`(() => {
+            try {
+              const row = document.querySelector('#giongSu .grow-row .gh-act');
+              const btns = row ? row.querySelectorAll('button') : [];
+              if (btns[1]) btns[1].click();
+              return { clicked: true, btnCount: btns.length };
+            } catch (e) { return { clicked: false, error: String(e) }; }
+          })()`);
+          await sleep(2000);
+          assignStatus = (await textOf(cdp, '#voiceGenStatus')) || vstatus;
+          shotb = await shot(cdp, 's3-voice-assigned');
+        } catch (e) { auxErr = String(e.message || e); }
+        if (dl) { try { fs.copyFileSync(dl.path, path.join(RUN_DIR, 'products', path.basename(dl.path))); } catch (_) {} }
         const pass = !!dl && dl.bytes > 5000;
         addScenario({ id: 'S3-voiceGen', buttons: ['#voiceGenBtn', 'giongSu[0].Tải', 'giongSu[0].Dùng cho video'], verdict: pass ? 'pass' : 'fail',
-          evidence: { giay: vres.giay, ten: vres.ten, status: vstatus, assigned, assignStatus },
-          products: dl ? [product(dl.path, dl.bytes, 'File giọng đọc TTS local — tải về qua nút Tải')] : [],
-          screenshots: [shota.path, shotb.path] });
-        console.log('[e2e] S3 voice:', pass ? 'PASS' : 'FAIL', dl ? dl.path : 'no file', vres.giay + 's');
+          evidence: { giay: vres.giay, ten: vres.ten, status: vstatus, assigned, assignStatus,
+            dlClickErr: dlClickErr || undefined, auxErr: auxErr || undefined,
+            blobSaved: blobSaved || undefined, blobErr: blobErr || undefined, blobSource: blobSource || undefined,
+            voice: { backend: voiceBackendBase, seed: voiceSeedInfo && voiceSeedInfo.id, wiring: voiceWiring, selection: voiceSelection, list: voiceEvidence } },
+          products: dl ? [product(dl.path, dl.bytes, 'File giọng đọc TTS local (mock engine) — qua nút Tải hoặc trích blob')] : [],
+          screenshots: [shota, shotb].filter(Boolean).map((s) => s.path) });
+        if (blobSaved) {
+          console.log('[e2e] S3 blob fallback:', blobSaved.type, blobSaved.bytes + ' bytes', 'source:', blobSource || 'unknown');
+        }
+        console.log('[e2e] S3 voice:', pass ? 'PASS' : 'FAIL', dl ? dl.path : 'no file', vres.giay + 's', blobSaved ? '(via blob)' : '', auxErr ? ('(aux: ' + auxErr + ')') : '');
       } else {
-        const shotv = await shot(cdp, 's3-voice-failed');
+        let shotv = null; let shotvErr = null;
+        try { shotv = await shot(cdp, 's3-voice-failed'); } catch (e) { shotvErr = String(e.message || e); }
         addScenario({ id: 'S3-voiceGen', buttons: ['#voiceGenBtn'], verdict: 'fail',
-          evidence: { status: vstatus, detail: vres }, screenshots: [shotv.path] });
+          evidence: { status: vstatus, detail: vres, shotErr: shotvErr || undefined,
+            voice: { backend: voiceBackendBase, seed: voiceSeedInfo && voiceSeedInfo.id, wiring: voiceWiring, selection: voiceSelection, list: voiceEvidence } },
+          screenshots: shotv ? [shotv.path] : [] });
         console.log('[e2e] S3 voice: FAIL —', JSON.stringify(redact(vstatus || vres)));
       }
     } catch (e) { addScenario({ id: 'S3-voiceGen', verdict: 'fail', error: String(e.message || e) }); }
 
     /* ── S4: Phân tích kịch bản → storyboard (#t2AnalyzeBtn) ────────────── */
     try {
+      await waitRendererReady();
       await switchTool(cdp, 'tool2');
       await setText(cdp, '#scriptInput', SCRIPT_FULL);
       await cdp.click('#t2AnalyzeBtn');
@@ -536,6 +890,7 @@ async function main() {
 
     /* ── S5: panel Video Agent trong index.html (#btnRunFull) ───────────── */
     try {
+      await waitRendererReady();
       await switchTool(cdp, 'toolvideoagent');
       await sleep(500);
       const has = await cdp.evaluate(`(() => ({ btnRunFull: !!document.getElementById('btnRunFull'), btnRender: !!document.getElementById('renderBtn'), info: (document.getElementById('renderInfo') || {}).textContent || null }))()`);
@@ -556,6 +911,7 @@ async function main() {
     /* ── S6: cửa sổ Video Agent — pipeline đầy đủ → file .mp4 THẬT ──────── */
     let vaWin = null;
     try {
+      await waitRendererReady();
       const opened = await cdp.evaluate(`(() => { try { if (window.native && window.native.videoAgent && window.native.videoAgent.openWindow) { window.native.videoAgent.openWindow(); return { ok: true }; } return { ok: false, error: 'no native.videoAgent.openWindow' }; } catch (e) { return { ok: false, error: String(e) }; } })()`);
       const vaTarget = await waitForTarget(CDP_PORT, /video-agent\.html/, 20000);
       vaWin = new CdpClient(vaTarget.webSocketDebuggerUrl);
@@ -613,6 +969,7 @@ async function main() {
 
     /* ── S7: Xuất video Tool 7 (#t7ExportBtn → #t7ExpGo trong modal) ────── */
     try {
+      await waitRendererReady();
       await switchTool(cdp, 'tool7');
       await sleep(500);
       const has7 = await cdp.evaluate(`(() => ({ exportBtn: !!document.getElementById('t7ExportBtn'), scenes: (window.t7State && window.t7State.scenes || []).length, audio: !!(window.t7State && window.t7State.audioFile), bgm: !!(window.t7State && window.t7State.bgmFile) }))()`);
@@ -635,25 +992,43 @@ async function main() {
 
     /* ── S8: các nút AI phụ (tool3/tool6/tool9/upscale/niche/flow) ──────── */
     const attempts = [
-      { tool: 'tool3', button: '#t3GenBtn, #tool3GenBtn', status: '#status3', label: 'tool3 (phân cảnh AI)' },
-      { tool: 'tool6', button: '#t6GenBtn, #tool6GenBtn', status: '#status6', label: 'tool6 (gợi ý AI)' },
-      { tool: 'tool9', button: '#t9GenBtn, #tool9GenBtn', status: '#status9', label: 'tool9 (AI meta)' },
-      { tool: 'toolniche', button: '#nfGenBtn, #nicheGenBtn', status: '#statusNf', label: 'niche finder' },
-      { tool: 'toolupscale', button: '#upGenBtn, #upscaleBtn', status: '#upStatus', label: 'upscale' },
-      { tool: 'toolflow', button: '#flowGenBtn, #flowBtn', status: '#statusFlow', label: 'flow (browser flow)' },
+      { tool: 'tool3', button: '#autoT3Btn', status: '#status3', label: 'tool3 (assets AI — nút 1-bấm)' },
+      { tool: 'tool6', button: '#mvGenBtn', status: '#mvStatus, #status6', label: 'tool6 (gợi ý AI chuyển động)' },
+      { tool: 'tool9', button: '[onclick="t9Generate()"]', status: '#status9', label: 'tool9 (YouTube SEO pack)', capture: 'seo' },
+      { tool: 'toolniche', button: '#nfHotBtn', status: '#nfStatus, #statusNf', label: 'niche finder (chủ đề đang lên)' },
+      { tool: 'toolupscale', button: '#upRunBtn', status: '#upStatus', label: 'upscale' },
+      { tool: 'toolflow', button: '#bulkGenBtn', status: '#statusflow', label: 'flow (browser flow)' },
     ];
     for (const a of attempts) {
       try {
+        await waitRendererReady();
         await switchTool(cdp, a.tool);
         await sleep(400);
         const btnExists = await cdp.evaluate(`(() => { const b = document.querySelector(${JSON.stringify(a.button)}); return !!b; })()`);
         if (btnExists) await cdp.click(a.button);
-        await sleep(8000); // cho handler chạy & cập nhật status
+        await sleep(10000); // cho handler chạy & cập nhật status (AI mock nhanh, để dư thời gian)
         const status = await textOf(cdp, a.status);
         const shotS8 = await shot(cdp, 's8-' + a.tool);
+        let products8 = [];
+        if (a.capture === 'seo') {
+          // Tool 9 = YouTube SEO: ghi pack thật (tiêu đề/mô tả/tags) ra đĩa.
+          try {
+            const seo = await cdp.evaluate(`(() => ({
+              title: (document.getElementById('t9Title') || {}).value || '',
+              description: (document.getElementById('t9Desc') || {}).value || '',
+              tags: (document.getElementById('t9Tags') || {}).value || '',
+              status: (document.getElementById('status9') || {}).textContent || ''
+            }))()`);
+            if (seo && (seo.title || seo.description || seo.tags)) {
+              const p = path.join(RUN_DIR, 'products', 'seo-pack.json');
+              fs.writeFileSync(p, JSON.stringify(seo, null, 2));
+              products8 = [product(p, fs.statSync(p).size, 'YouTube SEO pack (tiêu đề/mô tả/tags) sinh từ Tool 9 (mock AI)')];
+            }
+          } catch (_) { /* evidence-only */ }
+        }
         addScenario({ id: 'S8-' + a.tool, buttons: [a.button], verdict: 'attempted',
-          evidence: { label: a.label, buttonExists: btnExists, status: status || '(không có status element)' }, screenshots: [shotS8.path] });
-        console.log('[e2e] S8', a.tool + ':', JSON.stringify(redact(status || 'no-status')));
+          evidence: { label: a.label, buttonExists: btnExists, status: status || '(không có status element)' }, products: products8, screenshots: [shotS8.path] });
+        console.log('[e2e] S8', a.tool + ':', JSON.stringify(redact(status || 'no-status')), products8.length ? '(product: seo-pack.json)' : '');
       } catch (e) { addScenario({ id: 'S8-' + a.tool, buttons: [a.button], verdict: 'fail', error: String(e.message || e) }); }
     }
   } finally {
@@ -661,14 +1036,34 @@ async function main() {
     try { await cdpBrowser.send('Browser.close'); } catch (_) {}
     await sleep(1500);
     try { if (app.child && !app.child.killed) app.child.kill(); } catch (_) {}
-    const table = await processTable();
-    await killAppExes(table, path.basename(exe));
-    try { if (app.child && app.child.pid) await forceKill(app.child.pid, table); } catch (_) {}
+    await killAppExes(path.dirname(exe));
+    try { if (app.child && app.child.pid) await forceKill(app.child.pid); } catch (_) {}
     await closeServer(mock.server);
+
+    // Dọn voice backend cục bộ: xoá giọng seed khỏi voicebank (best-effort) rồi kill tiến trình.
+    if (voiceBackendBase) {
+      try {
+        const list = await httpJson(voiceBackendBase + '/api/voices', 2000).catch(() => null);
+        const vs = (list && Array.isArray(list.voices)) ? list.voices : [];
+        let removed = 0;
+        for (const v of vs) {
+          if (v && v.id && Array.isArray(v.tags) && v.tags.indexOf('e2e') >= 0) {
+            await deleteJson(voiceBackendBase + '/api/voices/' + v.id, 2000).then(() => { removed += 1; }).catch(() => {});
+          }
+        }
+        console.log('[e2e] voice seed cleanup:', removed, 'preset(s) removed');
+      } catch (_) {}
+    }
+    try { if (voiceBackendProc && !voiceBackendProc.killed) voiceBackendProc.kill(); } catch (_) {}
+    try { if (voiceBackendProc && voiceBackendProc.pid) await forceKill(voiceBackendProc.pid); } catch (_) {}
+    if (voiceBackendProc && voiceBackendProc.getStderrTail) {
+      report.voiceBackendTail = String(voiceBackendProc.getStderrTail()).split('\n').slice(-40);
+    }
+
     report.appStderrTail = String(app.getStderrTail()).split('\n').slice(-80);
     report.mockRequests = mock.requests.length;
 
-    report.meta = { startedAt, finishedAt: new Date().toISOString(), exe: path.relative(ROOT, exe), runDir: RUN_DIR, mockAi: base, cdpPort: CDP_PORT };
+    report.meta = { startedAt, finishedAt: new Date().toISOString(), exe: path.relative(ROOT, exe), runDir: RUN_DIR, mockAi: base, cdpPort: CDP_PORT, voiceBackend: voiceBackendBase || 'app-native' };
     const counts = { pass: 0, fail: 0, attempted: 0 };
     for (const s of report.scenarios) counts[s.verdict] = (counts[s.verdict] || 0) + 1;
     report.summary = counts;

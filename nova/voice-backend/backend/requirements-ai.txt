@@ -6,6 +6,9 @@ torchcodec
 coqui-tts==0.27.5
 transformers==4.57.1
 huggingface_hub
+# OmniVoice — đa ngôn ngữ, clone giọng + thiết kế giọng theo thuộc tính (engine mặc định):
+omnivoice
+num2words
 # VieNeu-TTS — tiếng Việt native + voice cloning (v3 Turbo 48kHz, CPU qua ONNX):
 vieneu
 # ASR — Apple Silicon dùng mlx-whisper (GPU Metal); nền khác dùng faster-whisper:

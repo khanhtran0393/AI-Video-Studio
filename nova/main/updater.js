@@ -4,10 +4,19 @@
  * Bật bằng AI_VIDEO_STUDIO_ENABLE_UPDATES=1 khi có máy chủ phát hành riêng.
  */
 const { app } = require('electron');
-const { autoUpdater } = require('electron-updater');
 const state = require('./state');
 
 function setupAutoUpdate() {
+  // Lazy require: electron-updater chỉ nạp KHI bật update (AI_VIDEO_STUDIO_ENABLE_UPDATES=1).
+  // Nạp sớm kéo cả chuỗi dependency (fs-extra, universalify, js-yaml, semver…) — nếu bản
+  // đóng gói thiếu một module thì toàn bộ main process crash ngay khi khởi động.
+  let autoUpdater;
+  try {
+    ({ autoUpdater } = require('electron-updater'));
+  } catch (e) {
+    console.warn('[update] không nạp được electron-updater:', e?.message || e);
+    return null;
+  }
   autoUpdater.autoDownload = false;   // hỏi trước khi tải
   const sendUpd = (payload) => { try { state.mainWindow && state.mainWindow.webContents.send('update-status', payload); } catch (_) {} };
   autoUpdater.on('update-available', (info) => {

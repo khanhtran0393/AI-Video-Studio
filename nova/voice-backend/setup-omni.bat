@@ -1,12 +1,12 @@
 @echo off
 REM ============================================================
-REM  Cai backend giong noi OmniVoice cho Nova Studio (Windows)
-REM  TU DONG: tim/cai Python 3.11 -> tao venv -> cai thu vien AI.
+REM  Cai backend giong noi (OmniVoice + VieNeu + XTTS) cho Nova Studio (Windows)
+REM  TU DONG: tim/cai Python 3.11 -> tao venv -> cai thu vien AI cho CA 3 ENGINE.
 REM ============================================================
 setlocal enabledelayedexpansion
 cd /d "%~dp0"
 echo ============================================================
-echo   Cai giong noi AI (OmniVoice) cho Nova Studio
+echo   Cai giong noi AI (OmniVoice + VieNeu + XTTS) cho Nova Studio
 echo ============================================================
 echo.
 
@@ -39,14 +39,16 @@ call ".venv-omni\Scripts\activate.bat"
 python -m pip install -U pip
 
 echo.
-echo [3/3] Cai thu vien AI (torch, omnivoice... nang ~1-2GB, cho vai phut) ...
+echo [3/3] Cai thu vien AI cho 3 engine (OmniVoice + VieNeu + XTTS) ...
+echo       Nang ~2-3GB (torch, coqui-tts, vieneu, omnivoice...) - cho vai phut.
+echo       Danh sach day du trong backend\requirements-ai.txt
 REM uu tien "uv" neu co - tai nhanh hon pip rat nhieu voi mang yeu
 where uv >nul 2>nul
 if %errorlevel%==0 (
   echo     Dung uv de tai (nhanh hon) ...
-  uv pip install --python ".venv-omni\Scripts\python.exe" "fastapi>=0.110" "uvicorn[standard]" python-multipart torch==2.8.0 torchaudio==2.8.0 omnivoice num2words
+  uv pip install --python ".venv-omni\Scripts\python.exe" "fastapi>=0.110" "uvicorn[standard]" python-multipart -r "backend\requirements-ai.txt"
 ) else (
-  python -m pip install "fastapi>=0.110" "uvicorn[standard]" python-multipart torch==2.8.0 torchaudio==2.8.0 omnivoice num2words
+  python -m pip install "fastapi>=0.110" "uvicorn[standard]" python-multipart -r "backend\requirements-ai.txt"
 )
 if errorlevel 1 (
   echo.
@@ -57,8 +59,9 @@ if errorlevel 1 (
 
 echo.
 echo ==================== XONG! ====================
+echo Da cai du 3 engine: OmniVoice + VieNeu + XTTS.
 echo Quay lai Nova Studio -^> tab "Tao giong noi" -^> bam "Kiem tra lai".
-echo (Lan dau tao giong, model se tu tai ~vai GB tu Hugging Face.)
+echo (Lan dau tao giong, tung model se tu tai ~vai GB tu Hugging Face.)
 echo ==============================================
 pause
 exit /b 0

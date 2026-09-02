@@ -51,6 +51,9 @@ async function handle(action, payload = {}) {
       case 'POOL_ABORT':     S._poolAbort = !!payload.on; return { ok: true, aborting: S._poolAbort };
       case 'POOL_GEN':       return await withGen(() => poolGen(payload));
       case 'POOL_GEN_VIDEO': return await withGen(() => genVideoPool(payload));
+      // Parity giao thức với extension router + bridge whitelist (UI app chỉ gọi POOL_GEN_VIDEO; 2 action này để builtin mode không rơi vào UNKNOWN_MESSAGE — native chạy qua pool = 1 scene/1 account rảnh).
+      case 'GEN_VIDEO':
+      case 'GEN_VIDEO_FROM_IMAGE': return await withGen(() => genVideoPool(payload));
       case 'VIDEO_LEARN_ARM':    return await armVideoLearn();
       case 'VIDEO_LEARN_STATUS': return await videoLearnStatus();
       case 'VIDEO_LEARN_DUMP':   return await videoLearnDump();

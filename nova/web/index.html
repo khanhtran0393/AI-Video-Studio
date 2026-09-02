@@ -2634,6 +2634,14 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
       #tool-tool7 .t7-gl b{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
       #tool-tool7 .t7-cchip{font-size:10.5px;padding:3px 9px;border-radius:20px;border:1px solid var(--border);background:var(--surface-2);color:var(--text-muted);cursor:pointer;display:inline-block}
       #tool-tool7 .t7-cchip.on{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent);font-weight:700}
+      /* ── thẻ kiểu chuyển động (đơn giản hoá: 1 thẻ = phối sẵn Vào/Giữ/Ra) ── */
+      #tool-tool7 .t7-stylecard{display:flex;gap:8px;align-items:flex-start;background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:7px 9px;cursor:pointer;color:var(--text)}
+      #tool-tool7 .t7-stylecard:hover{border-color:var(--accent)}
+      #tool-tool7 .t7-stylecard.on{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent);box-shadow:0 0 0 1px var(--accent)}
+      #tool-tool7 .t7-stylecard i{font-style:normal;font-size:16px;line-height:1.1;flex:none}
+      #tool-tool7 .t7-stylecard b{display:block;font-size:11.5px;font-weight:700}
+      #tool-tool7 .t7-stylecard.on b{color:var(--accent)}
+      #tool-tool7 .t7-stylecard s{text-decoration:none;display:block;font-size:9.5px;color:var(--text-muted);margin-top:1px;line-height:1.35}
       #tool-tool7 .t7-sw{display:flex;align-items:center;gap:6px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:5px 8px;font-size:11px;font-family:var(--mono,monospace);color:var(--text)}
       #tool-tool7 .t7-sw i{width:15px;height:15px;border-radius:4px;border:1px solid rgba(128,128,128,.35);flex:none}
       /* ── rãnh Đồ hoạ ── đặt tuyệt đối vì nhiều lớp chồng thời gian nhau */
@@ -4062,6 +4070,18 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
                 </div>
               </div>
             </div>
+
+            <div class="rhead" style="margin-top:18px">Giọng đọc</div>
+            <div class="be-dd" id="voiceGiongDD">
+              <button type="button" class="be-btn" id="voiceGiongBtn" onclick="giongDDMo(event)"
+                aria-haspopup="listbox" aria-expanded="false">
+                <span class="be-ten" id="voiceGiongTen">chưa chọn giọng</span>
+                <span class="be-mo" id="voiceGiongNote"></span>
+                <span class="be-caret">▾</span>
+              </button>
+              <div class="be-menu" id="voiceGiongMenu" role="listbox" style="max-height:280px;overflow:auto"></div>
+            </div>
+            <div id="whyGiong" style="font-size:11.5px;color:var(--text-dim);margin-top:8px;line-height:1.55"></div>
 
             <div class="rhead" style="margin-top:18px">Tinh chỉnh</div>
             <div class="sl" id="slTocDo">
@@ -7797,11 +7817,11 @@ function voiceShowSetup(kind){
   if (!st) return;
   const needPy = kind === 'need-python';
   const msg = needPy
-    ? 'Đã tìm thấy thư mục voice-studio nhưng <b>chưa cài môi trường Python</b>. Mở voice-studio và chạy file cài đặt (setup) một lần, rồi bấm “Kiểm tra lại”.'
-    : 'Giọng nói AI chạy <b>ngay trên máy bạn</b> (đọc bao nhiêu cũng miễn phí). Bấm <b>“Cài backend vào máy”</b> — app tự cài vào thư mục của app, <b>không cần chọn nơi lưu</b>. Chỉ cài một lần là xong.';
+    ? 'Đã tìm thấy thư mục voice-studio nhưng <b>chưa cài môi trường Python</b>. Mở voice-studio và chạy file cài đặt <b>setup-omni</b> (cài đủ cả 3 engine: OmniVoice · VieNeu · XTTS) một lần, rồi bấm “Kiểm tra lại”.'
+    : 'Giọng nói AI chạy <b>ngay trên máy bạn</b> (đọc bao nhiêu cũng miễn phí), gồm đủ 3 engine <b>OmniVoice · VieNeu · XTTS</b>. Bấm <b>“Cài backend vào máy”</b> — app tự cài vào thư mục của app, <b>không cần chọn nơi lưu</b>. Chỉ cài một lần là xong.';
   st.innerHTML = `
     <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:16px 18px;text-align:left;max-width:720px">
-      <div style="font-weight:800;font-size:14px;color:var(--text);margin-bottom:6px">🎙 Cần cài backend giọng nói (OmniVoice) trên máy</div>
+      <div style="font-weight:800;font-size:14px;color:var(--text);margin-bottom:6px">🎙 Cài backend giọng nói (OmniVoice · VieNeu · XTTS) trên máy</div>
       <div style="font-size:12.8px;color:var(--text-muted);line-height:1.65;margin-bottom:12px">${msg}</div>
       <div style="display:flex;gap:10px;flex-wrap:wrap">
         <button class="btn primary sm" onclick="voiceInstallBackend()">📥 Cài backend vào máy</button>
@@ -7823,7 +7843,8 @@ async function voiceInstallBackend(){
         <div style="font-size:12.8px;color:var(--text-muted);line-height:1.7">
           Thư mục: <code style="background:var(--surface-3);padding:2px 6px;border-radius:5px">${escapeHtml(r.path)}</code> (đã mở sẵn).<br>
           <b>Bước tiếp — cài Python + model (1 lần):</b> vào thư mục đó, chạy
-          <b>setup-omni.bat</b> (Windows) hoặc <b>setup-omni.command</b> (Mac). Xong bấm <b>🔄 Kiểm tra lại</b>.<br>
+          <b>setup-omni.bat</b> (Windows) hoặc <b>setup-omni.command</b> (Mac) — cài đủ cả 3 engine
+          <b>OmniVoice · VieNeu · XTTS</b> (nặng ~2GB, chờ vài phút). Xong bấm <b>🔄 Kiểm tra lại</b>.<br>
           <span style="color:var(--text-dim)">Chi tiết xem file HUONG-DAN-KHACH.md trong thư mục đó.</span>
         </div>
         <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap">
@@ -7938,6 +7959,7 @@ function giongVe(){
   const cur = _giongDS.find(v => v.key === _giongChon);
   const lb = document.getElementById('giongDangChon');
   if (lb) lb.textContent = cur ? (cur.name + ' · ' + _TTS_TEN[_voiceBackend]) : 'chưa chọn giọng';
+  try { giongDDVe(); } catch (e){}   // dropdown "Giọng đọc" dưới cũng chạy theo thư viện
   giongVeThanh();
 }
 function giongDatLoc(f){ _giongLoc = f; giongVe(); }
@@ -8251,6 +8273,49 @@ function voiceBackendVe(){
 document.addEventListener('click', () => { const dd = document.getElementById('voiceBackendDD'); if (dd) dd.classList.remove('mo'); });
 try { voiceBackendVe(); } catch (e){}
 try { giongVeThanh(); } catch (e){}
+
+// ── Dropdown "Giọng đọc" — chọn người nói ngay trong khối Đọc thành giọng ──
+// Đồng bộ hai chiều với Thư viện giọng: chọn ở dropdown → thẻ trên sáng lên;
+// bấm thẻ trên → dropdown đổi theo. Việc đọc (ttsDoc) vẫn dùng _giongChon.
+function giongDDMo(e){
+  if (e) e.stopPropagation();
+  const dd = document.getElementById('voiceGiongDD'); if (!dd) return;
+  dd.classList.toggle('mo');
+  const btn = document.getElementById('voiceGiongBtn');
+  if (btn) btn.setAttribute('aria-expanded', dd.classList.contains('mo') ? 'true' : 'false');
+}
+function giongDDChon(key){
+  const v = _giongDS.find(x => x.key === key); if (!v) return;
+  _giongChon = key;
+  const dd = document.getElementById('voiceGiongDD'); if (dd) dd.classList.remove('mo');
+  giongVe();   // vẽ lại thẻ thư viện + nhãn + chính dropdown này
+}
+/* Vẽ lại dropdown theo _giongDS/_giongChon. Thư viện rỗng thì nói rõ đường ra
+   (bấm "＋ Thêm giọng" phía trên) — không để người dùng tưởng thiếu chỗ chọn. */
+function giongDDVe(){
+  const ten = document.getElementById('voiceGiongTen');
+  const note = document.getElementById('voiceGiongNote');
+  const menu = document.getElementById('voiceGiongMenu');
+  const why = document.getElementById('whyGiong');
+  if (!ten || !note || !menu) return;
+  if (!_giongDS.length){
+    ten.textContent = 'chưa có giọng nào';
+    note.textContent = '';
+    menu.innerHTML = '<div class="be-item" style="cursor:default;color:var(--text-dim)">Chưa có giọng trong thư viện</div>';
+    if (why) why.textContent = 'Bấm “＋ Thêm giọng” trong Thư viện giọng phía trên (clone từ file mẫu 5–15 giây, hoặc thiết kế từ mô tả chữ) — lưu xong sẽ chọn được ở đây.';
+    return;
+  }
+  const cur = _giongDS.find(v => v.key === _giongChon);
+  ten.textContent = cur ? cur.name : 'chưa chọn giọng';
+  note.textContent = cur ? (cur.src || '') : '';
+  menu.innerHTML = _giongDS.map(v =>
+    `<div class="be-item${v.key === _giongChon ? ' sel' : ''}" role="option" onclick="giongDDChon('${escapeHtml(v.key)}')">` +
+    `<span class="be-ten">${escapeHtml(v.name)}</span><span class="be-mo">${escapeHtml(v.src || '')}</span></div>`).join('');
+  if (why) why.textContent = '';
+}
+// bấm ra ngoài thì đóng menu giọng đọc
+document.addEventListener('click', () => { const dd = document.getElementById('voiceGiongDD'); if (dd) dd.classList.remove('mo'); });
+try { giongDDVe(); } catch (e){}
 
 // ── Prompt chuyển động (Image → Video) — Tool 5 ──
 let mvScenes = [];
@@ -19488,7 +19553,30 @@ function _t7GfxName(L){
 }
 
 
-// Bảng chỉnh 1 lớp — các ô NỘI DUNG sinh từ params của chính mẫu (catalog()), không viết cứng.
+// ── CHUYỂN ĐỘNG THÂN THIỆN ──────────────────────────────────────────────────
+// 1 kiểu = phối sẵn (in, hold, out): người dùng bấm 1 thẻ là đủ.
+// KHAI BÁO TRƯỚC _t7LayerPanel: bảng thuộc tính render ngay khi tải trang
+// cũng đọc được — không rơi vào temporal dead zone của const.
+const _T7_STYLES = [
+  { id: 'still',   icon: '🖼', name: 'Đứng yên',      desc: 'Không di chuyển — lời dẫn trầm lặng',      in: 'fade',  hold: 'none',    out: 'fade'  },
+  { id: 'pushin',  icon: '🎥', name: 'Phóng chậm vào', desc: 'Ken Burns cổ điển — tốt cho mọi ảnh tĩnh', in: 'fade',  hold: 'kenIn',   out: 'fade'  },
+  { id: 'pullout', icon: '🔍', name: 'Phóng chậm ra', desc: 'Cảm giác lùi xa, kết mở',                  in: 'fade',  hold: 'kenOut',  out: 'fade'  },
+  { id: 'side',    icon: '↔️', name: 'Lia ngang',     desc: 'Quét sang trái — hợp ảnh rộng',            in: 'fade',  hold: 'panL',    out: 'fade'  },
+  { id: 'updown',  icon: '↕️', name: 'Lia dọc',       desc: 'Đi từ trên xuống — hợp toà nhà, nhân vật', in: 'fade',  hold: 'panD',    out: 'fade'  },
+  { id: 'breathe', icon: '🌬', name: 'Hơi thở',       desc: 'Phập phồng rất nhẹ — chữ, nhãn hút mắt',    in: 'fade',  hold: 'breathe', out: 'fade'  },
+  { id: 'lively',  icon: '✨', name: 'Sống động',     desc: 'Nảy vào rồi trôi nhẹ — thẻ ảnh, sticker',  in: 'pop',   hold: 'drift',   out: 'fade'  },
+  { id: 'epic',    icon: '🌄', name: 'Kịch tính',     desc: 'Phóng mạnh vào, thu nhỏ ra — cao trào',    in: 'zoom',  hold: 'kenIn',   out: 'shrink'},
+];
+// Nhãn tiếng Việt cho tên preset kỹ thuật — dùng ở dropdown trình chỉnh nhanh.
+const NOVA_ANIM_LABELS = {
+  none: 'Không', fade: 'Mờ dần', rise: 'Dâng lên', drop: 'Rơi xuống',
+  slideL: 'Trượt trái', slideR: 'Trượt phải', pop: 'Bật nảy', defocus: 'Nhoè dần',
+  wipeL: 'Quét ngang', zoom: 'Phóng vào', deal: 'Chia bài',
+  sinkL: 'Chìm trái', sinkR: 'Chìm phải', fall: 'Rơi xuống', shrink: 'Co lại', wipeR: 'Quét ra',
+  kenIn: 'Phóng chậm vào', kenOut: 'Phóng chậm ra',
+  panL: 'Lia trái', panR: 'Lia phải', panU: 'Lia lên', panD: 'Lia xuống',
+  drift: 'Trôi nhẹ', breathe: 'Hơi thở', growX: 'Chạy đầy ngang', growY: 'Chạy đầy dọc',
+};
 // Bảng chỉnh MỘT lớp — dùng chung cho lớp trong cảnh và lớp toàn cục.
 // Các ô NỘI DUNG sinh từ params của chính mẫu (catalog()), không viết cứng.
 function _t7LayerPanel(L, ctx){
@@ -19519,6 +19607,16 @@ function _t7LayerPanel(L, ctx){
   const OUT = [['fade','mờ dần'],['sinkL','chìm trái'],['sinkR','chìm phải'],['fall','rơi xuống'],['shrink','co lại'],['wipeR','quét'],['none','không']];
   const HOLD = [['none','không'],['kenIn','Ken Burns – phóng vào'],['kenOut','Ken Burns – phóng ra'],['panL','lia trái'],['panR','lia phải'],['panU','lia lên'],['panD','lia xuống'],['drift','trôi'],['breathe','thở'],['growX','chạy đầy ngang'],['growY','chạy đầy dọc']];
   const curIn = (L.in && L.in.preset) || 'fade', curOut = (L.out && L.out.preset) || 'none', curHold = (L.hold && L.hold.preset) || 'none';
+  // ── Chuyển động đơn giản: 1 thẻ = phối sẵn Vào+Giữ+Ra, cộng thanh Mức độ. ──
+  // Người dùng thường bấm 1 thẻ là xong; 3 hàng chip kỹ thuật gốc vẫn giữ nguyên
+  // trong "Nâng cao" cho ai cần chỉnh riêng từng pha. Engine/render không đổi.
+  const curAmp = (L.hold && L.hold.amp != null) ? Number(L.hold.amp) : 1;
+  const curStyle = (_T7_STYLES || []).find(s => s.hold === curHold);
+  const comboMatch = !!(curStyle && curStyle.in === curIn && curStyle.out === curOut);
+  const styleCard = (s) =>
+    `<div class="t7-stylecard${curStyle && curStyle.id === s.id ? ' on' : ''}" onclick="t7LStyle('${s.id}')" title="${esc(s.desc)}">
+       <i>${s.icon}</i><span><b>${s.name}</b><s>${s.desc}</s></span>
+     </div>`;
 
   // ── Vị trí / cỡ / độ mờ: mẫu tự dựng bố cục, các ô này ĐÈ LÊN bố cục đó ──
   const b = L.box || {};
@@ -19557,11 +19655,24 @@ function _t7LayerPanel(L, ctx){
     <div class="bd2"><div class="t7-g2">${colors.map(k => `<div>${lb(k)}<div style="display:flex;gap:5px;align-items:center"><input type="color" style="width:30px;height:28px;padding:0;border:1px solid var(--border);border-radius:6px;background:none;cursor:pointer" value="${esc(/^#[0-9a-f]{6}$/i.test(L[k] || '') ? L[k] : ((cat && cat.defaults && cat.defaults[k]) || '#888888'))}" onchange="t7LSet('${k}',this.value)"><input class="t7-mfield" style="flex:1;min-width:0;font-family:monospace;font-size:11px" value="${esc(L[k] || '')}" placeholder="mặc định" onchange="t7LSet('${k}',this.value)"></div></div>`).join('')}</div></div>
   </details>` : ''}
   <details class="t7-sect" open>
-    <summary><span><b>🎞 Chuyển động</b><em>Chọn theo TÊN trong bảng hiệu ứng cố định.</em></span><span class="cv">⌃</span></summary>
+    <summary><span><b>🎞 Chuyển động</b><em>Bấm 1 kiểu là đủ — phần vào/ra đã phối sẵn.</em></span><span class="cv">⌃</span></summary>
     <div class="bd2">
-      ${lb('Vào', IN.length + ' kiểu')}<div style="display:flex;gap:4px;flex-wrap:wrap">${IN.map(([v,l]) => chip('in', v, l, curIn)).join('')}</div>
-      ${lb('Ra', OUT.length + ' kiểu')}<div style="display:flex;gap:4px;flex-wrap:wrap">${OUT.map(([v,l]) => chip('out', v, l, curOut)).join('')}</div>
-      ${lb('Giữ', HOLD.length + ' kiểu')}<div style="display:flex;gap:4px;flex-wrap:wrap">${HOLD.map(([v,l]) => chip('hold', v, l, curHold)).join('')}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px">${(_T7_STYLES || []).map(styleCard).join('')}</div>
+      ${lb('Mức độ chuyển động')}
+      <div style="display:flex;align-items:center;gap:8px;margin-top:2px">
+        <span style="font-size:10.5px;color:var(--text-muted)">nhẹ</span>
+        <input type="range" min="0.25" max="2" step="0.05" value="${curAmp}" style="flex:1;accent-color:var(--accent)" onchange="t7LAmp(this.value)" title="Kéo sang phải để chuyển động mạnh/đậm hơn">
+        <span style="font-size:10.5px;color:var(--text-muted)">mạnh</span>
+      </div>
+      ${comboMatch ? '' : `<div style="font-size:10.5px;color:var(--text-dim);margin-top:7px">⚙️ Đang chỉnh tay (${esc(curIn)} · ${esc(curHold)} · ${esc(curOut)}) — bấm 1 kiểu bên trên để áp bộ chuẩn.</div>`}
+      <details style="margin-top:9px">
+        <summary style="font-size:10.5px;color:var(--text-dim);cursor:pointer;user-select:none;list-style:none">⚙️ Nâng cao — chỉnh riêng từng pha (Vào / Giữ / Ra)</summary>
+        <div style="margin-top:6px">
+          ${lb('Vào', IN.length + ' kiểu')}<div style="display:flex;gap:4px;flex-wrap:wrap">${IN.map(([v,l]) => chip('in', v, l, curIn)).join('')}</div>
+          ${lb('Ra', OUT.length + ' kiểu')}<div style="display:flex;gap:4px;flex-wrap:wrap">${OUT.map(([v,l]) => chip('out', v, l, curOut)).join('')}</div>
+          ${lb('Giữ', HOLD.length + ' kiểu')}<div style="display:flex;gap:4px;flex-wrap:wrap">${HOLD.map(([v,l]) => chip('hold', v, l, curHold)).join('')}</div>
+        </div>
+      </details>
     </div>
   </details>
   ${ctx.timing || ''}${ctx.tail || ''}`;
@@ -20202,6 +20313,22 @@ function t7LBox(key, val){
 function t7LBoxSet(key, val){
   const r = _t7LRef(); if (!r) return;
   r.L.box = Object.assign({}, r.L.box || {}, { [key]: val }); r.touch();
+}
+// ── CHUYỂN ĐỘNG THÂN THIỆN: bảng _T7_STYLES + nhãn NOVA_ANIM_LABELS khai báo
+// ở gần _t7LayerPanel (phía trên) — 2 hàm áp kiểu & mức độ nằm ở đây.
+function t7LStyle(id){
+  const r = _t7LRef(); if (!r) return;
+  const s = (_T7_STYLES || []).find(x => x.id === id); if (!s) return;
+  r.L.in   = Object.assign({}, r.L.in   || {}, { preset: s.in,   dur: (r.L.in   && r.L.in.dur)   != null ? r.L.in.dur   : 0.45 });
+  r.L.hold = Object.assign({}, r.L.hold || {}, { preset: s.hold, amp:  (r.L.hold && r.L.hold.amp) != null ? r.L.hold.amp : 1 });
+  r.L.out  = Object.assign({}, r.L.out  || {}, { preset: s.out,  dur: (r.L.out  && r.L.out.dur)  != null ? r.L.out.dur  : 0.35 });
+  r.touch();
+}
+function t7LAmp(v){
+  const r = _t7LRef(); if (!r) return;
+  const amp = Math.min(2, Math.max(0.25, Number(v) || 1));
+  r.L.hold = Object.assign({}, r.L.hold || {}, { preset: (r.L.hold && r.L.hold.preset) || 'kenIn', amp });
+  r.touch();
 }
 function t7LAnim(grp, val){
   const r = _t7LRef(); if (!r) return;
@@ -20924,7 +21051,7 @@ function _t7AiEditCustom(q, i){
       const set = `t7AiCustomSet(${i},${j},'${key}',this.value)`;
       if (kind === 'chon')
         return `<label for="${id}">${nhan}</label><select id="${id}" onchange="${set}">${
-          chon.map(x => `<option${String(val) === x ? ' selected' : ''}>${x}</option>`).join('')}</select>`;
+          chon.map(x => `<option value="${x}"${String(val) === x ? ' selected' : ''}>${(typeof NOVA_ANIM_LABELS !== 'undefined' && NOVA_ANIM_LABELS[x]) ? NOVA_ANIM_LABELS[x] : x}</option>`).join('')}</select>`;
       if (kind === 'mau')
         return `<label for="${id}">${nhan}</label><input id="${id}" type="color" value="${_t7Hex(val)}" oninput="${set}">`;
       if (kind === 'so')
@@ -20939,8 +21066,8 @@ function _t7AiEditCustom(q, i){
       L.type === 'text' ? o('align', 'Canh', 'chon', b.align, ['left', 'center', 'right']) : '',
       L.type === 'text' ? o('size', 'Cỡ', 'so', st.size) : '',
       L.type === 'text' ? o('color', 'Màu chữ', 'mau', st.color) : o('fill', 'Màu khối', 'mau', st.fill),
-      o('in', 'Kiểu vào', 'chon', L.in && L.in.preset, NOVA_IN_PRESETS),
-      o('hold', 'Kiểu giữ', 'chon', L.hold && L.hold.preset, NOVA_HOLD_PRESETS),
+      o('in', 'Vào cảnh', 'chon', L.in && L.in.preset, NOVA_IN_PRESETS),
+      o('hold', 'Chuyển động chính', 'chon', L.hold && L.hold.preset, NOVA_HOLD_PRESETS),
     ].filter(Boolean).join('');
     return `<div class="edg"><b>Lớp ${j + 1} · ${L.type === 'text' ? 'chữ' : 'khối'}</b><div class="edf">${os}</div></div>`;
   }).join('');

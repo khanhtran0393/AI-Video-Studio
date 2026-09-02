@@ -808,6 +808,8 @@ function _vAnyUrl(data) {
 }
 // Chọn template đã học theo chế độ: có ảnh → genImage, không → genText.
 function _vLearnedFor(imageMediaId) { return imageMediaId ? (videoLearn.genImage || null) : (videoLearn.genText || videoLearn.gen || null); }
+// Map slug hiển thị (omni-flash…) → model key thật (mirror _vResolveModelKey của flow-native); key sẵn thì giữ nguyên.
+function _vResolveModelKey(mk) { if (mk && (videoLearn.modelKeys || {})[mk]) return videoLearn.modelKeys[mk]; return mk; }
 // Mirror request video THẬT đã học → chỉ thay prompt/ảnh/token/seed/project/model/độ dài.
 function _vBodyFromLearned({ prompt, projectId, imageMediaId, capToken, modelKey, durationSecs }) {
   const tpl = _vLearnedFor(imageMediaId);
@@ -1001,7 +1003,7 @@ async function runVideoOnToken(token, params) {
     if (up.error) return isQuotaErr(up.error) ? { quota: true, error: 'UPLOAD: ' + up.error } : { error: 'UPLOAD: ' + up.error };
     imageMediaId = up.media_id;
   }
-  const sub = await submitVideo(token, { prompt: params.prompt, projectId, imageMediaId, modelKey: params.modelKey, durationSecs: params.durationSecs });
+  const sub = await submitVideo(token, { prompt: params.prompt, projectId, imageMediaId, modelKey: _vResolveModelKey(params.modelKey || params.modelName), durationSecs: params.durationSecs });
   if (sub.error) return isQuotaErr(sub.error) ? { quota: true, error: sub.error } : sub;
   const started = Date.now(); let videoUrl = null, credits = null, lastP = null, done = false;
   while (Date.now() - started < 360000) {   // chờ tối đa 6 phút

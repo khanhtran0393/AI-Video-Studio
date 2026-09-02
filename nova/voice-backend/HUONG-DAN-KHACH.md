@@ -1,12 +1,17 @@
-# Cài Giọng Nói AI (OmniVoice) cho Nova Studio
+# Cài Giọng Nói AI (OmniVoice · VieNeu · XTTS) cho Nova Studio
 
 Giọng nói AI chạy **ngay trên máy bạn** — đọc bao nhiêu cũng **miễn phí**, không cần internet sau khi cài. Chỉ cài **1 lần**.
 
+Backend gồm **3 engine**, cài chung một môi trường Python:
+- **OmniVoice** — đa ngôn ngữ, clone giọng + thiết kế giọng theo mô tả.
+- **VieNeu** — tiếng Việt native, clone giọng (chạy CPU, nhẹ).
+- **XTTS** — clone giọng zero-shot (Coqui; tiếng Việt cần model viXTTS, xem dưới).
+
 ## Cần chuẩn bị
-- **Mạng internet** + khoảng **5GB trống** (để tải thư viện + model).
+- **Mạng internet** + khoảng **6-8GB trống** (thư viện + model của cả 3 engine).
 - Python 3.11 — **script tự cài giúp** (Windows: qua winget; Mac: qua Homebrew). Không có sẵn cũng không sao.
 
-> `setup-omni` sẽ **tự lo hết**: cài Python 3.11 (nếu thiếu) → cài thư viện AI → model tự tải khi tạo giọng lần đầu.
+> `setup-omni` sẽ **tự lo hết**: cài Python 3.11 (nếu thiếu) → cài đủ thư viện cho cả 3 engine (theo `backend/requirements-ai.txt`) → model tự tải khi tạo giọng lần đầu.
 
 ---
 
@@ -28,5 +33,7 @@ Giọng nói AI chạy **ngay trên máy bạn** — đọc bao nhiêu cũng **m
 - **"Không tìm thấy Python 3.11"** → chưa cài Python 3.11 hoặc quên tick "Add to PATH" (Windows). Cài lại rồi chạy `setup-omni` lần nữa.
 - **Cài thư viện lỗi** → do mạng; chạy lại `setup-omni`.
 - **Nova Studio vẫn báo chưa có backend** → bấm **"🔄 Kiểm tra lại"**, hoặc chọn lại đúng thư mục (thư mục phải chứa folder `backend`).
+- **XTTS đọc tiếng Việt bị lỗi/không rõ** → XTTS gốc không có tiếng Việt. Tải model viXTTS:
+  `python scripts/download_vixtts.py` (chạy trong venv, ở thư mục gốc voice-studio) → model nằm ở `data/models/viXTTS`, app tự nhận.
 
 > Máy yếu (không GPU) vẫn chạy được, chỉ chậm hơn khi tạo giọng.

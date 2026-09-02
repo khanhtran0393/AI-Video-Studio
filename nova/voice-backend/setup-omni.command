@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # ============================================================
-#  Cài backend giọng nói OmniVoice cho Nova Studio (macOS)
-#  TỰ ĐỘNG: tìm/cài Python 3.11 → tạo venv → cài thư viện AI.
+#  Cài backend giọng nói (OmniVoice · VieNeu · XTTS) cho Nova Studio (macOS)
+#  TỰ ĐỘNG: tìm/cài Python 3.11 → tạo venv → cài thư viện AI cho CẢ 3 ENGINE.
 # ============================================================
 set -e
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 echo "============================================================"
-echo "  Cài giọng nói AI (OmniVoice) cho Nova Studio"
+echo "  Cài giọng nói AI (OmniVoice · VieNeu · XTTS) cho Nova Studio"
 echo "============================================================"
 echo ""
 
@@ -41,12 +41,14 @@ source .venv-omni/bin/activate
 pip install -U pip -q
 
 echo ""
-echo "[3/3] Cài thư viện AI (torch, omnivoice… nặng ~2GB, chờ vài phút) ..."
-pip install "fastapi>=0.110" "uvicorn[standard]" python-multipart torch==2.8.0 torchaudio==2.8.0 omnivoice num2words
+echo "[3/3] Cài thư viện AI cho 3 engine (OmniVoice · VieNeu · XTTS)… nặng ~2-3GB, chờ vài phút."
+echo "      Danh sách đầy đủ trong backend/requirements-ai.txt"
+pip install "fastapi>=0.110" "uvicorn[standard]" python-multipart -r backend/requirements-ai.txt
 
 echo ""
 echo "==================== XONG! ===================="
+echo "Đã cài đủ 3 engine: OmniVoice · VieNeu · XTTS."
 echo "Quay lại Nova Studio → tab 'Tạo giọng nói' → bấm 'Kiểm tra lại'."
-echo "(Lần đầu tạo giọng, model sẽ tự tải ~vài GB từ Hugging Face.)"
+echo "(Lần đầu tạo giọng, từng model sẽ tự tải ~vài GB từ Hugging Face.)"
 echo "=============================================="
 read -n1 -r -p "Nhấn phím bất kỳ để đóng..."

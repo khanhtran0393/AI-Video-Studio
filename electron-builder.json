@@ -24,7 +24,10 @@
     "!nova/ytdlp-bin{,/**/*}",
     "!nova/editor-pro/remotion-browser{,/**/*}",
     "!nova/voice-studio/.venv-omni{,/**/*}",
-    "!nova/voice-studio/data{,/**/*}"
+    "!nova/voice-studio/data{,/**/*}",
+    "!nova/tmp-asar-app{,/**/*}",
+    "!nova/tmp-*",
+    "!nova/.tmp-*"
   ],
   "asar": true,
   "asarUnpack": [
