@@ -108,6 +108,46 @@ Lưu ý khi tách module CommonJS: file dời sâu 1 cấp phải sửa require 
 nội bộ (`./ytdlp-path` → `../ytdlp-path` — 3 dòng duy nhất không giữ nguyên
 byte); còn thân hàm giữ nguyên byte vì tên hứng qua destructuring `require('./loi')`.
 
+## `flow-chrome/` — tách module CommonJS có STATE HOLDER (pattern khác niche)
+
+`nova/flow-chrome.js` (1.276 dòng, engine "Chrome THẬT đa profile") KHÔNG tách được
+theo kiểu byte-preserve của `editor-pro/niche`: nó có **state `let` top-level bị
+GÁN LẠI xuyên file** — `order`/`nextId` (gán trong `restore()`), `_busy`,
+`_lastTokenExpiry`, `_captchaId` — mà destructuring `require` chỉ *snapshot* giá
+trị lúc nạp, các file khác sẽ giữ giá trị cũ → bug runtime âm thầm. Giải pháp:
+state dùng chung gom vào object `S` (`trang-thai.js`), tham chiếu đổi `x` → `S.x`
+(~50 dòng nội bộ đổi; hợp đồng `module.exports` 21 tên và mọi đường require của
+consumer giữ nguyên byte).
+
+| File | Nội dung |
+|---|---|
+| `flow-chrome/trang-thai.js` | State holder `S = { order, nextId, _busy, _lastTokenExpiry, _captchaId, tokens }` — bắt buộc qua object vì CommonJS không có live binding. |
+| `flow-chrome/nen-tang.js` | Dòng gốc 1–147: log sink/`LOG`, `FLOW_URL`/`FLOW_API_*`, `profilesRoot`/`storeFile`, kho account (`persist`/`restore`/`statusPayload`), helper CDP (`readDevToolsPort`/`httpJSON`/`flowPageWs`/`cdpConnect`/`evalInPage`/`evalInPageT`). |
+| `flow-chrome/tien-trinh.js` | 148–344: launch/kill/wipe/close/free profile, `openForOperation` (chuỗi `_openChain`), `captureToken`, `readCookies`, `apiFetch`. |
+| `flow-chrome/dang-nhap.js` | 345–561: login/relogin 4 bước, `loginAuto`, `gracefulQuit`, quản lý account (`setEnabled`/`setProxy`/`removeAccount`/`refreshOne`), `verifyAccount`. |
+| `flow-chrome/token-captcha.js` | 562–682 + 711–745: `ensureLive`, máy captcha account & guest (xoay profile), `getTokenFresh`, `pageEval`, `pageFetchImage`, `getToken`. |
+| `flow-chrome/gen.js` | 746–1241 + 683–709: gen ảnh test, pipeline video học request thật, upscale 1080p, tắt watermark, `genVideo`, `resolveVideoForApp`, `getAllTokens`. `getAccountData` hoán vị từ 683–709 về cuối file (hạ gợi chu trình require). |
+| `flow-chrome/index.js` | 1242–1276: dispatcher `handle` + `listAccounts` + **nguyên văn dòng `module.exports` cũ (21 tên)**. |
+| `flow-chrome.js` | **Shim**: re-export `./flow-chrome/index.js` + bọc `restore()` giữ đúng thứ tự gốc (`_loadCapMode()` chạy TRƯỚC khi nạp kho account — dòng 48 gốc). 3 đường require cũ (`main/ipc/flow.js`, `main/lifecycle.js`, `flow-native.plain.js`) không đổi. |
+
+Quy tắc rút ra khi tách module CommonJS có state gán lại:
+
+- **Đồ thị require phải TUYẾN TÍNH**: `trang-thai → nen-tang → tien-trinh →
+  dang-nhap / token-captcha → gen → index`. Vòng require với destructuring sẽ nạp
+  module chưa hoàn chỉnh.
+- `tokens` (Map) đưa vào `S` dù chỉ mutation — vì `persist`/`restore` (nen-tang)
+  cần nó; để nguyên chỗ cũ (token-captcha) sẽ tạo vòng nen-tang ↔ token-captcha.
+- `_loadCapMode()` (dòng 48 gốc trong `restore`) sống ở token-captcha — nếu
+  nen-tang import nó sẽ tạo vòng, nên shim gọi lại đúng vị trí.
+- Hàm tham chiếu hằng/ helper của lát SAU nhưng đứng TRƯỚC ranh giới (vd
+  `getAccountData` gọi `TRPC_CREATE_PROJECT` của gen) → hoán vị hàm sang lát
+  chứa hằng đó thay vì tạo vòng.
+- Kiểm định: multiset 1.227 dòng phi-rỗng (0 mất/0 dư, tính biến đổi `S.x`),
+  `node --check` 8/8, smoke electron-fake: 3 đường require chung 1 instance, 21
+  tên export đều là function, `handle('PING')` → `{ok, engine:'chrome'}`,
+  live-binding `S.order` → `listAccounts()` phản ánh gán lại.
+
+
 ## Kiểm tra
 
 ```bash
