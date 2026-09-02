@@ -9,7 +9,7 @@ const { app, shell, BrowserWindow, ipcMain } = require('electron');
 const state = require('../state');
 const { novaRoot, unpackedNovaRoot, canWriteDir } = require('../fs-utils');
 const flowNative = require('../../flow-native');
-const flowCft = require('../../flow-cft.plain');
+const flowCft = require('../../flow-cft');
 const flowChrome = require('../../flow-chrome');
 const flowExtBridge = require('../../flow-bridge.plain');
 

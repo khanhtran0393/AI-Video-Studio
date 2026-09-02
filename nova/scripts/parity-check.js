@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..');
-const pairs = ['main', 'flow-bridge', 'flow-cft', 'cli-bridge-native', 'voice-native'];
+const pairs = ['main', 'flow-bridge', 'cli-bridge-native', 'voice-native'];   // flow-cft/native-tools đã tách module + shim → bỏ khỏi parity
 // flow-native đã tách thành ./flow-native/ + shim (như flow-chrome) — không còn cặp plain/protected.
 // native-tools cũng đã tách thành ./native-tools/ + shim — bỏ khỏi pairs như flow-native.
 const failures = [];
