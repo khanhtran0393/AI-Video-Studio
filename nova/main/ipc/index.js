@@ -5,7 +5,7 @@
  */
 const { BrowserWindow } = require('electron');
 const state = require('../state');
-const nativeTools = require('../../native-tools.plain');
+const nativeTools = require('../../native-tools');   // shim → ./native-tools/ (đã tách như flow-native)
 const upscaleNative = require('../../upscale-native');
 const watermarkNative = require('../../watermark-native');
 const cliBridge = require('../../cli-bridge-native.plain');

@@ -7,8 +7,9 @@
 const fs = require('fs');
 const path = require('path');
 const root = path.join(__dirname, '..');
-const TARGETS = ['main.js', 'flow-bridge.js', 'flow-cft.js', 'native-tools.js', 'cli-bridge-native.js', 'voice-native.js'];
+const TARGETS = ['main.js', 'flow-bridge.js', 'flow-cft.js', 'cli-bridge-native.js', 'voice-native.js'];
 // flow-native.js giờ là shim re-export ./flow-native/ (đã tách) — không còn cặp .plain để khôi phục.
+// native-tools.js cũng đã tách thành shim re-export ./native-tools/ — không còn cặp .plain.
 let n = 0;
 for (const f of TARGETS) {
   const js = path.join(root, f);

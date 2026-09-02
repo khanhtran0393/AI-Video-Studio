@@ -4,8 +4,9 @@ const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..');
-const pairs = ['main', 'flow-bridge', 'flow-cft', 'native-tools', 'cli-bridge-native', 'voice-native'];
+const pairs = ['main', 'flow-bridge', 'flow-cft', 'cli-bridge-native', 'voice-native'];
 // flow-native đã tách thành ./flow-native/ + shim (như flow-chrome) — không còn cặp plain/protected.
+// native-tools cũng đã tách thành ./native-tools/ + shim — bỏ khỏi pairs như flow-native.
 const failures = [];
 for (const name of pairs) {
   const plain = path.join(ROOT, `${name}.plain.js`);

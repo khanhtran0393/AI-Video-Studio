@@ -1,52 +1,13 @@
-/**
- * Native Tools — chạy LOCAL trong app (không cần cloud/API):
- *   - renderVideo: ghép ảnh (theo độ dài từng cảnh) + audio → MP4 bằng FFmpeg (ffmpeg-static).
- *   - (sắp có) transcribe: Whisper local để căn timing, thay Groq/OpenAI.
- * Gọi từ renderer qua window.native.renderVideo(...) → ipc 'render-video'.
- */
-
+/* ── renderVideo: ghép ảnh/video + giọng/nhạc/SFX + phụ đề/overlay → MP4 qua FFmpeg.
+     GPU encode (NVENC/QSV/AMF) + tự rơi về CPU khi GPU lỗi + Hủy giữa chừng (_render/cancelRender).
+     Tách từ native-tools.plain.js — hạ tầng binary ở ./ffmpeg, bộ lọc graph ở ./filters. ── */
 const { app, dialog, BrowserWindow } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const { spawn } = require('child_process');
-
-// ffmpeg-static trả path tới binary; khi đóng gói (asar) cần trỏ vào bản unpack.
-function binPath(mod) {
-  let p;
-  try { p = require(mod); } catch { return null; }
-  if (p && typeof p === 'object') p = p.path;               // ffprobe-static trả {path}
-  if (!p) return null;
-  // Trong app đóng gói: node_modules nằm trong app.asar.unpacked
-  return p.replace('app.asar', 'app.asar.unpacked');
-}
-const FFMPEG = binPath('ffmpeg-static');
-const { gpuEncoder, qualityArgs: gpuQualityArgs, label: gpuLabel } = require('./editor-pro/gpu-encoder');
-const FFPROBE = binPath('ffprobe-static');
-
-function run(bin, args, onLog, onChild) {
-  return new Promise((resolve, reject) => {
-    if (!bin || !fs.existsSync(bin)) return reject(new Error('Không tìm thấy FFmpeg binary'));
-    const cp = spawn(bin, args, { windowsHide: true });
-    if (onChild) try { onChild(cp); } catch (e) {}
-    let err = '';
-    cp.stderr.on('data', (d) => { err += d; if (onLog) onLog(String(d)); });
-    cp.on('error', reject);
-    cp.on('close', (code) => code === 0 ? resolve(err) : reject(new Error('FFmpeg lỗi (' + code + '): ' + err.slice(-500))));
-  });
-}
-
-// Đo độ dài (giây) 1 file media bằng ffprobe. Trả 0 nếu không đo được.
-function probeDur(file) {
-  return new Promise((resolve) => {
-    if (!FFPROBE || !fs.existsSync(file)) return resolve(0);
-    const cp = spawn(FFPROBE, ['-v', 'error', '-show_entries', 'format=duration', '-of', 'default=nw=1:nk=1', file], { windowsHide: true });
-    let out = '';
-    cp.stdout.on('data', (d) => { out += d; });
-    cp.on('error', () => resolve(0));
-    cp.on('close', () => resolve(Math.max(0, Number(String(out).trim()) || 0)));
-  });
-}
+const { FFMPEG, run, probeDur } = require('./ffmpeg');
+const { gpuEncoder, qualityArgs: gpuQualityArgs, label: gpuLabel } = require('../editor-pro/gpu-encoder');
+const { dataUrlToBuffer, _kenBurns, _colorFilter, _scaleZoom, _xfadeName } = require('./filters');
 
 // Tiến trình render hiện tại (để Hủy).
 const _render = { proc: null, canceled: false, outPath: null };
@@ -55,13 +16,6 @@ function cancelRender() {
   _render.canceled = true;
   try { _render.proc.kill('SIGKILL'); } catch (e) {}
   return { ok: true };
-}
-
-function dataUrlToBuffer(dataUrl) {
-  const s = String(dataUrl || '');
-  const comma = s.indexOf(',');
-  const b64 = comma >= 0 ? s.slice(comma + 1) : s;
-  return Buffer.from(b64, 'base64');
 }
 
 /**
@@ -74,43 +28,6 @@ function dataUrlToBuffer(dataUrl) {
  * }
  * Mở hộp thoại Lưu → xuất MP4. Trả { ok, path } hoặc { canceled } / { error }.
  */
-// Hiệu ứng Ken Burns cho 1 ảnh tĩnh (zoom/pan). df = số frame xuất ra.
-function _kenBurns(effect, i, W, H, fps, df) {
-  const pad = `scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:black,setsar=1`;
-  let eff = effect;
-  if (eff === 'random') eff = ['zoom-in', 'zoom-out', 'pan-left', 'pan-right'][i % 4];
-  if (eff === 'none') return `${pad},fps=${fps},format=yuv420p`;
-  const up = `${pad},scale=${W * 2}:${H * 2}`;    // phóng 2x cho zoompan mượt
-  const dz = 0.15;
-  let z, x, y;
-  if (eff === 'zoom-in') { z = `1+${dz}*on/${df}`; x = `iw/2-(iw/zoom/2)`; y = `ih/2-(ih/zoom/2)`; }
-  else if (eff === 'zoom-out') { z = `${1 + dz}-${dz}*on/${df}`; x = `iw/2-(iw/zoom/2)`; y = `ih/2-(ih/zoom/2)`; }
-  else if (eff === 'pan-left') { z = `1.08`; x = `(iw-iw/zoom)*on/${df}`; y = `ih/2-(ih/zoom/2)`; }
-  else if (eff === 'pan-right') { z = `1.08`; x = `(iw-iw/zoom)*(1-on/${df})`; y = `ih/2-(ih/zoom/2)`; }
-  else if (eff === 'pan-up') { z = `1.08`; x = `iw/2-(iw/zoom/2)`; y = `(ih-ih/zoom)*(1-on/${df})`; }
-  else { z = `1.08`; x = `iw/2-(iw/zoom/2)`; y = `(ih-ih/zoom)*on/${df}`; }  // pan-down
-  return `${up},zoompan=z='${z}':x='${x}':y='${y}':d=${df}:s=${W}x${H}:fps=${fps},setsar=1,format=yuv420p`;
-}
-// 🎨 Bộ lọc màu: Gốc/Ấm/Lạnh/Phim (áp cho cả ảnh & video).
-function _colorFilter(f) {
-  const eff = String(f || 'none').toLowerCase();
-  if (eff === 'warm' || eff === 'am' || eff === 'ấm') return ',colorbalance=rs=.10:gs=.03:bs=-.12,eq=saturation=1.12:gamma=1.02';
-  if (eff === 'cool' || eff === 'lanh' || eff === 'lạnh') return ',colorbalance=rs=-.12:gs=0:bs=.14,eq=saturation=1.04:contrast=1.03';
-  if (eff === 'film' || eff === 'phim' || eff === 'cine') return ',curves=r=\'0/0.03 0.5/0.5 1/0.96\':b=\'0/0.06 1/0.94\',eq=saturation=0.88:contrast=1.08';
-  return '';
-}
-// 🔍 Tỷ lệ ảnh: phóng to (>1 → cắt giữa) hoặc thu nhỏ (<1 → viền đen). Áp SAU khi khung đã đúng WxH.
-function _scaleZoom(scale, W, H) {
-  const f = Number(scale) || 1;
-  if (!(f > 0) || Math.abs(f - 1) < 0.001) return '';
-  const ev = (n) => Math.max(2, Math.round(n / 2) * 2);
-  const w = ev(W * f), h = ev(H * f);
-  if (f > 1) return `,scale=${w}:${h},crop=${W}:${H}`;
-  return `,scale=${w}:${h},pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:black,setsar=1`;
-}
-function _xfadeName(t) {
-  return ({ fade: 'fade', slide: 'slideleft', wipe: 'wipeleft', dissolve: 'dissolve', circle: 'circleopen' })[t] || 'fade';
-}
 
 async function renderVideo(payload, win) {
   if (!FFMPEG) return { error: 'Thiếu FFmpeg (ffmpeg-static chưa cài).' };
@@ -416,10 +333,4 @@ async function renderVideo(payload, win) {
     try { fs.rmSync(tmp, { recursive: true, force: true }); } catch { /* */ }
   }
 }
-
-function ffmpegInfo() {
-  let enc = null; try { enc = gpuEncoder('h264'); } catch (_) {}
-  return { ffmpeg: !!FFMPEG, ffprobe: !!FFPROBE, ffmpegPath: FFMPEG, gpuEncoder: enc, gpuLabel: gpuLabel(enc), gpu: !!enc };
-}
-
-module.exports = { renderVideo, ffmpegInfo, cancelRender, probeDur };
+module.exports = { renderVideo, cancelRender };

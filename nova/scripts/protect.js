@@ -11,8 +11,9 @@ const path = require('path');
 
 const root = path.join(__dirname, '..');
 // Main-process files cần giấu (KHÔNG gồm preload.js — để thô cho an toàn ngữ cảnh contextBridge)
-const TARGETS = ['main.js', 'flow-bridge.js', 'flow-cft.js', 'native-tools.js', 'cli-bridge-native.js', 'voice-native.js'];
+const TARGETS = ['main.js', 'flow-bridge.js', 'flow-cft.js', 'cli-bridge-native.js', 'voice-native.js'];
 // flow-native.js giờ là shim re-export ./flow-native/ (đã tách) — KHÔNG obfuscate nữa, kẻo đè shim.
+// native-tools.js cũng đã tách thành shim re-export ./native-tools/ — bỏ khỏi TARGETS như flow-native.
 
 // Cấu hình "vừa đủ" — rối tên biến + mã hoá chuỗi, TẮT các thứ dễ vỡ (controlFlow/selfDefending)
 const OPTS = {

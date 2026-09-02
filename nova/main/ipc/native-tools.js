@@ -3,7 +3,7 @@
  * IPC cho native tools chạy local (FFmpeg dựng video…).
  */
 const { BrowserWindow, ipcMain } = require('electron');
-const nativeTools = require('../../native-tools.plain');
+const nativeTools = require('../../native-tools');   // shim → ./native-tools/ (đã tách như flow-native)
 
 function registerNativeToolsIpc() {
   // ── Native tools chạy local (FFmpeg dựng video, sắp có Whisper) ──
