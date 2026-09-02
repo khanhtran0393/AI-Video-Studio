@@ -55,11 +55,13 @@ main.plain.js  ──┬── main/identity.js      app.setName / setAppUserMod
 
 Tương tự, `flow-chrome.js` (điều khiển Chrome đa profile — `flowChrome.handle(...)`) và `flow-native.plain.js` là **2 module khác nhau**, không phải bản sao của nhau — cả hai được `main/ipc/flow.js` require song song.
 
-## Web renderer — `web/nguon-web/` (tách từ file 1.086 dòng)
+## Web renderer — tách file lớn thành thư mục script thường
 
-`web/nguon-web.js` cũ đã tách thành 6 script thường (KHÔNG module) nạp theo
-thứ tự trong `index.html` — mọi tên cấp đầu vẫn global như lúc còn một file,
-nên `index.html` và các script khác không cần đổi tên gọi:
+Renderer không có build step nên mọi file là **script thường (KHÔNG module)**:
+tên cấp đầu dùng chung toàn cục, chỉ thứ tự nạp trong HTML là ràng buộc. Không
+dùng import/export ở đây.
+
+### `web/nguon-web/` (từ `nguon-web.js` 1.086 dòng, nạp trong `index.html`)
 
 | File | Nội dung |
 |---|---|
@@ -73,6 +75,19 @@ nên `index.html` và các script khác không cần đổi tên gọi:
 Thứ tự nạp: nen-tang → ha-tang → api → tim-web → bang → chinh. Khi thêm file
 mới phải giữ nguyên tính chất "script thường, tên global" — renderer không có
 build step nên không dùng import/export ở đây.
+
+### `web/fractal-engine/` (từ `fractal-engine.js` 683 dòng, nạp trong `fractal-antarctica-render.html`)
+
+| File | Nội dung |
+|---|---|
+| `fractal-engine/nen-tang.js` | Primitives động học: `bezier`, `EASINGS`, `easeFn`, `cl01`/`seg`/`lerp`, `el`/`px`; `archetype`, `media`/`stripes`, registry `AR = {}`. |
+| `fractal-engine/ve-1.js` | 8 renderer `AR.*`: title, lowerThird, wipe, callout, cta, logo, counter, hud. |
+| `fractal-engine/ve-2.js` | 13 renderer `AR.*`: shape → outro (list, frame, background, avatar, browser, search, chart, nodePath, cards, newspaper, highlight…). |
+| `fractal-engine/chuyen.js` | `AR.transitionAB` (23 kiểu chuyển cảnh A→B) + `clockPt`. |
+
+Thứ tự nạp: nen-tang → ve-1 → ve-2 → chuyen. Trang render ghi đè `media` sau
+khi nạp (thay nền gradient bằng ảnh thật) — function declaration là global
+nên ghi đè xuyên file vẫn đúng, đừng đổi thành `const`.
 
 ## Kiểm tra
 
