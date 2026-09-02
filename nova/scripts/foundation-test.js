@@ -49,7 +49,8 @@ async function main() {
   assert(mainSource.includes('resolveReleaseIdentity'), 'main process must attach validated release identity');
   assert(mainSource.includes('errorReporter.startLifecycle('), 'main process must start persistent queue retry at startup');
   assert(mainSource.includes('errorReporter.shutdown(2000)'), 'main process must await a bounded reporter shutdown flush');
-  const flowSource = fs.readFileSync(path.join(__dirname, '..', 'flow-native.plain.js'), 'utf8');
+  const flowSource = ['flow-native.js', 'flow-native/trang-thai.js', 'flow-native/nen-tang.js', 'flow-native/tien-trinh.js', 'flow-native/token-captcha.js', 'flow-native/dang-nhap.js', 'flow-native/gen.js', 'flow-native/index.js']
+    .map((f) => fs.readFileSync(path.join(__dirname, '..', f), 'utf8')).join('\n');
   assert(!flowSource.includes("persist:flow-"), 'Flow account partitions must not reuse the legacy namespace');
   const runtimePorts = [
     require('../flow-bridge.plain').PORT,

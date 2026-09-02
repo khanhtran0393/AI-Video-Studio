@@ -39,7 +39,7 @@ Kết quả nằm trong thư mục `dist/`.
 | Trình dựng video | `editor-pro/` (Remotion bundle + Nova editor) |
 | Extension chụp Flow | `flow-extension/`, `nova-studio/` (Chrome MV3) |
 | Server MCP | `mcp-server/` |
-| Native helpers | `flow-native.plain.js`, `voice-native.plain.js`, `watermark-native.js` |
+| Native helpers | `flow-native/`, `voice-native.plain.js`, `watermark-native.js` |
 
 ## Runtime binaries (không track trong git)
 

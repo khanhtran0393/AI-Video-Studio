@@ -53,7 +53,7 @@ main.plain.js  ──┬── main/identity.js      app.setName / setAppUserMod
 | `nova/nova-studio/` | **BIẾN THỂ CÓ CHỦ Ý** của flow-extension (logic captcha/aborted khác) — README sync-extension ghi rõ "KHÔNG copy chéo giữa 2 dòng extension". Chỉnh sửa độc lập. |
 | `nova/chrome-extension/` | **OUTPUT runtime** (dev) — được sinh bởi IPC `flow-ext-export`, Chrome tự thêm `_metadata/` khi load. Đã `.gitignore` + untrack; KHÔNG coi là nguồn, KHÔNG edit tay. |
 
-Tương tự, `flow-chrome.js` (điều khiển Chrome đa profile — `flowChrome.handle(...)`) và `flow-native.plain.js` là **2 module khác nhau**, không phải bản sao của nhau — cả hai được `main/ipc/flow.js` require song song.
+Tương tự, `flow-chrome.js` (điều khiển Chrome đa profile — `flowChrome.handle(...)`) và `flow-native.js` (BrowserWindow Electron đa profile — `flowNative.handle(...)`) là **2 module khác nhau**, không phải bản sao của nhau — cả hai được `main/ipc/flow.js` require song song.
 
 ## Web renderer — tách file lớn thành thư mục script thường
 
@@ -147,6 +147,37 @@ Quy tắc rút ra khi tách module CommonJS có state gán lại:
   tên export đều là function, `handle('PING')` → `{ok, engine:'chrome'}`,
   live-binding `S.order` → `listAccounts()` phản ánh gán lại.
 
+
+## `flow-native/` — tách theo pattern state-holder của `flow-chrome/`
+
+`nova/flow-native.plain.js` (1.302 dòng, engine "BrowserWindow Electron đa profile" của Flow)
+tách giống `flow-chrome/`: 7 biến `let` top-level bị **gán lại xuyên file** (`order`/`nextId`
+trong `restore()`/`addAccount*`, `pool` trong `poolReset()`, `_poolAbort` qua
+`handle(POOL_ABORT)`, `_capChain` trong `_withCapLock()`, `_autoTimer`/`_genActive` trong
+token-captcha) → object `S` trong `trang-thai.js`, tham chiếu đổi `S.x` (~45 dòng nội bộ);
+hợp đồng `module.exports { handle, restore }` giữ nguyên byte.
+
+| File | Nội dung |
+|---|---|
+| `flow-native/trang-thai.js` | State holder `S = { order, nextId, pool, _poolAbort, _capChain, _autoTimer, _genActive }` — bắt buộc qua object vì CommonJS không có live binding. |
+| `flow-native/nen-tang.js` | Dòng gốc 1–184: hằng số endpoint (`FLOW_API_BASE`/`FLOW_API_KEY`/`TRPC_CREATE_PROJECT`/`UPLOAD_IMAGE_URL`/`FLOW_TAB_URL`/`SITE_KEY`…), `sleep`, kho account (`accounts`/`storeFile`/`persist`/`acctSession`/`hookToken`), helpers thuần (`deepFindProjectId`/`extractApiError`). |
+| `flow-native/tien-trinh.js` | 79–164 + 515–518: `ensureWindow`, `pageEval`/`pageFetch`/`pageFetchImage`, `solveCaptcha`, `_withCapLock`. `ensureWindow` lazy-`require('./gen')` cho 2 hook học video/upscale — điểm vòng duy nhất, chỉ resolve lúc runtime. |
+| `flow-native/token-captcha.js` | 186–270 + 569–635: `readCookieExpiry`, dò email (session + page), `refreshAccount`, `triggerTokenRefresh`, `ensurePoolTokens`, tự làm mới token định kỳ (`withGen`/`refreshAccountToken`/`autoRefreshTokens`/`startAutoRefresh`). |
+| `flow-native/dang-nhap.js` | 525–538 + 691–830: `primary`/`syncChromeAccounts` (đặt đây để `gen` require 1 chiều — tránh vòng gen ↔ dang-nhap qua `statusPayload`), thêm account (cửa sổ / chuỗi cookie), `refreshOne`, bật/tắt/xoá, `setProxy`, `scanAll`, `statusPayload`. |
+| `flow-native/gen.js` | 272–497 + 502–689 + 832–1259: tRPC project/upload, `genImage` + upsample 2K/4K, POOL round-robin (`poolGen`/`acquireAccount`), video Veo (`submitVideo`/`pollVideo`/`resolveVideoData`/`genVideoPool`), template "học" video/upscale (`loadVideoLearn`/`loadUpscaleLearn` chạy lúc nạp module). |
+| `flow-native/index.js` | 44–57 + 1261–1301: `restore()` + dispatcher `handle` + **nguyên văn dòng `module.exports = { handle, restore }` cũ**. |
+| `flow-native.js` | **Shim**: `module.exports = require('./flow-native/index.js')` — `main/ipc/flow.js` đổi require từ `.plain` sang shim; hợp đồng 2 tên không đổi. |
+
+Khác `flow-chrome`: `flow-native.js` từng thuộc TARGETS của `scripts/protect.js`/`unprotect.js`
+và có cặp `.plain.js` — khi tách xong phải (1) xoá khỏi cả 2 TARGETS kẻo build bảo vệ obfuscate
+lại từ `.plain.js` đè shim, (2) xoá khỏi `pairs` của `scripts/parity-check.js`, (3) xoá
+`flow-native.plain.js` (nguồn đã rã thành thư mục, git history giữ bản gốc),
+(4) `scripts/foundation-test.js` đọc nguồn flow đổi sang 8 file split.
+
+Kiểm định: multiset dòng phi-rỗng **0 mất / 0 dư** (ngoài glue header/require/exports và các
+dòng đổi `S.x`), `node --check` 8/8, smoke electron-fake: 3 đường require chung 1 instance,
+`handle('PING')` → `{ok, native:true}`, live-binding `S.order` → `GET_STATUS`, `restore()` set
+`S._autoTimer`, `VIDEO_LEARN_STATUS` chạy qua lazy require không chết vòng.
 
 ## Kiểm tra
 
