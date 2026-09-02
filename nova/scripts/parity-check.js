@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..');
-const pairs = ['main'];   // flow-cft/native-tools/cli-bridge-native/voice-native đã tách module + shim; flow-bridge.js giờ là nguồn readable → bỏ khỏi parity
+const pairs = [];   // RETIRED: mọi cặp đã tách module + shim (flow-native, native-tools, flow-cft, cli-bridge-native, voice-native) hoặc thay bằng nguồn readable (flow-bridge.js); main.js obfuscated đã xoá (entry luôn là main.plain.js) — pipeline protect/unprotect/parity ngừng hoạt động
 // flow-native đã tách thành ./flow-native/ + shim (như flow-chrome) — không còn cặp plain/protected.
 // native-tools cũng đã tách thành ./native-tools/ + shim — bỏ khỏi pairs như flow-native.
 const failures = [];

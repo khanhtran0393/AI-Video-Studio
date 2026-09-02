@@ -179,6 +179,15 @@ dòng đổi `S.x`), `node --check` 8/8, smoke electron-fake: 3 đường requir
 `handle('PING')` → `{ok, native:true}`, live-binding `S.order` → `GET_STATUS`, `restore()` set
 `S._autoTimer`, `VIDEO_LEARN_STATUS` chạy qua lazy require không chết vòng.
 
+Sau đó chuỗi retire tiếp tục hoàn tất cho TẤT CẢ các cặp còn lại: `native-tools`,
+`flow-cft`, `cli-bridge-native`, `voice-native` (tách module + shim cùng pattern),
+`flow-bridge` (130 dòng state machine khớp chặt — không tách được verbatim, thay blob
+obfuscated bằng nguồn readable trực tiếp), và `main` (bản obfuscated `main.js` xoá hẳn —
+entry của Electron luôn là `main.plain.js` ở cả dev lẫn build đóng gói). Kết quả:
+`scripts/protect.js`/`unprotect.js` đã xoá (dep `javascript-obfuscator` cũng không còn),
+`scripts/parity-check.js` giữ lại làm guard no-op (0 pairs) cho `npm run check:parity`/CI.
+Từ đây mọi main-process source trong repo đều là JS readable duy nhất một nguồn.
+
 ## Kiểm tra
 
 ```bash
