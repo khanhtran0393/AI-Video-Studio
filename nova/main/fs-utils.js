@@ -1,24 +1,42 @@
 'use strict';
 /**
- * Helper filesystem dùng chung (kiểm quyền ghi thư mục, đường dẫn nova/ gốc & unpacked).
+ * Shared filesystem helpers (path and writeability helpers).
  */
 const fs = require('fs');
 const path = require('path');
 
-const NOVA_ROOT = path.join(__dirname, '..', '..');   // thư mục nova/
+const NOVA_ROOT = path.join(__dirname, '..', '..'); // Nova root (directory containing this file's parent: nova/)
 
-// Thư mục gốc nova/ (dùng cho fallback đường dẫn dev/npm start).
-function novaRoot() { return NOVA_ROOT; }
-
-// File nằm trong app.asar.unpacked (asarUnpack) — dùng đường dẫn THẬT để cpSync/opendir đọc/ghi được.
-function unpackedNovaRoot() {
-  return NOVA_ROOT.includes('app.asar') ? NOVA_ROOT.replace('app.asar', 'app.asar.unpacked') : NOVA_ROOT;
+// Base Nova folder used for dev fallback.
+function novaRoot() {
+  return NOVA_ROOT;
 }
 
-// Thử ghi vào thư mục để biết có cài được "trong app" không (VD cài ở Program Files thì không ghi được)
+/**
+ * app.asar version path is virtual; to access packaged unpacked files we need the
+ * real path in app.asar.unpacked/nova.
+ */
+function unpackedNovaRoot() {
+  if (!NOVA_ROOT.includes('app.asar')) return NOVA_ROOT;
+  const marker = `${path.sep}app.asar`;
+  const i = NOVA_ROOT.lastIndexOf(marker);
+  if (i >= 0) {
+    return path.join(NOVA_ROOT.slice(0, i), 'app.asar.unpacked', 'nova');
+  }
+  return NOVA_ROOT.replace('app.asar', 'app.asar.unpacked');
+}
+
+// Test whether we can create/write/delete a marker file in a folder.
 function canWriteDir(dir) {
-  try { fs.mkdirSync(dir, { recursive: true }); const t = path.join(dir, '.ghi-thu'); fs.writeFileSync(t, 'ok'); fs.unlinkSync(t); return true; }
-  catch { return false; }
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    const marker = path.join(dir, '.can-write-test');
+    fs.writeFileSync(marker, 'ok');
+    fs.unlinkSync(marker);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 module.exports = { novaRoot, unpackedNovaRoot, canWriteDir };

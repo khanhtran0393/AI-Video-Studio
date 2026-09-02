@@ -6,15 +6,109 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
-const SCRIPT = path.join(__dirname, 'parallax-native.py');
-function pyPath() {
-  const cands = [
-    path.join(os.homedir(), '.omnivoice-venv', 'bin', 'python'),   // venv voice-studio (dev) — có torch + depth
-    '/opt/homebrew/bin/python3', '/usr/local/bin/python3', 'python3'
-  ];
-  for (const p of cands) { try { if (p === 'python3' || fs.existsSync(p)) return p; } catch (_) {} }
-  return 'python3';
+const { novaRoot, unpackedNovaRoot } = require('./main/fs-utils');
+
+function resolveScriptPath() {
+  const direct = path.join(__dirname, 'parallax-native.py');
+  try {
+    if (fs.existsSync(direct)) return direct;
+  } catch {}
+
+  try {
+    const u = unpackedNovaRoot();
+    const unpacked = path.join(u, 'parallax-native.py');
+    if (fs.existsSync(unpacked)) return unpacked;
+  } catch {}
+
+  return direct;
 }
+
+const SCRIPT = resolveScriptPath();
+
+function isExecutable(p) {
+  if (!p) return false;
+  try {
+    if (path.isAbsolute(p)) {
+      if (process.platform === 'win32') {
+        return fs.existsSync(p);
+      }
+      fs.accessSync(p, fs.constants.X_OK);
+      return true;
+    }
+
+    // Lệnh không tuyệt đối: coi như command trong PATH.
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function addVenvCandidates(base, out) {
+  if (!base) return;
+  const variants = ['.venv-vieneu', '.venv-omni', '.venv'];
+  for (const v of variants) {
+    const root = path.join(base, v);
+    out.push({ cmd: path.join(root, 'Scripts', 'python.exe'), args: [] });
+    out.push({ cmd: path.join(root, 'bin', 'python'), args: [] });
+  }
+}
+
+function addVenvRootCandidates(base, out) {
+  if (!base) return;
+
+  // Nếu biến môi trường/đầu vào trỏ trực tiếp tới python executable, cho luôn thử.
+  const candidate = String(base).trim();
+  if (fs.existsSync(candidate)) {
+    const lower = candidate.toLowerCase();
+    if (lower.endsWith('.exe') || lower.endsWith('.py') || lower.endsWith('.bat') || lower.endsWith('.cmd')) {
+      out.push({ cmd: candidate, args: [] });
+    }
+  }
+
+  // Một số env có thể chỉ trỏ đến thư mục root venv, không phải file python.
+  addVenvCandidates(base, out);
+}
+
+function pyPath() {
+  const cands = [];
+
+  const rootCandidates = [
+    __dirname,
+    path.join(__dirname, 'voice-backend'),
+    path.join(__dirname, 'voice-studio'),
+    path.join(__dirname, '..', 'voice-backend'),
+    path.join(__dirname, '..', 'voice-studio'),
+    novaRoot(),
+    path.dirname(__dirname),
+  ];
+
+  const u = unpackedNovaRoot();
+  try {
+    if (u) rootCandidates.push(u, path.join(u, 'voice-backend'), path.join(u, 'voice-studio'));
+  } catch {}
+
+  for (const root of rootCandidates) addVenvCandidates(root, cands);
+
+  // Env var ưu tiên venv đã biết.
+  const legacy = process.env.VOICESERVER_VENV || process.env.VOICE_STUDIO_VENV || process.env.VENV || process.env.VIRTUAL_ENV;
+  if (legacy) addVenvRootCandidates(legacy, cands);
+
+  // Fallback theo PATH.
+  cands.push({ cmd: 'py', args: ['-3'] });
+  cands.push({ cmd: 'python3', args: [] });
+  cands.push({ cmd: 'python', args: [] });
+
+  for (const p of cands) {
+    try {
+      if (isExecutable(p.cmd)) return p;
+    } catch {
+      // noop
+    }
+  }
+
+  return null;
+}
+
 function tmpDir() { const d = path.join(os.tmpdir(), 'nova-parallax'); try { fs.mkdirSync(d, { recursive: true }); } catch (_) {} return d; }
 
 // { imageB64?, imagePath?, dur, fps?, w?, h? } → { ok, path } | { ok:false, error }
@@ -35,8 +129,18 @@ async function renderParallax(payload = {}, win) {
 
   return await new Promise((resolve) => {
     let outBuf = '', errBuf = '';
-    const proc = spawn(py, [SCRIPT, img, String(dur), out, String(fps), String(W), String(H)]);
-    const to = setTimeout(() => { try { proc.kill('SIGKILL'); } catch (_) {} }, 180000);   // 3 phút/ảnh — chống treo
+
+    if (!py || !py.cmd) {
+      return resolve({
+        ok: false,
+        error: 'Không tìm thấy Python hợp lệ cho parallax. Hãy cài hoặc chọn thư mục voice-studio đúng có .venv-vieneu/.venv-omni/.venv.',
+      });
+    }
+
+    const proc = spawn(py.cmd, [...py.args, SCRIPT, img, String(dur), out, String(fps), String(W), String(H)]);
+    const to = setTimeout(() => { try { proc.kill('SIGKILL'); } catch (_) {} }, 180000);
+    
+    
     proc.stdout.on('data', d => outBuf += d);
     proc.stderr.on('data', d => {
       errBuf += d; const s = String(d);
