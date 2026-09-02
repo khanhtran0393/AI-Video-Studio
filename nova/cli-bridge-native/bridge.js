@@ -1,69 +1,12 @@
-/**
- * CLI Bridge Native — chạy THẲNG trong app (không cần tải/chạy bridge riêng, không terminal).
- * Bọc CLI gói subscription của user (Claude Code / Codex) thành API kiểu OpenAI trên localhost:
- *   - Claude  → 127.0.0.1:8795
- *   - Codex   → 127.0.0.1:8796
- * Renderer gọi y như cũ (provider "CLI tự host" + endpoint localhost:8795, nút Đăng nhập).
- * Yêu cầu: user đã cài Claude Code / Codex CLI (đăng nhập qua nút trong app, khỏi terminal).
- */
-
+/* ── cli-bridge-native/bridge — createBridge(engine, port): semaphore + runCLI (spawn claude/codex)
+     + login qua URL/code + HTTP handler kiểu OpenAI + nghe IPv4/IPv6. Tách từ cli-bridge-native.plain.js (verbatim). ── */
 const http = require('http');
 const os = require('os');
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
-
-const MAX_CONCURRENT = 2;
-const TIMEOUT_MS = 900000;   // 15 phút — kịch bản dài + prompt phong cách nặng có thể lâu (gói Claude/ChatGPT chậm hơn API)
-
-// GUI app (mở từ Dock/Start) có PATH nghèo → bổ sung nơi hay cài CLI để tìm thấy `claude`/`codex`.
-// LƯU Ý Windows: env key có sẵn là "Path" (viết hoa P). Nếu gán env.PATH sẽ tạo THÊM key "PATH"
-// song song → env block có 2 biến trùng tên → cmd.exe mất PATH, spawn `claude` fail
-// "'claude' is not recognized". Phải ghi đè đúng key đang có.
-function goodEnv() {
-  const home = os.homedir();
-  const extra = ['/usr/local/bin', '/opt/homebrew/bin', '/usr/bin', '/bin',
-    path.join(home, '.npm-global/bin'), path.join(home, '.local/bin'),
-    path.join(home, '.bun/bin'), path.join(home, '.deno/bin')];
-  const env = { ...process.env };
-  const pathKey = Object.keys(env).find((k) => k.toLowerCase() === 'path') || 'PATH';
-  env[pathKey] = [env[pathKey] || '', ...extra].filter(Boolean).join(path.delimiter);
-  return env;
-}
-
-// Lưu 1 data URL / base64 ra file tạm. Trả path hoặc null.
-function saveImage(dataUrl) {
-  try {
-    const s = String(dataUrl || '');
-    const m = s.match(/^data:(image\/[a-z0-9.+-]+)?;base64,(.*)$/i);
-    const b64 = m ? m[2] : s;
-    const ext = (m && m[1] ? m[1].split('/')[1] : 'png').replace('jpeg', 'jpg');
-    const f = path.join(os.tmpdir(), 'ckm-img-' + Date.now() + '-' + Math.floor(Math.random() * 1e6) + '.' + ext);
-    fs.writeFileSync(f, Buffer.from(b64, 'base64'));
-    return f;
-  } catch { return null; }
-}
-
-// Dựng prompt + tách ảnh (ghi ra file tạm) từ messages kiểu OpenAI/Anthropic.
-function buildPrompt(messages) {
-  const images = [];
-  const text = (messages || []).map((m) => {
-    let parts;
-    if (typeof m.content === 'string') parts = [m.content];
-    else {
-      parts = [];
-      for (const x of (m.content || [])) {
-        if (x.type === 'text' && x.text) parts.push(x.text);
-        else if (x.type === 'image_url' && x.image_url && x.image_url.url) { const f = saveImage(x.image_url.url); if (f) { images.push(f); parts.push('[Ảnh đính kèm: ' + f + ']'); } }
-        else if (x.type === 'image' && x.source && x.source.data) { const f = saveImage('data:' + (x.source.media_type || 'image/png') + ';base64,' + x.source.data); if (f) { images.push(f); parts.push('[Ảnh đính kèm: ' + f + ']'); } }
-        else if (x.text) parts.push(x.text);
-      }
-    }
-    const tag = m.role === 'system' ? '[System]\n' : m.role === 'assistant' ? '[Assistant]\n' : '';
-    return tag + parts.join('\n');
-  }).join('\n\n');
-  return { text, images };
-}
+const { MAX_CONCURRENT, TIMEOUT_MS, goodEnv } = require('./env');
+const { buildPrompt } = require('./prompt');
 
 // Một "bridge" cho 1 engine (claude/codex) trên 1 cổng.
 function createBridge(engine, port) {
@@ -188,25 +131,4 @@ function createBridge(engine, port) {
   }
   return servers;
 }
-
-let started = false;
-let servers = [];
-function startAll() {
-  if (started) return servers;
-  started = true;
-  try { servers.push(...createBridge('claude', 8795)); } catch (e) { console.warn('[cli-bridge claude]', e.message); }
-  try { servers.push(...createBridge('codex', 8796)); } catch (e) { console.warn('[cli-bridge codex]', e.message); }
-  return servers;
-}
-
-function stopAll() {
-  started = false;
-  const owned = servers;
-  servers = [];
-  for (const server of owned) {
-    try { server.close(); } catch (_) {}
-    try { server.closeAllConnections && server.closeAllConnections(); } catch (_) {}
-  }
-}
-
-module.exports = { startAll, stopAll };
+module.exports = { createBridge };

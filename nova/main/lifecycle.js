@@ -4,7 +4,7 @@
  * timer auto-push, các bridge (extension/CLI/MCP), voice, watermark, captcha Chrome.
  */
 const flowExtBridge = require('../flow-bridge.plain');
-const cliBridge = require('../cli-bridge-native.plain');
+const cliBridge = require('../cli-bridge-native');
 const mcpBridge = require('../mcp-bridge-native');
 const voiceNative = require('../voice-native.plain');
 const watermarkNative = require('../watermark-native');
