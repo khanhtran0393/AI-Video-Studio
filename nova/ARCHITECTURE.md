@@ -55,6 +55,25 @@ main.plain.js  ──┬── main/identity.js      app.setName / setAppUserMod
 
 Tương tự, `flow-chrome.js` (điều khiển Chrome đa profile — `flowChrome.handle(...)`) và `flow-native.plain.js` là **2 module khác nhau**, không phải bản sao của nhau — cả hai được `main/ipc/flow.js` require song song.
 
+## Web renderer — `web/nguon-web/` (tách từ file 1.086 dòng)
+
+`web/nguon-web.js` cũ đã tách thành 6 script thường (KHÔNG module) nạp theo
+thứ tự trong `index.html` — mọi tên cấp đầu vẫn global như lúc còn một file,
+nên `index.html` và các script khác không cần đổi tên gọi:
+
+| File | Nội dung |
+|---|---|
+| `nguon-web/nen-tang.js` | Sổ 55 nền tảng (`NOVA_WEB_NEN_TANG`), nhóm, luật lọc URL, giấy phép cấm. |
+| `nguon-web/ha-tang.js` | Phanh nhịp `_WEB_NHIP`, bộ nhớ đệm `_webNho`, cầu nối main `_webNative`, HTTP `_webGet`/`_webJson`. |
+| `nguon-web/api.js` | `_WEB_API` — 5 API tìm riêng (archive, wikimedia, dailymotion, peertube, ytdlp). |
+| `nguon-web/tim-web.js` | Tìm web lùi về (DDG/Bing/Brave/SearXNG), khoá API tìm kiếm, `_webTimQuaCongCu`. |
+| `nguon-web/bang.js` | Bảng chọn nền tảng + kiểm tra + vẽ (`webMoBang`, `webKiemTra`, `webRenderBang`…). |
+| `nguon-web/chinh.js` | `searchWebSources`, `webLayClip`, `webNhan` + xuất tên ra `window`. |
+
+Thứ tự nạp: nen-tang → ha-tang → api → tim-web → bang → chinh. Khi thêm file
+mới phải giữ nguyên tính chất "script thường, tên global" — renderer không có
+build step nên không dùng import/export ở đây.
+
 ## Kiểm tra
 
 ```bash
