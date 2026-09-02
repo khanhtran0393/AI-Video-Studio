@@ -55,10 +55,23 @@ for (const ch of ['voiceStart', 'voiceStatus', 'voiceProbe', 'voiceInstallBacken
   assert(preload.includes(ch), 'preload phải expose ' + ch);
 }
 
-// 7. main.plain.js đăng ký IPC voice và giải đường dẫn app.asar.unpacked.
-const mainPlain = read('main.plain.js');
+// 7. Main process (composition root nova/main.plain.js + nova/main/**) đăng ký IPC voice
+// và giải đường dẫn app.asar.unpacked — logic đã tách module, phải quét cả nova/main/.
+const readMainPlainSource = () => {
+  const parts = [read('main.plain.js')];
+  const walk = (rel) => {
+    for (const entry of fs.readdirSync(path.join(NOVA, rel), { withFileTypes: true })) {
+      const child = rel + '/' + entry.name;
+      if (entry.isDirectory()) walk(child);
+      else if (entry.isFile() && entry.name.endsWith('.js')) parts.push(read(child));
+    }
+  };
+  walk('main');
+  return parts.join('\n');
+};
+const mainPlain = readMainPlainSource();
 for (const ch of ['voice-start', 'voice-status', 'voice-probe', 'voice-install-backend']) {
-  assert(mainPlain.includes("ipcMain.handle('" + ch + "'"), 'main.plain.js phải đăng ký IPC ' + ch);
+  assert(mainPlain.includes("ipcMain.handle('" + ch + "'"), 'main process phải đăng ký IPC ' + ch);
 }
 assert(mainPlain.includes("replace('app.asar', 'app.asar.unpacked')"),
   'voice-install-backend phải giải đường dẫn app.asar.unpacked');

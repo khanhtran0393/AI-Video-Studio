@@ -83,3 +83,8 @@ nova_scan_tmp*
 # nova/flow-extension khi dev; Chrome tự sinh thêm _metadata/ khi load). KHÔNG phải
 # nguồn — không track. Nguồn extension: nova/flow-extension (chính) + nova/nova-studio (biến thể riêng).
 nova/chrome-extension/
+artifacts/
+output/
+tts-demo/
+tmp*
+nova/tmp*

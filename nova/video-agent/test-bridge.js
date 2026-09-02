@@ -28,7 +28,7 @@ const LAYER_TYPES = new Set(['text', 'shape', 'image', 'video', 'backdrop', 'bit
 const BOX_KEYS = new Set(['x', 'y', 'w', 'h', 'align', 'vAlign', 'anchor']);
 
 // transitions: PRESETS (transitions.json) + legacyAliases + LEGACY map của transitions.js.
-const LEGACY_TRANS = { none: 'cut', fade: 'fade', dissolve: 'fade', slide: 'slide-left', wipe: 'wipe-left', circle: 'iris' };
+const LEGACY_TRANS = { none: 'cut', fade: 'fade', dissolve: 'fade', slide: 'push-left', wipe: 'wipe-left', circle: 'iris' };
 const PRESETS = require(path.join(ENGINE, 'transitions.json'));
 const TRANS_IDS = new Set(PRESETS.map((p) => p.id));
 PRESETS.forEach((p) => (p.legacyAliases || []).forEach((a) => TRANS_IDS.add(a)));

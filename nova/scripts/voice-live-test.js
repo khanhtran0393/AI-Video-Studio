@@ -104,7 +104,15 @@ function killTree(child) {
     const existing = await voiceNative.resolveUrl();
     if (existing) throw new Error('cổng ' + existing + ' đã có backend đang chạy — dừng nó trước khi test');
 
-    fs.cpSync(path.join(NOVA, 'voice-backend'), path.join(tmp, 'voice-studio'), { recursive: true });
+    fs.cpSync(path.join(NOVA, 'voice-backend'), path.join(tmp, 'voice-studio'), {
+    recursive: true,
+    // Bỏ qua các venv khi copy (đến hàng trăm MB) — backend chạy bằng Python của máy, không cần venv trong bản copy.
+    filter: (s) => {
+      const rel = path.relative(path.join(NOVA, 'voice-backend'), s);
+      if (!rel) return true;
+      return !rel.split(path.sep).some((seg) => /^(\.venv|venv)/.test(seg));
+    },
+  });
     assert(fs.existsSync(path.join(backendDir, 'app.py')), 'bản copy backend trong temp phải có app.py');
 
     // 1-2. Khởi động trên cổng chính 8771 → voice-native phải nhận diện đúng URL.

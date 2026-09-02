@@ -1400,6 +1400,11 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
         <div class="nav-item" data-tool="tool8" onclick="switchTool('tool8')" style="display:none">
           <span class="num"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></span><span>Căn Timing</span>
         </div>
+        <!-- Tool 5 gộp vào Tool 2 (bảng chọn 🎞 stock / 🌐 web ngay trong Phân Cảnh) + Dựng Video (t7SrcStock).
+             Không còn cửa vào nào ngoài console — ẩn nav; DOM + hàm tìm media giữ nguyên để không phá dữ liệu/luồng cũ. -->
+        <div class="nav-item" data-tool="tool5" onclick="switchTool('tool5')" style="display:none">
+          <span class="num"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/><path d="M11 8v6M8 11h6"/></svg></span><span>Tìm Ảnh & Video Stock</span>
+        </div>
         <div class="nav-item" data-tool="tool4" onclick="switchTool('tool4')">
           <span class="num"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7l3-3 3 3M7 4v9M20 17l-3 3-3-3M17 20v-9"/></svg></span><span>Đổi Tên Ảnh</span>
         </div>
@@ -1415,6 +1420,11 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
         </div>
         <div class="nav-item" data-tool="tool7" onclick="switchTool('tool7')">
           <span class="num"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10l5-3v10l-5-3"/></svg></span><span>Dựng Video</span>
+        </div>
+        <!-- Cửa vào riêng cho kho hiệu ứng chuyển động (mẫu, bit, chuyển cảnh) —
+             trước đây chỉ nằm ẩn trong tab "Hiệu ứng" của Dựng Video nên khó thấy. -->
+        <div class="nav-item" data-tool="toolanim" onclick="switchTool('toolanim')">
+          <span class="num"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.9 2.9M15.5 15.5l2.9 2.9M18.4 5.6l-2.9 2.9M8.5 15.5l-2.9 2.9"/></svg></span><span>Hoạt Ảnh</span>
         </div>
         <div class="nav-item" data-tool="toolupscale" onclick="switchTool('toolupscale')">
           <span class="num"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 15l3-3 2 2 3-4"/><path d="M14 6h4v4" stroke-linecap="round"/><path d="M18 6l-5 5" stroke-linecap="round"/></svg></span><span>Nâng cấp ảnh</span>
@@ -3328,7 +3338,7 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
               <div class="t7-trkbody" data-ghost="Đồ hoạ — kéo mẫu từ kho vào đây" id="t7TrkGfx" style="gap:0;padding-left:5px;position:relative"
                    ondragover="t7GfxDragOver(event)" ondragleave="t7GfxDragLeave(event)" ondrop="t7GfxDrop(event)"></div>
             </div>
-            <!-- Rãnh CHUYỂN CẢNH: mỗi vạch = 1 mối nối, bấm để đổi trong 38 kiểu. -->
+            <!-- Rãnh CHUYỂN CẢNH: mỗi vạch = 1 mối nối, bấm để đổi kiểu chuyển cảnh. -->
             <div class="t7-trk" id="t7RowTrans" style="height:30px;min-height:30px">
               <div class="t7-trkh" title="Chuyển cảnh"><span class="ci" style="background:var(--amber)"></span>Chuyển cảnh</div>
               <div class="t7-trkbody" data-ghost="— chưa có chuyển cảnh —" id="t7TrkTrans" style="gap:0;padding-left:5px;position:relative"></div>
@@ -3379,6 +3389,46 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
 
       <!-- KHUNG XUẤT VIDEO -->
 
+    </div>
+
+    <!-- ═══════════ TOOL HOẠT ẢNH — cửa vào riêng cho kho hiệu ứng chuyển động ═══════════
+         Mẫu đồ hoạ động + bit Remotion + các chuyển cảnh. Trước đây các thứ này chỉ nằm
+         trong tab "Hiệu ứng" của Dựng Video nên khó thấy. Dùng lại y nguyên kho của Tool 7. -->
+    <div class="tool" id="tool-toolanim">
+      <style>
+        #tool-toolanim .anim-wrap{width:100%}
+        #tool-toolanim .anim-bar{display:flex;gap:10px;align-items:center;margin:14px 0 10px;flex-wrap:wrap}
+        #tool-toolanim .anim-bar input{flex:1;min-width:240px;background:var(--surface-2);border:1px solid var(--border);color:var(--text);border-radius:9px;padding:8px 12px;font-size:13px;font-family:inherit}
+        #tool-toolanim .anim-stat{font-size:12px;color:var(--text-muted);white-space:nowrap}
+        #tool-toolanim .anim-status{font-size:12.5px;font-weight:600;margin:0 0 12px;min-height:18px;color:var(--text-muted)}
+        #tool-toolanim .anim-sec{font-size:10px;text-transform:uppercase;letter-spacing:.6px;font-weight:800;color:var(--text-muted);margin:18px 0 6px}
+        #tool-toolanim .anim-fam{font-size:11px;letter-spacing:.3px;font-weight:700;color:var(--text-muted);margin:12px 0 5px}
+        #tool-toolanim .anim-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px}
+        #tool-toolanim .anim-card{border:1px solid var(--border);border-radius:10px;overflow:hidden;background:var(--surface-2);cursor:pointer;transition:border-color .15s,transform .15s}
+        #tool-toolanim .anim-card:hover{border-color:var(--accent);transform:translateY(-2px)}
+        #tool-toolanim .anim-card .pv{aspect-ratio:16/9;background:#15141a;display:flex;align-items:center;justify-content:center;color:var(--text-dim);font-size:11px}
+        #tool-toolanim .anim-card .pv img{width:100%;height:100%;object-fit:cover;display:block}
+        #tool-toolanim .anim-card .nm{font-size:11.5px;padding:6px 9px;line-height:1.35;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        #tool-toolanim .anim-tr{display:flex;align-items:center;gap:10px;background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:8px 12px;cursor:pointer}
+        #tool-toolanim .anim-tr:hover{border-color:var(--accent)}
+        #tool-toolanim .anim-tr b{font-size:13px;color:var(--text)}
+        #tool-toolanim .anim-tr s{font-size:11.5px;color:var(--text-muted);text-decoration:none;margin-left:auto}
+        #tool-toolanim .anim-dim{font-size:12px;color:var(--text-muted)}
+        #tool-toolanim .anim-trgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px}
+      </style>
+      <div class="tool-head">
+        <div class="tool-title">✨ Hoạt Ảnh</div>
+        <div class="tool-subtitle">Kho hiệu ứng chuyển động của app: mẫu đồ hoạ động, bit Remotion và chuyển cảnh gom theo 4 nhóm (Cắt &amp; hoà, Quang học, Hình học, Giấy &amp; phim). Bấm thẻ để áp vào cảnh đang chọn ở Dựng Video; hoặc bấm 🎬 Mở Dựng Video rồi kéo-thả lên timeline. Muốn AI tự chọn hiệu ứng cho từng cảnh? Dùng nút “Trợ lý dựng” trong Dựng Video.</div>
+      </div>
+      <div class="anim-wrap">
+        <div class="anim-bar">
+          <input id="animQ" type="text" placeholder="Tìm mẫu, bit, chuyển cảnh…" oninput="animRender()">
+          <span class="anim-stat" id="animStat">…</span>
+          <button class="btn ghost sm" onclick="animGoT7()">🎬 Mở Dựng Video</button>
+        </div>
+        <div class="anim-status" id="animStatus">Bấm một hiệu ứng để áp vào cảnh đang chọn trong Dựng Video.</div>
+        <div id="animBody"></div>
+      </div>
     </div>
 
     <!-- TOOL 11: PHÂN TÍCH BÌNH LUẬN ĐỐI THỦ -->
@@ -3852,12 +3902,14 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
         #tool-toolvoice .gtags{display:flex;gap:5px;flex-wrap:wrap}
         #tool-toolvoice .gtg{font-size:10.5px;padding:3px 8px;border-radius:5px;background:var(--surface-3);
           color:var(--text-muted);border:1px solid var(--border);font-weight:500}
-        #tool-toolvoice .gtg.eng{background:transparent;color:var(--text-dim)}
         #tool-toolvoice .gdel{position:absolute;top:8px;right:8px;opacity:0;padding:2px 7px;transition:opacity .12s}
         #tool-toolvoice .gcard:hover .gdel{opacity:1}
         #tool-toolvoice .gadd{border:1px dashed var(--border-2);border-radius:10px;display:grid;place-items:center;
           color:var(--text-dim);font-size:13px;cursor:pointer;min-height:100px;font-weight:500}
         #tool-toolvoice .gadd:hover{border-color:var(--accent);color:var(--accent)}
+        /* Chú thích khối “Thêm giọng” — cùng màu chữ với .ghint, nền hộp như ô log */
+        #tool-toolvoice .gt-tt{margin-top:10px;font-size:12.5px;color:var(--text-dim);line-height:1.6;
+          background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:10px 12px}
 
         /* Khu đọc — hai cột */
         #tool-toolvoice .gtts{display:grid;grid-template-columns:1fr 254px;gap:0}
@@ -3904,11 +3956,33 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
         #tool-toolvoice .gdot.err{background:var(--red)}
         #tool-toolvoice .gdot.thieu{background:var(--amber)}
         #tool-toolvoice .ghint{font-size:12.5px;color:var(--text-dim);line-height:1.6;margin-top:12px}
+
+        /* ── Dropdown chọn backend tạo giọng ── */
+        #tool-toolvoice .be-dd{position:relative}
+        #tool-toolvoice .be-btn{display:flex;align-items:center;gap:9px;width:100%;background:var(--surface);
+          border:1px solid var(--border);border-radius:10px;padding:10px 12px;cursor:pointer;font-family:inherit;
+          font-size:13.5px;color:var(--text);transition:border-color .12s,box-shadow .12s}
+        #tool-toolvoice .be-btn:hover{border-color:var(--border-bright)}
+        #tool-toolvoice .be-btn:focus-visible{outline:none;border-color:var(--accent);
+          box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 15%,transparent)}
+        #tool-toolvoice .be-ten{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        #tool-toolvoice .be-mo{font-size:11.5px;color:var(--text-dim);margin-left:auto;white-space:nowrap;flex:none}
+        #tool-toolvoice .be-caret{color:var(--text-dim);flex:none;transition:transform .14s}
+        #tool-toolvoice .be-dd.mo .be-caret{transform:rotate(180deg)}
+        #tool-toolvoice .be-menu{position:absolute;z-index:40;top:calc(100% + 6px);left:0;right:0;
+          background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:5px;
+          box-shadow:0 12px 34px rgba(0,0,0,.14);display:none;flex-direction:column;gap:2px}
+        #tool-toolvoice .be-dd.mo .be-menu{display:flex}
+        #tool-toolvoice .be-item{display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:8px;
+          cursor:pointer;text-align:left;font-size:13px;color:var(--text)}
+        #tool-toolvoice .be-item:hover{background:var(--surface-2)}
+        #tool-toolvoice .be-item.sel{background:var(--accent-soft)}
+        #tool-toolvoice .be-tt{font-size:11.5px;color:var(--text-dim);margin-top:6px;line-height:1.55}
       </style>
 
        <div class="tool-head">
          <div class="tool-title">🎙 Giọng nói</div>
-         <div class="tool-subtitle">Clone giọng, thiết kế giọng, đọc kịch bản thành tiếng. OmniVoice chạy trong máy.</div>
+         <div class="tool-subtitle">Clone giọng, thiết kế giọng, đọc kịch bản thành tiếng. OmniVoice · VieNeu · XTTS — tất cả chạy trong máy, không cần key.</div>
        </div>
 
       <div id="voiceBackendStatus" style="font-size:12.5px;margin-bottom:14px;color:var(--text-muted)">Đang chuẩn bị…</div>
@@ -3924,11 +3998,11 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
           <div id="giongThemBox" style="display:none;margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
             <div class="grid-2" style="gap:12px">
                 <select id="giongThemCach" onchange="giongThemDoi()">
-                  <option value="clone">Clone từ file mẫu 5–15 giây (OmniVoice)</option>
-                  <option value="design">Thiết kế từ mô tả bằng chữ (OmniVoice)</option>
+                  <option value="clone">Clone từ file mẫu 5–15 giây</option>
+                  <option value="design">Thiết kế từ mô tả bằng chữ</option>
                 </select>
               </div>
-              <div><label class="label">TÊN GIỌNG</label><input type="text" id="gtTen" placeholder="vd: Nam trầm kể chuyện — dán voice id là tự điền" autocomplete="off" oninput="_giongTenTay = true"></div>
+              <div><label class="label">TÊN GIỌNG</label><input type="text" id="gtTen" placeholder="vd: Nam trầm kể chuyện" autocomplete="off"></div>
 
               <div id="gtClone" style="margin-top:12px">
               <label class="label">FILE GIỌNG MẪU (5–15 giây, wav/mp3)</label>
@@ -3938,9 +4012,10 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
               <label class="label">MÔ TẢ GIỌNG</label>
               <input type="text" id="gtMoTa" placeholder="vd: giọng nam trầm ấm, kể chuyện chậm rãi, cảm xúc" autocomplete="off">
             </div>
-            <div id="gtDesignInfo" style="display:none;margin-top:10px;font-size:12.5px;color:var(--text-dim);line-height:1.6;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:10px 12px">
-              Thiết kế giọng bằng mô tả chữ tạo giọng mới trong OmniVoice — bạn không cần key API.
+            <div id="gtDesignInfo" class="gt-tt" style="display:none">
+              Thiết kế giọng bằng mô tả chữ — OmniVoice áp dụng mô tả đầy đủ; VieNeu / XTTS sẽ đọc giọng này bằng giọng mặc định của engine.
             </div>
+
             <div style="display:flex;gap:10px;margin-top:14px">
               <button class="btn primary" onclick="giongThemLuu()">Lưu giọng</button>
               <button class="btn ghost" onclick="giongThemBat()">Huỷ</button>
@@ -3966,20 +4041,42 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
           </div>
 
           <div class="gr">
-            <div class="rhead">Tinh chỉnh</div>
+            <div class="rhead">Backend tạo giọng</div>
+            <div class="be-dd" id="voiceBackendDD">
+              <button type="button" class="be-btn" id="voiceBackendBtn" onclick="voiceBackendMo(event)"
+                aria-haspopup="listbox" aria-expanded="false">
+                <span class="gdot" id="voiceBackendDot"></span>
+                <span class="be-ten" id="voiceBackendTen">OmniVoice</span>
+                <span class="be-mo" id="voiceBackendNote">trên máy · đa ngôn ngữ</span>
+                <span class="be-caret">▾</span>
+              </button>
+              <div class="be-menu" id="voiceBackendMenu" role="listbox">
+                <div class="be-item" data-eng="omni" role="option" onclick="voiceBackendChon('omni')">
+                  <span class="gdot" id="beDotOmni"></span><span class="be-ten">OmniVoice</span><span class="be-mo">trên máy · đa ngôn ngữ</span>
+                </div>
+                <div class="be-item" data-eng="vieneu" role="option" onclick="voiceBackendChon('vieneu')">
+                  <span class="gdot" id="beDotVieneu"></span><span class="be-ten">VieNeu</span><span class="be-mo">trên máy · tiếng Việt</span>
+                </div>
+                <div class="be-item" data-eng="xtts" role="option" onclick="voiceBackendChon('xtts')">
+                  <span class="gdot" id="beDotXtts"></span><span class="be-ten">XTTS</span><span class="be-mo">trên máy · clone giọng</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="rhead" style="margin-top:18px">Tinh chỉnh</div>
             <div class="sl" id="slTocDo">
               <div class="slh"><b>Tốc độ</b><span id="vSpeedVal">1.00×</span></div>
               <input type="range" id="voiceSpeed" min="0.5" max="1.5" step="0.05" value="1"
                 oninput="document.getElementById('vSpeedVal').textContent=(+this.value).toFixed(2)+'×'">
+              <div class="why" id="whyTocDo"></div>
             </div>
             <div class="sl" id="slGap">
               <div class="slh"><b>Nghỉ giữa câu</b><span id="vGapVal">300 ms</span></div>
               <input type="range" id="voiceGap" min="0" max="1000" step="50" value="300"
                 oninput="document.getElementById('vGapVal').textContent=this.value+' ms'">
-              <div class="why">Chỉ OmniVoice có</div>
             </div>
-            <div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border)">
-              <label class="label">NGÔN NGỮ</label>
+            <div class="sl" id="slNgonNgu">
+              <div class="slh"><b>Ngôn ngữ</b></div>
               <select id="voiceLang">
                 <option value="vi" selected>Tiếng Việt</option>
                 <option value="en">English</option>
@@ -3987,6 +4084,7 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
                 <option value="ja">日本語</option>
                 <option value="ko">한국어</option>
               </select>
+              <div class="why" id="whyNgonNgu"></div>
             </div>
           </div>
         </div>
@@ -4005,7 +4103,7 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
         <div class="panel-head"><span>Engine</span><span id="giongEngineDem" style="text-transform:none;letter-spacing:0;font-weight:500;color:var(--text-dim);font-size:12px">…</span></div>
         <div class="panel-body">
           <div class="geng" id="giongEngine"></div>
-          <div class="ghint">Chấm xanh nghĩa là đã gọi thử được thật, không phải chỉ có điền key. Engine đang chọn hỏng thì lượt đọc tự lui về engine chấm xanh kế tiếp và ghi vào nhật ký.</div>
+          <div class="ghint">Cả ba engine chạy trong máy qua backend voice-studio. Chấm xanh = backend sẵn sàng; xám = backend chưa chạy; đỏ = engine lỗi lần đọc gần nhất (đọc được lại thì tự xanh). Engine đang dùng chọn trong khối “Đọc thành giọng”.</div>
         </div>
       </div>
 
@@ -4014,7 +4112,7 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
         <pre id="voiceLog" style="max-height:240px;overflow:auto;background:var(--surface-2);color:var(--text-muted);border:1px solid var(--border);font-size:11px;line-height:1.5;padding:10px;border-radius:8px;margin-top:6px;white-space:pre-wrap"></pre>
       </details>
       <div style="margin-top:14px;font-size:11px;color:var(--text-dim);border-top:1px solid var(--border);padding-top:10px">
-        Giọng nói bởi <b>OmniVoice</b> (k2-fsa) — giấy phép Apache-2.0, model chạy cục bộ trên máy bạn. ElevenLabs và OpenAI gọi qua API, tính tiền theo ký tự.
+        Giọng đọc chạy trong máy: <b>OmniVoice</b> (k2-fsa · Apache-2.0) · <b>VieNeu</b> · <b>XTTS</b> (Coqui) — không tốn phí API, không gửi dữ liệu lên đám mây.
       </div>
     </div>
 
@@ -5983,7 +6081,7 @@ function _shrinkDataUrl(dataUrl, maxEdge, q){
 
 // Cấu hình chia cảnh/prompt (Tool 2) + giọng đọc — lưu THEO PROFILE để đa kênh chạy đúng của từng kênh.
 const _T2_FIELDS = { splitMode: 'v', t2DescMode: 'v', minChars: 'v', maxChars: 'v', minSecPerImg: 'v', maxSecPerImg: 'v', batchSize: 'v', shortPromptMode: 'c', highDetailMode: 'c', brollMode: 'c', noCharMode: 'c', hybridIconMode: 'c' };
-const _VOICE_FIELDS = { voiceLang: 'v', voiceSpeed: 'v', voiceGap: 'v', voiceInstruct: 'v' };
+const _VOICE_FIELDS = { voiceLang: 'v', voiceSpeed: 'v', voiceGap: 'v' };
 function _capCfg(fields){ const o = {}; for (const id in fields){ const el = document.getElementById(id); if (!el) continue; o[id] = fields[id] === 'c' ? !!el.checked : el.value; } return o; }
 function _appCfg(fields, cfg){ if (!cfg) return; for (const id in fields){ if (!(id in cfg)) continue; const el = document.getElementById(id); if (!el) continue; if (fields[id] === 'c') el.checked = !!cfg[id]; else el.value = cfg[id]; } }
 // Đọc cấu hình Tool 2 + Giọng hiện tại → lưu vào profile đang chọn.
@@ -5991,19 +6089,13 @@ function captureChannelCfg(){
   const p = (typeof getProfile === 'function') ? getProfile() : null; if (!p) return;
   p.t2Cfg = _capCfg(_T2_FIELDS);
   const vc = _capCfg(_VOICE_FIELDS);
-  vc.voiceMode = document.querySelector('input[name="voiceMode"]:checked')?.value || '';
-  vc.preset = (typeof _voicePreset !== 'undefined') ? (_voicePreset || '') : '';
   p.voiceCfg = vc;
 }
 // Áp cấu hình đã lưu của profile vào DOM (trước khi pipeline chạy chia cảnh / tạo giọng của kênh đó).
 function applyChannelCfg(p){
   p = p || ((typeof getProfile === 'function') ? getProfile() : null); if (!p) return;
   _appCfg(_T2_FIELDS, p.t2Cfg);
-  if (p.voiceCfg){
-    _appCfg(_VOICE_FIELDS, p.voiceCfg);
-    if (p.voiceCfg.voiceMode){ const r = document.querySelector('input[name="voiceMode"][value="' + p.voiceCfg.voiceMode + '"]'); if (r) r.checked = true; }
-    if ('preset' in p.voiceCfg){ try { _voicePreset = p.voiceCfg.preset || ''; } catch (e) {} const vs = document.getElementById('voiceSaved'); if (vs) vs.value = p.voiceCfg.preset || ''; }
-  }
+  if (p.voiceCfg) _appCfg(_VOICE_FIELDS, p.voiceCfg);
 }
 try { _prodQueue = JSON.parse(localStorage.getItem('av_queue') || '[]') || []; } catch (e) { _prodQueue = []; }
 function queueSave(){ try { localStorage.setItem('av_queue', JSON.stringify(_prodQueue.map(j => { const c = { ...j }; delete c.script; return c; }))); } catch (e) {} }   // kịch bản để ở IndexedDB (qs_<id>), không nhét localStorage
@@ -6177,10 +6269,10 @@ async function _runPipeline(job){
       // DOM — backend chết là cả job chết. Giờ ttsDoc() tự lui về engine còn sống.
       if (!_giongDS.length) await giongTaiDS();
       const vt = document.getElementById('voiceText'); if (vt){ vt.value = state.script; giongDemChu(); }
-      const { blob, giong, luiVe } = await ttsDoc(state.script, null);
+      const { blob, giong, engine, luiVe } = await ttsDoc(state.script, null);
       const mp3 = /(mpeg|mp3)/.test(blob.type);
       await t7HandleAudio(new File([blob], 'voice' + (mp3 ? '.mp3' : '.wav'), { type: blob.type || 'audio/wav' }));
-      return { sub: giong.name + (luiVe ? ' (lui về ' + _TTS_TEN[giong.engine] + ')' : '') };
+      return { sub: giong.name + (luiVe ? ' (lui về ' + _TTS_TEN[engine] + ')' : '') };
     },
     scenes: async () => {
       const si = document.getElementById('scriptInput'); if (si) si.value = state.script;
@@ -7215,6 +7307,7 @@ function switchTool(name){
   if (name === 'tool6'){ if (typeof _autoSaveSyncUI === 'function') _autoSaveSyncUI(); if (typeof tvFlowStatus === 'function') tvFlowStatus(); if (typeof tvLoadModelKeys === 'function') tvLoadModelKeys(); if (typeof tvOnModelChange === 'function') tvOnModelChange(); if (typeof tvSetMode === 'function') tvSetMode(document.getElementById('tvMode')?.value || 'scene'); if (typeof tvRenderVideos === 'function') tvRenderVideos(); }
   if (name === 'tool8' && typeof t8Init === 'function') t8Init();
   if (name === 'tool7' && typeof t7Build === 'function') t7Build();
+  if (name === 'toolanim' && typeof animInit === 'function') animInit();   // tab Hoạt Ảnh — nạp kho hiệu ứng chuyển động
   if (name === 'tool9' && typeof t9Init === 'function') t9Init();
   if (name === 'tool9' && typeof t10Init === 'function') t10Init();   // phần Thumbnail giờ nằm trong tab SEO
   if (name === 'tool9' && typeof t9Step2Refresh === 'function') setTimeout(t9Step2Refresh, 200);   // bước 2 (thumbnail) chỉ mở khi đã có tiêu đề
@@ -7675,7 +7768,6 @@ let VOICE_URL = 'http://127.0.0.1:8771';   // cổng mặc định; voiceInit() 
 const VOICE_SETUP_URL = 'https://github.com/khanhtran0393/AI-Novel#giong-noi';
 let _voiceReady = false;
 let _voiceStarting = null;
-let _voicePreset = '';   // id giọng đã lưu đang chọn (rỗng = theo chế độ)
 
 async function voiceInit(){
   const st = document.getElementById('voiceBackendStatus');
@@ -7685,17 +7777,17 @@ async function voiceInit(){
   }
   // Xác minh backend còn sống (không chỉ dựa cờ cũ — phòng khi backend đã tắt/khởi động lại).
   const cur = await window.native.voiceStatus().catch(() => null);
-  if (cur?.running){ _voiceReady = true; if (cur?.url) VOICE_URL = cur.url; if (st) st.innerHTML = '<span style="color:var(--green)">● Giọng nói sẵn sàng (OmniVoice)</span>'; voiceLoadVoices(); return; }
+  if (cur?.running){ _voiceReady = true; if (cur?.url) VOICE_URL = cur.url; if (st) st.innerHTML = '<span style="color:var(--green)">● Giọng nói sẵn sàng (OmniVoice · VieNeu · XTTS)</span>'; voiceLoadVoices(); return; }
   _voiceReady = false;
   // Đã cài backend trên máy chưa? (thay vì báo lỗi đỏ → hiện panel hướng dẫn cài)
   const pb = window.native.voiceProbe ? await window.native.voiceProbe().catch(() => null) : null;
   if (pb && !pb.hasRoot){ voiceShowSetup('need-install'); return; }
   if (pb && pb.hasRoot && !pb.hasPython){ voiceShowSetup('need-python'); return; }
   // Có backend → tự khởi động (im lặng) khi mở tab.
-  if (st) st.innerHTML = '⏳ Đang khởi động backend giọng nói (OmniVoice)… lần đầu ~30-60s, giữ app mở.';
+  if (st) st.innerHTML = '⏳ Đang khởi động backend giọng nói (OmniVoice · VieNeu · XTTS)… lần đầu ~30-60s, giữ app mở.';
   if (!_voiceStarting) _voiceStarting = window.native.voiceStart();
   const r = await _voiceStarting; _voiceStarting = null;
-  if (r?.ok){ _voiceReady = true; if (r?.url) VOICE_URL = r.url; if (st) st.innerHTML = '<span style="color:var(--green)">● Giọng nói sẵn sàng (OmniVoice)</span>'; voiceLoadVoices(); }
+  if (r?.ok){ _voiceReady = true; if (r?.url) VOICE_URL = r.url; if (st) st.innerHTML = '<span style="color:var(--green)">● Giọng nói sẵn sàng (OmniVoice · VieNeu · XTTS)</span>'; voiceLoadVoices(); }
   else if (st) st.innerHTML = '<span style="color:var(--red)">Lỗi khởi động: ' + escapeHtml(r?.error || '') + '</span>';
 }
 
@@ -7750,13 +7842,25 @@ async function voicePickRoot(){
 }
 
 /* ══ TAB GIỌNG NÓI ═══════════════════════════════════════════════════════════
-   Chỉ giữ OmniVoice local (chạy máy, cổng 8771). Danh sách giọng là toàn bộ
-   giọng có trong backend voice-studio.
+   Engine tạo giọng chọn qua dropdown — cả ba chạy ngay trong máy qua backend
+   voice-studio (cổng 8771), không cần key, không gọi đám mây:
+   OmniVoice (đa ngôn ngữ) · VieNeu (tiếng Việt native) · XTTS (clone giọng).
+   Engine gửi kèm field `engine` của POST /api/tts; thư viện giọng VoiceBank
+   dùng chung cho cả ba.                                                        */
 
-   Đã gỡ legacy: ElevenLabs/OpenAI khỏi luồng giọng nói. */
-
-const _TTS_TEN = { omni: 'OmniVoice' };
+const _TTS_TEN = { omni: 'OmniVoice', vieneu: 'VieNeu', xtts: 'XTTS' };
+// tên engine thật gửi cho backend (field `engine` của POST /api/tts)
+const _TTS_BACKEND_ID = { omni: 'omnivoice', vieneu: 'vieneu', xtts: 'xtts' };
 const _GIONG_THU = 'Xin chào, đây là giọng đọc thử của AI Video Studio.';
+
+// Engine đang chọn trong dropdown; lưu localStorage để mở lại vẫn giữ lựa chọn.
+let _voiceBackend = 'omni';
+try { const _vb = localStorage.getItem('voice_backend'); if (_vb === 'vieneu' || _vb === 'xtts') _voiceBackend = _vb; } catch (e){}
+const _BE_MO_TA = {
+  omni:   { mo: 'trên máy · đa ngôn ngữ' },
+  vieneu: { mo: 'trên máy · tiếng Việt' },
+  xtts:   { mo: 'trên máy · clone giọng' },
+};
 
 let _giongDS = [];            // danh sách hợp nhất
 let _giongChon = '';          // khoá giọng đang chọn
@@ -7765,28 +7869,27 @@ let _giongPhat = '';          // khoá đang phát thử
 let _giongAudio = null;       // thẻ audio dùng chung cho nghe thử
 const _giongMau = new Map();  // khoá → objectURL mẫu 4 giây (khỏi gọi lại)
 let _giongSu = [];            // lịch sử bản đã tạo trong phiên
-let _giongTT = { omni: 'no' };
+let _giongTT = { omni: 'no', vieneu: 'no', xtts: 'no' };
 let _giongThemMo = false;
 
-// ── Danh sách hợp nhất ──────────────────────────────────────────────
+// ── Danh sách giọng — VoiceBank dùng chung cho cả ba engine ─────────
 async function giongTaiDS(){
   const ds = [];
   try {
     const data = await fetch(VOICE_URL + '/api/voices').then(r => r.json());
     const list = Array.isArray(data) ? data : (data.voices || []);
-    _voiceList = list;
     for (const v of list){
-      // Giọng ⭐ nhà máy của OmniVoice là tiếng Anh, không dùng cho video tiếng Việt.
+      // Giọng ⭐ nhà máy là tiếng Anh, không dùng cho video tiếng Việt.
       // Chỉ GIẤU khỏi thư viện — file vẫn nằm trong voicebank, muốn hiện lại thì bỏ dòng này.
       if (v.is_factory) continue;
       const thietKe = !!(v.attributes && v.attributes.instruct);
       ds.push({
-        key: 'omni:' + v.id, engine: 'omni', id: v.id, name: v.name || v.id,
-        src: v.is_factory ? 'Giọng có sẵn' : (thietKe ? 'Thiết kế từ mô tả' : 'Clone từ mẫu'),
-        kind: v.is_factory ? 'san' : (thietKe ? 'design' : 'clone'),
+        key: 'omni:' + v.id, id: v.id, name: v.name || v.id,
+        src: thietKe ? 'Thiết kế từ mô tả' : 'Clone từ mẫu',
+        kind: thietKe ? 'design' : 'clone',
         tags: (v.tags || []).slice(0, 3),
         lang: (v.attributes && v.attributes.lang) || 'vi',
-        factory: !!v.is_factory,
+        factory: false,
       });
     }
   } catch (e){ /* backend chưa lên — giữ trống để thao tác khởi tạo sau */ }
@@ -7798,7 +7901,6 @@ const voiceLoadVoices = giongTaiDS;   // tên cũ voiceInit() còn gọi
 
 function _giongHop(v){
   if (_giongLoc === '*') return true;
-  if (_giongLoc.startsWith('e:')) return v.engine === _giongLoc.slice(2);
   if (_giongLoc.startsWith('k:')) return v.kind === _giongLoc.slice(2);
   return (v.tags || []).includes(_giongLoc);
 }
@@ -7811,7 +7913,6 @@ function giongVe(){
   if (chips){
     const dem = f => _giongDS.filter(v => { const c = _giongLoc; _giongLoc = f; const k = _giongHop(v); _giongLoc = c; return k; }).length;
     const muc = [['*', 'Tất cả']];
-    if (_giongDS.some(v => v.engine === 'omni')) muc.push(['e:omni', _TTS_TEN.omni]);
     for (const [k, t] of [['k:clone','Clone'],['k:design','Thiết kế']]) if (_giongDS.some(v => v.kind === k.slice(2))) muc.push([k, t]);
     const nhan = {};
     for (const v of _giongDS) for (const t of (v.tags || [])) nhan[t] = (nhan[t] || 0) + 1;
@@ -7829,14 +7930,14 @@ function giongVe(){
         <span class="gpico">${dangPhat ? '❙❙' : '▶'}</span>
         <div style="min-width:0"><div class="gname">${escapeHtml(v.name)}</div><div class="gsrc">${escapeHtml(v.src)}</div></div>
       </div>
-      <div class="gtags">${(v.tags || []).map(t => `<span class="gtg">${escapeHtml(t)}</span>`).join('')}<span class="gtg eng">${escapeHtml(_TTS_TEN[v.engine])}</span></div>
+      <div class="gtags">${(v.tags || []).map(t => `<span class="gtg">${escapeHtml(t)}</span>`).join('')}</div>
     </div>`;
   }).join('') + `<div class="gadd" onclick="giongThemBat()">＋ Thêm giọng</div>`;
 
   const n = document.getElementById('giongDem'); if (n) n.textContent = _giongDS.length + ' giọng';
   const cur = _giongDS.find(v => v.key === _giongChon);
   const lb = document.getElementById('giongDangChon');
-  if (lb) lb.textContent = cur ? (cur.name + ' · ' + _TTS_TEN[cur.engine]) : 'chưa chọn giọng';
+  if (lb) lb.textContent = cur ? (cur.name + ' · ' + _TTS_TEN[_voiceBackend]) : 'chưa chọn giọng';
   giongVeThanh();
 }
 function giongDatLoc(f){ _giongLoc = f; giongVe(); }
@@ -7844,8 +7945,17 @@ function giongDatLoc(f){ _giongLoc = f; giongVe(); }
 // Thanh trượt nào engine hiện tại không hiểu thì làm mờ, KHÔNG giấu —
 // giấu đi người dùng tưởng tool thiếu tính năng.
 function giongVeThanh(){
-  const el = document.getElementById('slGap');
-  if (el) el.classList.remove('off');
+  // VieNeu Turbo chưa nhận tham số tốc độ, và chỉ đọc tiếng Việt —
+  // mờ phần tương ứng khi chọn VieNeu, KHÔNG giấu (đúng triết lý tab này).
+  const vi = _voiceBackend === 'vieneu';
+  const el = document.getElementById('slTocDo');
+  if (el) el.classList.toggle('off', vi);
+  const wy = document.getElementById('whyTocDo');
+  if (wy) wy.textContent = vi ? 'VieNeu Turbo chưa hỗ trợ tốc độ' : '';
+  const nn = document.getElementById('slNgonNgu');
+  if (nn) nn.classList.toggle('off', vi);
+  const wn = document.getElementById('whyNgonNgu');
+  if (wn) wn.textContent = vi ? 'VieNeu chỉ đọc tiếng Việt' : '';
 }
 
 // ── Nghe thử: bấm cả thẻ, mẫu 4 giây, lưu lại khỏi gọi hai lần ──────
@@ -7860,7 +7970,7 @@ async function giongBam(key){
     let url = _giongMau.get(key);
     if (!url){
       _giongPhat = key; giongVe();
-      const blob = await _ttsChay(v, _GIONG_THU, giongDocTuyChon(), null);
+      const blob = await _ttsChay(_voiceBackend, v, _GIONG_THU, giongDocTuyChon(), null);
       url = URL.createObjectURL(blob); _giongMau.set(key, url);
     }
     if (!_giongAudio) _giongAudio = new Audio();
@@ -7868,7 +7978,10 @@ async function giongBam(key){
     _giongAudio.src = url; _giongPhat = key; giongVe();
     await _giongAudio.play();
   } catch (err){
-    _giongPhat = ''; giongVe();
+    _giongPhat = '';
+    // Nghe thử lỗi thật cũng đánh đỏ engine — cùng quy tắc với ttsDoc().
+    if (_giongTT[_voiceBackend] === 'ok'){ _giongTT[_voiceBackend] = 'err'; try { giongKiemEngineVe(); } catch (_){} }
+    giongVe();
     giongBao('Nghe thử lỗi: ' + (err.message || err), 'red');
   }
 }
@@ -7878,50 +7991,18 @@ function giongDocTuyChon(){
   return {
     tocDo: isFinite(s('voiceSpeed')) ? s('voiceSpeed') : 1,
     gap: isFinite(s('voiceGap')) ? s('voiceGap') : 300,
-    onDinh: isFinite(s('voiceOnDinh')) ? s('voiceOnDinh') : 0.5,
-    tuongDong: isFinite(s('voiceTuongDong')) ? s('voiceTuongDong') : 0.75,
     lang: (document.getElementById('voiceLang') || {}).value || 'vi',
   };
 }
 
-// ── Ba engine ───────────────────────────────────────────────────────
-/* Dịch lỗi hay gặp của nhà cung cấp sang tiếng Việt kèm cách xử lý. Câu gốc
-   vẫn giữ ở cuối để tra cứu khi cần.                                          */
-const _TTS_LOI = [
-  [/free users cannot use library voices/i,
-   'Giọng này lấy từ Voice Library (kho cộng đồng) — tài khoản miễn phí không gọi qua API được. Dùng giọng premade của ElevenLabs (Adam, Rachel, Bill…), hoặc nâng gói, hoặc tự clone giọng bằng OmniVoice.'],
-  [/missing the permission ([a-z_]+)/i,
-   'Key bị giới hạn quyền — vào elevenlabs.io → API Keys, bật quyền còn thiếu cho key này.'],
-  [/(quota|character limit|exceeds your)/i,
-   'Hết hạn mức ký tự tháng này của ElevenLabs. Chờ sang kỳ mới, nâng gói, hoặc chuyển sang giọng OmniVoice chạy máy (không giới hạn).'],
-  [/voice.{0,12}not.{0,4}found|invalid voice/i,
-   'Không tìm thấy voice id này. Kiểm lại chuỗi id, hoặc giọng đã bị xoá khỏi tài khoản.'],
-  [/(invalid[_ ]api[_ ]key|incorrect api key|unauthorized|authentication)/i,
-   'Key sai hoặc hết hạn. Dán lại key ở ô KEY bên trên rồi bấm Lưu key.'],
-  [/rate.?limit|too many requests/i,
-   'Gọi quá nhanh, nhà cung cấp chặn tạm. Chờ một lát rồi thử lại.'],
-];
-function _ttsGiaiThich(msg){
-  for (const [re, vi] of _TTS_LOI) if (re.test(msg)) return vi + ' [' + String(msg).slice(0, 110) + ']';
-  return msg;
-}
 
-function _ttsBlob(r, ten){
-  if (!r) throw new Error(ten + ': không có phản hồi.');
-  if (r.error) throw new Error(ten + ': ' + r.error);
-  if (!r.b64){
-    let m = r.text || ('HTTP ' + (r.status || '?'));
-    try { const j = JSON.parse(r.text); m = (j.error && (j.error.message || j.error)) || j.detail && (j.detail.message || j.detail) || m; } catch (e){}
-    throw new Error(ten + ': ' + _ttsGiaiThich(String(m)).slice(0, 320));
-  }
-  const bin = atob(r.b64), u8 = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
-  return new Blob([u8], { type: r.mime || 'audio/mpeg' });
-}
 
-async function _ttsOmni(v, text, o, onTien){
-  if (!_voiceReady){ await voiceInit(); if (!_voiceReady) throw new Error('Backend OmniVoice chưa sẵn sàng.'); }
-  const body = { text, language: o.lang, speed: o.tocDo, gap_ms: Math.round(o.gap), attributes: {}, preset_id: v.id };
+/* Đọc một đoạn bằng engine chỉ định (omni/vieneu/xtts) — đi qua task queue
+   của backend voice-studio: POST /api/tts (kèm field `engine`) → poll
+   /api/status/{id} → tải file merged.                                        */
+async function _ttsLocal(eng, v, text, o, onTien){
+  if (!_voiceReady){ await voiceInit(); if (!_voiceReady) throw new Error('Backend giọng nói chưa sẵn sàng.'); }
+  const body = { text, language: o.lang, speed: o.tocDo, gap_ms: Math.round(o.gap), attributes: {}, preset_id: v.id, engine: _TTS_BACKEND_ID[eng] || 'omnivoice' };
   const sub = await fetch(VOICE_URL + '/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.json());
   const tid = sub.task_id;
   if (!tid) throw new Error('Backend không nhận việc.');
@@ -7938,64 +8019,32 @@ async function _ttsOmni(v, text, o, onTien){
   throw new Error('Quá lâu không xong.');
 }
 
-async function _ttsEleven(v, text, o){
-  const k = _ttsKey('elevenlabs');
-  if (!k) throw new Error('Chưa có key ElevenLabs — bấm "Sửa key".');
-  return _ttsBlob(await window.native.ttsFetch({
-    url: 'https://api.elevenlabs.io/v1/text-to-speech/' + encodeURIComponent(v.id),
-    method: 'POST',
-    headers: { 'xi-api-key': k, 'Content-Type': 'application/json', 'Accept': 'audio/mpeg' },
-    body: JSON.stringify({
-      text, model_id: v.model || 'eleven_multilingual_v2',
-      voice_settings: { stability: o.onDinh, similarity_boost: o.tuongDong, speed: o.tocDo },
-    }),
-    timeoutMs: 300000,
-  }), 'ElevenLabs');
-}
-
-async function _ttsOpenAI(v, text, o){
-  const k = _ttsKey('openai');
-  if (!k) throw new Error('Chưa có key OpenAI — bấm "Sửa key".');
-  return _ttsBlob(await window.native.ttsFetch({
-    url: 'https://api.openai.com/v1/audio/speech',
-    method: 'POST',
-    headers: { 'Authorization': 'Bearer ' + k, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: v.model || 'gpt-4o-mini-tts', input: text, voice: v.id,
-      speed: Math.max(0.25, Math.min(4, o.tocDo)), response_format: 'mp3',
-    }),
-    timeoutMs: 300000,
-  }), 'OpenAI');
-}
-
-async function _ttsChay(v, text, o, onTien){
-  let blob;
-  if (v.engine === 'omni') blob = await _ttsOmni(v, text, o, onTien);
-  else if (v.engine === 'elevenlabs') blob = await _ttsEleven(v, text, o);
-  else if (v.engine === 'openai') blob = await _ttsOpenAI(v, text, o);
-  else throw new Error('Engine lạ: ' + v.engine);
+async function _ttsChay(eng, v, text, o, onTien){
+  if (!_TTS_TEN[eng]) throw new Error('Engine lạ: ' + eng);
+  const blob = await _ttsLocal(eng, v, text, o, onTien);
   // Đọc ra file là bằng chứng mạnh hơn mọi phép thăm dò — nâng chấm lên xanh.
-  // Có key chỉ được quyền text_to_speech mà không được user_read, thăm dò sẽ
-  // báo vàng oan; lần đọc thật đầu tiên sửa lại cho đúng.
-  if (_giongTT[v.engine] !== 'ok'){ _giongTT[v.engine] = 'ok'; delete _giongTTLoi[v.engine]; try { giongKiemEngineVe(); } catch (_){} }
+  if (_giongTT[eng] !== 'ok'){ _giongTT[eng] = 'ok'; try { giongKiemEngineVe(); } catch (_){} }
   return blob;
 }
 
-/* Đọc cả kịch bản. Engine đang chọn hỏng thì nhảy sang engine chấm xanh kế
-   tiếp thay vì chết hẳn — luồng tự động dựa vào đây.                        */
+/* Đọc cả kịch bản. Engine đang chọn hỏng (chưa cài, lỗi model…) thì lần lượt
+   thử hai engine local còn lại với CÙNG giọng thay vì chết hẳn — luồng tự
+   động dựa vào đây.                                                          */
 async function ttsDoc(text, onTien){
   const uu = _giongDS.find(v => v.key === _giongChon) || _giongDS[0];
   if (!uu) throw new Error('Chưa có giọng nào trong thư viện.');
-  const thu = [uu].concat(_giongDS.filter(v => v.engine !== uu.engine && _giongTT[v.engine] === 'ok'));
+  const thu = [_voiceBackend].concat(Object.keys(_TTS_TEN).filter(e => e !== _voiceBackend));
   let loiDau = null;
-  for (const v of thu){
+  for (const eng of thu){
     try {
-      if (onTien && v !== uu) onTien('chuyển sang ' + _TTS_TEN[v.engine]);
-      const blob = await _ttsChay(v, text, giongDocTuyChon(), onTien);
-      return { blob, giong: v, luiVe: v !== uu };
+      if (onTien && eng !== _voiceBackend) onTien('chuyển sang ' + _TTS_TEN[eng]);
+      const blob = await _ttsChay(eng, uu, text, giongDocTuyChon(), onTien);
+      return { blob, giong: uu, engine: eng, luiVe: eng !== _voiceBackend };
     } catch (e){
       if (!loiDau) loiDau = e;
-      try { novaLog('🎙 ' + _TTS_TEN[v.engine] + ' lỗi — ' + (e.message || e), 'warn'); } catch (_){}
+      // engine thật sự hỏng (chưa cài, lỗi model…) → chấm đỏ, đừng để xanh dối lòng.
+      if (_giongTT[eng] === 'ok'){ _giongTT[eng] = 'err'; try { giongKiemEngineVe(); } catch (_){} }
+      try { novaLog('🎙 ' + _TTS_TEN[eng] + ' lỗi — ' + (e.message || e), 'warn'); } catch (_){}
     }
   }
   throw loiDau || new Error('Không engine nào đọc được.');
@@ -8018,12 +8067,7 @@ function giongDemChu(){
   const giay = Math.round(tu / 2.5);
   const el = document.getElementById('giongDemChu');
   if (!el) return;
-  const cur = _giongDS.find(v => v.key === _giongChon);
-  // Gói miễn phí ElevenLabs 10.000 ký tự/THÁNG — kịch bản video dài vượt là chuyện
-  // thường, nên nhắc ngay lúc gõ chứ đừng để bấm Tạo giọng mới báo lỗi.
-  const canh = cur && cur.engine === 'elevenlabs' && t.length > 10000
-    ? ' <span style="color:var(--amber)">· vượt 10.000 ký tự — gói ElevenLabs miễn phí sẽ chặn, cân nhắc giọng OmniVoice</span>' : '';
-  el.innerHTML = escapeHtml(tu + ' từ · ' + t.length + ' ký tự · ước ' + Math.floor(giay / 60) + ' phút ' + (giay % 60) + ' giây') + canh;
+  el.innerHTML = escapeHtml(tu + ' từ · ' + t.length + ' ký tự · ước ' + Math.floor(giay / 60) + ' phút ' + (giay % 60) + ' giây');
 }
 
 async function voiceGenerate(){
@@ -8035,14 +8079,14 @@ async function voiceGenerate(){
   try {
     giongBao('Đang tạo giọng…');
     const t0 = Date.now();
-    const { blob, giong, luiVe } = await ttsDoc(text, s => giongBao('Đang tạo… ' + s));
+    const { blob, giong, engine, luiVe } = await ttsDoc(text, s => giongBao('Đang tạo… ' + s));
     const url = URL.createObjectURL(blob);
     const au = new Audio(url);
     const giay = await new Promise(r => { au.onloadedmetadata = () => r(au.duration || 0); au.onerror = () => r(0); });
-    _giongSu.unshift({ url, blob, ten: giong.name, engine: giong.engine, giay, text, khi: Date.now() });
+    _giongSu.unshift({ url, blob, ten: giong.name, engine: engine, giay, text, khi: Date.now() });
     _giongSu = _giongSu.slice(0, 12);
     giongSuVe();
-    giongBao('✓ Xong sau ' + Math.round((Date.now() - t0) / 1000) + ' giây' + (luiVe ? ' (đã lui về ' + _TTS_TEN[giong.engine] + ')' : ''), 'green');
+    giongBao('✓ Xong sau ' + Math.round((Date.now() - t0) / 1000) + ' giây' + (luiVe ? ' (đã lui về ' + _TTS_TEN[engine] + ')' : ''), 'green');
   } catch (e){
     giongBao('Lỗi: ' + (e.message || e), 'red');
   } finally {
@@ -8060,7 +8104,7 @@ function giongSuVe(){
       <span class="gpico">▶</span>
       <div style="flex:1;min-width:0">
         <div class="gh-txt">${escapeHtml(h.text.slice(0, 70))}${h.text.length > 70 ? '…' : ''}</div>
-        <div class="gh-meta">${escapeHtml(h.ten)} · ${ph}:${String(gi).padStart(2,'0')} · ${_giongKhiNao(h.khi)}</div>
+        <div class="gh-meta">${escapeHtml(h.ten)}${h.engine ? ' · ' + (_TTS_TEN[h.engine] || '') : ''} · ${ph}:${String(gi).padStart(2,'0')} · ${_giongKhiNao(h.khi)}</div>
       </div>
       <div class="gh-act">
         <button class="btn sm ghost" onclick="event.stopPropagation();giongSuTai(${i})">Tải</button>
@@ -8096,278 +8140,117 @@ function giongSuDungChoVideo(i){
 }
 
 // ── Thêm giọng ──────────────────────────────────────────────────────
-function giongThemBat(){ _giongThemMo = !_giongThemMo; _giongTenTay = false; _giongTra = {}; _giongTraId = ''; const b = document.getElementById('giongThemBox'); if (b) b.style.display = _giongThemMo ? '' : 'none'; if (_giongThemMo) giongThemDoi(); }
+function giongThemBat(){ _giongThemMo = !_giongThemMo; const b = document.getElementById('giongThemBox'); if (b) b.style.display = _giongThemMo ? '' : 'none'; if (_giongThemMo) giongThemDoi(); }
 function giongThemDoi(){
   const c = (document.getElementById('giongThemCach') || {}).value || 'clone';
-  for (const [id, hop] of [['gtClone', c === 'clone'], ['gtDesign', c === 'design'],
-                           ['gtNhap', c === 'nhap' || c === 'nhanban'],
-                           ['gtKeyRow', c === 'nhap' || c === 'nhanban'],
-                           ['gtNhanBanNote', c === 'nhanban']]){
+  for (const [id, hop] of [['gtClone', c === 'clone'], ['gtDesign', c === 'design'], ['gtDesignInfo', c === 'design']]){
     const el = document.getElementById(id); if (el) el.style.display = hop ? '' : 'none';
   }
-  const es = document.getElementById('gtEngine');
-  const vs = document.getElementById('gtVoiceId'), vl = document.getElementById('gtVoiceSel');
-  if (es && vs && vl){
-    const eng = es.value;
-    vl.style.display = eng === 'openai' ? '' : 'none';
-    vs.style.display = eng === 'openai' ? 'none' : '';
-  }
-  giongVeKey();
-  const tt = document.getElementById('gtVoiceTT'); if (tt) tt.textContent = '';
-  _giongTra = {};
 }
 
-/* Ô key: chỉ cho biết ĐÃ có hay chưa và 4 ký tự cuối — không đổ nguyên key ra
-   màn hình, phòng lúc quay màn hình hoặc chụp ảnh gửi đi.                     */
-function giongVeKey(){
-  const eng = ((document.getElementById('gtEngine') || {}).value) || 'elevenlabs';
-  const nha = document.getElementById('gtKeyNha'); if (nha) nha.textContent = _TTS_TEN[eng].toUpperCase();
-  const o = document.getElementById('gtKey'); if (o) o.value = '';
-  const tt = document.getElementById('gtKeyTT');
-  if (!tt) return;
-  const k = _ttsKey(eng);
-  const rieng = (localStorage.getItem(_TTS_KHOA[eng]) || '').trim();
-  if (!k) tt.innerHTML = '<span style="color:var(--red)">— chưa có key</span>';
-  else tt.innerHTML = '<span style="color:var(--green)">✓ đã có (…' + escapeHtml(k.slice(-4)) + ')</span>'
-    + (!rieng && eng === 'openai' ? ' <span style="color:var(--text-dim)">mượn từ tab Cài đặt</span>' : '')
-    + ' <span style="color:var(--text-dim)">— dán key mới để thay</span>';
-}
-function giongHienKey(){
-  const o = document.getElementById('gtKey'); if (!o) return;
-  o.type = o.type === 'password' ? 'text' : 'password';
-}
-async function giongLuuKey(){
-  const eng = ((document.getElementById('gtEngine') || {}).value) || 'elevenlabs';
-  const o = document.getElementById('gtKey');
-  const v = ((o || {}).value || '').trim();
-  if (!v){ giongBao('Dán key vào ô trước đã.', 'red'); return; }
-  const khac = Object.keys(_TTS_DAU).find(x => x !== eng && _TTS_DAU[x].test(v));
-  if (khac && !_TTS_DAU[eng].test(v)){
-    giongBao('Key này có dạng của ' + _TTS_TEN[khac] + ' (bắt đầu bằng "' + v.slice(0, 3) + '") — bạn đang lưu vào ô ' + _TTS_TEN[eng] + '. Đổi Nhà cung cấp cho khớp rồi lưu lại.', 'red');
-    return;
-  }
-  try { localStorage.setItem(_TTS_KHOA[eng], v); } catch (e){ giongBao('Không lưu được key: ' + (e.message || e), 'red'); return; }
-  if (o){ o.value = ''; o.type = 'password'; }
-  giongBao('Đang thử gọi ' + _TTS_TEN[eng] + ' bằng key vừa lưu…');
-  await giongKiemEngine();
-  giongVeKey();
-  const tt = _giongTT[eng];
-  if (tt === 'ok') giongBao('✓ Key ' + _TTS_TEN[eng] + ' dùng được.', 'green');
-  else giongBao('Đã lưu nhưng gọi thử KHÔNG được — key sai hoặc hết hạn?', 'red');
-}
-/* Tra voice id sang tên. ElevenLabs có GET /v1/voices/{id} trả về name kèm
-   labels (giới tính, tuổi, chất giọng, dùng cho) — lấy luôn làm nhãn lọc, khỏi
-   bắt người dùng gõ tay. Endpoint này cần quyền voices_read; key bị giới hạn
-   thì báo rõ chứ không im lặng.                                              */
-let _giongTra = {};        // kết quả tra gần nhất: {id, name, tags}
-let _giongTraHen = null;   // hẹn giờ gõ xong mới tra
-let _giongTraId = '';      // voice id của lần tra gần nhất
-let _giongTenTay = false;  // bạn có tự sửa ô Tên SAU lần tra gần nhất không.
-                           // Dán voice id KHÁC = đổi ý chọn giọng khác → cờ này về false,
-                           // tên lại chạy theo giọng mới. Chỉ tên gõ sau lúc tra mới được giữ.
-
-function giongDoVoiceId(){
-  clearTimeout(_giongTraHen);
-  const o = document.getElementById('gtVoiceId'), tt = document.getElementById('gtVoiceTT');
-  const id = ((o || {}).value || '').trim();
-  // Chỉ khi voice id ĐỔI THẬT mới cho tên chạy theo lại. Gõ rồi xoá về đúng id cũ
-  // thì tên bạn vừa đặt vẫn còn.
-  if (id !== _giongTraId){ _giongTra = {}; _giongTenTay = false; _giongTraId = id; }
-  if (!tt) return;
-  if (id.length < 15){ tt.textContent = id ? 'Đang chờ đủ voice id…' : ''; return; }
-  tt.textContent = 'Đang tra tên giọng…';
-  _giongTraHen = setTimeout(() => _giongTraNgay(id), 500);
-}
-
-async function _giongTraNgay(id){
-  const tt = document.getElementById('gtVoiceTT');
-  const eng = ((document.getElementById('gtEngine') || {}).value) || 'elevenlabs';
-  if (eng !== 'elevenlabs'){ if (tt) tt.textContent = ''; return; }
-  const k = _ttsKey('elevenlabs');
-  if (!k){ if (tt) tt.innerHTML = '<span style="color:var(--red)">Chưa có key ElevenLabs — lưu key bên dưới rồi dán lại voice id.</span>'; return; }
-  try {
-    const r = await window.native.llmFetch({
-      url: 'https://api.elevenlabs.io/v1/voices/' + encodeURIComponent(id),
-      method: 'GET', headers: { 'xi-api-key': k }, timeoutMs: 20000,
-    });
-    const j = JSON.parse(r.text || '{}');
-    if (!r.ok){
-      const d = j.detail || j.error || {};
-      const vi = d.message || j.message || ('HTTP ' + r.status);
-      if (document.getElementById('gtVoiceId').value.trim() !== id) return;   // đã gõ tiếp
-      tt.innerHTML = '<span style="color:var(--' + (/missing the permission/i.test(vi) ? 'amber' : 'red') + ')">' + escapeHtml(String(vi).slice(0, 170)) + '</span>'
-        + (/missing the permission/i.test(vi) ? '<span style="color:var(--text-dim)"> — bật quyền voices_read cho key, hoặc cứ tự gõ Tên giọng rồi lưu.</span>' : '');
-      return;
-    }
-    if (document.getElementById('gtVoiceId').value.trim() !== id) return;
-    const lb = j.labels || {};
-    const tags = ['gender','age','accent','use_case','descriptive']
-      .map(x => lb[x]).filter(Boolean).map(s => String(s).replace(/_/g, ' ')).slice(0, 3);
-    _giongTra = { id, name: j.name || '', tags };
-    const ten = document.getElementById('gtTen');
-    if (ten && j.name && !_giongTenTay) ten.value = j.name;
-    // category 'premade' = giọng gốc của ElevenLabs, gói miễn phí gọi API được.
-    // Mọi loại khác (professional/cloned/generated — tức lấy từ Voice Library)
-    // đều bị chặn ở gói miễn phí. Báo trước, đừng để lưu xong mới biết.
-    const chuan = String(j.category || '').toLowerCase() === 'premade';
-    tt.innerHTML = '<span style="color:var(--green)">✓ ' + escapeHtml(j.name || '(không tên)') + '</span>'
-      + (tags.length ? '<span style="color:var(--text-dim)"> · ' + escapeHtml(tags.join(' · ')) + '</span>' : '')
-      + (j.category ? '<span style="color:var(--' + (chuan ? 'text-dim' : 'amber') + ')"> · ' + escapeHtml(j.category) + '</span>' : '')
-      + (chuan ? '' : '<div style="color:var(--amber);margin-top:4px">Giọng từ Voice Library — tài khoản ElevenLabs miễn phí KHÔNG gọi được qua API. Chọn giọng <b>premade</b>, nâng gói, hoặc dùng "Nhân bản về máy" nếu gói bạn cho phép.</div>');
-  } catch (e){
-    if (tt) tt.innerHTML = '<span style="color:var(--red)">Tra không được: ' + escapeHtml(String(e.message || e).slice(0, 120)) + '</span>';
-  }
-}
-
-async function giongXoaKey(){
-  const eng = ((document.getElementById('gtEngine') || {}).value) || 'elevenlabs';
-  if (!(localStorage.getItem(_TTS_KHOA[eng]) || '').trim()){ giongBao('Ô ' + _TTS_TEN[eng] + ' vốn đã trống.', 'text-muted'); return; }
-  if (!confirm('Xoá key ' + _TTS_TEN[eng] + ' đang lưu?')) return;
-  try { localStorage.removeItem(_TTS_KHOA[eng]); } catch (e){}
-  await giongKiemEngine(); giongVeKey();
-  giongBao('Đã xoá key ' + _TTS_TEN[eng] + '.', 'green');
-}
-
-/* Nút "Sửa key" ở hàng engine: mở thẳng ô key thay vì quăng sang tab khác. */
-function giongMoKey(eng){
-  const b = document.getElementById('giongThemBox');
-  if (b && b.style.display === 'none'){ _giongThemMo = false; giongThemBat(); }
-  const c = document.getElementById('giongThemCach'); if (c) c.value = 'nhap';
-  const e = document.getElementById('gtEngine'); if (e && eng) e.value = eng;
-  giongThemDoi();
-  const o = document.getElementById('gtKey');
-  if (o){ o.scrollIntoView({ block: 'center' }); o.focus(); }
-}
 async function giongThemLuu(){
   const cach = (document.getElementById('giongThemCach') || {}).value || 'clone';
-  const ten = ((document.getElementById('gtTen') || {}).value || '').trim() || (_giongTra.name || '');
-  const nhan = (_giongTra.tags || []).slice(0, 3);   // nhãn lấy từ kết quả tra voice id, không nhập tay nữa
+  const ten = ((document.getElementById('gtTen') || {}).value || '').trim();
+  const nhan = [];   // nhãn lọc — backend tự gắn sau khi thêm
   if (!ten){ giongBao('Đặt tên cho giọng trước.', 'red'); return; }
   try {
-    if (cach === 'nhap' || cach === 'nhanban'){
-      const eng = (document.getElementById('gtEngine') || {}).value || 'elevenlabs';
-      const id = eng === 'openai'
-        ? ((document.getElementById('gtVoiceSel') || {}).value || '')
-        : ((document.getElementById('gtVoiceId') || {}).value || '').trim();
-      if (!id){ giongBao('Nhập voice id.', 'red'); return; }
-      const model = ((document.getElementById('gtModel') || {}).value || '').trim();
-      if (cach === 'nhanban'){ await _giongNhanBan(eng, id, model, ten, nhan); }
-      else {
-      const ds = _giongCloud();
-      if (ds.some(v => v.engine === eng && v.id === id)){ giongBao('Giọng này đã có trong thư viện.', 'red'); return; }
-      ds.push({ engine: eng, id, name: ten, tags: nhan, model });
-      _giongCloudLuu(ds);
-      }
+    if (!_voiceReady){ await voiceInit(); if (!_voiceReady){ giongBao('Backend giọng nói chưa sẵn sàng.', 'red'); return; } }
+    const body = { name: ten, ref_text: '', attributes: {}, tags: nhan };
+    if (cach === 'clone'){
+      const f = (document.getElementById('gtFile') || {}).files && document.getElementById('gtFile').files[0];
+      if (!f){ giongBao('Chọn file giọng mẫu.', 'red'); return; }
+      giongBao('Đang tải file mẫu…');
+      const fd = new FormData(); fd.append('file', f);
+      const up = await fetch(VOICE_URL + '/api/upload', { method: 'POST', body: fd }).then(r => r.json());
+      body.ref_audio = up.path;
     } else {
-      if (!_voiceReady){ await voiceInit(); if (!_voiceReady){ giongBao('Backend OmniVoice chưa sẵn sàng.', 'red'); return; } }
-      const body = { name: ten, ref_text: '', attributes: {}, tags: nhan };
-      if (cach === 'clone'){
-        const f = (document.getElementById('gtFile') || {}).files && document.getElementById('gtFile').files[0];
-        if (!f){ giongBao('Chọn file giọng mẫu.', 'red'); return; }
-        giongBao('Đang tải file mẫu…');
-        const fd = new FormData(); fd.append('file', f);
-        const up = await fetch(VOICE_URL + '/api/upload', { method: 'POST', body: fd }).then(r => r.json());
-        body.ref_audio = up.path;
-      } else {
-        const ins = ((document.getElementById('gtMoTa') || {}).value || '').trim();
-        if (!ins){ giongBao('Nhập mô tả giọng.', 'red'); return; }
-        body.attributes.instruct = ins;
-      }
-      await fetch(VOICE_URL + '/api/voices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.json());
+      const ins = ((document.getElementById('gtMoTa') || {}).value || '').trim();
+      if (!ins){ giongBao('Nhập mô tả giọng.', 'red'); return; }
+      body.attributes.instruct = ins;
     }
+    await fetch(VOICE_URL + '/api/voices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.json());
     giongThemBat();
     await giongTaiDS();
     giongBao('✓ Đã thêm giọng "' + ten + '".', 'green');
   } catch (e){ giongBao('Thêm giọng lỗi: ' + (e.message || e), 'red'); }
 }
-/* Nhân bản một giọng đám mây về máy: gọi nhà cung cấp đọc ~45 từ, lấy file đó
-   làm mẫu cho OmniVoice clone. Trả tiền MỘT lần, sau đó đọc bao nhiêu cũng
-   miễn phí và chạy offline. Chất lượng là bản sao của bản sao — giống mà không
-   trùng; có file gốc người thu thì dùng file gốc vẫn hơn.                     */
-async function _giongNhanBan(eng, id, model, ten, nhan){
-  if (!_voiceReady){ await voiceInit(); if (!_voiceReady) throw new Error('Backend OmniVoice chưa sẵn sàng — cần nó để giữ bản sao.'); }
-  const lang = ((document.getElementById('voiceLang') || {}).value === 'en') ? 'en' : 'vi';
-  const doan = _GIONG_MAU_CLONE[lang];
-  giongBao('Đang nhờ ' + _TTS_TEN[eng] + ' đọc ' + doan.length + ' ký tự làm mẫu…');
-  const o = giongDocTuyChon();
-  const gia = { engine: eng, id, model };
-  const blob = eng === 'elevenlabs' ? await _ttsEleven(gia, doan, o) : await _ttsOpenAI(gia, doan, o);
-  if (!blob || blob.size < 4000) throw new Error(_TTS_TEN[eng] + ' trả file rỗng.');
-  giongBao('Đang nạp mẫu ' + Math.round(blob.size / 1024) + ' KB vào OmniVoice…');
-  const fd = new FormData();
-  fd.append('file', new File([blob], 'mau-' + eng + '.mp3', { type: blob.type || 'audio/mpeg' }));
-  const up = await fetch(VOICE_URL + '/api/upload', { method: 'POST', body: fd }).then(r => r.json());
-  if (!up || !up.path) throw new Error('OmniVoice không nhận được file mẫu.');
-  await fetch(VOICE_URL + '/api/voices', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: ten, ref_text: doan, ref_audio: up.path, attributes: { lang }, tags: nhan.concat(['nhân bản']) }),
-  }).then(r => r.json());
-}
-
 async function giongXoa(key){
   const v = _giongDS.find(x => x.key === key);
   if (!v || v.factory) return;
   if (!confirm('Xoá giọng "' + v.name + '"?')) return;
   try {
-    if (v.engine === 'omni') await fetch(VOICE_URL + '/api/voices/' + v.id, { method: 'DELETE' });
-    else _giongCloudLuu(_giongCloud().filter(x => !(x.engine === v.engine && x.id === v.id)));
+    await fetch(VOICE_URL + '/api/voices/' + v.id, { method: 'DELETE' });
     _giongMau.delete(key);
     await giongTaiDS();
   } catch (e){ giongBao('Xoá lỗi: ' + (e.message || e), 'red'); }
 }
 
-// ── Trạng thái engine: đo THẬT, không chỉ xem có key ─────────────────
+// ── Trạng thái engine: đo THẬT qua backend ───────────────────────────
 function giongKiemEngineVe(){
     const el = document.getElementById('giongEngine');
-    if (!el) return;
-    const cham = e => `<span class="gdot ${_giongTT[e]}"></span>`;
-    const chua = ['elevenlabs','openai'].filter(e => _giongTT[e] === 'no');
-    const hong = ['elevenlabs','openai'].filter(e => _giongTT[e] === 'err' || _giongTT[e] === 'thieu');
-    el.innerHTML =
-      cham('omni') + '<b>OmniVoice</b> <span style="color:var(--text-dim)">máy</span>' +
-      '<span class="sep">·</span>' + cham('elevenlabs') + 'ElevenLabs' +
-      '<span class="sep">·</span>' + cham('openai') + 'OpenAI' +
-      (chua.length ? '<span class="sep">·</span><span style="color:var(--text-dim)">' + chua.map(e => _TTS_TEN[e]).join(', ') + ' chưa có key</span>' : '') +
-      '<button class="btn sm ghost" style="margin-left:auto" onclick="giongMoKey(\'elevenlabs\')">Sửa key</button>' +
-      hong.map(e => '<div style="flex-basis:100%;font-size:12px;color:var(--' + (_giongTT[e] === 'thieu' ? 'amber' : 'red') + ');margin-top:6px">'
-        + escapeHtml(_TTS_TEN[e]) + ': ' + escapeHtml(_giongTTLoi[e] || 'gọi thử không được')
-        + (_giongTT[e] === 'thieu' ? ' <span style="color:var(--text-dim)">— key HỢP LỆ, chỉ thiếu quyền cho phép Nova tự kiểm tra. Đọc vẫn có thể chạy bình thường: cứ bấm Tạo giọng, ra tiếng là chấm tự chuyển xanh. Muốn xanh ngay thì bật quyền đó ở elevenlabs.io → API Keys.</span>' : '')
-        + '</div>').join('');
+    if (el){
+      const cham = e => `<span class="gdot ${_giongTT[e] || 'no'}"></span>`;
+      el.innerHTML = ['omni', 'vieneu', 'xtts'].map(e =>
+        cham(e) + `<b>${_TTS_TEN[e]}</b> <span style="color:var(--text-dim)">máy</span>`
+      ).join('<span class="sep">·</span>');
+    }
     const n = document.getElementById('giongEngineDem');
-    if (n) n.textContent = Object.values(_giongTT).filter(x => x === 'ok').length + '/3 sẵn sàng';
+    if (n) n.textContent = _giongTT[_voiceBackend] === 'ok' ? 'sẵn sàng' : 'chưa sẵn sàng';
+    voiceBackendVe();
 }
 
 async function giongKiemEngine(){
-  const ve = giongKiemEngineVe;
-  ve();
-  const dat = (e, v) => { _giongTT[e] = v; ve(); };
-  try { const s = await window.native.voiceStatus(); dat('omni', s && s.running ? 'ok' : 'no'); } catch (e){ dat('omni', 'no'); }
-  for (const e of ['elevenlabs','openai']){
-    const k = _ttsKey(e);
-    if (!k){ dat(e, 'no'); continue; }
-    try {
-      const r = await window.native.llmFetch({
-        url: e === 'elevenlabs' ? 'https://api.elevenlabs.io/v1/user/subscription' : 'https://api.openai.com/v1/models',
-        method: 'GET',
-        headers: e === 'elevenlabs' ? { 'xi-api-key': k } : { 'Authorization': 'Bearer ' + k },
-        timeoutMs: 15000,
-      });
-      let tt = r && r.ok ? 'ok' : 'err', vi = '';
-      if (r && !r.ok){
-        try {
-          const j = JSON.parse(r.text || '{}');
-          const d = j.detail || j.error || {};
-          vi = d.message || j.message || '';
-          // ElevenLabs 401 kèm missing_permissions = key THẬT, chỉ thiếu quyền.
-          // Báo đỏ ở đây là oan, phải phân biệt.
-          if (d.status === 'missing_permissions' || /missing the permission/i.test(vi)) tt = 'thieu';
-        } catch (_){ vi = String(r.text || r.error || '').slice(0, 160); }
-      } else if (r && r.error) vi = r.error;
-      _giongTTLoi[e] = vi;
-      dat(e, tt);
-    } catch (err){ _giongTTLoi[e] = String(err.message || err); dat(e, 'err'); }
+  giongKiemEngineVe();
+  // Backend lên là cả ba engine khả dụng (model nạp lười lần đọc đầu).
+  // Engine từng lỗi thật giữ chấm đỏ tới khi đọc được lại.
+  let chay = false;
+  try { const s = await window.native.voiceStatus(); chay = !!(s && s.running); } catch (e){ chay = false; }
+  for (const e of ['omni', 'vieneu', 'xtts']){
+    if (_giongTT[e] === 'err') continue;
+    _giongTT[e] = chay ? 'ok' : 'no';
+  }
+  giongKiemEngineVe();
+}
+
+// ── Dropdown chọn backend tạo giọng ──────────────────────────────────
+function voiceBackendMo(e){
+  if (e) e.stopPropagation();
+  const dd = document.getElementById('voiceBackendDD');
+  if (dd) dd.classList.toggle('mo');
+  const btn = document.getElementById('voiceBackendBtn');
+  if (btn) btn.setAttribute('aria-expanded', dd && dd.classList.contains('mo') ? 'true' : 'false');
+}
+function voiceBackendChon(eng){
+  if (!_TTS_TEN[eng]) return;
+  _voiceBackend = eng;
+  try { localStorage.setItem('voice_backend', eng); } catch (e){}
+  const dd = document.getElementById('voiceBackendDD');
+  if (dd) dd.classList.remove('mo');
+  _giongMau.clear();   // mẫu nghe thử đang cache tạo bằng engine cũ — xoá cho đúng
+  voiceBackendVe();
+  giongVe();
+  giongVeThanh();
+}
+/* Vẽ lại nút dropdown theo engine đang chọn: tên, chú thích, chấm trạng thái,
+   mục đang chọn trong menu. Gọi mỗi khi trạng thái đổi.                    */
+function voiceBackendVe(){
+  const eng = _TTS_TEN[_voiceBackend] ? _voiceBackend : 'omni';
+  const ten = document.getElementById('voiceBackendTen');
+  const mo  = document.getElementById('voiceBackendNote');
+  const dot = document.getElementById('voiceBackendDot');
+  if (ten) ten.textContent = _TTS_TEN[eng];
+  if (mo)  mo.textContent  = _BE_MO_TA[eng].mo;
+  if (dot) dot.className = 'gdot ' + (_giongTT[eng] || 'no');
+  for (const [e, id] of [['omni', 'beDotOmni'], ['vieneu', 'beDotVieneu'], ['xtts', 'beDotXtts']]){
+    const d = document.getElementById(id); if (d) d.className = 'gdot ' + (_giongTT[e] || 'no');
+    const it = document.querySelector('#voiceBackendMenu .be-item[data-eng="' + e + '"]');
+    if (it) it.classList.toggle('sel', e === eng);
   }
 }
+// bấm ra ngoài thì đóng menu
+document.addEventListener('click', () => { const dd = document.getElementById('voiceBackendDD'); if (dd) dd.classList.remove('mo'); });
+try { voiceBackendVe(); } catch (e){}
+try { giongVeThanh(); } catch (e){}
 
 // ── Prompt chuyển động (Image → Video) — Tool 5 ──
 let mvScenes = [];
@@ -19752,7 +19635,8 @@ function t7GlobFull(){
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-//  KHO HIỆU ỨNG — 24 mẫu · 38 chuyển cảnh · 63 bit. Bấm = thêm vào CẢNH ĐANG CHỌN.
+//  KHO HIỆU ỨNG — số mục nạp động từ main (mẫu + chuyển cảnh theo catalog()).
+//  Kho bit để trống có chủ đích (xoá 2026-08-20) — UI tự ẩn nhóm khi rỗng.
 // ══════════════════════════════════════════════════════════════════════════
 let _t7FxTab = 'tpl', _t7Bits = null, _t7Prev = null;
 async function _t7LoadFx(){
@@ -19892,6 +19776,106 @@ function t7FxSetTrans(id){
   setStatus7('⋈ Cảnh ' + c.sceneId + ' dùng chuyển cảnh "' + id + '".', 'ok');
 }
 
+/* ============================================================
+   HOẠT ẢNH (toolanim) — CỬA VÀO RIÊNG cho kho hiệu ứng chuyển động.
+   Dùng lại y nguyên kho + bộ nạp của Tool 7 (_t7LoadFx / _t7Cat /
+   _t7Trans / _t7Bits / _t7Prev) nên hai nơi không bao giờ lệch nhau.
+   Bấm thẻ: có cảnh đang chọn → áp ngay vào spec; chưa có → mở Tool 7.
+============================================================ */
+let _animLoaded = false;
+async function animInit(){
+  const body = document.getElementById('animBody'); if (!body) return;
+  if (!_animLoaded){
+    body.innerHTML = '<div class="anim-dim" style="padding:10px">Đang nạp kho hiệu ứng…</div>';
+    try { await _t7LoadFx(); } catch (e) {}
+    _animLoaded = true;
+  }
+  animRender();
+}
+function animSetStatus(msg, tone){
+  const el = document.getElementById('animStatus'); if (!el) return;
+  el.textContent = msg || '';
+  el.style.color = tone === 'ok' ? 'var(--green)' : tone === 'warn' ? 'var(--accent)'
+    : tone === 'error' ? 'var(--red)' : 'var(--text-muted)';
+}
+function _animSelClip(){
+  try { return (t7State.clips || []).find(x => x.id === t7State.selClip) || null; }
+  catch (e) { return null; }
+}
+function animGoT7(){
+  switchTool('tool7');                                     // switchTool tự gọi t7Build()
+  try { if (typeof t7SetMediaTab === 'function') t7SetMediaTab('fx'); } catch (e) {}
+  try { if (typeof t7FxTab === 'function') t7FxTab('motion'); } catch (e) {}
+}
+function animApply(kind, name){
+  if (!window.native || !window.native.sceneTemplates){
+    animSetStatus('Chỉ áp được trong app Nova (Electron) — mở app desktop.', 'error'); return;
+  }
+  const c = _animSelClip();
+  if (!c){
+    animGoT7();
+    animSetStatus('Chưa chọn cảnh — đã mở Dựng Video. Bấm chọn một cảnh trên timeline rồi quay lại đây bấm hiệu ứng.', 'warn');
+    return;
+  }
+  if (kind === 'tpl' && typeof t7FxAddTpl === 'function') t7FxAddTpl(name);
+  else if (kind === 'bit' && typeof t7FxAddBit === 'function') t7FxAddBit(name);
+  else if (kind === 'tr' && typeof t7FxSetTrans === 'function') t7FxSetTrans(name);
+  else { animSetStatus('Không áp được (thiếu hàm của Tool 7).', 'error'); return; }
+  const nhan = kind === 'tr' ? 'chuyển cảnh' : (kind === 'bit' ? 'bit' : 'mẫu');
+  animSetStatus('✓ Đã áp ' + nhan + ' vào cảnh ' + c.sceneId + ' — bấm 🎬 Mở Dựng Video để xem kết quả.', 'ok');
+}
+function animRender(){
+  const body = document.getElementById('animBody'); if (!body) return;
+  const qEl = document.getElementById('animQ');
+  const q = (qEl ? qEl.value : '').toLowerCase();
+  const esc = escapeHtml;
+  const cat = _t7Cat || [], bits = _t7Bits || [], trans = _t7Trans || [];
+  const stat = document.getElementById('animStat');
+  if (stat) stat.textContent = cat.length + ' mẫu · ' + bits.length + ' bit · ' + trans.length + ' chuyển cảnh';
+  if (!window.native || !window.native.sceneTemplates){
+    body.innerHTML = '<div class="anim-dim" style="padding:10px">⚠️ Kho hiệu ứng chỉ nạp được trong app Nova (Electron) — mở bằng app desktop. Trong trình duyệt thường sẽ thấy trống.</div>';
+    return;
+  }
+  const _hit = (s) => !q || String(s || '').toLowerCase().includes(q);
+  let html = '';
+  // 1) Mẫu đồ hoạ động — ảnh xem trước thật từ nova:fxPreviews
+  const t = cat.filter(x => _hit(x.label + ' ' + x.template));
+  html += '<div class="anim-sec">Mẫu đồ hoạ động · ' + t.length + '</div>';
+  html += t.length
+    ? '<div class="anim-grid">' + t.map(x => {
+        const im = (_t7Prev || {})['tpl_' + x.template];
+        return '<div class="anim-card" onclick="animApply(\'tpl\',\'' + esc(x.template) + '\')" title="' + esc((x.params || []).join(' · ')) + ' — bấm để áp vào cảnh đang chọn">'
+          + '<div class="pv">' + (im ? '<img src="' + im + '" loading="lazy">' : '<span>—</span>') + '</div>'
+          + '<div class="nm">' + esc(x.label) + '</div></div>';
+      }).join('') + '</div>'
+    : '<div class="anim-dim">Không có mẫu nào khớp.</div>';
+  // 2) Bit Remotion
+  const b = bits.filter(_hit);
+  html += '<div class="anim-sec">Bit Remotion · ' + b.length + '</div>';
+  html += b.length
+    ? '<div class="anim-grid">' + b.map(x => {
+        const im = (_t7Prev || {})['bit_' + x];
+        return '<div class="anim-card" onclick="animApply(\'bit\',\'' + esc(x) + '\')" title="' + esc(x) + ' — bấm để áp vào cảnh đang chọn">'
+          + '<div class="pv">' + (im ? '<img src="' + im + '" loading="lazy">' : '<span>—</span>') + '</div>'
+          + '<div class="nm">' + esc(x) + '</div></div>';
+      }).join('') + '</div>'
+    : '<div class="anim-dim">Không có bit nào khớp.</div>';
+  // 3) Chuyển cảnh — gom theo nhóm y như Tool 7 để dễ tìm
+  const fam = {};
+  trans.filter(x => _hit(x.label + ' ' + x.id)).forEach(x => { (fam[x.family] = fam[x.family] || []).push(x); });
+  const famKeys = Object.keys(fam);
+  const nTr = famKeys.reduce((n, f) => n + fam[f].length, 0);
+  html += '<div class="anim-sec">Chuyển cảnh · ' + nTr + '</div>';
+  html += famKeys.length
+    ? famKeys.map(f =>
+        '<div class="anim-fam">' + esc(_T7_FAM[f] || f) + '</div>' +
+        '<div class="anim-trgrid">' + fam[f].map(x =>
+          '<div class="anim-tr" onclick="animApply(\'tr\',\'' + esc(x.id) + '\')" title="' + esc(x.description || '') + ' — bấm để gán cho cảnh đang chọn"><b>' + esc(x.label) + '</b><s>' + (x.durationSec || '') + 's</s></div>').join('') + '</div>'
+      ).join('')
+    : '<div class="anim-dim">Không có chuyển cảnh nào khớp.</div>';
+  body.innerHTML = html;
+}
+
 // ══ KÉO TỪ THƯ VIỆN → THẢ XUỐNG RÃNH ĐỒ HOẠ ══
 // Thả ở đâu thì lớp bắt đầu ở đúng giây đó, và tự thuộc về cảnh đang phủ điểm thả.
 let _t7Drag = null;
@@ -19989,7 +19973,7 @@ function t7GfxJump(clipId, sceneId, i){
 function t7TransJump(clipId){
   t7State.selClip = clipId; _t7GfxSel = null; _t7GlobSel = null;
   t7RenderDetail(); t7RenderTimeline();
-  setStatus7('Chọn kiểu ở ô "Chuyển cảnh vào" bên phải — 38 kiểu.', 'ok');
+  setStatus7('Chọn kiểu ở ô "Chuyển cảnh vào" bên phải — ' + ((_t7Trans || []).length) + ' kiểu.', 'ok');
 }
 // Bám mốc: kéo/trim clip tự dính vào mép cảnh khác + vạch phát. Mặc định BẬT.
 function t7ToggleSnap(){
@@ -20533,20 +20517,27 @@ const _T7_HOLD = {
   'pan-up': 'panU',    'pan-down': 'panD',
   'none': 'none',
 };
-// Chuyển cảnh của timeline → hiệu ứng "vào" của lớp nền
-const _T7_IN = { fade:'fade', dissolve:'fade', slide:'slideL', wipe:'wipeL', circle:'pop', none:'none' };
+// Chuyển cảnh của timeline → hiệu ứng "vào" của lớp nền (tên preset IN của anim.js).
+// Phủ đủ id mới của catalog() lẫn tên cũ / alias; thiếu thì nơi gọi fallback 'fade'.
+const _T7_IN = { fade:'fade', dissolve:'fade', slide:'slideL', 'slide-left':'slideL', wipe:'wipeL', circle:'pop', none:'none',
+  cut:'none', 'dip-black':'fade', 'dip-white':'fade', 'flash-cut':'pop', 'whip-pan':'slideL', defocus:'defocus',
+  'zoom-through':'zoom', 'match-zoom':'zoom', 'light-leak':'fade', 'film-burn':'fade', 'glow-bloom':'fade',
+  'wipe-left':'wipeL', 'wipe-up':'rise', 'push-left':'slideL', 'push-up':'rise', 'barn-door':'wipeL', shutter:'wipeL',
+  iris:'pop', 'paper-slide':'deal', 'paper-drop':'drop', 'grain-dissolve':'fade', 'film-roll':'fade' };
 
-// ── 38 CHUYỂN CẢNH (bê từ video-creator Fractal) ────────────────────────────
+// ── CÁC CHUYỂN CẢNH (bê từ video-creator Fractal) ────────────────────────────
 // Nạp 1 lần từ main; hỏng thì lùi về 6 mục cũ để panel không trắng.
 let _t7Trans = null;
 const _T7_TRANS_FALLBACK = [
   { id:'cut', label:'Cắt thẳng', family:'cut' }, { id:'fade', label:'Mờ dần', family:'dissolve' },
-  { id:'dip-black', label:'Nhúng đen', family:'dissolve' }, { id:'slide-left', label:'Trượt trái', family:'push' },
+  { id:'dip-black', label:'Nhúng đen', family:'dissolve' }, { id:'push-left', label:'Trượt trái', family:'push' },
   { id:'wipe-left', label:'Gạt trái', family:'wipe' }, { id:'iris', label:'Vòng tròn', family:'shape' },
 ];
 const _T7_FAM = { cut:'Cắt', dissolve:'Hoà tan', camera:'Máy quay', push:'Đẩy', wipe:'Gạt', split:'Tách đôi',
   whip:'Quật nhanh', flip:'Lật', shape:'Hình khối', flash:'Chớp sáng', glitch:'Nhiễu số', zoom:'Phóng',
-  sweep:'Quét', film:'Chất phim', blend:'Chồng ảnh', compress:'Bóp' };
+  sweep:'Quét', film:'Chất phim', blend:'Chồng ảnh', compress:'Bóp',
+  // Nhóm mới của catalog() vốn đã tiếng Việt — khai cho đủ map; nhánh _T7_FAM[f] || f vẫn an toàn.
+  'Cắt & hoà':'Cắt & hoà', 'Quang học':'Quang học', 'Hình học':'Hình học', 'Chất liệu giấy & phim':'Chất liệu giấy & phim' };
 async function _t7LoadTrans(){
   if (_t7Trans) return _t7Trans;
   try {
@@ -20555,7 +20546,7 @@ async function _t7LoadTrans(){
   } catch (e) {}
   _t7Trans = _T7_TRANS_FALLBACK; return _t7Trans;
 }
-// Dựng <optgroup> gom theo nhóm — 38 mục phẳng thì không ai tìm nổi.
+// Dựng optgroup gom theo nhóm — danh sách dài thì không ai tìm nổi.
 
 
 // Ảnh cảnh → blob: URL (cache theo dataURL). Không nhồi base64 vào props: 172 cảnh sẽ làm iframe sập.
@@ -22268,7 +22259,15 @@ async function t7NovaExport(){
     if (t7State.audioFile){ try { voiceB64 = await _t7FileToDataUrl(t7State.audioFile); } catch (e) {} }
     if (t7State.bgmFile){ try { musicB64 = await _t7FileToDataUrl(t7State.bgmFile); } catch (e) {} }
     const musicVolume = (parseInt(document.getElementById('t7Bgmvol')?.value) || 22) / 100;
-    const r = await window.native.renderNovaScenes({ scenes, globals: _t7Globs(), voiceB64, musicB64, musicVolume });
+    /* Đường ra: lấy từ chính hộp Xuất (Thư mục + Tên) y như nhánh ffmpeg bên dưới.
+       Trước đây nhánh Nova bỏ qua 2 ô này → main luôn bật dialog "lưu file" riêng
+       (dialog.showSaveDialog) → người dùng phải chọn 2 lần, còn automation/CDP thì
+       kẹt "Đã huỷ" vì không ai bấm hộp thoại hệ điều hành. Giờ: đã chọn ở modal là
+       xuất thẳng; chỉ khi thiếu thư mục mới fallback về dialog cũ ở main.          */
+    const _dir = String(document.getElementById('t7ExpDir')?.value || '').trim();
+    const _name = (document.getElementById('t7ExpName')?.value || 'video').replace(/[\\/:*?"<>|]+/g, '_').trim() || 'video';
+    const outputPath = _dir ? (_dir.replace(/[\/\\]+$/, '') + '/' + _name + '.mp4') : null;
+    const r = await window.native.renderNovaScenes({ scenes, globals: _t7Globs(), voiceB64, musicB64, musicVolume, outputPath });
     if (r && r.ok) setStatus7('✓ Xuất xong: ' + (r.outputPath || '') + ' · ' + r.durationInFrames + ' khung @' + r.fps + 'fps.', 'ok');
     else setStatus7('Lỗi xuất Nova Scene: ' + ((r && r.error) || 'không rõ'), 'error');
   } catch (e){ setStatus7('Lỗi xuất Nova Scene: ' + String(e).slice(0, 150), 'error'); }

@@ -29,7 +29,7 @@ const TRANSITIONS = {
   'fade':       { id: 'dissolve',    dur: 0.5 },
   'dissolve':   { id: 'dissolve',    dur: 0.5 },
   'cinematic':  { id: 'dip-black',   dur: 0.7 },
-  'wipe':       { id: 'slide-left',  dur: 0.5 },
+  'wipe':       { id: 'wipe-left',   dur: 0.5 },
   'cut':        { id: 'cut',         dur: 0.01 },
   'whip':       { id: 'whip-pan',    dur: 0.32 },
   'defocus':    { id: 'defocus',     dur: 0.7 },

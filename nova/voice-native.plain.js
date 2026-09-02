@@ -49,6 +49,8 @@ function venvPython(root) {
   const c = [
     path.join(root, '.venv-omni', 'bin', 'python'),            // macOS/Linux
     path.join(root, '.venv-omni', 'Scripts', 'python.exe'),    // Windows
+    path.join(root, '.venv-vieneu', 'bin', 'python'),          // macOS/Linux (engine VieNeu)
+    path.join(root, '.venv-vieneu', 'Scripts', 'python.exe'),  // Windows (engine VieNeu)
     path.join(root, '.venv', 'bin', 'python'),
     path.join(root, '.venv', 'Scripts', 'python.exe'),
   ];

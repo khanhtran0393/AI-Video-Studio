@@ -254,7 +254,8 @@
       "motionDirection": "left"
     },
     "legacyAliases": [
-      "slide"
+      "slide",
+      "slide-left"
     ]
   },
   {

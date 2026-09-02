@@ -207,6 +207,19 @@ async function main() {
   try {
     report.executable = findPackagedExe(ROOT, process.env.NOVA_SMOKE_EXE || process.argv[2]);
     report.installDir = path.dirname(report.executable);
+
+    // Single-instance lock là "kẻ giết im lặng": 1 instance cũ còn sống giữ lock thì
+    // instance mới exit ngay lập tức, 0 output, ports chết — khó debug. Chặn sớm.
+    const runningRows = appExeRows(await processTable(), report.installDir);
+    if (runningRows.length) {
+      throw new Error(
+        `Smoke preflight refused to start: ${runningRows.length} packaged-app process(es) already running `
+        + `(PID ${runningRows.map((r) => r.processId || r.ProcessId).join(', ')}) — they hold the single-instance lock `
+        + `and would make the new instance exit silently. Kill them first.`
+      );
+    }
+    report.checks.preflightNoRunningApp = { ok: true };
+
     const occupied = [];
     for (const port of FIXED_PORTS) if (await isPortOpen(port)) occupied.push(port);
     if (occupied.length) throw new Error(`Smoke preflight refused to disturb occupied Nova ports: ${occupied.join(', ')}.`);

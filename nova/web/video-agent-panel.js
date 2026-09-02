@@ -162,7 +162,7 @@
 
     if (unlockBtn) {
       unlockBtn.onclick = () => {
-        if (!native || !currentProjectDir) return;
+        if (!native || !currentProjectDir || typeof native.unlock !== 'function') return;
         native.unlock(currentProjectDir).then(() => openProject(currentProjectDir));
       };
     }
@@ -173,8 +173,10 @@
   }
 
   async function refreshProjects() {
-    if (!native) return;
-    const projects = await native.listProjects();
+    if (!native || typeof native.listProjects !== 'function') return;
+    let projects = [];
+    try { projects = (await native.listProjects()) || []; }
+    catch (_) { return; }
     if (!projectSelect) return;
     projectSelect.innerHTML = '';
     for (const p of projects) {
@@ -188,7 +190,7 @@
   }
 
   async function openProject(projectId) {
-    if (!native || !projectId) return;
+    if (!native || !projectId || typeof native.get !== 'function') return;
     currentProjectDir = projectId;
     const project = await native.get(projectId);
     if (!project) return;
@@ -262,13 +264,15 @@
       });
     }
 
-    await native.create({
-      projectId,
-      overwrite: true,
-      title: titleInput.value || 'Untitled',
-      narration: narrationArea.value,
-      assets
-    });
+    if (typeof native.create === 'function') {
+      await native.create({
+        projectId,
+        overwrite: true,
+        title: titleInput.value || 'Untitled',
+        narration: narrationArea.value,
+        assets
+      });
+    }
     setProgress('starting', 2);
 
     try {
@@ -299,11 +303,30 @@
   function setupNative() {
     if (!native) return;
 
-    native.onProgress(update => setProgress(update.phase, update.percent));
-    native.onJob(update => {
-      jobsList.append(el('li', {}, `${update.key}: ${update.status}${update.error ? ' — ' + update.error : ''}`));
-      jobsList.scrollTop = jobsList.scrollHeight;
-    });
+    // Bridge preload hiện chỉ expose onEvent (kênh 'videoAgent:event' từ main,
+    // payload: { jobId, stage, ... }). Panel phải chịu được bridge thiếu
+    // onProgress/onJob thay vì ném TypeError chết toàn bộ panel khi init.
+    if (typeof native.onProgress === 'function') {
+      native.onProgress(update => setProgress(update.phase, update.percent));
+    }
+    if (typeof native.onJob === 'function') {
+      native.onJob(update => {
+        jobsList.append(el('li', {}, `${update.key}: ${update.status}${update.error ? ' — ' + update.error : ''}`));
+        jobsList.scrollTop = jobsList.scrollHeight;
+      });
+    }
+    if (typeof native.onEvent === 'function') {
+      native.onEvent(ev => {
+        if (!ev) return;
+        if (ev.stage) {
+          setProgress(ev.stage, typeof ev.percent === 'number' ? ev.percent : 0);
+          if (jobsList) {
+            jobsList.append(el('li', {}, `${ev.jobId || '-'}: ${ev.stage}${ev.error ? ' — ' + ev.error : ''}`));
+            jobsList.scrollTop = jobsList.scrollHeight;
+          }
+        }
+      });
+    }
 
     refreshProjects();
     safe(() => native.presets(), []).then(list => { presets = list || []; });

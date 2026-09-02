@@ -270,7 +270,7 @@ function registerEditorProRemotion(ipcMain) {
     } catch (err) { return { ok: false, error: String(err && err.message || err).slice(0, 200) }; }
   });
 
-  // Danh mục 38 chuyển cảnh (bê từ video-creator Fractal, phần dựng viết lại ở transitions.js).
+  // Danh mục chuyển cảnh (bê từ video-creator Fractal, phần dựng viết lại ở transitions.js).
   const chTr = 'nova:sceneTransitions';
   try { ipcMain.removeHandler(chTr); } catch (_) {}
   ipcMain.handle(chTr, async () => {

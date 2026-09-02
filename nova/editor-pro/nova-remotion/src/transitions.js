@@ -1,4 +1,4 @@
-// 38 CHUYỂN CẢNH — dữ liệu bê từ video-creator của Fractal (transitions.json),
+// CÁC CHUYỂN CẢNH — dữ liệu bê từ video-creator của Fractal (transitions.json),
 // phần DỰNG thì viết lại ở đây vì bên kia nằm trong runtime Composition Lab không bê được.
 //
 //   13 cái "builtin" → ánh xạ thẳng sang @remotion/transitions (fade/slide/wipe/flip/iris/clockWipe/none).
@@ -222,7 +222,8 @@ const BY_ID = {};
 PRESETS.forEach(p => { BY_ID[p.id] = p; (p.legacyAliases || []).forEach(a => { if (!BY_ID[a]) BY_ID[a] = p; }); });
 
 // Tên cũ Nova đang dùng ở Tool 7 → preset mới, để dự án cũ không vỡ.
-const LEGACY = { none: 'cut', fade: 'fade', dissolve: 'fade', slide: 'slide-left', wipe: 'wipe-left', circle: 'iris' };
+// slide-left là id Nova cũ (fallback UI + dữ liệu đã lưu) — là alias của push-left trong transitions.json.
+const LEGACY = { none: 'cut', fade: 'fade', dissolve: 'fade', slide: 'push-left', wipe: 'wipe-left', circle: 'iris' };
 
 // Trả TransitionPresentation cho 1 tên chuyển cảnh. Không nhận ra thì trả fade.
 function presentationFor(name) {
