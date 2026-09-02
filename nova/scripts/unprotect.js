@@ -7,7 +7,7 @@
 const fs = require('fs');
 const path = require('path');
 const root = path.join(__dirname, '..');
-const TARGETS = ['main.js', 'flow-bridge.js'];   // flow-cft.js/native-tools.js/cli-bridge-native.js/voice-native.js giờ là shim re-export (đã tách module) — không obfuscate
+const TARGETS = ['main.js'];   // flow-cft.js/native-tools.js/cli-bridge-native.js/voice-native.js là shim re-export; flow-bridge.js là nguồn readable — không obfuscate
 // flow-native.js giờ là shim re-export ./flow-native/ (đã tách) — không còn cặp .plain để khôi phục.
 // native-tools.js cũng đã tách thành shim re-export ./native-tools/ — không còn cặp .plain.
 let n = 0;

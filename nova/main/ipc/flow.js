@@ -11,7 +11,7 @@ const { novaRoot, unpackedNovaRoot, canWriteDir } = require('../fs-utils');
 const flowNative = require('../../flow-native');
 const flowCft = require('../../flow-cft');
 const flowChrome = require('../../flow-chrome');
-const flowExtBridge = require('../../flow-bridge.plain');
+const flowExtBridge = require('../../flow-bridge');
 
 // Version extension MỚI NHẤT (đọc từ manifest đóng gói trong app) → so với version extension đang chạy để nhắc cập nhật.
 function bundledExtVersion() {

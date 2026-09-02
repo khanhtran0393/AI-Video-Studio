@@ -53,7 +53,7 @@ async function main() {
     .map((f) => fs.readFileSync(path.join(__dirname, '..', f), 'utf8')).join('\n');
   assert(!flowSource.includes("persist:flow-"), 'Flow account partitions must not reuse the legacy namespace');
   const runtimePorts = [
-    require('../flow-bridge.plain').PORT,
+    require('../flow-bridge').PORT,
     require('../mcp-bridge-native').PORT,
     require('../voice-native').PORT,
   ];

@@ -3,7 +3,7 @@
  * Dọn dẹp tài nguyên main process sở hữu khi thoát app:
  * timer auto-push, các bridge (extension/CLI/MCP), voice, watermark, captcha Chrome.
  */
-const flowExtBridge = require('../flow-bridge.plain');
+const flowExtBridge = require('../flow-bridge');
 const cliBridge = require('../cli-bridge-native');
 const mcpBridge = require('../mcp-bridge-native');
 const voiceNative = require('../voice-native');

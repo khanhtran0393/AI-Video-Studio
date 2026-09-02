@@ -1,1 +1,129 @@
-(function(_0x152690,_0x511fde){const _0x192aac=_0x36f6,_0x50b85d=_0x152690();while(!![]){try{const _0x4fc91a=-parseInt(_0x192aac(0x126))/0x1*(parseInt(_0x192aac(0x102))/0x2)+parseInt(_0x192aac(0x124))/0x3+parseInt(_0x192aac(0x114))/0x4*(-parseInt(_0x192aac(0x132))/0x5)+-parseInt(_0x192aac(0x130))/0x6*(parseInt(_0x192aac(0x10f))/0x7)+parseInt(_0x192aac(0x105))/0x8+-parseInt(_0x192aac(0x11a))/0x9*(parseInt(_0x192aac(0x109))/0xa)+-parseInt(_0x192aac(0x108))/0xb;if(_0x4fc91a===_0x511fde)break;else _0x50b85d['push'](_0x50b85d['shift']());}catch(_0x4eb5ba){_0x50b85d['push'](_0x50b85d['shift']());}}}(_0x2880,0xb9164));const http=require('http'),PORT=0x2258;let server=null,extLastSeen=0x0,extVersion=null;function _grabVer(_0xf5fc17){const _0x44b029=_0x36f6;try{const _0x59eca0=new URL(_0xf5fc17[_0x44b029(0x11d)],_0x44b029(0x129))[_0x44b029(0x12f)][_0x44b029(0x10a)]('v');if(_0x59eca0)extVersion=_0x59eca0;}catch{}}let seq=0x0;const pending=new Map(),queue=[];let waiters=[];function readBody(_0x5afde7,_0x16fe53){const _0x2d8d5f=_0x36f6;let _0x388842='';_0x5afde7['on'](_0x2d8d5f(0x119),_0x568d32=>{const _0x5dfa85=_0x2d8d5f;_0x388842+=_0x568d32;if(_0x388842[_0x5dfa85(0x12d)]>0x3c*0x400*0x400)_0x5afde7[_0x5dfa85(0x12c)]();}),_0x5afde7['on'](_0x2d8d5f(0x122),()=>_0x16fe53(_0x388842)),_0x5afde7['on'](_0x2d8d5f(0x131),()=>_0x16fe53(''));}function flushToWaiter(_0x1eb994){const _0x1d8c83=_0x36f6;while(waiters[_0x1d8c83(0x12d)]){const _0x21639b=waiters[_0x1d8c83(0x128)]();clearTimeout(_0x21639b[_0x1d8c83(0x10c)]);try{return _0x21639b['res'][_0x1d8c83(0x12b)](0xc8,{'content-type':'application/json'}),_0x21639b['res'][_0x1d8c83(0x122)](JSON['stringify'](_0x1eb994)),!![];}catch{}}return![];}function handlePoll(_0x416b1f,_0x20a71e){const _0x4cb13c=_0x36f6;extLastSeen=Date[_0x4cb13c(0x115)](),_grabVer(_0x416b1f);if(queue[_0x4cb13c(0x12d)]){const _0x4f82a8=queue[_0x4cb13c(0x128)]();_0x20a71e[_0x4cb13c(0x12b)](0xc8,{'content-type':'application/json'}),_0x20a71e['end'](JSON[_0x4cb13c(0x111)](_0x4f82a8));return;}const _0x2a9f85={'res':_0x20a71e,'timer':null};_0x2a9f85[_0x4cb13c(0x10c)]=setTimeout(()=>{const _0x5dcb3b=_0x4cb13c;waiters=waiters[_0x5dcb3b(0x123)](_0x4dd9c2=>_0x4dd9c2!==_0x2a9f85);try{_0x20a71e[_0x5dcb3b(0x12b)](0xc8,{'content-type':_0x5dcb3b(0x116)}),_0x20a71e[_0x5dcb3b(0x122)]('{}');}catch{}},0x61a8),waiters[_0x4cb13c(0x12e)](_0x2a9f85);}function handleReply(_0x14a92e){const _0x3264c5=_0x36f6;let _0x2f7d14;try{_0x2f7d14=JSON[_0x3264c5(0x11e)](_0x14a92e);}catch{return;}if(!_0x2f7d14||!_0x2f7d14['id'])return;const _0x32782c=pending[_0x3264c5(0x10a)](_0x2f7d14['id']);if(!_0x32782c)return;pending[_0x3264c5(0x101)](_0x2f7d14['id']),clearTimeout(_0x32782c[_0x3264c5(0x10c)]),_0x32782c[_0x3264c5(0x120)](_0x2f7d14[_0x3264c5(0x121)]);}function start(){return new Promise(_0x44da5d=>{const _0x1ddf70=_0x36f6;server=http['createServer']((_0x42f77f,_0xc701a5)=>{const _0x2da13b=_0x36f6;_0xc701a5[_0x2da13b(0x104)](_0x2da13b(0x106),'*'),_0xc701a5[_0x2da13b(0x104)](_0x2da13b(0x118),_0x2da13b(0x107)),_0xc701a5[_0x2da13b(0x104)](_0x2da13b(0x10b),_0x2da13b(0x125));if(_0x42f77f[_0x2da13b(0x10e)]===_0x2da13b(0x133))return _0xc701a5[_0x2da13b(0x12b)](0xcc),_0xc701a5[_0x2da13b(0x122)]();const _0x2e26bd=(_0x42f77f[_0x2da13b(0x11d)]||'')[_0x2da13b(0x113)]('?')[0x0];if(_0x2e26bd===_0x2da13b(0x11b)&&_0x42f77f[_0x2da13b(0x10e)]===_0x2da13b(0x10d)){handlePoll(_0x42f77f,_0xc701a5);return;}if(_0x2e26bd===_0x2da13b(0x11f)&&_0x42f77f[_0x2da13b(0x10e)]==='POST'){readBody(_0x42f77f,_0x2f014d=>{const _0x19377a=_0x2da13b;handleReply(_0x2f014d),_0xc701a5['writeHead'](0xc8),_0xc701a5[_0x19377a(0x122)]('{}');});return;}if(_0x2e26bd===_0x2da13b(0x12a)){extLastSeen=Date[_0x2da13b(0x115)](),_grabVer(_0x42f77f),_0xc701a5[_0x2da13b(0x12b)](0xc8,{'content-type':_0x2da13b(0x116)}),_0xc701a5[_0x2da13b(0x122)](JSON[_0x2da13b(0x111)]({'ok':!![]}));return;}_0xc701a5[_0x2da13b(0x12b)](0x194),_0xc701a5[_0x2da13b(0x122)]();}),server['on']('error',_0x3289d5=>{const _0x1eb7a1=_0x36f6;console[_0x1eb7a1(0x11c)](_0x1eb7a1(0x127),PORT,_0x3289d5[_0x1eb7a1(0x112)]),_0x44da5d(0x0);}),server[_0x1ddf70(0x117)](PORT,_0x1ddf70(0x110),()=>{const _0x1b5735=_0x1ddf70;console[_0x1b5735(0x103)](_0x1b5735(0x134)+PORT),_0x44da5d(PORT);});});}function _0x36f6(_0x6d035b,_0x3f01d1){_0x6d035b=_0x6d035b-0x100;const _0x2880de=_0x2880();let _0x36f6c7=_0x2880de[_0x6d035b];if(_0x36f6['PDqupc']===undefined){var _0x2a2ad6=function(_0x342064){const _0x549de9='abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+/=';let _0xf5fc17='',_0x59eca0='';for(let _0x5afde7=0x0,_0x16fe53,_0x388842,_0x568d32=0x0;_0x388842=_0x342064['charAt'](_0x568d32++);~_0x388842&&(_0x16fe53=_0x5afde7%0x4?_0x16fe53*0x40+_0x388842:_0x388842,_0x5afde7++%0x4)?_0xf5fc17+=String['fromCharCode'](0xff&_0x16fe53>>(-0x2*_0x5afde7&0x6)):0x0){_0x388842=_0x549de9['indexOf'](_0x388842);}for(let _0x1eb994=0x0,_0x21639b=_0xf5fc17['length'];_0x1eb994<_0x21639b;_0x1eb994++){_0x59eca0+='%'+('00'+_0xf5fc17['charCodeAt'](_0x1eb994)['toString'](0x10))['slice'](-0x2);}return decodeURIComponent(_0x59eca0);};_0x36f6['jkktcO']=_0x2a2ad6,_0x36f6['tSADAV']={},_0x36f6['PDqupc']=!![];}const _0x406899=_0x2880de[0x0],_0x4dbcb9=_0x6d035b+_0x406899,_0xb52c16=_0x36f6['tSADAV'][_0x4dbcb9];return!_0xb52c16?(_0x36f6c7=_0x36f6['jkktcO'](_0x36f6c7),_0x36f6['tSADAV'][_0x4dbcb9]=_0x36f6c7):_0x36f6c7=_0xb52c16,_0x36f6c7;}function _0x2880(){const _0x17fd21=['l2jYAwrNzs9WB2XS','D2fYBG','DxjS','CgfYC2u','l2jYAwrNzs9YzxbSEq','CMvZB2X2zq','CMvZDwX0','zw5K','zMLSDgvY','nda5mZG0nuTWvefksW','r0vulfbpu1qSt1busu9ouW','ndm4muXSuxrouW','w2zSB3CTyNjPzgDLxsbS4BUxAsbJ4BUvBMC','C2HPzNq','Ahr0CdOVl3G','l2jYAwrNzs9WAw5N','D3jPDgvizwfK','zgvZDhjVEq','BgvUz3rO','ChvZAa','C2vHCMnOugfYyw1Z','mta5odz0u3LmrNi','zxjYB3i','mtm0nZK1weTIEg9H','t1busu9ouW','w2zSB3CTyNjPzgDLxsbJAog6OxKG4BUFideYnY4WlJaUmtO','qLjjreDfx1rjtuvpvvq','zgvSzxrL','mJaYv2j0s2jl','Bg9N','C2v0sgvHzgvY','nZu2ntuYmfv3Bunwvq','qwnJzxnZlunVBNrYB2WTqwXSB3CTt3jPz2LU','y29UDgvUDc10ExbL','mZaZody5nuLjr0vrCW','ndaYotbPBgfIEfi','z2v0','qwnJzxnZlunVBNrYB2WTqwXSB3CTtwv0Ag9KCW','DgLTzxi','r0vu','Bwv0Ag9K','oda1A1DLtwjZ','mti3lJaUmc4X','C3rYAw5NAwz5','BwvZC2fNzq','C3bSAxq','ndrYtKLQzvm','BM93','yxbWBgLJyxrPB24VANnVBG','BgLZDgvU','qwnJzxnZlunVBNrYB2WTqwXSB3CTsgvHzgvYCW','zgf0yq','nZi5CNbitNjW'];_0x2880=function(){return _0x17fd21;};return _0x2880();}function call(_0x342507,_0x3a1835){return new Promise(_0x4454cb=>{const _0x1181a3=_0x36f6,_0x4a967c='c'+ ++seq+'_'+Date[_0x1181a3(0x115)](),_0x15e85b=setTimeout(()=>{const _0x16669c=_0x1181a3;pending['has'](_0x4a967c)&&(pending[_0x16669c(0x101)](_0x4a967c),_0x4454cb({'error':_0x16669c(0x100)}));},0x927c0);pending['set'](_0x4a967c,{'resolve':_0x4454cb,'timer':_0x15e85b});const _0x267e2a={'id':_0x4a967c,'action':_0x342507,'payload':_0x3a1835};if(!flushToWaiter(_0x267e2a))queue[_0x1181a3(0x12e)](_0x267e2a);});}function status(){return{'running':!!server,'port':PORT,'extensionConnected':Date['now']()-extLastSeen<0x88b8,'extVersion':extVersion};}module['exports']={'start':start,'call':call,'status':status,'PORT':PORT};
+/**
+ * Flow Bridge (chế độ Chrome Extension) — server HTTP cục bộ để app nói chuyện với
+ * extension "Flow Image Gen" chạy trong Chrome THẬT của người dùng.
+ *
+ * Vì extension trong Chrome không truy cập được app Electron, ta dùng long-poll:
+ *   - App xếp lệnh vào hàng đợi (call(action,payload)).
+ *   - Extension GET /bridge/poll  → nhận 1 lệnh {id,action,payload} (chờ tối đa 25s).
+ *   - Extension chạy xong POST /bridge/reply {id,result}.
+ *   - Extension GET /bridge/ping định kỳ để app biết "đã kết nối".
+ * Cổng riêng 8793 để extension Nova không đụng app cũ.
+ */
+
+const http = require('http');
+
+const PORT = 8793;
+// Secret dùng chung với extension (nova/flow-extension/background.js) — chỉ nhận lệnh từ extension của app.
+// Extension luôn gửi header 'x-bridge-secret'; request thiếu/sai secret bị từ chối (403) để chặn tiến trình lạ chiếm cổng.
+const BRIDGE_SECRET = 'a920967907aa4445b66fd6ae835c7768780531677ee9a332';
+let server = null;
+let extLastSeen = 0;
+let extVersion = null;   // version extension đang kết nối (báo qua ?v=… lúc poll/ping) → so với bản mới để nhắc cập nhật
+function _grabVer(req) { try { const v = new URL(req.url, 'http://x').searchParams.get('v'); if (v) extVersion = v; } catch {} }
+let seq = 0;
+
+const pending = new Map();   // id -> { resolve, timer }
+const queue = [];            // lệnh chờ extension lấy
+let waiters = [];            // long-poll đang treo: { res, timer }
+
+function readBody(req, cb) {
+  let b = '';
+  req.on('data', (c) => { b += c; if (b.length > 60 * 1024 * 1024) req.destroy(); });
+  req.on('end', () => cb(b));
+  req.on('error', () => cb(''));
+}
+
+function flushToWaiter(cmd) {
+  while (waiters.length) {
+    const w = waiters.shift();
+    clearTimeout(w.timer);
+    try { w.res.writeHead(200, { 'content-type': 'application/json' }); w.res.end(JSON.stringify(cmd)); return true; }
+    catch { /* waiter chết → thử cái kế */ }
+  }
+  return false;
+}
+
+function handlePoll(req, res) {
+  extLastSeen = Date.now(); _grabVer(req);
+  if (queue.length) {
+    const cmd = queue.shift();
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify(cmd));
+    return;
+  }
+  const holder = { res, timer: null };
+  holder.timer = setTimeout(() => {
+    waiters = waiters.filter((w) => w !== holder);
+    try { res.writeHead(200, { 'content-type': 'application/json' }); res.end('{}'); } catch { /* */ }
+  }, 25000);
+  waiters.push(holder);
+}
+
+function handleReply(body) {
+  let d; try { d = JSON.parse(body); } catch { return; }
+  if (!d || !d.id) return;
+  const p = pending.get(d.id);
+  if (!p) return;
+  pending.delete(d.id);
+  clearTimeout(p.timer);
+  p.resolve(d.result);
+}
+
+function start() {
+  return new Promise((resolve) => {
+    server = http.createServer((req, res) => {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Headers', 'content-type, x-bridge-secret');
+      res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+      if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
+      // Chỉ tin extension của app: header secret phải khớp (chặn tiến trình lạ chiếm cổng mạo danh bridge).
+      if (req.headers['x-bridge-secret'] !== BRIDGE_SECRET) { res.writeHead(403); return res.end(); }
+      const url = (req.url || '').split('?')[0];
+      if (url === '/bridge/poll' && req.method === 'GET') { handlePoll(req, res); return; }
+      if (url === '/bridge/reply' && req.method === 'POST') { readBody(req, (b) => { handleReply(b); res.writeHead(200); res.end('{}'); }); return; }
+      if (url === '/bridge/ping') { extLastSeen = Date.now(); _grabVer(req); res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify({ ok: true })); return; }
+      res.writeHead(404); res.end();
+    });
+    server.on('error', (e) => { console.warn('[flow-bridge] lỗi cổng', PORT, e.message); resolve(0); });
+    server.listen(PORT, '127.0.0.1', () => { console.log('[flow-bridge] chạy ở 127.0.0.1:' + PORT); resolve(PORT); });
+  });
+}
+
+// App gọi 1 lệnh tới extension, chờ kết quả.
+function call(action, payload) {
+  return new Promise((resolve) => {
+    const id = 'c' + (++seq) + '_' + Date.now();
+    const timer = setTimeout(() => { if (pending.has(id)) { pending.delete(id); resolve({ error: 'BRIDGE_TIMEOUT' }); } }, 600000);   // 10 phút — video Veo mất 3-6 phút
+    pending.set(id, { resolve, timer });
+    const cmd = { id, action, payload };
+    if (!flushToWaiter(cmd)) queue.push(cmd);
+  });
+}
+
+function status() {
+  // Ngưỡng 35s: service worker (nhất là trong GPM) hay chợp ngủ giữa 2 lần ping/alarm (~30s)
+  // → nới rộng để không báo "rớt" oan khi nó chỉ ngủ ngắn rồi tự thức lại.
+  return { running: !!(server && server.listening), port: PORT, extensionConnected: (Date.now() - extLastSeen) < 35000, extVersion };
+}
+
+function stop() {
+  for (const waiter of waiters) {
+    clearTimeout(waiter.timer);
+    try { waiter.res.destroy(); } catch (_) {}
+  }
+  waiters = [];
+  queue.length = 0;
+  for (const item of pending.values()) {
+    clearTimeout(item.timer);
+    try { item.resolve({ error: 'BRIDGE_STOPPED' }); } catch (_) {}
+  }
+  pending.clear();
+  const owned = server;
+  server = null;
+  if (owned) {
+    try { owned.close(); } catch (_) {}
+    try { owned.closeAllConnections && owned.closeAllConnections(); } catch (_) {}
+  }
+}
+
+module.exports = { start, stop, call, status, PORT };

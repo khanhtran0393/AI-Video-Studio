@@ -12,7 +12,7 @@
  *   4. Hằng số của state.js (WEB_DIR, NOVA_REMOTION_DIR, AUTH_HOSTS, SPLASH_*) không
  *      được định nghĩa lại ở module khác (một nguồn chân lý duy nhất).
  *   5. Cổng bridge 8793/8794/8795/8796 CẤM hardcode trong nova/main/** và
- *      main.plain.js — chủ sở hữu duy nhất là module gốc ở nova/ (flow-bridge.plain.js,
+ *      main.plain.js — chủ sở hữu duy nhất là module gốc ở nova/ (flow-bridge.js,
  *      mcp-bridge-native.js, cli-bridge-native/bridge.js). Cổng web 47280–47283 chỉ được
  *      đặt trong main/server.js (PREFERRED). Comment không tính.
  *   6. process.env.<TÊN> phải theo tiền tố quy ước AI_VIDEO_STUDIO_ hoặc NOVA_ hoặc
