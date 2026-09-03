@@ -63,7 +63,9 @@ function registerVideoAgentIpc(ipcMain, { adapters = {}, openWindow, maxConcurre
   });
 
   handle('videoAgent:status', (e, p = {}) => { const j = jobs.get(p.jobId); const saved = persisted.get(p.jobId);
-    return j ? { ok: true, jobId: j.jobId, status: j.state, timeline: j.timeline, qa: j.qa, url: j.url }
+    // Trả cả error cho job live vừa FAILED/CANCELLED — UI gọi status ngay sau lỗi
+    // vẫn thấy thông điệp tiếng Việt (job.json persisted path đã có sẵn error).
+    return j ? { ok: true, jobId: j.jobId, status: j.state, timeline: j.timeline, qa: j.qa, url: j.url, error: j.error }
       : saved ? { ok: true, ...saved, restored: true } : { ok: false, error: { code: 'VA_NO_JOB', message: 'Không tìm thấy job này. Job có thể đã bị xoá hoặc chưa từng chạy.' } }; });
   handle('videoAgent:spec', (e, p = {}) => { const j = jobs.get(p.jobId); return j && j.spec ? { ok: true, spec: j.spec } : { ok: false, error: { code: 'VA_NO_SPEC', message: 'Job chưa dựng xong video spec (bước đầu của quy trình).' } }; });
   handle('videoAgent:timeline', (e, p = {}) => { const j = jobs.get(p.jobId); return j && j.timeline ? { ok: true, timeline: j.timeline } : { ok: false, error: { code: 'VA_NO_TIMELINE', message: 'Job chưa có timeline.' } }; });
@@ -106,12 +108,14 @@ function registerVideoAgentIpc(ipcMain, { adapters = {}, openWindow, maxConcurre
     } catch (err) { return { ok: false, error: viError(err) }; }
   });
 
-  // Mở cửa sổ UI (pattern documentary:openWindow) — lazy require để test ngoài Electron vẫn nạp được.
+  // Mở Video Agent TRONG cửa sổ chính (tab sidebar "Video Agent") — không tạo BrowserWindow
+  // riêng. Giữ nguyên tên kênh `videoAgent:openWindow` cho tương thích preload/UI cũ.
+  // Lazy require để test ngoài Electron vẫn nạp được.
   handle('videoAgent:openWindow', async () => {
     try {
       const fn = openWindow || require('./window').openVideoAgentWindow;
       const win = fn();
-      return { ok: true, windowId: win && win.id };
+      return { ok: !!(win && win.id), windowId: win && win.id, inApp: true };
     } catch (err) { return { ok: false, error: viError(err) }; }
   });
 

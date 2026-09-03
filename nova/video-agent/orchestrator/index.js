@@ -26,7 +26,16 @@ function createVideoJob({ projectDir, adapters = {}, options = {} }) {
 
   const on = (fn) => listeners.push(fn);
   function emit(stage, payload) {
+    // Top-level percent/error để UI đọc trực tiếp (panel: ev.percent / ev.error) —
+    // payload lồng nhau đã từng làm UI không bao giờ thấy % tiến độ hay lý do FAILED (§32).
     const e = { stage, state, progress: PROGRESS[stage] != null ? PROGRESS[stage] : 0, at: new Date().toISOString(), payload: payload || null };
+    if (payload && typeof payload === 'object') {
+      // Cửa sổ video-agent.html đọc ev.progress, panel index.html đọc ev.percent —
+      // mirror cả hai để thanh tiến độ chạy thật khi PREVIEW_RENDER/FULL_RENDER báo %.
+      if (Number.isFinite(payload.percent)) { e.percent = payload.percent; e.progress = payload.percent; }
+      if (payload.error) e.error = payload.error;
+      else if (payload.code && payload.message) e.error = payload; // payload chính là error object (emit(state, out.error))
+    }
     events.push(e); for (const fn of listeners) { try { fn(e); } catch (_) {} }
   }
   const setState = (s) => { state = s; emit(s); persist(); };
@@ -157,7 +166,8 @@ function createVideoJob({ projectDir, adapters = {}, options = {} }) {
     try { if (cancelCurrent) cancelCurrent(); } catch (_) {}
   }, result,
     get state() { return state; }, get spec() { return spec; }, get timeline() { return timeline; },
-    get qa() { return qaReport; }, get url() { return url; }, get events() { return events; } };
+    get qa() { return qaReport; }, get url() { return url; }, get events() { return events; },
+    get error() { return out.error; } };
 }
 
 function isSecretKey(key) {

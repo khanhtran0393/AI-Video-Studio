@@ -127,6 +127,29 @@ contextBridge.exposeInMainWorld('native', {
       return () => ipcRenderer.removeListener('videoAgent:event', listener);
     },
   },
+  // Whiteboard Studio (port TPL Studio Stories v1.0.2) — chọn media
+  // thật, đo thời lượng thật (ffprobe nội bộ), export MP4 thật
+  // (ffmpeg nội bộ). KHÔNG nhận đường dẫn repo ngoài từ GUI.
+  whiteboard: {
+    runtime: () => ipcRenderer.invoke('whiteboard:runtime'),
+    pickSrt: () => ipcRenderer.invoke('whiteboard:pickSrt'),
+    pickAudio: () => ipcRenderer.invoke('whiteboard:pickAudio'),
+    pickImage: () => ipcRenderer.invoke('whiteboard:pickImage'),
+    pickImagesDir: () => ipcRenderer.invoke('whiteboard:pickImagesDir'),
+    probeDuration: (p) => ipcRenderer.invoke('whiteboard:probeDuration', p),
+    framePrompts: (payload) => ipcRenderer.invoke('whiteboard:framePrompts', payload),
+    topicKeywords: (topic, count) => ipcRenderer.invoke('whiteboard:topicKeywords', { topic, count }),
+    buildAutoProject: (payload) => ipcRenderer.invoke('whiteboard:buildAutoProject', payload),
+    saveFrames: (payload) => ipcRenderer.invoke('whiteboard:saveFrames', payload),
+    exportVideo: (payload) => ipcRenderer.invoke('whiteboard:export', payload),
+    pickOutput: (defaultName) => ipcRenderer.invoke('whiteboard:pickOutput', { defaultName }),
+    exportCancel: () => ipcRenderer.invoke('whiteboard:exportCancel'),
+    onExportProgress: (cb) => {
+      const listener = (_e, s) => cb && cb(s);
+      ipcRenderer.on('whiteboard:exportProgress', listener);
+      return () => ipcRenderer.removeListener('whiteboard:exportProgress', listener);
+    },
+  },
   // Thư viện Hiệu ứng âm thanh (SFX) dựng sẵn.
   sfxLibrary: () => ipcRenderer.invoke('nova:sfxLibrary:list'),
   // Flow tích hợp sẵn (trình duyệt nhúng) — UI gọi flowBridge → window.native.flow.

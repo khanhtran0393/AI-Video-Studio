@@ -92,4 +92,4 @@ function removeDirIfEmpty(dir) {
   } catch (_) { return false; }
 }
 
-module.exports = { VI_MESSAGES, viText, viError, cleanupArtifacts, removeDirIfEmpty };
+module.exports = { VI_MESSAGES, viText, viError, viSystemError, cleanupArtifacts, removeDirIfEmpty };

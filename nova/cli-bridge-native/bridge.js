@@ -28,7 +28,9 @@ function createBridge(engine, port) {
         args.push(prompt); useStdin = false;
       } else {
         cmd = 'claude'; args = ['-p', '--output-format', 'text'];
-        if (model === 'opus' || model === 'sonnet') args.push('--model', model);
+        // Forward model sang CLI: alias opus/sonnet NHƯNG cả tên model đầy đủ (glm-5.3, deepseek-v4-flash…)
+        // — gateway (agentrouter/HHTECH…) chỉ có kênh cho đúng id, alias sẽ 503 "no channel".
+        if (model && model !== 'default' && model !== 'chatgpt') args.push('--model', model);
         if (images.length) {
           args.push('--allowedTools', 'Read');   // chỉ cho phép Read (xem ảnh), không tool khác
           prompt += '\n\nẢNH ĐÍNH KÈM: ' + images.join(' , ')

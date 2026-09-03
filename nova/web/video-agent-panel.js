@@ -62,11 +62,59 @@
 
   function fmt(n) { return Number(n || 0).toFixed(2); }
 
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  /** Lỗi hệ thống (bắn từ fs/ffmpeg/Remotion) → tiếng Việt, trả '' nếu không khớp. */
+  function sysText(msg) {
+    if (/ENOSPC|no space left/i.test(msg)) return 'Ổ đĩa đã đầy — không còn chỗ để ghi file. Hãy dọn bớt dung lượng rồi thử lại.';
+    if (/EACCES|EPERM/i.test(msg)) return 'Không có quyền ghi vào thư mục dự án. Hãy chọn thư mục khác (vd Desktop).';
+    if (/EROFS/i.test(msg)) return 'Thư mục nằm trên ổ chỉ-đọc. Hãy chọn thư mục khác còn ghi được.';
+    if (/ENOENT|no such file/i.test(msg)) return 'Không tìm thấy file/thư mục cần dùng. Kiểm tra lại các file trong dự án.';
+    return '';
+  }
+
+  /** Mọi lỗi (string/Error/{code,message}) → câu tiếng Việt rõ ràng.
+   *  Electron bọc lỗi IPC: "Error invoking remote method 'x': Error: …" → bóc bỏ,
+   *  main đã trả message tiếng Việt nên thường chỉ cần làm sạch + fallback an toàn. */
+  function errText(x, context) {
+    if (x == null) return context ? `${context} thất bại (không rõ nguyên nhân).` : 'Lỗi không xác định.';
+    let msg = typeof x === 'string'
+      ? x
+      : (x.message || (x.error && (x.error.message || x.error)) || x.original || (x.code ? `mã lỗi ${x.code}` : ''));
+    msg = String(msg).trim()
+      .replace(/^Error invoking remote method '[^']*':\s*/i, '')
+      .replace(/^Error:\s*/i, '');
+    const sys = sysText(msg);
+    if (sys) msg = sys;
+    msg = msg.trim();
+    if (!msg) msg = 'Lỗi không xác định.';
+    return context ? `${context} thất bại: ${msg}` : msg;
+  }
+
+  /** Hiển thị lỗi tiếng Việt: banner notice + nhãn tiến độ. */
+  function showError(text) {
+    setProgress('error', 0);
+    if (progressLabel) progressLabel.textContent = `Lỗi: ${text}`;
+    if (notice) {
+      notice.style.display = 'block';
+      notice.innerHTML = `<b>⚠ ${esc(text)}</b>`;
+    }
+  }
+
+  function hideNotice() {
+    if (notice) {
+      notice.style.display = 'none';
+      notice.textContent = '';
+    }
+  }
+
   async function safe(fn, fallback = null) {
     try {
       return await fn();
     } catch (error) {
-      return fallback === null ? { error: String(error.message || error) } : fallback;
+      return fallback === null ? { error: errText(error) } : fallback;
     }
   }
 
@@ -163,7 +211,9 @@
     if (unlockBtn) {
       unlockBtn.onclick = () => {
         if (!native || !currentProjectDir || typeof native.unlock !== 'function') return;
-        native.unlock(currentProjectDir).then(() => openProject(currentProjectDir));
+        native.unlock(currentProjectDir)
+          .then(() => openProject(currentProjectDir))
+          .catch(error => showError(errText(error, 'Mở khóa kịch bản')));
       };
     }
 
@@ -176,7 +226,7 @@
     if (!native || typeof native.listProjects !== 'function') return;
     let projects = [];
     try { projects = (await native.listProjects()) || []; }
-    catch (_) { return; }
+    catch (error) { showError(errText(error, 'Tải danh sách dự án')); return; }
     if (!projectSelect) return;
     projectSelect.innerHTML = '';
     for (const p of projects) {
@@ -192,15 +242,26 @@
   async function openProject(projectId) {
     if (!native || !projectId || typeof native.get !== 'function') return;
     currentProjectDir = projectId;
-    const project = await native.get(projectId);
-    if (!project) return;
+    let project;
+    try { project = await native.get(projectId); }
+    catch (error) { showError(errText(error, 'Đọc dự án')); return; }
+    if (!project) { showError(`Không tìm thấy dự án "${projectId}".`); return; }
 
     titleInput.value = project.title || '';
     narrationArea.value = project.narration || '';
     assetPath.value = (project.assets || []).map((a) => `${a.path} | ${a.title || ''}, ${a.tags ? a.tags.join(', ') : ''}`).join('\n');
 
     if (renderInfo) {
-      renderInfo.textContent = project.renderStatus ? `Render: ${project.renderStatus}` : 'Chưa render';
+      // Field thật là project.render.status (không phải renderStatus) — trước đây
+      // luôn rơi vào 'Chưa render' và ĐÈ 'Pipeline xong/Đã render xong' vừa ghi.
+      const rs = project.render && project.render.status;
+      renderInfo.textContent = rs === 'complete'
+        ? `Đã render xong: ${project.render.outputPath || 'OK'}`
+        : rs === 'failed'
+          ? 'Render thất bại — xem thông báo lỗi ở trên.'
+          : rs === 'ready'
+            ? 'Đã sẵn sàng để render video.'
+            : (rs ? `Render: ${rs}` : 'Chưa render');
     }
     if (lockState) {
       lockState.textContent = project.lockContent ? 'Đã khóa nội dung' : 'Tự do chỉnh sửa';
@@ -264,28 +325,33 @@
       });
     }
 
-    if (typeof native.create === 'function') {
-      await native.create({
-        projectId,
-        overwrite: true,
-        title: titleInput.value || 'Untitled',
-        narration: narrationArea.value,
-        assets
-      });
-    }
     setProgress('starting', 2);
-
     try {
+      // create nằm TRONG try: lỗi tạo dự án (tên trùng, projectId sai, đĩa đầy…)
+      // phải hiện ra UI thay vì chết im lặng.
+      if (typeof native.create === 'function') {
+        await native.create({
+          projectId,
+          overwrite: true,
+          title: titleInput.value || 'Untitled',
+          narration: narrationArea.value,
+          assets
+        });
+      }
       const result = await native.runFull({
         projectId,
         input: { lockContent: true, autoFix: true, render: false },
         concurrency: 4
       });
-      renderInfo.textContent = `Pipeline xong · ${result.timeline.scenes.length} scene · QA ${result.qa.status}`;
+      // Guard shape: pipeline lỗi shape khác phải báo rõ, không crash "Cannot read …".
+      const scenes = (result && result.timeline && result.timeline.scenes) || [];
+      const qaStatus = (result && result.qa && result.qa.status) || 'not-run';
       await openProject(projectId);
+      // Ghi SAU openProject để không bị 'Chưa render/Đã sẵn sàng' đè mất kết quả.
+      renderInfo.textContent = `Pipeline xong · ${scenes.length} scene · QA ${qaStatus}`;
+      hideNotice();
     } catch (error) {
-      setProgress('error', 0);
-      progressLabel.textContent = `Lỗi: ${error.message}`;
+      showError(errText(error, 'Pipeline'));
     }
   }
 
@@ -294,9 +360,19 @@
     renderInfo.textContent = 'Đang render…';
     try {
       const result = await native.render({ projectId: currentProjectDir });
-      renderInfo.textContent = result && result.ok ? `Rendered: ${result.outputPath || 'OK'}` : 'Render failed';
+      if (result && result.ok) {
+        renderInfo.textContent = `Đã render xong: ${result.outputPath || 'OK'}`;
+        hideNotice();
+      } else {
+        // renderNovaScenes lỗi trả { ok:false, error } (không ném) → vẫn báo rõ.
+        const reason = errText(result && (result.error || result), 'Render');
+        renderInfo.textContent = `Render thất bại — xem thông báo lỗi ở trên.`;
+        showError(reason);
+      }
     } catch (error) {
-      renderInfo.textContent = `Lỗi: ${error.message}`;
+      const reason = errText(error, 'Render');
+      renderInfo.textContent = 'Render thất bại — xem thông báo lỗi ở trên.';
+      showError(reason);
     }
   }
 
@@ -309,7 +385,6 @@
     if (typeof native.onProgress === 'function') {
       native.onProgress(update => setProgress(update.phase, update.percent));
     }
-    const errText = (x) => !x ? '' : (typeof x === 'string' ? x : (x.message || x.original || x.code || ''));
     if (typeof native.onJob === 'function') {
       native.onJob(update => {
         jobsList.append(el('li', {}, `${update.key}: ${update.status}${update.error ? ' — ' + errText(update.error) : ''}`));
@@ -346,7 +421,28 @@
       return;
     }
 
-    native = window.native && window.native.videoAgent;
+    // Bridge ĐÚNG của panel này là window.native.documentary (create/runFull/
+    // render/unlock/presets/providers/onProgress/onJob, xem nova/documentary/
+    // ipc.js). Trước đây lấy window.native.videoAgent (API §25: run/status/
+    // spec…) → bấm "Chạy pipeline" chết với "native.runFull is not a function".
+    // Map tên method panel dùng sang tên kênh documentary: get→read,
+    // listProjects→list. Fallback videoAgent cho bản preload cũ (các call đều
+    // được guard bằng typeof nên không chết panel).
+    const bridge = window.native && (window.native.documentary || window.native.videoAgent);
+    native = bridge ? {
+      create: bridge.create,
+      runFull: bridge.runFull,
+      run: bridge.run,
+      render: bridge.render,
+      unlock: bridge.unlock,
+      presets: bridge.presets,
+      providers: bridge.providers,
+      get: (id) => (typeof bridge.read === 'function' ? bridge.read(id) : undefined),
+      listProjects: () => (typeof bridge.list === 'function' ? bridge.list() : undefined),
+      onProgress: bridge.onProgress,
+      onJob: bridge.onJob,
+      onEvent: bridge.onEvent,
+    } : null;
     notice = document.getElementById('notice');
     panelsEl = document.getElementById('panels');
     progressFill = document.getElementById('progressFill');

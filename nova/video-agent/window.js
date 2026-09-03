@@ -1,36 +1,36 @@
 'use strict';
 
 /**
- * §25 UI WINDOW — mở panel Video Agent trong BrowserWindow riêng (pattern như documentary/window.js).
+ * §25 UI WINDOW — mở Video Agent NGAY TRONG cửa sổ chính của app (tab "Video Agent"
+ * trên sidebar → switchTool('toolvideoagent'), panel của nova/web/video-agent-panel.js).
+ *
+ * Chính sách: MỌI công cụ chức năng phải chạy trong app — KHÔNG tạo BrowserWindow riêng.
+ * Ngoại lệ duy nhất được phép mở cửa sổ ngoài là đăng nhập tài khoản bên thứ 3
+ * (popup Google/Firebase trong nova/main/window.js, cửa sổ Flow trong nova/flow-native).
+ *
+ * Giữ tên export `openVideoAgentWindow` để các nơi đang require (menu, ipc §25) không đổi.
  * Lazy require electron để module vẫn nạp được ngoài main process (test, plain node).
  */
 
-const path = require('path');
-
-let cached = null;
+const state = require('../main/state');
 
 function openVideoAgentWindow() {
-  const { BrowserWindow } = require('electron');
-  if (cached && !cached.isDestroyed()) {
-    cached.show();
-    cached.focus();
-    return cached;
+  const win = state.mainWindow;
+  if (!win || win.isDestroyed()) return null;   // không có cửa sổ chính → không mở gì cả (không sinh cửa sổ ngoài)
+  const switchToTab = () => {
+    try {
+      win.webContents
+        .executeJavaScript("(() => { if (typeof switchTool === 'function') { switchTool('toolvideoagent'); return true; } return false; })()", true)
+        .catch(() => {});
+    } catch (_) {}
+  };
+  try { if (win.isMinimized()) win.restore(); } catch (_) {}
+  try { win.show(); win.focus(); } catch (_) {}
+  if (win.webContents.isLoadingMainFrame()) {
+    try { win.webContents.once('did-finish-load', switchToTab); } catch (_) {}
+  } else {
+    switchToTab();
   }
-  const win = new BrowserWindow({
-    width: 1250,
-    height: 880,
-    title: 'Nova Video Agent',
-    backgroundColor: '#0b0d12',
-    webPreferences: {
-      preload: path.join(__dirname, '..', 'preload.js'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: false,
-    },
-  });
-  win.loadFile(path.join(__dirname, '..', 'web', 'video-agent.html'));
-  win.on('closed', () => { if (cached === win) cached = null; });
-  cached = win;
   return win;
 }
 

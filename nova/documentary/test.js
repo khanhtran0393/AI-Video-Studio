@@ -81,10 +81,14 @@ async function main() {
     rootDir,
     render: async () => { throw new Error('render failed'); },
   });
-  await assert.rejects(() => failedHandlers.get('documentary:render')(null, { projectId: 'demo_1' }), /render failed/);
+  await assert.rejects(() => failedHandlers.get('documentary:render')(null, { projectId: 'demo_1' }), /Lỗi trong quá trình xử lý: render failed/);
   const failedProject = createProjectStore(rootDir, 'demo_1').read();
   assert.strictEqual(failedProject.render.status, 'failed');
-  assert.strictEqual(failedProject.render.error, 'render failed');
+  // §1.6: lỗi lưu vào project phải là tiếng Việt, nhưng giữ nguyên bản gốc + mã
+  // (DOC_UNKNOWN) làm dữ liệu cho auto-fix/debug.
+  assert.strictEqual(failedProject.render.error, 'Lỗi trong quá trình xử lý: render failed');
+  assert.strictEqual(failedProject.render.original, 'render failed');
+  assert.strictEqual(failedProject.render.code, 'DOC_UNKNOWN');
   assert.strictEqual(makeSceneSpec({ sceneId: 'empty', text: 'No asset' }).durationSec, 3);
   console.log('documentary-test-ok');
 }

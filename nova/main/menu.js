@@ -23,7 +23,8 @@ function buildMenu() {
       { role: 'resetZoom', label: 'Cỡ mặc định' }, { role: 'zoomIn', label: 'Phóng to' }, { role: 'zoomOut', label: 'Thu nhỏ' },
       { type: 'separator' }, { role: 'togglefullscreen', label: 'Toàn màn hình' },
     ] },
-    // Menu Cửa sổ: mở các panel phụ (pattern documentary:openWindow / videoAgent:openWindow).
+    // Menu Cửa sổ: Video Agent mở NGAY TRONG app (tab sidebar "Video Agent" của cửa sổ chính)
+    // — không tạo BrowserWindow riêng theo chính sách "mọi công cụ trong app".
     { label: 'Cửa sổ', submenu: [
       { label: 'Nova Video Agent', click: () => {
         try { require('../video-agent/window').openVideoAgentWindow(); }

@@ -3,7 +3,7 @@
  * Đăng ký TOÀN BỘ IPC của main process + khởi động các bridge cục bộ (CLI/MCP).
  * Gọi một lần khi app nạp (trước app.whenReady()) — giữ đúng hành vi cũ.
  */
-const { BrowserWindow } = require('electron');
+const { BrowserWindow, ipcMain } = require('electron');   // ipcMain: registerWhiteboardIpc nhận ipcMain làm tham số
 const state = require('../state');
 const nativeTools = require('../../native-tools');   // shim → ./native-tools/ (đã tách như flow-native)
 const upscaleNative = require('../../upscale-native');
@@ -18,6 +18,7 @@ const { registerFilesIpc } = require('./files');
 const { registerVoiceIpc } = require('./voice');
 const { registerWatermarkIpc } = require('./watermark');
 const { registerSystemIpc } = require('./system');
+const { registerWhiteboardIpc } = require('../../whiteboard-studio/ipc');
 
 function registerAllIpc() {
   registerFlowIpc();
@@ -28,6 +29,12 @@ function registerAllIpc() {
   registerVoiceIpc();
   registerWatermarkIpc();
   registerSystemIpc();
+
+  // ── Whiteboard Studio (port TPL Studio Stories) — module độc lập,
+  //    runtime ffmpeg nội bộ riêng, không phụ thuộc app cũ ──
+  try {
+    registerWhiteboardIpc(ipcMain, { getState: () => state });
+  } catch (e) { console.warn('[whiteboard-studio]', e && e.message); }
 
   // ── CLI bridge native: app tự chạy gói Claude/ChatGPT của user (localhost:8795/8796) ──
   try { cliBridge.startAll(); } catch (e) { console.warn('[cli-bridge]', e && e.message); }

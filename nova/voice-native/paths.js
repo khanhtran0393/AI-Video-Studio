@@ -1,7 +1,11 @@
 /* ── voice-native/paths — tìm voice-studio (khách tự chọn ở userData/voice-root.txt + candidates)
-     + venv Python (omnivoice/vieneu/venv) + probe(). Tách từ voice-native.plain.js. ── */
+     + venv Python (omnivoice/vieneu/venv) + probe(). Tách từ voice-native.plain.js.
+     Bổ sung (bản đa máy): venv đóng gói từ máy build có thể hỏng trên máy khác vì pyvenv.cfg
+     "home" trỏ tới Python của máy build → tự phát hiện + tự trỏ lại Python 3.11 có trên máy. ── */
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
+const { execFileSync } = require('child_process');
 let electronApp = null; try { electronApp = require('electron').app; } catch {}
 
 // ── Đường dẫn voice-studio KHÁCH tự chọn (lưu ở userData/voice-root.txt) ──
@@ -42,6 +46,83 @@ function voiceRoot() {
   return null;
 }
 
+// ── Venv health-check + auto-repair (chạy đúng trên máy KHÔNG phải máy build) ──
+// Venv do uv tạo: Scripts/python.exe là trampoline đọc "home" từ pyvenv.cfg rồi gọi
+// Python thật ở đó. Trên máy khác, home này thường không tồn tại → chỉ cần trỏ lại
+// một Python 3.11 có sẵn là toàn bộ site-packages đóng gói sẵn chạy lại bình thường.
+
+function _pyvenvHome(venvDir) {
+  try {
+    const cfg = fs.readFileSync(path.join(venvDir, 'pyvenv.cfg'), 'utf8');
+    const m = cfg.match(/^home\s*=\s*(\S.*?)(?:\r?)$/m);
+    return m ? m[1].trim() : null;
+  } catch { return null; }
+}
+
+function _venvHealthy(venvDir) {
+  const home = _pyvenvHome(venvDir);
+  if (!home) return true; // không khai báo home → không kết luận hỏng
+  try { return fs.existsSync(home); } catch { return false; }
+}
+
+// Tìm Python 3.11 trên máy khách (cùng thứ tự ưu tiên như setup-omni.bat).
+function findPython311Homes() {
+  const out = [];
+  const home = os.homedir();
+  // 1) Python do uv quản lý (chuẩn của Nova: máy build + setup-omni đều dùng đường dẫn này)
+  for (const uvDir of [
+    path.join(home, 'AppData', 'Roaming', 'uv', 'python'),
+    path.join(home, 'AppData', 'Local', 'uv', 'python'),
+  ]) {
+    try {
+      if (!fs.existsSync(uvDir)) continue;
+      for (const d of fs.readdirSync(uvDir)) {
+        if (/^cpython-3\.11\b/.test(d)) {
+          const c = path.join(uvDir, d);
+          if (fs.existsSync(path.join(c, 'python.exe'))) out.push(c);
+        }
+      }
+    } catch {}
+  }
+  // 2) Python.org cài per-user (không cần admin)
+  try {
+    const p = path.join(home, 'AppData', 'Local', 'Programs', 'Python', 'Python311');
+    if (fs.existsSync(path.join(p, 'python.exe'))) out.push(p);
+  } catch {}
+  // 3) python 3.11 bất kỳ trên PATH (verify bằng -V)
+  try {
+    const found = execFileSync('where', ['python'], { stdio: ['ignore', 'pipe', 'ignore'], timeout: 3000, windowsHide: true }).toString();
+    for (const line of found.split(/\r?\n/)) {
+      const exe = line.trim();
+      if (!exe || !fs.existsSync(exe)) continue;
+      try {
+        const v = execFileSync(exe, ['-V'], { stdio: ['ignore', 'pipe', 'ignore'], timeout: 5000, windowsHide: true }).toString().trim();
+        if (/^Python 3\.11\./.test(v)) out.push(path.dirname(exe));
+      } catch {}
+    }
+  } catch {}
+  return [...new Set(out)];
+}
+
+let lastRepair = null; // mô tả lần sửa gần nhất (đưa lên probe/log để chẩn đoán)
+
+function _repairVenv(venvDir) {
+  const brokenHome = _pyvenvHome(venvDir);
+  for (const cand of findPython311Homes()) {
+    try {
+      const cfgPath = path.join(venvDir, 'pyvenv.cfg');
+      const cfg = fs.readFileSync(cfgPath, 'utf8');
+      const bak = cfgPath + '.bak-buildmachine';
+      if (!fs.existsSync(bak)) fs.writeFileSync(bak, cfg); // giữ bản gốc để debug
+      fs.writeFileSync(cfgPath, cfg.replace(/^home\s*=.*$/m, 'home = ' + cand));
+      lastRepair = { venv: venvDir, from: brokenHome, to: cand };
+      console.log('[voice] venv hỏng (home=' + brokenHome + ' không tồn tại) → đã trỏ lại Python: ' + cand);
+      return true;
+    } catch (e) { console.warn('[voice] sửa pyvenv.cfg lỗi:', e && e.message); }
+  }
+  return false;
+}
+
 function _venvPython(root, name) {
   const candidates = [
     path.join(root, name, 'bin', 'python'),
@@ -50,7 +131,13 @@ function _venvPython(root, name) {
   for (const p of candidates) {
     try {
       // A directory named .venv is not enough: a broken/partial venv must not be selected.
-      if (fs.existsSync(p) && fs.existsSync(path.join(root, name, 'pyvenv.cfg'))) return p;
+      if (fs.existsSync(p) && fs.existsSync(path.join(root, name, 'pyvenv.cfg'))) {
+        // Đóng gói từ máy build: home trong pyvenv.cfg có thể không tồn tại ở đây
+        // → tự trỏ lại Python 3.11 trên máy này (site-packages giữ nguyên, không cần cài lại).
+        const dir = path.join(root, name);
+        if (!_venvHealthy(dir) && !_repairVenv(dir)) return null;
+        return p;
+      }
     } catch {}
   }
   return null;
@@ -72,8 +159,10 @@ function venvKind(root) {
 }
 
 // Trạng thái cài đặt cho UI: có tìm thấy voice-studio + môi trường Python chưa
+// (venv hỏng được tự sửa tại chỗ khi gọi venvPython — probe phản ánh trạng thái SAU sửa).
 function probe() {
   const root = voiceRoot();
-  return { root: root || null, hasRoot: !!root, hasPython: root ? !!venvPython(root) : false, engine: root ? venvKind(root) : null };
+  const py = root ? venvPython(root) : null;
+  return { root: root || null, hasRoot: !!root, hasPython: !!py, engine: root ? venvKind(root) : null, lastRepair: lastRepair || null };
 }
-module.exports = { customRoot, setRoot, voiceRoot, venvPython, venvKind, probe };
+module.exports = { customRoot, setRoot, voiceRoot, venvPython, venvKind, probe, findPython311Homes };

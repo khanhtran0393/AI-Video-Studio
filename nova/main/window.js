@@ -2,11 +2,12 @@
 /**
  * Cửa sổ chính của app (AI Video Studio).
  * - Tạo BrowserWindow, reveal sau khi trang tải xong (chờ splash đủ SPLASH_MIN_MS).
- * - Popup đăng nhập chỉ cho host trong AUTH_HOSTS; còn lại mở trình duyệt ngoài.
+ * - Cửa sổ chính của app (AI Video Studio).
+ * - Chỉ popup đăng nhập bên thứ 3 (AUTH_HOSTS) được mở; MỌI liên kết khác giữ trong app.
  * - Menu chuột phải tiếng Việt cho ô nhập.
  */
 const path = require('path');
-const { BrowserWindow, Menu, shell } = require('electron');
+const { BrowserWindow, Menu } = require('electron');
 const state = require('./state');
 const { AUTH_HOSTS, SPLASH_MIN_MS, SPLASH_MAX_MS } = require('./state');
 const { NOVA_PARTITION } = require('./identity');
@@ -57,12 +58,16 @@ function createWindow(startUrl) {
   setTimeout(reveal, SPLASH_MAX_MS);
   state.mainWindow.loadURL(startUrl).catch(() => reveal());
   state.mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    // Chính sách "mọi thứ trong app": KHÔNG mở cửa sổ/trình duyệt ngoài.
+    // Ngoại lệ DUY NHẤT: popup ĐĂNG NHẬP bên thứ 3 (Google/Firebase — AUTH_HOSTS).
+    // Mọi liên kết khác bị deny — renderer tự xử lý trong app (novaCopyLink / novaDownloadUrl
+    // trong nova/web/index.html). Video Agent & các tool sidebar luôn là tab trong app.
     try {
       if (AUTH_HOSTS.test(new URL(url).hostname)) {
         return { action: 'allow', overrideBrowserWindowOptions: { width: 500, height: 660, autoHideMenuBar: true, webPreferences: { partition: NOVA_PARTITION, contextIsolation: true, nodeIntegration: false } } };
       }
     } catch {}
-    shell.openExternal(url);
+    try { console.warn('[window] đã chặn mở cửa sổ ngoài (chỉ cho phép đăng nhập bên thứ 3):', url); } catch (_) {}
     return { action: 'deny' };
   });
   attachContextMenu(state.mainWindow.webContents);

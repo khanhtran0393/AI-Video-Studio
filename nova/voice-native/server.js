@@ -1,8 +1,9 @@
 /* ── voice-native/server — start/stop/status backend Voice Studio (uvicorn 8771, tương thích 8770 cũ),
      resolveUrl dò /api/health, log sink cho UI. Tách từ voice-native.plain.js (verbatim). ── */
-const { spawn } = require('child_process');
+const { spawn, execFileSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const http = require('http');
 const { voiceRoot, venvPython, venvKind } = require('./paths');
 
@@ -49,14 +50,64 @@ async function resolveUrl() {
   return null;
 }
 
+// ── Deep-repair cho máy KHÔNG phải máy build ──
+// Venv hỏng (pyvenv.cfg trỏ Python của máy build) + máy chưa có Python 3.11 nào
+// → nếu có uv: tự cài Python 3.11 (~1 lần, cần internet) rồi paths tự trỏ venv sang nó.
+function _findUv() {
+  const home = os.homedir();
+  const cands = [
+    path.join(home, '.cargo', 'bin', 'uv.exe'),
+    path.join(home, '.local', 'bin', 'uv.exe'),
+    path.join(home, 'AppData', 'Local', 'Programs', 'uv', 'uv.exe'),
+    path.join(home, 'AppData', 'Roaming', 'uv', 'uv.exe'),
+  ];
+  try {
+    const out = execFileSync('where', ['uv'], { stdio: ['ignore', 'pipe', 'ignore'], timeout: 3000, windowsHide: true }).toString();
+    const fromPath = out.split(/\r?\n/).map((l) => l.trim()).filter((p) => p && fs.existsSync(p));
+    cands.unshift(...fromPath);
+  } catch {}
+  for (const c of cands) { try { if (fs.existsSync(c)) return c; } catch {} }
+  return null;
+}
+
+// Chạy lệnh nền, stream output lên UI qua emit() — không block main process.
+function _run(cmd, args) {
+  return new Promise((resolve) => {
+    let p;
+    try { p = spawn(cmd, args, { windowsHide: true }); } catch (e) { resolve({ ok: false, err: e && e.message }); return; }
+    if (!p) { resolve({ ok: false }); return; }
+    if (p.stdout) p.stdout.on('data', (d) => emit(d.toString()));
+    if (p.stderr) p.stderr.on('data', (d) => emit(d.toString()));
+    p.on('error', (e) => resolve({ ok: false, err: e && e.message }));
+    p.on('close', (code) => resolve({ ok: code === 0, code }));
+  });
+}
+
+async function _ensureVenv(root) {
+  let py = venvPython(root);   // paths tự sửa venv bằng Python 3.11 sẵn có trên máy
+  if (py) return py;
+  const uv = _findUv();
+  if (uv) {
+    emit('Môi trường Python của backend chưa sẵn sàng trên máy này — tự cài Python 3.11 qua uv (chỉ lần đầu, cần internet)…');
+    const r = await _run(uv, ['python', 'install', '3.11']);
+    if (r.ok) {
+      emit('Đã cài Python 3.11 — cấu hình lại môi trường backend…');
+      py = venvPython(root); // giờ findPython311Homes() thấy Python uv vừa cài và tự sửa pyvenv.cfg
+    } else {
+      emit('Không cài được Python qua uv' + (r.err ? ' (' + r.err + ')' : '') + '.');
+    }
+  }
+  return py || null;
+}
+
 async function start() {
   const existing = await resolveUrl();
   if (existing) return { ok: true, url: existing };
   const root = voiceRoot();
   if (!root) return { error: 'Không tìm thấy thư mục voice-studio. Hãy chọn thư mục backend trong AI Video Studio.' };
-  const py = venvPython(root);
+  const py = await _ensureVenv(root);
   const kind = venvKind(root);
-  if (!py || !kind) return { error: 'Thiếu môi trường Python hợp lệ trong voice-backend. Hãy chạy setup-omni.bat (Windows) hoặc setup-omni.command (macOS) rồi thử lại.' };
+  if (!py || !kind) return { error: 'Môi trường Python cho backend chưa chạy được trên máy này. Hãy cài Python 3.11 (hoặc uv) rồi bấm thử lại — hoặc chạy setup-omni.bat trong thư mục voice-backend rồi thử lại.' };
 
   if (!proc) {
     const env = { ...process.env, COQUI_TOS_AGREED: '1', VOICE_PORT: String(PORT) };

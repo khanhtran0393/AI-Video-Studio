@@ -11,6 +11,7 @@ const { overrideBeatAsset, overrideBeatMotion, setLock, applyOverrides } = requi
 const { listPresets } = require('./pipeline/motion-presets');
 const { makeSceneSpecs } = require('./pipeline/scene-spec');
 const { createProviderRegistry } = require('./core/provider-registry');
+const { viError } = require('./errors');
 
 function rootFrom(options) {
   const rootDir = options && (options.rootDir || options.userDataDir);
@@ -27,6 +28,18 @@ function registerDocumentaryIpc(ipcMain, options = {}) {
   const renderAdapter = options.render;
   const providers = options.providers || createProviderRegistry(options.providerConfig || {});
   const openWindowHandler = options.openWindow || null;
+
+  /** Bọc mọi handler: lỗi ném ra renderer luôn là message tiếng Việt rõ ràng
+   *  (giữ code/stage/original cho auto-fix đọc từ project/job data). */
+  function guarded(channel, handler) {
+    return async (event, payload) => {
+      try {
+        return await handler(event, payload);
+      } catch (error) {
+        throw viError(error, channel);
+      }
+    };
+  }
 
   /** Adapter render cho orchestrator: map sang renderNovaScenes signature. */
   function orchestratorRender(event) {
@@ -71,8 +84,20 @@ function registerDocumentaryIpc(ipcMain, options = {}) {
       const onProgress = update => {
         try { if (sender && !sender.isDestroyed()) sender.send('documentary:progress', { ...update, projectId }); } catch (_) {}
       };
-      const onJobUpdate = update => {
-        try { if (sender && !sender.isDestroyed()) sender.send('documentary:job', update); } catch (_) {}
+      const onJobUpdate = up => {
+        try {
+          // Job record chứa `task` (function) và result có thể chứa object không
+          // clone được → IPC 'Failed to serialize arguments'. Chỉ gửi field an toàn.
+          const safe = {
+            id: up.id, key: up.key, status: up.status, attempt: up.attempt,
+            error: up.error == null ? null : String(up.error),
+            updatedAt: up.updatedAt, projectId,
+          };
+          if (up.result !== undefined) {
+            try { safe.result = JSON.parse(JSON.stringify(up.result)); } catch (_) { /* result không serializable → bỏ */ }
+          }
+          if (sender && !sender.isDestroyed()) sender.send('documentary:job', safe);
+        } catch (_) {}
       };
       const orchestrator = createOrchestrator({
         providers,
@@ -151,13 +176,23 @@ function registerDocumentaryIpc(ipcMain, options = {}) {
         store.save(project);
         return result;
       } catch (error) {
-        project.render = { ...(project.render || {}), status: 'failed', error: String(error && error.message || error) };
+        // Lưu cả bản tiếng Việt (hiển thị) lẫn lỗi gốc (auto-fix/debug) vào project.
+        const friendly = viError(error, 'documentary:render');
+        project.render = {
+          ...(project.render || {}),
+          status: 'failed',
+          error: friendly.message,
+          code: friendly.code || null,
+          original: String((error && error.message) || error || ''),
+        };
         store.save(project);
-        throw error;
+        throw friendly;
       }
     },
   };
-  return register(ipcMain, handlers);
+  return register(ipcMain, Object.fromEntries(
+    Object.entries(handlers).map(([channel, handler]) => [channel, guarded(channel, handler)])
+  ));
 }
 
 module.exports = { registerDocumentaryIpc, rootFrom, payloadObject };

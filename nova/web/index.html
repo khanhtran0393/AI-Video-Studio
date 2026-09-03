@@ -1136,6 +1136,56 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
 .veo-copy{ margin-left:auto;background:transparent;border:1px solid var(--border);border-radius:6px;
   cursor:pointer;color:var(--text-muted);font-size:12px;padding:3px 9px; }
 .veo-copy:hover{ border-color:var(--accent);color:var(--accent); }
+
+/* ============================================================
+   WHITEBOARD STUDIO (port TPL Studio Stories v1.0.2) — .wb-*
+   ============================================================ */
+.wb-root{ display:flex;flex-direction:column;gap:14px; }
+.wb-head{ display:flex;align-items:baseline;gap:10px;flex-wrap:wrap; }
+.wb-head h3{ margin:0;font-size:16px; }
+.wb-sub{ font-size:11.5px;color:var(--text-muted); }
+.wb-tabs{ display:flex;gap:6px;border-bottom:1px solid var(--border);padding-bottom:8px; }
+.wb-tab{ background:transparent;border:1px solid var(--border);border-radius:8px;padding:6px 14px;
+  cursor:pointer;font-size:12.5px;color:var(--text-muted); }
+.wb-tab:hover{ color:var(--text);border-color:var(--accent); }
+.wb-tab.active{ background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600; }
+.wb-pane{ display:flex;flex-direction:column;gap:14px; }
+.wb-group{ background:var(--surface-1,var(--surface-2));border:1px solid var(--border);border-radius:10px;
+  padding:14px;display:flex;flex-direction:column;gap:10px; }
+.wb-group-title{ font-size:11.5px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px; }
+.wb-grid{ display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px 12px; }
+.wb-field{ display:flex;flex-direction:column;gap:4px;font-size:12px; }
+.wb-field-label{ font-size:11px;color:var(--text-muted); }
+.wb-tpl{ grid-column:1 / -1; }
+.wb-tpl-input{ width:100%;resize:vertical;font-family:inherit;font-size:12px;line-height:1.5; }
+.wb-media-row{ display:flex;align-items:center;gap:10px;flex-wrap:wrap; }
+.wb-media-label{ font-size:11.5px;color:var(--text-muted);word-break:break-all; }
+.wb-canvas{ width:100%;max-width:640px;background:#fff;border:1px solid var(--border);border-radius:8px;display:block; }
+.wb-timeline{ width:100%;max-width:640px;height:36px;background:var(--surface-2);border:1px solid var(--border);
+  border-radius:6px;display:block;cursor:pointer; }
+.wb-preview-bar{ display:flex;align-items:center;gap:12px;flex-wrap:wrap; }
+.wb-time{ font-family:monospace;font-size:12px;color:var(--text-muted); }
+.wb-btn-primary{ background:var(--accent);border-color:var(--accent);color:#fff; }
+.wb-export-bar{ display:flex;gap:8px;flex-wrap:wrap;align-items:center; }
+.wb-prog{ height:8px;background:var(--surface-2);border:1px solid var(--border);border-radius:4px;overflow:hidden; }
+.wb-prog-fill{ height:100%;width:0;background:var(--accent);transition:width .3s; }
+.wb-prog-label{ font-size:11.5px;color:var(--text-muted); }
+.wb-logs{ max-height:180px;overflow:auto;background:var(--surface-2);border:1px solid var(--border);
+  border-radius:8px;padding:10px;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;line-height:1.6; }
+.wb-log{ color:var(--text-muted); }
+.wb-log.ok{ color:var(--green,#2FA88E); }
+.wb-log.err{ color:var(--red,#e5484d); }
+/* Editor tab: danh sách item + form thuộc tính + ô chủ đề keyword */
+.wb-items{ display:flex;flex-direction:column;gap:4px;max-height:220px;overflow:auto; }
+.wb-item{ display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid var(--border);
+  border-radius:8px;cursor:pointer;font-size:12px;background:var(--surface-2); }
+.wb-item:hover{ border-color:var(--accent); }
+.wb-item.sel{ border-color:var(--accent);background:rgba(124,58,237,.08); }
+.wb-item-type{ flex:0 0 auto; }
+.wb-item-name{ flex:1;min-width:0;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.wb-item-x{ padding:2px 8px;font-size:11px; }
+.wb-topic-input{ flex:1;min-width:220px;font-family:inherit;font-size:12px; }
+.wb-canvas{ cursor:grab; }
 </style>
 </head>
 <body>
@@ -1438,6 +1488,9 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
         <div class="nav-item" data-tool="toolvideoagent" onclick="switchTool('toolvideoagent')">
           <span class="num"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M8 12l5 3.5V8.5L8 12z"/></svg></span><span>Video Agent</span>
         </div>
+        <div class="nav-item" data-tool="toolwhiteboard" onclick="switchTool('toolwhiteboard')">
+          <span class="num"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg></span><span>Whiteboard Studio</span>
+        </div>
         <div class="nav-group">Cài đặt</div>
         <div class="nav-item" data-tool="toolsettings" onclick="switchTool('toolsettings')">
           <span class="num"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="3.5" cy="6" r="1.5"/><circle cx="3.5" cy="12" r="1.5"/><circle cx="3.5" cy="18" r="1.5"/></svg></span><span>API &amp; Tài khoản</span>
@@ -1558,6 +1611,15 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
         <button id="renderBtn" class="btn secondary">Render video</button>
       </div>
       <div class="grid" id="panels" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;"></div>
+    </div>
+
+    <!-- WHITEBOARD STUDIO TOOL (port TPL Studio Stories v1.0.2) -->
+    <div class="tool" id="tool-toolwhiteboard">
+      <div class="tool-head">
+        <div class="tool-title">🖊 Whiteboard Studio</div>
+        <div class="tool-subtitle">Video whiteboard từ SRT + giọng đọc + ảnh thật — preview canvas, xuất MP4 bằng ffmpeg nội bộ</div>
+      </div>
+      <div id="whiteboardRoot"></div>
     </div>
 
     <!-- TOOL 1: PROFILE KÊNH -->
@@ -4729,7 +4791,12 @@ const MODELS = {
     { id: 'claude-opus-4-7',   name: 'Claude Opus 4.7' },
     { id: 'claude-opus-4-6',   name: 'Claude Opus 4.6' },
     { id: 'claude-fable-5',    name: 'Claude Fable 5' },
-    { id: 'claude-haiku-4.5',  name: 'Claude Haiku 4.5' }
+    { id: 'claude-haiku-4.5',  name: 'Claude Haiku 4.5' },
+    // Gateway agentrouter (đi qua CLI bridge, KHÔNG cần API key) — id phải khớp catalog của họ
+    // (Claude series trên agentrouter đang bị ngừng; GLM/DeepSeek/GPT còn kênh + budget).
+    { id: 'glm-5.3',           name: 'GLM 5.3 (agentrouter)' },
+    { id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash (agentrouter)' },
+    { id: 'gpt-5.6-sol',       name: 'GPT-5.6 Sol (agentrouter)' }
   ],
   openai: [
     // Key OpenAI TRỰC TIẾP — id chính thức. Rẻ hơn hẳn 5.6 cho việc hàng loạt.
@@ -5600,14 +5667,74 @@ document.addEventListener('click', (e) => {
   if (w && w.classList.contains('open') && !w.contains(e.target)) w.classList.remove('open');
 });
 let _updState = null, _appVer = '', _updDismissed = false;
+
+// ── Chính sách "MỌI THỨ TRONG APP" ────────────────────────────────────────────
+// App KHÔNG mở cửa sổ/trình duyệt ngoài — main process đã deny mọi window.open
+// trừ popup ĐĂNG NHẬP bên thứ 3 (Google/Firebase). Ở renderer:
+// - Liên kết ngoài → sao chép vào clipboard + toast (người dùng tự dán khi cần).
+// - File media kết quả → tải thẳng về máy ngay trong app (fetch → blob → download).
+const NOVA_AUTH_LINK_HOSTS = /(^|\.)(accounts\.google\.com|google\.com|firebaseapp\.com|novastudio\.com)$/i;
+function novaToast(msg){
+  try {
+    let t = document.getElementById('novaToast');
+    if (!t){
+      t = document.createElement('div');
+      t.id = 'novaToast';
+      t.style.cssText = 'position:fixed;bottom:26px;left:50%;transform:translateX(-50%);z-index:99999;max-width:min(560px,86vw);background:var(--surface,#1b1f27);color:var(--text,#e8eaf0);border:1px solid var(--border,#2c3240);border-radius:10px;padding:10px 16px;font-size:12.5px;line-height:1.5;box-shadow:0 8px 30px rgba(0,0,0,.45);word-break:break-all';
+      document.body.appendChild(t);
+    }
+    t.textContent = msg;
+    t.style.display = 'block';
+    clearTimeout(t._novaT);
+    t._novaT = setTimeout(() => { t.style.display = 'none'; }, 4200);
+  } catch(_){}
+}
+function novaCopyLink(url, label){
+  url = String(url || '');
+  if (!url) return;
+  try { navigator.clipboard.writeText(url); } catch(_){}
+  novaToast((label || 'App không mở cửa sổ ngoài — đã sao chép liên kết:') + ' ' + url);
+}
+async function novaDownloadUrl(url, name){
+  url = String(url || '');
+  if (!url) return;
+  try {
+    const r = await fetch(url);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const blob = await r.blob();
+    const a = document.createElement('a');
+    const objUrl = URL.createObjectURL(blob);
+    a.href = objUrl;
+    a.download = name || ('nova-tai-' + Date.now());
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(objUrl), 5000);
+    novaToast('Đang tải về (ngay trong app): ' + (name || url));
+  } catch (e) {
+    novaCopyLink(url, 'Không tải trực tiếp được — đã sao chép liên kết:');
+  }
+}
+// Chặn mọi <a target="_blank"> mở tab/cửa sổ ngoài (trừ host đăng nhập bên thứ 3).
+document.addEventListener('click', (e) => {
+  const a = e.target && e.target.closest ? e.target.closest('a[target="_blank"]') : null;
+  if (!a || !a.href) return;
+  let host = '';
+  try { host = new URL(a.href).hostname; } catch(_){}
+  if (host && NOVA_AUTH_LINK_HOSTS.test(host)) return;   // đăng nhập bên thứ 3 → main mở popup
+  e.preventDefault();
+  e.stopPropagation();
+  novaCopyLink(a.href);
+}, true);
+
 // Trang tải bản mới (Mac tải tay vì app chưa ký chứng chỉ Apple). Đổi thành link landing của bạn khi có.
 const MAC_DL_URL = 'https://novastudio-vn.netlify.app/#tai-app';
 // Liên hệ hỗ trợ — ĐỔI thành Zalo/YouTube của bạn:
 const SUPPORT_ZALO = 'https://zalo.me/0373382451';
 const SUPPORT_YOUTUBE = 'https://www.youtube.com/@DinoFact200-1';
-function openSupportZalo(){ try { window.open(SUPPORT_ZALO); } catch(_){ location.href = SUPPORT_ZALO; } }
+function openSupportZalo(){ novaCopyLink(SUPPORT_ZALO, 'Liên hệ hỗ trợ Zalo — đã sao chép:'); }
 function _isMac(){ return !!(window.native && window.native.platform === 'darwin'); }
-function macDownloadUpdate(){ try { window.open(MAC_DL_URL); } catch(_){ location.href = MAC_DL_URL; } }
+function macDownloadUpdate(){ novaCopyLink(MAC_DL_URL, 'Link tải bản Mac — đã sao chép:'); }
 function _showUpdate(info){
   _updState = info || {};
   // Mac: KHÔNG auto-update được (app chưa ký) → chỉ hiện dòng nhắc góc phải, mời tải từ web.
@@ -6784,8 +6911,10 @@ async function callLLM(prompt, opts = {}){
       || (typeof document !== 'undefined' && document.getElementById('cliEndpoint')?.value)
       || 'http://localhost:8795').trim().replace(/\/+$/, '');
     const url = /\/v1\/chat\/completions$/.test(ep) ? ep : ep + '/v1/chat/completions';
+    // Model Claude-* → alias opus/sonnet như cũ (subscription CLI); model KHÁC (glm-5.3, deepseek…)
+    // → truyền NGUYÊN id để gateway (agentrouter/HHTECH) chọn đúng kênh còn sống — bridge đưa thẳng vào --model.
     const cliModel = /opus/i.test(model) ? 'opus' : /sonnet/i.test(model) ? 'sonnet'
-      : (['opus', 'sonnet', 'chatgpt', 'default'].includes(model) ? model : 'default');
+      : (/^(claude-|custom-model)/i.test(model) ? 'default' : (model || 'default'));
     return _withRetry(() => callOpenAICompat(messages, cliModel, '', maxTokens, url, { json: false, timeoutMs: 600000 }));   // CLI: bỏ json_object (treo với ARRAY); timeout 10 phút vì CLI KHÔNG cap output → sinh dài + chậm, 240s giết oan call sắp xong
   }
 
@@ -7346,6 +7475,13 @@ function switchTool(name){
   if (name === 'toolvideoagent') {
     if (window.videoAgentPanel && typeof window.videoAgentPanel.init === 'function') {
       window.videoAgentPanel.init();
+    }
+  }
+  if (name === 'toolwhiteboard') {
+    const _wbC = document.getElementById('whiteboardRoot');
+    if (_wbC && window.WhiteboardPanel && typeof window.WhiteboardPanel.init === 'function') {
+      try { window.WhiteboardPanel.init(_wbC); }
+      catch (e) { console.error('[whiteboard] init lỗi:', e); }
     }
   }
   if (name === 'tooladmin' && typeof admListUsers === 'function') admListUsers();
@@ -8786,7 +8922,7 @@ function _mvVidSyncBtn(running){
   b.style.borderColor = running ? 'var(--red)' : '';
   b.textContent = running ? '■ Dừng' : '▶ Tạo tất cả';
 }
-function tvDownloadOne(i){ const r = tvResults[i]; if (!r) return; if (r.b64) _mvDownload(_b64ToBlob(r.b64, r.mime), r.name + '.mp4'); else if (r.videoUrl) window.open(r.videoUrl, '_blank'); }
+function tvDownloadOne(i){ const r = tvResults[i]; if (!r) return; if (r.b64) _mvDownload(_b64ToBlob(r.b64, r.mime), r.name + '.mp4'); else if (r.videoUrl) novaDownloadUrl(r.videoUrl, r.name + '.mp4'); }
 
 // ── Chọn / dạy model Flow ──
 let tvModelKeys = {};
@@ -8849,7 +8985,7 @@ async function mvVideoDownloadAll(){
   if (!rows.length){ setStatusBar('statusMvVid', 'Chưa có video nào để tải.', 'info'); return; }
   for (const r of rows){
     if (r.b64){ _mvDownload(_b64ToBlob(r.b64, r.mime), r.name + '.mp4'); }
-    else if (r.videoUrl){ window.open(r.videoUrl, '_blank'); }
+    else if (r.videoUrl){ await novaDownloadUrl(r.videoUrl, r.name + '.mp4'); }
     await new Promise(res => setTimeout(res, 450));   // giãn cách tránh trình duyệt chặn tải hàng loạt
   }
   setStatusBar('statusMvVid', `✓ Đã tải ${rows.length} video.`, 'ok');
@@ -18215,7 +18351,7 @@ function _t2WebPickerRender(sceneId, note){
       </div>
       <div style="display:flex;gap:4px;padding:0 8px 8px">
         <button class="btn ghost sm" style="flex:1;font-size:10.5px;padding:4px" onclick="t2PickWeb('${sceneId}',${i})">Dùng cảnh này</button>
-        <button class="btn ghost sm" style="font-size:10.5px;padding:4px 7px" title="Mở trang gốc trong trình duyệt" onclick="event.stopPropagation();window.open('${escapeHtml(c.trangUrl || '')}','_blank')">↗</button>
+        <button class="btn ghost sm" style="font-size:10.5px;padding:4px 7px" title="Sao chép link trang gốc (app không mở cửa sổ ngoài)" onclick="event.stopPropagation();novaCopyLink('${escapeHtml(c.trangUrl || '')}')">↗</button>
       </div>
     </div>`;
   }).join('');
@@ -18453,8 +18589,8 @@ async function downloadMedia(url, kind, sceneNum){
     URL.revokeObjectURL(objUrl);
     setStatus5(`✓ Đã tải về: ${baseName}.${ext}`, 'ok');
   } catch (e) {
-    window.open(url, '_blank');
-    setStatus5('Mở link ở tab mới để tải (CORS chặn tải trực tiếp).', 'info');
+    novaCopyLink(url, 'CORS chặn tải trực tiếp — đã sao chép liên kết:');
+    setStatus5('Không tải trực tiếp được (CORS) — link đã sao chép, app không mở cửa sổ ngoài.', 'info');
   }
 }
 
@@ -25509,6 +25645,9 @@ function toggleApiSection(){
 </script>
 
   <script src="video-agent-panel.js"></script>
+  <!-- Whiteboard Studio: core PHẢI nạp trước panel (panel đọc window.WhiteboardCore ngay khi execute) -->
+  <script src="whiteboard-studio-core.js"></script>
+  <script src="whiteboard-studio-panel.js"></script>
 
 <script>
 /* ============================================================================
