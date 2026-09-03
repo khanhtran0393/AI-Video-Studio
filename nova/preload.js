@@ -169,6 +169,10 @@ contextBridge.exposeInMainWorld('native', {
   onNovaLog: (cb) => ipcRenderer.on('nova-log', (_e, line) => cb(line)),
   // Thông số hệ thống thật (RAM/CPU) cho thanh trạng thái.
   sysStats: () => ipcRenderer.invoke('sys-stats'),
+  // Bảo vệ ổ đĩa (NVMe/SSD): xem chỗ trống, dọn file tạm, xoá job cũ.
+  diskStatus: () => ipcRenderer.invoke('disk-guard:status'),
+  diskCleanupTemp: (days) => ipcRenderer.invoke('disk-guard:cleanup-temp', days),
+  diskPruneOldJobs: (root, days) => ipcRenderer.invoke('disk-guard:prune-artifacts', { root, days }),
   // Voice native (OmniVoice) — khởi động backend giọng nói.
   voiceStart: () => ipcRenderer.invoke('voice-start'),
   voiceStatus: () => ipcRenderer.invoke('voice-status'),

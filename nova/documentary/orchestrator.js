@@ -28,6 +28,7 @@ const { createImageToVideoGate } = require('./ai/image-to-video');
 const { applyOverrides } = require('./core/overrides');
 const { detectGraphics } = require('./pipeline/motion-graphics');
 const { buildAttention } = require('./pipeline/attention');
+const { buildWordSync } = require('./pipeline/visual-sync');
 const { makeSceneSpecs } = require('./pipeline/scene-spec');
 const { runQa, autoFix } = require('./pipeline/qa');
 const { validateProject } = require('./core/schema');
@@ -170,6 +171,10 @@ async function runStages2(ctx) {
         ...beat, assetId: selection ? selection.assetId : null, asset: selection ? selection.asset : null,
         confidence: selection ? selection.confidence : 0, visualPlan: plan || null, motion: motion || null,
         graphics: detectGraphics(plan, anchor), attention: buildAttention(beat, alignment.words),
+        // Truyền cả object alignment (provider/confidence) — visual-sync tự chặn
+        // deterministic/low-trust để không bao giờ pop-in sai giây, tự hạ cấp
+        // về hành vi beat-level ổn định. Zero-config cho người dùng.
+        wordSync: buildWordSync(beat, alignment, selection ? selection.asset : null),
         segmentation: segmentationByBeat[beat.beatId] || null,
       };
     });

@@ -100,7 +100,8 @@ class CdpClient {
       const el = document.querySelector(${encodedSelector});
       if (!el) throw new Error('Missing element: ' + ${encodedSelector});
       el.scrollIntoView({block:'center'}); el.focus();
-      const proto = el instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype;
+      const proto = el instanceof HTMLSelectElement ? HTMLSelectElement.prototype
+        : (el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype);
       const setter = Object.getOwnPropertyDescriptor(proto, 'value').set;
       setter.call(el, ${encodedValue});
       el.dispatchEvent(new Event('input', {bubbles:true}));

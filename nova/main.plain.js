@@ -26,6 +26,7 @@ const { shutdownOwnedResources } = require('./main/lifecycle');
 const { installLifecycleLogging } = require('./main/lifecycle-log');
 const { registerAllIpc } = require('./main/ipc');
 const { userDataPath } = require('./core/paths');
+const { runStartupJanitor, runQuitJanitor } = require('./main/janitor');
 const { registerSettingsIpc } = require('./storage/settings-store');
 const { registerElectronErrorBridge } = require('../auto-fix/client-error-reporter/electron-bridge');
 
@@ -79,6 +80,8 @@ app.on('before-quit', (event) => {
 });
 app.on('will-quit', () => {
   state.isQuitting = true;
+  // Janitor lúc thoát: xoá file .tmp mồ côi trong userData (rẻ, không chặn thoát).
+  try { runQuitJanitor(app); } catch (_) {}
   if (state.unregisterErrorBridge) { try { state.unregisterErrorBridge(); } catch (_) {} state.unregisterErrorBridge = null; }
   try { closeSplashWindow(true); } catch (_) {}
   try { if (state.localServer) { state.localServer.close(); state.localServer = null; } } catch (_) {}
@@ -113,6 +116,12 @@ app.whenReady().then(async () => {
   if (process.platform === 'darwin' && app.dock) {
     try { const ic = path.join(__dirname, 'build', 'icon.png'); if (fs.existsSync(ic)) app.dock.setIcon(ic); } catch (e) { /* */ }
   }
+  // Janitor: dọn rác của phiên trước (crash/kill/rebrand để lại) — chạy 1 lần
+  // khi mở app: file tạm mồ côi trong os.tmpdir(), file .tmp atomic-write dở
+  // dang trong userData, userData của tên app cũ (mỗi bản ~430MB Chrome CfT),
+  // và (chỉ dev) log/script rác ở thư mục dự án. Xem nova/main/janitor.js.
+  try { runStartupJanitor(app); } catch (e) { console.warn('[janitor] startup:', e && e.message); }
+
   buildMenu();
   // Đăng ký IPC của Editor Pro (nhúng qua <webview>) — dùng chung userData Nova nhưng không dùng session app khác.
   try {

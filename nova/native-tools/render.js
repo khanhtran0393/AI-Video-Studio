@@ -8,6 +8,8 @@ const os = require('os');
 const { FFMPEG, run, probeDur } = require('./ffmpeg');
 const { gpuEncoder, qualityArgs: gpuQualityArgs, label: gpuLabel } = require('../editor-pro/gpu-encoder');
 const { dataUrlToBuffer, _kenBurns, _colorFilter, _scaleZoom, _xfadeName } = require('./filters');
+const { appTempDir } = require('../core/temp');
+const { ensureFreeBytes, estimateRenderBytes } = require('../storage/disk-guard');
 
 // Tiến trình render hiện tại (để Hủy).
 const _render = { proc: null, canceled: false, outPath: null };
@@ -62,7 +64,25 @@ async function renderVideo(payload, win) {
     try { fs.mkdirSync(path.dirname(outPath), { recursive: true }); } catch (e) {}
   }
 
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ckm-video-'));
+  // ── Bảo vệ ổ đĩa: kiểm tra chỗ trống TRƯỚC khi ghi bất kỳ byte nào (file tạm + MP4 cuối).
+  // Ước lượng: input tạm (base64→binary) + output (bitrate × thời lượng) + đệm 64MB.
+  const needBytes = estimateRenderBytes(payload, imgs);
+  const guards = [
+    { dir: path.dirname(outPath), label: 'nơi lưu video' },
+    { dir: appTempDir(), label: 'thư mục tạm' },
+  ];
+  for (const g of guards) {
+    const guard = ensureFreeBytes(g.dir, needBytes);
+    if (!guard.ok) {
+      const gb = (n) => (n / 1024 / 1024 / 1024).toFixed(1);
+      return {
+        error: `Ổ đĩa không đủ chỗ trống (${g.label}: ${g.dir}). Cần ~${gb(needBytes)} GB, còn ${gb(guard.freeBytes)} GB. `
+          + 'Hãy dọn bớt file, chọn ổ khác, hoặc bấm "Dọn file tạm" trong phần Dung lượng.',
+      };
+    }
+  }
+
+  const tmp = fs.mkdtempSync(path.join(appTempDir(), 'ckm-video-'));
   try {
     const isVid = (im) => im && im.kind === 'video';
     // Ghi từng input ra file (ảnh .png / video .mp4).

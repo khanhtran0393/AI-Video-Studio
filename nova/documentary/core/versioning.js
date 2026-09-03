@@ -26,12 +26,16 @@ function createVersioning(store) {
       ensureContainer(project);
       const version = versionFor(project, stage);
       project.stageVersions[stage] = version;
+      // Snapshot KHÔNG chứa chính mảng versions — nếu không, mỗi snapshot nhúng
+      // tất cả snapshot cũ → kích thước tăng cấp số nhân (§31 "giới hạn kích thước").
+      const snapshot = JSON.parse(JSON.stringify(project));
+      snapshot.versions = [];
       project.versions.push({
         stage: String(stage),
         version,
         at: new Date().toISOString(),
         note: note || null,
-        snapshot: JSON.parse(JSON.stringify(project)),
+        snapshot,
       });
       while (project.versions.length > MAX_SNAPSHOTS) project.versions.shift();
       return { stage, version };

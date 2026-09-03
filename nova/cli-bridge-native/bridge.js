@@ -7,6 +7,7 @@ const path = require('path');
 const { spawn } = require('child_process');
 const { MAX_CONCURRENT, TIMEOUT_MS, goodEnv } = require('./env');
 const { buildPrompt } = require('./prompt');
+const { createDebugLog } = require('./debug-log');
 
 // Một "bridge" cho 1 engine (claude/codex) trên 1 cổng.
 function createBridge(engine, port) {
@@ -88,8 +89,9 @@ function createBridge(engine, port) {
   const sendJSON = (res, obj, code = 200) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(obj)); };
   const readBody = (req) => new Promise((r) => { let b = ''; req.on('data', (c) => (b += c)); req.on('end', () => r(b)); });
 
-  const DBG = path.join(os.tmpdir(), 'ckm-cli-debug.txt');
-  const dlog = (s) => { try { fs.appendFileSync(DBG, '[' + engine + '] ' + s + '\n'); } catch {} };
+  // Log debug RAM-first (buffer trong RAM, flush theo lô 30s, file cap 512KB) —
+  // trước đây appendFileSync mỗi request xuống đĩa không giới hạn. Xem ./debug-log.
+  const dlog = createDebugLog(engine);
   const handler = async (req, res) => {
     cors(res);
     if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }

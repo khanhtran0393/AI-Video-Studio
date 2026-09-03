@@ -21,6 +21,7 @@
     "test:auto-fix": "npm --prefix auto-fix run test:all",
     "test:voice": "node nova/scripts/voice-contract-test.js",
     "test:voice:live": "node nova/scripts/voice-live-test.js",
+    "test:voice:ui": "node nova/scripts/voice-ui-smoke.js",
     "build:win": "electron-builder --config electron-builder.json --win",
     "build": "electron-builder --config electron-builder.json",
     "smoke:packaged": "node nova/scripts/packaged-smoke.js",

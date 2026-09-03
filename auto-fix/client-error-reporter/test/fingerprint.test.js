@@ -19,6 +19,46 @@ assert.notStrictEqual(fingerprintException(a).fingerprint, fingerprintException(
 // Normalization strips volatile tokens.
 assert.strictEqual(normalizeMessage('error at 0x1A2B line 99'), 'error at <HEX> line <N>');
 
+// Regression 2026-09-03: cùng lỗi logic trên 2 thư mục cài khác nhau (dev
+// checkout vs máy trắng AppData\Local\Programs\...\app.asar) phải ra CÙNG
+// fingerprint — đường dẫn cài không được vào basis (đã tái hiện 2 hash
+// khác nhau trước khi sửa).
+const devPath = new TypeError('Cannot read property x of undefined');
+devPath.stack = 'TypeError: Cannot read property x of undefined\n    at render (D:\\work\\AI Video Studio\\nova\\web\\render.js:42:7)';
+const cleanPath = new TypeError('Cannot read property x of undefined');
+cleanPath.stack = 'TypeError: Cannot read property x of undefined\n    at render (C:\\Users\\Khach\\AppData\\Local\\Programs\\AI Video Studio\\resources\\app.asar\\nova\\web\\render.js:42:7)';
+assert.strictEqual(
+  fingerprintException(devPath).fingerprint,
+  fingerprintException(cleanPath).fingerprint,
+  'install path must not change the fingerprint',
+);
+assert.strictEqual(fingerprintException(devPath).module, 'render.js', 'module must be the basename, not the install path');
+
+// Regression 2026-09-03: dịch line/column giữa các build (42:7 → 99:13) là
+// dữ liệu bay — không được đổi fingerprint (mirror crash-server :<N>:<N>).
+const lineShift = new TypeError('Cannot read property x of undefined');
+lineShift.stack = 'TypeError: Cannot read property x of undefined\n    at render (D:\\work\\AI Video Studio\\nova\\web\\render.js:99:13)';
+assert.strictEqual(
+  fingerprintException(devPath).fingerprint,
+  fingerprintException(lineShift).fingerprint,
+  'line/column shifts must not change the fingerprint',
+);
+
+// Sau khi bỏ line:column khỏi frame, sự khác nhau thật phải vẫn đến từ tên hàm.
+const otherFn = new TypeError('Cannot read property x of undefined');
+otherFn.stack = 'TypeError: Cannot read property x of undefined\n    at paint (D:\\work\\AI Video Studio\\nova\\web\\render.js:42:7)';
+assert.notStrictEqual(
+  fingerprintException(devPath).fingerprint,
+  fingerprintException(otherFn).fingerprint,
+  'different function names must still produce different fingerprints',
+);
+
+// Frame chuẩn hoá không còn số dòng/cột.
+assert.strictEqual(
+  fingerprintException(devPath).frames[0],
+  'render@render.js:<N>:<N>',
+);
+
 // Relevant error codes are included in the fingerprint basis.
 const stack = 'TypeError: boom\n    at read (read.js:1:1)';
 const withCodeA = new TypeError('boom');

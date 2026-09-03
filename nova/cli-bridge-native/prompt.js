@@ -1,16 +1,17 @@
 /* ── cli-bridge-native/prompt — dựng prompt + tách ảnh (file tạm) từ messages kiểu OpenAI/Anthropic. Tách từ cli-bridge-native.plain.js. ── */
-const os = require('os');
 const fs = require('fs');
-const path = require('path');
+const { tempFile } = require('../core/temp');
 
-// Lưu 1 data URL / base64 ra file tạm. Trả path hoặc null.
+// Lưu 1 data URL / base64 ra file tạm (trong thư mục tạm tập trung của app —
+// bridge.js xoá ngay sau khi CLI chạy xong; file mồ côi do crash sẽ được
+// cleanupTempOrphans() dọn khi app khởi động lại).
 function saveImage(dataUrl) {
   try {
     const s = String(dataUrl || '');
     const m = s.match(/^data:(image\/[a-z0-9.+-]+)?;base64,(.*)$/i);
     const b64 = m ? m[2] : s;
     const ext = (m && m[1] ? m[1].split('/')[1] : 'png').replace('jpeg', 'jpg');
-    const f = path.join(os.tmpdir(), 'ckm-img-' + Date.now() + '-' + Math.floor(Math.random() * 1e6) + '.' + ext);
+    const f = tempFile('ckm-img-', '.' + ext);
     fs.writeFileSync(f, Buffer.from(b64, 'base64'));
     return f;
   } catch { return null; }

@@ -21,14 +21,31 @@ function normalizeErrorCode(error) {
     : String(code).replace(/[^A-Za-z0-9_.-]/g, '').slice(0, 64);
 }
 
+// Tách basename của file trong stack: đường dẫn đầy đủ đổi theo máy cài
+// (dev checkout, AppData\Local\Programs, resources\app.asar) nên phải loại khỏi
+// fingerprint. Mirror extractModule bên crash-server/fingerprint.js.
+function basenameOf(file) {
+  return String(file || '')
+    .replace(/\\/g, '/')
+    .split('/')
+    .pop()
+    .split('?')[0]
+    .toLowerCase();
+}
+
+// Chuẩn hoá một frame stack: chỉ giữ tên hàm + tên file (basename) + vị trí đã
+// thay số bằng <N>. Đường dẫn cài và line:column là dữ liệu bay theo máy/build
+// — giữ nguyên chúng làm cùng một lỗi ra fingerprint khác nhau trên máy dev và
+// máy trắng (đã tái hiện 2026-09-03: render.js:42:7 ở 2 thư mục cài khác nhau
+// ra 2 hash khác nhau), phá dedup phía crash-server vì dedupKeyFor tin
+// fingerprint client khi hợp lệ. Mirror normalizeStack bên crash-server
+// (cũng thay :<N>:<N>).
 function normalizeFrame(frame) {
   if (!frame) return '';
-  const file = String(frame.file || frame.fileName || '')
-    .replace(/^[A-Za-z]:[\\/]/, '')
-    .replace(/[\\/]/g, '/');
+  const file = basenameOf(frame.file || frame.fileName || '');
   const fn = String(frame.function || frame.functionName || frame.methodName || '<anonymous>')
     .replace(/[0-9a-f]{8,}/gi, '<HEX>');
-  return `${fn}@${file}:${frame.lineNumber || frame.line || ''}:${frame.columnNumber || frame.column || ''}`;
+  return `${fn}@${file}:<N>:<N>`;
 }
 
 function extractFrames(error) {
@@ -58,9 +75,9 @@ function fingerprintException(error) {
   const frames = extractFrames(error);
   const normalizedMessage = normalizeMessage(error && error.message);
   const normalizedFrames = frames.map(normalizeFrame).join('|');
-  const moduleName = (frames[0] && frames[0].file)
-    ? String(frames[0].file).split('/').pop().split('?')[0]
-    : '';
+  // Basename + lowercase: mirror extractModule của crash-server để module không
+  // chứa đường dẫn cài (Windows stack dùng backslash, split('/') không tách được).
+  const moduleName = basenameOf(frames[0] && frames[0].file);
   const errorType = String(
     (error && error.name)
     || (error && error.constructor && error.constructor.name)

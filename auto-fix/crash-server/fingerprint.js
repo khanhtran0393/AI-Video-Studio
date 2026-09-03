@@ -25,15 +25,39 @@ function normalizeMessage(message) {
     .slice(0, 512);
 }
 
+// Chuẩn hoá từng dòng stack:
+// - Dòng frame chuẩn "at <fn> (<file>:<line>:<col>)" (hoặc "at <file>:<line>:<col>"):
+//   giữ tên hàm + basename file, bỏ đường dẫn và số dòng/cột — đồng bộ quy tắc
+//   với client fingerprint (frames dạng "<fn>@<basename>:<N>:<N>").
+//   Regex path cũ `[A-Za-z]:[\\/][^\\s'"]+` không match path chứa dấu cách
+//   ("D:\\AI Video Studio\\...") → thay một phần, sót đuôi path trong basis làm
+//   fingerprint lệch giữa máy cài (tái hiện 2026-09-03: dev path vs
+//   AppData\\...\\app.asar path ra 2 hash khác nhau). Path tương đối không có
+//   drive-letter cũng bị sót nguyên trước đây.
+// - Dòng khác (thông điệp lỗi, dòng rác): giữ thay <PATH>/<N> như cũ.
 function normalizeStack(stack) {
   return safeString(stack)
     .split(/\r?\n/)
-    .map((line) => line
-      .replace(/0x[0-9a-f]+/gi, '<HEX>')
-      .replace(/[A-Za-z]:[\\/][^\s'"]+/g, '<PATH>')
-      .replace(/:\d+:\d+/g, ':<N>:<N>')
-      .replace(/\s+/g, ' ')
-      .trim())
+    .map((raw) => {
+      const line = raw
+        .replace(/0x[0-9a-f]+/gi, '<HEX>')
+        .replace(/\s+/g, ' ')
+        .trim();
+      const m = line.match(/^at\s+(?:(.+?)\s+\()?(.+?):(\d+):(\d+)\)?$/);
+      if (m) {
+        const fn = String(m[1] || '<anonymous>').replace(/[0-9a-f]{8,}/gi, '<HEX>');
+        const base = String(m[2])
+          .replace(/\\/g, '/')
+          .split('/')
+          .pop()
+          .split('?')[0]
+          .toLowerCase();
+        return `at ${fn} (${base}:<N>:<N>)`;
+      }
+      return line
+        .replace(/[A-Za-z]:[\\/][^\s'"]+/g, '<PATH>')
+        .replace(/:\d+:\d+/g, ':<N>:<N>');
+    })
     .filter(Boolean)
     .slice(0, 64)
     .join('\n');
