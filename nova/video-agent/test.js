@@ -102,6 +102,30 @@ async function main() {
   const diskResult = await diskJob.run();
   assert('Disk preflight: refuses insufficient space', diskResult.status === 'FAILED' && diskResult.error.code === 'VA_DISK_SPACE', diskResult.error);
 
+  // §32.17 — Báo lỗi tiếng Việt + KHÔNG để lại file output khi app lỗi, nhưng vẫn giữ
+  // job.json + version store làm dữ liệu cho auto-fix/retry.
+  assert('VN error: VA_STAGE_TIMEOUT có message tiếng Việt', /thông báo tiếng Việt|dừng|kéo dài quá lâu|thử lại/i.test(timeoutResult.error.message), timeoutResult.error);
+  assert('VN error: VA_DISK_SPACE có message tiếng Việt', /ổ đĩa|dung lượng|dọn/i.test(diskResult.error.message), diskResult.error);
+  assert('VN error: error có code + original để auto-fix phân loại', !!timeoutResult.error.original && timeoutResult.error.code === 'VA_STAGE_TIMEOUT');
+
+  // Lỗi SAU khi render xong (upload fail) → xoá mọi file output run này đã tạo (preview + full),
+  // không để lại mp4, nhưng job.json trong output/ vẫn còn để retry/auto-fix.
+  const keepOutputBefore = fs.readdirSync(path.join(root, 'output'));
+  const failJob = createVideoJob({ projectDir: root, adapters: { render: renderer,
+    upload: () => ({ ok: false, code: 'VA_S3_NO_CREDS', error: 'missing creds' }) }, options: {} });
+  const failResult = await failJob.run();
+  assert('Cleanup on failure: FAILED', failResult.status === 'FAILED', failResult.status);
+  assert('Cleanup on failure: code giữ nguyên', failResult.error.code === 'VA_S3_NO_CREDS', failResult.error);
+  assert('Cleanup on failure: message tiếng Việt', /S3|tải lên|khoá/i.test(failResult.error.message), failResult.error);
+  const beforeMp4 = keepOutputBefore.filter(f => /\.mp4$/.test(f));
+  const afterMp4 = fs.readdirSync(path.join(root, 'output')).filter(f => /\.mp4$/.test(f));
+  assert('Cleanup on failure: job lỗi không tạo mp4 mới', afterMp4.every(f => beforeMp4.includes(f)), { beforeMp4, afterMp4 });
+  assert('Cleanup on failure: res.output/res.url bị thu hồi', !failResult.output && !failResult.url);
+  assert('Cleanup on failure: không phá output của job trước', keepOutputBefore.every(f => fs.existsSync(path.join(root, 'output', f))));
+  const failMeta = JSON.parse(fs.readFileSync(path.join(root, 'output', 'job.json'), 'utf8'));
+  assert('Cleanup on failure: job.json giữ lỗi + options để auto-fix', failMeta.jobId === failResult.jobId && !!failMeta.error && !!failMeta.options,
+    { jobId: failMeta.jobId, hasError: !!failMeta.error });
+
   const { pass, fail } = counters();
   console.log('\n=== NOVA VIDEO AGENT — Phase 1 acceptance (§33) ===');
   console.log('PASS: ' + pass + '  FAIL: ' + fail);

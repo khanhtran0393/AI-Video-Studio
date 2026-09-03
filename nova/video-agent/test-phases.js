@@ -192,6 +192,15 @@ async function phase5(tmp) {
     upload: { provider: 's3', bucket: 'b', region: 'us-east-1', keyPrefix: 'v', cdnBase: 'https://cdn.example' } });
   assert('P5: IPC wire S3 (no creds) → FAILED', run.status === 'FAILED', run.status);
   assert('P5: IPC error code = VA_S3_NO_CREDS', run.error && /VA_S3_NO_CREDS/.test(JSON.stringify(run.error)), run.error);
+  // §32.17 — Lỗi hiển thị tiếng Việt + không để lại file output, job.json vẫn giữ dữ liệu auto-fix.
+  assert('P5: FAILED → error.message tiếng Việt', typeof run.error.message === 'string' && /S3|tải lên|khoá/i.test(run.error.message), run.error);
+  assert('P5: FAILED → error.original + code cho auto-fix', run.error.code === 'VA_S3_NO_CREDS' && !!run.error.original, run.error);
+  const ipcOut = path.join(ipcRoot, 'output');
+  const mp4s = fs.existsSync(ipcOut) ? fs.readdirSync(ipcOut).filter(f => /\.mp4$/.test(f)) : [];
+  assert('P5: FAILED không để lại file mp4 output', mp4s.length === 0, mp4s);
+  const meta = fs.existsSync(path.join(ipcOut, 'job.json')) ? JSON.parse(fs.readFileSync(path.join(ipcOut, 'job.json'), 'utf8')) : null;
+  assert('P5: job.json vẫn còn để auto-fix/retry', !!meta && meta.jobId === run.jobId && !!meta.error && !!meta.options,
+    meta && { jobId: meta.jobId, hasError: !!meta.error, hasOptions: !!meta.options });
   try { fs.rmSync(ipcRoot, { recursive: true, force: true }); } catch (_) {}
 
   Object.keys(saved).forEach(k => { if (saved[k] != null) process.env[k] = saved[k]; });

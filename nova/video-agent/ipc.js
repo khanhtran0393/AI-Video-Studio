@@ -4,6 +4,7 @@ const { createVideoJob } = require('./orchestrator');
 const { VersionStore } = require('./versioning/store');
 const { createUploader } = require('./uploader/local');
 const { inspectProject } = require('./project/discover');
+const { viError } = require('./errors');
 const fs = require('fs');
 const path = require('path');
 
@@ -58,31 +59,31 @@ function registerVideoAgentIpc(ipcMain, { adapters = {}, openWindow, maxConcurre
       const meta = { projectDir: inspected.project.root, options: payload.options || {} };
       const job = createVideoJob({ projectDir: meta.projectDir, adapters: mergeAdapters(adapters, payload), options: meta.options });
       return await runCreatedJob(e, job, meta);
-    } catch (err) { return { ok: false, error: String(err && err.message || err) }; }
+    } catch (err) { return { ok: false, status: 'FAILED', error: viError(err) }; }
   });
 
   handle('videoAgent:status', (e, p = {}) => { const j = jobs.get(p.jobId); const saved = persisted.get(p.jobId);
     return j ? { ok: true, jobId: j.jobId, status: j.state, timeline: j.timeline, qa: j.qa, url: j.url }
-      : saved ? { ok: true, ...saved, restored: true } : { ok: false, error: 'Không có job này' }; });
-  handle('videoAgent:spec', (e, p = {}) => { const j = jobs.get(p.jobId); return j && j.spec ? { ok: true, spec: j.spec } : { ok: false, error: 'Job chưa có spec' }; });
-  handle('videoAgent:timeline', (e, p = {}) => { const j = jobs.get(p.jobId); return j && j.timeline ? { ok: true, timeline: j.timeline } : { ok: false, error: 'Job chưa có timeline' }; });
-  handle('videoAgent:qa', (e, p = {}) => { const j = jobs.get(p.jobId); return j && j.qa ? { ok: true, qa: j.qa } : { ok: false, error: 'Job chưa có QA' }; });
-  handle('videoAgent:cancel', (e, p = {}) => { const j = jobs.get(p.jobId); if (!j) return { ok: false, error: 'Không có job này' }; j.cancel(); return { ok: true }; });
+      : saved ? { ok: true, ...saved, restored: true } : { ok: false, error: { code: 'VA_NO_JOB', message: 'Không tìm thấy job này. Job có thể đã bị xoá hoặc chưa từng chạy.' } }; });
+  handle('videoAgent:spec', (e, p = {}) => { const j = jobs.get(p.jobId); return j && j.spec ? { ok: true, spec: j.spec } : { ok: false, error: { code: 'VA_NO_SPEC', message: 'Job chưa dựng xong video spec (bước đầu của quy trình).' } }; });
+  handle('videoAgent:timeline', (e, p = {}) => { const j = jobs.get(p.jobId); return j && j.timeline ? { ok: true, timeline: j.timeline } : { ok: false, error: { code: 'VA_NO_TIMELINE', message: 'Job chưa có timeline.' } }; });
+  handle('videoAgent:qa', (e, p = {}) => { const j = jobs.get(p.jobId); return j && j.qa ? { ok: true, qa: j.qa } : { ok: false, error: { code: 'VA_NO_QA', message: 'Job chưa chạy đến bước kiểm tra chất lượng (QA).' } }; });
+  handle('videoAgent:cancel', (e, p = {}) => { const j = jobs.get(p.jobId); if (!j) return { ok: false, error: { code: 'VA_NO_JOB', message: 'Không tìm thấy job này để huỷ.' } }; j.cancel(); return { ok: true }; });
 
   handle('videoAgent:retry', async (e, p = {}) => {
-    const a = active.get(p.jobId); if (!a) return { ok: false, error: 'Không có job này hoặc metadata chưa được khôi phục' };
+    const a = active.get(p.jobId); if (!a) return { ok: false, error: { code: 'VA_NO_JOB', message: 'Không tìm thấy job này hoặc metadata chưa được khôi phục. Hãy mở lại dự án (inspect) rồi thử.' } };
     const job = createVideoJob({ projectDir: a.projectDir, adapters: mergeAdapters(adapters, p), options: a.options });
     return runCreatedJob(e, job, a);
   });
 
   handle('videoAgent:restore', async (e, p = {}) => {
     try { const vs = new VersionStore(p.projectDir); const at = vs.specAt(Number(p.version) || vs.latestSpec().version);
-      return at ? { ok: true, version: at.version, spec: at.spec } : { ok: false, error: 'Version không tồn tại' }; }
-    catch (err) { return { ok: false, error: String(err && err.message || err) }; }
+      return at ? { ok: true, version: at.version, spec: at.spec } : { ok: false, error: { code: 'VA_NO_VERSION', message: 'Version không tồn tại trong dự án này.' } };
+    } catch (err) { return { ok: false, error: viError(err) }; }
   });
 
   handle('videoAgent:versions', async (e, p = {}) => {
-    try { return { ok: true, ...new VersionStore(p.projectDir).list() }; } catch (err) { return { ok: false, error: String(err.message) }; }
+    try { return { ok: true, ...new VersionStore(p.projectDir).list() }; } catch (err) { return { ok: false, error: viError(err) }; }
   });
 
   handle('videoAgent:inspect', async (e, p = {}) => {
@@ -102,7 +103,7 @@ function registerVideoAgentIpc(ipcMain, { adapters = {}, openWindow, maxConcurre
       if (!inspected.ok) return inspected;
       const job = readJob(inspected.project.root);
       return { ...inspected, projectDir: inspected.project.root, job };
-    } catch (err) { return { ok: false, error: String(err && err.message || err) }; }
+    } catch (err) { return { ok: false, error: viError(err) }; }
   });
 
   // Mở cửa sổ UI (pattern documentary:openWindow) — lazy require để test ngoài Electron vẫn nạp được.
@@ -111,7 +112,7 @@ function registerVideoAgentIpc(ipcMain, { adapters = {}, openWindow, maxConcurre
       const fn = openWindow || require('./window').openVideoAgentWindow;
       const win = fn();
       return { ok: true, windowId: win && win.id };
-    } catch (err) { return { ok: false, error: String(err && err.message || err) }; }
+    } catch (err) { return { ok: false, error: viError(err) }; }
   });
 
   return [

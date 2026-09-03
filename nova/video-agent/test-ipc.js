@@ -3,6 +3,7 @@
 const { registerVideoAgentIpc } = require('./ipc');
 const { makeFixture, mockRenderer } = require('./test-fixture');
 const fs = require('fs');
+const path = require('path');
 
 async function main() {
   const handlers = {};
@@ -62,6 +63,28 @@ async function main() {
   const liveId = busyEvents.find(x => x.ch === 'videoAgent:event' && x.payload.stage === 'FULL_RENDER').payload.jobId;
   await busyHandlers['videoAgent:cancel']({ sender: busySender }, { jobId: liveId });
   if ((await firstPromise).status !== 'CANCELLED') throw new Error('cancel concurrent job lỗi');
+
+  // §32.17 — Job lỗi qua IPC: error là object tiếng Việt (code + message), không để lại
+  // file mp4 output, nhưng output/job.json vẫn còn để auto-fix/retry sau restart.
+  const failHandlers = {};
+  registerVideoAgentIpc({ removeHandler() {}, handle(ch, fn) { failHandlers[ch] = fn; } },
+    { adapters: { render: mockRenderer(), upload: () => ({ ok: false, code: 'VA_S3_NO_CREDS', error: 'missing creds' }) } });
+  const froot = makeFixture(); process.env.VA_TMP_OUT = froot;
+  const frun = await failHandlers['videoAgent:run'](e, { projectDir: froot, options: {} });
+  if (frun.ok || frun.status !== 'FAILED') throw new Error('upload fail phải FAILED: ' + JSON.stringify(frun.status));
+  if (!frun.error || frun.error.code !== 'VA_S3_NO_CREDS' || typeof frun.error.message !== 'string' || !/S3|tải lên|khoá/i.test(frun.error.message))
+    throw new Error('error phải là object tiếng Việt: ' + JSON.stringify(frun.error));
+  const fOut = path.join(froot, 'output');
+  const fFiles = fs.readdirSync(fOut);
+  if (fFiles.some(f => /\.mp4$/.test(f))) throw new Error('FAILED không được để lại mp4: ' + fFiles);
+  if (!fFiles.includes('job.json')) throw new Error('job.json phải còn (dữ liệu auto-fix/retry)');
+  const fmeta = JSON.parse(fs.readFileSync(path.join(fOut, 'job.json'), 'utf8'));
+  if (fmeta.jobId !== frun.jobId || !fmeta.error || !/S3|tải lên|khoá/i.test(fmeta.error.message)) throw new Error('job.json phải giữ lỗi tiếng Việt');
+  const stBad = await handlers['videoAgent:status'](e, { jobId: 'khong-ton-tai' });
+  if (stBad.ok || typeof (stBad.error && stBad.error.message) !== 'string' || !/job/i.test(stBad.error.message))
+    throw new Error('status job sai phải trả object error tiếng Việt: ' + JSON.stringify(stBad.error));
+  fs.rmSync(froot, { recursive: true, force: true });
+
   fs.rmSync(root, { recursive: true, force: true });
   console.log('IPC-SMOKE-OK channels=' + channels.length + ' events=' + sent.length);
 }

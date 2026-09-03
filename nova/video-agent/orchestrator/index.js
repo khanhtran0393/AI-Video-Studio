@@ -12,6 +12,7 @@ const { createRendererAdapter } = require('../remotion/bridge');
 const { createUploader } = require('../uploader/local');
 const { extractSceneStats, createVisionProviders } = require('../qa/vision');
 const { PROGRESS, hashMap, styleVer } = require('./states');
+const { viError, cleanupArtifacts, removeDirIfEmpty } = require('../errors');
 
 function createVideoJob({ projectDir, adapters = {}, options = {} }) {
   const render = adapters.render || createRendererAdapter();
@@ -19,6 +20,7 @@ function createVideoJob({ projectDir, adapters = {}, options = {} }) {
   const events = []; const listeners = [];
   let state = 'CREATED', cancelled = false, spec = null, timeline = null, qaReport = null, output = null, url = null;
   let cancelCurrent = null;
+  const artifacts = []; // mọi file output (preview/full) run này tạo ra — xoá sạch khi job lỗi (§32).
   const abortController = new AbortController();
   const out = { jobId: 'va_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), projectDir };
 
@@ -52,6 +54,15 @@ function createVideoJob({ projectDir, adapters = {}, options = {} }) {
       fs.writeFileSync(path.join(dir, 'job.json'), JSON.stringify({ ...out, status: state, progress: PROGRESS[state] || 0, stage: state,
         url, output, options: redactSecrets(options), updatedAt: new Date().toISOString(), events: events.slice(-40) }, null, 2));
     } catch (_) {}
+  }
+
+  // App lỗi → KHÔNG để lại file output/thư mục tạm, nhưng vẫn giữ job.json + version
+  // store trong output/ làm dữ liệu cho auto-fix/retry (chỉ xoá file media đã truy vết).
+  function cleanupFailedOutputs() {
+    const removed = cleanupArtifacts(artifacts);
+    output = null; out.outputPath = null; out.previewPath = null;
+    removeDirIfEmpty(path.join(projectDir, 'output'));
+    return removed;
   }
   const result = (status, error) => ({ jobId: out.jobId, status, stage: state, progress: PROGRESS[state] || 0,
     url, output, spec, timeline, qa: qaReport, error });
@@ -92,8 +103,9 @@ function createVideoJob({ projectDir, adapters = {}, options = {} }) {
         const preview = await step('PREVIEW_RENDER', () => renderPreview({ adapter: render, spec, manifest, projectDir,
           voicePath: project.files.ttsAudio, musicPath: (project.files.music || [])[0], opts: options.preview || {},
           onProgress: (p) => emit('PREVIEW_RENDER', { percent: p }), registerCancel, signal: abortController.signal }));
-        if (!preview.ok) { const e = new Error('Preview render lỗi: ' + (preview.error || preview.code)); e.code = preview.code || 'VA_PREVIEW_FAIL'; throw e; }
+        if (!preview.ok) { const e = new Error('Không dựng được bản xem trước (preview): ' + (preview.error || preview.code || 'không rõ lý do')); e.code = preview.code || 'VA_PREVIEW_FAIL'; throw e; }
         out.previewPath = preview.outputPath;
+        if (preview.outputPath) artifacts.push(preview.outputPath);
         visionStats = grabFrames(preview.outputPath); // Phase 4: frame thật từ preview
         qaReport = await step('PREVIEW_QA', () => doQA(spec));
         versions.commitQA(qaReport);
@@ -106,11 +118,15 @@ function createVideoJob({ projectDir, adapters = {}, options = {} }) {
         }
       } else { qaReport = await doQA(spec); versions.commitQA(qaReport); }
 
-      const rendered = await step('FULL_RENDER', () => render.render({ spec, manifest, projectDir,
+      // OutputPath tường minh trong dự án — không để renderer tự ghi ra thư mục tạm (TMP)
+      // khi lỗi/khi QA fail, file này nằm trong `artifacts` và bị xoá ở cleanupFailedOutputs().
+      const fullOutput = path.join(projectDir, 'output', `full-${out.jobId}.mp4`);
+      const rendered = await step('FULL_RENDER', () => render.render({ spec, manifest, projectDir, outputPath: fullOutput,
         voicePath: project.files.ttsAudio, musicPath: (project.files.music || [])[0],
         onProgress: (p) => emit('FULL_RENDER', { percent: p }), registerCancel, signal: abortController.signal }));
-      if (!rendered.ok) { const e = new Error('Full render lỗi: ' + (rendered.error || rendered.code)); e.code = rendered.code || 'VA_RENDER_FAIL'; throw e; }
+      if (!rendered.ok) { const e = new Error('Không render được video hoàn chỉnh: ' + (rendered.error || rendered.code || 'không rõ lý do')); e.code = rendered.code || 'VA_RENDER_FAIL'; throw e; }
       output = rendered.outputPath; out.outputPath = output;
+      if (output) artifacts.push(output);
       visionStats = grabFrames(output); // Phase 4: FINAL_QA chạy trên frame của bản full
       (spec.scenes || []).forEach((sc) => cache.set(sceneKey(sc, cacheCtx), { sceneId: sc.id, renderedAt: new Date().toISOString() }));
       const finalQA = await step('FINAL_QA', () => doQA(spec));
@@ -119,14 +135,17 @@ function createVideoJob({ projectDir, adapters = {}, options = {} }) {
         const e = new Error('Final QA FAIL — không upload (§32.12)'); e.code = 'VA_FINAL_QA_FAIL'; e.qa = finalQA; throw e;
       }
       const up = await step('UPLOADING', () => upload({ filePath: output, projectRoot: projectDir, signal: abortController.signal, registerCancel }));
-      if (!up.ok) { const e = new Error('Upload lỗi: ' + (up.error || '')); e.code = up.code || 'VA_UPLOAD_FAIL'; throw e; }
+      if (!up.ok) { const e = new Error('Không tải lên được video kết quả: ' + (up.error || up.code || '')); e.code = up.code || 'VA_UPLOAD_FAIL'; throw e; }
       url = up.url; out.url = url;
       setState('COMPLETED'); await persist();
       return result('COMPLETED');
     } catch (e) {
       state = (cancelled || abortController.signal.aborted || e.code === 'VA_CANCELLED') ? 'CANCELLED' : 'FAILED';
       if (state === 'CANCELLED' && e.code !== 'VA_CANCELLED') e = cancelledError(state);
-      out.error = { code: e.code || 'VA_UNKNOWN', stage: state, message: e.message, details: e.details || (e.qa && e.qa.errors) };
+      // Báo lỗi tiếng Việt rõ ràng + xoá sạch file output đã tạo; job.json (persist dưới đây)
+      // và version store vẫn giữ nguyên — đó là dữ liệu để auto-fix/retry chạy lại.
+      out.removedOutputs = cleanupFailedOutputs();
+      out.error = viError(e, state);
       emit(state, out.error); await persist();
       return result(state, out.error);
     }

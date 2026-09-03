@@ -3,6 +3,30 @@
 const fs = require('fs');
 const path = require('path');
 
+/** Chờ đồng bộ (ms) không cần dependency ngoài. */
+function sleepSync(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+/**
+ * renameSync có retry: trên Windows, AV/indexer có thể giữ file .tmp ngay sau khi
+ * ghi → EPERM/EACCES/EBUSY tạm thời. Thử lại với backoff; nếu vẫn thất bại,
+ * fallback copy + unlink để không mất dữ liệu đã ghi.
+ */
+function renameWithRetry(from, to, attempts = 5) {
+  let lastError = null;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try { fs.renameSync(from, to); return; } catch (error) {
+      lastError = error;
+      const code = error && error.code;
+      if (code !== 'EPERM' && code !== 'EACCES' && code !== 'EBUSY') throw error;
+      sleepSync(25 * (attempt + 1));
+    }
+  }
+  fs.copyFileSync(from, to);
+  try { fs.unlinkSync(from); } catch (_) {}
+}
+
 function cloneDefault(value) {
   const resolved = typeof value === 'function' ? value() : value;
   if (resolved === undefined) return {};
@@ -29,7 +53,7 @@ class JsonStore {
     try {
       fs.mkdirSync(directory, { recursive: true });
       fs.writeFileSync(temporary, JSON.stringify(value, null, 2), 'utf8');
-      fs.renameSync(temporary, this.file);
+      renameWithRetry(temporary, this.file);
       return value;
     } catch (error) {
       try { if (fs.existsSync(temporary)) fs.unlinkSync(temporary); } catch (_) {}

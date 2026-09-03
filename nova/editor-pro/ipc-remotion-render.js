@@ -4,6 +4,8 @@ const { dialog, BrowserWindow } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+// §32.17 — thông báo lỗi render tiếng Việt (bảng mã + dịch lỗi hệ thống dùng chung với Video Agent).
+const { viText } = require('../video-agent/errors');
 
 const DIR = __dirname;
 // Trong app đóng gói, __dirname nằm TRONG app.asar — chỉ đọc được, KHÔNG ghi được, và Remotion
@@ -66,11 +68,17 @@ async function renderRemotionFull({ composition, outputPath, onProgress }) {
   const browserExecutable = BROWSER || undefined;
   const comp = await selectComposition({ serveUrl: BUNDLE, id: 'VideoShuffleComposition', inputProps, browserExecutable, binariesDirectory: REMOTION_BIN_DIR });
   const out = outputPath || path.join(TMP, `nova-export-${Date.now()}.mp4`);
-  await renderMedia({
-    composition: comp, serveUrl: BUNDLE, codec: 'h264', outputLocation: out, inputProps, browserExecutable, binariesDirectory: REMOTION_BIN_DIR,
-    concurrency: Math.max(2, Math.min(6, (os.cpus() || []).length - 2)),
-    onProgress: ({ progress }) => { try { onProgress && onProgress(Math.round(progress * 100), 'Đang render (Remotion)…'); } catch (_) {} },
-  });
+  try {
+    await renderMedia({
+      composition: comp, serveUrl: BUNDLE, codec: 'h264', outputLocation: out, inputProps, browserExecutable, binariesDirectory: REMOTION_BIN_DIR,
+      concurrency: Math.max(2, Math.min(6, (os.cpus() || []).length - 2)),
+      onProgress: ({ progress }) => { try { onProgress && onProgress(Math.round(progress * 100), 'Đang render (Remotion)…'); } catch (_) {} },
+    });
+  } catch (error) {
+    // Render lỗi giữa chừng → xoá file dở, không để lại MP4 hỏng/nửa vời.
+    try { if (fs.existsSync(out)) fs.unlinkSync(out); } catch (_) {}
+    throw error;
+  }
   return { ok: true, outputPath: out, engine: 'remotion' };
 }
 
@@ -293,7 +301,7 @@ function registerEditorProRemotion(ipcMain) {
       }
       const onProgress = (p, msg) => { try { e.sender.send('remotion:progress', { percent: p, message: msg }); } catch (_) {} };
       return await renderNovaScenes({ scenes: payload.scenes, globals: payload.globals, outputPath, onProgress, voiceB64: payload.voiceB64, musicB64: payload.musicB64, musicVolume: payload.musicVolume });
-    } catch (err) { return { ok: false, error: String(err && err.message || err).slice(0, 300) }; }
+    } catch (err) { return { ok: false, code: (err && err.code) || undefined, error: viText(err && err.code, String(err && err.message || err)).slice(0, 300) }; }
   });
 
   const ch = 'remotion:renderVideo';
@@ -318,7 +326,7 @@ function registerEditorProRemotion(ipcMain) {
           const { renderComposition } = require('./ipc-render');
           const r = await renderComposition({ composition, outputPath, onProgress });
           return { ...r, engine: 'ffmpeg-fallback', remotionError: String(err && err.message || err) };
-        } catch (_) { return { ok: false, error: 'Remotion: ' + String(err && err.message || err).slice(0, 300) }; }
+        } catch (_) { return { ok: false, code: (err && err.code) || undefined, error: 'Không render được video: ' + viText(err && err.code, String(err && err.message || err)).slice(0, 300) }; }
       }
     } catch (err) { return { ok: false, error: String(err && err.message || err) }; }
   });

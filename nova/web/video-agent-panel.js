@@ -309,9 +309,10 @@
     if (typeof native.onProgress === 'function') {
       native.onProgress(update => setProgress(update.phase, update.percent));
     }
+    const errText = (x) => !x ? '' : (typeof x === 'string' ? x : (x.message || x.original || x.code || ''));
     if (typeof native.onJob === 'function') {
       native.onJob(update => {
-        jobsList.append(el('li', {}, `${update.key}: ${update.status}${update.error ? ' — ' + update.error : ''}`));
+        jobsList.append(el('li', {}, `${update.key}: ${update.status}${update.error ? ' — ' + errText(update.error) : ''}`));
         jobsList.scrollTop = jobsList.scrollHeight;
       });
     }
@@ -321,7 +322,7 @@
         if (ev.stage) {
           setProgress(ev.stage, typeof ev.percent === 'number' ? ev.percent : 0);
           if (jobsList) {
-            jobsList.append(el('li', {}, `${ev.jobId || '-'}: ${ev.stage}${ev.error ? ' — ' + ev.error : ''}`));
+            jobsList.append(el('li', {}, `${ev.jobId || '-'}: ${ev.stage}${ev.error ? ' — ' + errText(ev.error) : ''}`));
             jobsList.scrollTop = jobsList.scrollHeight;
           }
         }

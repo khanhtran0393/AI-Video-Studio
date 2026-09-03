@@ -54,6 +54,14 @@
   'use strict';
   /* §25 UI — mọi thao tác qua window.native.videoAgent (preload bridge). */
   const native = window.native && window.native.videoAgent;
+  // Báo lỗi tiếng Việt rõ ràng: error giờ là object {code, message, original…} —
+  // Ưu tiên message (tiếng Việt), kèm mã lỗi để đối chiếu; fallback chuỗi cũ.
+  const errText = (x) => {
+    if (!x) return '';
+    if (typeof x === 'string') return x;
+    const msg = x.message || x.original || '';
+    return x.code ? (msg ? msg + ' (' + x.code + ')' : x.code) : msg;
+  };
   const notice = document.getElementById('notice');
   const panelsEl = document.getElementById('panels');
   const progressFill = document.getElementById('progressFill');
@@ -172,7 +180,7 @@
       ['URL', r.url ? '<code>' + r.url + '</code>' : '—', ''],
       ['Output', r.output || '—', ''],
       ['Mất', r.elapsedMs != null ? (r.elapsedMs / 1000).toFixed(1) + 's' : '—', ''],
-      ['Lỗi', r.error ? JSON.stringify(r.error) : '—', r.error ? 'err' : ''],
+      ['Lỗi', r.error ? (errText(r.error) || JSON.stringify(r.error)) : '—', r.error ? 'err' : ''],
     ];
     for (const item of rows) resBox.append(el('div', { class: item[2] },
       el('b', {}, item[0] + ': '), el('span', { html: String(item[1]) })));
@@ -208,7 +216,7 @@
 
   function applyInspection(r) {
     if (!r || !r.ok) {
-      projectInfo.className = 'err'; projectInfo.textContent = (r && (r.error || r.code)) || 'Dự án không hợp lệ.';
+    projectInfo.className = 'err'; projectInfo.textContent = (r && (errText(r.error) || r.code)) || 'Dự án không hợp lệ.';
       return false;
     }
     const f = r.project.files;
@@ -249,7 +257,7 @@
     if (!native || !verSelect.value) return;
     const r = await native.restore(dirInput.value.trim(), Number(verSelect.value));
     if (r.ok) { verBox.className = ''; verBox.textContent = 'v' + r.version + ' · ' + ((r.spec.scenes || []).length) + ' cảnh'; renderSpec(r.spec); }
-    else { verBox.className = 'err'; verBox.textContent = r.error || 'lỗi'; }
+    else { verBox.className = 'err'; verBox.textContent = errText(r.error) || 'lỗi'; }
   };
 
   async function runJob() {
@@ -288,7 +296,7 @@
   btnCancel.onclick = async () => {
     if (!jobId || !native) return;
     const r = await native.cancel(jobId);
-    if (!r.ok) { notice.style.display = 'block'; notice.textContent = r.error || 'Không thể huỷ job.'; }
+    if (!r.ok) { notice.style.display = 'block'; notice.textContent = errText(r.error) || 'Không thể huỷ job.'; }
   };
 })();
 </script>
