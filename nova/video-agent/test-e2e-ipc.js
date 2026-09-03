@@ -149,5 +149,7 @@ async function main() {
   console.log('PASS: ' + pass + '  FAIL: ' + failN);
   if (failN) process.exitCode = 1;
   for (const r of [root, root6, root7]) { try { fs.rmSync(r, { recursive: true, force: true }); } catch (_) {} }
+  // Windows: vài handle (server/timer nội bộ của ipc-fake) giữ event loop → thoát tường minh.
+  process.exit(process.exitCode || 0);
 }
-main().catch((e) => { console.error('FATAL', e && e.stack || e); process.exitCode = 1; });
+main().catch((e) => { console.error('FATAL', e && e.stack || e); process.exit(1); });
