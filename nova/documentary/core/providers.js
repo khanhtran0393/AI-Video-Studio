@@ -60,4 +60,34 @@ async function fetchWithRetry(url, options = {}, { retries = 2, timeoutMs = 6000
   throw lastError;
 }
 
-module.exports = { ProviderError, fetchWithRetry, createRateLimiter };
+/** HTTP binary helper cho provider trả PNG/JPEG thay vì JSON. */
+async function fetchBufferWithRetry(url, options = {}, { retries = 2, timeoutMs = 90000, limiter, limiterKey } = {}) {
+  let lastError = null;
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      if (limiter) await limiter.acquire(limiterKey || url);
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const response = await fetch(url, { ...options, signal: controller.signal });
+        if (response.status === 429 || response.status >= 500) throw new ProviderError(`HTTP ${response.status}`, { status: response.status, retryable: true });
+        if (!response.ok) {
+          let detail = '';
+          try { detail = await response.text(); } catch (_) {}
+          throw new ProviderError(`HTTP ${response.status}${detail ? `: ${detail.slice(0, 300)}` : ''}`, { status: response.status, retryable: false });
+        }
+        return { buffer: Buffer.from(await response.arrayBuffer()), contentType: response.headers.get('content-type') || '' };
+      } finally {
+        clearTimeout(timer);
+      }
+    } catch (error) {
+      lastError = error;
+      const retryable = !(error instanceof ProviderError) || error.retryable;
+      if (attempt >= retries || !retryable) throw error;
+      await new Promise(resolve => setTimeout(resolve, 400 * 2 ** attempt));
+    }
+  }
+  throw lastError;
+}
+
+module.exports = { ProviderError, fetchWithRetry, fetchBufferWithRetry, createRateLimiter };

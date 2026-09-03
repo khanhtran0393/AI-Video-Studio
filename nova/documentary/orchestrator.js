@@ -31,6 +31,7 @@ const { buildAttention } = require('./pipeline/attention');
 const { makeSceneSpecs } = require('./pipeline/scene-spec');
 const { runQa, autoFix } = require('./pipeline/qa');
 const { validateProject } = require('./core/schema');
+const path = require('path');
 
 function createOrchestrator(options = {}) {
   const renderAdapter = options.render;
@@ -122,7 +123,17 @@ async function runStages2(ctx) {
   progress('asset-matching', 60);
 
   // STAGE 8 — segmentation (§16) cho asset được chọn.
-  const segmenter = createSegmenter({ providers, cache, costs, logger });
+  const segmentationProviders = input.segmentation
+    ? createProviderRegistry({ providers: { segmentation: input.segmentation } })
+    : providers;
+  const segmenter = createSegmenter({
+    providers: segmentationProviders,
+    cache,
+    costs,
+    logger,
+    outputDir: path.join(path.dirname(store.file), 'segmentation'),
+    materialize: input.materializeSegmentation !== false,
+  });
   const segmentationByBeat = {};
   for (const selection of selections) {
     if (selection.asset) segmentationByBeat[selection.beatId] = await segmenter.segment(selection.asset);

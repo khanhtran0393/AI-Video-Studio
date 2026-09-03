@@ -34,7 +34,16 @@ exit /b 1
 echo     Dung: %PY%
 echo.
 echo [2/3] Tao moi truong .venv-omni ...
-if not exist ".venv-omni\" %PY% -m venv .venv-omni
+REM Neu thu muc ton tai nhung thieu pyvenv.cfg/python.exe thi day la venv hong.
+REM Xoa va tao lai de Nova khong bi ket vao moi truong nua-vung.
+if exist ".venv-omni\" if not exist ".venv-omni\pyvenv.cfg\" rmdir /s /q ".venv-omni"
+if exist ".venv-omni\" if not exist ".venv-omni\Scripts\python.exe\" rmdir /s /q ".venv-omni"
+if not exist ".venv-omni\pyvenv.cfg\" %PY% -m venv .venv-omni
+if not exist ".venv-omni\Scripts\python.exe\" (
+  echo [LOI] Khong tao duoc .venv-omni hop le.
+  pause
+  exit /b 1
+)
 call ".venv-omni\Scripts\activate.bat"
 python -m pip install -U pip
 

@@ -12,7 +12,9 @@
     "test:foundation": "node scripts/foundation-test.js",
     "test:voice": "node scripts/voice-contract-test.js",
     "test:voice:live": "node scripts/voice-live-test.js",
-    "test:documentary": "node documentary/test.js"
+    "test:documentary": "node documentary/test.js",
+    "test:documentary:full": "node documentary/test-full.js",
+    "test:documentary:segmentation": "node documentary/test-segmentation.js"
   },
   "dependencies": {
     "electron-updater": "^6.3.9",

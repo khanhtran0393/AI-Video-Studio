@@ -90,7 +90,7 @@ function download(url, dest, onEvent) {
     get(url);
   });
 }
-async function ensureChrome(onEvent) {
+async function _ensureChrome(onEvent) {
   // Ưu tiên Chrome for Testing thật sự (cửa sổ riêng, tắt hẳn) — tải về nếu máy chưa có.
   const cft = findCft();
   if (cft && cftIsPinned()) return cft;                 // đã là bản ghim 149 (không banner) → dùng luôn
@@ -113,9 +113,17 @@ async function ensureChrome(onEvent) {
   }
   fs.mkdirSync(cftRoot(), { recursive: true });
   const zip = path.join(cftRoot(), 'chrome.zip');
-  await download(url, zip, onEvent);
-  onEvent && onEvent({ type: 'status', msg: 'Đang giải nén…' });
-  await unzip(zip, cftRoot());
+  try { fs.unlinkSync(zip); } catch {}   // bỏ zip dở dang của lần chạy trước bị gián đoạn
+  try {
+    await download(url, zip, onEvent);
+    onEvent && onEvent({ type: 'status', msg: 'Đang giải nén…' });
+    await unzip(zip, cftRoot());
+  } catch (e) {
+    // Dọn sạch trạng thái nửa vời (zip hỏng + chrome.exe giải nén lởm) — không để
+    // cachedCft() nhặt CfT THIẾU FILE ở các lần mở app sau rồi spawn Chrome hỏng.
+    try { fs.rmSync(cftRoot(), { recursive: true, force: true }); } catch {}
+    throw e;
+  }
   try { fs.unlinkSync(zip); } catch {}
   const bin = cachedCft();
   if (!bin) throw new Error('Giải nén xong nhưng không thấy chrome');
@@ -128,6 +136,16 @@ async function ensureChrome(onEvent) {
     } catch {}
   }
   return bin;
+}
+// Chống gọi đồng thời: restore() lúc mở app tải CfT NỀN (~180MB), user có thể bấm
+// "thêm tài khoản Chrome" ngay trong lúc đó → trước đây 2 luồng cùng ghi chrome.zip
+// và giải nén vào cftRoot (zip hỏng, Expand-Archive xung đột → flow chết ngang).
+// Giờ mọi caller chạy trong cùng lúc chia sẻ 1 promise; caller sau nhận đúng kết quả
+// (không lặp lại events tiến trình — chấp nhận, vì kết quả download là như nhau).
+let _ensureInflight = null;
+function ensureChrome(onEvent) {
+  if (!_ensureInflight) _ensureInflight = _ensureChrome(onEvent).finally(() => { _ensureInflight = null; });
+  return _ensureInflight;
 }
 function unzip(zip, dir) {
   return new Promise((res, rej) => {

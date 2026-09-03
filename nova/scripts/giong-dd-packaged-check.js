@@ -176,7 +176,11 @@ async function main() {
       kq.theBSang = !!(the('omni:dd-b') && the('omni:dd-b').classList.contains('sel'));
       kq.menuDong = !document.getElementById('voiceGiongDD').classList.contains('mo');
 
-      // thư viện → dropdown: bấm thẻ A như người dùng (giongBam — phần nghe thử có thể fail vì không có backend, không liên quan chọn giọng).
+      // thư viện → dropdown: bấm thẻ A như người dùng (giongBam — phần nghe thử
+      // có thể fail vì không có backend, không liên quan chọn giọng). Đánh dấu
+      // backend đã được kiểm tra để giongBam không gọi voiceInit() và thay bộ dữ
+      // liệu UI giả lập bằng một response rỗng của clean-room backend.
+      _voiceReady = true;
       try { await giongBam('omni:dd-a'); } catch (e) { kq.giongBamLoi = String(e).slice(0, 120); }
       await new Promise(r => setTimeout(r, 300));
       kq.chonSauThe = _giongChon;

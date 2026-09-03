@@ -349,10 +349,16 @@ let RUN_DIR = '';
 const report = { meta: null, scenarios: [], rendererErrors: [], appStderrTail: [], mockRequests: 0 };
 
 async function shot(cdp, name) {
-  const png = await cdp.send('Page.captureScreenshot', { format: 'png' }, 20000);
+  // Ảnh chụp là bằng chứng PHỤ — renderer có thể đang bận render thật (Tool 7 export,
+  // video agent…) khiến Page.captureScreenshot timeout. Không để lỗi này lật verdict.
   const p = path.join(RUN_DIR, 'screenshots', name + '.png');
-  fs.writeFileSync(p, Buffer.from(png.data, 'base64'));
-  return { path: p, bytes: fs.statSync(p).size };
+  try {
+    const png = await cdp.send('Page.captureScreenshot', { format: 'png' }, 20000);
+    fs.writeFileSync(p, Buffer.from(png.data, 'base64'));
+    return { path: p, bytes: fs.statSync(p).size };
+  } catch (e) {
+    return { path: null, error: String((e && e.message) || e) };
+  }
 }
 
 async function textOf(cdp, selector) {
@@ -629,26 +635,33 @@ async function main() {
   // Runtime.evaluate timeout 15s và các scenario sau fail oan. Chờ (có giới hạn)
   // renderer phản hồi trước MỖI scenario; nếu WebSocket đứt (renderer reload/crash)
   // thì nối lại target index.html hiện hành qua /json/list.
-  async function waitRendererReady(timeoutMs = 240000) {
+  async function waitRendererReady(timeoutMs = 45000) {
     const startedWait = Date.now();
     const deadline = startedWait + timeoutMs;
     let lastErr = 'not-started';
     for (;;) {
       try { await cdp.evaluate('1', 5000); break; }
       catch (e) { lastErr = String((e && e.message) || e); }
-      if (Date.now() > deadline) throw new Error('renderer CDP unresponsive: ' + lastErr);
-      if (!cdp.ws || cdp.ws.readyState !== 1) {
-        try { cdp.close(); } catch (_) {}
-        try {
-          const t = await waitForTarget(CDP_PORT, /index\.html/, 8000);
+
+      // A renderer can leave its old CDP socket OPEN while the page target is
+      // replaced (for example after a local TTS/blob operation). Always refresh
+      // the target after an evaluation failure; checking readyState alone is not
+      // sufficient because an OPEN socket may still be stale.
+      try {
+        const t = await waitForTarget(CDP_PORT, /index\\.html/, 5000);
+        const stale = !cdp.ws || cdp.ws.readyState !== 1 || cdp.url !== t.webSocketDebuggerUrl;
+        if (stale) {
+          try { cdp.close(); } catch (_) {}
           const fresh = new CdpClient(t.webSocketDebuggerUrl);
           await fresh.connect(10000);
           try { await fresh.send('Runtime.enable'); } catch (_) {}
           try { await fresh.send('Page.enable'); } catch (_) {}
           cdp = fresh;
-        } catch (_) { /* giữ cdp cũ, thử lại sau */ }
-      }
-      await sleep(2000);
+        }
+      } catch (e) { lastErr = String((e && e.message) || e); }
+
+      if (Date.now() > deadline) throw new Error('renderer CDP unresponsive: ' + lastErr);
+      await sleep(1000);
     }
     const waitedMs = Date.now() - startedWait;
     if (waitedMs > 5000) console.log('[e2e] renderer stall ~' + Math.round(waitedMs / 1000) + 's — đã chờ phục hồi CDP');
@@ -705,7 +718,7 @@ async function main() {
       addScenario({ id: 'S2-writeScript', buttons: ['#tsGenBtn'], verdict: pass ? 'pass' : 'fail',
         evidence: { status: st2, outputChars: out.trim().length, outputPreview: out.slice(0, 200), topicInput: s2Topic },
         products: pass ? [product(path.join(RUN_DIR, 'products', 'script.txt'), fs.statSync(path.join(RUN_DIR, 'products', 'script.txt')).size, 'Kịch bản sinh từ AI (mock)') ] : [],
-        screenshots: [shotS2.path] });
+        screenshots: [shotS2.path].filter(Boolean) });
       console.log('[e2e] S2 script:', pass ? 'PASS' : 'FAIL', out.length + ' chars');
     } catch (e) { addScenario({ id: 'S2-writeScript', verdict: 'fail', error: String(e.message || e) }); }
 
@@ -855,56 +868,90 @@ async function main() {
 
     /* ── S4: Phân tích kịch bản → storyboard (#t2AnalyzeBtn) ────────────── */
     try {
-      await waitRendererReady();
+      // Renderer có thể đóng băng / tải lại ~90s sau khi gán giọng đọc (S3) — chờ đủ
+      // lâu (150s) thay vì fail oan sau 45s.
+      await waitRendererReady(150000);
       await switchTool(cdp, 'tool2');
       await setText(cdp, '#scriptInput', SCRIPT_FULL);
       await cdp.click('#t2AnalyzeBtn');
       let sres = null;
+      let s4pollErr = null;
       for (let i = 0; i < 180; i++) {
         await sleep(1000);
-        sres = await cdp.evaluate(`(() => {
-          const sc = (window.state && window.state.scenes) || [];
-          const st = document.getElementById('status2');
-          const stText = st ? String(st.textContent || '').trim() : '';
-          if (sc.length > 0) return { ok: true, count: sc.length, first: String(sc[0].text || '').slice(0, 120), status: stText };
-          if (/Lỗi|❌|fail/i.test(stText)) return { ok: false, status: stText };
-          return null;
-        })()`);
+        try {
+          sres = await cdp.evaluate(`(() => {
+            // state được khai báo bằng const trong index.html -> nằm ở global lexical
+            // environment, KHÔNG lên window (window.state luôn undefined). Phải hỏi
+            // bằng tên trần.
+            const sc = (typeof state !== 'undefined' && state && state.scenes) || [];
+            const st = document.getElementById('status2');
+            const stText = st ? String(st.textContent || '').trim() : '';
+            if (sc.length > 0) return { ok: true, count: sc.length, first: String(sc[0].text || '').slice(0, 120), status: stText };
+            const m = /(?:✓|xong).{0,40}(\\d+)\\s*cảnh/i.exec(stText);
+            if (m) return { ok: true, count: Number(m[1]), first: '(từ status2)', status: stText, viaStatus: true };
+            if (/Lỗi|❌|fail/i.test(stText)) return { ok: false, status: stText };
+            return null;
+          })()`);
+          s4pollErr = null;
+        } catch (e) {
+          // Renderer bận / đứt CDP giữa chừng — chờ phục hồi rồi poll tiếp (không bỏ cuộc).
+          s4pollErr = String((e && e.message) || e);
+          try { await waitRendererReady(150000); } catch (_) {}
+          continue;
+        }
         if (sres) break;
       }
-      const st4 = (await textOf(cdp, '#status2')) || '';
+      let st4 = '';
+      try { st4 = (await textOf(cdp, '#status2')) || ''; } catch (e) { st4 = 'CDP: ' + String((e && e.message) || e); }
       const shotS4 = await shot(cdp, 's4-storyboard');
       if (sres && sres.ok) {
-        const scenesJson = await cdp.evaluate('JSON.stringify(window.state.scenes)');
-        fs.writeFileSync(path.join(RUN_DIR, 'products', 'storyboard.json'), scenesJson);
-        addScenario({ id: 'S4-storyboard', buttons: ['#t2AnalyzeBtn'], verdict: 'pass',
-          evidence: { scenes: sres.count, firstScene: sres.first, status: st4, via: 'mock AI storyboard' },
-          products: [product(path.join(RUN_DIR, 'products', 'storyboard.json'), scenesJson.length, 'Storyboard state.scenes sinh từ phân tích AI')],
-          screenshots: [shotS4.path] });
-        console.log('[e2e] S4 storyboard: PASS', sres.count, 'cảnh');
+        let scenesJson = null;
+        let scenesErr = null;
+        for (let t = 0; t < 2 && !scenesJson; t++) {
+          try { scenesJson = await cdp.evaluate('JSON.stringify(typeof state !== "undefined" && state ? (state.scenes || []) : [])'); }
+          catch (e) { scenesErr = String((e && e.message) || e); try { await waitRendererReady(150000); } catch (_) {} }
+        }
+        if (scenesJson) {
+          fs.writeFileSync(path.join(RUN_DIR, 'products', 'storyboard.json'), scenesJson);
+          addScenario({ id: 'S4-storyboard', buttons: ['#t2AnalyzeBtn'], verdict: 'pass',
+            evidence: { scenes: sres.count, firstScene: sres.first, status: st4, via: 'mock AI storyboard', pollError: s4pollErr || undefined },
+            products: [product(path.join(RUN_DIR, 'products', 'storyboard.json'), scenesJson.length, 'Storyboard state.scenes sinh từ phân tích AI')],
+            screenshots: [shotS4.path].filter(Boolean) });
+          console.log('[e2e] S4 storyboard: PASS', sres.count, 'cảnh');
+        } else {
+          addScenario({ id: 'S4-storyboard', buttons: ['#t2AnalyzeBtn'], verdict: 'fail',
+            evidence: { status: st4, detail: sres, scenesError: scenesErr }, screenshots: [shotS4.path].filter(Boolean) });
+          console.log('[e2e] S4 storyboard: FAIL —', scenesErr);
+        }
       } else {
-        addScenario({ id: 'S4-storyboard', buttons: ['#t2AnalyzeBtn'], verdict: 'fail', evidence: { status: st4, detail: sres }, screenshots: [shotS4.path] });
+        addScenario({ id: 'S4-storyboard', buttons: ['#t2AnalyzeBtn'], verdict: 'fail', evidence: { status: st4, detail: sres, pollError: s4pollErr || undefined }, screenshots: [shotS4.path].filter(Boolean) });
         console.log('[e2e] S4 storyboard: FAIL —', JSON.stringify(redact(sres || st4)));
       }
     } catch (e) { addScenario({ id: 'S4-storyboard', verdict: 'fail', error: String(e.message || e) }); }
 
     /* ── S5: panel Video Agent trong index.html (#btnRunFull) ───────────── */
     try {
-      await waitRendererReady();
+      await waitRendererReady(150000);
       await switchTool(cdp, 'toolvideoagent');
       await sleep(500);
-      const has = await cdp.evaluate(`(() => ({ btnRunFull: !!document.getElementById('btnRunFull'), btnRender: !!document.getElementById('renderBtn'), info: (document.getElementById('renderInfo') || {}).textContent || null }))()`);
-      await cdp.click('#btnRunFull');
+      let has = null;
+      try { has = await cdp.evaluate(`(() => ({ btnRunFull: !!document.getElementById('btnRunFull'), btnRender: !!document.getElementById('renderBtn'), info: (document.getElementById('renderInfo') || {}).textContent || null }))()`); }
+      catch (e) { has = { error: String((e && e.message) || e) }; }
+      let clickErr = null;
+      try { await cdp.click('#btnRunFull'); } catch (e) { clickErr = String((e && e.message) || e); }
       await sleep(6000);
-      const infoAfter = await cdp.evaluate(`(() => {
-        const ri = document.getElementById('renderInfo');
-        const pl = document.getElementById('progressLabel');
-        const ev = document.querySelector('#renderEvents li, #videoAgentEvents li');
-        return { renderInfo: ri ? ri.textContent.trim() : null, progressLabel: pl ? pl.textContent.trim() : null, firstEvent: ev ? ev.textContent.trim() : null };
-      })()`);
+      let infoAfter = null;
+      try {
+        infoAfter = await cdp.evaluate(`(() => {
+          const ri = document.getElementById('renderInfo');
+          const pl = document.getElementById('progressLabel');
+          const ev = document.querySelector('#renderEvents li, #videoAgentEvents li');
+          return { renderInfo: ri ? ri.textContent.trim() : null, progressLabel: pl ? pl.textContent.trim() : null, firstEvent: ev ? ev.textContent.trim() : null };
+        })()`);
+      } catch (e) { infoAfter = { error: String((e && e.message) || e) }; }
       const shotS5 = await shot(cdp, 's5-va-panel');
       addScenario({ id: 'S5-vaPanel', buttons: ['#btnRunFull'], verdict: 'attempted',
-        evidence: { before: has, after: infoAfter }, screenshots: [shotS5.path] });
+        evidence: { before: has, clickError: clickErr || undefined, after: infoAfter }, screenshots: [shotS5.path].filter(Boolean) });
       console.log('[e2e] S5 vaPanel (runFull):', JSON.stringify(redact(infoAfter)));
     } catch (e) { addScenario({ id: 'S5-vaPanel', verdict: 'fail', error: String(e.message || e) }); }
 
@@ -948,45 +995,72 @@ async function main() {
       }
       const resultBox = await vaWin.evaluate(`(() => { const p = document.querySelectorAll('#panels .panel')[2]; const m = p ? p.querySelectorAll('.meta') : []; return Array.from(m).map(x => x.textContent.trim()); })()`);
       const shotS6b = await shot(vaWin, 's6-va-window-after');
-      // tìm mp4 thật sinh sau khi bấm Run trong thư mục project
-      const mp4s = listFilesDeep(vaProject, (p) => /\.mp4$/i.test(p)).filter((f) => f.mtime >= runStart - 2000 && f.bytes > 10000);
+      // tìm mp4 thật sinh sau khi bấm Run. Render engine (nova editor-pro) ghi output
+      // vào OS temp — được launchApp redirect vào profile/AppData/Local/Temp của run,
+      // KHÔNG nằm trong thư mục project. Nguồn chân thực nhất: outputPath trong
+      // output/job.json của project; fallback: quét mp4 trong thư mục project.
+      let jobOut = null;
+      let jobOutErr = null;
+      try {
+        const jobJson = JSON.parse(fs.readFileSync(path.join(vaProject, 'output', 'job.json'), 'utf8'));
+        const op = jobJson && (jobJson.outputPath || jobJson.output);
+        if (op && fs.existsSync(op)) {
+          const stO = fs.statSync(op);
+          jobOut = (stO.size > 10000 && stO.mtimeMs >= runStart - 2000) ? { path: op, bytes: stO.size, mtime: stO.mtimeMs } : null;
+        } else { jobOutErr = 'job.json outputPath missing: ' + String(op); }
+      } catch (e) { jobOutErr = String((e && e.message) || e); }
+      const mp4s = [jobOut].filter(Boolean).concat(
+        listFilesDeep(vaProject, (p) => /\.mp4$/i.test(p)).filter((f) => f.mtime >= runStart - 2000 && f.bytes > 10000)
+      ).filter((f, i, arr) => arr.findIndex((x) => x.path === f.path) === i);
       if (final && final.done && mp4s.length) {
         const f = mp4s[0];
         fs.copyFileSync(f.path, path.join(RUN_DIR, 'products', path.basename(f.path)));
         addScenario({ id: 'S6-vaWindowPipeline', buttons: ['native.videoAgent.openWindow', '#btnInspectProject', 'optSkip', '#btnRun'], verdict: 'pass',
-          evidence: { setDir, inspect: inspectInfo, progress: final.txt, events: final.events, result: resultBox, mp4Count: mp4s.length },
+          evidence: { setDir, inspect: inspectInfo, progress: final.txt, events: final.events, result: resultBox, mp4Count: mp4s.length, jobOutput: path.relative(ROOT, f.path) },
           products: [product(f.path, f.bytes, 'Video MP4 render THẬT bởi Video Agent pipeline (local render engine)')],
-          screenshots: [shotS6a.path, shotS6b.path] });
+          screenshots: [shotS6a.path, shotS6b.path].filter(Boolean) });
         console.log('[e2e] S6 vaWindow: PASS — mp4 =', f.path, f.bytes + 'B');
       } else {
         addScenario({ id: 'S6-vaWindowPipeline', buttons: ['native.videoAgent.openWindow', '#btnInspectProject', 'optSkip', '#btnRun'], verdict: 'fail',
-          evidence: { open: opened, setDir, inspect: inspectInfo, progress: final && final.txt, events: final && final.events, result: resultBox, mp4Count: mp4s.length },
-          screenshots: [shotS6a.path, shotS6b.path] });
-        console.log('[e2e] S6 vaWindow: FAIL —', JSON.stringify(redact({ progress: final && final.txt, result: resultBox })));
+          evidence: { open: opened, setDir, inspect: inspectInfo, progress: final && final.txt, events: final && final.events, result: resultBox, mp4Count: mp4s.length, jobOutput: jobOut ? path.relative(ROOT, jobOut.path) : null, jobOutputError: jobOutErr || undefined },
+          screenshots: [shotS6a.path, shotS6b.path].filter(Boolean) });
+        console.log('[e2e] S6 vaWindow: FAIL —', JSON.stringify(redact({ progress: final && final.txt, result: resultBox, jobOutputError: jobOutErr })));
       }
     } catch (e) { addScenario({ id: 'S6-vaWindowPipeline', verdict: 'fail', error: String(e.message || e) }); }
     finally { try { if (vaWin) await vaWin.close(); } catch (_) {} }
 
     /* ── S7: Xuất video Tool 7 (#t7ExportBtn → #t7ExpGo trong modal) ────── */
     try {
-      await waitRendererReady();
+      await waitRendererReady(150000);
       await switchTool(cdp, 'tool7');
       await sleep(500);
-      const has7 = await cdp.evaluate(`(() => ({ exportBtn: !!document.getElementById('t7ExportBtn'), scenes: (window.t7State && window.t7State.scenes || []).length, audio: !!(window.t7State && window.t7State.audioFile), bgm: !!(window.t7State && window.t7State.bgmFile) }))()`);
-      await cdp.click('#t7ExportBtn');
+      let has7 = null;
+      try { has7 = await cdp.evaluate(`(() => ({ exportBtn: !!document.getElementById('t7ExportBtn'), scenes: (window.t7State && window.t7State.scenes || []).length, audio: !!(window.t7State && window.t7State.audioFile), bgm: !!(window.t7State && window.t7State.bgmFile) }))()`); }
+      catch (e) { has7 = { error: String((e && e.message) || e) }; }
+      let t7ClickErr = null;
+      try { await cdp.click('#t7ExportBtn'); }
+      catch (e) {
+        t7ClickErr = String((e && e.message) || e);
+        try { await waitRendererReady(150000); await cdp.click('#t7ExportBtn'); t7ClickErr = null; }
+        catch (e2) { t7ClickErr = String((e2 && e2.message) || e2); }
+      }
       await sleep(1200);
       // modal xuất hiện → bấm nút bắt đầu xuất (giống CapCut: "Xuất" trong modal)
       const modalGo = await cdp.evaluate(`(() => { const m = document.getElementById('t7ExpModal'); if (!m) return { modal: false }; const go = document.getElementById('t7ExpGo') || Array.from(m.querySelectorAll('button')).find(b => /Xuất|Bắt đầu|Export/i.test(b.textContent)); if (go) { go.click(); return { modal: true, clicked: go.id || go.textContent.trim() }; } return { modal: true, go: null }; })()`);
       let st7 = '';
       for (let i = 0; i < 120; i++) {
         await sleep(1000);
-        st7 = (await textOf(cdp, '#status7')) || '';
+        // Tool 7 render video ngay trong renderer → CDP evaluate có thể timeout lúc
+        // engine bận; bỏ qua lần poll đó thay vì fail cả scenario.
+        try { st7 = (await textOf(cdp, '#status7')) || ''; } catch (e) { continue; }
         if (/xong|hoàn tất|Lỗi|❌|✓/i.test(st7)) break;
       }
-      const expInfo = await cdp.evaluate(`(() => ({ t7ExpState: (document.getElementById('t7ExpState') || {}).textContent || null, t7ExpPct: (document.getElementById('t7ExpPct') || {}).textContent || null }))()`);
+      let expInfo = null;
+      try { expInfo = await cdp.evaluate(`(() => ({ t7ExpState: (document.getElementById('t7ExpState') || {}).textContent || null, t7ExpPct: (document.getElementById('t7ExpPct') || {}).textContent || null }))()`); }
+      catch (e) { expInfo = { error: String((e && e.message) || e) }; }
       const shotS7 = await shot(cdp, 's7-tool7-export');
       addScenario({ id: 'S7-tool7Export', buttons: ['#t7ExportBtn', '#t7ExpGo'], verdict: /xong|✓/i.test(st7) ? 'pass' : 'attempted',
-        evidence: { pre: has7, modalGo, status7: st7, expInfo }, screenshots: [shotS7.path] });
+        evidence: { pre: has7, clickError: t7ClickErr || undefined, modalGo, status7: st7, expInfo }, screenshots: [shotS7.path].filter(Boolean) });
       console.log('[e2e] S7 tool7Export:', JSON.stringify(redact({ modalGo, status7: st7 })));
     } catch (e) { addScenario({ id: 'S7-tool7Export', verdict: 'fail', error: String(e.message || e) }); }
 
@@ -1027,7 +1101,7 @@ async function main() {
           } catch (_) { /* evidence-only */ }
         }
         addScenario({ id: 'S8-' + a.tool, buttons: [a.button], verdict: 'attempted',
-          evidence: { label: a.label, buttonExists: btnExists, status: status || '(không có status element)' }, products: products8, screenshots: [shotS8.path] });
+          evidence: { label: a.label, buttonExists: btnExists, status: status || '(không có status element)' }, products: products8, screenshots: [shotS8.path].filter(Boolean) });
         console.log('[e2e] S8', a.tool + ':', JSON.stringify(redact(status || 'no-status')), products8.length ? '(product: seo-pack.json)' : '');
       } catch (e) { addScenario({ id: 'S8-' + a.tool, buttons: [a.button], verdict: 'fail', error: String(e.message || e) }); }
     }

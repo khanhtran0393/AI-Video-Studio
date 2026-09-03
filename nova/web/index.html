@@ -7896,25 +7896,31 @@ let _giongThemMo = false;
 // ── Danh sách giọng — VoiceBank dùng chung cho cả ba engine ─────────
 async function giongTaiDS(){
   const ds = [];
+  let taiThanhCong = false;
   try {
-    const data = await fetch(VOICE_URL + '/api/voices').then(r => r.json());
+    const res = await fetch(VOICE_URL + '/api/voices');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
     const list = Array.isArray(data) ? data : (data.voices || []);
     for (const v of list){
-      // Giọng ⭐ nhà máy là tiếng Anh, không dùng cho video tiếng Việt.
-      // Chỉ GIẤU khỏi thư viện — file vẫn nằm trong voicebank, muốn hiện lại thì bỏ dòng này.
-      if (v.is_factory) continue;
+      // Voice factory cũng phải hiện tên trong UI. Trước đây continue ở đây làm
+      // danh sách trống dù backend đã seed thành công các voice có sẵn.
+      const factory = !!v.is_factory;
       const thietKe = !!(v.attributes && v.attributes.instruct);
       ds.push({
         key: 'omni:' + v.id, id: v.id, name: v.name || v.id,
-        src: thietKe ? 'Thiết kế từ mô tả' : 'Clone từ mẫu',
-        kind: thietKe ? 'design' : 'clone',
+        src: factory ? 'Giọng có sẵn' : (thietKe ? 'Thiết kế từ mô tả' : 'Clone từ mẫu'),
+        kind: factory ? 'san' : (thietKe ? 'design' : 'clone'),
         tags: (v.tags || []).slice(0, 3),
         lang: (v.attributes && v.attributes.lang) || 'vi',
-        factory: false,
+        factory,
       });
     }
-  } catch (e){ /* backend chưa lên — giữ trống để thao tác khởi tạo sau */ }
-  _giongDS = ds;
+    taiThanhCong = true;
+  } catch (e){ /* backend tạm thời chưa lên — giữ danh sách đang dùng */ }
+  // Không xoá thư viện/selection đang hiện chỉ vì một lần reload gặp backend lỗi.
+  // Lần khởi tạo đầu vẫn giữ [] để UI hiển thị đúng trạng thái rỗng.
+  if (taiThanhCong) _giongDS = ds;
   if (!_giongDS.some(v => v.key === _giongChon)) _giongChon = (_giongDS[0] || {}).key || '';
   giongVe();
 }

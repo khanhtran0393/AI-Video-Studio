@@ -23,6 +23,7 @@ const { resolveStartUrl } = require('./main/server');
 const { createWindow } = require('./main/window');
 const { setupAutoUpdate } = require('./main/updater');
 const { shutdownOwnedResources } = require('./main/lifecycle');
+const { installLifecycleLogging } = require('./main/lifecycle-log');
 const { registerAllIpc } = require('./main/ipc');
 const { userDataPath } = require('./core/paths');
 const { registerSettingsIpc } = require('./storage/settings-store');
@@ -39,6 +40,10 @@ try { app.commandLine.appendSwitch('log-level', '3'); } catch (e) { /* */ }
 
 // Bắt lỗi toàn cục (uncaughtException/unhandledRejection) → thông báo thân thiện, không văng app.
 installGlobalErrorHandlers();
+
+// Log lifecycle (quit / render-process-gone / child-process-gone / unresponsive)
+// ra userData/lifecycle.log — để chẩn đoán exit code khi test UI tự động.
+installLifecycleLogging(app);
 
 // ── Kho cài đặt (API key…) → FILE trong userData ────────────────────────────
 // localStorage của UI gắn vào origin "http://localhost:<port>". Port có thể đổi

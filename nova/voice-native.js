@@ -1,6 +1,6 @@
 /**
- * Voice Native — khởi động backend Voice Studio (OmniVoice) rồi cho novastudio nhúng UI.
- * Backend = thư mục voice-studio do người dùng chọn (engine OmniVoice qua .venv-omni).
+ * Voice Native — khởi động backend Voice Studio rồi cho Nova Studio nhúng UI.
+ * Backend có thể là voice-backend/voice-studio; engine được chọn theo venv hợp lệ.
  * App gọi start() khi mở tab "Tạo giọng nói" → spawn uvicorn (nếu chưa chạy) → chờ health → trả URL.
  * Nội dung đã tách sang ./voice-native/ (paths → server, gộp ở index.js).
  * File này giữ đường require cũ của consumer (main/ipc/voice.js, main/lifecycle.js,

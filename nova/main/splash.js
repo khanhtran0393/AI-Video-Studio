@@ -65,11 +65,16 @@ function closeSplashWindow(immediate = false) {
       .finally(() => {
         state.splashCloseTimer = setTimeout(() => {
           state.splashCloseTimer = null;
-          if (!current.isDestroyed()) current.close();
+          // PHẢI destroy() chứ không close(): splash tạo với closable:false và
+          // trên Windows close() với cửa sổ closable:false là NO-OP → splash tàng
+          // hình sống mãi → window-all-closed không bao giờ fire → app không bao
+          // giờ thoát (harness phải force-kill, exit code rác); cửa sổ trong suốt
+          // còn chặn click chuột vào vùng 820x360 của cửa sổ chính.
+          if (!current.isDestroyed()) current.destroy();
         }, 300);
       });
   } catch (_) {
-    try { current.close(); } catch (_) { /* ignore */ }
+    try { current.destroy(); } catch (_) { /* ignore */ }
   }
 }
 

@@ -4,7 +4,7 @@ const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
-const { voiceRoot, venvPython } = require('./paths');
+const { voiceRoot, venvPython, venvKind } = require('./paths');
 
 const PORT = 8771;
 const LEGACY_PORT = 8770;   // backend đã cài từ bản Nova cũ chạy ở cổng này
@@ -55,21 +55,19 @@ async function start() {
   const root = voiceRoot();
   if (!root) return { error: 'Không tìm thấy thư mục voice-studio. Hãy chọn thư mục backend trong AI Video Studio.' };
   const py = venvPython(root);
-  if (!py) return { error: 'Thiếu môi trường Python (.venv-omni) trong voice-studio. Chạy setup trong voice-studio trước.' };
+  const kind = venvKind(root);
+  if (!py || !kind) return { error: 'Thiếu môi trường Python hợp lệ trong voice-backend. Hãy chạy setup-omni.bat (Windows) hoặc setup-omni.command (macOS) rồi thử lại.' };
 
   if (!proc) {
     const env = { ...process.env, COQUI_TOS_AGREED: '1', VOICE_PORT: String(PORT) };
-    const hasOmni = fs.existsSync(path.join(root, '.venv-omni', 'bin', 'python')) || fs.existsSync(path.join(root, '.venv-omni', 'Scripts', 'python.exe'));
-    if (hasOmni) {
-      env.VOICE_TTS_ENGINE = env.VOICE_TTS_ENGINE || 'omnivoice';
-      // ASR mặc định là 'mock' → trả câu giả "[Đây là bản nhận dạng giả…]".
-      // Timing cảnh giờ dựa vào ASR nên mock là dữ liệu rác đội lốt số đo. Ưu tiên
-      // whisper thật; không có thư viện thì engine tự báo lỗi, app rơi về ước lượng.
-      env.VOICE_ASR_ENGINE = env.VOICE_ASR_ENGINE || 'whisper';
+    const defaultEngine = kind;
+    env.VOICE_TTS_ENGINE = env.VOICE_TTS_ENGINE || defaultEngine;
+    // VieNeu/XTTS không cần Whisper để chạy luồng đọc; OmniVoice mới ưu tiên ASR thật.
+    env.VOICE_ASR_ENGINE = env.VOICE_ASR_ENGINE || (kind === 'omnivoice' ? 'whisper' : 'mock');
+    if (kind === 'omnivoice') {
       const hf = path.join(root, 'data', 'hf');
       if (fs.existsSync(hf)) env.HF_HOME = env.HF_HOME || hf;
-    } else {
-      env.VOICE_TTS_ENGINE = env.VOICE_TTS_ENGINE || 'xtts';
+    } else if (kind === 'xtts') {
       const vixtts = path.join(root, 'data', 'models', 'viXTTS');
       if (fs.existsSync(vixtts)) env.VOICE_XTTS_DIR = env.VOICE_XTTS_DIR || vixtts;
     }

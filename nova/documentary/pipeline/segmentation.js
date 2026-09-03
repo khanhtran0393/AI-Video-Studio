@@ -9,6 +9,8 @@
  */
 
 const crypto = require('crypto');
+const path = require('path');
+const { materializeSegmentation } = require('./layer-materializer');
 
 function segmentationFingerprint(asset) {
   return crypto.createHash('sha256').update(JSON.stringify({ id: asset.id, path: asset.path || asset.src })).digest('hex');
@@ -25,13 +27,27 @@ function fallbackSegmentation(asset) {
   };
 }
 
-function createSegmenter({ providers, cache, costs, logger } = {}) {
+function createSegmenter({ providers, cache, costs, logger, outputDir, materialize = true } = {}) {
   return {
     async segment(asset) {
       const fingerprint = segmentationFingerprint(asset);
       if (asset && asset.segmentation && asset.segmentation.fingerprint === fingerprint) return asset.segmentation;
       const key = cache ? cache.key('segmentation', { fingerprint }) : null;
       const compute = async () => {
+        // Segmentation provider trả pixel thật (cutout/mask), khác vision chỉ trả JSON metadata.
+        if (providers && providers.has('segmentation')) {
+          try {
+            const result = await providers.call('segmentation', 'segment', { source: asset.path || asset.src, imageDataUrl: asset.dataUrl || asset.src });
+            if (materialize && outputDir && result) {
+              const physical = await materializeSegmentation({ asset, result, outputDir, fingerprint, logger });
+              if (physical && physical.layers && physical.layers.length) {
+                return { fingerprint, quality: 'good', provider: result.provider || 'segmentation-provider', layers: physical.layers, depthMap: null, materialized: true, dir: physical.dir };
+              }
+            }
+          } catch (error) {
+            if (logger) logger(`segmenter: pixel provider failed (${error.message}), trying vision/fallback`);
+          }
+        }
         if (providers && providers.has('vision')) {
           try {
             const result = await providers.call('vision', 'vision', {
