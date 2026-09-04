@@ -4782,6 +4782,12 @@ const PAYMENT_INFO = {
 ============================================================ */
 const MODELS = {
   anthropic: [
+    // Gateway agentrouter (đi qua CLI bridge, KHÔNG cần API key) — id phải khớp catalog của họ.
+    // Claude series trên agentrouter đang bị ngừng; GLM/DeepSeek/GPT còn kênh + budget.
+    // ⚠️ Đặt model CÒN SỐNG lên đầu — MODELS[provider][0] là mặc định cho người dùng mới.
+    { id: 'glm-5.3',           name: 'GLM 5.3 (agentrouter)' },
+    { id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash (agentrouter)' },
+    { id: 'gpt-5.6-sol',       name: 'GPT-5.6 Sol (agentrouter)' },
     // ⚠️ HHTECH đặt id KHÔNG nhất quán: Opus dùng dấu GẠCH (4-7), Sonnet/Haiku dùng dấu CHẤM (4.6). Giữ đúng như catalog của họ.
     { id: 'claude-sonnet-4.6', name: 'Claude Sonnet 4.6' },
     { id: 'claude-sonnet-5',   name: 'Claude Sonnet 5' },
@@ -4791,12 +4797,7 @@ const MODELS = {
     { id: 'claude-opus-4-7',   name: 'Claude Opus 4.7' },
     { id: 'claude-opus-4-6',   name: 'Claude Opus 4.6' },
     { id: 'claude-fable-5',    name: 'Claude Fable 5' },
-    { id: 'claude-haiku-4.5',  name: 'Claude Haiku 4.5' },
-    // Gateway agentrouter (đi qua CLI bridge, KHÔNG cần API key) — id phải khớp catalog của họ
-    // (Claude series trên agentrouter đang bị ngừng; GLM/DeepSeek/GPT còn kênh + budget).
-    { id: 'glm-5.3',           name: 'GLM 5.3 (agentrouter)' },
-    { id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash (agentrouter)' },
-    { id: 'gpt-5.6-sol',       name: 'GPT-5.6 Sol (agentrouter)' }
+    { id: 'claude-haiku-4.5',  name: 'Claude Haiku 4.5' }
   ],
   openai: [
     // Key OpenAI TRỰC TIẾP — id chính thức. Rẻ hơn hẳn 5.6 cho việc hàng loạt.
@@ -7850,25 +7851,25 @@ async function tsGenerate(rewrite){
   const p = (typeof getProfile === 'function') ? getProfile() : null;
   const sp = (p?.scriptPrompt || '').trim();
   const prompt =
-`Bạn là biên kịch chuyên viết lời đọc (voiceover) cho video faceless trên YouTube.
-NHIỆM VỤ: Viết MỘT kịch bản lời đọc hoàn chỉnh về chủ đề: "${topic}".
-NGÔN NGỮ: ${lang}. GIỌNG VĂN: ${tone}. ĐỘ DÀI: khoảng ${words} từ (chênh lệch tối đa 10%).
-${sp ? 'PHONG CÁCH KÊNH — BẮT BUỘC tuân theo (nhưng XEM luật ĐỘ DÀI bên dưới đè lên phần số từ):\n' + sp.replace(/\{\{\s*WORDS\s*\}\}/gi, String(words)) + '\n' : ''}${rewrite ? 'Viết một BẢN KHÁC, cách tiếp cận/mở đầu mới so với thông thường.\n' : ''}
-⚠️ ĐỘ DÀI — ƯU TIÊN CAO NHẤT, ĐÈ LÊN MỌI CON SỐ TRONG PHONG CÁCH KÊNH:
-- BỎ QUA mọi con số độ dài viết trong phong cách kênh ("tổng ... từ", "ngân sách từ", "sàn cứng", "mỗi phần/cung ... từ", "~... phút"…).
-- Tổng độ dài kịch bản BẮT BUỘC ≈ ${words} từ (sai lệch tối đa 10%). Tự co giãn SỐ PHẦN và tỉ lệ mỗi phần cho vừa ${words} từ — giữ cấu trúc/giọng của phong cách kênh nhưng nén/giãn để đúng ${words} từ.
-🎣 GIỮ CHÂN — ${sp ? 'TẦNG NỀN; chỗ nào PHONG CÁCH KÊNH ở trên đã nói khác thì THEO PHONG CÁCH KÊNH' : 'bắt buộc'}:
-- 15 GIÂY ĐẦU: câu đầu ≤ 15 từ, vào thẳng chuyện. KHÔNG mở bằng năm/bối cảnh/định nghĩa. Cấm sáo ngữ "Hãy tưởng tượng", "Bạn có biết", "Trong thế giới…".
-- OPEN LOOP: gieo NGAY ở hook một mâu thuẫn hoặc câu hỏi chưa trả lời. Nhắc lại 2–3 lần rải đều giữa bài, MỖI lần thêm một chi tiết mới (không lặp nguyên văn), TRẢ dứt điểm ở gần kết.
-- VẬT DẪN: chọn 1 vật/chi tiết nhỏ cụ thể, cắm ở mở đầu, cho quay lại ≥2 lần trong đó 1 lần gần kết.
-- MỖI ĐOẠN đẩy thêm ĐÚNG 1 điều MỚI (sự kiện, con số, hệ quả) — không tô lại ý vừa nói bằng từ khác.
-- CẤM: câu dẫn báo hiệu chuyển đoạn ("ít ai biết rằng", "little did you know"), gọi khán giả ("các bạn ơi", "nhớ like"), giảng đạo, kết ngọt sáo.
-QUY TẮC ĐẦU RA (rất quan trọng):
-- CHỈ trả về LỜI ĐỌC liền mạch. Ký tự ĐẦU TIÊN phải là chữ đầu của câu đầu kịch bản.
-- TUYỆT ĐỐI KHÔNG câu dẫn/mở đầu kiểu "The script is complete...", "Here it is:", "Here is the script", "Đây là kịch bản", "Dưới đây là…", không nêu số từ.
-- KHÔNG: tiêu đề, dòng "Kịch bản:", đánh số, nhãn [Intro]/[Hook]/[Kết], ghi chú đạo diễn, emoji, markdown, gạch đầu dòng.
-- Chia thành các đoạn văn ngắn 2–4 câu, dễ đọc cho giọng nói AI (TTS). Mở đầu NGAY bằng hook; kết bằng câu chốt.
-Trả về DUY NHẤT nội dung kịch bản, không thêm bất kỳ lời dẫn nào.`;
+`You are a professional voiceover scriptwriter for faceless YouTube videos.
+TASK: Write ONE complete voiceover script for this topic: "${topic}".
+LANGUAGE: ${lang}. TONE: ${tone}. LENGTH: about ${words} words (max 10% deviation).
+${sp ? 'CHANNEL STYLE — MUST follow (but the LENGTH rules below override any word counts inside it):\n' + sp.replace(/\{\{\s*WORDS\s*\}\}/gi, String(words)) + '\n' : ''}${rewrite ? 'Write a DIFFERENT version with a fresh angle and a new opening compared to the usual approach.\n' : ''}
+LENGTH — top priority, overrides any numbers found in the channel style:
+- Ignore any word counts written in the channel style.
+- The total script length MUST be about ${words} words (max 10% deviation). Rescale the number of sections and their proportions to fit ${words} words — keep the structure and voice of the channel style but compress or expand to hit ${words} words.
+RETENTION — ${sp ? 'baseline; wherever the CHANNEL STYLE above says otherwise, follow the CHANNEL STYLE' : 'required'}:
+- First 15 seconds: the opening sentence must be at most 15 words and jump straight into the story. Do not open with a year, a setting, or a definition. Banned openers: "Hãy tưởng tượng", "Bạn có biết".
+- Open loop: plant a contradiction or an unanswered question right in the hook. Call it back 2-3 times spread evenly through the script, each time adding a new detail (never repeat verbatim), and resolve it near the end.
+- Object through-line: pick one small concrete object or detail, plant it in the opening, bring it back at least twice, once near the end.
+- Every paragraph must push exactly ONE new thing (an event, a number, a consequence) — never restate the previous idea in different words.
+- Forbidden: transition signposts like "ít ai biết rằng", addressing the audience ("các bạn ơi"), moralizing, syrupy endings.
+OUTPUT RULES (very important):
+- Return ONLY the narration text as one flowing piece. The first character must be the first letter of the script's opening sentence.
+- Absolutely no lead-in such as "The script is complete...", "Here it is:", "Here is the script", "Đây là kịch bản", "Dưới đây là", and no word counts.
+- No titles, no "Kịch bản:" lines, no numbering, no [Intro]/[Hook]/[Kết] labels, no director notes, no emoji, no markdown, no bullet points.
+- Split into short paragraphs of 2-4 sentences, easy to read aloud for an AI voice (TTS). Start immediately with the hook; end with a closing line.
+Return only the script content, nothing else.`;
   const btn = document.getElementById('tsGenBtn'); if (btn) btn.disabled = true;
   const _tk = _startElapsed('✍️ Đang viết kịch bản', setStatusScript,
     'bản dài / chạy bằng gói Claude-ChatGPT có thể chờ vài phút — cứ để yên');
