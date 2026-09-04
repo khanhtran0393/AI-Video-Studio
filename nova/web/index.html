@@ -7850,15 +7850,15 @@ async function tsGenerate(rewrite){
   const tone = document.getElementById('tsTone')?.value || 'Kể chuyện cuốn hút';
   const p = (typeof getProfile === 'function') ? getProfile() : null;
   const sp = (p?.scriptPrompt || '').trim();
-  const prompt =
+  const buildPrompt = (style) =>
 `You are a professional voiceover scriptwriter for faceless YouTube videos.
 TASK: Write ONE complete voiceover script for this topic: "${topic}".
 LANGUAGE: ${lang}. TONE: ${tone}. LENGTH: about ${words} words (max 10% deviation).
-${sp ? 'CHANNEL STYLE — MUST follow (but the LENGTH rules below override any word counts inside it):\n' + sp.replace(/\{\{\s*WORDS\s*\}\}/gi, String(words)) + '\n' : ''}${rewrite ? 'Write a DIFFERENT version with a fresh angle and a new opening compared to the usual approach.\n' : ''}
+${style ? 'CHANNEL STYLE — MUST follow (but the LENGTH rules below override any word counts inside it):\n' + style.replace(/\{\{\s*WORDS\s*\}\}/gi, String(words)) + '\n' : ''}${rewrite ? 'Write a DIFFERENT version with a fresh angle and a new opening compared to the usual approach.\n' : ''}
 LENGTH — top priority, overrides any numbers found in the channel style:
 - Ignore any word counts written in the channel style.
 - The total script length MUST be about ${words} words (max 10% deviation). Rescale the number of sections and their proportions to fit ${words} words — keep the structure and voice of the channel style but compress or expand to hit ${words} words.
-RETENTION — ${sp ? 'baseline; wherever the CHANNEL STYLE above says otherwise, follow the CHANNEL STYLE' : 'required'}:
+RETENTION — ${style ? 'baseline; wherever the CHANNEL STYLE above says otherwise, follow the CHANNEL STYLE' : 'required'}:
 - First 15 seconds: the opening sentence must be at most 15 words and jump straight into the story. Do not open with a year, a setting, or a definition. Banned openers: "Hãy tưởng tượng", "Bạn có biết".
 - Open loop: plant a contradiction or an unanswered question right in the hook. Call it back 2-3 times spread evenly through the script, each time adding a new detail (never repeat verbatim), and resolve it near the end.
 - Object through-line: pick one small concrete object or detail, plant it in the opening, bring it back at least twice, once near the end.
@@ -7874,7 +7874,16 @@ Return only the script content, nothing else.`;
   const _tk = _startElapsed('✍️ Đang viết kịch bản', setStatusScript,
     'bản dài / chạy bằng gói Claude-ChatGPT có thể chờ vài phút — cứ để yên');
   try {
-    const raw = await callLLM(prompt, { maxTokens: Math.min(16000, Math.round(words * 2.5) + 600) });
+    const maxT = Math.min(16000, Math.round(words * 2.5) + 600);
+    // Channel Style còn viết bằng tiếng Việt (tạo trước bản sửa prompt này) có thể bị content
+    // filter của gateway chặn cả prompt. Khi lỗi/rỗng mà có style → thử lại 1 lần KHÔNG kèm
+    // style, để user vẫn có kịch bản thay vì chết lỗi.
+    let raw = '';
+    try { raw = await callLLM(buildPrompt(sp), { maxTokens: maxT }); }
+    catch (e){ if (!sp) throw e; }
+    if ((!raw || !String(raw).trim()) && sp){
+      raw = await callLLM(buildPrompt(''), { maxTokens: maxT });
+    }
     _stopElapsed(_tk);
     const clean = _tsClean(raw);
     const out = document.getElementById('tsOutput'); if (out) out.value = clean;
@@ -10461,32 +10470,32 @@ async function tsAnalyzeCompetitor(files){
   setSt('🤖 AI đang phân tích ' + n + ' kịch bản (9 lớp → prompt 8 khối)…', 'var(--violet)');
   const joined = texts.map((x, i) => `━━━ KỊCH BẢN ${i + 1} (${x.name}) ━━━\n${x.text}`).join('\n\n');
   const prompt =
-`Bạn là chuyên gia mổ xẻ kịch bản video faceless VIRAL và là người viết META-PROMPT cấp cao — bộ hướng dẫn cực chi tiết để một AI khác viết kịch bản MỚI cùng phong cách. Dưới đây là ${n} kịch bản mẫu THÀNH CÔNG của (các) kênh cùng thể loại.
+`You are an expert analyst of VIRAL faceless video scripts and a master META-PROMPT writer — you produce the detailed instruction set that another AI will use to write a NEW script in the same style. Below are ${n} SUCCESSFUL sample scripts from channel(s) in the same niche.
 
 ${joined}
 
-Làm theo 2 bước. CHỈ xuất ra kết quả Bước 2.
+Work in 2 steps. Output ONLY the result of Step 2.
 
-BƯỚC 1 — MỔ XẺ (làm trong đầu, ĐO BẰNG CON SỐ, KHÔNG xuất ra; một đặc điểm chỉ thành "luật" khi lặp ở ${n > 1 ? 'phần lớn ' + n + ' kịch bản' : 'kịch bản'}). Rút ra: thể loại & persona người viết; mục tiêu cảm xúc; NGÔI kể + THÌ; ngôn ngữ. Khung: số phần/chương, TỈ LỆ % cho mở/thân/kết (dùng %, không chốt số từ). Hook: 2-3 câu đầu làm gì, dạng mở, độ dài câu đầu, có nêu năm không. Beat thân: công thức lặp mỗi khối + cách chuyển cảnh vô hình. Giọng: độ dài câu trung bình, tần suất câu cụt, từ/cụm hay dùng, từ cấm, số câu hỏi tu từ. Cơ chế giữ chân: bí ẩn xương sống, open loop, object motif, reframe line, dramatic irony, sting line, micro-payoff. Đường cong năng lượng (2 trục) + vị trí đỉnh cảm xúc. Kết: dạng đóng, câu chốt. Guardrail: dùng số/tên/mốc thật & hedge ra sao.
+STEP 1 — ANALYZE (do it in your head, MEASURE WITH NUMBERS, do not output it; a trait only becomes a "rule" when it repeats in ${n > 1 ? 'most of the ' + n + ' scripts' : 'the script'}). Extract: genre & writer persona; emotional goal; narrative PERSON + TENSE; narration language. Structure: number of parts/chapters, PERCENTAGE split for opening/body/ending (use %, never fixed word counts). Hook: what the first 2-3 sentences do, opening pattern, first-sentence length, whether a year is mentioned. Body beats: the repeating formula per block + how invisible transitions are made. Voice: average sentence length, frequency of short punchy sentences, signature words/phrases, banned words, number of rhetorical questions. Retention devices: backbone mystery, open loop, object motif, reframe line, dramatic irony, sting line, micro-payoff. Energy curve (2 axes) + position of the emotional peak. Ending: closing pattern, final line. Guardrails: how real numbers/names/dates are used and hedged.
 
-BƯỚC 2 — VIẾT "PROMPT KỊCH BẢN": một META-PROMPT ĐẦY ĐỦ, CHI TIẾT, sẵn sàng dán cho AI khác viết kịch bản MỚI cùng phong cách viral này. Phần hướng dẫn tiếng Việt; ví dụ trích giữ nguyên ngôn ngữ gốc. Viết bằng CON SỐ/TỈ LỆ rút từ Bước 1, cụ thể tới mức đọc là viết được ngay. Gồm các khối đánh số:
+STEP 2 — WRITE THE "SCRIPT PROMPT": a COMPLETE, DETAILED META-PROMPT, ready to paste for another AI to write a NEW script in this viral style. Write the INSTRUCTIONS IN ENGLISH (the narration itself will still be written in the language detected in Step 1 — state that language in block 2); quoted example lines stay in their original language verbatim. Use the NUMBERS/RATIOS extracted in Step 1, specific enough that reading it is enough to start writing. Include these numbered blocks:
 
-1. ROLE — persona người viết + thể loại + mục tiêu cảm xúc (1 đoạn đậm chất, kiểu "Bạn là… Người xem KHÔNG học về X; người xem LÀ…").
-2. OUTPUT — luật TTS tuyệt đối: CHỈ lời đọc liền mạch; ghi rõ NGÔI + THÌ đã rút ra; số & tiền VIẾT BẰNG CHỮ; cấm tiêu đề/nhãn/emoji/markdown/ký hiệu; chỉ dấu câu chuẩn.
-3. ĐỘ DÀI & NGÂN SÁCH — Tổng ≈ {{WORDS}} từ (dùng ĐÚNG chuỗi {{WORDS}}, KHÔNG thay bằng số). Chia N phần theo TỈ LỆ % (vd hook ~13%, thân ~74%, kết ~13%); mỗi khối ghi % của tổng, KHÔNG ghi số từ cứng. Kèm luật chống teo: các khối cuối phải đủ ngân sách như khối đầu, đừng rút gọn để về đích sớm.
-4. SKELETON / FORMAT ẨN — bộ beat của thể loại rải đều các phần; KHÔNG gọi tên beat/format trong lời đọc. Người xem chỉ được CẢM cấu trúc, không thấy bản đồ.
-5. LENS — 4-6 góc nhìn để tránh mọi video giống nhau; nêu lens mặc định + lens "chỉ làm gia vị". (Thumbnail đã hét thay — lời dẫn không hét.)
-6. ĐƯỜNG CONG NĂNG LƯỢNG — 2 trục ngược nhau hợp thể loại; đỉnh cảm xúc để dành gần cuối; luật CHỐNG SƯƠNG MÙ: mỗi phần phải đẩy thêm 1 điều MỚI, không chỉ tô lại không khí.
-7. CƠ CHẾ GIỮ CHÂN — chỉ lấy cái hợp thể loại, mỗi cái kèm 1 câu cách làm: bí ẩn xương sống, quiet/hard open loop, OBJECT MOTIF (vật nhỏ cắm ở mở, quay lại ≥2 lần gồm gần kết), REFRAME LINE, NARRATIVE GAP/dramatic irony, STING LINE, micro-payoff.
-8. HOOK — luật 15 giây đầu (câu đầu ≤ ~15 từ; không nêu năm; cấm "Imagine you are"); 1 open loop gieo ở hook, tái teasing 2-3 lần, trả ở kết; kèm HOOK-BANK 8-10 archetype xoay vòng (mỗi video một dạng khác), viết fresh, có mẫu ngắn lấy "feel".
-9. GIỌNG & NHỊP — ngôi + thì; độ dài câu (số từ); xen câu cụt; phép lặp cú pháp (anaphora); giới hạn câu hỏi tu từ; bộ từ vựng đặc trưng.
-10. CẤM — sáo ngữ mở đầu; câu dẫn báo hiệu chuyển đoạn ("little did you know"…); gọi khán giả; giảng đạo; kết ngọt; khoe của; ký hiệu khó đọc cho TTS.
-11. DẪN CHỨNG & GUARDRAIL — dùng số/tên/mốc THẬT + so sánh đời thường; hedge thành thật; KHÔNG bịa tên–năm–số chính xác giả.
-12. ENDING (anti-formula) — trình tự đóng bài + 3-5 dạng kết xoay vòng để không video nào kết giống nhau; câu chốt mẫu nếu có.
-13. FEW-SHOT — 2-3 đoạn TRÍCH NGUYÊN VĂN ngắn từ kịch bản mẫu (hook, câu chuyển, câu kết) làm ví dụ mẫu mực.
-14. SELF-CHECK — checklist tự rà thầm trước khi nộp (đủ {{WORDS}} từ theo tỉ lệ? đúng ngôi/thì? hook đủ mạnh? object motif quay lại? sạch cho TTS? kết không lặp dạng?).
+1. ROLE — writer persona + genre + emotional goal (one punchy paragraph, like "You are… The viewer does NOT learn about X; the viewer IS…").
+2. OUTPUT — absolute TTS rules: ONLY flowing narration; state the PERSON + TENSE extracted in Step 1; numbers & money SPELLED OUT as words; no titles/labels/emoji/markdown/symbols; standard punctuation only; state the narration language detected in Step 1 (e.g. Vietnamese).
+3. LENGTH & BUDGET — Total ≈ {{WORDS}} words (use the EXACT string {{WORDS}}, NEVER replace it with a number). Split into N parts by PERCENTAGE (e.g. hook ~13%, body ~74%, ending ~13%); each block states its % of the total, NEVER a fixed word count. Add an anti-shrink rule: the final blocks must keep the same budget as the first ones — do not compress just to finish early.
+4. HIDDEN SKELETON / FORMAT — the genre's beats spread evenly across the parts; NEVER name beats/format inside the narration. The viewer must only FEEL the structure, never see the map.
+5. LENS — 4-6 angles so no two videos feel the same; name the default lens + one "seasoning-only" lens. (The thumbnail already shouts — the narration must not.)
+6. ENERGY CURVE — 2 opposing axes fitting the genre; save the emotional peak for near the end; ANTI-FOG rule: every part must push ONE new thing, not just repaint the atmosphere.
+7. RETENTION DEVICES — keep only what fits the genre, each with 1 sentence on how: backbone mystery, quiet/hard open loop, OBJECT MOTIF (a small object planted in the opening, returning at least twice, once near the end), REFRAME LINE, NARRATIVE GAP/dramatic irony, STING LINE, micro-payoff.
+8. HOOK — first-15-seconds rules (first sentence ≤ ~15 words; no year in the opening; banned opener "Imagine you are"); 1 open loop planted in the hook, re-teased 2-3 times, resolved in the ending; include a HOOK-BANK of 8-10 rotating archetypes (a different one each video), written fresh, with short samples for "feel".
+9. VOICE & RHYTHM — person + tense; sentence length (in words); interspersed short sentences; syntactic repetition (anaphora); cap on rhetorical questions; signature vocabulary.
+10. BANNED — cliché openers; transition signposts ("little did you know"…); addressing the audience; preaching; syrupy endings; bragging; symbols that are hard to read for TTS.
+11. EVIDENCE & GUARDRAILS — use REAL numbers/names/dates + everyday comparisons; honest hedging; NEVER invent fake names–years–precise numbers.
+12. ENDING (anti-formula) — the closing sequence + 3-5 rotating ending patterns so no two videos end the same; a sample final line if any.
+13. FEW-SHOT — 2-3 short VERBATIM excerpts from the sample scripts (a hook, a transition line, the closing line) as exemplary models.
+14. SELF-CHECK — a silent checklist to run before submitting (does it hit {{WORDS}} words by ratio? right person/tense? strong enough hook? does the object motif return? clean for TTS? ending pattern not repeated?).
 
-ĐẦU RA: Trả về DUY NHẤT nội dung "PROMPT KỊCH BẢN" (các khối đánh số), KHÔNG in lại Bước 1, KHÔNG lời dẫn thừa. BẮT BUỘC giữ nguyên văn chuỗi {{WORDS}} ở khối 3 và 14 để công cụ tự điền số từ — TUYỆT ĐỐI KHÔNG thay {{WORDS}} bằng con số.`;
+OUTPUT: return ONLY the "SCRIPT PROMPT" content (the numbered blocks), do NOT print Step 1, no extra lead-in. You MUST keep the string {{WORDS}} verbatim in blocks 3 and 14 so the tool can inject the word count — NEVER replace {{WORDS}} with a number.`;
   try {
     const raw = await callLLM(prompt, { maxTokens: 8000 });
     p.scriptPrompt = _tsCleanPrompt(raw);

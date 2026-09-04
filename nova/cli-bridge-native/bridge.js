@@ -55,7 +55,7 @@ function createBridge(engine, port) {
   // Gateway (agentrouter…) route request qua NHIỀU kênh upstream, một số kênh lọc content
   // (400 content-blocked) hoặc hết kênh (503 无可用渠道) — CÙNG prompt chạy lại thường PASS.
   // Retry ngay tại bridge (không tốn vòng HTTP của app) cho đúng nhóm lỗi tạm thời này.
-  const TRANSIENT_RE = /content-blocked|无可用渠道|no available channel|overloaded|rate.?limit|API (429|5\d\d)\b/i;
+  const TRANSIENT_RE = /content-blocked|无可用渠道|no available channel|overloaded|rate.?limit|credit|insufficient|API (429|5\d\d)\b/i;
   function runCLIWithRetry(promptData, model, attempts = 3) {
     let lastErr = null;
     const attempt = (i) => runCLI(promptData, model).catch((e) => {
