@@ -6770,7 +6770,7 @@ async function testApi(){
     if (!ep) return setApiStatus('Chưa nhập Endpoint CLI.', 'err');
     setApiStatus('Đang test CLI...', 'info');
     try {
-      const reply = await callLLM('Trả lời ngắn: "ok"', { maxTokens: 30, _override: { provider, model, cliEndpoint: ep } });
+      const reply = await callLLM('Reply with exactly: "ok"', { maxTokens: 30, _override: { provider, model, cliEndpoint: ep } });
       if (reply && reply.toLowerCase().includes('ok')) setApiStatus('✓ CLI hoạt động: ' + reply.trim().slice(0, 30), 'ok');
       else setApiStatus('? Phản hồi lạ: ' + (reply || '').slice(0, 40), 'info');
     } catch (e) { setApiStatus('✗ Lỗi: ' + (e.message || '').slice(0, 90), 'err'); }
@@ -6781,7 +6781,7 @@ async function testApi(){
 
   setApiStatus('Đang test...', 'info');
   try {
-    const reply = await callLLM('Trả lời ngắn: "ok"', { maxTokens: 30, _override: { provider, model, key } });
+    const reply = await callLLM('Reply with exactly: "ok"', { maxTokens: 30, _override: { provider, model, key } });
     if (reply && reply.toLowerCase().includes('ok')) {
       setApiStatus('✓ API hoạt động: ' + reply.trim().slice(0, 30), 'ok');
     } else {
@@ -7358,7 +7358,7 @@ async function callLLMJson(prompt, opts = {}){
   const maxTokens = opts.maxTokens || 1500;
   const tries = opts.tries || 3;
   const baseMessages = opts.messages || null;
-  const STRICT = '\n\n⚠️ BẮT BUỘC: CHỈ in JSON THUẦN (bắt đầu bằng [ hoặc {). KHÔNG suy luận, KHÔNG markdown, KHÔNG văn xuôi, KHÔNG ```. Không có ký tự nào ngoài JSON.';
+  const STRICT = '\n\n⚠️ MANDATORY: output ONLY raw JSON (starting with [ or {). No reasoning, no markdown, no prose, no ```. No characters outside the JSON.';
   const baseOverride = { ...(opts._override || {}), thinking: false };
   let lastErr = null;
   const run = async (strict, override) => {
@@ -8523,17 +8523,17 @@ function _mvRules(cfg){
   const _exStyle = _pm.isPhoto ? 'Photorealistic documentary cinematography, muted desaturated palette, tense somber mood.'
     : _pm.is2D ? 'Dark 2D hand-drawn storybook style, muted desaturated palette, tense somber mood.'
     : 'Same art style as the still image, muted desaturated palette, tense somber mood.';
-  return `CÔNG THỨC VEO CHÍNH THỨC — viết ĐÚNG THỨ TỰ 5 phần, camera ĐỨNG ĐẦU:
+  return `OFFICIAL VEO FORMULA — write the 5 parts IN THIS EXACT ORDER, camera FIRST:
 [Cinematography] → [Subject] → [Action] → [Context] → [Style & Ambiance]
-Ví dụ mẫu (bám sát giọng văn này):
+Sample (match this voice):
 "Very slow push-in, close-up. A young farmer's solemn face. He slowly glances toward the tree line, faint breath visible in the cold air. Village clearing before dawn, drifting mist and a distant flicker of torchlight behind him. ${_exStyle} ${_lookLock}"
 
-QUY TẮC BẮT BUỘC:
-1. Cinematography mở đầu = "${cfg.camText}" + cỡ cảnh (close-up / medium / wide establishing shot) suy ra từ nội dung ảnh.
-2. Chỉ mô tả CHUYỂN ĐỘNG áp lên ảnh có sẵn — GIỮ NGUYÊN nhân vật, bố cục, art-style. KHÔNG thêm vật thể/nhân vật mới, KHÔNG đổi cảnh, KHÔNG tả lại chi tiết ngoại hình (ảnh đã khóa).
-3. Action = chuyển động NHỎ, CHẬM (breathing, blinking, gaze shift, hair/cloth sway, thin wisp of smoke, flickering firelight, drifting mist, ripples, falling leaves). Mức độ: ${cfg.intText}. Chuyển động tối thiểu để KHÔNG méo mặt/mask.
-4. TUYỆT ĐỐI KHÔNG có câu thoại và KHÔNG dùng dấu ngoặc kép cho lời nói (kênh này lồng tiếng riêng — không để nhân vật cất tiếng, không mô tả âm thanh/nhạc/SFX).
-5. Style & Ambiance ở CUỐI, kết bằng: "${_lookLock}"${cfg.extra ? '\n6. Lưu ý thêm: ' + cfg.extra : ''}`;
+MANDATORY RULES:
+1. Opening Cinematography = "${cfg.camText}" + shot size (close-up / medium / wide establishing shot) inferred from the image content.
+2. Describe ONLY the MOTION applied to the existing still image — KEEP the characters, composition and art style unchanged. Do NOT add new objects/characters, do NOT change the scene, do NOT re-describe appearance details (the image already locks them).
+3. Action = SMALL, SLOW motion (breathing, blinking, gaze shift, hair/cloth sway, thin wisp of smoke, flickering firelight, drifting mist, ripples, falling leaves). Intensity: ${cfg.intText}. Minimal motion so faces/masks are NOT distorted.
+4. NEVER include spoken lines and NEVER use quotation marks for speech (this channel records voiceover separately — no character voices, no sound/music/SFX descriptions).
+5. Style & Ambiance goes LAST, ending with: "${_lookLock}"${cfg.extra ? '\n6. Extra notes: ' + cfg.extra : ''}`;
 }
 function _mvCfg(){
   // Mặc định: chuyển động tinh tế + push-in chậm điện ảnh (an toàn nhất cho khuôn mặt).
@@ -8541,7 +8541,7 @@ function _mvCfg(){
   return {
     clip: document.getElementById('mvVidDur')?.value || '8',
     extra: '',
-    intText: 'rất tinh tế, tối thiểu (an toàn nhất cho khuôn mặt)',
+    intText: 'very subtle, minimal (safest for faces)',
     camText: 'Very slow push-in',
   };
 }
@@ -8549,11 +8549,11 @@ function _mvCfg(){
 async function _mvGenVision(s, cfg){
   const messages = [{ role: 'user', content: [
     { type: 'image', source: { type: 'base64', media_type: s.img.mediaType || 'image/png', data: s.img.base64 } },
-    { type: 'text', text: `Ảnh trên là KHUNG HÌNH ĐẦU TIÊN cho 1 clip Veo (image→video) ${cfg.clip}s. Nhìn ảnh và viết 1 prompt CHUYỂN ĐỘNG bằng TIẾNG ANH cho Veo.
+    { type: 'text', text: `The image above is the FIRST FRAME of a ${cfg.clip}s Veo (image→video) clip. Look at the image and write 1 MOTION prompt IN ENGLISH for Veo.
 
 ${_mvRules(cfg)}
 
-Trả về CHỈ 1 JSON: {"motion":"..."}` },
+Return ONLY 1 JSON: {"motion":"..."}` },
   ] }];
   const data = await callLLMJson('', { maxTokens: 900, messages, validate: d => d && typeof d.motion === 'string' && d.motion.length > 20 });
   return data.motion.trim();
@@ -8586,13 +8586,13 @@ async function mvGenerate(){
     for (let i = 0; i < textOnes.length && !window.__mvStop; i += BATCH){
       const chunk = textOnes.slice(i, i + BATCH);
       const list = chunk.map(s => `[${s.id}] Lời VO: "${(s.vo || '').replace(/\s+/g, ' ').slice(0, 160)}" | Nội dung ảnh: ${(s.imgPrompt || '').replace(/\s+/g, ' ').slice(0, 400)}`).join('\n');
-      const prompt = `Bạn là chuyên gia prompt IMAGE-TO-VIDEO cho GOOGLE VEO. Mỗi cảnh dưới đây ĐÃ CÓ ẢNH TĨNH — ảnh đó là KHUNG HÌNH ĐẦU TIÊN. Viết 1 prompt CHUYỂN ĐỘNG bằng TIẾNG ANH để Veo làm ảnh động thành clip ${cfg.clip}s.
+      const prompt = `You are an IMAGE-TO-VIDEO prompt expert for GOOGLE VEO. Each scene below ALREADY HAS A STILL IMAGE — that image is the FIRST FRAME. Write 1 MOTION prompt IN ENGLISH so Veo animates the image into a ${cfg.clip}s clip.
 
 ${_mvRules(cfg)}
 
-Trả về CHỈ 1 JSON: {"shots":[{"id":"<đúng id>","motion":"..."}]}
+Return ONLY 1 JSON: {"shots":[{"id":"<exact id>","motion":"..."}]}
 
-CẢNH:
+SCENES:
 ${list}`;
       const data = await callLLMJson(prompt, { maxTokens: 2200, validate: d => d && Array.isArray(d.shots) });
       for (const sh of (data.shots || [])){ if (sh && sh.id && sh.motion) state.motionPrompts[String(sh.id)] = String(sh.motion).trim(); }
@@ -10679,18 +10679,18 @@ async function analyzeStyleImages(){
     }
     content.push({
       type: 'text',
-      text: `Phân tích KỸ visual style của ${state.styleRefImages.length} ảnh mẫu trên (ảnh từ 1 kênh video/animation faceless). Mục tiêu: viết "STYLE GUIDE" CỰC CHI TIẾT để mọi ảnh tạo sau giữ đúng phong cách & nhất quán. TUYỆT ĐỐI KHÔNG viết sơ sài, KHÔNG viết 1 đoạn ngắn chung chung.
+      text: `Analyze the visual style of the ${state.styleRefImages.length} sample images above IN DEPTH (images from one faceless video/animation channel). Goal: write an EXTREMELY DETAILED "STYLE GUIDE" so every future generated image keeps the exact style and stays consistent. ABSOLUTELY no sketchy work, no short generic paragraph.
 
-Trả về CHÍNH XÁC 1 JSON object (không markdown, không chữ nào ngoài JSON). MỌI giá trị viết bằng TIẾNG ANH cho G-Labs, dùng \\n để xuống dòng giữa các mục:
+Return EXACTLY 1 JSON object (no markdown, no characters outside the JSON). ALL values written IN ENGLISH for G-Labs, use \\n for line breaks between sections:
 {
-  "characterStyle": "RẤT CHI TIẾT 200-350 từ, NHIỀU ĐOẠN chia mục rõ. Câu mở đầu chốt phong cách tổng (vd 'A minimalist stick-limb storybook character, hand-drawn with...'). Sau đó tả theo mục:\\n#1 BODY & PROPORTIONS: hình dạng & tỉ lệ đầu, tỉ lệ đầu/thân, cổ-tay-chân (nét stick mảnh hay chi thật, có cơ/khớp không), bàn tay (mitten/ngón), bàn chân.\\n#2 FACE: màu mặt/da, kiểu mắt (chấm/oval/có tròng/lông mi), mũi, miệng, lông mày, biểu cảm mặc định.\\n#3 HAIR & CLOTHING: kiểu tóc & cách xử lý, cách trang phục bám theo bối cảnh/thời đại.\\nNÊU RÕ nét vẽ: độ dày outline, kiểu cel-shading, có/không grain. Chốt phong cách bằng câu KHẲNG ĐỊNH rõ ràng, DƯƠNG TÍNH (vd 'flat 2D hand-drawn cartoon, cel-shaded, grounded human proportions with slim rounded limbs') — HẠN CHẾ 'NOT/no' (Nano Banana là model instruction-following, không dùng negative kiểu SDXL); nếu cần chỉ thêm tối đa 1-2 điều tránh ngắn. Chỉ tả thứ THẬT SỰ thấy trong ảnh.",
-  "backgroundStyle": "RẤT CHI TIẾT 150-300 từ, nhiều đoạn: độ dày & độ sắc outline, mức chi tiết môi trường SO với nhân vật, bảng màu cụ thể, kiểu cel-shading + nguồn sáng (hướng/màu/tương phản ấm-lạnh), phối cảnh & lớp chiều sâu (foreground/midground/background), chất liệu & texture (gỗ, đá, vải, kim loại, giấy...), loại props. Kết thúc: NO characters, NO people, NO figures, NO text, NO words, 16:9 ratio.",
-  "sceneStyle": "60-120 từ: aesthetic tổng cho MỌI scene — kiểu vẽ, nét, bảng màu, cel-shading, tương phản sáng, mood/tông, khung 16:9, sự nhất quán xuyên suốt mọi cảnh.",
-  "promptRules": "Danh sách NGẮN (tối đa ~8-12 cụm) — CHỦ YẾU khẳng định DƯƠNG TÍNH điều muốn GIỮ (đúng nét vẽ & độ dày outline, đúng tỉ lệ cơ thể, bảng màu ảnh, nhân vật nhất quán mọi cảnh), chỉ kèm vài điều tránh THẬT CẦN: no text, no watermark, no logo, no distorted anatomy, no extra fingers. KHÔNG viết negative list dài kiểu SDXL — Nano Banana là model instruction-following.",
-  "visualStyle": "tên ngắn 2-5 từ cho style này"
+  "characterStyle": "VERY DETAILED 200-350 words, MULTIPLE clearly sectioned paragraphs. The opening sentence locks the overall style (e.g. 'A minimalist stick-limb storybook character, hand-drawn with...'). Then describe by section:\\n#1 BODY & PROPORTIONS: head shape & proportions, head/body ratio, neck-arms-legs (thin stick limbs or real limbs, muscles/joints or not), hands (mitten/fingers), feet.\\n#2 FACE: face/skin color, eye style (dots/oval/with iris/eyelashes), nose, mouth, eyebrows, default expression.\\n#3 HAIR & CLOTHING: hairstyle & how it is drawn, how clothing adapts to setting/era.\\nSTATE CLEARLY the linework: outline thickness, cel-shading style, grain present or not. Lock the style with a clear ASSERTIVE, POSITIVE sentence (e.g. 'flat 2D hand-drawn cartoon, cel-shaded, grounded human proportions with slim rounded limbs') — MINIMIZE 'NOT/no' (Nano Banana is an instruction-following model, no SDXL-style negatives); if needed add at most 1-2 short things to avoid. Only describe what is ACTUALLY visible in the images.",
+  "backgroundStyle": "VERY DETAILED 150-300 words, multiple paragraphs: outline thickness & sharpness, environment detail level COMPARED to characters, specific palette, cel-shading style + light sources (direction/color/warm-cold contrast), perspective & depth layers (foreground/midground/background), materials & textures (wood, stone, fabric, metal, paper...), prop types. End with: NO characters, NO people, NO figures, NO text, NO words, 16:9 ratio.",
+  "sceneStyle": "60-120 words: overall aesthetic for EVERY scene — drawing style, linework, palette, cel-shading, light contrast, mood/tone, 16:9 frame, consistent across all scenes.",
+  "promptRules": "SHORT list (max ~8-12 phrases) — MOSTLY positive assertions of things to KEEP (correct linework & outline weight, correct body proportions, the images' palette, character consistent across scenes), plus only the truly needed avoidances: no text, no watermark, no logo, no distorted anatomy, no extra fingers. Do NOT write a long SDXL-style negative list — Nano Banana is an instruction-following model.",
+  "visualStyle": "short 2-5 word name for this style"
 }
 
-QUAN TRỌNG: characterStyle & backgroundStyle PHẢI dài và chia mục như STYLE GUIDE THẬT (không phải 1 đoạn ngắn). Phân tích THỰC TẾ từ ảnh, KHÔNG bịa, KHÔNG suy đoán những gì không thấy.`
+IMPORTANT: characterStyle & backgroundStyle MUST be long and sectioned like a REAL STYLE GUIDE (not one short paragraph). Analyze from the ACTUAL images, do NOT invent, do NOT guess what is not visible.`
     });
 
     const data = await callLLMJson('', {
@@ -10721,21 +10721,21 @@ async function genStyleFromText(){
   if (status) status.innerHTML = '<span class="spinner"></span> <span style="color:var(--violet)">AI đang viết style guide…</span>';
   const btn = document.getElementById('btnGenStyleText'); if (btn) btn.disabled = true;
   try {
-    const prompt = `Bạn là art director cho kênh video faceless. Từ MÔ TẢ KÊNH dưới, viết STYLE GUIDE CHI TIẾT để MỌI ảnh tạo sau (qua AI ảnh Nano Banana / Imagen) giữ ĐÚNG phong cách & nhất quán.
+    const prompt = `You are an art director for a faceless video channel. From the CHANNEL DESCRIPTION below, write a DETAILED STYLE GUIDE so that EVERY generated image (via Nano Banana / Imagen) keeps the EXACT style and stays consistent.
 
-MÔ TẢ KÊNH: "${desc}"
+CHANNEL DESCRIPTION: "${desc}"
 
-Trả về CHÍNH XÁC 1 JSON object (KHÔNG markdown, KHÔNG chữ nào ngoài JSON). MỌI giá trị viết TIẾNG ANH, dùng \\n để xuống dòng giữa các mục:
+Return EXACTLY 1 JSON object (no markdown, no characters outside the JSON). ALL values IN ENGLISH, use \\n for line breaks between sections:
 {
-  "characterStyle": "150-300 từ, chia mục: BODY & PROPORTIONS, FACE, HAIR & CLOTHING, nét vẽ/chất liệu render. Diễn đạt DƯƠNG TÍNH (model instruction-following — HẠN CHẾ 'no/not'). Nếu là kênh ẢNH THẬT thì tả như nhiếp ảnh người thật; nếu hoạt hình thì tả nét vẽ. Nếu ngách KHÔNG có nhân vật người (cảnh vật/đồ vật/quy trình) thì tả chủ thể chính điển hình của ngách.",
-  "backgroundStyle": "120-250 từ: bối cảnh/môi trường điển hình của ngách, mức chi tiết, bảng màu, ánh sáng (hướng/màu/tương phản), phối cảnh & chiều sâu, chất liệu/texture. Kết thúc: no characters, no people, no text, 16:9 ratio.",
-  "sceneStyle": "40-90 từ NGẮN GỌN: aesthetic tổng cho MỌI cảnh — kiểu ảnh/vẽ, bảng màu, ánh sáng, mood, khung 16:9, nhất quán. (Đây là cụm tag sẽ dán CUỐI mọi prompt nên phải súc tích.)",
-  "promptRules": "8-12 cụm, CHỦ YẾU dương tính (điều muốn GIỮ), chỉ kèm vài negative thật cần: no text, no watermark. KHÔNG viết negative list dài kiểu SDXL.",
-  "visualStyle": "tên style ngắn 2-5 từ",
-  "ngach": "ngách/niche ngắn gọn",
-  "noPeople": true nếu ngách này HẦU NHƯ KHÔNG có nhân vật người (mẹo vặt, đồ vật, quy trình, infographic, cảnh vật, sản phẩm…), false nếu thường có người (kể chuyện, vlog người thật, nhân vật…)
+  "characterStyle": "150-300 words, sectioned: BODY & PROPORTIONS, FACE, HAIR & CLOTHING, line quality/render material. Use POSITIVE phrasing (instruction-following model — MINIMIZE 'no/not'). If it is a real-photo channel, describe as real-person photography; if animated, describe the linework. If the niche has NO human characters (scenery/objects/processes), describe the niche's typical main subject.",
+  "backgroundStyle": "120-250 words: the niche's typical settings/environments, level of detail, color palette, lighting (direction/color/contrast), perspective & depth, materials/textures. End with: no characters, no people, no text, 16:9 ratio.",
+  "sceneStyle": "40-90 SHORT words: overall aesthetic for EVERY scene — image/drawing style, color palette, lighting, mood, 16:9 frame, consistent. (This tag block gets appended to the END of every prompt, so it must be concise.)",
+  "promptRules": "8-12 phrases, MOSTLY positive (things to KEEP), with only a few truly needed negatives: no text, no watermark. Do NOT write a long SDXL-style negative list.",
+  "visualStyle": "short style name, 2-5 words",
+  "ngach": "short niche",
+  "noPeople": true if this niche almost NEVER has human characters (tips, objects, processes, infographics, scenery, products...), false if it usually does (storytelling, real-person vlogs, characters...)
 }
-Suy ĐÚNG ngành từ mô tả. KHÔNG bịa chi tiết trái với mô tả.`;
+Infer the correct industry from the description. Do NOT invent details contradicting the description.`;
     const data = await callLLMJson(prompt, { maxTokens: 3500, validate: d => d && typeof d === 'object' && !Array.isArray(d) && typeof d.sceneStyle === 'string' && d.sceneStyle.length > 20 });
     if (data.characterStyle) document.getElementById('pCharStyle').value = data.characterStyle;
     if (data.backgroundStyle) document.getElementById('pBgStyle').value = data.backgroundStyle;
@@ -10762,34 +10762,34 @@ async function autoExtract(){
   document.getElementById('btnAutoExtract').disabled = true;
 
   try {
-    const prompt = `Đọc 3 tài liệu sau và trích xuất thông tin để điền profile kênh video.
+    const prompt = `Read the 3 documents below and extract information to fill a video channel profile.
 
 === STYLE GUIDE ===
-${sg || '(không có)'}
+${sg || '(none)'}
 
-=== DNA KÊNH ===
-${dk || '(không có)'}
+=== CHANNEL DNA ===
+${dk || '(none)'}
 
-=== CHỦ ĐỀ ===
-${cd || '(không có)'}
+=== TOPIC ===
+${cd || '(none)'}
 
-Trả về CHÍNH XÁC 1 JSON object (không markdown):
+Return EXACTLY 1 JSON object (no markdown):
 {
-  "tenKenh": "tên kênh",
-  "ngach": "ngách/niche",
+  "tenKenh": "channel name",
+  "ngach": "niche",
   "visualStyle": "visual style preset",
-  "ngonNgu": "ngôn ngữ VO",
-  "povStyle": "kiểu POV",
-  "cauTruc": "cấu trúc video",
+  "ngonNgu": "VO language",
+  "povStyle": "POV style",
+  "cauTruc": "video structure",
   "soPhan": 8,
   "targetPhut": 12,
-  "characterStyle": "prompt ảnh character reference, 80-120 từ tiếng Anh",
-  "backgroundStyle": "prompt ảnh background reference, 80-120 từ tiếng Anh",
-  "sceneStyle": "prompt ngắn 30-50 từ tiếng Anh cho scene aesthetic",
+  "characterStyle": "character reference image prompt, 80-120 English words",
+  "backgroundStyle": "background reference image prompt, 80-120 English words",
+  "sceneStyle": "short 30-50 English word prompt for scene aesthetic",
   "promptRules": "negative prompt rules"
 }
 
-Character/Background/Scene style prompts PHẢI bằng tiếng Anh.`;
+Character/Background/Scene style prompts MUST be in English.`;
     const data = await callLLMJson(prompt, {
       maxTokens: 3000,
       validate: d => d && typeof d === 'object' && !Array.isArray(d) && (d.tenKenh || d.ngach || d.characterStyle || d.visualStyle)
@@ -12250,31 +12250,31 @@ async function splitScenesSmart(text, min, max){
   clearCancel();
   const lanes = _concurrency();
 
-  const buildPrompt = (batchText) => `Bạn là biên tập video. Chia đoạn kịch bản sau thành các cảnh cho sản xuất video ảnh.
+  const buildPrompt = (batchText) => `You are a video editor. Split the following script segment into scenes for image-based video production.
 
-QUY TẮC QUAN TRỌNG NHẤT — KHÔNG ĐƯỢC VI PHẠM:
-- ĐƠN VỊ NHỎ NHẤT LÀ 1 CÂU HOÀN CHỈNH (kết thúc bằng . ! ? …).
-- TUYỆT ĐỐI KHÔNG cắt 1 câu thành 2 cảnh — kể cả câu dài, kể cả có dấu phẩy "," hay gạch ngang "—" / ":" giữa câu.
-- Việc của bạn là GỘP các câu thành cảnh, KHÔNG phải CẮT câu.
+MOST IMPORTANT RULES — NEVER VIOLATE:
+- THE SMALLEST UNIT IS 1 COMPLETE SENTENCE (ending with . ! ? …).
+- NEVER cut one sentence into two scenes — not even a long sentence, not even one containing a comma "," or a dash "—" / ":" mid-sentence.
+- Your job is to MERGE sentences into scenes, NOT to CUT sentences.
 
-Quy tắc gộp:
-- 1 câu dài → để NGUYÊN cả câu trong 1 cảnh (dù vượt ${max} ký tự — vẫn giữ nguyên).
-- Nhiều câu ngắn cùng 1 ý hình ảnh → có thể gộp vào 1 cảnh (mục tiêu ${min}-${max} ký tự, nhưng ranh giới câu quan trọng hơn đếm ký tự).
-- Câu ngắn ấn tượng (như "Ồ.", "Chờ đã.") có thể đứng riêng 1 cảnh.
-- GIỮ NGUYÊN lời gốc 100% — chỉ quyết định chỗ gộp, không sửa chữ.
+Merging rules:
+- 1 long sentence → keep the WHOLE sentence in 1 scene (even if it exceeds ${max} characters — keep it intact).
+- Several short sentences sharing the same visual idea → may merge into 1 scene (target ${min}-${max} characters, but sentence boundaries matter more than character counts).
+- A striking short sentence (like "Wow.", "Wait.") may stand alone as its own scene.
+- Keep the original wording 100% — you only decide where to merge, never edit the text.
 
-ĐỊNH DẠNG OUTPUT — BẮT BUỘC theo mẫu sau, mỗi cảnh trên dòng riêng, phân cách bằng dòng "===SCENE===":
+OUTPUT FORMAT — MUST follow this template, one scene per line, separated by a "===SCENE===" line:
 
 ===SCENE===
-nội dung cảnh 1 ở đây
+scene 1 content here
 ===SCENE===
-nội dung cảnh 2 ở đây
+scene 2 content here
 ===SCENE===
-nội dung cảnh 3 ở đây
+scene 3 content here
 
-KHÔNG dùng JSON, KHÔNG ngoặc kép quanh cảnh, KHÔNG đánh số. CHỈ in các cảnh phân cách bằng "===SCENE===".
+No JSON, no quotation marks around scenes, no numbering. ONLY scenes separated by "===SCENE===".
 
-Đoạn kịch bản:
+Script segment:
 """
 ${batchText}
 """`;
@@ -12425,20 +12425,20 @@ async function mergeScenesByMeaningAI(silent){
   const N = state.scenes.length;
   const maxChars = state.maxChars || 150;
   const list = state.scenes.map((s, i) => `${i + 1}. ${(s.text || '').replace(/\s+/g, ' ').trim()}`).join('\n');
-  const prompt = `Dưới đây là danh sách CẢNH đã đánh số (mỗi dòng 1 cảnh, là 1 câu).
-Nhiệm vụ: GỘP các cảnh LIÊN TIẾP thuộc CÙNG 1 Ý HÌNH ẢNH (vẽ được chung 1 khung hình) vào 1 nhóm, để bớt vụn.
+  const prompt = `Below is a numbered list of SCENES (one per line, each is one sentence).
+Task: MERGE CONSECUTIVE scenes that share THE SAME VISUAL IDEA (drawable in one single frame) into one group, to reduce fragmentation.
 
-QUY TẮC BẮT BUỘC:
-- CHỈ gộp các cảnh LIÊN TIẾP. TUYỆT ĐỐI KHÔNG cắt, KHÔNG đổi thứ tự, KHÔNG bỏ sót cảnh nào.
-- 1 ý/đối tượng/khoảnh khắc = 1 nhóm. Câu mô tả tiếp cùng 1 cảnh → gộp chung. Sang ý mới → nhóm mới.
-- ĐỪNG gộp quá to: mỗi nhóm tối đa ~3 câu hoặc ~${maxChars} ký tự.
-- Câu đã đủ 1 ý rõ → để riêng 1 nhóm.
+MANDATORY RULES:
+- ONLY merge CONSECUTIVE scenes. NEVER cut, NEVER reorder, NEVER skip any scene.
+- 1 idea/object/moment = 1 group. Consecutive sentences describing the same visual scene → same group. New idea → new group.
+- Do NOT over-merge: each group has at most ~3 sentences or ~${maxChars} characters.
+- A sentence that is already one clear idea → keep it as its own group.
 
-Trả về JSON array các nhóm, mỗi nhóm là mảng SỐ THỨ TỰ cảnh. MỖI số từ 1 đến ${N} xuất hiện ĐÚNG 1 LẦN, đúng thứ tự tăng dần.
-VD: [[1],[2,3],[4],[5,6,7]]
-CHỈ in JSON, không giải thích.
+Return a JSON array of groups, each group being an array of scene NUMBERS. Each number from 1 to ${N} appears EXACTLY ONCE, in ascending order.
+Example: [[1],[2,3],[4],[5,6,7]]
+Print ONLY the JSON, no explanation.
 
-DANH SÁCH (${N} cảnh):
+LIST (${N} scenes):
 ${list}`;
 
   try {
@@ -13048,29 +13048,29 @@ async function _t2ChonNguonChoCanh(scenes){
 
   const _kq = await _t2SongSong(_lots, _concurrency(), async (lot) => {
     const list = lot.map((s, k) => `${k}. [${s.shot || '?'}${s.character ? ' · có nhân vật' : ''}${s.thuc ? ' · TƯ LIỆU THẬT' : ''}] ${_t2Gist(s.text, 90)}`).join('\n');
-    const prompt = `Chọn NGUỒN HÌNH cho từng cảnh của video.
-${topic ? 'CHỦ ĐỀ: ' + topic + '\n' : ''}
-Cảnh có nhãn "TƯ LIỆU THẬT" là cảnh bước chia đã xác định tả thứ CÓ THẬT ĐÃ ĐƯỢC QUAY —
-ƯU TIÊN giao những cảnh đó cho nguồn tư liệu. Cảnh không có nhãn thì giữ ảnh AI, trừ khi rõ ràng hợp hơn.
-Cả lô này nên chuyển khoảng ${Math.max(1, Math.round(lot.length * _tiLe))} cảnh.
+    const prompt = `Choose the IMAGE SOURCE for each scene of the video.
+${topic ? 'TOPIC: ' + topic + '\n' : ''}
+Scenes tagged "TƯ LIỆU THẬT" were flagged at split time as depicting REAL, ALREADY-FILMED material —
+prioritize assigning those scenes to footage sources. Untagged scenes stay AI images unless clearly better otherwise.
+About ${Math.max(1, Math.round(lot.length * _tiLe))} scenes in this batch should be switched.
 
-NGUỒN ĐANG BẬT:
+ENABLED SOURCES:
 ${bang}
 
-LUẬT:
-- Cảnh có NHÂN VẬT của video (người kể, nhân vật vẽ) → giữ ảnh AI, đừng dùng stock/kho: mặt người thật không khớp.
-- Cảnh b-roll đời thực (bầu trời, biển, thành phố, máy móc) → stock.
-- Cảnh cần TƯ LIỆU THẬT (hiện vật, bản đồ cổ, ảnh lưu trữ, thiên văn) → kho.
-- Cảnh cần chuyển động mạnh và phải khớp nhân vật → veo.
-- Cảnh cần TƯ LIỆU CÓ THẬT ĐÃ QUAY (phiên điều trần, sự kiện lịch sử, phóng sự,
-  cảnh quay hiện trường, tư liệu lưu trữ có chuyển động) → web.
-- Cảnh trừu tượng, ẩn dụ, nội tâm → giữ ảnh AI.
+RULES:
+- Scenes featuring the video's CHARACTERS (narrator, drawn characters) → keep AI images, avoid stock/kho: real faces won't match.
+- Real-life b-roll (sky, sea, city, machinery) → stock.
+- Scenes needing REAL ARTIFACTS (objects, old maps, archival photos, astronomy) → kho.
+- Scenes needing strong motion that must match the characters → veo.
+- Scenes needing REAL FILMED FOOTAGE (hearings, historical events, reports,
+  on-site shots, archival footage with motion) → web.
+- Abstract, metaphorical, inner-life scenes → keep AI images.
 
-CẢNH:
+SCENES:
 ${list}
 
-Trả JSON, CHỈ những cảnh đổi nguồn:
-[{"i":0,"nguon":"stock","why":"lý do ngắn tiếng Việt dưới 14 từ"}]`;
+Return JSON, ONLY the scenes whose source changes:
+[{"i":0,"nguon":"stock","why":"short Vietnamese reason under 14 words"}]`;
 
     for (let t = 0; t < 2; t++){
       try { const a = await callLLMJson(prompt, { maxTokens: 1100, validate: (d) => Array.isArray(d) }); if (a) return a; }
@@ -13259,23 +13259,23 @@ function _canonTags(prompt, charMap, bgMap){
 // → mọi cảnh cùng bối cảnh dán đúng 1 mô tả → quần áo không drift (giữ mặt + đổi đồ theo tình huống).
 async function _t2PlanWardrobe(script, noChar, presetEra){
   const eraLine = presetEra
-    ? `THỜI ĐẠI/BỐI CẢNH đã cho — trang phục, đạo cụ, kiến trúc PHẢI đúng thời này: "${presetEra}". Trả lại y nguyên ở "era".`
-    : `Tự SUY RA "era" = THỜI ĐẠI + BỐI CẢNH LỊCH SỬ của kịch bản (vd "Ancient Egypt, New Kingdom", "medieval Europe", "modern day USA", "1920s").`;
-  const eraRule = 'Trang phục + kiểu tóc + đạo cụ PHẢI ĐÚNG THỜI ĐẠI đó — vd Ai Cập cổ đại: khố/áo choàng lanh, vòng cổ wesekh, tóc cạo/bộ tóc giả đen; TUYỆT ĐỐI không quần jeans/áo phông/đồ hiện đại nếu là thời cổ.';
+    ? `The era/setting is GIVEN — clothing, props and architecture MUST match this period: "${presetEra}". Return it unchanged in "era".`
+    : `INFER "era" = the era + HISTORICAL SETTING of the script yourself (e.g. "Ancient Egypt, New Kingdom", "medieval Europe", "modern day USA", "1920s").`;
+  const eraRule = 'Clothing + hairstyles + props MUST be CORRECT for that era — e.g. ancient Egypt: linen kilts/cloaks, wesekh collars, shaved head/black wig; ABSOLUTELY no jeans/t-shirts/modern items if it is a historical period.';
   const prompt =
-`Đọc kịch bản. ${eraLine}
-Liệt kê CÁC NHÂN VẬT xuất hiện NHIỀU LẦN (bỏ vai thoáng qua). Với MỖI nhân vật lập TỦ ĐỒ. ${eraRule}
-⚠️ QUAN TRỌNG: nếu kịch bản dùng NGÔI THỨ 2 ("you"/"bạn") và người đó ĐƯỢC HÌNH DUNG TRÊN MÀN HÌNH xuyên suốt (nhân vật đại diện người xem — vd người mua, khách hàng, người dùng, người xem) → PHẢI lập 1 slug cho họ (vd "shopper","viewer","protagonist") với 1 bộ đồ CỐ ĐỊNH, để mọi cảnh vẽ GIỐNG NHAU. ĐỪNG bỏ qua chỉ vì họ không có tên riêng — đây thường là NHÂN VẬT CHÍNH của video.
-- "slug": tên ngắn cố định 1-3 từ, chữ thường gạch nối (vd "protagonist-male").
-- "outfits": số bộ đồ = SỐ LẦN NHÂN VẬT THỰC SỰ ĐỔI QUẦN ÁO trong truyện, KHÔNG phải số địa điểm.
-  ⚠️ MẶC ĐỊNH CHỈ 1 BỘ. Đi nhiều nơi mà VẪN MẶC CÙNG BỘ → chỉ 1 bộ duy nhất.
-  CHỈ thêm bộ thứ 2, 3 khi kịch bản CHO THẤY RÕ nhân vật thay đồ (ngủ dậy→đi làm; nhảy thời gian; dịp đặc biệt). Tối đa 3 bộ.
-  Mỗi bộ: · "when": giai đoạn/thời điểm mặc (vd "throughout", "morning at home", "years later"). · "desc": mô tả CỤ THỂ, CỐ ĐỊNH, tiếng Anh, đúng thời đại, MỖI MÓN nêu ĐÚNG 1 MÀU cụ thể + KIỂU (vd "a faded navy-blue polo shirt, khaki shorts, white sneakers"). ⚠️ TUYỆT ĐỐI KHÔNG dùng "or"/"hoặc"/nhiều lựa chọn màu — CHỐT 1 màu duy nhất cho từng món để mọi cảnh vẽ giống hệt.
-KHÔNG bịa nhân vật, KHÔNG bịa lần thay đồ không có trong kịch bản.
-Trả về CHỈ JSON, không markdown:
+`Read the script. ${eraLine}
+List the CHARACTERS appearing MANY TIMES (skip walk-on roles). For EACH character, build a WARDROBE. ${eraRule}
+⚠️ IMPORTANT: if the script uses 2ND PERSON ("you") and that person is DEPICTED ON SCREEN throughout (the viewer's stand-in — e.g. the buyer, customer, user, viewer) → you MUST create a slug for them (e.g. "shopper","viewer","protagonist") with 1 FIXED outfit, so every scene draws them the SAME. Do NOT skip them just because they have no proper name — they are often the MAIN character of the video.
+- "slug": a short fixed 1-3 word name, lowercase hyphenated (e.g. "protagonist-male").
+- "outfits": the number of outfits = the number of times the character ACTUALLY CHANGES CLOTHES in the story, NOT the number of locations.
+  ⚠️ DEFAULT IS JUST 1 OUTFIT. Visiting many places while STILL WEARING the same outfit → exactly 1 outfit.
+  ONLY add a 2nd/3rd outfit when the script CLEARLY shows the character changing (waking→going to work; a time jump; a special occasion). Max 3 outfits.
+  Each outfit: · "when": the period/moment it is worn (e.g. "throughout", "morning at home", "years later"). · "desc": a CONCRETE, FIXED, English description, era-correct, EVERY ITEM stating EXACTLY 1 specific COLOR + TYPE (e.g. "a faded navy-blue polo shirt, khaki shorts, white sneakers"). ⚠️ ABSOLUTELY no "or"/multiple color choices — LOCK 1 single color per item so every scene draws it identically.
+Do NOT invent characters, do NOT invent outfit changes that are not in the script.
+Return ONLY JSON, no markdown:
 {"era":"...","characters":[{"slug":"protagonist-male","outfits":[{"when":"throughout","desc":"..."}]}]}
 
-KỊCH BẢN:
+SCRIPT:
 """${String(script || '').slice(0, 14000)}"""`;
   try {
     const data = await callLLMJson(prompt, { maxTokens: 3500, validate: d => d && (Array.isArray(d.characters) || typeof d.era === 'string') });
@@ -13353,11 +13353,11 @@ async function t2StoryboardAI(){
   if (era && !state.t3Era) { state.t3Era = era; const _eEl = document.getElementById('t3Era'); if (_eEl) _eEl.value = era; }
   state.wardrobe = wardrobe;
   const eraText = era
-    ? `\n- THỜI ĐẠI/BỐI CẢNH: "${era}". MỌI trang phục, kiểu tóc, đạo cụ, kiến trúc, phương tiện PHẢI ĐÚNG thời đại này — TUYỆT ĐỐI không có đồ/vật hiện đại nếu là thời cổ.`
+    ? `\n- ERA/SETTING: "${era}". ALL clothing, hairstyles, props, architecture and vehicles must be CORRECT for this era — ABSOLUTELY no modern items if it is a historical period.`
     : '';
   const wbText = Object.keys(wardrobe).length
-    ? '\n- TỦ ĐỒ CỐ ĐỊNH (BẮT BUỘC dán ĐÚNG "desc" theo thời điểm — KHÔNG tự chế đồ khác, để cùng giai đoạn mặc GIỐNG NHAU):\n'
-      + Object.entries(wardrobe).map(([n, os]) => `  • [${n}]: ${os.map(o => `khi ${o.when} → "${o.desc}"`).join(' · ')}`).join('\n')
+    ? '\n- FIXED WARDROBE (MUST paste the exact "desc" matching the moment — do NOT invent different outfits; same period = dressed the SAME):\n'
+      + Object.entries(wardrobe).map(([n, os]) => `  • [${n}]: ${os.map(o => `when ${o.when} → "${o.desc}"`).join(' · ')}`).join('\n')
     : '';
 
   // 🎯 LOGLINE toàn video — sinh 1 lần rồi nhồi vào MỌI lô storyboard để các lô sau không lạc mạch/đổi tông (giống web tool).
@@ -13366,7 +13366,7 @@ async function t2StoryboardAI(){
   try { if (typeof genVideoLogline === 'function') _loglineSb = (await genVideoLogline(false)) || ''; } catch (e) { console.warn('logline:', e); }
   if (typeof novaLog === 'function' && _loglineSb) novaLog('🎯 Logline: ' + _loglineSb.slice(0, 120) + (_loglineSb.length > 120 ? '…' : ''), 'acc');
   const loglineText = (_loglineSb && _loglineSb.trim())
-    ? `\n\n🎯 BỐI CẢNH TOÀN VIDEO (mọi cảnh PHẢI bám vào đây): "${_loglineSb.trim()}"\n- Mọi cảnh — kể cả cảnh trừu tượng / câu hỏi tu từ / câu chuyển ý — phải nằm trong THẾ GIỚI HÌNH ẢNH của video này (đúng nhân vật, bối cảnh, thời đại, tông màu). KHÔNG vẽ hình generic lạc khỏi câu chuyện.`
+    ? `\n\n🎯 WHOLE-VIDEO PREMISE (every scene MUST stick to this): "${_loglineSb.trim()}"\n- Every scene — including abstract lines / rhetorical questions / transitions — must stay inside this video's VISUAL WORLD (correct characters, settings, era, palette). Do NOT draw generic imagery that drifts off the story.`
     : '';
 
 /* ── Chia cảnh phải BIẾT đang bật nguồn nào ─────────────────────────────
@@ -13382,13 +13382,13 @@ async function t2StoryboardAI(){
   const _coThuc = _nguonThuc.length > 0;
   const luatNguon = _coThuc ? `
 
-🎥 VIDEO NÀY DÙNG TƯ LIỆU CÓ SẴN (${_nguonThuc.length} nguồn đang bật) — CHIA CẢNH THEO LỐI KHÁC:
-- Phần lớn cảnh sẽ lấp bằng CLIP QUAY THẬT, không phải ảnh AI. Vậy nên:
-  • Cảnh dùng tư liệu thật hãy để DÀI HƠN (gần ${secMax}s) — clip cần thời gian cho chuyển động chạy hết. Cắt vụn 3 giây một nhát là phí tư liệu và xem giật.
-  • ĐỪNG gán nhân vật (character) cho những cảnh này: clip có sẵn không thể khớp mặt một nhân vật do AI bịa. Để character RỖNG.
-  • Tả cảnh bằng thứ CÓ THẬT TRÊN ĐỜI và TÌM ĐƯỢC (con vật, đồ vật, nơi chốn, hành động cụ thể) — đừng tả tông màu điện ảnh hay ánh sáng dàn dựng, vì không ai đặt hàng được clip theo tông.
-- Đánh dấu "thuc": true cho cảnh nào MÔ TẢ THỨ CÓ THẬT ĐÃ ĐƯỢC QUAY (loài vật, hiện tượng, địa danh, hoạt động đời thường, tư liệu lịch sử, hiện vật). Đánh "thuc": false cho cảnh trừu tượng, ẩn dụ, nội tâm, hoặc cần một nhân vật cố định — những cảnh đó vẫn dùng ảnh AI.
-- ẢNH TĨNH chỉ dành cho cảnh GIẢI THÍCH (so sánh, số liệu, bản đồ, hiện vật cần nhìn kỹ). Cảnh kể chuyện thì để tư liệu động.` : '';
+🎥 THIS VIDEO USES STOCK FOOTAGE (${_nguonThuc.length} sources enabled) — SPLIT SCENES DIFFERENTLY:
+- Most scenes will be filled with REAL-LIFE CLIPS, not AI images. So:
+  • Make stock-footage scenes LONGER (close to ${secMax}s) — a clip needs time for its motion to play out. Chopping into 3-second bites wastes footage and looks jumpy.
+  • Do NOT assign a character to those scenes: a stock clip cannot match the face of an AI-invented character. Leave character EMPTY.
+  • Describe scenes using things that REALLY EXIST and are FINDABLE (animals, objects, places, concrete actions) — do not describe cinematic color grading or staged lighting, because nobody can search stock by mood.
+- Mark "thuc": true for scenes that depict REAL, ALREADY-FILMED things (species, phenomena, landmarks, everyday activities, historical footage, artifacts). Mark "thuc": false for abstract, metaphorical, inner-monologue scenes, or scenes needing a consistent character — those still use AI images.
+- STILL IMAGES are only for EXPLANATORY scenes (comparisons, data, maps, artifacts needing close study). Story scenes get moving footage.` : '';
 
   const typesOn = _sceneTypesOn();
   const typeList = typesOn.map(t => `"${t}" (${SCENE_TYPES[t].vi})`).join(' · ');
@@ -13398,46 +13398,46 @@ async function t2StoryboardAI(){
   const _infoShots = [_hasCmp ? '"compare"' : '', _hasMap ? '"map"' : ''].filter(Boolean).join('/');
   const cmpHint = _hasCmp ? '; đoạn giải thích/so sánh/số liệu → "compare"' : '';
   const cmpRule = _hasCmp
-    ? '\n- ⚖️ HẠN CHẾ "compare" (biểu đồ) — ƯU TIÊN KỂ BẰNG HÌNH ẢNH ĐỜI THƯỜNG: KHÔNG biến mọi câu có con số thành biểu đồ. CHỈ dùng "compare" khi PHẢI đặt 2 con số/phương án CẠNH NHAU mới hiểu được (so sánh thật). Còn lại — kể cả câu có tiền/tỉ lệ — hãy diễn bằng CẢNH CỤ THỂ hoặc ẨN DỤ (người cầm xấp tiền, hoá đơn dài, đồ vật chồng cao, bảng giá trên tường, ví rỗng…) dùng "scene"/"close-up"/"b-roll". MỤC TIÊU: "compare" chỉ chiếm ~1/5–1/4 tổng số cảnh. TUYỆT ĐỐI KHÔNG để 2 cảnh "compare" liền nhau — nếu 2 câu liên tiếp đều là số liệu, đổi ít nhất 1 câu sang cảnh đời thường/ẩn dụ.'
-    : '\n- ⛔ VIDEO NÀY KHÔNG DÙNG BIỂU ĐỒ/INFOGRAPHIC: TUYỆT ĐỐI KHÔNG trả shot "compare"/"diagram"/"map", KHÔNG vẽ biểu đồ, bảng số, sơ đồ, chart. Câu có số liệu/so sánh vẫn phải kể bằng CẢNH ĐỜI THƯỜNG hoặc ẨN DỤ CỤ THỂ (người cầm xấp tiền, hoá đơn dài, đồ vật chồng cao, bảng giá trên tường, ví rỗng…) với "scene"/"close-up"/"b-roll".';
+    ? '\n- ⚖️ LIMIT "compare" (charts) — PREFER TELLING WITH EVERYDAY IMAGERY: do NOT turn every number-containing line into a chart. ONLY use "compare" when two numbers/options MUST sit SIDE BY SIDE to be understood (a true comparison). Everything else — including lines with money/ratios — should be conveyed as a CONCRETE SCENE or a METAPHOR (someone holding a stack of cash, a long receipt, objects stacked high, a price board on a wall, an empty wallet...) using "scene"/"close-up"/"b-roll". TARGET: "compare" should be only ~1/5–1/4 of all scenes. NEVER let 2 "compare" scenes sit adjacent — if 2 consecutive lines are both data, switch at least one to an everyday/metaphor scene.'
+    : '\n- ⛔ THIS VIDEO USES NO CHARTS/INFOGRAPHICS: ABSOLUTELY do NOT return shot "compare"/"diagram"/"map", do not draw charts, data tables, diagrams. Lines with numbers/comparisons must still be told through EVERYDAY SCENES or CONCRETE METAPHORS (someone holding a stack of cash, a long receipt, objects stacked high, a price board on a wall, an empty wallet...) with "scene"/"close-up"/"b-roll".';
   const infoBgRule = _infoShots
-    ? `📊 RIÊNG biểu đồ/số liệu/infographic (shot ${_infoShots}): ĐỂ background RỖNG (KHÔNG tạo bối cảnh asset) và TẢ THẲNG nội dung biểu đồ NGAY trong "prompt" — mỗi biểu đồ tả RIÊNG theo đúng số liệu/nội dung của nó, KHÔNG gộp chung, KHÔNG bịa số. `
+    ? `📊 For chart/data/infographic shots (${_infoShots}): leave background EMPTY (do NOT create a setting asset) and DESCRIBE the chart content DIRECTLY in "prompt" — describe each chart SEPARATELY per its own numbers/content, do NOT merge them, do NOT invent numbers. `
     : '';
   const infoTextRule = _infoShots
-    ? `  Cảnh ${_infoShots}: chỉ ÍT chữ THIẾT YẾU (1 tiêu đề 2-4 từ + vài CON SỐ hoặc nhãn 1-2 từ chính), phần lớn là ICON/hình khối/thanh, CHỪA nhiều khoảng trống — TUYỆT ĐỐI KHÔNG nhồi tường chữ, không câu dài, không nhãn mô tả dài.\n`
+    ? `  ${_infoShots} scenes: only the FEW ESSENTIAL pieces of text (one 2-4 word title + a few NUMBERS or 1-2 word labels), mostly ICONS/shapes/bars, WITH lots of empty space — ABSOLUTELY no wall of words, no long sentences, no long descriptive labels.\n`
     : '';
   const noTextRule = _infoShots
-    ? `- 🚫 CHỮ TRONG ẢNH: MỌI cảnh KHÔNG phải ${_infoShots} thì TUYỆT ĐỐI KHÔNG có chữ/nhãn/câu/số/watermark/logo nào trong ảnh (phụ đề do khâu dựng lo). Ảnh sạch, chỉ hình.`
-    : `- 🚫 CHỮ TRONG ẢNH: TUYỆT ĐỐI KHÔNG cảnh nào có chữ/nhãn/câu/số/watermark/logo trong ảnh (phụ đề do khâu dựng lo). Ảnh sạch, chỉ hình.`;
+    ? `- 🚫 TEXT IN IMAGE: every scene that is NOT ${_infoShots} must contain ABSOLUTELY no text/labels/sentences/numbers/watermark/logo in the image (subtitles are handled at the editing stage). Clean images, visuals only.`
+    : `- 🚫 TEXT IN IMAGE: ABSOLUTELY no scene may contain text/labels/sentences/numbers/watermark/logo in the image (subtitles are handled at the editing stage). Clean images, visuals only.`;
   // 🔖 Prompt NGẮN (chỉ tag, kiểu @leo/@mia) — MẶC ĐỊNH LUÔN (ẩn UI): nhân vật có slug chỉ ghi [slug] + hành động, KHÔNG lặp trang phục → dựa ảnh tham chiếu.
   const _shortRef = true;
   const promptLen = _shortRef ? '55-110' : '60-120';
   const charSlugRule = _shortRef
-    ? `  👤 NHÂN VẬT CÓ slug: CHỈ ghi [slug] + (nếu cần) 1-2 từ tuổi/giới + HÀNH ĐỘNG/tư thế/biểu cảm. ⛔ TUYỆT ĐỐI KHÔNG lặp lại trang phục/tóc/màu đồ trong prompt — ảnh tham chiếu [slug] lo toàn bộ ngoại hình. (Chỉ nhân vật KHÔNG có slug mới tả đầy đủ ngoại hình.) ✅ Chữ TIẾT KIỆM được từ việc bỏ tả trang phục → DỒN VÀO tả MÔI TRƯỜNG/bối cảnh CHI TIẾT + ánh sáng (hướng/màu/tương phản) + bố cục & CHIỀU SÂU (tiền/trung/hậu cảnh) → prompt VẪN GIÀU CHI TIẾT, ĐIỆN ẢNH (chỉ gọn ở phần nhân vật).`
-    : `  👤 NHÂN VẬT CÓ slug: ghi [slug] RỒI KÈM NGAY mô tả ngắn-nhưng-ĐỦ trong prompt: tuổi/giới/vóc dáng + tóc + TOÀN BỘ trang phục KÈM ĐÚNG MÀU TỪNG MÓN (dán NGUYÊN VĂN "desc" từ TỦ ĐỒ CỐ ĐỊNH ở trên — vd "a faded navy-blue polo shirt and khaki shorts, white sneakers"). ⚠️ GIỮ Y NGUYÊN màu + kiểu quần áo ở MỌI cảnh — KHÔNG đổi, KHÔNG tự chế, KHÔNG rút gọn màu. (CHỈ đưa ref tag đôi khi VẪN SAI MÀU ĐỒ → BẮT BUỘC nêu rõ màu ngay trong prompt.) Nhân vật nhiều bộ → chọn bộ hợp THỜI ĐIỂM (dựa "when"). MẶT/tuổi/giới/vóc dáng cố định tuyệt đối.`;
+    ? `  👤 CHARACTERS WITH a slug: write ONLY [slug] + (if needed) 1-2 words of age/gender + the ACTION/pose/expression. ⛔ ABSOLUTELY do NOT repeat outfit/hair/clothing colors in the prompt — the [slug] reference image handles the entire appearance. (Only characters WITHOUT a slug get a full appearance description.) ✅ The words saved by skipping outfit description → SPEND on describing the ENVIRONMENT/setting in DETAIL + lighting (direction/color/contrast) + composition & DEPTH (fore/mid/background) → the prompt stays RICH and CINEMATIC (only the character part stays terse).`
+    : `  👤 CHARACTERS WITH a slug: write [slug] THEN IMMEDIATELY add a short-but-COMPLETE description in the prompt: age/gender/build + hair + the FULL OUTFIT with EXACT COLORS per item (paste the "desc" VERBATIM from the FIXED WARDROBE above — e.g. "a faded navy-blue polo shirt and khaki shorts, white sneakers"). ⚠️ Keep the EXACT same colors + outfit in EVERY scene — do NOT change, do NOT invent, do NOT shorten colors. (Reference tags alone STILL get colors wrong → the colors MUST be stated explicitly in the prompt.) Characters with multiple outfits → pick the one matching the moment (based on "when"). Face/age/gender/build are locked absolutely.`;
   const beats = []; const cast = new Set(Object.keys(wardrobe)), locs = new Set();
   for (let bi = 0; bi < batches.length; bi++) {
     if (state.cancelRequested) { setStatus2('⏸ Đã dừng. Giữ ' + beats.length + ' cảnh.', 'info'); if (typeof novaLog === 'function') novaLog('⏸ Phân Cảnh: đã dừng theo yêu cầu — giữ ' + beats.length + ' cảnh.', 'warn'); break; }
     _llmStep = 'chia cảnh';
     if (typeof novaLog === 'function') novaLog(`🎬 Chia cảnh lô ${bi + 1}/${batches.length}…`);
     const _biN = beats.length;
-    const known = 'Nhân vật đã lập: ' + ([...cast].join(', ') || '(chưa có)') + '. Bối cảnh đã lập: ' + ([...locs].join(', ') || '(chưa có)') + '.';
+    const known = 'Characters already created: ' + ([...cast].join(', ') || '(none)') + '. Settings already created: ' + ([...locs].join(', ') || '(none)') + '.';
     const _mkPrompt = (SCRIPT) =>
-`Bạn là đạo diễn storyboard cho video faceless. Chia ĐOẠN kịch bản dưới thành các CẢNH để tạo ẢNH minh hoạ — GOM theo ý hình ảnh, KHÔNG cắt vụn từng câu.${loglineText}
+`You are a storyboard director for faceless videos. Split the script SEGMENT below into SCENES for illustration images — GROUP by visual idea, do NOT chop into single sentences.${loglineText}
 
-QUY TẮC:
-- Mỗi cảnh = MỘT khung hình, độ dài ${secMin}-${secMax}s đọc (TB ~${secAvg}s ≈ ${Math.round(secAvg * 2.6)} từ). ⛔ BẮT BUỘC: KHÔNG cảnh nào dài quá ${secMax}s. Đoạn văn DÀI phải TÁCH thành NHIỀU cảnh liên tiếp — mỗi cảnh 1 khung hình KHÁC NHAU (đổi góc máy / cận-xa / chi tiết / hành động khác), KHÔNG gộp thành 1 cảnh dài lặp hình. Câu chốt/kịch tính → cảnh NGẮN nhưng ⛔ KHÔNG DƯỚI ${secMin}s: câu quá ngắn (đọc <${secMin}s) thì GỘP với câu liền kề CÙNG Ý thành 1 cảnh, KHÔNG để đứng riêng thành cảnh tí hon. KHÔNG cắt giữa câu.
-- GIỮ NGUYÊN VĂN lời đọc ở "text" (nối các câu của cảnh, không sửa chữ).
-- Dàn NHÂN VẬT & BỐI CẢNH NHẤT QUÁN cả video, slug NGẮN CỐ ĐỊNH 1-3 từ (vd "protagonist-male","call-center-night"). MỖI người/nơi CHỈ 1 tên duy nhất xuyên suốt — DÙNG LẠI slug đã lập, TUYỆT ĐỐI KHÔNG đổi hậu tố giữa các cảnh (đã dùng "protagonist-male" thì luôn "protagonist-male", KHÔNG lúc "protagonist-male-trader"). ⚠️ GỘP để ÍT bối cảnh: NƠI CHỐN/phòng TƯƠNG TỰ → dùng CHUNG 1 slug; CHỈ tạo slug MỚI khi khác HẲN; ưu tiên tái dùng slug đã có. ${infoBgRule}👤 TẠO slug NHÂN VẬT cho MỌI nhân vật CÓ VAI hoặc được kịch bản nói tới CỤ THỂ — KỂ CẢ người CHỈ xuất hiện 1 LẦN (vd "người mua tivi khổng lồ", "ông ăn thử đồ", "gã cầm ống đồng") → cấp slug để có ẢNH THAM CHIẾU giữ MẶT + trang phục NHẤT QUÁN giữa ảnh A và B. ⚠️ Tối đa ~6 nhân vật cho CẢ video — nếu vượt thì GỘP vai giống nhau / bỏ vai kém quan trọng nhất, KHÔNG đẻ vô tội vạ. CHỈ để character RỖNG (tả đầy đủ inline, KHÔNG tạo asset) cho: đám đông/quần chúng thoáng qua không cần nhận diện, hoặc người lướt qua hoàn toàn không đáng kể. 🏠 BỐI CẢNH — HÃY CHỦ ĐỘNG nhận ra các NƠI CHỐN XƯƠNG SỐNG lặp lại ở ≥2 cảnh và TẠO SLUG cho chúng (video dài thường có 2–6 địa điểm xương sống: vd nhà ở, văn phòng, trụ sở, cửa hàng…). GỘP nơi tương tự vào CHUNG 1 slug; dùng lại slug đã lập, KHÔNG đổi hậu tố. CHỈ để background RỖNG và tả thẳng trong prompt khi: ${_infoShots ? '(a) cảnh biểu đồ/số liệu/infographic, (b)' : '(a)'} nơi chỉ xuất hiện 1 LẦN, hoặc ${_infoShots ? '(c)' : '(b)'} nơi chung chung tả 1 câu là xong (bầu trời, con đường, góc bàn, bãi biển…). ⚠️ ĐỪNG trả về 0 bối cảnh cho video dài — hãy nhặt ÍT NHẤT vài nơi xương sống để giữ không gian nhất quán; CHỈ được trả 0 khi video THỰC SỰ thuần trừu tượng (không có bất kỳ nơi vật lý nào lặp lại). Cân bằng: đủ nơi xương sống cho nhất quán, nhưng đừng biến mỗi nơi thoáng qua thành 1 asset. ${known}${noChar ? ' KÊNH KHÔNG NGƯỜI: mọi cảnh chỉ cảnh vật/đồ vật/quá trình, character để rỗng.' : ''}${eraText}${wbText}
-- 🎬 GIÃN NHÂN VẬT: TỐI ĐA 3 cảnh LIÊN TIẾP có cùng một nhân vật. Cứ 3-4 cảnh có người thì PHẢI có ít nhất 1 cảnh KHÔNG người (character rỗng, shot "b-roll"): đồ vật, nơi chốn, cận cảnh chi tiết, quá trình. Video 150+ cảnh mà cảnh nào cũng cùng một người là xem rất chán.
-- "shot" = KIỂU CẢNH, chọn ĐÚNG 1 trong: ${typeList}. Mặc định "scene". Chọn theo nội dung: câu MỞ ĐẦU video/hook → "hook"; mở đầu 1 chương/giới thiệu nơi chốn → "establishing"; câu nhấn cảm xúc/chi tiết → "close-up"; câu dẫn chuyện tả cảnh vật không người → "b-roll"${cmpHint}.${cmpRule}
-- KHÔNG viết prompt ảnh ở bước này — lượt sau lo. Chỉ trả cấu trúc cảnh.${luatNguon}
-- "camera": wide|medium|close. "motion": zoom-in|zoom-out|pan-left|pan-right|static|punch (cảnh ngắn dùng punch/zoom nhanh).
+RULES:
+- Each scene = ONE frame, ${secMin}-${secMax}s of narration (avg ~${secAvg}s ≈ ${Math.round(secAvg * 2.6)} words). ⛔ MANDATORY: no scene longer than ${secMax}s. A LONG paragraph must be SPLIT into SEVERAL consecutive scenes — each scene one DISTINCT frame (different angle / close-wide / detail / different action), do NOT merge into one long scene repeating the same image. Dramatic/closing lines → SHORT scenes but ⛔ NOT UNDER ${secMin}s: if a line is too short (reads under ${secMin}s), MERGE it with an adjacent line of the SAME idea into one scene, do NOT let it stand alone as a tiny scene. Do NOT cut mid-sentence.
+- Keep the narration VERBATIM in "text" (join the scene's sentences, no edits).
+- Keep the CAST & SETTINGS consistent across the whole video, with SHORT FIXED slugs of 1-3 words (e.g. "protagonist-male","call-center-night"). Each person/place gets ONLY one unique name throughout — REUSE existing slugs, ABSOLUTELY do NOT change suffixes between scenes (once "protagonist-male" is used, it stays "protagonist-male", never "protagonist-male-trader"). ⚠️ MERGE toward FEWER settings: SIMILAR places/rooms → share ONE slug; create a NEW slug only when clearly different; prefer reusing existing slugs. ${infoBgRule}👤 CREATE a character slug for EVERY character with a ROLE or explicitly mentioned in the script — EVEN those appearing only ONCE (e.g. "the giant TV buyer", "the taste-testing man", "the man holding the copper tube") → give them a slug so a REFERENCE IMAGE keeps the FACE + outfit CONSISTENT between image A and B. ⚠️ Max ~6 characters for the WHOLE video — if exceeded, MERGE similar roles / drop the least important role, do NOT spawn them carelessly. Leave character EMPTY (describe fully inline, do NOT create an asset) ONLY for: passing crowds that need no identification, or completely insignificant walk-ons. 🏠 SETTINGS — PROACTIVELY spot the BACKBONE locations recurring in ≥2 scenes and CREATE SLUGS for them (long videos usually have 2–6 backbone locations: home, office, HQ, store...). MERGE similar places into ONE shared slug; reuse existing slugs, do NOT change suffixes. Leave background EMPTY and describe inline in the prompt only when: ${_infoShots ? '(a) it is a chart/data/infographic scene, (b)' : '(a)'} the place appears only ONCE, or ${_infoShots ? '(c)' : '(b)'} it is generic enough that one sentence covers it (sky, a road, a desk corner, a beach...). ⚠️ Do NOT return 0 settings for a long video — pick AT LEAST a few backbone locations to keep the space consistent; you may only return 0 when the video is TRULY purely abstract (no recurring physical place at all). Balance: enough backbone places for consistency, but don't turn every passing place into an asset. ${known}${noChar ? ' NO-PEOPLE CHANNEL: every scene is scenery/objects/processes only, leave character empty.' : ''}${eraText}${wbText}
+- 🎬 CHARACTER SPACING: MAX 3 CONSECUTIVE scenes with the same character. Every 3-4 people-scenes MUST include at least 1 scene WITHOUT people (character empty, shot "b-roll"): objects, places, detail close-ups, processes. A 150+ scene video where every scene shows the same person is very boring to watch.
+- "shot" = SCENE TYPE, pick EXACTLY 1 from: ${typeList}. Default "scene". Pick by content: the video's OPENING line/hook → "hook"; opening a chapter/introducing a place → "establishing"; an emotional/detail line → "close-up"; a narration line describing people-less scenery → "b-roll"${cmpHint}.${cmpRule}
+- Do NOT write image prompts at this step — the next pass handles that. Return only the scene structure.${luatNguon}
+- "camera": wide|medium|close. "motion": zoom-in|zoom-out|pan-left|pan-right|static|punch (short scenes use punch/quick zoom).
 
-Trả về CHỈ 1 JSON array THEO THỨ TỰ, không markdown:
-[{"text":"...","character":"slug hoặc rỗng","background":"slug","camera":"medium","shot":"scene","motion":"zoom-in"${_coThuc ? ', "thuc":true' : ''}}]
+Return ONLY 1 JSON array IN ORDER, no markdown:
+[{"text":"...","character":"slug or empty","background":"slug","camera":"medium","shot":"scene","motion":"zoom-in"${_coThuc ? ', "thuc":true' : ''}}]
 
-ĐOẠN KỊCH BẢN:
+SCRIPT SEGMENT:
 """${SCRIPT}"""`;
     // Gateway/API bên thứ 3 hay RỚT call to ("Failed to fetch") dù call nhỏ vẫn qua → khi rớt MẠNG thì CHIA ĐÔI đoạn gọi lại (call nhẹ dễ qua), tối đa 3 tầng.
     const _isNetErr = (m) => /Failed to fetch|Load failed|NetworkError|ERR_NETWORK|ERR_CONNECTION|socket hang up|ECONN|Quá thời gian|aborted/i.test(String(m || ''));
@@ -13744,34 +13744,34 @@ async function doPrescan(){
   try {
     const allText = state.scenes.map(s => s.text).join(' ');
     const prompt = bibleMode
-      ? `Đọc toàn bộ kịch bản và liệt kê NHÂN VẬT (người) + BỐI CẢNH (location) sẽ xuất hiện, KÈM mô tả ngoại hình cố định để giữ nhất quán.
+      ? `Read the entire script and list the (human) CHARACTERS + (location) SETTINGS that will appear, WITH fixed appearance descriptions to keep them consistent.
 
-Quy tắc:
-- Tên: kebab-case tiếng Anh (vd: protagonist-young, hospital-room).
-- "desc": MÔ TẢ NGOẠI HÌNH cố định bằng TIẾNG ANH (nhân vật: tuổi, giới, trang phục+màu, tóc, đặc điểm; bối cảnh: loại nơi, đồ vật, ánh sáng, tông màu). 15-30 từ. Đây sẽ được chèn vào MỌI cảnh dùng nhân vật/bối cảnh đó nên phải đủ chi tiết + nhất quán.
-- Liệt kê MỌI nhân vật NGƯỜI được VẼ ở ≥2 cảnh → cấp slug riêng (để có ảnh tham chiếu, giữ MẶT nhất quán): nhân vật CHÍNH, người phụ TÁI XUẤT, và cả "người xem"/viewer trong đoạn kêu gọi like-subscribe NẾU kịch bản có cảnh quay người xem. Người CHỈ xuất hiện 1 LẦN thì KHÔNG liệt kê (sẽ tả inline trong prompt). Tối đa 10 nhân vật, 8 bối cảnh.
+Rules:
+- Names: English kebab-case (e.g.: protagonist-young, hospital-room).
+- "desc": a FIXED appearance description IN ENGLISH (characters: age, gender, outfit+colors, hair, traits; settings: type of place, objects, lighting, palette). 15-30 words. This gets inserted into EVERY scene using that character/setting, so it must be detailed enough + consistent.
+- List EVERY HUMAN character DRAWN in ≥2 scenes → give each a slug (for a reference image, keeping the FACE consistent): main characters, RECURRING side characters, and even the "viewer" in a like-subscribe call-to-action IF the script shows a viewer scene. People appearing only ONCE are NOT listed (described inline in the prompt instead). Max 10 characters, 8 settings.
 
-Kịch bản:
+Script:
 """
 ${allText.slice(0, 8000)}
 """
 
-Trả về CHỈ JSON:
+Return ONLY JSON:
 {"characters":[{"name":"...","desc":"..."}],"backgrounds":[{"name":"...","desc":"..."}]}`
-      : `Đọc toàn bộ kịch bản và liệt kê NHÂN VẬT (người) + BỐI CẢNH (location) sẽ xuất hiện.
+      : `Read the entire script and list the (human) CHARACTERS + (location) SETTINGS that will appear.
 
-Quy tắc đặt tên:
-- Nhân vật: kebab-case tiếng Anh, mô tả ngắn vai trò + đặc điểm (vd: protagonist-young, narrator, agent-male, victim-female)
-- Bối cảnh: kebab-case tiếng Anh, mô tả nơi chốn (vd: dark-office-night, kitchen-interior, hospital-room)
-- Liệt kê MỌI nhân vật NGƯỜI được VẼ ở ≥2 cảnh (cần giữ MẶT nhất quán → cấp slug): nhân vật chính, người phụ TÁI XUẤT, và cả "người xem"/viewer đoạn kêu gọi like-subscribe NẾU có cảnh quay người xem. Người CHỈ xuất hiện 1 LẦN → KHÔNG liệt kê (tả inline). Động vật không liệt kê (tả trực tiếp trong prompt cảnh).
-- Tối đa 10 nhân vật, 8 bối cảnh.
+Naming rules:
+- Characters: English kebab-case, a short role + trait description (e.g.: protagonist-young, narrator, agent-male, victim-female)
+- Settings: English kebab-case, a place description (e.g.: dark-office-night, kitchen-interior, hospital-room)
+- List EVERY HUMAN character DRAWN in ≥2 scenes (needs a consistent FACE → give a slug): main characters, RECURRING side characters, and even the "viewer" in a like-subscribe call-to-action IF there is a viewer scene. People appearing only ONCE → NOT listed (described inline). Animals are not listed (described directly in the scene prompt).
+- Max 10 characters, 8 settings.
 
-Kịch bản:
+Script:
 """
 ${allText.slice(0, 8000)}
 """
 
-Trả về CHỈ JSON:
+Return ONLY JSON:
 {"characters": ["name1", "name2"], "backgrounds": ["bg1", "bg2"]}`;
     const maxTok = bibleMode ? 1500 : 800;
     // callLLMJson: lặp + ép JSON + chỉ nhận khối có ít nhất 1 mảng characters/backgrounds
@@ -13841,23 +13841,23 @@ async function doAssign(only){
     if (exact) return exact;
     return list.find(x => { const lx = x.toLowerCase(); return lx.includes(n) || n.includes(lx); }) || '';
   };
-  const buildAssignPrompt = (batch) => `Gán nhân vật + bối cảnh + góc camera + cấp cho mỗi cảnh.
+  const buildAssignPrompt = (batch) => `Assign a character + setting + camera angle to each scene.
 
-DANH SÁCH NHÂN VẬT (chỉ được chọn ĐÚNG 1 tên từ đây, hoặc "" nếu cảnh không có người):
+CHARACTER LIST (you may only pick EXACTLY 1 name from here, or "" if the scene has no people):
 ${charList}
 
-DANH SÁCH BỐI CẢNH (chỉ được chọn ĐÚNG 1 tên từ đây, hoặc "" nếu không rõ):
+SETTING LIST (you may only pick EXACTLY 1 name from here, or "" if unclear):
 ${bgList}
 
-Quy tắc:
-- character / background: PHẢI là tên y hệt trong danh sách trên, hoặc "" — KHÔNG bịa tên mới.
+Rules:
+- character / background: MUST be a name exactly as in the lists above, or "" — do NOT invent new names.
 - camera: wide | medium | close | over-shoulder | pov
 - level: L1 | L2 | L3 | L4
 
-Trả về CHỈ 1 JSON object, key = id cảnh:
+Return ONLY 1 JSON object, keyed by scene id:
 {"001":{"character":"...","background":"...","camera":"medium","level":"L1"}, "002":{...}}
 
-CÁC CẢNH:
+THE SCENES:
 ${batch.map(s => `[${s.id}] "${s.text}"`).join('\n')}`;
 
   // Chuẩn hoá kết quả về dạng { id: {character,background,camera,level} } dù AI trả object hay array
@@ -13964,14 +13964,14 @@ async function genVideoLogline(force){
   if (!force && fresh) return state.videoLogline;
   const p = getProfile();
   const ngach = p && p.ngach ? p.ngach : '';
-  const prompt = `Đọc kịch bản video dưới đây và VIẾT LOGLINE tóm tắt TOÀN VIDEO (để mọi cảnh bám đúng chủ đề khi tạo ảnh).
-${ngach ? 'Ngách kênh: ' + ngach + '\n' : ''}Yêu cầu: 2-4 câu tiếng Việt — nội dung/câu chuyện chính + nhân vật xuyên suốt + bối cảnh & thời đại + tông cảm xúc. Cụ thể, gọn. KHÔNG liệt kê từng cảnh, KHÔNG kể tuần tự.
-⚠️ VIẾT LOGLINE THẬT từ kịch bản — TUYỆT ĐỐI KHÔNG chép lại câu yêu cầu trên, KHÔNG để dấu < >.
-VD đúng: {"logline":"Hành trình một cậu bé Hy Lạp cổ đại bị bán làm nô lệ sau chiến tranh, từ làng quê tới khu chợ buôn người ở thế giới cổ đại. Tông bi tráng, hoài niệm."}
+  const prompt = `Read the video script below and WRITE A LOGLINE summarizing the WHOLE VIDEO (so every scene stays on topic when images are generated).
+${ngach ? 'Channel niche: ' + ngach + '\n' : ''}Requirements: 2-4 sentences IN VIETNAMESE — main story/content + the recurring character + setting & era + emotional tone. Specific and concise. Do NOT list individual scenes, do NOT narrate chronologically.
+⚠️ Write a REAL logline derived from the script — NEVER copy the request lines above, no < or > characters.
+Correct example: {"logline":"Hành trình một cậu bé Hy Lạp cổ đại bị bán làm nô lệ sau chiến tranh, từ làng quê tới khu chợ buôn người ở thế giới cổ đại. Tông bi tráng, hoài niệm."}
 
-Trả về CHỈ 1 JSON object: {"logline":"..."}
+Return ONLY 1 JSON object: {"logline":"..."}
 
-KỊCH BẢN:
+SCRIPT:
 """
 ${script.slice(0, 6000)}
 """`;
@@ -13983,7 +13983,7 @@ ${script.slice(0, 6000)}
         if (!o || typeof o.logline !== 'string') return false;
         const s = o.logline.trim();
         return s.length >= 25 && !/[<>]/.test(s)
-          && !/KHÔNG\s+liệt kê|nội dung\/câu chuyện|2-4 câu tiếng Việt|câu tiếng Việt:/i.test(s);
+          && !/KHÔNG\s+liệt kê|nội dung\/câu chuyện|2-4 câu tiếng Việt|câu tiếng Việt:|2-4 sentences|main story\/content|recurring character/i.test(s);
       }
     });
     state.videoLogline = o.logline.trim();
@@ -14066,15 +14066,15 @@ function buildSceneGenPrompt(batch, prevSceneCtx, p, profileContext, neighborVO)
   const _coThucBatch = (Array.isArray(batch) ? batch : []).some(_laThuc);
   const luatThuc = _coThucBatch ? `
 
-⚑ CẢNH CÓ NHÃN "TƯ LIỆU THẬT" — VIẾT KHÁC HẲN:
-- Những cảnh này KHÔNG sinh ảnh AI. Chúng sẽ được lấp bằng clip/ảnh QUAY THẬT từ kho tư liệu.
-- Với các cảnh đó, "prompt" KHÔNG phải lệnh vẽ mà là MÔ TẢ ĐỂ ĐI TÌM: 6–14 từ tiếng Anh, chỉ gồm
-  DANH TỪ CỤ THỂ + HÀNH ĐỘNG có thật (vd "capuchin monkey cracking nut with stone",
+⚑ SCENES LABELED "TƯ LIỆU THẬT" (REAL FOOTAGE) — WRITE COMPLETELY DIFFERENTLY:
+- These scenes do NOT get AI images. They will be filled with REAL filmed clips/photos from stock libraries.
+- For those scenes, "prompt" is NOT a drawing instruction but a SEARCH DESCRIPTION: 6–14 English words, only
+  CONCRETE NOUNS + REAL ACTIONS (e.g. "capuchin monkey cracking nut with stone",
   "archaeologist brushing soil at excavation trench").
-- ⛔ TUYỆT ĐỐI KHÔNG đưa vào: tông màu, phong cách vẽ, chất liệu (2D/3D/watercolor/render),
-  ánh sáng dàn dựng, tên nhân vật [slug], hay bất kỳ chữ nào của Style Profile. Không kho tư liệu
-  nào tìm được theo tông màu, và những chữ đó chỉ làm loãng từ khoá.
-- Cảnh KHÔNG có nhãn thì giữ nguyên mọi luật ảnh AI bên dưới.` : '';
+- ⛔ ABSOLUTELY do NOT include: color grading, drawing style, medium (2D/3D/watercolor/render),
+  staged lighting, character [slug] names, or any Style Profile wording. No stock library can
+  search by color mood, and those words only dilute the keywords.
+- Scenes WITHOUT the label follow all the AI-image rules below as normal.` : '';
   const _pmScene = _profileMedium(p);                 // Profile trống thì bám medium suy ra được, KHÔNG mặc định 2D
   // Công thức hình theo KIỂU CẢNH — lượt 1 chỉ chọn kiểu, lượt này mới cần công thức để viết prompt.
   const _shotRecipes = _sceneTypesOn().map(t => `  • ${t}: ${SCENE_TYPES[t].recipe}`).join('\n');
@@ -14093,68 +14093,68 @@ function buildSceneGenPrompt(batch, prevSceneCtx, p, profileContext, neighborVO)
   // 🧩 Style lai: cảnh kể = người que + bối cảnh, cảnh giải thích = icon nền trắng
   const hybridIconMode = T2_TUY_CHON.hybridIcon && !noCharMode;
   const hybridRule = hybridIconMode ? `
-🧩 STYLE LAI — TÁCH 2 KIỂU CẢNH (LUẬT BẮT BUỘC, quyết theo nội dung VO):
-1) Cảnh KỂ CHUYỆN (VO là hành động/cảm xúc/lời kể của NGƯỜI) → vẽ NHÂN VẬT (người que của kênh) trong BỐI CẢNH đầy đủ theo Scene Style.
-2) Cảnh GIẢI THÍCH (VO giải thích khái niệm / quy trình / so sánh / số liệu / nguyên nhân-kết quả, KHÔNG phải hành động của nhân vật) → vẽ ICON / PICTOGRAM line-art ĐƠN GIẢN, nét đen đậm, kiểu biểu tượng, trên NỀN TRẮNG TRƠN (plain solid white background). KHÔNG nhân vật người que, KHÔNG bối cảnh phòng/cảnh vật. Mỗi cảnh 1–4 icon, tối giản, nhiều khoảng trắng.
-   - Prompt loại này PHẢI ghi rõ: "minimalist black line-art pictogram icons on a plain solid white background, no scenery, no characters, lots of negative space".
-- Tự quyết mỗi cảnh thuộc loại nào theo VO. Đa số câu kể → kiểu 1; câu giải thích/khái niệm → kiểu 2.
+🧩 HYBRID STYLE — SPLIT INTO 2 SCENE KINDS (MANDATORY, decide by VO content):
+1) STORYTELLING scenes (VO is an action/emotion/narration by a PERSON) → draw the CHARACTER (the channel's stick figures) in full SETTINGS per the Scene Style.
+2) EXPLANATORY scenes (VO explains a concept / process / comparison / data / cause-effect, NOT a character's action) → draw SIMPLE line-art ICONS / PICTOGRAMS, bold black strokes, sign-like, on a PLAIN SOLID WHITE background. NO stick-figure characters, NO rooms/scenery. 1–4 icons per scene, minimal, lots of white space.
+   - Prompts of this kind MUST state: "minimalist black line-art pictogram icons on a plain solid white background, no scenery, no characters, lots of negative space".
+- Decide per scene from the VO. Most narrative lines → kind 1; explanatory/concept lines → kind 2.
 ` : '';
   // 🏺 Khoá thời đại cho prompt cảnh: ưu tiên giá trị đã đặt ở Tool 3 (state.t3Era), nếu trống → trích kịch bản
   const eraHintT2 = (state.t3Era && state.t3Era.trim())
     ? state.t3Era.trim()
     : (state.script || '').replace(/\s+/g, ' ').trim().slice(0, 400);
   const eraBlockT2 = eraHintT2
-    ? `\n🏺 BỐI CẢNH & THỜI ĐẠI (áp cho MỌI cảnh): ${eraHintT2}\n- Trang phục, kiểu tóc/đội đầu và đạo cụ của MỌI nhân vật — kể cả nhân vật phụ tả tự do, đám đông, người qua đường — PHẢI đúng thời đại/bối cảnh này; KHÔNG để lẫn đồ/tóc hiện đại sai thời. GIỮ NGUYÊN art-style/phong cách render của kênh (theo Character/Scene Style) ở mọi nhân vật — chỉ đổi trang phục/tóc/đạo cụ cho khớp thời đại.\n`
+    ? `\n🏺 SETTING & ERA (applies to EVERY scene): ${eraHintT2}\n- The clothing, hair/headwear and props of EVERY character — including freely-described secondary characters, crowds, passers-by — MUST match this era/setting; no anachronistic modern items/hair. KEEP the channel's art-style/render medium (per Character/Scene Style) on every character — only adapt outfit/hair/props to the era.\n`
     : '';
   // 🎬 Cảnh b-roll / 🚫 không nhân vật
   const brollRule = noCharMode ? `
-🚫 VIDEO KHÔNG CÓ NHÂN VẬT (HƯỚNG DẪN / B-ROLL THUẦN) — LUẬT TỐI CAO, ÁP CHO MỌI CẢNH:
-- TUYỆT ĐỐI KHÔNG có người, không nhân vật, không người dẫn, không bóng người, không khuôn mặt trong BẤT KỲ cảnh nào.
-- MỌI cảnh chỉ là: cảnh vật / đồ vật / quá trình / cận cảnh (close-up, macro) / dụng cụ / sơ đồ đơn giản.
-- VO tả hành động của người → chuyển thành cảnh THỂ HIỆN ĐỒ VẬT / KẾT QUẢ / QUÁ TRÌNH, KHÔNG hiện người. VD: "you water the plants" → "close-up of a watering can pouring water onto green seedlings, no person"; câu cảm xúc/đại từ ("she smiles") → thay bằng cảnh vật liên quan trong ngữ cảnh.
-- BỎ QUA hoàn toàn phần phân loại NHÂN VẬT bên dưới.
-- MỖI prompt PHẢI kết thúc kèm cụm: "no people, no person, no humans, no figures, no hands".
+🚫 THIS VIDEO HAS NO CHARACTERS (PURE TUTORIAL / B-ROLL) — TOP-PRIORITY RULE, APPLIES TO EVERY SCENE:
+- ABSOLUTELY no people, no characters, no presenter, no human silhouettes, no faces in ANY scene.
+- EVERY scene is only: scenery / objects / processes / close-ups (close-up, macro) / tools / simple diagrams.
+- When the VO describes a person's action → convert it into a scene showing the OBJECT / RESULT / PROCESS, no person. Example: "you water the plants" → "close-up of a watering can pouring water onto green seedlings, no person"; emotional/pronoun lines ("she smiles") → replace with related scenery fitting the context.
+- SKIP the character classification section below entirely.
+- EVERY prompt MUST end with: "no people, no person, no humans, no figures, no hands".
 ` : (brollMode ? `
-🎬 KHÔNG phải cảnh nào cũng có người — TỰ QUYẾT theo nội dung VO:
-- VO nói về NGƯỜI (hành động, lời người dẫn, cảm xúc, đối thoại) → cảnh CÓ nhân vật.
-- VO tả ĐỒ VẬT / NƠI CHỐN / QUÁ TRÌNH / CẬN CẢNH chi tiết / hiện tượng cụ thể (vd "ants on a leaf", "the vegetable bed", "a jar of baking soda", "roots in the soil", "rain falling") → làm cảnh B-ROLL / INSERT / CẬN CẢNH chỉ có đồ vật + bối cảnh, KHÔNG có người, KHÔNG có người dẫn nhìn camera.
-- Mục tiêu: XEN KẼ cảnh có người và cảnh b-roll cho video tự nhiên — KHÔNG ép người dẫn vào mọi khung hình.
-- ⚠️ QUAN TRỌNG: cảnh có thể đã được GÁN SẴN 1 nhân vật ("nhân vật:" ở dòng cảnh), NHƯNG nếu VO của cảnh đó là TẢ ĐỒ VẬT / KHÁI NIỆM / ẨN DỤ / câu trừu tượng (không phải hành động cụ thể của chính nhân vật đó) → ĐƯỢC PHÉP bỏ người, làm cảnh B-ROLL/INSERT đồ vật, KHÔNG bắt buộc chèn tag [nhân-vật] đã gán. Tag nhân vật chỉ là gợi ý, không phải lệnh cứng khi b-roll.
-- Cảnh b-roll vẫn giữ đúng style/tông màu/ánh sáng của kênh; mô tả rõ chủ thể, góc máy (close-up/macro/wide), bố cục.
+🎬 Not every scene needs people — DECIDE YOURSELF from the VO content:
+- VO about PEOPLE (actions, presenter lines, emotions, dialogue) → scene WITH characters.
+- VO describing OBJECTS / PLACES / PROCESSES / detail CLOSE-UPS / concrete phenomena (e.g. "ants on a leaf", "the vegetable bed", "a jar of baking soda", "roots in the soil", "rain falling") → make it a B-ROLL / INSERT / CLOSE-UP scene with only objects + setting, NO people, NO presenter looking at camera.
+- Goal: INTERLEAVE people-scenes and b-roll scenes so the video feels natural — do NOT force a presenter into every frame.
+- ⚠️ IMPORTANT: a scene may ALREADY have an assigned character ("nhân vật:" in the scene line), BUT if that scene's VO describes OBJECTS / CONCEPTS / METAPHORS / abstract lines (not a concrete action of that character) → you MAY drop the person and make a b-roll/object INSERT, you are NOT forced to include the assigned [character] tag. The character tag is a hint, not a hard order, for b-roll.
+- B-roll scenes still keep the channel's exact style/palette/lighting; describe the subject clearly, the shot size (close-up/macro/wide), the composition.
 ` : '');
   // ---- Mode-aware: Tag / Inline / Inline+bible ----
       const dm = state.descMode || 'tag';
       let charCtx, bgCtx, charHeader, bgHeader, mode1Rule;
       if (dm === 'inline_bible') {
-        charCtx = state.charactersV.map(c => `- ${c}: ${(state.charBible && state.charBible[c]) || '(chưa có hồ sơ — bấm Quét Trước)'}`).join('\n');
-        bgCtx = state.backgroundsV.map(b => `- ${b}: ${(state.bgBible && state.bgBible[b]) || '(chưa có hồ sơ)'}`).join('\n');
-        charHeader = 'NHÂN VẬT — CHÈN NGUYÊN VĂN mô tả cố định sau vào prompt (KHÔNG đổi chữ, KHÔNG dùng ngoặc vuông):';
-        bgHeader = 'BỐI CẢNH — CHÈN NGUYÊN VĂN mô tả cố định sau:';
-        mode1Rule = `- Tư thế/biểu cảm/hành động: tả theo VO
-- Nhân vật là NGƯỜI: CHÈN NGUYÊN VĂN mô tả cố định của nhân vật đó (ở danh sách trên) vào prompt, KHÔNG đổi 1 chữ, KHÔNG ngoặc vuông → giữ nhân vật giống hệt mọi cảnh. VD: "a tired female nurse, mid-30s, mint-green scrubs, brown hair in low bun, stands at the desk..."
-- Động vật/vật thể: miêu tả bình thường
-- Bối cảnh: CHÈN NGUYÊN VĂN mô tả cố định của bối cảnh đó`;
+        charCtx = state.charactersV.map(c => `- ${c}: ${(state.charBible && state.charBible[c]) || '(no profile yet — run Pre-scan)'}`).join('\n');
+        bgCtx = state.backgroundsV.map(b => `- ${b}: ${(state.bgBible && state.bgBible[b]) || '(no profile yet)'}`).join('\n');
+        charHeader = 'CHARACTERS — PASTE the fixed description below VERBATIM into the prompt (do not change a word, no square brackets):';
+        bgHeader = 'SETTINGS — PASTE the fixed description below VERBATIM:';
+        mode1Rule = `- Pose/expression/action: describe per the VO
+- When the character is a PERSON: PASTE that character's fixed description (from the list above) VERBATIM into the prompt, not one word changed, no square brackets → the character stays identical across every scene. Example: "a tired female nurse, mid-30s, mint-green scrubs, brown hair in low bun, stands at the desk..."
+- Animals/objects: describe normally
+- Settings: PASTE that setting's fixed description VERBATIM`;
       } else if (dm === 'inline') {
         charCtx = state.charactersV.map(c => '- ' + c).join('\n');
         bgCtx = state.backgroundsV.map(b => '- ' + b).join('\n');
-        charHeader = 'NHÂN VẬT (gợi ý vai — TẢ ĐẦY ĐỦ ngoại hình trong prompt):';
-        bgHeader = 'BỐI CẢNH (gợi ý):';
-        mode1Rule = `- Tư thế/biểu cảm/hành động: tả theo VO
-- Nhân vật là NGƯỜI: TẢ ĐẦY ĐỦ ngoại hình NGAY trong prompt (tuổi, giới, trang phục+màu, tóc, đặc điểm), KHÔNG dùng ngoặc vuông. VD: "a young male agent in a grey suit, short black hair, stands at the desk..."
-- Nếu cùng 1 nhân vật xuất hiện nhiều cảnh: tả GIỐNG NHAU mỗi lần để nhất quán
-- Động vật/vật thể: miêu tả bình thường
-- Bối cảnh: TẢ ĐẦY ĐỦ bối cảnh trong prompt (KHÔNG ngoặc vuông)`;
+        charHeader = 'CHARACTERS (role hints — describe the FULL appearance in the prompt):';
+        bgHeader = 'SETTINGS (hints):';
+        mode1Rule = `- Pose/expression/action: describe per the VO
+- When the character is a PERSON: describe the FULL appearance IN the prompt itself (age, gender, outfit+colors, hair, traits), no square brackets. Example: "a young male agent in a grey suit, short black hair, stands at the desk..."
+- If the same character appears in multiple scenes: describe them IDENTICALLY each time for consistency
+- Animals/objects: describe normally
+- Settings: describe the setting FULLY in the prompt (no square brackets)`;
       } else {
         charCtx = state.charactersV.map(c => '- ' + c).join('\n');
         bgCtx = state.backgroundsV.map(b => '- ' + b).join('\n');
-        charHeader = 'NHÂN VẬT CÓ REFERENCE SHEET (ghi tag [tên]):';
-        bgHeader = 'BỐI CẢNH (reference từ sheet):';
-        mode1Rule = `- Nhân vật CÓ trong danh sách trên: ghi [tên-nhân-vật] (VD: "[narrator] stands at desk...")
-- Nhân vật PHỤ KHÔNG có trong danh sách (xuất hiện trong VO nhưng chưa có reference): TẢ TỰ DO ngoại hình ngắn gọn theo style chính của kênh — VD nếu cảnh có người lạ, người qua đường, đám đông → mô tả "a [mô tả ngắn] character in same art style" KHÔNG dùng ngoặc vuông
-- Nếu cảnh có NHIỀU nhân vật: ghi đủ cả nhân vật chính (tag) lẫn phụ (tả tự do). VD: "[narrator] talking to a worried elderly woman in plain dress, both in same cartoon style, inside [office-night]"
-- Động vật/vật thể: miêu tả bình thường KHÔNG ngoặc vuông
-- Bối cảnh: ghi [tên-bối-cảnh] (VD: "inside [dark-office-night]...")
-- Style nhân vật phụ phải KHỚP style nhân vật chính (cùng nét vẽ, cùng tỉ lệ)`;
+        charHeader = 'CHARACTERS WITH REFERENCE SHEETS (write the [name] tag):';
+        bgHeader = 'SETTINGS (referenced from the sheet):';
+        mode1Rule = `- Character IN the list above: write [character-name] (e.g. "[narrator] stands at desk...")
+- SECONDARY characters NOT in the list (appear in VO but have no reference): describe them FREELY in a few words matching the channel's main style — e.g. if the scene has a stranger, passer-by, crowd → describe "a [short description] character in same art style" WITHOUT square brackets
+- If the scene has MULTIPLE characters: include both the main characters (tags) and secondary ones (free description). Example: "[narrator] talking to a worried elderly woman in plain dress, both in same cartoon style, inside [office-night]"
+- Animals/objects: describe normally, NO square brackets
+- Setting: write [setting-name] (e.g. "inside [dark-office-night]...")
+- Secondary characters must MATCH the main characters' style (same linework, same proportions)`;
       }
       // Detect animation/cartoon style → inject formula block
       const styleStr = (p.sceneStyle || '').toLowerCase();
@@ -14166,147 +14166,147 @@ function buildSceneGenPrompt(batch, prevSceneCtx, p, profileContext, neighborVO)
         ? p.charIdentity.trim()
         : _trimToSentence((p.characterStyle || '').replace(/\s+/g, ' ').trim(), 600));
       const animFormulaBlock = (isCartoon2D && refShape) ? `
-🎬 STYLE DO ẢNH REFERENCE GÁNH (BẢN 1 — cảnh có [tên-nhân-vật] = có ảnh reference đính kèm khi tạo ảnh):
-- TUYỆT ĐỐI KHÔNG tả lại toàn bộ ngoại hình / tỉ lệ cơ thể / nét vẽ nhân vật trong prompt (ảnh reference ĐÃ khoá những cái đó — tả lại sẽ ĐÁNH NHAU với ref). Chỉ ghi [tên-nhân-vật] + hành động/biểu cảm theo VO.
-- Prompt viết NGẮN GỌN theo shape Nano Banana: [chủ thể + hành động] tại [bối cảnh] → [góc máy] → [ánh sáng/không khí] → KẾT bằng 1 cụm scene aesthetic NGẮN dương tính (vd "${_ssClean || _pmScene.medium || 'consistent cinematic style, cohesive lighting'}").
-- KHÔNG danh sách NOT/no (trừ "no text, no watermark" ở cuối). Diễn đạt DƯƠNG TÍNH.
-- Nhân vật phụ KHÔNG có ảnh reference: tả NGẮN ngoại hình theo đúng style kênh.
+🎬 STYLE IS CARRIED BY THE REFERENCE IMAGE (VARIANT 1 — scenes with [character-name] get a reference image attached at generation time):
+- ABSOLUTELY do NOT re-describe the character's full appearance / body proportions / linework in the prompt (the reference image already LOCKS those — re-describing them will FIGHT the reference). Write only [character-name] + the action/expression from the VO.
+- Write the prompt TERSELY in the Nano Banana shape: [subject + action] at [setting] → [camera angle] → [lighting/atmosphere] → END with 1 SHORT positive scene-aesthetic phrase (e.g. "${_ssClean || _pmScene.medium || 'consistent cinematic style, cohesive lighting'}").
+- NO NOT/no lists (except "no text, no watermark" at the end). Phrase POSITIVELY.
+- Secondary characters WITHOUT a reference image: describe their appearance BRIEFLY per the channel style.
 ` : (isCartoon2D ? `
-🎬 STYLE MASTER Ở CUỐI (BẢN 2 — KHÔNG có ảnh reference, tự tả style ở cuối prompt):
-ÁP CÔNG THỨC HÌNH theo "kiểu" của từng cảnh (KHÔNG ghi tên kiểu vào prompt):
+🎬 STYLE MASTER AT THE END (VARIANT 2 — NO reference image, describe the style yourself at the end of the prompt):
+APPLY THE IMAGE FORMULA per the "type" of each scene (do NOT write the type name into the prompt):
 ${_shotRecipes}
-⛔ KHÔNG viết cụm phong cách/aesthetic ở cuối prompt — hệ thống TỰ gắn cụm chuẩn giống hệt nhau cho mọi cảnh. Chỉ tả nội dung hình.
-⛔ KHÔNG mô tả CHỮ, SỐ, nhãn, bảng hiệu, tiêu đề ĐỌC ĐƯỢC trong ảnh (không "labeled '35'", không "screen reads DEVALUATION"). Muốn thể hiện số liệu thì diễn bằng SỐ LƯỢNG/kích thước/độ cao/độ dày của vật thể — vd 'một chồng vali cao ngất so với một chiếc lẻ loi' thay vì ghi con số.
-- Viết prompt theo shape: [chủ thể + hành động] tại [bối cảnh] → [góc máy] → [ánh sáng] → rồi CUỐI cùng chèn 1 câu STYLE dương tính gói gọn đặc điểm nhân vật + nét vẽ (dựa trên: "${charStyleShort || 'style nhân vật của kênh'}").
-- Diễn đạt DƯƠNG TÍNH, KHÔNG danh sách NOT (chỉ giữ no text, no watermark ở cuối).
+⛔ Do NOT write a style/aesthetic phrase at the end of the prompt — the system APPENDS the exact same standard phrase to every scene itself. Describe only the visual content.
+⛔ Do NOT describe READABLE TEXT, NUMBERS, labels, signs or titles in the image (no "labeled '35'", no "screen reads DEVALUATION"). To convey data, express it through QUANTITY/size/height/thickness of objects — e.g. 'a towering stack of suitcases next to one lone case' instead of writing the number.
+- Write the prompt in this shape: [subject + action] at [setting] → [camera angle] → [lighting] → then FINALLY append 1 positive STYLE sentence summarizing the character design + linework (based on: "${charStyleShort || 'the channel character style'}").
+- Phrase POSITIVELY, NO NOT lists (keep only no text, no watermark at the end).
 ` : '');
 
       // 🎯 Logline toàn video — áp cho MỌI cảnh để không lạc chủ đề / không đứt mạch giữa batch
       const loglineBlock = (state.videoLogline && state.videoLogline.trim())
-        ? `\n🎯 BỐI CẢNH TOÀN VIDEO (mọi cảnh PHẢI bám vào đây):\n"${state.videoLogline.trim()}"\n- Mọi cảnh — kể cả cảnh trừu tượng / câu hỏi tu từ / câu chuyển ý — phải nằm trong THẾ GIỚI HÌNH ẢNH của video này (đúng nhân vật, bối cảnh, thời đại, tông màu nêu trên). KHÔNG vẽ hình generic lạc khỏi câu chuyện.\n`
+        ? `\n🎯 WHOLE-VIDEO PREMISE (every scene MUST stick to this):\n"${state.videoLogline.trim()}"\n- Every scene — including abstract lines / rhetorical questions / transitions — must stay inside this video's VISUAL WORLD (correct characters, settings, era, palette above). Do NOT draw generic imagery that drifts off the story.\n`
         : '';
-      const prompt = `Bạn là prompt engineer G-Labs (Imagen / Nano Banana). Tạo prompt cảnh cho mỗi cảnh bên dưới.
+      const prompt = `You are a G-Labs prompt engineer (Imagen / Nano Banana). Write a scene prompt for each scene below.
 
-PROFILE KÊNH:
+CHANNEL PROFILE:
 ${profileContext}
 ${loglineBlock}
-SCENE AESTHETIC (dùng cho MỌI cảnh): "${_ssClean || 'consistent visual style across all scenes'}"
+SCENE AESTHETIC (used for EVERY scene): "${_ssClean || 'consistent visual style across all scenes'}"
 
-ĐỊNH HƯỚNG LOOK (diễn đạt DƯƠNG TÍNH trong prompt — KHÔNG chép nguyên thành danh sách "no/not"; chỉ giữ vài negative thật cần như no text, no watermark): "${p.promptRules || ''}"
+LOOK DIRECTION (phrase POSITIVELY in the prompt — do NOT copy verbatim as a "no/not" list; keep only the few truly needed negatives like no text, no watermark): "${p.promptRules || ''}"
 ${eraBlockT2}${animFormulaBlock}
 
 ${charHeader}
-${charCtx || '(không có)'}
-${(state.wardrobe && Object.keys(state.wardrobe).length) ? ('\n👕 TỦ ĐỒ CỐ ĐỊNH (BẮT BUỘC dán ĐÚNG "desc" — KHÔNG tự chế đồ khác, cùng giai đoạn mặc GIỐNG NHAU):\n' + Object.entries(state.wardrobe).map(([n, os]) => `  • [${n}]: ${(os || []).map(o => `khi ${o.when} → "${o.desc}"`).join(' · ')}`).join('\n')) : ''}
+${charCtx || '(none)'}
+${(state.wardrobe && Object.keys(state.wardrobe).length) ? ('\n👕 FIXED WARDROBE (MUST paste the EXACT "desc" — do NOT invent different outfits; same period = dressed the SAME):\n' + Object.entries(state.wardrobe).map(([n, os]) => `  • [${n}]: ${(os || []).map(o => `when ${o.when} → "${o.desc}"`).join(' · ')}`).join('\n')) : ''}
 
 ${bgHeader}
-${bgCtx || '(không có)'}
+${bgCtx || '(none)'}
 
-Với mỗi cảnh, TRƯỚC TIÊN xác định LOẠI CẢNH từ nội dung VO, sau đó viết prompt phù hợp:
+For each scene, FIRST determine the SCENE KIND from the VO content, then write a matching prompt:
 ${hybridRule}${brollRule}${VISUAL_METAPHOR_RULE}
-🔹 LOẠI 1 — NHÂN VẬT TRONG BỐI CẢNH (VO nói về hành động của người):
+🔹 KIND 1 — CHARACTERS IN A SETTING (VO is about a person's action):
 ${mode1Rule}
 
-🔹 LOẠI 2 — INFOGRAPHIC / BIỂU ĐỒ ĐƠN GIẢN (VO nói về số liệu, so sánh, thống kê):
-- Vẽ ĐƠN GIẢN: 1-2 icon/biểu đồ đơn giản + nhân vật ${dm === 'tag' ? '[tên-nhân-vật]' : 'đơn giản ĐÚNG STYLE KÊNH (KHÔNG mặc định người que)'} chỉ tay hoặc đứng cạnh
-- Vẽ ĐƠN GIẢN, KHÔNG nhiều panel. GHI CHỮ/SỐ THẬT vào biểu đồ (tiêu đề + vài nhãn NGẮN 1-4 từ / con số ĐÚNG, khớp nội dung VO, viết đúng chính tả) — TUYỆT ĐỐI KHÔNG để ô nhãn TRỐNG / "[TEXT]" / "reserved caption". Giữ chữ NGẮN để model vẽ rõ.
-- KHÔNG vẽ nội tạng, ký hiệu y tế trừ khi VO yêu cầu rõ ràng
-- VD: "${dm === 'tag' ? '[narrator-male]' : 'A simple character in the channel art style'} pointing at a simple bar chart with 3 labelled bars — \\"Storage 20\\", \\"Mall 12\\", \\"Office 8\\" written under them, title \\"Cost per month\\" on top; clean flat background, minimal style, short real text spelled correctly"
+🔹 KIND 2 — SIMPLE INFOGRAPHIC / CHART (VO is about data, comparisons, statistics):
+- Keep it SIMPLE: 1-2 simple icons/charts + a character ${dm === 'tag' ? '[character-name]' : 'in the channel style (do NOT default to stick figures)'} pointing or standing beside it
+- Keep it SIMPLE, no multi-panel layout. Write REAL TEXT/NUMBERS into the chart (a title + a few SHORT 1-4 word labels / exact numbers, matching the VO, spelled correctly) — ABSOLUTELY no EMPTY label cells / "[TEXT]" / "reserved caption". Keep the text SHORT so the model renders it clearly.
+- Do NOT draw internal organs or medical symbols unless the VO explicitly calls for them
+- Example: "${dm === 'tag' ? '[narrator-male]' : 'A simple character in the channel art style'} pointing at a simple bar chart with 3 labelled bars — \\"Storage 20\\", \\"Mall 12\\", \\"Office 8\\" written under them, title \\"Cost per month\\" on top; clean flat background, minimal style, short real text spelled correctly"
 
-🔹 LOẠI 3 — QUY TRÌNH / BƯỚC (VO giải thích cách làm, từng bước):
-- Mô tả 2-3 bước từ trái sang phải với mũi tên đơn giản
-- ${dm === 'tag' ? 'Nếu có nhân vật: ghi [tên-nhân-vật] thực hiện hành động' : 'Nhân vật đơn giản (ĐÚNG STYLE KÊNH) thực hiện từng bước'}
-- VD: "Three steps left to right with arrows: step 1 seed icon, step 2 watering can icon, step 3 plant sprouting, warm muted palette, flat 2D style"
+🔹 KIND 3 — PROCESS / STEPS (VO explains how to do something, step by step):
+- Describe 2-3 steps left to right with simple arrows
+- ${dm === 'tag' ? 'If a character is involved: write [character-name] performing the action' : 'A simple character (in the CHANNEL STYLE) performs each step'}
+- Example: "Three steps left to right with arrows: step 1 seed icon, step 2 watering can icon, step 3 plant sprouting, warm muted palette, flat 2D style"
 
-🔹 LOẠI 4 — ICON / KHÁI NIỆM (VO giải thích khái niệm trừu tượng):
-- 1 icon trung tâm lớn + tối đa 4 icon phụ xung quanh, kiểu simple flat illustration
-- Dùng metaphor hình ảnh (não = suy nghĩ, tim = cảm xúc, ví tiền = tài chính)
-- KHÔNG vẽ nhân vật realistic, KHÔNG vẽ nội tạng người trừ khi VO nói về y tế cụ thể
-- ${dm === 'tag' ? 'Nếu có nhân vật phụ: ghi [tên-nhân-vật] đứng cạnh icon' : 'Nếu có người: vẽ nhân vật đơn giản ĐÚNG STYLE KÊNH (KHÔNG mặc định người que)'}
-- VD: "Central large coin icon surrounded by 4 small flat icons: house, car, graduation cap, piggy bank, connected by dotted lines, warm yellow background, flat 2D style"
+🔹 KIND 4 — ICON / CONCEPT (VO explains an abstract concept):
+- 1 large central icon + at most 4 smaller icons around it, simple flat illustration style
+- Use visual metaphors (brain = thinking, heart = emotion, wallet = finance)
+- Do NOT draw realistic characters, do NOT draw human internal organs unless the VO is specifically medical
+- ${dm === 'tag' ? 'If a secondary character is involved: write [character-name] standing beside the icon' : 'If people are needed: draw a simple character in the CHANNEL STYLE (do NOT default to stick figures)'}
+- Example: "Central large coin icon surrounded by 4 small flat icons: house, car, graduation cap, piggy bank, connected by dotted lines, warm yellow background, flat 2D style"
 
-🔹 LOẠI 5 — SỐ/TỪ KHOÁ ẤN TƯỢNG + MINH HOẠ (CHỈ khi VO có con số sốc, năm cụ thể, hoặc 1 từ khoá duy nhất):
-- CHỈ dùng cho text 1-4 TỪ ngắn, KHÔNG dùng cho câu trần thuật/đối thoại
-- Text ngắn bold ở trên/giữa + hình minh hoạ đơn giản bên dưới
-- VD: "Bold black text '13,000 YEARS' at top center, below a simple flat illustration of ancient cave with campfire, warm earthy palette, flat 2D style"
-- KHÔNG dùng LOẠI 5 nếu VO là câu kể chuyện — chọn LOẠI 1 (nhân vật) hoặc LOẠI 4 (icon khái niệm)
+🔹 KIND 5 — STRIKING NUMBER/KEYWORD + ILLUSTRATION (ONLY when the VO has a shocking number, a specific year, or a single key word):
+- ONLY for 1-4 WORD text, NOT for narrative lines/dialogue
+- Short bold text at top/center + a simple illustration below
+- Example: "Bold black text '13,000 YEARS' at top center, below a simple flat illustration of ancient cave with campfire, warm earthy palette, flat 2D style"
+- Do NOT use KIND 5 if the VO is a story line — choose KIND 1 (characters) or KIND 4 (concept icon)
 
-QUY TẮC CHUNG:
-- Luôn mô tả BỐ CỤC KHÔNG GIAN (trái/phải/trên/dưới/giữa)
-- 🎬 ÁNH SÁNG CÓ CHỦ ĐÍCH theo CẢM XÚC VO (đừng để phẳng/đều mọi cảnh): căng/sợ → ngược sáng gắt, bóng mạnh, tương phản cao; ấm/hoài niệm → golden hour, nắng xiên mềm; buồn/tĩnh → xanh lạnh, khuếch tán; vui/hy vọng → sáng trong, rực; bí ẩn → tối chủ đạo + 1 vệt sáng điểm. Ghi rõ nguồn sáng + hướng + không khí.
-- 🧭 CHIỀU SÂU & BỐ CỤC: dựng lớp tiền cảnh–trung cảnh–hậu cảnh cho có không gian; đặt chủ thể theo quy tắc 1/3, dùng đường dẫn/phối cảnh dẫn mắt về chủ thể; "close-up" ưu tiên phông mờ nhẹ (độ sâu trường ảnh nông) để tách chủ thể.
-- Kết thúc bằng scene aesthetic tag
+GENERAL RULES:
+- Always describe the SPATIAL COMPOSITION (left/right/top/bottom/center)
+- 🎬 PURPOSEFUL LIGHTING per the VO's EMOTION (don't leave it flat/even in every scene): tense/fear → harsh backlight, strong shadows, high contrast; warm/nostalgic → golden hour, soft slanted sun; sad/still → cold blue, diffused; joyful/hopeful → bright, clear, radiant; mysterious → mostly dark + 1 highlight streak. State the light source + direction + atmosphere clearly.
+- 🧭 DEPTH & COMPOSITION: build foreground–midground–background layers for space; place the subject by the rule of thirds; use leading lines/perspective to draw the eye to the subject; "close-up" favors a slightly blurred background (shallow depth of field) to isolate the subject.
+- End with the scene aesthetic tag
 
-⚠️ TEXT TRONG ẢNH — RẤT QUAN TRỌNG (ĐA SỐ CẢNH KHÔNG NÊN CÓ TEXT):
-- MẶC ĐỊNH: KHÔNG có text trong ảnh. Để hình ảnh tự kể chuyện qua nhân vật, icon, bố cục.
-- CHỈ thêm text khi thật cần điểm nhấn: con số ('8 HOURS'), năm ('1965'), 1 từ khoá ('WARNING', 'DANGER')
-- GIỚI HẠN CỨNG: text trong ảnh tối đa 4 TỪ. Viết HOA, trong nháy đơn.
-- TUYỆT ĐỐI KHÔNG đưa cả câu VO, câu thoại, hay tiêu đề dài vào ảnh (vd KHÔNG ghi 'SKIP SEVERAL NIGHTS? THE STREETS STOP WORKING' hay 'SLEEP IS WHEN THE CLEANUP HAPPENS')
-- TUYỆT ĐỐI KHÔNG dịch nguyên VO sang tiếng Anh để làm text — text chỉ là điểm nhấn cực ngắn, không phải tiêu đề câu
-- 🌐 NGÔN NGỮ TEXT: CHỈ TIẾNG ANH. TUYỆT ĐỐI KHÔNG có chữ Hàn, Trung, Nhật, Thái, Ả Rập, hay bất kỳ ngôn ngữ nào khác. Phải ghi rõ trong prompt: "all text in English only, no Korean / Chinese / Japanese characters"
-- LOẠI 4 ICON CONCEPT: icon dùng METAPHOR HÌNH ẢNH thuần (não, đồng hồ, biểu tượng) — KHÔNG dán label chữ dưới mỗi icon (đây là lỗi thường gặp: AI mặc định thêm label Hàn dưới icon health/medical)
+⚠️ TEXT IN IMAGE — VERY IMPORTANT (MOST SCENES SHOULD HAVE NO TEXT):
+- DEFAULT: NO text in the image. Let the visuals tell the story through characters, icons, composition.
+- Add text ONLY when it truly punctuates: a number ('8 HOURS'), a year ('1965'), 1 key word ('WARNING', 'DANGER')
+- HARD LIMIT: in-image text is at most 4 WORDS. Written in CAPS, in single quotes.
+- ABSOLUTELY no full VO lines, dialogue, or long titles in the image (e.g. do NOT write 'SKIP SEVERAL NIGHTS? THE STREETS STOP WORKING' or 'SLEEP IS WHEN THE CLEANUP HAPPENS')
+- ABSOLUTELY do NOT translate the VO into English as the text — text is only an ultra-short punch, not a sentence title
+- 🌐 TEXT LANGUAGE: ENGLISH ONLY. ABSOLUTELY no Korean, Chinese, Japanese, Thai, Arabic, or any other script. You MUST state in the prompt: "all text in English only, no Korean / Chinese / Japanese characters"
+- KIND 4 CONCEPT ICONS: icons use pure VISUAL METAPHORS (brain, clock, symbols) — do NOT paste a text label under each icon (a common failure: the AI defaults to adding Korean labels under health/medical icons)
 
-🔗 LIÊN TỤC HÌNH ẢNH (để video KHÔNG rời rạc — rất quan trọng):
-- Đây là các cảnh LIÊN TIẾP trong CÙNG 1 video → giữ mạch hình ảnh liền lạc.
-- Cảnh liên tiếp CÙNG bối cảnh → giữ KHÔNG GIAN nhất quán (cùng phòng, cùng layout, cùng hướng ánh sáng), chỉ đổi góc máy/hành động.
-- Đổi góc máy CÓ CHỦ ĐÍCH (vd wide → medium → close để dẫn dắt), KHÔNG nhảy góc ngẫu nhiên giữa các cảnh.
-- Cùng 1 phân đoạn nội dung → tông màu + ánh sáng + bố cục phải nối tiếp mượt với cảnh trước, không đổi đột ngột.
-${prevSceneCtx ? '\n📍 CẢNH NGAY TRƯỚC (cảnh đầu tiên bên dưới phải nối tiếp mượt với cảnh này):\n"' + prevSceneCtx + '"\n' : ''}
-${neighborVO ? `\n🔗 NGỮ CẢNH LÂN CẬN (lời thoại cảnh trước & sau — DÙNG để hiểu bối cảnh nếu cảnh hiện tại thiếu hình ảnh):\n${neighborVO}\n
-⚠️ Nếu lời thoại của cảnh hiện tại KHÔNG có hình ảnh cụ thể (câu hỏi tu từ, câu chuyển ý, câu trừu tượng như "what does it feel like?", "hold that feeling", "here's the thing") → HÃY mượn bối cảnh/nhân vật/không khí từ cảnh trước hoặc cảnh sau để vẽ 1 hình hợp lý, liền mạch. KHÔNG để prompt trống rỗng hay quá chung chung. Hình phải nối tiếp tự nhiên với mạch truyện.` : ''}
-⚠️ TUYỆT ĐỐI KHÔNG:
-- KHÔNG ghi "LOẠI 1", "LOẠI 2", "LOẠI 3", "LOẠI 4", "LOẠI 5" vào prompt output
-- KHÔNG ghi "Type 1", "Type 2", ... hay bất kỳ label phân loại nào
-- KHÔNG ghi "[001]", "[002]" hay chỉ số cảnh vào prompt
-${dm === 'tag' ? '- LUÔN dùng [tên-nhân-vật] và [tên-bối-cảnh] cho MỌI cảnh có nhân vật — KHÔNG tả inline\n- VD đúng: "[narrator-male] walks in [outdoor-nature-daytime]" | VD SAI: "a generic character walks in a green field"\n' : '- KHÔNG dùng ngoặc vuông [] cho tên nhân vật/bối cảnh — TẢ THẲNG bằng chữ tiếng Anh\n'}- Loại cảnh CHỈ DÙNG ĐỂ AI XÁC ĐỊNH STYLE INTERNAL, KHÔNG XUẤT HIỆN trong text prompt cuối cùng
-- Prompt trả về phải BẮT ĐẦU NGAY bằng mô tả visual (vd: "Medium shot of...", "Split layout showing...", "Wide angle of..."), KHÔNG có prefix nào khác
+🔗 IMAGE CONTINUITY (so the video does NOT feel disjointed — very important):
+- These are CONSECUTIVE scenes in the SAME video → keep the visual flow continuous.
+- Consecutive scenes in the SAME setting → keep the SPACE consistent (same room, same layout, same light direction), only change camera angle/action.
+- Change camera angles PURPOSEFULLY (e.g. wide → medium → close to guide the viewer), do NOT jump to random angles between scenes.
+- Same content segment → palette + lighting + composition must flow smoothly from the previous scene, no abrupt changes.
+${prevSceneCtx ? '\n📍 THE IMMEDIATELY PREVIOUS SCENE (the first scene below must flow smoothly from this one):\n"' + prevSceneCtx + '"\n' : ''}
+${neighborVO ? `\n🔗 NEIGHBOR CONTEXT (the previous & next scenes' VO — USE it to understand the setting when the current scene lacks imagery):\n${neighborVO}\n
+⚠️ If the current scene's VO has no concrete imagery (rhetorical questions, transitions, abstract lines like "what does it feel like?", "hold that feeling", "here's the thing") → BORROW the setting/characters/atmosphere from the previous or next scene to draw a fitting, seamless image. Do NOT leave the prompt empty or overly generic. The image must continue the story naturally.` : ''}
+⚠️ ABSOLUTELY DO NOT:
+- Do NOT write "KIND 1", "KIND 2", "KIND 3", "KIND 4", "KIND 5" into the output prompt
+- Do NOT write "Type 1", "Type 2", ... or any classification label
+- Do NOT write "[001]", "[002]" or scene indices into the prompt
+${dm === 'tag' ? '- ALWAYS use [character-name] and [setting-name] for every scene with characters — do NOT describe inline\n- Correct: "[narrator-male] walks in [outdoor-nature-daytime]" | WRONG: "a generic character walks in a green field"\n' : '- Do NOT use square brackets [] for character/setting names — describe them DIRECTLY in English words\n'}- The scene kind is ONLY for the AI to pick the style INTERNALLY, it must NOT APPEAR in the final text prompt
+- The returned prompt must START IMMEDIATELY with the visual description (e.g. "Medium shot of...", "Split layout showing...", "Wide angle of..."), with no other prefix
 
-📐 CÔNG THỨC NANO BANANA (Google DeepMind — model instruction-following dựng trên Gemini, viết prompt THEO ĐÚNG shape này):
-- THỨ TỰ: [Chủ thể + tính từ cụ thể] đang [hành động] tại [bối cảnh] → [bố cục/góc máy] → [ánh sáng/không khí] → [phong cách/nét vẽ để GẦN CUỐI]. Đưa CHỦ THỂ–HÀNH ĐỘNG–BỐI CẢNH lên ĐẦU, phong cách/aesthetic xuống CUỐI (KHÔNG front-load style).
-- DƯƠNG TÍNH: tả thứ MUỐN thấy, HẠN CHẾ tối đa "no X / not Y" (model này không dùng negative prompt kiểu SDXL). Vd "clean plain white background" thay vì "no clutter/no background"; "empty street" thay vì "no cars". Chỉ giữ vài negative thật cần: no text, no watermark (+ no people cho b-roll). ⚠️ NGOẠI LỆ: cảnh INFOGRAPHIC / BIỂU ĐỒ / SO SÁNH / BẢN ĐỒ thì ĐƯỢC & NÊN ghi CHỮ/SỐ thật ngắn (tiêu đề + nhãn 1-4 từ / con số đúng) — với cảnh đó KHÔNG thêm "no text".
-- NGÔN NGỮ TỰ NHIÊN, mạch lạc, câu đầy đủ — KHÔNG nhồi từ khoá rời rạc cách nhau bằng dấu phẩy.
-- KHÔNG ghi "--ar" hay tỉ lệ khung vào prompt (tool đã set tỉ lệ riêng qua API).
+📐 NANO BANANA FORMULA (Google DeepMind — an instruction-following model built on Gemini; write prompts in EXACTLY this shape):
+- ORDER: [Subject + specific adjectives] doing [action] at [setting] → [composition/camera angle] → [lighting/atmosphere] → [style/linework near the END]. Put SUBJECT–ACTION–SETTING FIRST, style/aesthetic at the END (do NOT front-load style).
+- POSITIVE PHRASING: describe what you WANT to see, MINIMIZE "no X / not Y" (this model does not use SDXL-style negative prompts). E.g. "clean plain white background" instead of "no clutter/no background"; "empty street" instead of "no cars". Keep only the few truly needed negatives: no text, no watermark (+ no people for b-roll). ⚠️ EXCEPTION: INFOGRAPHIC / CHART / COMPARISON / MAP scenes SHOULD include real short TEXT/NUMBERS (a title + 1-4 word labels / correct numbers) — for those scenes do NOT add "no text".
+- NATURAL, coherent language, full sentences — do NOT stuff loose keywords separated by commas.
+- Do NOT write "--ar" or aspect ratios into the prompt (the tool sets the ratio separately via the API).
 
-🛡 AN TOÀN NỘI DUNG (BẮT BUỘC — để qua bộ lọc của tool tạo ảnh):
-Tool tạo ảnh (G-Labs) TỪ CHỐI các prompt có nội dung chết chóc/bạo lực/thương vong trực tiếp. Khi VO nhắc đến chết, chìm, đóng băng, thi thể, nạn nhân, máu, đau đớn... PHẢI viết prompt theo cách GIÁN TIẾP, ẩn dụ, tập trung KHÔNG KHÍ thay vì hành động:
-- "drowning / chết đuối" → "floating in dark water looking up, peaceful, eyes closed"
-- "dead body / thi thể" → "figure drifting gently in deep water, calm, distant"
-- "freezing to death / chết cóng" → "shivering, breath visible, wrapped in cold blue tones"
-- "1,500 victims died / hàng nghìn người chết" → "vast empty dark ocean, scattered distant lights, somber mood" (KHÔNG vẽ người chết, KHÔNG số liệu thương vong)
-- "blood / máu, gore" → bỏ hoàn toàn, thay bằng không khí u tối
-- TUYỆT ĐỐI KHÔNG dùng các từ: dead, death, dying, corpse, drowning, blood, gore, victim, suffering trong prompt tiếng Anh
-- Thay bằng: peaceful, drifting, floating, cold, somber, quiet, still, distant, fading
-- Giữ ĐÚNG cảm xúc và không khí của cảnh, chỉ đổi cách diễn đạt để không vi phạm
+🛡 CONTENT SAFETY (MANDATORY — to pass the image tool's filters):
+The image tool (G-Labs) REJECTS prompts with directly deadly/violent/casualty content. When the VO mentions death, drowning, freezing, bodies, victims, blood, suffering... you MUST write the prompt INDIRECTLY, metaphorically, focused on the ATMOSPHERE instead of the action:
+- "drowning" → "floating in dark water looking up, peaceful, eyes closed"
+- "dead body" → "figure drifting gently in deep water, calm, distant"
+- "freezing to death" → "shivering, breath visible, wrapped in cold blue tones"
+- "1,500 victims died / thousands dead" → "vast empty dark ocean, scattered distant lights, somber mood" (no dead bodies, no casualty numbers)
+- "blood / gore" → drop entirely, replace with a dark somber atmosphere
+- ABSOLUTELY do NOT use the words: dead, death, dying, corpse, drowning, blood, gore, victim, suffering in the English prompt
+- Replace with: peaceful, drifting, floating, cold, somber, quiet, still, distant, fading
+- Keep the scene's EXACT emotion and atmosphere, only change the phrasing so it does not violate policy
 
-Ngôn ngữ prompt: TIẾNG ANH (cho image gen). ${refShape && highDetail ? '70-130 từ/prompt (nhân vật để ảnh reference lo, MÔI TRƯỜNG tả dày chi tiết).' : refShape ? '55-110 từ/prompt (nhân vật CHỈ tag — ảnh reference lo ngoại hình, KHÔNG tả lại body-lock; DỒN chữ vào tả MÔI TRƯỜNG/bối cảnh chi tiết + ánh sáng (hướng/màu/tương phản) + bố cục & CHIỀU SÂU → prompt GIÀU CHI TIẾT, ĐIỆN ẢNH, chỉ gọn ở phần nhân vật).' : highDetail ? '90-160 từ/prompt (CHI TIẾT CAO).' : '60-120 từ/prompt.'}
+Prompt language: ENGLISH (for image gen). ${refShape && highDetail ? '70-130 words/prompt (characters are handled by the reference image; describe the ENVIRONMENT densely in detail).' : refShape ? '55-110 words/prompt (characters are ONLY a tag — the reference image handles the appearance, do NOT re-describe body-lock; SPEND the words on the detailed ENVIRONMENT/setting + lighting (direction/color/contrast) + composition & DEPTH → the prompt stays RICH and CINEMATIC, terse only on the character part).' : highDetail ? '90-160 words/prompt (HIGH DETAIL).' : '60-120 words/prompt.'}
 ${highDetail ? `
-🔍 CHẾ ĐỘ CHI TIẾT CAO — làm ảnh DÀY chi tiết như tranh minh hoạ kể chuyện:
-- ĐẠO CỤ TIỀN CẢNH: gọi tên 3-6 vật cụ thể trong cảnh (vd thùng gỗ, dây thừng cuộn, vò gốm, đuốc, bàn thợ, vũ khí treo tường, sạp hàng) — KHÔNG để nền trống.
-- VẬT LIỆU & TEXTURE: ghi chất liệu bề mặt (gỗ sờn, đồng tán đinh, đá rêu, vải lanh, kim loại gỉ, vữa nứt) để ảnh có độ dày.
-- LỚP CHIỀU SÂU: tả riêng tiền cảnh / trung cảnh / hậu cảnh (vd hậu cảnh có núi xa, cột đền, tàu thuyền, mái nhà, đám đông mờ) để tạo depth.
-- ÁNH SÁNG CỤ THỂ: nguồn sáng + hướng + màu (vd "warm torchlight from the left casting long shadows", "overcast grey daylight from above").
-- Vẫn giữ ĐÚNG art-style của kênh (nét vẽ, tỉ lệ nhân vật, bảng màu) — chỉ thêm chi tiết MÔI TRƯỜNG, KHÔNG đổi style nhân vật.
-- Thêm chi tiết nhưng VẪN giữ luật NO-TEXT ở trên — KHÔNG thêm chữ/label vào ảnh.
+🔍 HIGH-DETAIL MODE — make the image DENSELY detailed like narrative illustration:
+- FOREGROUND PROPS: name 3-6 concrete objects in the scene (e.g. wooden crates, coiled rope, clay jars, torches, a workbench, weapons on the wall, a market stall) — do NOT leave the background empty.
+- MATERIALS & TEXTURE: state surface materials (worn wood, nailed brass, mossy stone, linen fabric, rusted metal, cracked plaster) so the image gains depth.
+- DEPTH LAYERS: describe foreground / midground / background separately (e.g. distant mountains, temple columns, ships, rooftops, a blurred crowd) to create depth.
+- SPECIFIC LIGHTING: source + direction + color (e.g. "warm torchlight from the left casting long shadows", "overcast grey daylight from above").
+- Still keep the channel's EXACT art-style (linework, character proportions, palette) — only add ENVIRONMENTAL detail, do NOT change the character style.
+- Add detail but STILL respect the NO-TEXT rules above — do NOT add text/labels into the image.
 ` : ''}${shortMode ? `
-⚡ CHẾ ĐỘ PROMPT NGẮN (người dùng sẽ ĐÍNH ẢNH REFERENCE của nhân vật khi gen):
-- KHÔNG mô tả ngoại hình nhân vật chi tiết (KHÔNG tả đầu tròn, mắt, tay chân, tóc, quần áo, tỉ lệ cơ thể) — ảnh reference đã lo việc đó
-- CHỈ ghi: [tên-nhân-vật] + HÀNH ĐỘNG + TƯ THẾ + cảm xúc (vd: "[passenger-bunk] lying on bunk staring at ceiling, worried")
-- TẬP TRUNG mô tả: bối cảnh, ánh sáng, góc máy, tông màu, không khí
-- KHÔNG nhắc lại đặc điểm style nhân vật — để reference image quyết định
-- Vẫn giữ mô tả style chung cho MÔI TRƯỜNG (flat 2D, màu sắc, outline) nhưng KHÔNG áp lên nhân vật
+⚡ SHORT PROMPT MODE (the user will attach the character's REFERENCE IMAGE when generating):
+- Do NOT describe the character's appearance in detail (no round head, eyes, limbs, hair, clothes, body proportions) — the reference image handles that
+- Write ONLY: [character-name] + ACTION + POSE + emotion (e.g.: "[passenger-bunk] lying on bunk staring at ceiling, worried")
+- FOCUS on describing: setting, lighting, camera angle, palette, atmosphere
+- Do NOT repeat character style traits — let the reference image decide
+- Still keep the general style description for the ENVIRONMENT (flat 2D, colors, outline) but do NOT apply it to characters
 ` : ''}
 
 ${luatThuc}
 
-⚠️ VIẾT ĐẦY ĐỦ prompt RIÊNG cho TỪNG cảnh trong danh sách — KHÔNG được lười:
-- KHÔNG dùng "...", "...full prompt...", "[full prompt]", "same as above", "như cảnh trước", "tương tự".
-- KHÔNG bỏ trống, KHÔNG viết tắt. Mỗi cảnh PHẢI có 1 prompt hoàn chỉnh độc lập, đủ chữ.
+⚠️ Write the FULL SEPARATE prompt for EVERY scene in the list — do NOT get lazy:
+- No "...", "...full prompt...", "[full prompt]", "same as above", "like the previous scene", "similar".
+- No blanks, no abbreviations. Every scene MUST have 1 complete standalone prompt, fully written.
 
-Trả về CHỈ JSON array (mỗi cảnh 1 phần tử ĐẦY ĐỦ):
-[{"id":"001","prompt":"<prompt hoàn chỉnh>"}, ...]
+Return ONLY a JSON array (each scene 1 COMPLETE element):
+[{"id":"001","prompt":"<complete prompt>"}, ...]
 
-CÁC CẢNH:
-${batch.map(s => `[${s.id}] VO: "${s.text}" | nhân vật: ${s.character || '-'} | bối cảnh: ${s.background || '-'} | camera: ${s.camera} | ${s.duration}s${_laThuc(s) ? ' | ⚑ TƯ LIỆU THẬT' : ''}`).join('\n')}`;
+THE SCENES:
+${batch.map(s => `[${s.id}] VO: "${s.text}" | character: ${s.character || '-'} | setting: ${s.background || '-'} | camera: ${s.camera} | ${s.duration}s${_laThuc(s) ? ' | ⚑ REAL FOOTAGE' : ''}`).join('\n')}`;
   return prompt;
 }
 
@@ -14350,7 +14350,7 @@ async function genSingleScenePrompt(id){
   if (idx < 0) return;
   await genVideoLogline(false);
   const scene = state.scenes[idx];
-  const profileContext = `Kênh: ${p.tenKenh}\nNgách: ${p.ngach}\nPOV: ${p.povStyle}\nCấu trúc: ${p.cauTruc}`;
+  const profileContext = `Channel: ${p.tenKenh}\nNiche: ${p.ngach}\nPOV: ${p.povStyle}\nStructure: ${p.cauTruc}`;
   // Lấy cảnh ngay trước làm ngữ cảnh liên tục
   let prevSceneCtx = '';
   if (idx > 0) {
@@ -14362,8 +14362,8 @@ async function genSingleScenePrompt(id){
   let neighborVO = '';
   const prevS = state.scenes[idx - 1];
   const nextS = state.scenes[idx + 1];
-  if (prevS) neighborVO += `Cảnh trước [${prevS.id}]: "${(prevS.text || '').slice(0, 200)}"\n`;
-  if (nextS) neighborVO += `Cảnh sau [${nextS.id}]: "${(nextS.text || '').slice(0, 200)}"`;
+  if (prevS) neighborVO += `Previous scene [${prevS.id}]: "${(prevS.text || '').slice(0, 200)}"\n`;
+  if (nextS) neighborVO += `Next scene [${nextS.id}]: "${(nextS.text || '').slice(0, 200)}"`;
   setStatus2(`Đang tạo lại prompt cảnh [${id}]...`, 'working');
   try {
     const prompt = buildSceneGenPrompt([scene], prevSceneCtx, p, profileContext, neighborVO);
@@ -14410,7 +14410,7 @@ async function t2RegenAllPrompts(){
   if (typeof clearCancel === 'function') clearCancel();
   try {
     if (typeof genVideoLogline === 'function') { try { await genVideoLogline(false); } catch (e) {} }
-    const profileContext = `Kênh: ${p.tenKenh}\nNgách: ${p.ngach}\nPOV: ${p.povStyle}\nCấu trúc: ${p.cauTruc}`;
+    const profileContext = `Channel: ${p.tenKenh}\nNiche: ${p.ngach}\nPOV: ${p.povStyle}\nStructure: ${p.cauTruc}`;
     const B = 6; let done = 0;
     if (!state.scenePrompts) state.scenePrompts = {};
     const batches = [];
@@ -14465,20 +14465,20 @@ async function makeSafePrompt(id, which){
 
   setStatus2(`Đang làm mềm prompt [${id}${which === 'B' ? 'b' : ''}]...`, 'working');
   try {
-    const prompt = `Prompt tạo ảnh dưới đây bị bộ lọc nội dung TỪ CHỐI (vì có nội dung chết chóc/bạo lực/thương vong). Hãy VIẾT LẠI để qua được bộ lọc mà GIỮ NGUYÊN ý nghĩa, bối cảnh, style, góc máy.
+    const prompt = `The image prompt below was REJECTED by a content filter (it contains death/violence/casualty content). REWRITE it so it passes the filter while KEEPING the same meaning, setting, style and camera angle.
 
-QUY TẮC viết lại:
-- Bỏ hết từ: dead, death, dying, corpse, drowning, blood, gore, victim, suffering, kill, die
-- Thay bằng cách diễn đạt gián tiếp: peaceful, drifting, floating, eyes closed, cold, somber, quiet, still, distant, fading, motionless
-- Cảnh người chết/chìm → "figure drifting peacefully in dark water, eyes closed, calm"
-- Cảnh thương vong số đông → "vast empty dark scene, somber mood, distant scattered lights" (KHÔNG vẽ người)
-- Giữ nguyên: tên nhân vật [trong ngoặc], tên bối cảnh [trong ngoặc], style, ánh sáng, góc máy, tông màu
-- Giữ độ dài tương đương
+REWRITE RULES:
+- Remove every word: dead, death, dying, corpse, drowning, blood, gore, victim, suffering, kill, die
+- Replace with indirect wording: peaceful, drifting, floating, eyes closed, cold, somber, quiet, still, distant, fading, motionless
+- A dead/drowning person → "figure drifting peacefully in dark water, eyes closed, calm"
+- Mass casualties → "vast empty dark scene, somber mood, distant scattered lights" (do NOT draw people)
+- Keep unchanged: character names [in brackets], background names [in brackets], style, lighting, camera angle, color tone
+- Keep roughly the same length
 
-PROMPT GỐC (bị chặn):
+ORIGINAL PROMPT (blocked):
 ${original}
 
-Trả về CHỈ prompt đã viết lại (tiếng Anh), không giải thích.`;
+Return ONLY the rewritten prompt (in English), no explanation.`;
     const safe = await callClaude(prompt, 600);
     store[id] = safe.trim();
     renderPromptsV();
@@ -14569,21 +14569,21 @@ async function genBatchPromptB(batch, p){
     return `[${s.id}]${tag} (${s.duration}s)\nVO: "${s.text}"\nPrompt A: "${promptA}"`;
   }).join('\n\n');
 
-  const sysPrompt = `Bạn là prompt engineer G-Labs. Với MỖI cảnh dưới đây, tạo Prompt B — ảnh THỨ HAI của CÙNG cảnh (chiếu ngay sau Prompt A, chia đôi thời lượng).
+  const sysPrompt = `You are a G-Labs prompt engineer. For EACH scene below, create Prompt B — the SECOND image of the SAME scene (shown right after Prompt A, splitting the duration in half).
 
-Mỗi Prompt B phải:
-- Cùng nhân vật, bối cảnh, style với Prompt A của cảnh đó
-- GIỮ NGUYÊN các tag tham chiếu [tên-nhân-vật] và [tên-bối-cảnh] Y HỆT Prompt A: nếu Prompt A có [dealer-male] [perfumed-room] thì Prompt B PHẢI dùng lại đúng [dealer-male] [perfumed-room] (kèm dấu ngoặc vuông) — TUYỆT ĐỐI KHÔNG đổi thành "dealer-male", "the man", "the child"... (để G-Labs giữ nhân vật/bối cảnh nhất quán với reference sheet)
-- Cảnh THƯỜNG: thể hiện khoảnh khắc/hành động TIẾP THEO (nửa sau) trong cùng cảnh.
-- Cảnh [LOẠI: INFOGRAPHIC/BIỂU ĐỒ]: KHÔNG vẽ "hành động tiếp theo". Thay vào đó vẽ một GÓC KHÁC/PHẦN BỔ SUNG của cùng dữ liệu (vd Prompt A cho con số/vế đầu → Prompt B cho vế còn lại hoặc kết luận), nền trắng, CHỦ YẾU icon/hình khối, RẤT ÍT chữ (tối đa tiêu đề ngắn + vài số) — KHÔNG lặp y hệt Prompt A, KHÔNG nhồi chữ.
-- Cùng độ dài & format với Prompt A (~60-100 từ)
-- Tiếng Anh, bắt đầu ngay bằng mô tả visual
+Each Prompt B must:
+- Use the same characters, setting and style as that scene's Prompt A
+- KEEP the reference tags [character-name] and [background-name] EXACTLY as in Prompt A: if Prompt A has [dealer-male] [perfumed-room] then Prompt B MUST reuse exactly [dealer-male] [perfumed-room] (with brackets) — NEVER change them to "dealer-male", "the man", "the child"... (so G-Labs keeps characters/settings consistent with the reference sheet)
+- Normal scenes: show the NEXT moment/action (second half) within the same scene.
+- Scenes tagged [LOẠI: INFOGRAPHIC/BIỂU ĐỒ]: do NOT draw a "next action". Instead draw a DIFFERENT ANGLE/COMPLEMENTARY PART of the same data (e.g. Prompt A shows the number/first half → Prompt B shows the remaining half or the conclusion), white background, mostly icons/shapes, VERY LITTLE text (at most a short title + a few numbers) — do NOT repeat Prompt A verbatim, do not stuff text.
+- Same length & format as Prompt A (~60-100 words)
+- In English, starting directly with the visual description
 
-CÁC CẢNH:
+SCENES:
 ${sceneBlocks}
 
-Trả về JSON object, key là id cảnh, value là prompt B (tiếng Anh). VD: {"007":"...","012":"..."}
-CHỈ trả JSON, không giải thích, không suy luận.`;
+Return a JSON object keyed by scene id, value being Prompt B (in English). Example: {"007":"...","012":"..."}
+Return ONLY JSON, no explanation, no reasoning.`;
 
   // callLLMJson: ép JSON + thinking off + validate (object có ≥1 value chuỗi cho id trong batch)
   // → chống DeepSeek xả nguyên đoạn suy luận vào prompt B
@@ -14634,19 +14634,19 @@ async function genSingleScenePromptB(id){
   if (!promptA) return setStatus2(`Cần tạo Prompt A cho cảnh [${id}] trước.`, 'error');
   setStatus2(`Đang tạo Prompt B cảnh [${id}]...`, 'working');
   try {
-    const sysPrompt = `Bạn là prompt engineer G-Labs. Dựa trên Prompt A của cảnh, tạo Prompt B cho NỬA SAU của cảnh đó.
-Prompt B phải:
-- Cùng nhân vật, bối cảnh, style với Prompt A
-- GIỮ NGUYÊN các tag tham chiếu [tên-nhân-vật] và [tên-bối-cảnh] Y HỆT Prompt A: nếu Prompt A có [dealer-male] [perfumed-room] thì Prompt B PHẢI dùng lại đúng [dealer-male] [perfumed-room] (kèm dấu ngoặc vuông) — TUYỆT ĐỐI KHÔNG đổi thành "dealer-male", "the man", "the child"... (để G-Labs giữ nhân vật/bối cảnh nhất quán với reference sheet)
-- Thể hiện HÀNH ĐỘNG / TRẠNG THÁI tiếp theo (sau khi Prompt A kết thúc)
-- Cùng độ dài và format với Prompt A (~60-100 từ)
-- Tiếng Anh, bắt đầu ngay bằng mô tả visual
+    const sysPrompt = `You are a G-Labs prompt engineer. Based on the scene's Prompt A, create Prompt B for the SECOND HALF of that scene.
+Prompt B must:
+- Use the same characters, setting and style as Prompt A
+- KEEP the reference tags [character-name] and [background-name] EXACTLY as in Prompt A: if Prompt A has [dealer-male] [perfumed-room] then Prompt B MUST reuse exactly [dealer-male] [perfumed-room] (with brackets) — NEVER change them to "dealer-male", "the man", "the child"... (so G-Labs keeps characters/settings consistent with the reference sheet)
+- Show the NEXT action / state (after Prompt A ends)
+- Same length and format as Prompt A (~60-100 words)
+- In English, starting directly with the visual description
 
-VO cảnh: "${scene.text}"
-Thời lượng: ${scene.duration}s
+Scene VO: "${scene.text}"
+Duration: ${scene.duration}s
 Prompt A: "${promptA}"
 
-Trả về CHỈ 1 JSON object: {"prompt":"<prompt B tiếng Anh, bắt đầu ngay bằng mô tả visual, KHÔNG prefix>"}. KHÔNG giải thích, KHÔNG suy luận, KHÔNG văn xuôi ngoài JSON.`;
+Return ONLY 1 JSON object: {"prompt":"<Prompt B in English, starting directly with the visual description, no prefix>"}. No explanation, no reasoning, no prose outside the JSON.`;
     // callLLMJson: ép JSON + thinking off → chống DeepSeek xả suy luận thành prompt
     const got = await callLLMJson(sysPrompt, {
       maxTokens: 500,
@@ -14702,7 +14702,7 @@ async function doGenerateScenePrompts(){
     ? `Chạy tiếp: đã có ${already} prompt, còn ${todo.length} cảnh...`
     : 'AI đang sinh prompt ảnh...', 'working');
   clearCancel();
-  const profileContext = `Kênh: ${p.tenKenh}\nNgách: ${p.ngach}\nPOV: ${p.povStyle}\nCấu trúc: ${p.cauTruc}`;
+  const profileContext = `Channel: ${p.tenKenh}\nNiche: ${p.ngach}\nPOV: ${p.povStyle}\nStructure: ${p.cauTruc}`;
 
   // Ngữ cảnh cảnh ngay trước (giữ mạch hình ảnh liền lạc, tránh rời rạc)
   let prevSceneCtx = '';
@@ -16262,12 +16262,12 @@ async function autoFillEra(force){
   const prevPh = el.placeholder;
   el.placeholder = '⏳ Đang suy bối cảnh & thời đại từ kịch bản...';
   try {
-    const prompt = `Đọc đoạn kịch bản dưới đây. Trả về CHỈ 1 JSON object mô tả BỐI CẢNH + THỜI ĐẠI + VĂN HOÁ (tiếng Anh, 1 dòng) để chọn TRANG PHỤC + KIỂU TÓC/ĐỘI ĐẦU đúng thời: nơi chốn, thời kỳ (kèm năm nếu suy được), vài món trang phục đặc trưng, kiểu tóc/đội đầu đặc trưng.
-Định dạng: {"era":"<mô tả 1 dòng>"}
-VD: {"era":"Ancient Egypt, New Kingdom (~1300 BCE) — clothing: linen kilts, wesekh collars, sandals; hair: shaved heads or black bob wigs, nemes headcloth; no modern clothing or hairstyles"}
-CHỈ in JSON, KHÔNG giải thích.
+    const prompt = `Read the script excerpt below. Return ONLY 1 JSON object describing the SETTING + ERA + CULTURE (in English, one line) so that period-correct CLOTHING + HAIR/HEADWEAR can be chosen: place, time period (with year if inferable), a few signature garments, signature hairstyles/headwear.
+Format: {"era":"<one-line description>"}
+Example: {"era":"Ancient Egypt, New Kingdom (~1300 BCE) — clothing: linen kilts, wesekh collars, sandals; hair: shaved heads or black bob wigs, nemes headcloth; no modern clothing or hairstyles"}
+Print ONLY the JSON, no explanation.
 
-KỊCH BẢN:
+SCRIPT:
 """
 ${script.slice(0, 2500)}
 """`;
@@ -16432,7 +16432,7 @@ function clearAllCharImages(){
 /* Luật CẤM CHỮ + layout sạch dùng chung cho mọi prompt asset.
    Trước đây prompt liệt kê "panel 1...", "neutral, sad..." → G-Labs vẽ luôn chữ vào ảnh.
    3 hằng số dưới buộc AI mô tả bố cục mà KHÔNG sinh chữ/nhãn trên ảnh. */
-const ASSET_NO_TEXT_RULE = 'NO-TEXT RULE (bắt buộc, ưu tiên cao nhất): ảnh cuối cùng KHÔNG được chứa bất kỳ chữ nào — không tiêu đề, không header, không số thứ tự panel, không nhãn, không tên cảm xúc, không caption, không watermark, không chữ ký. TUYỆT ĐỐI không ghi nhãn cho các góc nhìn hay biểu cảm. Prompt bạn viết ra PHẢI kết thúc bằng đúng câu: "no text, no title, no labels, no captions, no numbers, no watermark anywhere in the image, pure artwork only".';
+const ASSET_NO_TEXT_RULE = 'NO-TEXT RULE (mandatory, highest priority): the final image must NOT contain any text at all — no titles, no headers, no panel numbers, no labels, no emotion names, no captions, no watermarks, no signatures. NEVER label the views or the expressions. The prompt you write MUST end with exactly this sentence: "no text, no title, no labels, no captions, no numbers, no watermark anywhere in the image, pure artwork only".';
 
 const ASSET_CHAR_LAYOUT = 'LAYOUT: one clean character reference sheet on a plain off-white background. The SAME character shown full-body from five angles in a single horizontal row: front, three-quarter front, side profile, three-quarter back, full back. Full-body turnaround ONLY — NO expression chart, NO row or grid of face close-ups, NO thumbnail strip, NO extra panels or tiles below or beside the figures. Identical character design, proportions and outfit in every pose. LIGHTING: even, soft, neutral reference lighting that reveals every design detail clearly — no heavy dramatic shadows that hide the face, hands or costume. CRISPNESS: razor-sharp clean linework with precise edges, high resolution, deep sharp focus across the whole sheet, richly detailed, never soft, blurry, hazy or washed out. ' + ASSET_NO_TEXT_RULE;
 
@@ -16454,14 +16454,14 @@ function _t3StyleCtx(){
   const eraInput = (document.getElementById('t3Era')?.value || state.t3Era || '').trim();
   const scriptHint = (state.script || '').replace(/\s+/g, ' ').trim().slice(0, 700);
   const eraCtx = eraInput
-    ? `\nBỐI CẢNH & THỜI ĐẠI (suy TRANG PHỤC đúng thời từ đây): ${eraInput}`
-    : (scriptHint ? `\nTRÍCH KỊCH BẢN (suy thời đại + trang phục từ đây): "${scriptHint}"` : '');
+    ? `\nSETTING & ERA (infer period-correct CLOTHING from this): ${eraInput}`
+    : (scriptHint ? `\nSCRIPT EXCERPT (infer era + clothing from this): "${scriptHint}"` : '');
   const eraRule = (eraInput || scriptHint)
-    ? `\n- TRANG PHỤC + KIỂU TÓC/ĐỘI ĐẦU + phụ kiện phải ĐÚNG thời đại/bối cảnh ở trên (vd Ai Cập cổ → khố/váy lanh, áo choàng lanh, vòng cổ wesekh, dép cói; KHÔNG vest/sơ mi/cà vạt/tạp dề hiện đại nếu sai thời). GIỮ NGUYÊN art-style/phong cách render của kênh ĐÚNG theo Character Style ở trên (vd kênh ảnh thật → giữ ảnh thật, kênh 2D → giữ 2D) — CHỈ đổi quần áo, tóc, kiểu đầu, đội đầu, trang sức cho khớp thời đại, KHÔNG đổi phong cách vẽ/chất liệu.`
+    ? `\n- Clothing + HAIR/HEADWEAR + accessories must be CORRECT for the era/setting above (e.g. ancient Egypt → linen kilts/skirts, linen cloaks, wesekh collars, papyrus sandals; NO modern suits/shirts/ties/aprons when anachronistic). KEEP the channel's art-style/render medium EXACTLY as defined in the Character Style above (e.g. real-photo channel stays photoreal, 2D channel stays 2D) — ONLY change clothes, hair, headwear, jewelry to match the era, NEVER change the drawing style/material.`
     : '';
   // 🏺 Luật thời đại cho BỐI CẢNH (kiến trúc/vật liệu/đồ vật/ánh sáng theo đúng thời)
   const eraRuleBg = (eraInput || scriptHint)
-    ? `\n- Kiến trúc, vật liệu, đồ vật và nguồn sáng của bối cảnh phải ĐÚNG thời đại/nơi chốn ở trên — KHÔNG để lẫn yếu tố hiện đại sai thời (vd Ai Cập cổ → tường gạch bùn/đá, cột khắc chữ tượng hình, đèn dầu/đuốc; KHÔNG bóng đèn điện, kính, kim loại/nhựa hiện đại).`
+    ? `\n- The setting's architecture, materials, objects and light sources must be CORRECT for the era/place above — NO anachronistic modern elements (e.g. ancient Egypt → mud-brick/stone walls, hieroglyph-carved columns, oil lamps/torches; NO electric bulbs, glass, modern metal/plastic).`
     : '';
   // 🖼 Kiểu ảnh bối cảnh: 'single' = 1 ảnh/mỗi bối cảnh (nét, ít lỗi) | 'grid' = 4 góc trong 1 ảnh
   const bgLayoutMode = (document.getElementById('t3BgLayout')?.value || state.t3BgLayout || 'single');
@@ -16592,17 +16592,17 @@ async function genOneCharPrompt(rawName, ctx, opts = {}){
     if (k < 0) k = Math.abs([...String(name)].reduce((a, c) => a * 31 + c.charCodeAt(0) | 0, 7)) % _MAU_AO.length;
     return _MAU_AO[k % _MAU_AO.length];
   })();
-  const _khacCtx = `\nMÀU ÁO NGOÀI BẮT BUỘC của nhân vật này: ${_mauCua}. Mỗi nhân vật trong video được gán một màu KHÁC NHAU — kênh này vẽ mặt tối giản nên MÀU TRANG PHỤC là thứ DUY NHẤT phân biệt được người này với người kia. Chọn kiểu áo hợp nghề nghiệp, nhưng màu phải đúng màu trên.`;
+  const _khacCtx = `\nMANDATORY OUTER GARMENT COLOR for this character: ${_mauCua}. Each character in the video is assigned a DIFFERENT color — this channel draws minimal faces, so GARMENT COLOR is the ONLY way to tell people apart. Pick a garment style fitting the profession, but the color must be exactly the color above.`;
 
   const _ctxKB = _nhanVatTrongKichBan(name);
   const _kbCtx = _ctxKB
-    ? `\nNHÂN VẬT NÀY TRONG KỊCH BẢN (suy NGHỀ NGHIỆP + vai trò từ đây, rồi mới chọn trang phục cho hợp): "${_ctxKB}"`
+    ? `\nTHIS CHARACTER IN THE SCRIPT (infer PROFESSION + role from this, then choose fitting clothing): "${_ctxKB}"`
     : '';
 
-  const descReq = (extra) => `Mô tả NGOẠI HÌNH RIÊNG của nhân vật [${name}] cho kênh "${ctx.p?.tenKenh || ''} — ${ctx.p?.ngach || ''}".${ctx.eraCtx}${_kbCtx}${_khacCtx}
+  const descReq = (extra) => `Describe the INDIVIDUAL appearance of character [${name}] for the channel "${ctx.p?.tenKenh || ''} — ${ctx.p?.ngach || ''}".${ctx.eraCtx}${_kbCtx}${_khacCtx}
 ${extra}
-Trả về 1-3 câu tiếng Anh NGẮN (40-80 từ), BẮT ĐẦU bằng "The character [${name}] wears", mô tả: TRANG PHỤC đúng thời đại, KIỂU TÓC/ĐỘI ĐẦU, tuổi/giới, đặc điểm nhận dạng riêng.
-KHÔNG tả lại art-style chung của kênh, KHÔNG mô tả layout/bố cục, KHÔNG luật no-text. Trả về CHỈ câu mô tả.`;
+Return 1-3 SHORT English sentences (40-80 words), STARTING with "The character [${name}] wears", describing: period-correct CLOTHING, HAIR/HEADWEAR, age/gender, distinctive identifying traits.
+Do NOT re-describe the channel's overall art-style, do NOT describe layout/composition, no no-text rules. Return ONLY the description sentence(s).`;
 
   let desc;
   const _sceneDesc = (!opts.forceRewrite) ? _charDescFromScenes(name) : '';   // opts.forceRewrite → bỏ qua, cho AI viết mới
@@ -16610,11 +16610,11 @@ KHÔNG tả lại art-style chung của kênh, KHÔNG mô tả layout/bố cục
     // ✅ Dùng ĐÚNG mô tả trang phục trong prompt cảnh → ảnh tham chiếu khớp ảnh cảnh (hết lệch quần áo).
     desc = `The character [${name}] is ${_sceneDesc}`;
   } else if (img) {
-    desc = await callClaudeWithImage(descReq('Dựa CHÍNH XÁC vào ảnh reference đính kèm (trang phục, màu sắc, kiểu tóc, đặc điểm khuôn mặt).'), img.base64, img.mediaType, 400);
+    desc = await callClaudeWithImage(descReq('Base your answer EXACTLY on the attached reference image (clothing, colors, hairstyle, facial features).'), img.base64, img.mediaType, 400);
   } else if (anchor) {
-    desc = await callClaudeWithImage(descReq('Suy trang phục/tóc/đặc điểm từ TÊN nhân vật + thời đại + ngách kênh (ảnh đính kèm chỉ để tham khảo tinh thần style).'), anchor.base64, anchor.mediaType, 400);
+    desc = await callClaudeWithImage(descReq('Infer clothing/hair/traits from the character NAME + era + channel niche (the attached image is only a style-spirit reference).'), anchor.base64, anchor.mediaType, 400);
   } else {
-    desc = await callClaude(descReq('Suy trang phục/tóc/đặc điểm từ TÊN nhân vật + thời đại + ngách kênh.'), 400);
+    desc = await callClaude(descReq('Infer clothing/hair/traits from the character NAME + era + channel niche.'), 400);
   }
   desc = cleanPrompt(String(desc || '').trim());
   if (desc && !desc.includes('[' + name + ']')) desc = `The character [${name}]. ` + desc;   // đảm bảo có tag
@@ -16631,23 +16631,23 @@ async function genOneBgPrompt(name, ctx, opts = {}){
     const libEntry = checkLibraryFor('bg', name);
     if (libEntry) { state.assetBgPrompts[name] = libEntry.prompt; return { name, pulled: true }; }
   }
-  const promptText = `Tạo 1 prompt ảnh chi tiết cho background reference location [${name}].
+  const promptText = `Create 1 detailed image prompt for a background reference location [${name}].
 
 Style template:
 """
 ${ctx.bgStyle}
 """
 
-ĐỊNH HƯỚNG LOOK (diễn đạt DƯƠNG TÍNH trong prompt — KHÔNG chép nguyên thành danh sách "no/not"): ${ctx.rules}
-Kênh: ${ctx.p?.tenKenh || ''} — ${ctx.p?.ngach || ''}${ctx.eraCtx}
+LOOK DIRECTION (phrase POSITIVELY in the prompt — do NOT copy it verbatim as a "no/not" list): ${ctx.rules}
+Channel: ${ctx.p?.tenKenh || ''} — ${ctx.p?.ngach || ''}${ctx.eraCtx}
 
-Yêu cầu:
-- Mô tả chi tiết môi trường, đồ vật, ánh sáng, PHỐI CẢNH & CHIỀU SÂU (tiền cảnh–trung cảnh–hậu cảnh) để bối cảnh có không gian
-- Ghi tên bối cảnh [${name}] trong prompt
-- DƯƠNG TÍNH: tả thứ MUỐN thấy, HẠN CHẾ tối đa "no X / not Y" (Nano Banana là model instruction-following, không dùng negative kiểu SDXL). Chỉ giữ vài negative thật cần: no text, no watermark, và no people / no characters (đây là ảnh bối cảnh trống)${ctx.eraRuleBg}
+Requirements:
+- Describe the environment, props and lighting in detail, plus COMPOSITION & DEPTH (foreground–midground–background) so the setting has real space
+- Include the background name [${name}] in the prompt
+- POSITIVE PHRASING: describe what you WANT to see, MINIMIZE "no X / not Y" (Nano Banana is an instruction-following model, no SDXL-style negatives). Keep only the few truly needed negatives: no text, no watermark, and no people / no characters (this is an empty background plate)${ctx.eraRuleBg}
 - ${ctx.bgLayout}
-- 100-150 từ tiếng Anh
-- Trả về CHỈ prompt text.`;
+- 100-150 English words
+- Return ONLY the prompt text.`;
   state.assetBgPrompts[name] = await callClaude(promptText, 500);
   return { name, pulled: false };
 }
@@ -16761,7 +16761,7 @@ async function genAllAssetPrompts(){
     if (bgsToGen.length && !state.cancelRequested) {
       setStatus3(`Đang tạo ${bgsToGen.length} prompt bối cảnh (1 lần gọi)...`, 'working');
       const bgListStr = bgsToGen.map(n => `[${n}]`).join('\n');
-      const batchBgPrompt = `Tạo prompt ảnh chi tiết cho NHIỀU background reference location dưới đây.
+      const batchBgPrompt = `Create detailed image prompts for the MULTIPLE background reference locations below.
 
 Style template:
 """
@@ -16769,20 +16769,20 @@ ${bgStyle}
 """
 
 NEGATIVE/RULES: ${rules}
-Kênh: ${p?.tenKenh || ''} — ${p?.ngach || ''}${eraCtx}
+Channel: ${p?.tenKenh || ''} — ${p?.ngach || ''}${eraCtx}
 
-Danh sách bối cảnh:
+Background list:
 ${bgListStr}
 
-Với MỖI bối cảnh, tạo 1 prompt:
-- Mô tả chi tiết môi trường, đồ vật, ánh sáng
-- Ghi tên bối cảnh [tên] trong prompt
+For EACH background, create 1 prompt:
+- Describe the environment, props and lighting in detail
+- Include the background name [name] in the prompt
 - NO characters NO people${eraRuleBg}
 - ${bgLayout}
-- 100-150 từ tiếng Anh mỗi prompt
+- 100-150 English words per prompt
 
-Trả về JSON object, key là tên bối cảnh (không có ngoặc vuông), value là prompt text. VD: {"ship-cabin-night":"...","ship-deck-night":"..."}
-CHỈ trả JSON, không giải thích.`;
+Return a JSON object keyed by background name (no brackets), value being the prompt text. Example: {"ship-cabin-night":"...","ship-deck-night":"..."}
+Return ONLY JSON, no explanation.`;
       try {
         const reply = await callClaude(batchBgPrompt, 3000);
         const clean = reply.replace(/```json|```/g, '').trim();
@@ -16832,25 +16832,25 @@ async function genStyleReference(){
   if (!p) return setStatus3('Cần Profile.', 'error');
   setStatus3('AI đang tạo Style Reference prompt...', 'working');
   try {
-    const prompt = `Tạo 1 prompt ảnh cho "Channel Visual Style Reference Sheet" — 1 ảnh master tóm tắt toàn bộ style visual của kênh, dùng làm chuẩn cho mọi video sau.
+    const prompt = `Create 1 image prompt for a "Channel Visual Style Reference Sheet" — one master image summarizing the channel's entire visual style, used as the standard for all future videos.
 
-Kênh: ${p.tenKenh} — ${p.ngach}
+Channel: ${p.tenKenh} — ${p.ngach}
 Visual Style: ${p.visualStyle}
-Character Style (ÁP DỤNG ĐẦY ĐỦ — đặc biệt cách dựng cơ thể, tay/chân, bàn tay và mặt): ${p.characterStyle || ''}
+Character Style (apply IN FULL — especially how bodies, arms/legs, hands and faces are built): ${p.characterStyle || ''}
 Background Style: ${(p.backgroundStyle || '').slice(0, 700)}
 Scene Style: ${(p.sceneStyle || '').slice(0, 400)}
 
-LAYOUT BẮT BUỘC — ảnh chia 3 hàng ngang rõ ràng, phân cách bằng đường kẻ mảnh:
-- HÀNG 1 (trên cùng): color palette — 8 ô vuông màu đại diện cho bảng màu chủ đạo của kênh (lấy từ style), xếp ngang đều nhau
-- HÀNG 2 (giữa): line-up 8 nhân vật mẫu đa dạng (nam/nữ, già/trẻ, các nghề khác nhau phù hợp ngách kênh) — TẤT CẢ cùng art style nhất quán, đứng full-body front view, nền trắng, có bóng đổ nhẹ dưới chân. CÁCH DỰNG CƠ THỂ của cả 8 nhân vật PHẢI đúng y hệt Character Style ở trên (vd nếu Character Style yêu cầu tay/chân là nét que đen mảnh + bàn tay mitten trắng + mặt off-white thì cả 8 đều phải vậy) — TUYỆT ĐỐI không vẽ thành người cartoon tỉ lệ thường
-- HÀNG 3 (dưới cùng): 3 ô bối cảnh mẫu (3 môi trường tiêu biểu của kênh) với lighting và mood khác nhau, bo góc nhẹ
+MANDATORY LAYOUT — the image is divided into 3 clear horizontal rows, separated by thin divider lines:
+- ROW 1 (top): color palette — 8 color squares representing the channel's dominant palette (taken from the style), evenly spaced in a row
+- ROW 2 (middle): a line-up of 8 diverse sample characters (male/female, old/young, different professions fitting the channel niche) — ALL in the same consistent art style, standing full-body front view, white background, soft drop shadow under their feet. The BODY CONSTRUCTION of all 8 characters MUST exactly follow the Character Style above (e.g. if the Character Style calls for thin black stick arms/legs + white mitten hands + off-white faces, all 8 must be drawn that way) — NEVER draw them as regular-proportioned cartoon people
+- ROW 3 (bottom): 3 sample background cells (3 typical environments of the channel) with different lighting and moods, slightly rounded corners
 
-Prompt phải:
-- Mô tả CHÍNH XÁC art style VÀ cách dựng cơ thể nhân vật (tay, chân, bàn tay, mặt) đúng theo Character Style ở trên — copy nguyên đặc điểm nhận diện, KHÔNG thay bằng tỉ lệ người cartoon thường
-- Áp dụng đúng bảng màu và mood theo Visual Style
-- 130-180 từ tiếng Anh
-- Kết thúc bằng: "channel style reference sheet, consistent art style throughout, clean layout, no text, no title, no labels, no captions, no numbers, no watermark anywhere in the image, pure artwork only"
-- Trả về CHỈ prompt text.`;
+The prompt must:
+- Describe the EXACT art style AND character body construction (arms, legs, hands, faces) exactly per the Character Style above — copy the identifying features verbatim, do NOT replace them with regular cartoon human proportions
+- Apply the correct color palette and mood per the Visual Style
+- 130-180 English words
+- End with: "channel style reference sheet, consistent art style throughout, clean layout, no text, no title, no labels, no captions, no numbers, no watermark anywhere in the image, pure artwork only"
+- Return ONLY the prompt text.`;
     state.styleRefPrompt = await callClaude(prompt, 600);
     document.getElementById('styleRefPanel').style.display = 'block';
     renderStyleRef();
@@ -17470,26 +17470,26 @@ async function generateSearchAngles(voText, opts){
   const vaiTro = o.role || ((state.aiMap || {})[o.sceneId] || {}).role || '';
   const truoc = String(o.truoc || '').trim(), sau = String(o.sau || '').trim();
 
-  const prompt = `Bạn là người chọn hình cho video tài liệu. Sinh TỪ KHOÁ tìm kho stock.
-${topic ? 'CHỦ ĐỀ CẢ VIDEO: ' + topic + '\n' : ''}${vaiTro ? 'VAI TRÒ CẢNH: ' + vaiTro + '\n' : ''}
-CÂU THOẠI CẢNH NÀY: "${voText}"
-${truoc ? 'Câu trước: "' + truoc + '"\n' : ''}${sau ? 'Câu sau: "' + sau + '"\n' : ''}
-⚠️ BẪY THƯỜNG GẶP: câu thoại hay mượn một đồ vật để SO SÁNH ("rẻ hơn ly cà phê",
-"to bằng cái xe buýt", "mỏng như tờ giấy"). Đồ vật đó KHÔNG phải chủ thể của cảnh —
-chủ thể vẫn là thứ mà cả video đang nói tới. Lấy tám clip cà phê cho một video về
-hàng không là sai. Nếu có đồ vật so sánh thì xếp nó vào góc "doi-chieu", KHÔNG được
-để làm góc đầu tiên.
+  const prompt = `You are a footage researcher for documentary-style videos. Generate stock-library SEARCH KEYWORDS.
+${topic ? 'WHOLE VIDEO TOPIC: ' + topic + '\n' : ''}${vaiTro ? 'SCENE ROLE: ' + vaiTro + '\n' : ''}
+THIS SCENE'S VOICEOVER LINE: "${voText}"
+${truoc ? 'Previous line: "' + truoc + '"\n' : ''}${sau ? 'Next line: "' + sau + '"\n' : ''}
+⚠️ COMMON TRAP: voiceover lines often borrow an object for COMPARISON ("cheaper than a cup of coffee",
+"big as a bus", "thin as paper"). That object is NOT the subject of the scene —
+the subject is what the whole video is about. Pulling eight coffee clips for a video about
+aviation is wrong. If there is a comparison object, put it in the "doi-chieu" angle, NEVER
+as the first angle.
 
-Trả về 2–3 GÓC TÌM khác nhau, mỗi góc 2–4 từ khoá tiếng Anh ngắn (danh từ cụ thể,
-không tính từ mơ hồ). Được thêm ĐÚNG 1 từ khoá góc máy nếu thật hợp:
+Return 2–3 DIFFERENT search angles, each 2–4 short English keywords (concrete nouns,
+no vague adjectives). You may add EXACTLY 1 camera keyword if it truly fits:
 aerial, close-up, macro, top-down, timelapse, slow motion, handheld.
 
-Các góc dùng được:
-- "chu-the"   — thứ cảnh đang nói tới theo nghĩa đen. LUÔN có góc này, luôn đứng đầu.
-- "boi-canh"  — nơi chốn / không khí bao quanh, để làm b-roll.
-- "doi-chieu" — đồ vật dùng để so sánh hoặc ẩn dụ, CHỈ khi câu thoại thật sự có.
+Usable angles:
+- "chu-the"   — the literal thing this scene talks about. ALWAYS present, always first.
+- "boi-canh"  — surrounding place / atmosphere, for b-roll.
+- "doi-chieu" — an object used for comparison or metaphor, ONLY if the line truly has one.
 
-Trả JSON: [{"goc":"chu-the","q":"airline profit margin"},{"goc":"boi-canh","q":"airport terminal wide"}]`;
+Return JSON: [{"goc":"chu-the","q":"airline profit margin"},{"goc":"boi-canh","q":"airport terminal wide"}]`;
 
   try {
     const arr = await callLLMJson(prompt, { maxTokens: 300,
@@ -17542,29 +17542,29 @@ async function generateSearchKeywords(voText, opts){
   const bac = Number(o.bac) || (o.broader ? 3 : 1);
   const chuDe = String(state.videoLogline || '').trim();
 
-  const LUAT = 'Quy tắc: chủ thể đứng ĐẦU. Trả JSON mảng, MỖI PHẦN TỬ LÀ MỘT từ khoá tiếng Anh ngắn '
-    + '(2-4 phần tử), KHÔNG nhồi nhiều từ khoá vào một phần tử, KHÔNG lặp lại chủ thể ở nhiều phần tử. '
-    + 'Kho ảnh tìm theo keyword chứ không hiểu câu văn — KHÔNG viết thành câu, KHÔNG tính từ mơ hồ '
-    + '(beautiful, amazing, stunning). Có thể thêm 1 từ góc máy nếu hợp: aerial, close-up, timelapse, slow motion.';
+  const LUAT = 'Rules: the subject goes FIRST. Return a JSON array where EACH ELEMENT IS ONE short English keyword '
+    + '(2-4 elements), do not cram multiple keywords into one element, do not repeat the subject across elements. '
+    + 'Stock libraries search by keyword, they do not understand sentences — no full sentences, no vague adjectives '
+    + '(beautiful, amazing, stunning). You may add 1 camera keyword if it fits: aerial, close-up, timelapse, slow motion.';
 
   const P = {
-    1: `Sinh 2-4 từ khoá tìm ảnh/video stock cho nội dung dưới — BẬC CHÍNH XÁC: đúng sự việc, nhân vật, hành động được nhắc tới.
-${chuDe ? 'CHỦ ĐỀ CẢ VIDEO: "' + chuDe.slice(0, 200) + '"\n' : ''}${LUAT}
-Trả JSON mảng chuỗi.
-NỘI DUNG: "${voText}"`,
+    1: `Generate 2-4 stock photo/video search keywords for the content below — TIER "EXACT": the actual event, subject or action mentioned.
+${chuDe ? 'WHOLE VIDEO TOPIC: "' + chuDe.slice(0, 200) + '"\n' : ''}${LUAT}
+Return a JSON array of strings.
+CONTENT: "${voText}"`,
 
-    2: `Từ khoá bậc chính xác cho "${voText}" đang ra 0 kết quả.
-Sinh 2-4 từ khoá tiếng Anh cho BẬC BỐI CẢNH: đừng tìm chính sự việc nữa, tìm cảnh XUNG QUANH nó —
-nơi chốn diễn ra, vật thể liên quan, đám đông, mặt tiền toà nhà, thiết bị, phương tiện.
-Ví dụ: "phiên điều trần về hãng bay" → bậc 2 là "airport terminal exterior, airline counter, boarding gate".
-${chuDe ? 'CHỦ ĐỀ CẢ VIDEO: "' + chuDe.slice(0, 200) + '"\n' : ''}${LUAT}
-Trả JSON mảng chuỗi.`,
+    2: `Exact-tier keywords for "${voText}" are returning 0 results.
+Generate 2-4 English keywords for TIER "SURROUNDINGS": stop searching for the event itself, search what is AROUND it —
+the place it happens, related objects, crowds, building facades, equipment, vehicles.
+Example: "an airline-margin hearing" → tier 2 is "airport terminal exterior, airline counter, boarding gate".
+${chuDe ? 'WHOLE VIDEO TOPIC: "' + chuDe.slice(0, 200) + '"\n' : ''}${LUAT}
+Return a JSON array of strings.`,
 
-    3: `Hai bậc trước cho "${voText}" đều ra 0 kết quả.
-Sinh 2-3 từ khoá tiếng Anh RỘNG và ĐƠN GIẢN nhất cho BẬC NỀN CHUNG: b-roll đẹp cùng chủ đề,
-chấp nhận không khớp chi tiết, miễn là chắc chắn có trong kho stock.
-${chuDe ? 'CHỦ ĐỀ CẢ VIDEO: "' + chuDe.slice(0, 200) + '"\n' : ''}${LUAT}
-Trả JSON mảng chuỗi.`,
+    3: `Both previous tiers for "${voText}" returned 0 results.
+Generate 2-3 BROAD, SIMPLE English keywords for TIER "GENERIC B-ROLL": pretty b-roll on the same topic,
+accepting no detail match, as long as it surely exists in stock libraries.
+${chuDe ? 'WHOLE VIDEO TOPIC: "' + chuDe.slice(0, 200) + '"\n' : ''}${LUAT}
+Return a JSON array of strings.`,
   };
 
   try {
@@ -18774,19 +18774,19 @@ async function genSingleVeoPrompt(id){
   const dur = getSceneDuration(scene);
   const aspectRatio = document.getElementById('v6AspectRatio')?.value || '16:9';
   const audioMode = document.getElementById('v6AudioMode')?.value || 'none';
-  const audioLine = audioMode === 'none' ? 'KHÔNG thêm dòng audio.' : 'Thêm dòng "Audio: [mô tả ambient music + sfx phù hợp scene]" cuối prompt.';
-  const gLabsPrompt = state.scenePrompts[id] ? `\nG-Labs prompt (tham khảo style): ${state.scenePrompts[id].slice(0, 200)}` : '';
+  const audioLine = audioMode === 'none' ? 'Do NOT add an audio line.' : 'Add a line "Audio: [ambient music + sfx description fitting the scene]" at the end of the prompt.';
+  const gLabsPrompt = state.scenePrompts[id] ? `\nG-Labs prompt (style reference): ${state.scenePrompts[id].slice(0, 200)}` : '';
   setStatus6(`Đang tạo prompt Veo 3 cảnh [${id}]...`, 'working');
   try {
-    const prompt = `Bạn là Veo 3 prompt engineer. Tạo 1 prompt video cho cảnh sau.
+    const prompt = `You are a Veo 3 prompt engineer. Create 1 video prompt for the following scene.
 Profile: ${p.tenKenh} | Style: ${p.sceneStyle || '2D animated'} | Rules: ${p.promptRules || ''}
-Nhân vật: ${state.charactersV.join(', ') || '-'} | Bối cảnh: ${state.backgroundsV.join(', ') || '-'}
-Aspect ratio: ${aspectRatio} | Audio: ${audioMode === 'none' ? 'không' : 'có'}
+Characters: ${state.charactersV.join(', ') || '-'} | Backgrounds: ${state.backgroundsV.join(', ') || '-'}
+Aspect ratio: ${aspectRatio} | Audio: ${audioMode === 'none' ? 'none' : 'yes'}
 
-Cảnh [${id}]: VO: "${scene.text}" | nhân vật: ${scene.character || '-'} | bối cảnh: ${scene.background || '-'} | camera: ${scene.camera} | duration: ${dur}s${gLabsPrompt}
+Scene [${id}]: VO: "${scene.text}" | character: ${scene.character || '-'} | background: ${scene.background || '-'} | camera: ${scene.camera} | duration: ${dur}s${gLabsPrompt}
 
-Yêu cầu: Subject+Action+CameraMovement+Lighting+Style. ${audioLine}
-70-130 từ tiếng Anh. Bắt đầu ngay bằng mô tả visual. Trả về CHỈ text prompt, không JSON.`;
+Requirements: Subject+Action+CameraMovement+Lighting+Style. ${audioLine}
+70-130 English words. Start directly with the visual description. Return ONLY the text prompt, no JSON.`;
     const reply = await callClaude(prompt, 600);
     const clean = cleanPrompt(reply.trim());
     if (clean) {
@@ -21414,20 +21414,20 @@ function _t7CustomNhan(layers){
 // PHẢI là HÀM chứ không phải const: khối này nằm TRÊN chỗ khai báo NOVA_*_PRESETS, mà
 // const thì tính ngay lúc nạp trang → đọc biến chưa khởi tạo là ném TDZ, chết cả script.
 function _t7CustomSpec(){ return `
-✎ TỰ THIẾT KẾ (dùng RẤT THƯA):
-Nếu cảnh này KHÔNG mẫu nào ở trên hợp mà vẫn đáng có đồ hoạ, thay "picks" bằng "custom":
+✎ CUSTOM DESIGN (use VERY SPARINGLY):
+If none of the templates above fits this scene but graphics are still warranted, replace "picks" with "custom":
 "custom":[
  {"type":"shape","box":{"x":6,"y":62,"w":52,"h":22},"style":{"fill":"rgba(0,0,0,.6)","radius":12},
   "at":0,"in":{"preset":"wipeL","dur":0.4},"out":{"preset":"fade","dur":0.3}},
- {"type":"text","text":"chữ ngắn","box":{"x":9,"y":66,"w":46,"align":"left"},
+ {"type":"text","text":"short text","box":{"x":9,"y":66,"w":46,"align":"left"},
   "style":{"size":64,"weight":800,"color":"#ffffff"},
   "at":0.15,"in":{"preset":"rise","dur":0.45},"hold":{"preset":"drift"},"out":{"preset":"fade","dur":0.3}}]
-- Toạ độ theo % khung hình, gốc góc trên-trái. Tối đa 3 lớp, KHÔNG cho hai hộp đè nhau.
-- type chỉ được "text" hoặc "shape". in/hold/out phải lấy đúng tên trong danh sách:
-  vào: ${NOVA_IN_PRESETS.join(' ')}
-  giữ: ${NOVA_HOLD_PRESETS.join(' ')}
-  ra:  ${NOVA_OUT_PRESETS.join(' ')}
-- Chỉ dùng khi thật sự cần bố cục riêng. Có mẫu hợp thì LUÔN dùng mẫu, đừng tự vẽ.`; }
+- Coordinates are % of the frame, origin at the top-left corner. Max 3 layers, NEVER let two boxes overlap.
+- type may only be "text" or "shape". in/hold/out must use exact names from these lists:
+  in: ${NOVA_IN_PRESETS.join(' ')}
+  hold: ${NOVA_HOLD_PRESETS.join(' ')}
+  out:  ${NOVA_OUT_PRESETS.join(' ')}
+- Only use this when a truly custom layout is needed. If a template fits, ALWAYS use the template instead of drawing your own.`; }
 
 /* ══ CHỌN CHUYỂN CẢNH — bước 6 của trợ lý ═══════════════════════════════════
    Nút ⚡ Tự chuyển cảnh cũ đặt thẳng theo luật cứng (đổi bối cảnh → hoà tan…),
@@ -21488,30 +21488,30 @@ async function _t7AiTrans(clips, map, cat, onTick){
         + `"${_t7Gist(sc && sc.text, 70) || '—'}" ⇒ "${_t7Gist(nx && nx.text, 70) || '—'}"`;
     }).join('\n');
 
-    const prompt = `Bạn là dựng phim tài liệu. Chọn CHUYỂN CẢNH cho từng mối nối dưới đây.
-${topic ? 'CHỦ ĐỀ: ' + topic + '\n' : ''}
-⚠️ LUẬT QUAN TRỌNG NHẤT: mặc định là CẮT THẲNG. Phim tài liệu tốt để khoảng 80% mối nối
-là cắt thẳng; mọi cú chuyển khác đều là NGOẠI LỆ phải có lý do. Cả lô này bạn chỉ nên
-đề cử tối đa ${Math.max(1, Math.round(lot.length * 0.2))} mối nối. Mối nối nào cắt thẳng thì BỎ HẲN khỏi kết quả.
+    const prompt = `You are a documentary film editor. Choose the TRANSITION for each junction below.
+${topic ? 'TOPIC: ' + topic + '\n' : ''}
+⚠️ MOST IMPORTANT RULE: the default is a HARD CUT. A good documentary keeps about 80% of junctions
+as hard cuts; every other transition is an EXCEPTION that needs a reason. For this whole batch you should
+nominate at most ${Math.max(1, Math.round(lot.length * 0.2))} junctions. Omit any junction that should be a hard cut ENTIRELY from the result.
 
-CÚ CHUYỂN DÙNG ĐƯỢC:
+USABLE TRANSITIONS:
 ${bang}
 
-KHI NÀO DÙNG:
-- Đổi chương, nhảy thời gian, đổi hẳn địa điểm → dip-black
-- Chuyển ý trong cùng mạch, trôi thời gian ngắn → dissolve
-- Đổi chủ đề dứt khoát, cần một cú hích → whip-pan
-- Sang tư liệu cũ / hồi tưởng → grain-dissolve, defocus, light-leak, film-burn
-- Cảnh cắt dán trên giấy nối nhau → paper-slide, paper-drop
-- Bản đồ, biểu đồ, danh sách nối nhau → wipe-left, wipe-up, push-left, push-up
-- Hai cảnh CÙNG BỐ CỤC → match-zoom
-KHÔNG dùng cú mạnh ở giữa một đoạn đang kể liền mạch.
+WHEN TO USE:
+- Chapter change, time jump, full location change → dip-black
+- Shift of idea within the same thread, short time drift → dissolve
+- Decisive topic change, needs a punch → whip-pan
+- Cutting to archive footage / flashback → grain-dissolve, defocus, light-leak, film-burn
+- Paper-cut scenes chained together → paper-slide, paper-drop
+- Maps, charts, lists chained together → wipe-left, wipe-up, push-left, push-up
+- Two scenes with the SAME composition → match-zoom
+Do NOT use a strong transition in the middle of a continuous narrative passage.
 
-MỐI NỐI (số là chỉ số trong lô):
+JUNCTIONS (the number is the index within the batch):
 ${list}
 
-Trả JSON mảng, CHỈ những mối nối cần khác cắt thẳng:
-[{"i":0,"tr":"dip-black","why":"lý do ngắn tiếng Việt dưới 16 từ"}]`;
+Return a JSON array containing ONLY the junctions that need something other than a hard cut:
+[{"i":0,"tr":"dip-black","why":"short Vietnamese reason, under 16 words"}]`;
 
     let arr = null;
     for (let thu = 0; thu < 2 && arr == null; thu++){
@@ -21940,14 +21940,14 @@ function _t7AiQuotaLine(S){
   Object.keys(q).forEach(k => {
     if (k[0] === '_') return;
     const con = q[k] - (S.used[k] || 0);
-    if (con <= 0) out.push(`${k}: HẾT, cấm dùng`);
+    if (con <= 0) out.push(`${k}: EXHAUSTED, do not use`);
   });
   const ambCon = q._ambient - S.amb, txtCon = q._text - S.txt;
-  out.push(`lớp không khí còn ${Math.max(0, ambCon)} lượt`);
-  out.push(`còn ${Math.max(0, txtCon)} cảnh được phép đặt chữ`);
+  out.push(`ambient layers: ${Math.max(0, ambCon)} remaining`);
+  out.push(`${Math.max(0, txtCon)} scenes still allowed to carry text`);
   const kchu = _T7_NOTEXT.reduce((a2, k) => a2 + (S.used[k] || 0), 0);
-  out.push(`đã dùng ${S.txt} mẫu CÓ CHỮ và ${kchu} mẫu KHÔNG CHỮ` +
-    (S.txt >= 3 && kchu === 0 ? ' → ĐANG LỆCH HẲN VỀ CHỮ, lô này ưu tiên mẫu không chữ' : ''));
+  out.push(`used ${S.txt} text templates and ${kchu} no-text templates` +
+    (S.txt >= 3 && kchu === 0 ? ' → HEAVILY SKEWED TOWARD TEXT, prioritize no-text templates in this batch' : ''));
   return out.join(' · ');
 }
 
@@ -21969,19 +21969,19 @@ async function _t7AiMap(clips, onTick){
     if (state.cancelRequested) break;
     const lot = clips.slice(i, i + CH);
     const list = lot.map((c, k) => `${k}. [${(parseFloat(_t7ClipDur(c)) || 3).toFixed(1)}s] ${_t7Gist(_t7ClipScene(c) && _t7ClipScene(c).text, 120) || '(không lời)'}`).join('\n');
-    const prompt = `Bạn là biên tập video. Đọc CẢ đoạn kịch bản dưới đây rồi chấm từng cảnh.
-${topic ? 'CHỦ ĐỀ CẢ VIDEO: ' + topic + '\n' : ''}
-Với MỖI cảnh trả về:
-- role: đúng một trong mo-dau | dan-dat | so-lieu | trich-dan | chuyen-y | chot
-- key: tên người / tổ chức / địa danh cụ thể xuất hiện trong câu (không có thì "")
-- num: con số đáng lên hình trong câu, giữ nguyên dạng đọc (không có thì "")
-- emp: 0-3 — mức đáng nhấn bằng đồ hoạ. 0 = câu nối, 3 = câu chốt/gây sốc.
-Cả video chỉ nên có vài cảnh emp=3. Đừng chấm rộng tay.
+    const prompt = `You are a video editor. Read the ENTIRE script segment below, then score each scene.
+${topic ? 'WHOLE VIDEO TOPIC: ' + topic + '\n' : ''}
+For EACH scene return:
+- role: exactly one of mo-dau | dan-dat | so-lieu | trich-dan | chuyen-y | chot
+- key: the specific person / organization / place name appearing in the line ("")
+- num: a number worth showing on screen in the line, kept as written ("")
+- emp: 0-3 — how much it deserves a graphics emphasis. 0 = connective sentence, 3 = closing/shocking line.
+The whole video should have only a few emp=3 scenes. Do not grade generously.
 
-CẢNH:
+SCENES:
 ${list}
 
-Trả JSON mảng đủ ${lot.length} phần tử: [{"i":0,"role":"mo-dau","key":"","num":"","emp":2}]`;
+Return a JSON array with all ${lot.length} elements: [{"i":0,"role":"mo-dau","key":"","num":"","emp":2}]`;
     let arr = [];
     try { arr = await callLLMJson(prompt, { maxTokens: 2600, validate: (d) => Array.isArray(d) }); }
     catch (e){ novaLog && novaLog(`✨ Bản đồ cảnh ${i + 1}–${i + lot.length} lỗi: ${String(e.message || e).slice(0, 80)}`, 'warn'); }
@@ -22028,14 +22028,14 @@ async function _t7AiVision(cat, onTick){
     if (!pk){ doi++; return; }
     const tk = tuVe ? 'text' : _t7TplTextKey(cat, pk.template);
     const posKey = tuVe ? '' : _t7TplPosKey(cat, pk.template);
-    const prompt = `Đây là KHUNG HÌNH thật của cảnh video. Ta định phủ lên nó dòng chữ: "${String(pk[tk] || '').slice(0, 60)}" (mẫu: ${tuVe ? 'tự thiết kế' : pk.template}).
+    const prompt = `This is the REAL frame of a video scene. We plan to overlay this text on it: "${String(pk[tk] || '').slice(0, 60)}" (template: ${tuVe ? 'custom design' : pk.template}).
 
-Trả JSON: {"ok":true/false,"pos":"góc","text":"chữ sửa lại nếu cần","why":"1 câu ngắn tiếng Việt"}
-- ok=false NẾU: khung hình đã có sẵn chữ/logo, hoặc quá rối, hoặc chủ thể chiếm gần hết khung nên chữ nào cũng che mặt.
-- pos: chọn trong ${_T7_POS.join(' | ')} — vùng TRỐNG nhất, tránh mặt người và vật thể chính.
-- text: giữ nguyên nếu ổn; rút ngắn dưới 6 từ nếu dài; "" nếu ok=false.
-  Viết bằng ĐÚNG ${_t7AiLang()} — cùng ngôn ngữ với kịch bản, không dịch sang tiếng Việt.
-Chỉ in JSON.`;
+Return JSON: {"ok":true/false,"pos":"corner","text":"edited text if needed","why":"one short Vietnamese sentence"}
+- ok=false IF: the frame already has text/logo, or is too busy, or the subject fills nearly the whole frame so any text would cover faces.
+- pos: pick from ${_T7_POS.join(' | ')} — the EMPTIEST area, avoiding faces and key objects.
+- text: keep unchanged if fine; shorten to under 6 words if long; "" if ok=false.
+  Write it in EXACTLY ${_t7AiLang()} — the same language as the script, do not translate to Vietnamese.
+Print ONLY the JSON.`;
     let r = null;
     try {
       r = await callLLMJson(prompt, { maxTokens: 300, tries: 2,
@@ -22078,15 +22078,15 @@ async function _t7AiCritic(cat){
     const tk = _t7TplTextKey(cat, x.q.picks[0].template);
     return `${k}. ${x.q.name} · ${x.q.picks.map(p => p.template).join('+')} · "${String((tk && x.q.picks[0][tk]) || '').slice(0, 40)}"`;
   }).join('\n');
-  const prompt = `Đây là TOÀN BỘ kế hoạch đồ hoạ của một video. Soi lại như một biên tập khó tính.
+  const prompt = `This is the ENTIRE graphics plan of a video. Review it like a demanding editor.
 
-Chỉ ra những mục NÊN BỎ vì: trùng ý với mục liền kề, chữ lặp lại, đặt chữ vào cảnh không đáng, hoặc cả cụm dày quá làm video rối.
-Đừng bỏ quá 20% số mục. Kế hoạch đã ổn thì trả mảng rỗng.
+Point out ONLY the items that should be DROPPED because: they duplicate the adjacent item, repeat the same text, put text on a scene that doesn't deserve it, or a whole cluster is too dense and clutters the video.
+Do not drop more than 20% of the items. If the plan is already fine, return an empty array.
 
-KẾ HOẠCH:
+PLAN:
 ${list}
 
-Trả JSON: [{"k":3,"why":"lý do ngắn tiếng Việt dưới 15 từ"}]`;
+Return JSON: [{"k":3,"why":"short Vietnamese reason, under 15 words"}]`;
   let arr = [];
   try { arr = await callLLMJson(prompt, { maxTokens: 900, validate: (d) => Array.isArray(d) }); }
   catch (e){ return 0; }
@@ -22173,49 +22173,49 @@ async function t7AiPropose(lamLai){
       return `${k}. [${(parseFloat(_t7ClipDur(c)) || 3).toFixed(1)}s]${meta ? ' {' + meta + '}' : ''} ${_t7Gist(sc && sc.text, 200) || '(không có lời)'}`;
     }).join('\n');
 
-    const prompt = `Bạn là biên tập đồ hoạ chuyển động cho video faceless tiếng Việt.
-${topic ? 'CHỦ ĐỀ CẢ VIDEO: ' + topic + '\n' : ''}Với MỖI cảnh dưới đây, chọn 0–2 mẫu đồ hoạ phủ lên hình, VÀ giải thích vì sao.
+    const prompt = `You are a motion-graphics editor for faceless Vietnamese videos.
+${topic ? 'WHOLE VIDEO TOPIC: ' + topic + '\n' : ''}For EACH scene below, pick 0–2 graphics templates to overlay, AND explain why.
 
-MẪU DÙNG ĐƯỢC (chỉ được chọn trong danh sách này):
+USABLE TEMPLATES (you may only choose from this list):
 ${catLine}
 
-HẠN NGẠCH CÒN LẠI CỦA CẢ VIDEO (vượt là bị loại tự động):
+REMAINING QUOTAS FOR THE WHOLE VIDEO (going over gets auto-rejected):
 ${_t7AiQuotaLine(S)}
 
-🌐 NGÔN NGỮ CHỮ LÊN HÌNH — QUAN TRỌNG NHẤT:
-Kịch bản viết bằng ${_t7AiLang()}. MỌI chữ hiển thị trên màn hình phải viết bằng ĐÚNG ${_t7AiLang()}:
+🌐 ON-SCREEN TEXT LANGUAGE — MOST IMPORTANT:
+The script is written in ${_t7AiLang()}. EVERY piece of text shown on screen must be written in EXACTLY ${_t7AiLang()}:
 text, subtitle, headline, title, value, unit, kicker, note, caption, label, name, body, dek, stamp.
-Người xem thấy chữ khác ngôn ngữ với giọng đọc là hỏng cả video.
-CHỈ RIÊNG trường "why" viết bằng tiếng Việt — đó là lời giải thích cho người dựng, không lên hình.
+If viewers see text in a different language than the voiceover, the whole video is ruined.
+ONLY the "why" field is written in Vietnamese — it is an explanation for the human editor, never shown on screen.
 
-LUẬT:
-- MẶC ĐỊNH LÀ KHÔNG GẮN GÌ. Chỉ đề xuất khi cảnh THẬT SỰ khá lên nhờ nó.
-  Cả video chỉ nên có khoảng 1/8 số cảnh mang chữ. Bỏ trống là lựa chọn đúng, không phải lười.
-- Mỗi cảnh tối đa 1 mẫu. Hai mẫu một cảnh chỉ khi một cái là lớp không khí không chữ.
-- Ưu tiên cảnh có {nhấn 2} hoặc {nhấn 3}. Cảnh {nhấn 0} thì hầu như luôn bỏ trống.
-- Cảnh {so-lieu} có sẵn "số:" → ưu tiên mẫu trình bày số liệu, điền ĐÚNG con số đó.
-- Cảnh có "tên:" mới được dùng mẫu gắn tên/nhãn, điền đúng tên đó.
-- Chữ hiện trên màn hình phải NGẮN (dưới 6 từ), là ý chốt — KHÔNG chép nguyên lời thoại.
-- Cảnh dưới 2.5 giây thì đừng gắn mẫu có chữ dài.
+RULES:
+- THE DEFAULT IS TO ADD NOTHING. Only propose something when the scene is genuinely improved by it.
+  The whole video should have roughly 1/8 of its scenes carrying text. Leaving a scene empty is the right call, not laziness.
+- Max 1 template per scene. Two templates in one scene only when one is a no-text ambient layer.
+- Prioritize scenes with {nhấn 2} or {nhấn 3}. Scenes with {nhấn 0} are almost always left empty.
+- A {so-lieu} scene that has "số:" (number) → prioritize a data-presentation template and fill in EXACTLY that number.
+- Only scenes with "tên:" (name) may use a name/label template, filled with exactly that name.
+- On-screen text must be SHORT (under 6 words), the key takeaway — do NOT copy the full voiceover line.
+- Scenes under 2.5 seconds should not get templates with long text.
 
-⚠️ ƯU TIÊN MẪU KHÔNG CHỮ nếu kho có. Video mà cảnh nào cũng đắp chữ thì rẻ tiền và
-mệt mắt — người xem đã nghe giọng đọc rồi, không cần đọc lại chính câu đó trên màn hình.
-Cảnh {nhấn 0} hoặc {nhấn 1} mà vẫn muốn có gì đó → chọn mẫu KHÔNG chữ, đừng nhét chữ.
+⚠️ PREFER NO-TEXT TEMPLATES when the library has them. A video where every scene is plastered with text looks
+cheap and tiring — viewers already hear the voiceover, they don't need to re-read the same line on screen.
+A {nhấn 0} or {nhấn 1} scene that still needs something → pick a NO-TEXT template, don't force text in.
 
 ${_t7CustomSpec()}
 
 
-LÝ DO ("why") phải bám vào CHÍNH câu thoại và độ dài cảnh, viết tiếng Việt, 1 câu dưới 22 từ.
-Ví dụ đúng: "Câu có con số gây bất ngờ nên phóng chữ rồi nảy, khớp nhịp nhấn."
-Ví dụ SAI (chung chung, cấm): "Mẫu này đẹp và phù hợp với cảnh."
+The REASON ("why") must reference the actual voiceover line and the scene length, written in Vietnamese, 1 sentence under 22 words.
+Good example: "Câu có con số gây bất ngờ nên phóng chữ rồi nảy, khớp nhịp nhấn."
+BAD example (generic, forbidden): "Mẫu này đẹp và phù hợp với cảnh."
 
-CẢNH:
+SCENES:
 ${list}
 
-Trả JSON mảng, mỗi phần tử ứng với MỘT cảnh có đề xuất (cảnh không cần gì thì bỏ hẳn):
-[{"i":0,"why":"lý do ngắn","picks":[{"template":"tên-mẫu","text":"chữ ngắn nếu mẫu cần"}]}]
-Chỉ điền các trường mà mẫu đó nhận. Không thêm trường lạ.
-Cảnh tự thiết kế thì bỏ "picks", dùng "custom" theo đúng khuôn ở trên.`;
+Return a JSON array, one element per scene WITH a proposal (skip scenes that need nothing entirely):
+[{"i":0,"why":"short reason","picks":[{"template":"template-name","text":"short text if the template needs it"}]}]
+Fill in only the fields the template accepts. Do not add strange fields.
+For custom-designed scenes, omit "picks" and use "custom" following the exact schema above.`;
 
     let arr = null;
     for (let thu = 0; thu < 2 && arr == null; thu++){
@@ -22346,26 +22346,26 @@ async function t7AiDesign(){
         return `${k}. [${(parseFloat(_t7ClipDur(c)) || 3).toFixed(1)}s] ${_t7Gist(sc && sc.text, 180) || '(không có lời)'}`;
       }).join('\n');
 
-      const prompt = `Bạn là biên tập đồ hoạ chuyển động cho video faceless tiếng Việt.
-Với MỖI cảnh dưới đây, chọn 0–2 mẫu đồ hoạ phủ lên hình. Được phép để trống (mảng rỗng) nếu cảnh không cần gì.
+      const prompt = `You are a motion-graphics editor for faceless Vietnamese videos.
+For EACH scene below, pick 0–2 graphics templates to overlay. Leaving it empty (empty array) is allowed when a scene needs nothing.
 
-MẪU DÙNG ĐƯỢC (chỉ được chọn trong danh sách này):
+USABLE TEMPLATES (you may only choose from this list):
 ${catLine}
 
-LUẬT:
-- Đừng lạm dụng: phần lớn cảnh chỉ cần 0 hoặc 1 mẫu. Chữ đè lên mọi cảnh sẽ rối và che mất hình.
-- Chữ hiện trên màn hình phải NGẮN (dưới 6 từ), là ý chốt của cảnh — KHÔNG chép nguyên lời thoại.
-- lower-thirds chỉ dùng khi cảnh nhắc tên người/địa danh cụ thể.
-- typewriter-text / kinetic-typography chỉ cho cảnh nhấn mạnh, tối đa 1-2 cảnh trong cả video.
-- vignette / film-grain / light-leak là lớp không khí, dùng thưa và không kèm chữ.
-- Cảnh ngắn dưới 2.5 giây thì đừng gắn mẫu có chữ dài.
+RULES:
+- Don't overuse: most scenes need only 0 or 1 templates. Text covering every scene clutters and hides the imagery.
+- On-screen text must be SHORT (under 6 words), the key takeaway of the scene — do NOT copy the full voiceover line.
+- lower-thirds only when the scene mentions a specific person/place name.
+- typewriter-text / kinetic-typography only for emphasized scenes, at most 1-2 scenes in the whole video.
+- vignette / film-grain / light-leak are ambient layers, use sparingly and without text.
+- Scenes shorter than 2.5 seconds should not get templates with long text.
 
-CẢNH:
+SCENES:
 ${list}
 
-Trả JSON mảng ${lot.length} phần tử, phần tử thứ k ứng với cảnh k:
-[{"i":0,"picks":[{"template":"tên-mẫu","text":"chữ ngắn nếu mẫu cần"}]}]
-Chỉ điền các trường mà mẫu đó nhận. Không thêm trường lạ.`;
+Return a JSON array of ${lot.length} elements, element k matching scene k:
+[{"i":0,"picks":[{"template":"template-name","text":"short text if the template needs it"}]}]
+Fill in only the fields the template accepts. Do not add strange fields.`;
 
       let arr = [];
       try {
@@ -22625,7 +22625,7 @@ async function t7TranslateAll(){
     for (let i = 0; i < items.length; i += BATCH){
       const chunk = items.slice(i, i + BATCH);
       // Trả MẢNG theo ĐÚNG THỨ TỰ (không dùng id-key vì model hay bỏ số 0 đầu "016"→"16" gây lệch).
-      const prompt = `Dịch ${chunk.length} câu lời thoại sau sang TIẾNG VIỆT tự nhiên, sát nghĩa, giữ giọng kể.\nTrả về CHÍNH XÁC 1 JSON ARRAY gồm ĐÚNG ${chunk.length} bản dịch, THEO ĐÚNG THỨ TỰ, KHÔNG kèm số/nhãn, KHÔNG markdown, KHÔNG chữ nào ngoài JSON:\n["bản dịch câu 1","bản dịch câu 2", …]\n\nCÁC CÂU:\n` + chunk.map((x, k) => `${k + 1}. ${x.t}`).join('\n');
+      const prompt = `Translate the following ${chunk.length} voiceover lines into natural Vietnamese, close to the original meaning, keeping the narrative voice.\nReturn EXACTLY 1 JSON ARRAY of EXACTLY ${chunk.length} translations, IN THE SAME ORDER, with no numbers/labels, no markdown, no characters outside the JSON:\n["translation of line 1","translation of line 2", …]\n\nTHE LINES:\n` + chunk.map((x, k) => `${k + 1}. ${x.t}`).join('\n');
       try {
         const arr = await callLLMJson(prompt, { maxTokens: 3500, validate: d => Array.isArray(d) });
         chunk.forEach((x, k) => { const v = arr && arr[k]; if (v){ state.sceneTrans[x.id] = String(v).trim(); ok++; } });
@@ -25353,7 +25353,7 @@ async function _t9RefTopicQuery(){
   let q = src.txt.replace(/["“”'’|—–\-:!?.,]+/g, ' ').replace(/\s+/g, ' ').trim();
   if (_hasViet(q) && typeof callLLM === 'function'){
     try {
-      const r = await callLLM(`Đổi mô tả video sau thành 3-6 TỪ KHOÁ TIẾNG ANH để tìm video cùng chủ đề trên YouTube. Chỉ in từ khoá, cách nhau bằng dấu phẩy, không giải thích.\n\n"${q.slice(0, 200)}"`, { maxTokens: 60 });
+      const r = await callLLM(`Convert the following video description into 3-6 ENGLISH KEYWORDS to search YouTube for videos on the same topic. Print only the keywords, comma-separated, no explanation.\n\n"${q.slice(0, 200)}"`, { maxTokens: 60 });
       const k = String(r || '').replace(/[\n"]+/g, ' ').trim();
       if (k && k.length < 120) q = k;
     } catch (e) {}
