@@ -25,9 +25,14 @@
     "!nova/editor-pro/remotion-browser{,/**/*}",
     "!nova/voice-studio/.venv-omni{,/**/*}",
     "!nova/voice-studio/data{,/**/*}",
+    "!nova/voice-backend/data{,/**/*}",
     "!nova/tmp-asar-app{,/**/*}",
     "!nova/tmp-*",
-    "!nova/.tmp-*"
+    "!nova/.tmp-*",
+    "!nova/**/tmp-*",
+    "!nova/**/.tmp-*",
+    "!nova/**/*.log",
+    "!nova/editor-pro/nova-remotion/bundle/assets/*-a*_*"
   ],
   "asar": true,
   "asarUnpack": [

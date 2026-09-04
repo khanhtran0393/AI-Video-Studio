@@ -110,7 +110,12 @@ async function start() {
   if (!py || !kind) return { error: 'Môi trường Python cho backend chưa chạy được trên máy này. Hãy cài Python 3.11 (hoặc uv) rồi bấm thử lại — hoặc chạy setup-omni.bat trong thư mục voice-backend rồi thử lại.' };
 
   if (!proc) {
+    // PYTHONUTF8: stdout/stderr của python khi bị pipe (không phải console) dùng encoding
+    // locale (cp1252 trên Windows) → print tiếng Việt (vd 'đ') crash UnicodeEncodeError
+    // ngay khi uvicorn import app.py. Ép UTF-8 cho mọi engine/dòng log của backend.
     const env = { ...process.env, COQUI_TOS_AGREED: '1', VOICE_PORT: String(PORT) };
+    env.PYTHONUTF8 = env.PYTHONUTF8 || '1';
+    env.PYTHONIOENCODING = env.PYTHONIOENCODING || 'utf-8';
     const defaultEngine = kind;
     env.VOICE_TTS_ENGINE = env.VOICE_TTS_ENGINE || defaultEngine;
     // VieNeu/XTTS không cần Whisper để chạy luồng đọc; OmniVoice mới ưu tiên ASR thật.

@@ -23,10 +23,13 @@ function _candidateRoots() {
     path.join(__dirname, 'voice-studio'),
   ];
   // Khi chạy từ app.asar, backend được bung ra app.asar.unpacked để Python có thể đọc/ghi.
+  // Lưu ý: unpacked của __dirname là …\app.asar.unpacked\nova\voice-native — voice-backend
+  // nằm CẠNH voice-native (…\nova\voice-backend), nên phải đi lên 1 cấp mới đúng.
   if (__dirname.includes('app.asar')) {
-    const unpacked = __dirname.replace('app.asar', 'app.asar.unpacked');
-    out.unshift(path.join(unpacked, 'voice-backend'));
-    out.unshift(path.join(unpacked, 'voice-studio'));
+    const novaUnpacked = path.join(__dirname.replace('app.asar', 'app.asar.unpacked'), '..');
+    // voice-backend là backend canonical (có venv) — ưu tiên trước voice-studio (chỉ là tên lịch sử).
+    out.unshift(path.join(novaUnpacked, 'voice-studio'));
+    out.unshift(path.join(novaUnpacked, 'voice-backend'));
   }
   try {
     if (electronApp) {
@@ -42,7 +45,11 @@ function _candidateRoots() {
 function voiceRoot() {
   const custom = customRoot();
   if (custom) return custom;
-  for (const c of _candidateRoots()) { try { if (_isValidRoot(c)) return c; } catch {} }
+  const cands = _candidateRoots();
+  // Ưu tiên đường dẫn THẬT trên đĩa: path trong app.asar (không phải .unpacked) chỉ đọc
+  // được qua fs-patch của Electron — spawn python.exe từ đó sẽ ENOENT.
+  const real = cands.filter((c) => !c.includes('app.asar') || c.includes('app.asar.unpacked'));
+  for (const c of real) { try { if (_isValidRoot(c)) return c; } catch {} }
   return null;
 }
 

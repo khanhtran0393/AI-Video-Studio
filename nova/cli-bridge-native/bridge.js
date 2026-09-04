@@ -52,6 +52,20 @@ function createBridge(engine, port) {
     }));
   }
 
+  // Gateway (agentrouter…) route request qua NHIỀU kênh upstream, một số kênh lọc content
+  // (400 content-blocked) hoặc hết kênh (503 无可用渠道) — CÙNG prompt chạy lại thường PASS.
+  // Retry ngay tại bridge (không tốn vòng HTTP của app) cho đúng nhóm lỗi tạm thời này.
+  const TRANSIENT_RE = /content-blocked|无可用渠道|no available channel|overloaded|rate.?limit|API (429|5\d\d)\b/i;
+  function runCLIWithRetry(promptData, model, attempts = 3) {
+    let lastErr = null;
+    const attempt = (i) => runCLI(promptData, model).catch((e) => {
+      lastErr = e;
+      if (i >= attempts || !TRANSIENT_RE.test(String(e.message || e))) throw e;
+      return new Promise((r) => setTimeout(r, 3000)).then(() => attempt(i + 1));
+    });
+    return attempt(1).catch(() => { throw lastErr; });
+  }
+
   // ── Đăng nhập (không cần terminal): bắt URL CLI in ra → web → nhận code → stdin ──
   const loginArgs = engine === 'codex' ? ['login'] : ['setup-token'];
   let login = null;
@@ -113,7 +127,7 @@ function createBridge(engine, port) {
         const { messages, model } = JSON.parse(body || '{}');
         const pd = buildPrompt(messages);
         dlog('CHAT: ' + pd.images.length + ' ảnh · prompt ' + pd.text.length + ' ký tự');
-        const text = await runCLI(pd, model);
+        const text = await runCLIWithRetry(pd, model);
         dlog('CLAUDE TRẢ (' + text.length + ' ký tự): ' + text.slice(0, 400).replace(/\n/g, ' '));
         return sendJSON(res, { choices: [{ index: 0, message: { role: 'assistant', content: text }, finish_reason: 'stop' }] });
       } catch (e) {
