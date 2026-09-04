@@ -42,10 +42,12 @@ assert(/let VOICE_URL\s*=/.test(indexHtml), 'renderer phải dùng let VOICE_URL
 assert(indexHtml.includes('if (cur?.url) VOICE_URL = cur.url'), 'renderer lấy VOICE_URL từ voiceStatus()');
 assert(indexHtml.includes('if (r?.url) VOICE_URL = r.url'), 'renderer lấy VOICE_URL từ voiceStart()');
 
-// 5. Cấu hình đóng gói: voice-backend được đóng gói (không loại) và bung khỏi asar.
+// 5. Cấu hình đóng gói: source voice-backend được đóng gói (không loại cả cây) và bung khỏi asar.
+// Được phép loại runtime: data/, .venv*, __pycache__ — không ship file sinh lúc chạy.
 const builder = JSON.parse(fs.readFileSync(path.join(ROOT, 'electron-builder.json'), 'utf8'));
-const excluded = (builder.files || []).filter((p) => p.startsWith('!') && p.includes('voice-backend'));
-assert.strictEqual(excluded.length, 0, 'electron-builder không được loại voice-backend khỏi files');
+const excludedAll = (builder.files || []).filter((p) =>
+  p.startsWith('!') && /voice-backend/.test(p) && !/voice-backend\/(data|\.venv|__pycache__)/.test(p));
+assert.strictEqual(excludedAll.length, 0, 'electron-builder không được loại source voice-backend khỏi files');
 assert((builder.asarUnpack || []).includes('nova/voice-backend/**/*'),
   'electron-builder phải bung nova/voice-backend qua asarUnpack');
 
@@ -96,5 +98,19 @@ assert(!editorChannels.includes("ai:ttsGenerate'"),
 const novaWeb = read('web/index.html');
 assert(!novaWeb.includes('ai:ttsGenerate'),
   'Voice Studio renderer không được gọi channel TTS của Editor Pro');
+
+// 9. UI xóa giọng clone luôn hiện; TTS/thêm/xóa kiểm tra HTTP; backend từ chối xóa giọng nhà máy.
+assert(novaWeb.includes('async function giongXoa(key)'), 'UI phải có hàm xóa giọng clone');
+assert(novaWeb.includes('async function _giongFetchJson(url, opt)'), 'UI phải kiểm tra HTTP khi gọi Voice API');
+assert(novaWeb.includes('class="btn sm ghost gdel"') && novaWeb.includes('>Xóa</button>'),
+  'thẻ giọng clone phải có nút Xóa luôn hiện');
+assert(novaWeb.includes('Không xoá được giọng có sẵn'), 'UI phải chặn xóa giọng nhà máy');
+assert(novaWeb.includes('gcard.has-del'), 'thẻ clone phải chừa chỗ nút Xóa');
+const voicebankSrc = read('voice-backend/backend/voicebank.py');
+const appSrc = read('voice-backend/backend/app.py');
+assert(voicebankSrc.includes('raise PermissionError("Không xoá được giọng có sẵn")'),
+  'voicebank phải từ chối xóa giọng nhà máy');
+assert(appSrc.includes('HTTPException(403'), 'API xóa giọng nhà máy phải trả 403');
+assert(appSrc.includes('HTTPException(400'), 'API lưu giọng lỗi phải trả 400');
 
 console.log('voice contract tests: passed');

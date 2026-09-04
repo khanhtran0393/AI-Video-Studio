@@ -18,6 +18,7 @@ const http = require('http');
 const path = require('path');
 const { spawn, execFile } = require('child_process');
 const { CdpClient } = require('./smoke-cdp');
+const { acquirePipelineLock } = require('./pipeline-lock');
 const {
   closeServer, descendants, findPackagedExe, forceKill, httpJson, isPortOpen, killAppExes,
   listen, processTable, redact, sleep, waitForJson,
@@ -597,6 +598,11 @@ async function switchTool(cdp, tool) {
 
 async function main() {
   const startedAt = new Date().toISOString();
+  let releaseLock = null;
+  // Mutex với mọi run khác cùng chạm app/dist/ports (smoke, build): chờ hàng đợi
+  // thay vì chạy song song rồi giết nhau (e2e 04-57-03Z: smoke kèo song song
+  // kill app e2e → S6–S8 attempted=0).
+  releaseLock = await acquirePipelineLock('ui-functions-e2e');
   const resultsRoot = process.env.E2E_RESULTS_DIR || path.join(ROOT, 'smoke-results');
   RUN_DIR = path.join(resultsRoot, 'e2e-' + stamp());
   for (const d of ['screenshots', 'products', 'downloads', 'profile', 'fixtures']) fs.mkdirSync(path.join(RUN_DIR, d), { recursive: true });
@@ -701,6 +707,37 @@ async function main() {
     if (waitedMs > 5000) console.log('[e2e] renderer stall ~' + Math.round(waitedMs / 1000) + 's — đã chờ phục hồi CDP');
     return waitedMs;
   }
+
+  // ── Bọc evaluate/click/shot chống stall renderer ──────────────────────────
+  // Renderer cửa sổ chính có thể đóng băng tới vài phút sau khi render chạy
+  // (đã biết từ S5/S6: stall 46s–3.5min) → evaluate timeout 15s mặc định fail oan.
+  // Pattern giống polling S6: lỗi → waitRendererReady (tối đa 150s) → thử lại (3 lần).
+  const stallSafe = {
+    eval: async (expr, timeoutMs) => {
+      let lastErr;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try { return await cdp.evaluate(expr, timeoutMs); }
+        catch (e) { lastErr = e; try { await waitRendererReady(150000); } catch (_) {} }
+      }
+      throw lastErr;
+    },
+    click: async (selector) => {
+      let lastErr;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try { return await cdp.click(selector); }
+        catch (e) { lastErr = e; try { await waitRendererReady(150000); } catch (_) {} }
+      }
+      throw lastErr;
+    },
+    shot: async (name) => {
+      let lastErr;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try { return await shot(cdp, name); }
+        catch (e) { lastErr = e; try { await waitRendererReady(150000); } catch (_) {} }
+      }
+      throw lastErr;
+    },
+  };
 
   try {
     /* ── S1: sweep 19 tab (mỗi tool mở UI thật, không crash) ─────────────── */
@@ -1135,7 +1172,7 @@ async function main() {
         }
         if (i < 7) await sleep(400);
       }
-      const tabInfo = await cdp.evaluate(`(() => ({ toolActive: !!document.getElementById('tool-toolvideoagent') && document.getElementById('tool-toolvideoagent').classList.contains('active'), navActive: !!document.querySelector('.nav-item[data-tool="toolvideoagent"]') && document.querySelector('.nav-item[data-tool="toolvideoagent"]').classList.contains('active') }))()`);
+      const tabInfo = await stallSafe.eval(`(() => ({ toolActive: !!document.getElementById('tool-toolvideoagent') && document.getElementById('tool-toolvideoagent').classList.contains('active'), navActive: !!document.querySelector('.nav-item[data-tool="toolvideoagent"]') && document.querySelector('.nav-item[data-tool="toolvideoagent"]').classList.contains('active') }))()`);
       if (!opened || !opened.ok || opened.inApp !== true) {
         throw new Error('videoAgent.openWindow phải mở IN-APP (inApp:true) — got: ' + JSON.stringify(opened));
       }
@@ -1147,86 +1184,102 @@ async function main() {
       }
       // panel 01 trong tab (nova/web/video-agent-panel.js): ô thư mục + nút Kiểm tra
       // project (auto-điền thư mục fixture) — mọi thao tác qua CDP của CHÍNH cửa sổ app.
-      const setDir = await cdp.evaluate(`(() => {
-        const ta = document.querySelector('#panels textarea');
-        if (!ta) return { ok: false, error: 'no textarea' };
-        ta.value = ${JSON.stringify(vaProject)};
-        return { ok: true };
-      })()`);
-      await cdp.click('#btnInspectProject');
-      await sleep(3000);
-      const inspectInfo = await cdp.evaluate(`(() => { const p = document.querySelectorAll('#panels .panel')[0]; const m = p ? p.querySelectorAll('.meta') : []; return { metas: Array.from(m).map(x => x.textContent.trim()) }; })()`);
-      // tick "Bỏ preview/QA (xuất thẳng)" nếu có (optSkip) để pipeline đi thẳng export
-      await cdp.evaluate(`(() => { const cb = document.getElementById('optSkip'); if (cb && !cb.checked) cb.click(); return !!cb; })()`);
-      const shotS6a = await shot(cdp, 's6-va-inapp-before');
+      // Panel documentary MỚI (nova/web/video-agent-panel.js — bridge documentary:
+      // create/runFull/render): narration (panel 02 textarea) + asset lines (panel 03
+      // textarea) → #btnRunFull → "Pipeline xong" (panel 08) → nút Render trong panel 08
+      // → "Đã render xong: <đường dẫn mp4>". Panel 12-channel cũ (#btnInspectProject /
+      // #optSkip / ô thư mục) đã bị thay — selector cũ chỉ còn ở video-agent.html ngoài.
+      const panelReady = await stallSafe.eval(`(() => { const t = document.getElementById('tool-toolvideoagent'); const panels = t ? t.querySelectorAll('#panels .panel') : []; const tas = t ? t.querySelectorAll('#panels textarea') : []; return { visible: !!(t && t.classList.contains('active')), panels: panels.length, hasRun: !!document.getElementById('btnRunFull'), textareas: tas.length, noticeShown: !!(document.getElementById('notice') && document.getElementById('notice').style.display === 'block') }; })()`);
+      if (!panelReady || panelReady.panels < 10 || !panelReady.hasRun) {
+        throw new Error('Panel Video Agent (documentary) chưa dựng đủ trong tab: ' + JSON.stringify(panelReady));
+      }
+      // Narration = text các scene storyboard S4 (sản phẩm khâu trên nối vào khâu tạo
+      // video); assets = ảnh thật (ffmpeg màu) cho từng scene. Quy ước panel: mỗi dòng
+      // asset "đường dẫn | mô tả", mỗi đoạn narration (dòng trống) = 1 scene.
+      const narration = (upstream.storyboard || []).map((s) => String((s && s.text) || '').trim()).filter(Boolean).join('\n\n')
+        || 'Đoạn mở đầu giới thiệu câu chuyện.\n\nĐoạn kết tổng kết thông điệp.';
+      const s6ImgDir = path.join(vaProject, 'images');
+      const assetLines = fs.readdirSync(s6ImgDir).filter((fn) => /\.(jpe?g|png)$/i.test(fn)).sort()
+        .map((fn, i) => `${path.join(s6ImgDir, fn)} | Bối cảnh ${i + 1}, tài liệu, cảnh ${i + 1}`);
+      const filled = await stallSafe.eval(`(() => { const t = document.getElementById('tool-toolvideoagent'); const tas = t.querySelectorAll('#panels textarea'); if (tas.length < 2) return { ok: false, n: tas.length }; tas[0].value = ${JSON.stringify(narration)}; tas[1].value = ${JSON.stringify(assetLines.join('\n'))}; const ps = t.querySelectorAll('#panels .panel'); const title = ps[0] && ps[0].querySelector('input'); if (title) title.value = 'E2E VA Window Video'; return { ok: true, n: tas.length, chars: tas[0].value.length, assets: tas[1].value.split('\\n').filter(Boolean).length }; })()`);
+      const shotS6a = await stallSafe.shot('s6-va-inapp-before');
       const runStart = Date.now();
-      await cdp.click('#btnRunFull');   // panel in-app map nút header này → runJob() (videoAgent:run)
-      let final = null;
-      for (let i = 0; i < 600; i++) { // tối đa ~600s cho pipeline + render
-        await sleep(1000);
+      await stallSafe.click('#btnRunFull');
+      // Poll "Pipeline xong" trên panel 08 (renderInfo) — pipeline documentary chạy ở
+      // MAIN process (documentary:runFull) nên renderer đóng băng (đã biết) không làm
+      // pipeline chết; poll chịu timeout CDP lúc renderer bận (pattern S5).
+      let pipeDone = null;
+      for (let i = 0; i < 300; i++) {
+        await sleep(2000);
         if (app.exitInfo()) break; // app đã thoát — không chờ nữa, err handler sẽ dump stderr
         try {
-          final = await cdp.evaluate(`(() => {
-            const pl = document.getElementById('progressLabel');
-            const evs = Array.from(document.querySelectorAll('#panels ul li')).slice(0, 8).map(li => li.textContent.trim());
-            const txt = pl ? pl.textContent : '';
-            if (/COMPLETED|DONE|Hoàn tất/i.test(txt)) return { done: true, txt: txt.trim(), events: evs };
-            if (/FAILED|LỖI|ERROR/i.test(txt)) return { done: false, failed: true, txt: txt.trim(), events: evs };
-            return null;
-          })()`);
+          const snap = await cdp.evaluate(`(() => { const t = document.getElementById('tool-toolvideoagent'); const pl = document.getElementById('progressLabel'); const ps = t ? t.querySelectorAll('#panels .panel') : []; const renderInfo = ps[7] ? ps[7].textContent.trim() : ''; const notice = document.getElementById('notice'); return { label: pl ? pl.textContent.trim() : '', renderInfo, noticeShown: !!(notice && notice.style.display === 'block') }; })()`);
+          if (snap && (/Pipeline xong/i.test(snap.renderInfo) || snap.noticeShown)) { pipeDone = snap; break; }
         } catch (e) {
-          // Renderer (cửa sổ chính) có thể bận/đóng băng khi render chạy — chờ rồi poll tiếp
-          // (waitRendererReady chờ tối đa 150s), giống pattern S5.
           if (app.exitInfo()) break;
           try { await waitRendererReady(150000); } catch (_) {}
         }
-        if (final) break;
       }
-      const resultBox = await cdp.evaluate(`(() => { const p = document.querySelectorAll('#panels .panel')[2]; const m = p ? p.querySelectorAll('.meta') : []; return Array.from(m).map(x => x.textContent.trim()); })()`);
-      const shotS6b = await shot(cdp, 's6-va-inapp-after');
-      // tìm mp4 thật sinh sau khi bấm Run. Render engine (nova editor-pro) ghi output
-      // vào OS temp — được launchApp redirect vào profile/AppData/Local/Temp của run,
-      // KHÔNG nằm trong thư mục project. Nguồn chân thực nhất: outputPath trong
-      // output/job.json của project; fallback: quét mp4 trong thư mục project.
-      let jobOut = null;
-      let jobOutErr = null;
-      try {
-        const jobJson = JSON.parse(fs.readFileSync(path.join(vaProject, 'output', 'job.json'), 'utf8'));
-        const op = jobJson && (jobJson.outputPath || jobJson.output);
-        if (op && fs.existsSync(op)) {
-          const stO = fs.statSync(op);
-          jobOut = (stO.size > 10000 && stO.mtimeMs >= runStart - 2000) ? { path: op, bytes: stO.size, mtime: stO.mtimeMs } : null;
-        } else { jobOutErr = 'job.json outputPath missing: ' + String(op); }
-      } catch (e) { jobOutErr = String((e && e.message) || e); }
-      const mp4s = [jobOut].filter(Boolean).concat(
-        listFilesDeep(vaProject, (p) => /\.mp4$/i.test(p)).filter((f) => f.mtime >= runStart - 2000 && f.bytes > 10000)
-      ).filter((f, i, arr) => arr.findIndex((x) => x.path === f.path) === i);
-      if (final && final.done && mp4s.length) {
-        const f = mp4s[0];
-        fs.copyFileSync(f.path, path.join(RUN_DIR, 'products', path.basename(f.path)));
-        // KIỂM CHỨNG TÍCH HỢP THẬT: mp4 phải (1) có stream audio khi input là giọng
-        // đọc S3 thật, (2) duration khớp duration giọng đọc S3 (±2s, tính cả nhạc nền).
+      // Bấm "Render Video" (nút trong panel 08) → Remotion render MP4 THẬT.
+      const renderClicked = await stallSafe.eval(`(() => { const ps = document.querySelectorAll('#panels .panel'); const b = ps[7] && ps[7].querySelector('button'); if (!b) return { ok: false, error: 'no render button in panel 08' }; b.click(); return { ok: true }; })()`);
+      let rendered = null;
+      for (let i = 0; i < 420; i++) {
+        await sleep(1000);
+        if (app.exitInfo()) break;
+        try {
+          const snap = await cdp.evaluate(`(() => { const t = document.getElementById('tool-toolvideoagent'); const ps = t ? t.querySelectorAll('#panels .panel') : []; const renderInfo = ps[7] ? ps[7].textContent.trim() : ''; const notice = document.getElementById('notice'); return { renderInfo, noticeShown: !!(notice && notice.style.display === 'block') }; })()`);
+          if (snap && (/Đã render xong:/.test(snap.renderInfo) || snap.noticeShown)) { rendered = snap; break; }
+        } catch (e) {
+          if (app.exitInfo()) break;
+          try { await waitRendererReady(150000); } catch (_) {}
+        }
+      }
+      const resultBox = (rendered && rendered.renderInfo) || (pipeDone && (pipeDone.label + ' | ' + pipeDone.renderInfo)) || null;
+      const shotS6b = await stallSafe.shot('s6-va-inapp-after');
+      // MP4 THẬT: đường dẫn trong "Đã render xong: <path>" (engine Remotion ghi vào
+      // OS temp — được launchApp redirect vào profile/AppData/Local/Temp của run).
+      let f = null;
+      let mp4Err = null;
+      if (rendered && /Đã render xong:/.test(rendered.renderInfo || '')) {
+        const m = /Đã render xong:\s*(.+)/.exec(rendered.renderInfo);
+        const mp4Path = m && m[1] && m[1].trim();
+        try {
+          if (mp4Path && fs.existsSync(mp4Path)) {
+            const st = fs.statSync(mp4Path);
+            if (st.size > 10000 && st.mtimeMs >= runStart - 2000) f = { path: mp4Path, bytes: st.size, mtime: st.mtimeMs };
+            else mp4Err = 'mp4 quá nhỏ/cũ: ' + mp4Path + ' ' + st.size + 'B';
+          } else mp4Err = 'đường dẫn mp4 trong UI không tồn tại: ' + String(mp4Path);
+        } catch (e) { mp4Err = String((e && e.message) || e); }
+      }
+      if (!f) {
+        // fallback: quét mp4 mới sinh trong profile (temp) của run
+        const cands = listFilesDeep(path.join(RUN_DIR, 'profile'), (p) => /\.mp4$/i.test(p)).filter((x) => x.mtime >= runStart - 2000 && x.bytes > 10000);
+        f = cands[0] || null;
+      }
+      if (f) {
+        fs.copyFileSync(f.path, path.join(RUN_DIR, 'products', 'va-window-render.mp4'));
+        // KIỂM CHỨNG render THẬT: mp4 phải có track video + duration > 0. Track audio
+        // và duration so với giọng đọc S3 ghi vào evidence (thông tin, không fail oan
+        // — panel documentary dựng video từ narration, không nhận file giọng đọc).
         const mp4Dur = await mediaDurationSeconds(f.path);
         const streams = await mediaStreamInfo(f.path);
         const hasAudioStream = !!(streams && streams.some((s) => s && s.codec_type === 'audio'));
         const hasVideoStream = !!(streams && streams.some((s) => s && s.codec_type === 'video'));
-        const audioOk = !upstreamUsed.voice || hasAudioStream;
-        const durDelta = (upstreamUsed.voice && upstreamVoiceDur && mp4Dur) ? +(mp4Dur - upstreamVoiceDur).toFixed(2) : null;
-        const durOk = durDelta == null || Math.abs(durDelta) <= 2;
-        const passS6 = audioOk && durOk;
-        addScenario({ id: 'S6-vaWindowPipeline', buttons: ['native.videoAgent.openWindow (in-app)', '#btnInspectProject', 'optSkip', '#btnRunFull'], verdict: passS6 ? 'pass' : 'fail',
-          evidence: { open: { ok: opened.ok, inApp: opened.inApp, windowId: opened.windowId }, strayTargets, tab: tabInfo, setDir, inspect: inspectInfo, progress: final.txt, events: final.events, result: resultBox, mp4Count: mp4s.length, jobOutput: path.relative(ROOT, f.path),
-            upstream: { usedVoice: upstreamUsed.voice, voicePath: upstream.voice ? path.relative(ROOT, upstream.voice.path) : null, voiceBytes: upstream.voice && upstream.voice.bytes, voiceDurationSec: upstreamVoiceDur, usedStoryboard: upstreamUsed.storyboard, storyboardScenes: upstream.storyboard ? upstream.storyboard.length : 0, notes: upstreamUsed.notes },
-            mp4Probe: { durationSec: mp4Dur, hasAudioStream, hasVideoStream, streams, durationDeltaVsVoiceSec: durDelta, audioIntegrated: audioOk, durationMatch: durOk } },
-          products: [product(f.path, f.bytes, 'Video MP4 render THẬT — input là giọng đọc S3 (tts/chapter-001.*) + storyboard S4 (script/chapter-001.md) của chính app')],
-          screenshots: [shotS6a.path, shotS6b.path].filter(Boolean) });
-        console.log('[e2e] S6 vaWindow:', passS6 ? 'PASS' : 'FAIL — mp4 không khớp input upstream', '— mp4 =', f.path, f.bytes + 'B', 'dur=' + mp4Dur + 's voice=' + upstreamVoiceDur + 's audio=' + hasAudioStream);
+        const mp4Ok = hasVideoStream && mp4Dur > 0;
+        const durDelta = (upstreamVoiceDur && mp4Dur) ? +(mp4Dur - upstreamVoiceDur).toFixed(2) : null;
+        addScenario({ id: 'S6-vaWindowPipeline', buttons: ['native.videoAgent.openWindow (in-app)', '#btnRunFull', 'panel 08 Render'], verdict: mp4Ok ? 'pass' : 'fail',
+          evidence: { open: { ok: opened.ok, inApp: opened.inApp, windowId: opened.windowId }, strayTargets, tab: tabInfo, panel: panelReady, filled, pipeline: pipeDone && (pipeDone.label + ' | ' + pipeDone.renderInfo), render: resultBox, renderClicked, mp4Err: mp4Err || undefined,
+            upstream: { usedStoryboard: upstreamUsed.storyboard, storyboardScenes: upstream.storyboard ? upstream.storyboard.length : 0, voiceDurationSec: upstreamVoiceDur, notes: upstreamUsed.notes },
+            mp4Probe: { path: path.relative(ROOT, f.path), bytes: f.bytes, durationSec: mp4Dur, hasAudioStream, hasVideoStream, durationDeltaVsVoiceSec: durDelta } },
+          products: [product(f.path, f.bytes, 'Video MP4 render THẬT qua tab Video Agent (openWindow → pipeline documentary → Remotion render) — narration là storyboard S4 của chính app')],
+          screenshots: [shotS6a && shotS6a.path, shotS6b && shotS6b.path].filter(Boolean) });
+        console.log('[e2e] S6 vaWindow:', mp4Ok ? 'PASS' : 'FAIL — mp4 không có video stream', '— mp4 =', f.path, f.bytes + 'B', 'dur=' + mp4Dur + 's audio=' + hasAudioStream);
       } else {
-        addScenario({ id: 'S6-vaWindowPipeline', buttons: ['native.videoAgent.openWindow (in-app)', '#btnInspectProject', 'optSkip', '#btnRunFull'], verdict: 'fail',
-          evidence: { open: opened, strayTargets, tab: tabInfo, setDir, inspect: inspectInfo, progress: final && final.txt, events: final && final.events, result: resultBox, mp4Count: mp4s.length, jobOutput: jobOut ? path.relative(ROOT, jobOut.path) : null, jobOutputError: jobOutErr || undefined,
-            upstream: { usedVoice: upstreamUsed.voice, voiceDurationSec: upstreamVoiceDur, usedStoryboard: upstreamUsed.storyboard, storyboardScenes: upstream.storyboard ? upstream.storyboard.length : 0, notes: upstreamUsed.notes } },
-          screenshots: [shotS6a.path, shotS6b.path].filter(Boolean) });
-        console.log('[e2e] S6 vaWindow: FAIL —', JSON.stringify(redact({ progress: final && final.txt, result: resultBox, jobOutputError: jobOutErr })));
+        addScenario({ id: 'S6-vaWindowPipeline', buttons: ['native.videoAgent.openWindow (in-app)', '#btnRunFull', 'panel 08 Render'], verdict: 'fail',
+          evidence: { open: opened, strayTargets, tab: tabInfo, panel: panelReady, filled, pipeline: pipeDone && (pipeDone.label + ' | ' + pipeDone.renderInfo), render: resultBox, renderClicked, mp4Err: mp4Err || undefined,
+            upstream: { usedStoryboard: upstreamUsed.storyboard, storyboardScenes: upstream.storyboard ? upstream.storyboard.length : 0, voiceDurationSec: upstreamVoiceDur, notes: upstreamUsed.notes } },
+          screenshots: [shotS6a && shotS6a.path, shotS6b && shotS6b.path].filter(Boolean) });
+        console.log('[e2e] S6 vaWindow: FAIL — không có mp4 render', JSON.stringify(redact({ pipeline: pipeDone && pipeDone.renderInfo, render: resultBox, renderClicked, mp4Err })));
       }
     } catch (e) { addScenario({ id: 'S6-vaWindowPipeline', verdict: 'fail', error: String(e.message || e) }); }
 
@@ -1347,6 +1400,7 @@ async function main() {
     console.log('[e2e] RESULT :', JSON.stringify(counts));
     console.log('[e2e] products in', path.join(RUN_DIR, 'products'));
     process.exitCode = counts.fail > 0 ? 1 : 0;
+    try { if (releaseLock) releaseLock(); } catch (_) {}
   }
 }
 

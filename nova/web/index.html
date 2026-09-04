@@ -3961,6 +3961,7 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
         #tool-toolvoice .gluoi{display:grid;grid-template-columns:repeat(auto-fill,minmax(224px,1fr));gap:10px}
         #tool-toolvoice .gcard{border:1px solid var(--border);border-radius:10px;padding:13px;
           background:var(--surface-2);cursor:pointer;position:relative}
+        #tool-toolvoice .gcard.has-del{padding-right:56px}
         #tool-toolvoice .gcard:hover{border-color:var(--border-bright)}
         #tool-toolvoice .gcard.sel{border-color:var(--accent);background:var(--accent-soft)}
         #tool-toolvoice .gtop{display:flex;align-items:center;gap:11px;margin-bottom:10px}
@@ -3972,8 +3973,8 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
         #tool-toolvoice .gtags{display:flex;gap:5px;flex-wrap:wrap}
         #tool-toolvoice .gtg{font-size:10.5px;padding:3px 8px;border-radius:5px;background:var(--surface-3);
           color:var(--text-muted);border:1px solid var(--border);font-weight:500}
-        #tool-toolvoice .gdel{position:absolute;top:8px;right:8px;opacity:0;padding:2px 7px;transition:opacity .12s}
-        #tool-toolvoice .gcard:hover .gdel{opacity:1}
+        #tool-toolvoice .gdel{position:absolute;top:8px;right:8px;opacity:1;padding:2px 8px;min-width:28px;line-height:1.4;z-index:1;color:var(--text-muted)}
+        #tool-toolvoice .gdel:hover{color:var(--red);border-color:var(--red)}
         #tool-toolvoice .gadd{border:1px dashed var(--border-2);border-radius:10px;display:grid;place-items:center;
           color:var(--text-dim);font-size:13px;cursor:pointer;min-height:100px;font-weight:500}
         #tool-toolvoice .gadd:hover{border-color:var(--accent);color:var(--accent)}
@@ -4063,7 +4064,7 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
         <div class="panel-body">
           <div class="gchips" id="giongChips"></div>
           <div class="gluoi" id="giongLuoi"></div>
-          <div class="ghint">Bấm vào thẻ để nghe 4 giây mẫu — bấm lần nữa để dừng. Nút ✕ hiện khi rê chuột. Nhãn dưới mỗi thẻ dùng để lọc khi thư viện đông.</div>
+          <div class="ghint">Bấm vào thẻ để nghe 4 giây mẫu — bấm lần nữa để dừng. Giọng clone có nút Xóa góc phải (giọng có sẵn thì giữ nguyên). Nhãn dưới mỗi thẻ dùng để lọc khi thư viện đông.</div>
 
           <div id="giongThemBox" style="display:none;margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
             <div class="grid-2" style="gap:12px">
@@ -8038,15 +8039,26 @@ const _giongMau = new Map();  // khoá → objectURL mẫu 4 giây (khỏi gọi
 let _giongSu = [];            // lịch sử bản đã tạo trong phiên
 let _giongTT = { omni: 'no', vieneu: 'no', xtts: 'no' };
 let _giongThemMo = false;
+let _giongBusy = false;
+
+async function _giongFetchJson(url, opt){
+  const r = await fetch(url, opt);
+  const data = await r.json().catch(() => null);
+  if (!r.ok){
+    let d = data && (data.detail || data.error || data.message);
+    if (Array.isArray(d)) d = (d[0] && (d[0].msg || d[0].detail)) || '';
+    const msg = (typeof d === 'string' && d) ? d : ('HTTP ' + r.status);
+    throw new Error(msg);
+  }
+  return data || {};
+}
 
 // ── Danh sách giọng — VoiceBank dùng chung cho cả ba engine ─────────
 async function giongTaiDS(){
   const ds = [];
   let taiThanhCong = false;
   try {
-    const res = await fetch(VOICE_URL + '/api/voices');
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const data = await res.json();
+    const data = await _giongFetchJson(VOICE_URL + '/api/voices');
     const list = Array.isArray(data) ? data : (data.voices || []);
     for (const v of list){
       // Voice factory cũng phải hiện tên trong UI. Trước đây continue ở đây làm
@@ -8097,8 +8109,8 @@ function giongVe(){
   const hien = _giongDS.filter(_giongHop);
   box.innerHTML = hien.map(v => {
     const chon = v.key === _giongChon, dangPhat = v.key === _giongPhat;
-    return `<div class="gcard${chon ? ' sel' : ''}${dangPhat ? ' play' : ''}" onclick="giongBam('${escapeHtml(v.key)}')">
-      ${v.factory ? '' : `<button class="btn sm ghost gdel" onclick="event.stopPropagation();giongXoa('${escapeHtml(v.key)}')" title="Xoá giọng">✕</button>`}
+    return `<div class="gcard${chon ? ' sel' : ''}${dangPhat ? ' play' : ''}${v.factory ? '' : ' has-del'}" onclick="giongBam('${escapeHtml(v.key)}')">
+      ${v.factory ? '' : `<button type="button" class="btn sm ghost gdel" onclick="event.stopPropagation();giongXoa('${escapeHtml(v.key)}')" title="Xoá giọng clone" aria-label="Xoá giọng">Xóa</button>`}
       <div class="gtop">
         <span class="gpico">${dangPhat ? '❙❙' : '▶'}</span>
         <div style="min-width:0"><div class="gname">${escapeHtml(v.name)}</div><div class="gsrc">${escapeHtml(v.src)}</div></div>
@@ -8176,17 +8188,22 @@ function giongDocTuyChon(){
    /api/status/{id} → tải file merged.                                        */
 async function _ttsLocal(eng, v, text, o, onTien){
   if (!_voiceReady){ await voiceInit(); if (!_voiceReady) throw new Error('Backend giọng nói chưa sẵn sàng.'); }
+  if (!v || !v.id) throw new Error('Chưa chọn giọng.');
   const body = { text, language: o.lang, speed: o.tocDo, gap_ms: Math.round(o.gap), attributes: {}, preset_id: v.id, engine: _TTS_BACKEND_ID[eng] || 'omnivoice' };
-  const sub = await fetch(VOICE_URL + '/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.json());
+  const sub = await _giongFetchJson(VOICE_URL + '/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   const tid = sub.task_id;
   if (!tid) throw new Error('Backend không nhận việc.');
   for (let i = 0; i < 900; i++){
     await new Promise(r => setTimeout(r, 1000));
-    const s = await fetch(VOICE_URL + '/api/status/' + tid).then(r => r.json());
+    const s = await _giongFetchJson(VOICE_URL + '/api/status/' + tid);
     if (s.total && onTien) onTien(s.progress + '/' + s.total + ' khối');
     if (s.status === 'completed' || s.status === 'done'){
       if (!s.results || !s.results.merged) throw new Error('Backend không trả file.');
-      return await fetch(VOICE_URL + s.results.merged).then(r => r.blob());
+      const fileRes = await fetch(VOICE_URL + s.results.merged);
+      if (!fileRes.ok) throw new Error('Không tải được file giọng (HTTP ' + fileRes.status + ').');
+      const blob = await fileRes.blob();
+      if (!blob || !blob.size) throw new Error('File giọng rỗng.');
+      return blob;
     }
     if (s.status === 'failed' || s.status === 'error') throw new Error(s.error || 'Backend báo lỗi.');
   }
@@ -8323,40 +8340,66 @@ function giongThemDoi(){
 }
 
 async function giongThemLuu(){
+  if (_giongBusy) return;
   const cach = (document.getElementById('giongThemCach') || {}).value || 'clone';
   const ten = ((document.getElementById('gtTen') || {}).value || '').trim();
   const nhan = [];   // nhãn lọc — backend tự gắn sau khi thêm
   if (!ten){ giongBao('Đặt tên cho giọng trước.', 'red'); return; }
+  if (cach === 'clone'){
+    const f = (document.getElementById('gtFile') || {}).files && document.getElementById('gtFile').files[0];
+    if (!f){ giongBao('Chọn file giọng mẫu.', 'red'); return; }
+  } else {
+    const ins = ((document.getElementById('gtMoTa') || {}).value || '').trim();
+    if (!ins){ giongBao('Nhập mô tả giọng.', 'red'); return; }
+  }
+  _giongBusy = true;
   try {
     if (!_voiceReady){ await voiceInit(); if (!_voiceReady){ giongBao('Backend giọng nói chưa sẵn sàng.', 'red'); return; } }
     const body = { name: ten, ref_text: '', attributes: {}, tags: nhan };
     if (cach === 'clone'){
-      const f = (document.getElementById('gtFile') || {}).files && document.getElementById('gtFile').files[0];
-      if (!f){ giongBao('Chọn file giọng mẫu.', 'red'); return; }
+      const f = document.getElementById('gtFile').files[0];
       giongBao('Đang tải file mẫu…');
       const fd = new FormData(); fd.append('file', f);
-      const up = await fetch(VOICE_URL + '/api/upload', { method: 'POST', body: fd }).then(r => r.json());
+      const up = await _giongFetchJson(VOICE_URL + '/api/upload', { method: 'POST', body: fd });
+      if (!up.path) throw new Error('Backend không nhận file mẫu.');
       body.ref_audio = up.path;
     } else {
-      const ins = ((document.getElementById('gtMoTa') || {}).value || '').trim();
-      if (!ins){ giongBao('Nhập mô tả giọng.', 'red'); return; }
-      body.attributes.instruct = ins;
+      body.attributes.instruct = ((document.getElementById('gtMoTa') || {}).value || '').trim();
     }
-    await fetch(VOICE_URL + '/api/voices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.json());
+    const saved = await _giongFetchJson(VOICE_URL + '/api/voices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const gtTen = document.getElementById('gtTen'); if (gtTen) gtTen.value = '';
+    const gtFile = document.getElementById('gtFile'); if (gtFile) gtFile.value = '';
+    const gtMoTa = document.getElementById('gtMoTa'); if (gtMoTa) gtMoTa.value = '';
     giongThemBat();
     await giongTaiDS();
+    if (saved && saved.id){
+      const key = 'omni:' + saved.id;
+      if (_giongDS.some(x => x.key === key)){ _giongChon = key; giongVe(); }
+    }
     giongBao('✓ Đã thêm giọng "' + ten + '".', 'green');
   } catch (e){ giongBao('Thêm giọng lỗi: ' + (e.message || e), 'red'); }
+  finally { _giongBusy = false; }
 }
 async function giongXoa(key){
+  if (_giongBusy) return;
   const v = _giongDS.find(x => x.key === key);
-  if (!v || v.factory) return;
-  if (!confirm('Xoá giọng "' + v.name + '"?')) return;
+  if (!v){ giongBao('Không tìm thấy giọng.', 'red'); return; }
+  if (v.factory){ giongBao('Không xoá được giọng có sẵn.', 'red'); return; }
+  if (!confirm('Xoá giọng "' + v.name + '"? File mẫu clone sẽ bị gỡ khỏi thư viện.')) return;
+  _giongBusy = true;
   try {
-    await fetch(VOICE_URL + '/api/voices/' + v.id, { method: 'DELETE' });
-    _giongMau.delete(key);
+    await _giongFetchJson(VOICE_URL + '/api/voices/' + encodeURIComponent(v.id), { method: 'DELETE' });
+    const mau = _giongMau.get(key);
+    if (mau){ try { URL.revokeObjectURL(mau); } catch (e){} _giongMau.delete(key); }
+    if (_giongPhat === key){
+      try { if (_giongAudio) _giongAudio.pause(); } catch (e){}
+      _giongPhat = '';
+    }
+    if (_giongChon === key) _giongChon = '';
     await giongTaiDS();
+    giongBao('✓ Đã xoá giọng "' + v.name + '".', 'green');
   } catch (e){ giongBao('Xoá lỗi: ' + (e.message || e), 'red'); }
+  finally { _giongBusy = false; }
 }
 
 // ── Trạng thái engine: đo THẬT qua backend ───────────────────────────

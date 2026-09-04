@@ -6,6 +6,7 @@ const path = require('path');
 const { spawn, execFile } = require('child_process');
 const { CdpClient } = require('./smoke-cdp');
 const { runMcpChecks } = require('./smoke-mcp');
+const { acquirePipelineLock } = require('./pipeline-lock');
 const {
   appExeRows, closeServer, descendants, findPackagedExe, forceKill, httpJson, isPortOpen,
   killAppExes, listen, processTable, redact, sleep, waitForJson, waitForPort,
@@ -203,8 +204,14 @@ async function main() {
   let cdp = null;
   let mock = null;
   let appPids = [];
+  let releaseLock = null;
 
   try {
+    // Mutex với mọi run khác cùng chạm app/dist/ports (smoke, e2e, build):
+    // chờ hàng đợi thay vì chạy song song rồi giết nhau (e2e 04-57-03Z).
+    releaseLock = await acquirePipelineLock('packaged-smoke');
+    report.checks.pipelineLock = { ok: true, label: 'packaged-smoke' };
+
     report.executable = findPackagedExe(ROOT, process.env.NOVA_SMOKE_EXE || process.argv[2]);
     report.installDir = path.dirname(report.executable);
 
@@ -411,6 +418,7 @@ async function main() {
     const safeReport = deepRedact(report);
     fs.writeFileSync(path.join(runDir, 'report.json'), JSON.stringify(safeReport, null, 2) + '\n');
     console.log(JSON.stringify({ status: safeReport.status, report: path.join(runDir, 'report.json'), screenshot: safeReport.checks.screenshot?.path || null }, null, 2));
+    try { if (releaseLock) releaseLock(); } catch (_) {}
   }
 }
 

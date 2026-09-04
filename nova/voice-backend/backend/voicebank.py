@@ -81,11 +81,17 @@ def get_voice(pid: str) -> Optional[dict]:
 
 def save_voice(name: str, ref_audio: Optional[str] = None, ref_text: str = "",
                tags: Optional[list[str]] = None, attributes: Optional[dict] = None) -> dict:
+    name = (name or "").strip()
+    if not name:
+        raise ValueError("Đặt tên cho giọng trước.")
     pid = "spk_" + uuid.uuid4().hex[:8]
     stored_ref = None
-    if ref_audio and Path(ref_audio).exists():
-        dst = VOICEBANK_DIR / f"{pid}{Path(ref_audio).suffix or '.wav'}"
-        shutil.copy(ref_audio, dst)
+    if ref_audio:
+        src = Path(ref_audio)
+        if not src.exists():
+            raise ValueError("Không tìm thấy file giọng mẫu.")
+        dst = VOICEBANK_DIR / f"{pid}{src.suffix or '.wav'}"
+        shutil.copy(src, dst)
         stored_ref = str(dst)
     voice = {
         "id": pid,
@@ -106,6 +112,11 @@ def update_voice(pid: str, **fields) -> Optional[dict]:
     v = get_voice(pid)
     if v is None:
         return None
+    fields.pop("id", None)
+    # Giọng nhà máy không được đổi cờ / file mẫu qua PATCH.
+    if v.get("is_factory"):
+        fields.pop("is_factory", None)
+        fields.pop("ref_audio", None)
     v.update(fields)
     _preset_path(pid).write_text(json.dumps(v, ensure_ascii=False, indent=2), encoding="utf-8")
     return v
@@ -116,10 +127,15 @@ def delete_voice(pid: str) -> bool:
     if v is None:
         return False
     if v.get("is_factory"):
-        return False  # giọng nhà máy (có sẵn) — không cho xoá
+        raise PermissionError("Không xoá được giọng có sẵn")
     # Xoá file mẫu kèm theo nếu nằm trong voicebank.
     ref = v.get("ref_audio")
-    if ref and Path(ref).parent == VOICEBANK_DIR and Path(ref).exists():
-        Path(ref).unlink(missing_ok=True)
+    if ref:
+        try:
+            rp = Path(ref).resolve()
+            if rp.parent == VOICEBANK_DIR.resolve() and rp.exists():
+                rp.unlink(missing_ok=True)
+        except OSError:
+            pass
     _preset_path(pid).unlink(missing_ok=True)
     return True

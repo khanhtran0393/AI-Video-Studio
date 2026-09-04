@@ -254,10 +254,13 @@ def api_voices():
 
 @app.post("/api/voices")
 def api_save_voice(body: SaveVoiceBody):
-    return voicebank.save_voice(
-        body.name, ref_audio=body.ref_audio, ref_text=body.ref_text,
-        tags=body.tags, attributes=body.attributes,
-    )
+    try:
+        return voicebank.save_voice(
+            body.name, ref_audio=body.ref_audio, ref_text=body.ref_text,
+            tags=body.tags, attributes=body.attributes,
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e) or "Không lưu được giọng")
 
 
 @app.patch("/api/voices/{pid}")
@@ -270,8 +273,11 @@ def api_update_voice(pid: str, fields: dict):
 
 @app.delete("/api/voices/{pid}")
 def api_delete_voice(pid: str):
-    if not voicebank.delete_voice(pid):
-        raise HTTPException(404, "Không tìm thấy giọng")
+    try:
+        if not voicebank.delete_voice(pid):
+            raise HTTPException(404, "Không tìm thấy giọng")
+    except PermissionError as e:
+        raise HTTPException(403, str(e) or "Không xoá được giọng có sẵn")
     return {"deleted": pid}
 
 
