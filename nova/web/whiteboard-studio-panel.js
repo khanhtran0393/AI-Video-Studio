@@ -62,6 +62,17 @@
   const show = (e) => { if (e) e.classList.remove('wb-hide'); };
   const hide = (e) => { if (e) e.classList.add('wb-hide'); };
 
+  /* ── URL ảnh an toàn cho origin http://localhost ──
+     App chạy UI trên http://localhost (local server của Nova) nên trình duyệt
+     CHẶN <img src="file:///..."> — sơ đồ vùng preview hiện lỗi/không lên.
+     Đường dẫn đĩa trỏ qua route /local-media của server Nova (cùng origin):
+     đồng bộ, không IPC/base64, không cache, không race-condition. */
+  function wbFileUrl(p) {
+    if (!p) return '';
+    if (/^(https?:|data:|blob:|file:)/i.test(p)) return p;
+    return '/local-media?p=' + encodeURIComponent(String(p).replace(/\\/g, '/'));
+  }
+
   /* ── tiến trình render (IPC main → renderer) ── */
   function listenProgress() {
     if (!window.native || !window.native.whiteboard || !window.native.whiteboard.onExportProgress) return;
@@ -345,11 +356,15 @@
     els.sceneCanvasLabel.textContent = s && s.canvas ? s.canvas.width + '×' + s.canvas.height : '—';
     els.genElementsBtn.disabled = !(s && s.image && s.canvas);
     els.previewBtn.disabled = !(s && s.image && s.elements && s.elements.length);
-    if (s && s.previewPath && els.previewImg) {
-      els.previewImg.src = 'file:///' + s.previewPath.replace(/\\/g, '/');
-      show(els.previewImg);
-    } else if (els.previewImg) {
+    // Sơ đồ vùng: đường dẫn đĩa trỏ qua route /local-media (file:/// bị chặn
+    // vì trang chạy http://localhost). Đồng bộ nên không cần guard race-condition.
+    if (els.previewImg) {
       hide(els.previewImg);
+      if (els.previewImg.getAttribute('src')) els.previewImg.removeAttribute('src');
+    }
+    if (s && s.previewPath && els.previewImg) {
+      els.previewImg.src = wbFileUrl(s.previewPath);
+      show(els.previewImg);
     }
     renderElementsTable(s);
   }

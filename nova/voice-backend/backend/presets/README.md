@@ -8,6 +8,13 @@ Two sources:
 
 When a customer picks a voice, the app auto-sets language from `attributes.lang`.
 
+## Multilingual design voices (OmniVoice instruct, no WAV)
+32 factory voices — male + female for 16 languages beyond Vi/En:
+`zh, ja, ko, es, fr, de, it, pt, ru, pl, tr, nl, cs, ar, hu, hi`.
+These seed via `attributes.instruct` + `attributes.lang` (OmniVoice voice design).
+XTTS also accepts these language codes (zh → zh-cn internally); VieNeu does not
+(Vietnamese only, En/Vi code-switch).
+
 ## English (WAV clone)
 | Filename | Voice |
 |---|---|

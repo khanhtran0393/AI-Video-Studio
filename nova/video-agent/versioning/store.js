@@ -39,7 +39,23 @@ class VersionStore {
     return { version: n, spec: JSON.parse(fs.readFileSync(f, 'utf8')) };
   }
   list() {
-    return { videoSpecs: this._count('video-spec'), qa: this._count('qa') };
+    // Trả về CẢ mảng versions (version + createdAt từ mtime file) cho UI dropdown,
+    // lẫn số đếm cũ (videoSpecs/qa) để tương thích caller hiện có.
+    const versions = [];
+    let qa = 0;
+    try {
+      for (const f of fs.readdirSync(this.dir)) {
+        const m = f.match(/^video-spec-v(\d{3})\.json$/);
+        if (m) {
+          const p = path.join(this.dir, f);
+          let createdAt = '';
+          try { createdAt = fs.statSync(p).mtime.toISOString(); } catch (_) {}
+          versions.push({ version: parseInt(m[1], 10), createdAt, file: f });
+        } else if (/^qa-v(\d{3})\.json$/.test(f)) qa++;
+      }
+    } catch (_) {} // dir chưa tạo / không đọc được → danh sách rỗng
+    versions.sort((a, b) => a.version - b.version);
+    return { versions, videoSpecs: versions.length, qa };
   }
 }
 

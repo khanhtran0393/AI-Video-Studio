@@ -1,0 +1,4 @@
+﻿nova/web/handdraw-studio-panel.js:356: img.src = 'file:///' + s.image.replace(/\\/g, '/');
+nova/web/handdraw-studio-panel.js:949: els.previewImg.src = 'file:///' + s.previewPath.replace(/\\/g, '/');
+nova/web/handdraw-studio-panel.js:955: els.hdThumb.src = 'file:///' + s.image.replace(/\\/g, '/');
+nova/web/whiteboard-studio-panel.js:67: CHẶN <img src="file:///..."> — sơ đồ vùng preview hiện lỗi/không lên.

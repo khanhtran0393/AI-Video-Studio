@@ -70,6 +70,45 @@ function registerVoiceIpc() {
       return { error: String(e) };
     }
   });
+  // ── Cache mẫu nghe thử trên đĩa (userData/voice-sample-cache) ──────────
+  // Mẫu nghe thử ~4 giây chỉ nên sinh MỘT lần: model nạp lười lần đầu
+  // 30-60s, để mỗi lần bấm nghe thử lại tạo mới thì khách tưởng app treo.
+  // Renderer tự quản khoá (phiên bản cache + engine + khoá giọng); main chỉ
+  // ghi/đọc/xoá file — file là dataURL ASCII nên dễ đọc lại thành Blob.
+  function voiceSampleFile(key){
+    const safe = String(key || '').replace(/[/\\:*?"<>|]+/g, '_').replace(/\.\.+/g, '_').slice(0, 180);
+    return path.join(app.getPath('userData'), 'voice-sample-cache', safe + '.txt');
+  }
+  ipcMain.handle('voice-sample-save', (_e, payload = {}) => {
+    try {
+      const { key, dataUrl } = payload || {};
+      if (!key || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:') || dataUrl.length > 16 * 1024 * 1024) return { error: 'DỮ_LIỆU_KHÔNG_HỢP_LỆ' };
+      const file = voiceSampleFile(key);
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, dataUrl, 'utf8');
+      return { ok: true };
+    } catch (e) { return { error: String((e && e.message) || e) }; }
+  });
+  ipcMain.handle('voice-sample-load', (_e, key) => {
+    try {
+      const file = voiceSampleFile(key);
+      if (!fs.existsSync(file)) return { missing: true };
+      const dataUrl = fs.readFileSync(file, 'utf8');
+      if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) return { missing: true };
+      return { ok: true, dataUrl };
+    } catch (e) { return { missing: true }; }
+  });
+  ipcMain.handle('voice-sample-clear', (_e, key) => {
+    try {
+      if (key == null || key === ''){
+        fs.rmSync(path.join(app.getPath('userData'), 'voice-sample-cache'), { recursive: true, force: true });
+        return { ok: true };
+      }
+      try { fs.rmSync(voiceSampleFile(key), { force: true }); } catch (_) {}
+      return { ok: true };
+    } catch (e) { return { error: String((e && e.message) || e) }; }
+  });
+
   voiceNative.onLog((line) => { try { if (state.mainWindow && !state.mainWindow.isDestroyed()) state.mainWindow.webContents.send('voice-log', line); } catch {} });
 }
 

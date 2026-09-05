@@ -113,4 +113,12 @@ assert(voicebankSrc.includes('raise PermissionError("Không xoá được giọn
 assert(appSrc.includes('HTTPException(403'), 'API xóa giọng nhà máy phải trả 403');
 assert(appSrc.includes('HTTPException(400'), 'API lưu giọng lỗi phải trả 400');
 
+// 10. Cao độ (pitch): backend nhận field `pitch` (nửa cung) và xử lý hậu kỳ cho mọi engine.
+assert(appSrc.includes('pitch: float = 0.0'), 'TTSBody phải nhận field pitch (nửa cung, mặc định 0)');
+assert(appSrc.includes('pitch_shift_wav(wav, pitch)'), '_run_tts phải áp pitch sau khi engine synth');
+assert(read('voice-backend/backend/audio_utils.py').includes('def pitch_shift_wav'),
+  'audio_utils phải có pitch_shift_wav (ffmpeg, giữ tempo)');
+assert(novaWeb.includes('id="voicePitch"'), 'UI phải có slider cao độ (voicePitch)');
+assert(novaWeb.includes('pitch: o.caoDo || 0'), 'UI phải gửi pitch trong POST /api/tts');
+
 console.log('voice contract tests: passed');

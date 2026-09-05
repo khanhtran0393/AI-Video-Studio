@@ -21,9 +21,11 @@ def _preset_path(pid: str) -> Path:
 def seed_factory() -> int:
     """Nạp giọng NHÀ MÁY vào VoiceBank. Idempotent, chạy mỗi lần mở app.
 
-    Hai nguồn:
+    Ba nguồn:
       - Có ``file`` WAV: copy vào voicebank, dùng làm ref_audio (clone).
       - Không file nhưng ``attributes.voice``: giọng built-in của engine (VieNeu).
+      - Không file nhưng ``attributes.instruct``: giọng "thiết kế" theo mô tả (OmniVoice)
+        — dùng cho các ngôn ngữ ngoài Việt/Anh (zh, ja, ko, es, fr, de...).
     Bỏ qua mục không có nguồn → không tạo giọng rỗng.
     """
     manifest = PRESETS_DIR / "presets.json"
@@ -41,6 +43,7 @@ def seed_factory() -> int:
         attrs = it.get("attributes") or {}
         wav_name = it.get("file")
         builtin = str(attrs.get("voice") or "").strip()
+        instruct = str(attrs.get("instruct") or "").strip()
         dst = None
         if wav_name:
             src = PRESETS_DIR / wav_name
@@ -52,8 +55,8 @@ def seed_factory() -> int:
                     shutil.copy(src, dst)
             except Exception:
                 continue
-        elif not builtin:
-            continue
+        elif not builtin and not instruct:
+            continue  # không có nguồn nào (wav/builtin/instruct) → bỏ qua
         prev = get_voice(pid) or {}
         voice = {
             "id": pid,

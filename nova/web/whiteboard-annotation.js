@@ -198,22 +198,62 @@
   }
 
   /* ── chuẩn hoá 1 element do UI edit ── */
+  /* vùng khoanh tay (lasso): ≥ 3 điểm [x,y] pixel nguyên, clamp trong canvas,
+     bỏ điểm trùng liền kề — điểm cuối sẽ tự nối điểm đầu khép thành vùng kín */
+  function sanitizePoints(rawPts, w, h) {
+    if (!Array.isArray(rawPts)) return null;
+    const out = [];
+    for (const p of rawPts) {
+      if (!Array.isArray(p) || p.length < 2) continue;
+      const x = clampInt(p[0], 0, w, 0);
+      const y = clampInt(p[1], 0, h, 0);
+      const last = out[out.length - 1];
+      if (!last || last[0] !== x || last[1] !== y) out.push([x, y]);
+    }
+    return out.length >= 3 ? out : null;
+  }
+
+  function pointsBBox(pts) {
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    pts.forEach((p) => {
+      if (p[0] < minX) minX = p[0];
+      if (p[0] > maxX) maxX = p[0];
+      if (p[1] < minY) minY = p[1];
+      if (p[1] > maxY) maxY = p[1];
+    });
+    return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+  }
+
   function normalizeElement(el, idx, canvas) {
     const w = clampInt(canvas && canvas.width, 16, 20000, 1280);
     const h = clampInt(canvas && canvas.height, 16, 20000, 720);
     const region = (el && el.region) || {};
     const reveal = (el && el.reveal) || {};
     const handPath = (el && el.handPath) || {};
-    const x = clampInt(region.x, 0, w, 0);
-    const y = clampInt(region.y, 0, h, 0);
-    const rw = clampInt(region.width, 8, w - x, w);
-    const rh = clampInt(region.height, 8, h - y, h);
+    const pts = sanitizePoints(region.points, w, h);
+    let x, y, rw, rh;
+    if (pts) {
+      // vùng khoanh tay: rect = hộp bao của polygon (giữ tương thích schema engine)
+      const bb = pointsBBox(pts);
+      x = clampInt(bb.x, 0, w, 0);
+      y = clampInt(bb.y, 0, h, 0);
+      rw = clampInt(bb.width, 8, w - x, w);
+      rh = clampInt(bb.height, 8, h - y, h);
+    } else {
+      x = clampInt(region.x, 0, w, 0);
+      y = clampInt(region.y, 0, h, 0);
+      rw = clampInt(region.width, 8, w - x, w);
+      rh = clampInt(region.height, 8, h - y, h);
+    }
     const dir = REVEAL_DIRECTIONS.includes(reveal.direction) ? reveal.direction : 'top_to_bottom';
     const easing = EASINGS.includes(handPath.easing) ? handPath.easing : 'easeInOut';
-    const start = [clampInt(handPath.start && handPath.start[0], x, x + rw, x + Math.round(rw / 2)),
-                   clampInt(handPath.start && handPath.start[1], y, y + rh, y + Math.round(rh / 2))];
-    const end = [clampInt(handPath.end && handPath.end[0], x, x + rw, x + Math.round(rw / 2)),
-                 clampInt(handPath.end && handPath.end[1], y, y + rh, y + rh - Math.max(8, Math.round(rh * 0.1)))];
+    // vùng khoanh tay → handPath đi theo đúng nét người dùng vẽ (điểm đầu → điểm cuối)
+    const start = pts ? [pts[0][0], pts[0][1]]
+      : [clampInt(handPath.start && handPath.start[0], x, x + rw, x + Math.round(rw / 2)),
+         clampInt(handPath.start && handPath.start[1], y, y + rh, y + Math.round(rh / 2))];
+    const end = pts ? [pts[pts.length - 1][0], pts[pts.length - 1][1]]
+      : [clampInt(handPath.end && handPath.end[0], x, x + rw, x + Math.round(rw / 2)),
+         clampInt(handPath.end && handPath.end[1], y, y + rh, y + rh - Math.max(8, Math.round(rh * 0.1)))];
     return {
       id: String((el && el.id) || 'element-' + (idx + 1)),
       label: String((el && el.label) || 'Phần tử ' + (idx + 1)).slice(0, 80),
@@ -221,7 +261,7 @@
       narrativeRole: String((el && el.narrativeRole) || 'diễn tiến').slice(0, 120),
       subtitle: String((el && el.subtitle) || '').slice(0, 200),
       type: String((el && el.type) || 'illustration'),
-      region: { x, y, width: rw, height: rh },
+      region: pts ? { x, y, width: rw, height: rh, points: pts } : { x, y, width: rw, height: rh },
       reveal: {
         direction: dir,
         startMs: clampInt(reveal.startMs, 0, 600000, LEAD_IN_MS + idx * 1000),
@@ -268,6 +308,20 @@
       }
       if (r.x < 0 || r.y < 0 || r.x + r.width > w || r.y + r.height > h) {
         errors.push('element ' + (i + 1) + ': region vượt ra ngoài canvas');
+      }
+      // vùng khoanh tay (polygon): điểm phải nguyên + nằm trong canvas
+      if (r.points != null) {
+        if (!Array.isArray(r.points) || r.points.length < 3) {
+          errors.push('element ' + (i + 1) + ': points phải là mảng ≥ 3 điểm [x, y]');
+        } else {
+          r.points.forEach((p, k) => {
+            if (!Array.isArray(p) || p.length < 2 || !Number.isInteger(p[0]) || !Number.isInteger(p[1])) {
+              errors.push('element ' + (i + 1) + ': points[' + k + '] phải là [x, y] nguyên');
+            } else if (p[0] < 0 || p[1] < 0 || p[0] > w || p[1] > h) {
+              errors.push('element ' + (i + 1) + ': points[' + k + '] vượt ra ngoài canvas');
+            }
+          });
+        }
       }
       const end = (el.reveal ? el.reveal.startMs : 0) + (el.reveal ? el.reveal.durationMs : 0);
       if (end > ann.sceneDurationMs) {

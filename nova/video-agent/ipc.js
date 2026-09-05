@@ -92,7 +92,8 @@ function registerVideoAgentIpc(ipcMain, { adapters = {}, openWindow, maxConcurre
     const inspected = inspectProject(p.projectDir);
     if (!inspected.ok) return inspected;
     const job = readJob(inspected.project.root);
-    return { ...inspected, job };
+    // projectDir tường minh như pickProject — panel (applyAdvInspect) dựa vào trường này.
+    return { ...inspected, projectDir: inspected.project.root, job };
   });
 
   handle('videoAgent:pickProject', async (e) => {

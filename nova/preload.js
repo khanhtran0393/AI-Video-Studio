@@ -205,6 +205,10 @@ contextBridge.exposeInMainWorld('native', {
   voiceProbe: () => ipcRenderer.invoke('voice-probe'),
   voicePickRoot: () => ipcRenderer.invoke('voice-pick-root'),
   voiceInstallBackend: () => ipcRenderer.invoke('voice-install-backend'),
+  // Cache mẫu nghe thử trên đĩa (userData) — sinh 1 lần, các phiên sau nghe ngay.
+  voiceSampleSave: (payload) => ipcRenderer.invoke('voice-sample-save', payload),
+  voiceSampleLoad: (key) => ipcRenderer.invoke('voice-sample-load', key),
+  voiceSampleClear: (key) => ipcRenderer.invoke('voice-sample-clear', key),
   flowExtExport: () => ipcRenderer.invoke('flow-ext-export'),
   onVoiceLog: (cb) => ipcRenderer.on('voice-log', (_e, s) => cb(s)),
   // Watermark native — xoá watermark/logo (đặc biệt watermark Flow/Veo).

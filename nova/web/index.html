@@ -1166,6 +1166,24 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
 .wb-preview-bar{ display:flex;align-items:center;gap:12px;flex-wrap:wrap; }
 .wb-time{ font-family:monospace;font-size:12px;color:var(--text-muted); }
 .wb-btn-primary{ background:var(--accent);border-color:var(--accent);color:#fff; }
+/* Nút bấm trong panel Whiteboard / Vẽ Tay Ảnh: các <button> không có class .btn
+   → khoác diện mạo .btn của app (trước đó nút hiển thị kiểu mặc định trình duyệt — xấu). */
+.wb-root button:not(.wb-tab){
+  background:var(--surface);border:1px solid var(--border);color:var(--text);
+  padding:6px 12px;border-radius:7px;font-family:inherit;font-size:12px;font-weight:500;
+  cursor:pointer;transition:all .12s;display:inline-flex;align-items:center;gap:6px;line-height:1.4;
+}
+.wb-root button:not(.wb-tab):hover:not(:disabled){ border-color:var(--accent);background:var(--surface-2); }
+.wb-root button:not(.wb-tab):focus-visible{ outline:none;border-color:var(--accent);
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 15%,transparent); }
+.wb-root button:not(.wb-tab):disabled{ opacity:.5;cursor:not-allowed; }
+.wb-root .wb-btn-primary{ background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-weight:600; }
+.wb-root .wb-btn-primary:hover:not(:disabled){ background:var(--accent-2);border-color:var(--accent-2); }
+/* nút nhỏ trong bảng phần tử / danh sách cảnh (▲ ▼ ✕) */
+.wb-root .wb-act button,.wb-root .wb-item-actions button{ padding:4px 9px;font-size:11px;border-radius:6px; }
+/* thanh trượt thời lượng preview + select trong hàng chọn không giãn full-width */
+.wb-root input[type=range]{ accent-color:var(--accent);margin:0; }
+.wb-root .wb-media-row select{ width:auto;min-width:130px; }
 .wb-export-bar{ display:flex;gap:8px;flex-wrap:wrap;align-items:center; }
 .wb-prog{ height:8px;background:var(--surface-2);border:1px solid var(--border);border-radius:4px;overflow:hidden; }
 .wb-prog-fill{ height:100%;width:0;background:var(--accent);transition:width .3s; }
@@ -1611,19 +1629,91 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
     <div class="tool" id="tool-toolvideoagent">
       <div class="tool-head">
         <div class="tool-title">🎬 Video Agent</div>
-        <div class="tool-subtitle">Pipeline tự động tạo phim tài liệu từ kịch bản và assets</div>
+        <div class="tool-subtitle">Tạo phim tài liệu từng bước — viết lời thoại, Agent tự dựng cảnh và render MP4. Chế độ Nâng cao chạy pipeline đầy đủ (17 bước) trên thư mục dự án chuẩn.</div>
       </div>
-      <div id="notice" style="display:none;background:#3a2c14;border:1px solid var(--warn);border-radius:8px;padding:12px;margin-bottom:12px;"></div>
-      <div style="display:flex;gap:12px;align-items:center;margin-bottom:12px;">
-        <div id="progressBar" style="height:8px;background:var(--panel2);border-radius:4px;overflow:hidden;flex:1;min-width:200px;">
-          <div id="progressFill" style="height:100%;width:0;background:var(--accent);transition:width .3s;"></div>
-        </div>
-        <span id="progressLabel" class="meta">idle</span>
-        <button id="btnNew" class="btn secondary">Dự án mới</button>
-        <button id="btnRunFull" class="btn primary">Chạy pipeline</button>
-        <button id="renderBtn" class="btn secondary">Render video</button>
-      </div>
-      <div class="grid" id="panels" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;"></div>
+      <style>
+        /* VIDEO AGENT WIZARD — UI từng bước cho người mới (mô hình Whiteboard
+           Studio). Markup do web/video-agent-panel.js dựng động vào
+           #videoAgentRoot; toàn bộ class bắt đầu bằng va-. */
+        #tool-toolvideoagent .va-root{ max-width:900px; }
+        #tool-toolvideoagent .va-hide{ display:none; }
+        #tool-toolvideoagent .va-notice{ background:color-mix(in srgb,var(--amber) 10%,transparent);
+          border:1px solid color-mix(in srgb,var(--amber) 34%,transparent);border-radius:9px;
+          padding:10px 14px;font-size:12.5px;line-height:1.55;color:var(--text);margin-bottom:12px; }
+        #tool-toolvideoagent .va-tabs{ display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px; }
+        #tool-toolvideoagent .va-tab{ background:var(--surface);border:1px solid var(--border);color:var(--text-muted);
+          padding:8px 16px;border-radius:999px;font-family:inherit;font-size:12.5px;font-weight:600;
+          cursor:pointer;transition:all .12s; }
+        #tool-toolvideoagent .va-tab:hover{ border-color:var(--accent);color:var(--text); }
+        #tool-toolvideoagent .va-tab.active{ background:color-mix(in srgb,var(--accent) 16%,transparent);
+          border-color:var(--accent);color:var(--accent); }
+        #tool-toolvideoagent .va-steps{ display:flex;flex-direction:column;gap:14px; }
+        #tool-toolvideoagent .va-step{ background:var(--surface);border:1px solid var(--border);border-radius:14px;
+          padding:16px 18px;box-shadow:0 10px 26px -22px rgba(0,0,0,.35); }
+        #tool-toolvideoagent .va-step.active{ border-color:var(--accent); }
+        #tool-toolvideoagent .va-step.done{ border-color:color-mix(in srgb,var(--green) 45%,var(--border)); }
+        #tool-toolvideoagent .va-step-head{ display:flex;align-items:center;gap:10px;margin-bottom:12px; }
+        #tool-toolvideoagent .va-step-num{ width:26px;height:26px;border-radius:50%;display:inline-flex;
+          align-items:center;justify-content:center;font-weight:700;font-size:12px;flex:none;
+          background:var(--surface-2);border:1px solid var(--border);color:var(--text-muted); }
+        #tool-toolvideoagent .va-step.active .va-step-num{ background:var(--accent);border-color:var(--accent);color:var(--on-accent); }
+        #tool-toolvideoagent .va-step.done .va-step-num{ background:var(--green);border-color:var(--green);color:#fff; }
+        #tool-toolvideoagent .va-step-title{ font-size:14px;font-weight:700; }
+        #tool-toolvideoagent .va-step-sub{ font-size:12px;color:var(--text-muted);margin-top:2px; }
+        #tool-toolvideoagent .va-lbl{ font-size:11.5px;font-weight:600;color:var(--text-muted);
+          text-transform:uppercase;letter-spacing:.5px;margin:10px 0 5px; }
+        #tool-toolvideoagent .va-field{ width:100%;background:var(--surface-2);border:1px solid var(--border);
+          border-radius:9px;padding:10px 12px;font-size:13px;color:var(--text);font-family:inherit;
+          transition:border-color .12s; }
+        #tool-toolvideoagent .va-field:focus{ outline:none;border-color:var(--accent); }
+        #tool-toolvideoagent textarea.va-field{ min-height:150px;resize:vertical;line-height:1.7; }
+        #tool-toolvideoagent .va-row{ display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px; }
+        #tool-toolvideoagent .va-opt{ display:flex;align-items:center;gap:8px;font-size:12.5px;
+          color:var(--text);margin-top:10px;cursor:pointer; }
+        #tool-toolvideoagent .va-hint{ font-size:12px;color:var(--text-muted);line-height:1.6;margin-top:8px; }
+        #tool-toolvideoagent .va-btn{ background:var(--surface);border:1px solid var(--border);color:var(--text);
+          padding:8px 14px;border-radius:8px;font-family:inherit;font-size:12.5px;font-weight:600;
+          cursor:pointer;transition:all .12s; }
+        #tool-toolvideoagent .va-btn:hover:not(:disabled){ border-color:var(--accent);background:var(--surface-2); }
+        #tool-toolvideoagent .va-btn:focus-visible{ outline:none;border-color:var(--accent);
+          box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 15%,transparent); }
+        #tool-toolvideoagent .va-btn:disabled{ opacity:.5;cursor:not-allowed; }
+        #tool-toolvideoagent .va-btn.primary{ background:var(--accent);border-color:var(--accent);color:var(--on-accent); }
+        #tool-toolvideoagent .va-btn.primary:hover:not(:disabled){ background:var(--accent-2);border-color:var(--accent-2); }
+        #tool-toolvideoagent .va-btn.big{ padding:12px 24px;font-size:14px; }
+        #tool-toolvideoagent .va-btn.ghost{ background:transparent; }
+        #tool-toolvideoagent .va-chips{ display:flex;gap:6px;flex-wrap:wrap;margin-top:8px; }
+        #tool-toolvideoagent .va-chip{ display:inline-flex;align-items:center;gap:6px;background:var(--surface-2);
+          border:1px solid var(--border);border-radius:999px;padding:4px 10px;font-size:12px;
+          max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+        #tool-toolvideoagent .va-chip button{ background:none;border:none;color:var(--text-muted);cursor:pointer;
+          font-size:13px;line-height:1;padding:0;font-family:inherit; }
+        #tool-toolvideoagent .va-chip button:hover{ color:var(--red); }
+        #tool-toolvideoagent .va-prog{ height:10px;background:var(--surface-2);border:1px solid var(--border);
+          border-radius:6px;overflow:hidden;margin-top:12px; }
+        #tool-toolvideoagent .va-prog-fill{ height:100%;width:0;background:var(--accent);transition:width .25s; }
+        #tool-toolvideoagent .va-log{ background:#0d0f1a;color:#cdd6e4;font:11.5px/1.6 ui-monospace,Menlo,monospace;
+          padding:12px 14px;border-radius:10px;max-height:220px;overflow:auto;white-space:pre-wrap;
+          word-break:break-all;margin-top:10px; }
+        #tool-toolvideoagent .va-check{ display:flex;flex-direction:column;gap:4px;margin-top:10px; }
+        #tool-toolvideoagent .va-check-row{ display:flex;gap:8px;font-size:12.5px;color:var(--text-muted);
+          align-items:baseline; }
+        #tool-toolvideoagent .va-check-row.cur{ color:var(--text);font-weight:600; }
+        #tool-toolvideoagent .va-ic{ width:1.4em;flex:none; }
+        #tool-toolvideoagent .va-kv{ display:grid;grid-template-columns:auto 1fr;gap:5px 16px;
+          font-size:12.5px;line-height:1.6; }
+        #tool-toolvideoagent .va-kv .k{ color:var(--text-muted);white-space:nowrap; }
+        #tool-toolvideoagent .va-video{ width:100%;border-radius:12px;border:1px solid var(--border);
+          background:#000;margin-top:10px; }
+        #tool-toolvideoagent details.va-more{ margin-top:10px; }
+        #tool-toolvideoagent details.va-more summary{ cursor:pointer;font-size:12px;color:var(--text-muted); }
+        #tool-toolvideoagent .va-table{ width:100%;border-collapse:collapse;font-size:12px;margin-top:8px; }
+        #tool-toolvideoagent .va-table th{ text-align:left;font-size:11px;color:var(--text-muted);
+          text-transform:uppercase;letter-spacing:.5px;padding:4px 6px;border-bottom:1px solid var(--border); }
+        #tool-toolvideoagent .va-table td{ padding:4px 6px;border-bottom:1px solid var(--border);vertical-align:top; }
+        @media(max-width:760px){ #tool-toolvideoagent .va-root{ max-width:100%; } }
+      </style>
+      <div id="videoAgentRoot"></div>
     </div>
 
     <!-- WHITEBOARD STUDIO TOOL (srt-whiteboard-animation: SRT → cảnh → ảnh → stream-ink → MP4) -->
@@ -4007,6 +4097,13 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
         #tool-toolvoice .gt-tt{margin-top:10px;font-size:12.5px;color:var(--text-dim);line-height:1.6;
           background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:10px 12px}
 
+        /* Nút ▶ nghe thử 4 giây trong mỗi mục dropdown chọn giọng */
+        #tool-toolvoice .gplay{flex:none;width:27px;height:27px;border-radius:7px;border:1px solid var(--border);
+          background:var(--surface-2);color:var(--text-muted);cursor:pointer;display:grid;place-items:center;
+          font-size:11px;line-height:1;padding:0;font-family:inherit}
+        #tool-toolvoice .gplay:hover{border-color:var(--accent);color:var(--accent)}
+        #tool-toolvoice .gplay.on{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+
         /* Khu đọc — hai cột */
         #tool-toolvoice .gtts{display:grid;grid-template-columns:1fr 254px;gap:0}
         @media(max-width:900px){#tool-toolvoice .gtts{grid-template-columns:1fr}}
@@ -4087,9 +4184,26 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
       <div class="panel mb-16">
         <div class="panel-head"><span>Thư viện giọng</span><span id="giongDem" style="text-transform:none;letter-spacing:0;font-weight:500;color:var(--text-dim);font-size:12px">…</span></div>
         <div class="panel-body">
-          <div class="gchips" id="giongChips"></div>
-          <div class="gluoi" id="giongLuoi"></div>
-          <div class="ghint">Bấm vào thẻ để nghe 4 giây mẫu — bấm lần nữa để dừng. Giọng clone có nút Xóa góc phải (giọng có sẵn thì giữ nguyên). Nhãn dưới mỗi thẻ dùng để lọc khi thư viện đông.</div>
+          <!-- Dropdown chọn giọng — thay lưới thẻ cho gọn. Lưới thẻ cũ vẫn mở được qua nút dưới. -->
+          <div class="be-dd" id="giongLibDD">
+            <button type="button" class="be-btn" id="giongLibBtn" onclick="giongLibMo(event)"
+              aria-haspopup="listbox" aria-expanded="false">
+              <span class="be-ten" id="giongLibTen">chưa chọn giọng</span>
+              <span class="be-mo" id="giongLibNote"></span>
+              <span class="be-caret">▾</span>
+            </button>
+            <div class="be-menu" id="giongLibMenu" role="listbox" style="max-height:320px;overflow:auto"></div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px">
+            <button type="button" class="btn ghost sm" onclick="giongThemBat()">＋ Thêm giọng</button>
+            <button type="button" class="btn ghost sm" id="giongLuoiBtn" onclick="giongLuoiBat()">▦ Xem dạng lưới thẻ</button>
+            <span style="font-size:11.5px;color:var(--text-dim)">Mở danh sách ▾ rồi bấm ▶ để nghe thử 4 giây trước khi chọn.</span>
+          </div>
+          <div id="giongLuoiWrap" style="display:none;margin-top:12px">
+            <div class="gchips" id="giongChips"></div>
+            <div class="gluoi" id="giongLuoi"></div>
+            <div class="ghint">Bấm vào thẻ để nghe 4 giây mẫu — bấm lần nữa để dừng. Giọng clone có nút Xóa góc phải (giọng có sẵn thì giữ nguyên). Nhãn dưới mỗi thẻ dùng để lọc khi thư viện đông.</div>
+          </div>
 
           <div id="giongThemBox" style="display:none;margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
             <div class="grid-2" style="gap:12px">
@@ -4159,6 +4273,31 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
               </div>
             </div>
 
+            <div class="rhead" style="margin-top:18px">Ngôn ngữ</div>
+            <div class="sl" id="slNgonNgu">
+              <select id="voiceLang">
+                <option value="vi" selected>Tiếng Việt</option>
+                <option value="en">English (Anh)</option>
+                <option value="zh">中文 (Trung)</option>
+                <option value="ja">日本語 (Nhật)</option>
+                <option value="ko">한국어 (Hàn)</option>
+                <option value="es">Español (TBN)</option>
+                <option value="fr">Français (Pháp)</option>
+                <option value="de">Deutsch (Đức)</option>
+                <option value="it">Italiano (Ý)</option>
+                <option value="pt">Português (BĐN)</option>
+                <option value="ru">Русский (Nga)</option>
+                <option value="pl">Polski (Ba Lan)</option>
+                <option value="tr">Türkçe (Thổ)</option>
+                <option value="nl">Nederlands (Hà Lan)</option>
+                <option value="cs">Čeština (Séc)</option>
+                <option value="ar">العربية (Ả Rập)</option>
+                <option value="hu">Magyar (Hungary)</option>
+                <option value="hi">हिन्दी (Hindi)</option>
+              </select>
+              <div class="why" id="whyNgonNgu"></div>
+            </div>
+
             <div class="rhead" style="margin-top:18px">Giọng đọc</div>
             <div class="be-dd" id="voiceGiongDD">
               <button type="button" class="be-btn" id="voiceGiongBtn" onclick="giongDDMo(event)"
@@ -4178,21 +4317,16 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
                 oninput="document.getElementById('vSpeedVal').textContent=(+this.value).toFixed(2)+'×'">
               <div class="why" id="whyTocDo"></div>
             </div>
+            <div class="sl" id="slCaoDo">
+              <div class="slh"><b>Cao độ</b><span id="vPitchVal">0 st</span></div>
+              <input type="range" id="voicePitch" min="-12" max="12" step="1" value="0"
+                oninput="document.getElementById('vPitchVal').textContent=(+this.value>0?'+':'')+this.value+' st'">
+              <div class="why" id="whyCaoDo">±12 nửa cung (st) — trầm hơn hay cao hơn giọng gốc. Áp dụng cho mọi engine (xử lý hậu kỳ, giữ nguyên tốc độ).</div>
+            </div>
             <div class="sl" id="slGap">
               <div class="slh"><b>Nghỉ giữa câu</b><span id="vGapVal">300 ms</span></div>
               <input type="range" id="voiceGap" min="0" max="1000" step="50" value="300"
                 oninput="document.getElementById('vGapVal').textContent=this.value+' ms'">
-            </div>
-            <div class="sl" id="slNgonNgu">
-              <div class="slh"><b>Ngôn ngữ</b></div>
-              <select id="voiceLang">
-                <option value="vi" selected>Tiếng Việt</option>
-                <option value="en">English</option>
-                <option value="zh">中文</option>
-                <option value="ja">日本語</option>
-                <option value="ko">한국어</option>
-              </select>
-              <div class="why" id="whyNgonNgu"></div>
             </div>
           </div>
         </div>
@@ -6255,7 +6389,7 @@ function _shrinkDataUrl(dataUrl, maxEdge, q){
 
 // Cấu hình chia cảnh/prompt (Tool 2) + giọng đọc — lưu THEO PROFILE để đa kênh chạy đúng của từng kênh.
 const _T2_FIELDS = { splitMode: 'v', t2DescMode: 'v', minChars: 'v', maxChars: 'v', minSecPerImg: 'v', maxSecPerImg: 'v', batchSize: 'v', shortPromptMode: 'c', highDetailMode: 'c', brollMode: 'c', noCharMode: 'c', hybridIconMode: 'c' };
-const _VOICE_FIELDS = { voiceLang: 'v', voiceSpeed: 'v', voiceGap: 'v' };
+const _VOICE_FIELDS = { voiceLang: 'v', voiceSpeed: 'v', voicePitch: 'v', voiceGap: 'v' };
 function _capCfg(fields){ const o = {}; for (const id in fields){ const el = document.getElementById(id); if (!el) continue; o[id] = fields[id] === 'c' ? !!el.checked : el.value; } return o; }
 function _appCfg(fields, cfg){ if (!cfg) return; for (const id in fields){ if (!(id in cfg)) continue; const el = document.getElementById(id); if (!el) continue; if (fields[id] === 'c') el.checked = !!cfg[id]; else el.value = cfg[id]; } }
 // Đọc cấu hình Tool 2 + Giọng hiện tại → lưu vào profile đang chọn.
@@ -6270,6 +6404,13 @@ function applyChannelCfg(p){
   p = p || ((typeof getProfile === 'function') ? getProfile() : null); if (!p) return;
   _appCfg(_T2_FIELDS, p.t2Cfg);
   if (p.voiceCfg) _appCfg(_VOICE_FIELDS, p.voiceCfg);
+  // _appCfg set .value trực tiếp → sự kiện oninput không chạy, label thanh trượt
+  // (Tốc độ / Cao độ) vẫn hiển thị số cũ. Đồng bộ lại label cho khớp giá trị thật.
+  const _vSync = (id, val, fmt) => { const el = document.getElementById(id); if (el) el.textContent = fmt(val); };
+  const sp = (document.getElementById('voiceSpeed') || {}).value;
+  if (sp !== undefined) _vSync('vSpeedVal', sp, v => (+v).toFixed(2) + '×');
+  const pt = (document.getElementById('voicePitch') || {}).value;
+  if (pt !== undefined) _vSync('vPitchVal', pt, v => (+v > 0 ? '+' : '') + v + ' st');
 }
 try { _prodQueue = JSON.parse(localStorage.getItem('av_queue') || '[]') || []; } catch (e) { _prodQueue = []; }
 function queueSave(){ try { localStorage.setItem('av_queue', JSON.stringify(_prodQueue.map(j => { const c = { ...j }; delete c.script; return c; }))); } catch (e) {} }   // kịch bản để ở IndexedDB (qs_<id>), không nhét localStorage
@@ -8054,8 +8195,15 @@ const _TTS_BACKEND_ID = { omni: 'omnivoice', vieneu: 'vieneu', xtts: 'xtts' };
 const _GIONG_THU = 'Xin chào, đây là giọng đọc thử của AI Video Studio.';
 
 // Engine đang chọn trong dropdown; lưu localStorage để mở lại vẫn giữ lựa chọn.
+// _voiceBackendMacDinh: true = người dùng CHƯA từng chọn engine → lần đầu lấy
+// engine backend đang chạy thật (health.tts_engine) làm mặc định, khỏi cứng
+// OmniVoice rồi lỗi trên máy chỉ cài VieNeu/XTTS.
 let _voiceBackend = 'omni';
-try { const _vb = localStorage.getItem('voice_backend'); if (_vb === 'vieneu' || _vb === 'xtts') _voiceBackend = _vb; } catch (e){}
+let _voiceBackendMacDinh = true;
+try {
+  const _vb = localStorage.getItem('voice_backend');
+  if (_vb === 'omni' || _vb === 'vieneu' || _vb === 'xtts'){ _voiceBackend = _vb; _voiceBackendMacDinh = false; }
+} catch (e){}
 const _BE_MO_TA = {
   omni:   { mo: 'trên máy · đa ngôn ngữ' },
   vieneu: { mo: 'trên máy · tiếng Việt' },
@@ -8066,6 +8214,7 @@ let _giongDS = [];            // danh sách hợp nhất
 let _giongChon = '';          // khoá giọng đang chọn
 let _giongLoc = '*';          // chip lọc đang bật
 let _giongPhat = '';          // khoá đang phát thử
+let _giongTao = '';           // khoá đang TẠO mẫu nghe thử (⏳) — chưa phát được
 let _giongAudio = null;       // thẻ audio dùng chung cho nghe thử
 const _giongMau = new Map();  // khoá → objectURL mẫu 4 giây (khỏi gọi lại)
 let _giongSu = [];            // lịch sử bản đã tạo trong phiên
@@ -8097,12 +8246,17 @@ async function giongTaiDS(){
       // danh sách trống dù backend đã seed thành công các voice có sẵn.
       const factory = !!v.is_factory;
       const thietKe = !!(v.attributes && v.attributes.instruct);
+      const builtin = !!(v.attributes && v.attributes.voice);
       ds.push({
         key: 'omni:' + v.id, id: v.id, name: v.name || v.id,
         src: factory ? 'Giọng có sẵn' : (thietKe ? 'Thiết kế từ mô tả' : 'Clone từ mẫu'),
         kind: factory ? 'san' : (thietKe ? 'design' : 'clone'),
         tags: (v.tags || []).slice(0, 3),
         lang: (v.attributes && v.attributes.lang) || 'vi',
+        // Engine "gốc" của giọng, suy từ nguồn: built-in (attributes.voice) →
+        // VieNeu; thiết kế (attributes.instruct) → OmniVoice; clone WAV →
+        // OmniVoice (XTTS cũng đọc được clone nhưng OmniVoice là gốc).
+        engine: builtin ? 'vieneu' : 'omni',
         factory,
       });
     }
@@ -8144,7 +8298,7 @@ function giongVe(){
     return `<div class="gcard${chon ? ' sel' : ''}${dangPhat ? ' play' : ''}${v.factory ? '' : ' has-del'}" onclick="giongBam('${escapeHtml(v.key)}')">
       ${v.factory ? '' : `<button type="button" class="btn sm ghost gdel" onclick="event.stopPropagation();giongXoa('${escapeHtml(v.key)}')" title="Xoá giọng clone" aria-label="Xoá giọng">Xóa</button>`}
       <div class="gtop">
-        <span class="gpico">${dangPhat ? '❙❙' : '▶'}</span>
+        <span class="gpico">${_giongTao === v.key ? '⏳' : (dangPhat ? '❙❙' : '▶')}</span>
         <div style="min-width:0"><div class="gname">${escapeHtml(v.name)}</div><div class="gsrc">${escapeHtml(v.src)}</div></div>
       </div>
       <div class="gtags">${(v.tags || []).map(t => `<span class="gtg">${escapeHtml(t)}</span>`).join('')}</div>
@@ -8156,6 +8310,7 @@ function giongVe(){
   const lb = document.getElementById('giongDangChon');
   if (lb) lb.textContent = cur ? (cur.name + ' · ' + _TTS_TEN[_voiceBackend]) : 'chưa chọn giọng';
   try { giongDDVe(); } catch (e){}   // dropdown "Giọng đọc" dưới cũng chạy theo thư viện
+  try { giongLibVe(); } catch (e){}  // dropdown "Thư viện giọng" phía trên cũng vậy
   giongVeThanh();
 }
 function giongDatLoc(f){ _giongLoc = f; giongVe(); }
@@ -8173,32 +8328,154 @@ function giongVeThanh(){
   const nn = document.getElementById('slNgonNgu');
   if (nn) nn.classList.toggle('off', vi);
   const wn = document.getElementById('whyNgonNgu');
-  if (wn) wn.textContent = vi ? 'VieNeu chỉ đọc tiếng Việt' : '';
+  // Ghi chú đúng năng lực từng engine: VieNeu thuần Việt (En/Vi code-switch),
+  // XTTS-v2 gốc 17 ngôn ngữ (chưa có tiếng Việt — cần viXTTS), OmniVoice 600+.
+  if (vi) wn.textContent = 'VieNeu chỉ đọc tiếng Việt (tự nhận En/Vi lẫn nhau)';
+  else if (_voiceBackend === 'xtts') wn.textContent = 'XTTS đọc 17 ngôn ngữ này; tiếng Việt cần thêm bản viXTTS';
+  else wn.textContent = 'OmniVoice hỗ trợ 600+ ngôn ngữ';
+}
+
+// ── Chọn theo backend: chọn giọng nào thì engine tự theo giọng đó ──────
+// Giọng built-in chỉ VieNeu có; giọng thiết kế (instruct) chỉ OmniVoice
+// đọc đúng. Trước đây chọn giọng nhưng giữ nguyên engine cũ → đọc bằng
+// engine không sở hữu giọng đó rồi fallback ngầm, dễ ra audio sai. Giờ
+// chọn giọng là engine (và ngôn ngữ) đổi theo giọng ngay.
+function giongTheoBackend(v){
+  if (!v) return;
+  if (_TTS_TEN[v.engine] && v.engine !== _voiceBackend){
+    _voiceBackend = v.engine;
+    _voiceBackendMacDinh = false;   // chọn theo giọng = chọn có chủ đích
+    try { localStorage.setItem('voice_backend', v.engine); } catch (e){}
+    _giongMauXoa();      // mẫu nghe thử đang cache tạo bằng engine cũ — xoá cho đúng (cả trên đĩa)
+    try { voiceBackendVe(); giongVeThanh(); } catch (e){}
+    try { giongBao('Đã chuyển engine sang ' + _TTS_TEN[v.engine] + ' (theo giọng đang chọn)', 'green'); } catch (e){}
+    try { novaLog('🎙 engine theo giọng ' + v.name + ': ' + _TTS_TEN[v.engine]); } catch (e){}
+  }
+  // Ngôn ngữ cũng theo giọng: chọn giọng Nhật → dropdown sang tiếng Nhật.
+  const sl = document.getElementById('voiceLang');
+  if (sl && v.lang && sl.value !== v.lang && Array.from(sl.options).some(o => o.value === v.lang)){
+    sl.value = v.lang;
+  }
 }
 
 // ── Nghe thử: bấm cả thẻ, mẫu 4 giây, lưu lại khỏi gọi hai lần ──────
+// Phần phát thử tách riêng (_giongPhatThu) để cả thẻ lẫn nút ▶ trong menu
+// dropdown đều dùng chung; giongThu() CHỈ nghe, không đổi giọng đang chọn.
 async function giongBam(key){
   const v = _giongDS.find(x => x.key === key);
   if (!v) return;
-  const doiGiong = _giongChon !== key;
   _giongChon = key;
+  giongTheoBackend(v);
+  return _giongPhatThu(key);
+}
+async function giongThu(key){
+  return _giongPhatThu(key);
+}
+/* Đọc mẫu dùng CHÍNH cơ chế thử-engine của ttsDoc(): engine đang chọn hỏng
+   (chưa cài, thiếu model — vd OmniVoice lỗi "No module named 'torch'") thì
+   lần lượt thử hai engine local còn lại với CÙNG giọng. Không để nghe thử
+   chết chỉ vì một engine lỗi — trước đây nghe thử gọi thẳng engine đang
+   chọn nên máy chỉ cài VieNeu vẫn báo lỗi omni.                              */
+async function _giongTTS(v, text){
+  // Engine đầu tiên thử là engine GỐC CỦA GIỌNG (chọn theo backend) — nghe
+  // thử giọng built-in VieNeu mà đang chọn OmniVoice thì thử VieNeu trước,
+  // đỡ chạy nhầm engine không sở hữu giọng rồi mới fallback.
+  const thu = _giongThuTu(v);
+  let loiDau = null;
+  for (const eng of thu){
+    try { return { blob: await _ttsChay(eng, v, text, giongDocTuyChon(), null), engine: eng }; }
+    catch (e){
+      if (!loiDau) loiDau = e;
+      // engine thật sự hỏng → chấm đỏ, đừng để xanh dối lòng (giống ttsDoc).
+      if (_giongTT[eng] === 'ok'){ _giongTT[eng] = 'err'; try { giongKiemEngineVe(); } catch (_){} }
+      try { novaLog('🎙 nghe thử: ' + _TTS_TEN[eng] + ' lỗi — ' + (e.message || e), 'warn'); } catch (_){}
+    }
+  }
+  throw loiDau || new Error('Không engine nào đọc được.');
+}
+/* Thứ tự engine thử (dùng chung): engine GỐC CỦA GIỌNG trước — nghe thử giọng
+   built-in VieNeu mà đang chọn OmniVoice thì thử VieNeu trước, đỡ chạy nhầm
+   engine không sở hữu giọng rồi mới fallback. Viết riêng thành hàm để cả
+   _giongTTS (tạo mẫu) và _giongPhatThu (đọc cache đĩa) nhìn cùng một bộ khoá. */
+function _giongThuTu(v){
+  const goc = (v && _TTS_TEN[v.engine]) ? v.engine : _voiceBackend;
+  return [goc].concat([_voiceBackend].concat(Object.keys(_TTS_TEN)).filter(e => e !== goc && _TTS_TEN[e]).filter((e, i, a) => a.indexOf(e) === i));
+}
+
+/* ── Cache mẫu nghe thử LÂU DÀI trên đĩa (qua IPC voice-sample-*, userData) ──
+   Trước đây mẫu nghe thử chỉ nằm trong RAM (objectURL) → tắt app / đổi engine
+   là mất sạch, lần sau bấm lại phải nạp model tạo mới (~30-60s lần đầu).
+   Giờ sinh đúng MỘT lần rồi ghi đĩa; các phiên sau đọc lại phát gần như tức thì.
+   Khoá file = v1 | engine thật đã đọc | khoá giọng → đổi engine tự trượt khoá,
+   khỏi phát nhầm mẫu tạo bằng engine cũ. Bản web không có window.native thì
+   mọi hàm dưới tự no-op, nghe thử vẫn chạy như trước.                          */
+const _GIONG_MAU_V = 'v1';
+function _giongMauFileKey(eng, key){ return _GIONG_MAU_V + '|' + eng + '|' + key; }
+async function _giongMauDocDia(eng, key){
+  try {
+    if (!(window.native && window.native.voiceSampleLoad)) return null;   // bản web không có IPC
+    const r = await window.native.voiceSampleLoad(_giongMauFileKey(eng, key));
+    if (r && r.ok && typeof r.dataUrl === 'string' && r.dataUrl.startsWith('data:')) return r.dataUrl;
+  } catch (_){}
+  return null;
+}
+async function _giongMauGhiDia(eng, key, blob){
+  try {
+    if (!(window.native && window.native.voiceSampleSave) || !blob) return;
+    const dataUrl = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result || '')); fr.onerror = () => rej(new Error('đọc blob lỗi')); fr.readAsDataURL(blob); });
+    if (dataUrl && dataUrl.startsWith('data:')) window.native.voiceSampleSave({ key: _giongMauFileKey(eng, key), dataUrl });   // fire-and-forget: lỗi ghi không chặn việc nghe
+  } catch (_){}
+}
+function _giongMauXoa(key){
+  if (key != null){
+    const u = _giongMau.get(key);
+    if (u){ try { URL.revokeObjectURL(u); } catch (_){} _giongMau.delete(key); }
+    try { if (window.native && window.native.voiceSampleClear){ for (const e of Object.keys(_TTS_TEN)) window.native.voiceSampleClear(_giongMauFileKey(e, key)); } } catch (_){}
+  } else {
+    _giongMau.forEach(u => { try { URL.revokeObjectURL(u); } catch (_){} });
+    _giongMau.clear();
+    try { if (window.native && window.native.voiceSampleClear) window.native.voiceSampleClear(null); } catch (_){}
+  }
+}
+
+async function _giongPhatThu(key){
+  const v = _giongDS.find(x => x.key === key);
+  if (!v) return;
   if (_giongPhat === key && _giongAudio && !_giongAudio.paused){ _giongAudio.pause(); _giongPhat = ''; giongVe(); return; }
+  if (_giongTao === key) return;   // đang tạo mẫu cho chính giọng này — chờ, bấm thêm không spawn thêm task
   giongVe();
   try {
     let url = _giongMau.get(key);
     if (!url){
-      _giongPhat = key; giongVe();
-      const blob = await _ttsChay(_voiceBackend, v, _GIONG_THU, giongDocTuyChon(), null);
-      url = URL.createObjectURL(blob); _giongMau.set(key, url);
+      // RAM không có → đọc cache trên đĩa (đã sinh từ phiên trước, phát ngay).
+      // Dò theo đúng thứ tự engine ưu tiên như lúc tạo để không bỏ sót mẫu
+      // tạo bằng engine fallback, và dò được là dừng.
+      for (const e of _giongThuTu(v)){
+        const duLieu = await _giongMauDocDia(e, key);
+        if (duLieu){
+          try {
+            const r = await fetch(duLieu); const blob = await r.blob();
+            if (blob && blob.size){ url = URL.createObjectURL(blob); _giongMau.set(key, url); }
+          } catch (_){}
+          break;
+        }
+      }
     }
+    if (!url){
+      _giongTao = key; _giongPhat = ''; giongVe();
+      // Lần đầu model nạp lười mất ~30-60s — báo rõ đang chạy, đừng để tưởng treo.
+      giongBao('⏳ Đang tạo mẫu nghe thử của "' + v.name + '"… lần đầu model nạp ~30-60 giây, giữ app mở.', 'text-muted');
+      const kq = await _giongTTS(v, _GIONG_THU);   // { blob, engine }
+      url = URL.createObjectURL(kq.blob); _giongMau.set(key, url);
+      _giongMauGhiDia(kq.engine, key, kq.blob);    // ghi đĩa — phiên sau nghe ngay không tạo lại
+    }
+    _giongTao = '';
     if (!_giongAudio) _giongAudio = new Audio();
     _giongAudio.onended = () => { _giongPhat = ''; giongVe(); };
     _giongAudio.src = url; _giongPhat = key; giongVe();
     await _giongAudio.play();
   } catch (err){
-    _giongPhat = '';
-    // Nghe thử lỗi thật cũng đánh đỏ engine — cùng quy tắc với ttsDoc().
-    if (_giongTT[_voiceBackend] === 'ok'){ _giongTT[_voiceBackend] = 'err'; try { giongKiemEngineVe(); } catch (_){} }
+    _giongPhat = ''; _giongTao = '';
     giongVe();
     giongBao('Nghe thử lỗi: ' + (err.message || err), 'red');
   }
@@ -8208,6 +8485,7 @@ function giongDocTuyChon(){
   const s = id => parseFloat((document.getElementById(id) || {}).value);
   return {
     tocDo: isFinite(s('voiceSpeed')) ? s('voiceSpeed') : 1,
+    caoDo: isFinite(s('voicePitch')) ? s('voicePitch') : 0,
     gap: isFinite(s('voiceGap')) ? s('voiceGap') : 300,
     lang: (document.getElementById('voiceLang') || {}).value || 'vi',
   };
@@ -8221,11 +8499,12 @@ function giongDocTuyChon(){
 async function _ttsLocal(eng, v, text, o, onTien){
   if (!_voiceReady){ await voiceInit(); if (!_voiceReady) throw new Error('Backend giọng nói chưa sẵn sàng.'); }
   if (!v || !v.id) throw new Error('Chưa chọn giọng.');
-  const body = { text, language: o.lang, speed: o.tocDo, gap_ms: Math.round(o.gap), attributes: {}, preset_id: v.id, engine: _TTS_BACKEND_ID[eng] || 'omnivoice' };
+  // chunk_chars 400: gộp ~2-4 câu/lần gọi model → kịch bản dài xong nhanh hơn hẳn (0 = từng câu).
+  const body = { text, language: o.lang, speed: o.tocDo, pitch: o.caoDo || 0, gap_ms: Math.round(o.gap), chunk_chars: 400, attributes: {}, preset_id: v.id, engine: _TTS_BACKEND_ID[eng] || 'omnivoice' };
   const sub = await _giongFetchJson(VOICE_URL + '/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   const tid = sub.task_id;
   if (!tid) throw new Error('Backend không nhận việc.');
-  for (let i = 0; i < 900; i++){
+  for (let i = 0; i < 3600; i++){   // chờ tới 60 phút — kịch bản dài trên máy chậm vẫn kịp
     await new Promise(r => setTimeout(r, 1000));
     const s = await _giongFetchJson(VOICE_URL + '/api/status/' + tid);
     if (s.total && onTien) onTien(s.progress + '/' + s.total + ' khối');
@@ -8293,6 +8572,40 @@ function giongDemChu(){
   el.innerHTML = escapeHtml(tu + ' từ · ' + t.length + ' ký tự · ước ' + Math.floor(giay / 60) + ' phút ' + (giay % 60) + ' giây');
 }
 
+/* ── Tách kịch bản dài thành đoạn để render tuần tự ─────────────────────
+   Kịch bản dài render 1 task duy nhất: phải chờ hết mới nghe được, và lỗi
+   ở phút thứ 19 là mất trắng cả bài. Tách theo dòng/đoạn văn (~400 từ/đoạn
+   ≈ 2-3 phút đọc, không cắt giữa câu) → đoạn nào xong nghe/lưu được ngay,
+   lỗi chỉ làm lại đúng đoạn đó. Văn bản ngắn vẫn đi đúng luồng cũ.        */
+function _giongDemTu(s){ const t = String(s || '').trim(); return t ? t.split(/\s+/).length : 0; }
+function _giongTachCau(p){
+  return String(p || '').split(/(?<=[\.\!\?\…。！？])\s+/).map(s => s.trim()).filter(Boolean);
+}
+function _giongTachDoan(text, maxTu){
+  maxTu = maxTu || 400;
+  const don = [];
+  for (const p of String(text || '').split(/\n+/).map(s => s.trim()).filter(Boolean)){
+    if (_giongDemTu(p) <= maxTu){ don.push(p); continue; }   // dòng/đoạn ngắn giữ nguyên
+    for (const c of _giongTachCau(p)) don.push(c);           // quá dài → tách tiếp theo câu
+  }
+  const ds = []; let cur = '', curTu = 0;
+  for (const d of don){
+    const w = _giongDemTu(d);
+    if (cur && curTu + w > maxTu){ ds.push(cur); cur = d; curTu = w; }
+    else { cur = cur ? cur + '\n\n' + d : d; curTu += w; }
+  }
+  if (cur) ds.push(cur);
+  return ds;
+}
+async function _giongLuuBan(blob, giong, engine, text, nhan){
+  const url = URL.createObjectURL(blob);
+  const au = new Audio(url);
+  const giay = await new Promise(r => { au.onloadedmetadata = () => r(au.duration || 0); au.onerror = () => r(0); });
+  _giongSu.unshift({ url, blob, ten: (nhan ? nhan + ' · ' : '') + giong.name, engine, giay, text, khi: Date.now() });
+  _giongSu = _giongSu.slice(0, 40);   // kịch bản tách nhiều đoạn cần nhiều slot hơn 12
+  giongSuVe();
+}
+
 async function voiceGenerate(){
   if (typeof gateTool === 'function' && gateTool('toolvoice')) return;
   const text = ((document.getElementById('voiceText') || {}).value || '').trim();
@@ -8300,16 +8613,42 @@ async function voiceGenerate(){
   const btn = document.getElementById('voiceGenBtn');
   if (btn){ btn.disabled = true; btn.textContent = '⏳ Đang tạo…'; }
   try {
-    giongBao('Đang tạo giọng…');
     const t0 = Date.now();
-    const { blob, giong, engine, luiVe } = await ttsDoc(text, s => giongBao('Đang tạo… ' + s));
-    const url = URL.createObjectURL(blob);
-    const au = new Audio(url);
-    const giay = await new Promise(r => { au.onloadedmetadata = () => r(au.duration || 0); au.onerror = () => r(0); });
-    _giongSu.unshift({ url, blob, ten: giong.name, engine: engine, giay, text, khi: Date.now() });
-    _giongSu = _giongSu.slice(0, 12);
-    giongSuVe();
-    giongBao('✓ Xong sau ' + Math.round((Date.now() - t0) / 1000) + ' giây' + (luiVe ? ' (đã lui về ' + _TTS_TEN[engine] + ')' : ''), 'green');
+    const doan = _giongTachDoan(text, 400);
+
+    if (doan.length <= 1){
+      // Ngắn — giữ nguyên luồng cũ: 1 task trọn vẹn.
+      giongBao('Đang tạo giọng…');
+      const { blob, giong, engine, luiVe } = await ttsDoc(text, s => giongBao('Đang tạo… ' + s));
+      await _giongLuuBan(blob, giong, engine, text);
+      giongBao('✓ Xong sau ' + Math.round((Date.now() - t0) / 1000) + ' giây' + (luiVe ? ' (đã lui về ' + _TTS_TEN[engine] + ')' : ''), 'green');
+      return;
+    }
+
+    // Dài — render từng đoạn tuần tự, xong đoạn nào lưu ngay đoạn đó.
+    let xong = 0;
+    for (let i = 0; i < doan.length; i++){
+      const nhan = 'Đoạn ' + (i + 1) + '/' + doan.length;
+      let loi = null;
+      for (let thu = 1; thu <= 2; thu++){   // thử tối đa 2 lần mỗi đoạn
+        try {
+          giongBao('Đang tạo ' + nhan + ' (~' + _giongDemTu(doan[i]) + ' từ)' + (thu > 1 ? ' · thử lần ' + thu : '') + '…');
+          const { blob, giong, engine } = await ttsDoc(doan[i], s => giongBao(nhan + ' · ' + s));
+          await _giongLuuBan(blob, giong, engine, doan[i], nhan);
+          xong++;
+          giongBao('✓ ' + nhan + ' xong (' + xong + '/' + doan.length + ')' + (i + 1 < doan.length ? ' — đang sang đoạn tiếp…' : ''), 'green');
+          loi = null;
+          break;
+        } catch (e){ loi = e; }
+      }
+      if (loi){
+        // Dừng ngay: lỗi thường mang tính hệ thống (backend/engine hỏng), chạy tiếp chỉ tốn giờ.
+        const conLai = doan.slice(i).reduce((a, d) => a + _giongDemTu(d), 0);
+        giongBao('⚠ ' + nhan + ' lỗi sau 2 lần thử (' + (loi.message || loi) + '). Đã xong ' + xong + '/' + doan.length + ' đoạn (đã lưu trong lịch sử bên dưới). Muốn làm tiếp: dán phần văn bản còn lại (~' + conLai + ' từ) vào ô rồi bấm “Tạo giọng”.', 'red');
+        return;
+      }
+    }
+    giongBao('✓ Xong ' + doan.length + ' đoạn sau ' + Math.round((Date.now() - t0) / 1000) + ' giây — tải từng đoạn trong lịch sử bên dưới theo thứ tự (Đoạn 1 → ' + doan.length + ') rồi ghép khi dựng video.', 'green');
   } catch (e){
     giongBao('Lỗi: ' + (e.message || e), 'red');
   } finally {
@@ -8421,8 +8760,7 @@ async function giongXoa(key){
   _giongBusy = true;
   try {
     await _giongFetchJson(VOICE_URL + '/api/voices/' + encodeURIComponent(v.id), { method: 'DELETE' });
-    const mau = _giongMau.get(key);
-    if (mau){ try { URL.revokeObjectURL(mau); } catch (e){} _giongMau.delete(key); }
+    _giongMauXoa(key);   // bỏ cả cache đĩa của giọng đã xoá (thử mọi engine)
     if (_giongPhat === key){
       try { if (_giongAudio) _giongAudio.pause(); } catch (e){}
       _giongPhat = '';
@@ -8458,6 +8796,21 @@ async function giongKiemEngine(){
     if (_giongTT[e] === 'err') continue;
     _giongTT[e] = chay ? 'ok' : 'no';
   }
+  // Người dùng CHƯA từng chọn engine → lấy engine backend đang chạy thật
+  // (health.tts_engine) làm mặc định. Máy chỉ cài VieNeu thì mặc định VieNeu
+  // luôn, khỏi kẹt OmniVoice cứng rồi nghe thử/TTS ăn lỗi thiếu model.
+  if (chay && _voiceBackendMacDinh){
+    try {
+      const r = await fetch(VOICE_URL + '/api/health');
+      const h = await r.json();
+      const e = { omnivoice:'omni', vieneu:'vieneu', xtts:'xtts', mock:'omni' }[h && h.tts_engine];
+      if (e && e !== _voiceBackend){
+        _voiceBackend = e; _giongMauXoa();
+        try { novaLog('🎙 engine mặc định theo backend đang chạy: ' + _TTS_TEN[e]); } catch (_){}
+        voiceBackendVe(); giongVe(); giongVeThanh();
+      }
+    } catch (_){}
+  }
   giongKiemEngineVe();
 }
 
@@ -8472,10 +8825,11 @@ function voiceBackendMo(e){
 function voiceBackendChon(eng){
   if (!_TTS_TEN[eng]) return;
   _voiceBackend = eng;
+  _voiceBackendMacDinh = false;   // đã chọn tay — health không tự đổi nữa
   try { localStorage.setItem('voice_backend', eng); } catch (e){}
   const dd = document.getElementById('voiceBackendDD');
   if (dd) dd.classList.remove('mo');
-  _giongMau.clear();   // mẫu nghe thử đang cache tạo bằng engine cũ — xoá cho đúng
+  _giongMauXoa();      // mẫu nghe thử đang cache tạo bằng engine cũ — xoá cho đúng (cả trên đĩa)
   voiceBackendVe();
   giongVe();
   giongVeThanh();
@@ -8514,11 +8868,20 @@ function giongDDMo(e){
 function giongDDChon(key){
   const v = _giongDS.find(x => x.key === key); if (!v) return;
   _giongChon = key;
+  giongTheoBackend(v);   // chọn giọng → engine/ngôn ngữ đổi theo backend của giọng
   const dd = document.getElementById('voiceGiongDD'); if (dd) dd.classList.remove('mo');
   giongVe();   // vẽ lại thẻ thư viện + nhãn + chính dropdown này
 }
 /* Vẽ lại dropdown theo _giongDS/_giongChon. Thư viện rỗng thì nói rõ đường ra
    (bấm "＋ Thêm giọng" phía trên) — không để người dùng tưởng thiếu chỗ chọn. */
+/* Mục menu dùng chung cho 2 dropdown chọn giọng: mỗi mục có nút ▶ nghe thử
+   4 giây (bấm lần nữa để dừng) NGAY TRONG menu — không cần mở lưới thẻ. */
+function _giongMenuItem(v, chonFn){
+  const phat = v.key === _giongPhat, tao = v.key === _giongTao;
+  return `<div class="be-item${v.key === _giongChon ? ' sel' : ''}" role="option" onclick="${chonFn}('${escapeHtml(v.key)}')">` +
+    `<span class="be-ten">${escapeHtml(v.name)}</span><span class="be-mo">${escapeHtml(v.src || '')}</span>` +
+    `<button type="button" class="gplay${phat ? ' on' : ''}" title="${tao ? 'Đang tạo mẫu nghe thử…' : (phat ? 'Dừng nghe thử' : 'Nghe thử 4 giây')}" aria-label="Nghe thử" onclick="event.stopPropagation();giongThu('${escapeHtml(v.key)}')">${tao ? '⏳' : (phat ? '❙❙' : '▶')}</button></div>`;
+}
 function giongDDVe(){
   const ten = document.getElementById('voiceGiongTen');
   const note = document.getElementById('voiceGiongNote');
@@ -8535,14 +8898,58 @@ function giongDDVe(){
   const cur = _giongDS.find(v => v.key === _giongChon);
   ten.textContent = cur ? cur.name : 'chưa chọn giọng';
   note.textContent = cur ? (cur.src || '') : '';
-  menu.innerHTML = _giongDS.map(v =>
-    `<div class="be-item${v.key === _giongChon ? ' sel' : ''}" role="option" onclick="giongDDChon('${escapeHtml(v.key)}')">` +
-    `<span class="be-ten">${escapeHtml(v.name)}</span><span class="be-mo">${escapeHtml(v.src || '')}</span></div>`).join('');
+  menu.innerHTML = _giongDS.map(v => _giongMenuItem(v, 'giongDDChon')).join('');
   if (why) why.textContent = '';
 }
 // bấm ra ngoài thì đóng menu giọng đọc
 document.addEventListener('click', () => { const dd = document.getElementById('voiceGiongDD'); if (dd) dd.classList.remove('mo'); });
 try { giongDDVe(); } catch (e){}
+
+// ── Dropdown "Thư viện giọng" — thay lưới thẻ cho gọn, vẫn nghe thử được ──
+// Lưới thẻ cũ không xoá: ẩn mặc định, mở lại bằng nút "▦ Xem dạng lưới thẻ"
+// (lọc chip, xoá giọng clone vẫn dùng lưới đó).
+let _giongLuoiMo = false;
+function giongLibMo(e){
+  if (e) e.stopPropagation();
+  const dd = document.getElementById('giongLibDD'); if (!dd) return;
+  dd.classList.toggle('mo');
+  const btn = document.getElementById('giongLibBtn');
+  if (btn) btn.setAttribute('aria-expanded', dd.classList.contains('mo') ? 'true' : 'false');
+}
+function giongLibChon(key){
+  const v = _giongDS.find(x => x.key === key); if (!v) return;
+  _giongChon = key;
+  giongTheoBackend(v);   // chọn giọng → engine/ngôn ngữ đổi theo backend của giọng
+  const dd = document.getElementById('giongLibDD'); if (dd) dd.classList.remove('mo');
+  giongVe();   // vẽ lại nút, nhãn, lưới (nếu mở) + dropdown "Giọng đọc"
+}
+function giongLibVe(){
+  const ten = document.getElementById('giongLibTen');
+  const note = document.getElementById('giongLibNote');
+  const menu = document.getElementById('giongLibMenu');
+  if (!ten || !note || !menu) return;
+  if (!_giongDS.length){
+    ten.textContent = 'chưa có giọng nào';
+    note.textContent = '';
+    menu.innerHTML = '<div class="be-item" style="cursor:default;color:var(--text-dim)">Chưa có giọng trong thư viện</div>';
+    return;
+  }
+  const cur = _giongDS.find(v => v.key === _giongChon);
+  ten.textContent = cur ? cur.name : 'chưa chọn giọng';
+  note.textContent = cur ? (cur.src || '') : '';
+  menu.innerHTML = _giongDS.map(v => _giongMenuItem(v, 'giongLibChon')).join('');
+}
+// Ẩn/hiện lưới thẻ cũ — mặc định ẩn cho tab gọn; lọc + xoá giọng clone vẫn ở đó.
+function giongLuoiBat(){
+  _giongLuoiMo = !_giongLuoiMo;
+  const w = document.getElementById('giongLuoiWrap');
+  if (w) w.style.display = _giongLuoiMo ? '' : 'none';
+  const b = document.getElementById('giongLuoiBtn');
+  if (b) b.textContent = _giongLuoiMo ? '▦ Ẩn lưới thẻ' : '▦ Xem dạng lưới thẻ';
+}
+// bấm ra ngoài thì đóng menu thư viện giọng
+document.addEventListener('click', () => { const dd = document.getElementById('giongLibDD'); if (dd) dd.classList.remove('mo'); });
+try { giongLibVe(); } catch (e){}
 
 // ── Prompt chuyển động (Image → Video) — Tool 5 ──
 let mvScenes = [];
@@ -22775,13 +23182,18 @@ async function _t7DrawGlob(){
 }
 const _t7Kebab = (k) => k.replace(/[A-Z]/g, m => '-' + m.toLowerCase());
 // Dựng HTML cho 1 lớp đã được main tính sẵn CSS — dùng chung cho lớp trong cảnh và lớp toàn cục.
-// Đường dẫn tuyệt đối trên đĩa phải thành file:// thì thẻ <video>/<img> mới nạp;
-// riêng Windows (C:\...) không có dấu / đầu nên trình duyệt hiểu thành đường dẫn tương đối.
+// Đường dẫn tuyệt đối trên đĩa KHÔNG dùng file:// được: trang chạy origin http://localhost
+// nên trình duyệt chặn tài nguyên file:/// (video gắn vào lớp không hiện). Trỏ qua route
+// /local-media của server Nova — video quá lớn để base64, đây là cách duy nhất vừa xem
+// trước vừa tua. URL tương đối nên đúng ở mọi port, giữ nguyên #t=… của <video>.
 function _t7FileUrl(src){
   const s = String(src || '');
   if (!s || /^(https?:|data:|blob:|file:|assets\/)/i.test(s)) return s;
-  if (/^[a-zA-Z]:[\\/]/.test(s)) return 'file:///' + s.replace(/\\/g, '/');
-  if (s.startsWith('/')) return 'file://' + s;
+  if (/^[a-zA-Z]:[\\/]/.test(s) || s.startsWith('/')){
+    const i = s.indexOf('#'); const frag = i >= 0 ? s.slice(i) : '';
+    const pth = (i >= 0 ? s.slice(0, i) : s).replace(/\\/g, '/');
+    return '/local-media?p=' + encodeURIComponent(pth) + frag;
+  }
   return s;
 }
 function _t7LayerHtml(L){

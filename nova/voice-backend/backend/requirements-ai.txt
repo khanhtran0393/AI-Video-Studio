@@ -1,10 +1,11 @@
 # Model AI thật. CẦN Python 3.11 (PyTorch chưa có bản cho 3.14).
-# Version đã ghim để tránh xung đột transformers/torchcodec (đã kiểm chứng trên Apple Silicon).
+# Lưu ý tương thích: omnivoice bắt buộc transformers>=5.3; coqui-tts 0.27.5 xoay quanh
+# transformers 4.x → engine xtts tự shim (engines/tts_patch.py) để chạy được với 5.x.
 torch==2.13.0
 torchaudio==2.11.0
 torchcodec
 coqui-tts==0.27.5
-transformers==4.57.1
+transformers>=5.3.0
 huggingface_hub
 # OmniVoice — đa ngôn ngữ, clone giọng + thiết kế giọng theo thuộc tính (engine mặc định):
 omnivoice

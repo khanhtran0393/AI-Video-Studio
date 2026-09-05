@@ -30,7 +30,7 @@
     "name": "⭐ Việt — Minh Đức (Nam, Bắc, tin tức)",
     "ref_text": "",
     "tags": ["vietnamese", "male", "north", "news"],
-    "attributes": { "lang": "vi", "voice": "Minh Đức", "instruct": "male, northern Vietnamese accent, news announcer" },
+    "attributes": { "lang": "vi", "voice": "Minh Đức", "instruct": "male, middle-aged, low pitch" },
     "is_favorite": true
   },
   {
@@ -38,14 +38,14 @@
     "name": "⭐ Việt — Phạm Tuyên (Nam, Bắc, tự nhiên)",
     "ref_text": "",
     "tags": ["vietnamese", "male", "north", "natural"],
-    "attributes": { "lang": "vi", "voice": "Phạm Tuyên", "instruct": "male, northern Vietnamese accent, natural conversational" }
+    "attributes": { "lang": "vi", "voice": "Phạm Tuyên", "instruct": "male, young adult, moderate pitch" }
   },
   {
     "id": "factory_vi_thai_son",
     "name": "⭐ Việt — Thái Sơn (Nam, Nam Bộ, kể chuyện)",
     "ref_text": "",
     "tags": ["vietnamese", "male", "south", "story"],
-    "attributes": { "lang": "vi", "voice": "Thái Sơn", "instruct": "male, southern Vietnamese accent, storytelling" },
+    "attributes": { "lang": "vi", "voice": "Thái Sơn", "instruct": "male, young adult, moderate pitch" },
     "is_favorite": true
   },
   {
@@ -53,21 +53,21 @@
     "name": "⭐ Việt — Xuân Vĩnh (Nam, Nam Bộ, tự nhiên)",
     "ref_text": "",
     "tags": ["vietnamese", "male", "south", "natural"],
-    "attributes": { "lang": "vi", "voice": "Xuân Vĩnh", "instruct": "male, southern Vietnamese accent, natural conversational" }
+    "attributes": { "lang": "vi", "voice": "Xuân Vĩnh", "instruct": "male, young adult, moderate pitch" }
   },
   {
     "id": "factory_vi_thanh_binh",
     "name": "⭐ Việt — Thanh Bình (Nam, Bắc, kể chuyện)",
     "ref_text": "",
     "tags": ["vietnamese", "male", "north", "story"],
-    "attributes": { "lang": "vi", "voice": "Thanh Bình", "instruct": "male, northern Vietnamese accent, storytelling" }
+    "attributes": { "lang": "vi", "voice": "Thanh Bình", "instruct": "male, young adult, moderate pitch" }
   },
   {
     "id": "factory_vi_truc_ly",
     "name": "⭐ Việt — Trúc Ly (Nữ, Bắc, tự nhiên)",
     "ref_text": "",
     "tags": ["vietnamese", "female", "north", "natural"],
-    "attributes": { "lang": "vi", "voice": "Trúc Ly", "instruct": "female, northern Vietnamese accent, natural conversational" },
+    "attributes": { "lang": "vi", "voice": "Trúc Ly", "instruct": "female, young adult, moderate pitch" },
     "is_favorite": true
   },
   {
@@ -75,97 +75,321 @@
     "name": "⭐ Việt — Ngọc Linh (Nữ, Bắc, kể chuyện)",
     "ref_text": "",
     "tags": ["vietnamese", "female", "north", "story"],
-    "attributes": { "lang": "vi", "voice": "Ngọc Linh", "instruct": "female, northern Vietnamese accent, storytelling" }
+    "attributes": { "lang": "vi", "voice": "Ngọc Linh", "instruct": "female, young adult, moderate pitch" }
   },
   {
     "id": "factory_vi_doan_trang",
     "name": "⭐ Việt — Đoan Trang (Nữ, Bắc, tự nhiên)",
     "ref_text": "",
     "tags": ["vietnamese", "female", "north", "natural"],
-    "attributes": { "lang": "vi", "voice": "Đoan Trang", "instruct": "female, northern Vietnamese accent, natural conversational" }
+    "attributes": { "lang": "vi", "voice": "Đoan Trang", "instruct": "female, young adult, moderate pitch" }
   },
   {
     "id": "factory_vi_mai_anh",
     "name": "⭐ Việt — Mai Anh (Nữ, Bắc, tin tức)",
     "ref_text": "",
     "tags": ["vietnamese", "female", "north", "news"],
-    "attributes": { "lang": "vi", "voice": "Mai Anh", "instruct": "female, northern Vietnamese accent, news announcer" }
+    "attributes": { "lang": "vi", "voice": "Mai Anh", "instruct": "female, middle-aged, moderate pitch" }
   },
   {
     "id": "factory_vi_thuc_doan",
     "name": "⭐ Việt — Thục Đoan (Nữ, Nam Bộ, kể chuyện)",
     "ref_text": "",
     "tags": ["vietnamese", "female", "south", "story"],
-    "attributes": { "lang": "vi", "voice": "Thục Đoan", "instruct": "female, southern Vietnamese accent, storytelling" }
+    "attributes": { "lang": "vi", "voice": "Thục Đoan", "instruct": "female, young adult, moderate pitch" }
   },
   {
     "id": "factory_vi_minh_triet",
     "name": "⭐ Việt — Minh Triết (Nam, Nam Bộ, tin tức)",
     "ref_text": "",
     "tags": ["vietnamese", "male", "south", "news"],
-    "attributes": { "lang": "vi", "voice": "Minh Triết", "instruct": "male, southern Vietnamese accent, news announcer" }
+    "attributes": { "lang": "vi", "voice": "Minh Triết", "instruct": "male, middle-aged, low pitch" }
   },
   {
     "id": "factory_vi_thuy_dung",
     "name": "⭐ Việt — Thùy Dung (Nữ, Nam Bộ, tin tức)",
     "ref_text": "",
     "tags": ["vietnamese", "female", "south", "news"],
-    "attributes": { "lang": "vi", "voice": "Thùy Dung", "instruct": "female, southern Vietnamese accent, news announcer" }
+    "attributes": { "lang": "vi", "voice": "Thùy Dung", "instruct": "female, middle-aged, moderate pitch" }
   },
   {
     "id": "factory_vi_quang_son",
     "name": "⭐ Việt — Quang Sơn (Nam, Trung, tự nhiên)",
     "ref_text": "",
     "tags": ["vietnamese", "male", "central", "natural"],
-    "attributes": { "lang": "vi", "voice": "Quang Sơn", "instruct": "male, central Vietnamese accent, natural conversational" }
+    "attributes": { "lang": "vi", "voice": "Quang Sơn", "instruct": "male, young adult, moderate pitch" }
   },
   {
     "id": "factory_vi_ngoc_tran",
     "name": "⭐ Việt — Ngọc Trân (Nữ, Trung, tự nhiên)",
     "ref_text": "",
     "tags": ["vietnamese", "female", "central", "natural"],
-    "attributes": { "lang": "vi", "voice": "Ngọc Trân", "instruct": "female, central Vietnamese accent, natural conversational" }
+    "attributes": { "lang": "vi", "voice": "Ngọc Trân", "instruct": "female, young adult, moderate pitch" }
   },
   {
     "id": "factory_vi_my_duyen",
     "name": "⭐ Việt — Mỹ Duyên (Nữ, Nam Bộ, đọc truyện)",
     "ref_text": "",
     "tags": ["vietnamese", "female", "south", "story"],
-    "attributes": { "lang": "vi", "voice": "Mỹ Duyên", "instruct": "female, southern Vietnamese accent, audiobook narration" }
+    "attributes": { "lang": "vi", "voice": "Mỹ Duyên", "instruct": "female, young adult, moderate pitch" }
   },
   {
     "id": "factory_vi_quynh_anh",
     "name": "⭐ Việt — Quỳnh Anh (Nữ, Bắc, đọc truyện)",
     "ref_text": "",
     "tags": ["vietnamese", "female", "north", "story"],
-    "attributes": { "lang": "vi", "voice": "Quỳnh Anh", "instruct": "female, northern Vietnamese accent, audiobook narration" }
+    "attributes": { "lang": "vi", "voice": "Quỳnh Anh", "instruct": "female, young adult, moderate pitch" }
   },
   {
     "id": "factory_vi_duc_tri",
     "name": "⭐ Việt — Đức Trí (Nam, Nam Bộ, đọc truyện)",
     "ref_text": "",
     "tags": ["vietnamese", "male", "south", "story"],
-    "attributes": { "lang": "vi", "voice": "Đức Trí", "instruct": "male, southern Vietnamese accent, audiobook narration" }
+    "attributes": { "lang": "vi", "voice": "Đức Trí", "instruct": "male, young adult, moderate pitch" }
   },
   {
     "id": "factory_vi_kim_thanh",
     "name": "⭐ Việt — Kim Thanh (Nữ, Nam Bộ, đọc truyện)",
     "ref_text": "",
     "tags": ["vietnamese", "female", "south", "story"],
-    "attributes": { "lang": "vi", "voice": "Kim Thanh", "instruct": "female, southern Vietnamese accent, audiobook narration" }
+    "attributes": { "lang": "vi", "voice": "Kim Thanh", "instruct": "female, young adult, moderate pitch" }
   },
   {
     "id": "factory_vi_ngoc_huyen",
     "name": "⭐ Việt — Ngọc Huyền (Nữ, Bắc, tự nhiên)",
     "ref_text": "",
     "tags": ["vietnamese", "female", "north", "natural"],
-    "attributes": { "lang": "vi", "voice": "Ngọc Huyền", "instruct": "female, northern Vietnamese accent, natural reading" }
+    "attributes": { "lang": "vi", "voice": "Ngọc Huyền", "instruct": "female, young adult, moderate pitch" }
   },
   {
     "id": "factory_vi_adam",
     "name": "⭐ Việt — Adam (Nam, Nam Bộ, tự nhiên)",
     "ref_text": "",
     "tags": ["vietnamese", "male", "south", "natural"],
-    "attributes": { "lang": "vi", "voice": "Adam", "instruct": "male, southern Vietnamese accent, natural reading" }
+    "attributes": { "lang": "vi", "voice": "Adam", "instruct": "male, young adult, moderate pitch" }
+  },
+  {
+    "id": "factory_zh_female",
+    "name": "⭐ Trung — Nữ, ấm áp (thiết kế OmniVoice)",
+    "ref_text": "",
+    "tags": ["chinese", "female", "design"],
+    "attributes": { "lang": "zh", "instruct": "female, young adult, moderate pitch" }
+  },
+  {
+    "id": "factory_zh_male",
+    "name": "⭐ Trung — Nam, tin tức (thiết kế OmniVoice)",
+    "ref_text": "",
+    "tags": ["chinese", "male", "design"],
+    "attributes": { "lang": "zh", "instruct": "male, middle-aged, low pitch" }
+  },
+  {
+    "id": "factory_ja_female",
+    "name": "⭐ Nhật — Nữ, ấm áp (thiết kế OmniVoice)",
+    "ref_text": "",
+    "tags": ["japanese", "female", "design"],
+    "attributes": { "lang": "ja", "instruct": "female, young adult, moderate pitch" }
+  },
+  {
+    "id": "factory_ja_male",
+    "name": "⭐ Nhật — Nam, kể chuyện (thiết kế OmniVoice)",
+    "ref_text": "",
+    "tags": ["japanese", "male", "design"],
+    "attributes": { "lang": "ja", "instruct": "male, young adult, moderate pitch" }
+  },
+  {
+    "id": "factory_ko_female",
+    "name": "⭐ Hàn — Nữ, tự nhiên (thiết kế OmniVoice)",
+    "ref_text": "",
+    "tags": ["korean", "female", "design"],
+    "attributes": { "lang": "ko", "instruct": "female, young adult, moderate pitch" }
+  },
+  {
+    "id": "factory_ko_male",
+    "name": "⭐ Hàn — Nam, tin tức (thiết kế OmniVoice)",
+    "ref_text": "",
+    "tags": ["korean", "male", "design"],
+    "attributes": { "lang": "ko", "instruct": "male, middle-aged, low pitch" }
+  },
+  {
+    "id": "factory_es_female",
+    "name": "⭐ Tây Ban Nha — Nữ, tự nhiên (thiết kế OmniVoice)",
+    "ref_text": "",
+    "tags": ["spanish", "female", "design"],
+    "attributes": { "lang": "es", "instruct": "female, young adult, moderate pitch" }
+  },
+  {
+    "id": "factory_es_male",
+    "name": "⭐ Tây Ban Nha — Nam, tin tức (thiết kế OmniVoice)",
+    "ref_text": "",
+    "tags": ["spanish", "male", "design"],
+    "attributes": { "lang": "es", "instruct": "male, middle-aged, low pitch" }
+  },
+  {
+    "id": "factory_fr_female",
+    "name": "⭐ Pháp — Nữ, ấm áp (thiết kế OmniVoice)",
+    "ref_text": "",
+    "tags": ["french", "female", "design"],
+    "attributes": { "lang": "fr", "instruct": "female, young adult, moderate pitch" }
+  },
+  {
+    "id": "factory_fr_male",
+    "name": "⭐ Pháp — Nam, kể chuyện (thiết kế OmniVoice)",
+    "ref_text": "",
+    "tags": ["french", "male", "design"],
+    "attributes": { "lang": "fr", "instruct": "male, young adult, moderate pitch" }
+  },
+  {
+    "id": "factory_de_female",
+    "name": "⭐ Đức — Nữ, tự nhiên (thiết kế OmniVoice)",
+    "ref_text": "",
+    "tags": ["german", "female", "design"],
+    "attributes": { "lang": "de", "instruct": "female, young adult, moderate pitch" }
+  },
+  {
+    "id": "factory_de_male",
+    "name": "⭐ Đức — Nam, tin tức (thiết kế OmniVoice)",
+    "ref_text": "",
+    "tags": ["german", "male", "design"],
+    "attributes": { "lang": "de", "instruct": "male, middle-aged, low pitch" }
+  },
+  {
+    "id": "factory_it_female",
+    "name": "⭐ Ý — Nữ, tự nhiên (thiết kế OmniVoice)",
+    "ref_text": "",
+    "tags": ["italian", "female", "design"],
+    "attributes": { "lang": "it", "instruct": "female, young adult, moderate pitch" }
+  },
+  {
+    "id": "factory_it_male",
+    "name": "⭐ Ý — Nam, kể chuyện (thiết kế OmniVoice)",
+    "ref_text": "",
+    "tags": ["italian", "male", "design"],
+    "attributes": { "lang": "it", "instruct": "male, young adult, moderate pitch" }
+  },
+  {
+    "id": "factory_pt_female",
+    "name": "⭐ Bồ Đào Nha — Nữ, tự nhiên (thiết kế OmniVoice)",
+    "ref_text": "",
+    "tags": ["portuguese", "female", "design"],
+    "attributes": { "lang": "pt", "instruct": "female, young adult, moderate pitch" }
+  },
+  {
+    "id": "factory_pt_male",
+    "name": "⭐ Bồ Đào Nha — Nam, tin tức (thiết kế OmniVoice)",
+    "ref_text": "",
+    "tags": ["portuguese", "male", "design"],
+    "attributes": { "lang": "pt", "instruct": "male, middle-aged, low pitch" }
+  },
+  {
+    "id": "factory_ru_female",
+    "name": "⭐ Nga — Nữ, ấm áp (thiết kế OmniVoice)",
+    "ref_text": "",
+    "tags": ["russian", "female", "design"],
+    "attributes": { "lang": "ru", "instruct": "female, young adult, moderate pitch" }
+  },
+  {
+    "id": "factory_ru_male",
+    "name": "⭐ Nga — Nam, tin tức (thiết kế OmniVoice)",
+    "ref_text": "",
+    "tags": ["russian", "male", "design"],
+    "attributes": { "lang": "ru", "instruct": "male, middle-aged, low pitch" }
+  },
+  {
+    "id": "factory_pl_female",
+    "name": "⭐ Ba Lan — Nữ, tự nhiên (thiết kế OmniVoice)",
+    "ref_text": "",
+    "tags": ["polish", "female", "design"],
+    "attributes": { "lang": "pl", "instruct": "female, young adult, moderate pitch" }
+  },
+  {
+    "id": "factory_pl_male",
+    "name": "⭐ Ba Lan — Nam, kể chuyện (thiết kế OmniVoice)",
+    "ref_text": "",
+    "tags": ["polish", "male", "design"],
+    "attributes": { "lang": "pl", "instruct": "male, young adult, moderate pitch" }
+  },
+  {
+    "id": "factory_tr_female",
+    "name": "⭐ Thổ Nhĩ Kỳ — Nữ, tự nhiên (thiết kế OmniVoice)",
+    "ref_text": "",
+    "tags": ["turkish", "female", "design"],
+    "attributes": { "lang": "tr", "instruct": "female, young adult, moderate pitch" }
+  },
+  {
+    "id": "factory_tr_male",
+    "name": "⭐ Thổ Nhĩ Kỳ — Nam, tin tức (thiết kế OmniVoice)",
+    "ref_text": "",
+    "tags": ["turkish", "male", "design"],
+    "attributes": { "lang": "tr", "instruct": "male, middle-aged, low pitch" }
+  },
+  {
+    "id": "factory_nl_female",
+    "name": "⭐ Hà Lan — Nữ, tự nhiên (thiết kế OmniVoice)",
+    "ref_text": "",
+    "tags": ["dutch", "female", "design"],
+    "attributes": { "lang": "nl", "instruct": "female, young adult, moderate pitch" }
+  },
+  {
+    "id": "factory_nl_male",
+    "name": "⭐ Hà Lan — Nam, kể chuyện (thiết kế OmniVoice)",
+    "ref_text": "",
+    "tags": ["dutch", "male", "design"],
+    "attributes": { "lang": "nl", "instruct": "male, young adult, moderate pitch" }
+  },
+  {
+    "id": "factory_cs_female",
+    "name": "⭐ Séc — Nữ, tự nhiên (thiết kế OmniVoice)",
+    "ref_text": "",
+    "tags": ["czech", "female", "design"],
+    "attributes": { "lang": "cs", "instruct": "female, young adult, moderate pitch" }
+  },
+  {
+    "id": "factory_cs_male",
+    "name": "⭐ Séc — Nam, tin tức (thiết kế OmniVoice)",
+    "ref_text": "",
+    "tags": ["czech", "male", "design"],
+    "attributes": { "lang": "cs", "instruct": "male, middle-aged, low pitch" }
+  },
+  {
+    "id": "factory_ar_female",
+    "name": "⭐ Ả Rập — Nữ, ấm áp (thiết kế OmniVoice)",
+    "ref_text": "",
+    "tags": ["arabic", "female", "design"],
+    "attributes": { "lang": "ar", "instruct": "female, young adult, moderate pitch" }
+  },
+  {
+    "id": "factory_ar_male",
+    "name": "⭐ Ả Rập — Nam, tin tức (thiết kế OmniVoice)",
+    "ref_text": "",
+    "tags": ["arabic", "male", "design"],
+    "attributes": { "lang": "ar", "instruct": "male, middle-aged, low pitch" }
+  },
+  {
+    "id": "factory_hu_female",
+    "name": "⭐ Hungary — Nữ, tự nhiên (thiết kế OmniVoice)",
+    "ref_text": "",
+    "tags": ["hungarian", "female", "design"],
+    "attributes": { "lang": "hu", "instruct": "female, young adult, moderate pitch" }
+  },
+  {
+    "id": "factory_hu_male",
+    "name": "⭐ Hungary — Nam, kể chuyện (thiết kế OmniVoice)",
+    "ref_text": "",
+    "tags": ["hungarian", "male", "design"],
+    "attributes": { "lang": "hu", "instruct": "male, young adult, moderate pitch" }
+  },
+  {
+    "id": "factory_hi_female",
+    "name": "⭐ Hindi — Nữ, ấm áp (thiết kế OmniVoice)",
+    "ref_text": "",
+    "tags": ["hindi", "female", "design"],
+    "attributes": { "lang": "hi", "instruct": "female, young adult, moderate pitch" }
+  },
+  {
+    "id": "factory_hi_male",
+    "name": "⭐ Hindi — Nam, tin tức (thiết kế OmniVoice)",
+    "ref_text": "",
+    "tags": ["hindi", "male", "design"],
+    "attributes": { "lang": "hi", "instruct": "male, middle-aged, low pitch" }
   }
 ]

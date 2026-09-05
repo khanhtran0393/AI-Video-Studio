@@ -11,6 +11,51 @@ const state = require('./state');
 const { WEB_DIR, NOVA_REMOTION_DIR } = require('./state');
 const { brandIconPath } = require('./brand');
 
+// ── phát media từ đĩa cho renderer ──
+// Trang app chạy origin http://localhost nên trình duyệt CHẶN mọi tài nguyên
+// file:/// (ảnh nguồn, video lớp đồ hoạ hiện lỗi). Renderer trỏ tới route này
+// thay cho file://. Giới hạn: đường dẫn tuyệt đối + CHỈ đuôi media; server chỉ
+// bind 127.0.0.1 nên không lộ ra ngoài máy. Hỗ trợ Range để <video> tua được.
+const MEDIA_EXT = {
+  '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp',
+  '.gif': 'image/gif', '.svg': 'image/svg+xml', '.bmp': 'image/bmp',
+  '.mp4': 'video/mp4', '.webm': 'video/webm', '.mov': 'video/quicktime',
+  '.m4v': 'video/x-m4v', '.mkv': 'video/x-matroska',
+  '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.m4a': 'audio/mp4',
+  '.aac': 'audio/aac', '.ogg': 'audio/ogg', '.flac': 'audio/flac',
+};
+function serveLocalMedia(req, res) {
+  let q = '';
+  try { q = decodeURIComponent((req.url || '').split('?')[1] || ''); } catch (e) { q = ''; }
+  const p = (q.startsWith('p=') ? q.slice(2) : '');
+  if (!p || !path.isAbsolute(p)) { res.writeHead(400); return res.end('bad request'); }
+  const mime = MEDIA_EXT[path.extname(p).toLowerCase()];
+  let st = null;
+  try { st = fs.statSync(p); } catch (e) { /* file không còn */ }
+  if (!mime || !st || !st.isFile()) { res.writeHead(404); return res.end('not found'); }
+  const head = { 'Content-Type': mime, 'Accept-Ranges': 'bytes', 'Cache-Control': 'no-cache' };
+  const m = /^bytes=(\d*)-(\d*)$/.exec(String(req.headers.range || ''));
+  if (m) {
+    let start = m[1] === '' ? null : parseInt(m[1], 10);
+    let end = m[2] === '' ? null : parseInt(m[2], 10);
+    if (start === null && end !== null) { start = Math.max(0, st.size - end); end = st.size - 1; }   // suffix range
+    if (start === null) start = 0;
+    if (end === null || end >= st.size) end = st.size - 1;
+    if (start <= end && start < st.size) {
+      res.writeHead(206, Object.assign({}, head, {
+        'Content-Range': 'bytes ' + start + '-' + end + '/' + st.size,
+        'Content-Length': end - start + 1,
+      }));
+      fs.createReadStream(p, { start, end }).pipe(res);
+      return;
+    }
+    res.writeHead(416, { 'Content-Range': 'bytes */' + st.size });
+    return res.end();
+  }
+  res.writeHead(200, Object.assign({}, head, { 'Content-Length': st.size }));
+  fs.createReadStream(p).pipe(res);
+}
+
 function startLocalServer() {
   return new Promise((resolve) => {
     const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.json': 'application/json', '.ico': 'image/x-icon', '.wasm': 'application/wasm', '.map': 'application/json', '.mp4': 'video/mp4', '.gif': 'image/gif', '.webp': 'image/webp', '.woff2': 'font/woff2' };
@@ -39,6 +84,7 @@ function startLocalServer() {
     const server = http.createServer((req, res) => {
       let p = decodeURIComponent((req.url || '/').split('?')[0]);
       if (p === '/' || p === '') p = '/index.html';
+      if (p === '/local-media') return serveLocalMedia(req, res);
       const r = remotionRoute(p);
       if (r && r.html) {
         // index.html của bundle trỏ src="/bundle.js" — đổi sang tên riêng để hai bundle sống chung.

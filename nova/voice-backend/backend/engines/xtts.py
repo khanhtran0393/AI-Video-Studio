@@ -21,6 +21,19 @@ _XTTS_LANGS = {
     "nl", "cs", "ar", "zh-cn", "ja", "hu", "ko", "hi",
 }
 
+# Alias ngôn ngữ người dùng hay chọn (UI/Profile) → mã XTTS-v2 chuẩn.
+_XTTS_LANG_ALIASES = {
+    "zh": "zh-cn",
+    "zh-cn": "zh-cn",
+    "zh-tw": "zh-cn",
+    "zh-hans": "zh-cn",
+    "pt-br": "pt",
+    "pt-pt": "pt",
+    "en-us": "en",
+    "en-gb": "en",
+    "en-uk": "en",
+}
+
 # Mẫu giọng mặc định khi người dùng không đưa file mẫu (chế độ "thiết kế giọng").
 _DEFAULT_REF = Path(__file__).resolve().parent.parent.parent / "data" / "default_speaker.wav"
 
@@ -48,6 +61,12 @@ class XTTSEngine(TTSEngine):
             return
         self._device = self._pick_device()
         ckpt_dir = os.environ.get("VOICE_XTTS_DIR", "")
+
+        # coqui-tts 0.27.5 không tương thích transformers 5.x (mà OmniVoice cần)
+        # → shim trước khi import TTS.
+        from .tts_patch import apply_patch
+
+        apply_patch()
 
         if ckpt_dir and Path(ckpt_dir).is_dir():
             # --- Chế độ checkpoint viXTTS ---
@@ -89,7 +108,8 @@ class XTTSEngine(TTSEngine):
             pass
 
     def _lang(self, req: TTSRequest) -> str:
-        lang = req.language.lower()
+        lang = (req.language or "en").lower().strip()
+        lang = _XTTS_LANG_ALIASES.get(lang, lang)
         if lang == "vi":
             return "vi"  # chỉ hợp lệ khi dùng viXTTS
         return lang if lang in _XTTS_LANGS else "en"

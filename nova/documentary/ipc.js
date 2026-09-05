@@ -149,7 +149,11 @@ function registerDocumentaryIpc(ipcMain, options = {}) {
     /** Mở UI panel Documentary (§32). */
     'documentary:openWindow': async () => {
       if (!openWindowHandler) throw new Error('Documentary window opening is not available in this host');
-      return openWindowHandler({ rootDir });
+      // Handler (nova/documentary/window.js) giờ mở NGAY TRONG cửa sổ chính —
+      // trả về mainWindow; bọc sang shape serializable để ipcMain.handle không
+      // lỗi "object could not be cloned" (đúng pattern videoAgent:openWindow).
+      const win = openWindowHandler({ rootDir });
+      return { ok: !!(win && win.id), windowId: win && win.id, inApp: true };
     },
     'documentary:render': async (event, payload = {}) => {
       const data = payloadObject(payload);

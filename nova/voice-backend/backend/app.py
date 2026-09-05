@@ -21,7 +21,7 @@ from pydantic import BaseModel
 
 import config
 import voicebank
-from audio_utils import concat_wavs, split_sentences, to_mp3, wav_duration, write_srt
+from audio_utils import concat_wavs, pitch_shift_wav, split_sentences, to_mp3, wav_duration, write_srt
 from engines import get_asr_engine, get_tts_engine
 
 app = FastAPI(title="Voice Studio", version="0.1.0")
@@ -145,6 +145,7 @@ def _run_tts(task: dict) -> None:
     engine_name, engine = _resolve_tts_engine(p)
     lang = p.get("language", "vi")
     speed = float(p.get("speed", 1.0))
+    pitch = float(p.get("pitch", 0.0) or 0.0)
     gap_ms = int(p.get("gap_ms", 100))
     device_preference = _normalize_device_preference(p.get("device_preference"))
     try:
@@ -170,6 +171,10 @@ def _run_tts(task: dict) -> None:
             ),
             wav,
         )
+        # Cao độ: dịch hậu kỳ cho MỌI engine (OmniVoice/VieNeu/XTTS không nhận
+        # tham số pitch khi synth) — áp TRƯỚC khi đo thời lượng để SRT đúng.
+        if abs(pitch) >= 1e-6:
+            pitch_shift_wav(wav, pitch)
         dur = wav_duration(wav)
         parts.append(wav)
         srt_items.append({"text": sent, "duration": dur})
@@ -224,7 +229,13 @@ class TTSBody(BaseModel):
     ref_text: Optional[str] = None
     device_preference: Optional[str] = None
     speed: float = 1.0
+    # Cao độ theo NỬA CUNG (semitone): -12..+12, 0 = giữ nguyên.
+    # OmniVoice/VieNeu/XTTS đều không nhận pitch → backend xử lý hậu kỳ bằng ffmpeg.
+    pitch: float = 0.0
     gap_ms: int = 100
+    # Số ký tự tối đa mỗi khối đọc (gộp nhiều câu để giảm lần gọi model).
+    # 0 = tắt gộp, đọc từng câu. Frontend gửi 400 cho kịch bản dài → nhanh hơn.
+    chunk_chars: Optional[int] = 240
     attributes: dict = {}
 
 

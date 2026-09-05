@@ -4,14 +4,17 @@
 // documentary: create/runFull/render/unlock/onProgress/onJob) qua CDP như người
 // dùng bấm chuột — KHÔNG mock IPC/preload:
 //   [S1] native.videoAgent.openWindow() (đúng API UI) → tab Video Agent active + panel dựng
-//   [S2] điền kịch bản + ảnh thật → bấm "Chạy pipeline" (#btnRunFull — pipeline
-//        documentary deterministic thật) → UI hiện "Pipeline xong", timeline + QA
-//   [S3] bấm "Render Video" (panel 08) → render Remotion THẬT → MP4 THẬT (ffprobe)
-//   [S4] xoá project.json trên đĩa → bấm Render lần nữa → UI phải hiện lỗi
-//        TIẾNG VIỆT rõ ràng ("Không tìm thấy dự án…"), không [object Object],
-//        không để lại MP4 rác.
-// Lịch sử: panel 12-channel cũ (btnInspectProject + ô thư mục) đã được thay bằng
-// panel documentary (narration + assets + pipeline + render) — test này theo UI thật.
+//   [S1] native.videoAgent.openWindow() (đúng API UI) → tab Video Agent active + wizard dựng
+//   [S2] điền lời thoại (#vaNarration) + nạp ảnh thật qua hook _test.setAssets
+//        (dialog native không điều khiển được qua CDP) → bấm "🎬 Tạo video
+//        của tôi" (#vaRunBtn) → wizard chạy pipeline + render MP4 (deterministic)
+//   [S3] Bước 4 (#vaResult) hiện đường dẫn MP4 THẬT → ffprobe thấy track video
+//   [S4] xoá project.json trên đĩa → chọn lại dự án trong #vaProjectSelect →
+//        UI phải hiện lỗi TIẾNG VIỆT rõ ràng ("Không tìm thấy dự án…"),
+//        không [object Object], không để lại MP4 rác.
+// Lịch sử: UI từng là lưới 12 panel (#panels + #btnRunFull + #renderBtn), sau đó
+// được thiết kế lại thành wizard từng bước (#videoAgentRoot + .va-step) — test
+// này theo UI thật hiện hành.
 // Chạy: node nova/video-agent/test-ui-real.js  (~2-4 phút, mở cửa sổ app thật)
 const fs = require('fs');
 const path = require('path');
@@ -88,9 +91,9 @@ function launchApp(dirs) {
   return { child, getStderrTail: () => tail };
 }
 
-// Đọc trạng thái UI thật: nhãn tiến độ, thanh %, notice (banner lỗi tiếng Việt),
-// renderInfo (panel 08), số dòng timeline (panel 06), dự án đang chọn (panel 01), log jobs.
-const UI_SNAPSHOT = '(() => { const t = document.getElementById("tool-toolvideoagent"); const pl = document.getElementById("progressLabel"); const fill = document.getElementById("progressFill"); const notice = document.getElementById("notice"); const panels = t ? Array.from(t.querySelectorAll("#panels .panel")) : []; const renderInfo = panels[7] ? panels[7].textContent.trim() : ""; const timelineRows = panels[5] ? panels[5].querySelectorAll("table tr").length : 0; const sel = panels[0] ? panels[0].querySelector("select") : null; const jobs = t ? Array.from(t.querySelectorAll("#panels ul li")).slice(-10).map((li) => li.textContent.trim()) : []; return { label: pl ? pl.textContent.trim() : "", width: fill ? fill.style.width : "", notice: notice ? notice.textContent.trim() : "", noticeShown: !!(notice && notice.style.display === "block"), renderInfo, timelineRows, projectId: sel ? sel.value : "", jobs }; })()';
+// Đọc trạng thái wizard thật: nhãn tiến độ, thanh %, notice (banner lỗi tiếng Việt),
+// kết quả Bước 4 (#vaResult: đường dẫn MP4 + bảng timeline), số bước đã xong, log.
+const UI_SNAPSHOT = '(() => { const t = document.getElementById("tool-toolvideoagent"); const label = document.getElementById("vaProgressLabel"); const fill = document.getElementById("vaProgressFill"); const notice = document.getElementById("vaNotice"); const result = document.getElementById("vaResult"); const log = document.getElementById("vaLog"); const steps = t ? Array.from(t.querySelectorAll(".va-step")) : []; const timelineRows = result ? result.querySelectorAll("table tr").length : 0; const resultText = result ? result.textContent.trim() : ""; const doneSteps = steps.filter((s) => s.classList.contains("done")).length; return { label: label ? label.textContent.trim() : "", width: fill ? fill.style.width : "", notice: notice ? notice.textContent.trim() : "", noticeShown: !!(notice && notice.style.display === "block"), resultText, timelineRows, doneSteps, stepCount: steps.length, logShown: !!(log && log.style.display === "block") }; })()';
 
 // Tìm <profile>/…/documentary/projects nơi main lưu project.json.
 function findProjectsDir(root) {
@@ -159,74 +162,68 @@ async function main() {
     if (!(opened && opened.ok)) await sleep(1000);
   }
   assert('S1: openWindow trả ok (in-app)', opened && opened.ok && opened.inApp !== false, opened);
-  await cdp.waitFor('(() => { const nav = document.querySelector(".nav-item.active"); return nav && nav.getAttribute("data-tool") === "toolvideoagent" && document.querySelectorAll("#panels .panel").length >= 10; })()',
-    'tab Video Agent active + panel dựng xong', 30000);
-  const panelOk = await cdp.evaluate('(() => { const t = document.getElementById("tool-toolvideoagent"); return { visible: !!(t && t.classList.contains("active")), panels: document.querySelectorAll("#panels .panel").length, hasRun: !!document.getElementById("btnRunFull"), textareas: t ? t.querySelectorAll("#panels textarea").length : 0, noticeHidden: (document.getElementById("notice") || {}).style.display !== "block" }; })()');
-  assert('S1: panel Video Agent (documentary) dựng đủ 12 khu trong tab',
-    panelOk.visible && panelOk.panels >= 10 && panelOk.hasRun && panelOk.textareas >= 2 && panelOk.noticeHidden, panelOk);
+  await cdp.waitFor('(() => { const nav = document.querySelector(".nav-item.active"); return nav && nav.getAttribute("data-tool") === "toolvideoagent" && document.querySelectorAll("#videoAgentRoot .va-step").length >= 4; })()',
+    'tab Video Agent active + wizard dựng xong', 30000);
+  const panelOk = await cdp.evaluate('(() => { const t = document.getElementById("tool-toolvideoagent"); const n = document.getElementById("vaNotice"); const errNotice = !!(n && n.style.display === "block" && /^⚠/.test(n.textContent.trim())); return { visible: !!(t && t.classList.contains("active")), steps: document.querySelectorAll("#videoAgentRoot .va-step").length, hasRun: !!document.getElementById("vaRunBtn"), textareas: t ? t.querySelectorAll("#videoAgentRoot textarea").length : 0, errNotice }; })()');
+  assert('S1: wizard Video Agent (chế độ Dễ, 4 bước) dựng đủ trong tab, không có banner lỗi',
+    panelOk.visible && panelOk.steps >= 4 && panelOk.hasRun && panelOk.textareas >= 1 && !panelOk.errNotice, panelOk);
   const shotS1 = await shot(cdp, 's1-va-tab-open');
   report.scenarios.push({ id: 'S1-openTab', evidence: { opened, panelOk }, screenshots: [shotS1].filter(Boolean) });
 
-  // ── S2: điền kịch bản + ảnh → bấm "Chạy pipeline" (deterministic, không AI ngoài) ──
-  console.log('[S2] Điền kịch bản + ảnh thật → bấm "Chạy pipeline" (#btnRunFull)…');
-  const filled = await cdp.evaluate('(() => { const t = document.getElementById("tool-toolvideoagent"); const tas = t.querySelectorAll("#panels textarea"); if (tas.length < 2) return { ok: false, n: tas.length }; tas[0].value = ' + JSON.stringify(narration) + '; tas[1].value = ' + JSON.stringify(assetLines.join('\n')) + '; return { ok: true, n: tas.length }; })()');
-  assert('S2: điền được kịch bản + thư viện ảnh vào UI thật', filled && filled.ok, filled);
+  // ── S2: điền lời thoại + ảnh → bấm "🎬 Tạo video của tôi" (deterministic, không AI ngoài) ──
+  console.log('[S2] Điền lời thoại + nạp ảnh thật (hook _test.setAssets) → bấm "🎬 Tạo video của tôi" (#vaRunBtn)…');
+  const filled = await cdp.evaluate('(() => { const ta = document.getElementById("vaNarration"); if (!ta) return { ok: false, why: "no textarea" }; ta.value = ' + JSON.stringify(narration) + '; ta.dispatchEvent(new Event("input")); const title = document.getElementById("vaTitle"); if (title) title.value = "E2E Video Agent"; const assets = (window.videoAgentPanel._test && window.videoAgentPanel._test.setAssets) ? window.videoAgentPanel._test.setAssets(' + JSON.stringify(assetLines.join('\n')) + ') : -1; return { ok: assets >= 0, assets }; })()');
+  assert('S2: điền được lời thoại + nạp ảnh thật vào wizard', filled && filled.ok, filled);
   const runStart = Date.now();
-  await cdp.click('#btnRunFull');
+  await cdp.click('#vaRunBtn');
   let done = null;
   const widths = new Set();
   const labels = new Set();
   // Sample 400ms: pipeline deterministic nhanh — sample 1s có thể bỏ lỡ các
-  // mức % trung gian (alignment 10% … qa 90%).
-  for (let i = 0; i < 300; i++) {
+  // mức % trung gian.
+  for (let i = 0; i < Math.ceil(RUN_TIMEOUT_MS / 400); i++) {
     await sleep(400);
     let snap = null;
     try { snap = await cdp.evaluate(UI_SNAPSHOT, 10000); } catch (e) { continue; }
     if (!snap) continue;
     labels.add(snap.label);
     if (snap.width) widths.add(snap.width);
-    if (/Pipeline xong/.test(snap.renderInfo) || snap.noticeShown) { done = snap; break; }
+    if (/\.mp4/i.test(snap.resultText) || snap.noticeShown) { done = snap; break; }
     if (i > 0 && i % 50 === 0) console.log('    … đang chạy:', snap.label, snap.width, '(' + Math.round((Date.now() - runStart) / 1000) + 's)');
   }
-  assert('S2: pipeline chạy xong trong UI thật ("Pipeline xong" ở panel 08)', done && /Pipeline xong/.test(done.renderInfo),
+  assert('S2: wizard chạy xong pipeline + render (Bước 4 có đường dẫn MP4)',
+    done && /\.mp4/i.test(done.resultText),
     done || { labels: [...labels], stderrTail: app.getStderrTail().slice(-1500) });
-  // Pipeline deterministic 3 scene chạy DƯỚI 1s — không sample nổi các mức %
-  // trung gian; bằng chứng tiến độ hoạt động = kết thúc đúng ở 100% + 'complete'.
-  assert('S2: thanh tiến độ kết thúc đúng 100% + phase complete', widths.has('100%') && labels.has('complete'),
+  // Pipeline deterministic 3 scene chạy DƯỚI 1s nhưng render Remotion có thể lâu —
+  // bằng chứng tiến độ hoạt động = kết thúc đúng ở 100% + nhãn "Hoàn tất".
+  assert('S2: thanh tiến độ kết thúc đúng 100% + nhãn "Hoàn tất 🎉"', widths.has('100%') && labels.has('Hoàn tất 🎉'),
     { widths: [...widths].slice(0, 10), labels: [...labels] });
-  assert('S2: timeline UI có scene (bảng > 1 dòng)', done && done.timelineRows > 1, done && done.timelineRows);
-  assert('S2: không có lỗi nào hiện ra (notice ẩn)', !done.noticeShown, done && done.notice);
-  console.log('    →', (done.renderInfo || '').replace(/\s+/g, ' ').slice(0, 160));
+  assert('S2: timeline Bước 4 có scene (bảng > 1 dòng)', done && done.timelineRows > 1, done && done.timelineRows);
+  assert('S2: Bước 3 và 4 đánh dấu xong (doneSteps >= 2)', done && done.doneSteps >= 2, done && done.doneSteps);
+  /* #vaNotice dùng cho cả info/ok (ℹ/✓) — chỉ tính "lỗi" khi banner ⚠ / "thất bại". */
+  const s2Notice = (done && done.noticeShown && done.notice.trim()) || '';
+  assert('S2: không có banner lỗi nào (notice chỉ là thông báo thành công)',
+    !/^⚠/.test(s2Notice) && !/thất bại/i.test(s2Notice), s2Notice);
+  console.log('    →', (done && done.resultText || '').replace(/\s+/g, ' ').slice(0, 160));
   const shotS2 = await shot(cdp, 's2-va-pipeline-ok');
-  report.scenarios.push({ id: 'S2-run-pipeline', verdict: done && /Pipeline xong/.test(done.renderInfo) ? 'pass' : 'fail',
-    evidence: { renderInfo: done && done.renderInfo, timelineRows: done && done.timelineRows, labels: [...labels] },
+  report.scenarios.push({ id: 'S2-run-pipeline', verdict: done && /\.mp4/i.test(done.resultText) && done.doneSteps >= 2 ? 'pass' : 'fail',
+    evidence: { resultText: done && done.resultText, timelineRows: done && done.timelineRows, doneSteps: done && done.doneSteps, labels: [...labels] },
     screenshots: [shotS2].filter(Boolean) });
 
-  // ── S3: bấm "Render Video" (panel 08) — Remotion render THẬT ──
-  console.log('[S3] Bấm "Render Video" (panel 08 — Remotion thật)…');
-  const clickedRender = await cdp.evaluate('(() => { const ps = document.querySelectorAll("#panels .panel"); const b = ps[7] && ps[7].querySelector("button"); if (!b) return false; b.click(); return true; })()');
-  assert('S3: có nút Render trong panel 08', clickedRender === true);
-  const renderStart = Date.now();
-  let rendered = null;
-  for (let i = 0; i < Math.ceil(RUN_TIMEOUT_MS / 1000); i++) {
-    await sleep(1000);
-    let snap = null;
-    try { snap = await cdp.evaluate(UI_SNAPSHOT, 10000); } catch (e) { continue; }
-    if (!snap) continue;
-    if (/Đã render xong/.test(snap.renderInfo) || snap.noticeShown) { rendered = snap; break; }
-    if (i > 0 && i % 20 === 0) console.log('    … đang render:', snap.label, snap.width, '(' + Math.round((Date.now() - renderStart) / 1000) + 's)');
-  }
-  assert('S3: UI hiện "Đã render xong: <đường dẫn>"', rendered && /Đã render xong:/.test(rendered.renderInfo),
-    (rendered && rendered.renderInfo) || { stderrTail: app.getStderrTail().slice(-1500) });
+  // ── S3: Bước 4 hiện MP4 THẬT (auto-render trong lượt chạy S2) — Remotion render THẬT ──
+  console.log('[S3] Bước 4 (#vaResult) hiện đường dẫn MP4 → ffprobe kiểm tra track video…');
+  const rendered = done;
+  assert('S3: UI Bước 4 có đường dẫn MP4 (.mp4 trong kết quả)', rendered && /\.mp4/i.test(rendered.resultText),
+    (rendered && rendered.resultText) || { stderrTail: app.getStderrTail().slice(-1500) });
   // Sản phẩm MP4 THẬT: đường dẫn trong UI + ffprobe thấy track video.
   let mp4 = null;
   let mp4Err = null;
-  const m = rendered.renderInfo.match(/Đã render xong:\s*(.+)/);
-  const mp4Path = m && m[1] && m[1].trim();
+  const m = rendered && rendered.resultText.match(/[A-Za-z]:[\\/][\s\S]*?\.mp4/i);
+  const mp4Path = m && m[0] && m[0].trim();
   try {
     if (mp4Path && fs.existsSync(mp4Path)) {
       const st = fs.statSync(mp4Path);
-      if (st.size > 10000 && st.mtimeMs >= renderStart - 2000) {
+      if (st.size > 10000 && st.mtimeMs >= runStart - 2000) {
         const pr = probe(mp4Path);
         mp4 = { path: mp4Path, bytes: st.size, durationSec: pr.durationSec, hasVideo: pr.hasVideo, hasAudio: pr.hasAudio };
       } else mp4Err = 'MP4 quá nhỏ/cũ: ' + mp4Path + ' ' + st.size + 'B';
@@ -236,12 +233,12 @@ async function main() {
   const shotS3 = await shot(cdp, 's3-va-render-ok');
   if (mp4) { try { fs.copyFileSync(mp4.path, path.join(RUN_DIR, 'products', 'video-agent.mp4')); } catch (_) {} }
   report.scenarios.push({ id: 'S3-render', verdict: mp4 && mp4.hasVideo ? 'pass' : 'fail',
-    evidence: { rendered: rendered && rendered.renderInfo, mp4: mp4 || mp4Err, elapsedSec: Math.round((Date.now() - renderStart) / 1000) },
+    evidence: { rendered: rendered && rendered.resultText, mp4: mp4 || mp4Err, elapsedSec: Math.round((Date.now() - runStart) / 1000) },
     products: mp4 ? [path.join(RUN_DIR, 'products', 'video-agent.mp4')] : [],
     screenshots: [shotS3].filter(Boolean) });
 
-  // ── S4: xoá project.json → bấm Render → phải báo lỗi TIẾNG VIỆT, không rác ──
-  console.log('[S4] Xoá project.json trên đĩa → bấm "Render Video" → đợi banner lỗi tiếng Việt…');
+  // ── S4: xoá project.json → chọn lại dự án → phải báo lỗi TIẾNG VIỆT, không rác ──
+  console.log('[S4] Xoá project.json trên đĩa → chọn lại dự án trong "Mở dự án đã có" → đợi banner lỗi tiếng Việt…');
   const projectsDir = findProjectsDir(path.join(RUN_DIR, 'profile'));
   // Select dự án có thể rỗng (chưa refresh sau khi tạo) → lấy project.json MỚI NHẤT
   // sinh ra trong run này (mtime >= runStart) thay vì tin vào UI.
@@ -256,29 +253,33 @@ async function main() {
   assert('S4: tìm thấy project.json của dự án vừa chạy', !!jsonPath && fs.existsSync(jsonPath), { projectsDir, jsonPath });
   fs.unlinkSync(jsonPath);
   const s4Start = Date.now();
-  await cdp.evaluate('(() => { const ps = document.querySelectorAll("#panels .panel"); const b = ps[7] && ps[7].querySelector("button"); if (b) b.click(); return !!b; })()');
+  // Chọn đúng dự án vừa chạy trong "Mở dự án đã có" → wizard gọi bridge.read
+  // → project.json đã bị xoá → lỗi phải hiện thành banner tiếng Việt.
+  const picked = await cdp.evaluate('(() => { const sel = document.getElementById("vaProjectSelect"); if (!sel) return { ok: false, why: "no select" }; const st = (window.videoAgentPanel._test && window.videoAgentPanel._test.getState()) || {}; const opt = Array.from(sel.options).find((o) => o.value === st.projectId); if (!opt) return { ok: false, why: "option missing", projectId: st.projectId, options: Array.from(sel.options).map((o) => o.value) }; sel.value = st.projectId; sel.dispatchEvent(new Event("change")); return { ok: true }; })()');
+  assert('S4: chọn được dự án vừa chạy trong ô "Mở dự án đã có"', picked && picked.ok, picked);
   let errSnap = null;
   for (let i = 0; i < 60; i++) {
     await sleep(1000);
     let snap = null;
     try { snap = await cdp.evaluate(UI_SNAPSHOT, 10000); } catch (e) { continue; }
-    if (snap && snap.noticeShown) { errSnap = snap; break; }
+    /* Chỉ dừng khi thấy banner LỖI (⚠) — bỏ qua notice info/ok (ℹ/✓) còn sót. */
+    if (snap && snap.noticeShown && /^⚠/.test(snap.notice)) { errSnap = snap; break; }
   }
   assert('S4: UI hiện banner lỗi (notice) khi dự án biến mất', errSnap && errSnap.noticeShown,
-    errSnap || { stderrTail: app.getStderrTail().slice(-1500) });
+    errSnap || { picked, stderrTail: app.getStderrTail().slice(-1500) });
   assert('S4: lỗi là tiếng Việt rõ ràng "Không tìm thấy dự án…" (không [object Object]/undefined)',
     errSnap && /Không tìm thấy dự án/.test(errSnap.notice) && !/object Object|undefined/.test(errSnap.notice),
     errSnap && errSnap.notice);
-  assert('S4: nhãn tiến độ hiện "Lỗi: …"', errSnap && /^Lỗi:/.test(errSnap.label), errSnap && errSnap.label);
-  assert('S4: panel 08 báo "Render thất bại"', errSnap && /Render thất bại/.test(errSnap.renderInfo), errSnap && errSnap.renderInfo);
-  // Không để lại MP4 rác khi render lỗi (chỉ tính file sinh SAU khi bấm S4).
+  const selAfter = await cdp.evaluate('(() => (document.getElementById("vaProjectSelect") || { value: null }).value)()').catch(() => null);
+  assert('S4: ô "Mở dự án đã có" reset về trống sau lỗi', selAfter === '', selAfter);
+  // Không để lại MP4 rác khi thao tác lỗi (chỉ tính file sinh SAU khi bắt đầu S4).
   const mp4Left = fs.existsSync(dirs.temp)
     ? fs.readdirSync(dirs.temp).filter((f) => /\.mp4$/i.test(f) && fs.statSync(path.join(dirs.temp, f)).mtimeMs >= s4Start)
     : [];
-  assert('S4: không để lại MP4 rác khi render lỗi', mp4Left.length === 0, mp4Left);
+  assert('S4: không để lại MP4 rác khi có lỗi', mp4Left.length === 0, mp4Left);
   const shotS4 = await shot(cdp, 's4-va-error-vi');
   report.scenarios.push({ id: 'S4-error-vietnamese', verdict: errSnap && /Không tìm thấy dự án/.test(errSnap.notice) ? 'pass' : 'fail',
-    evidence: { notice: errSnap && errSnap.notice, label: errSnap && errSnap.label, renderInfo: errSnap && errSnap.renderInfo, mp4Left },
+    evidence: { notice: errSnap && errSnap.notice, selAfter, mp4Left },
     screenshots: [shotS4].filter(Boolean) });
   console.log('    → Lỗi UI hiển thị:', (errSnap && errSnap.notice || '').replace(/\s+/g, ' ').slice(0, 300));
 
