@@ -1,0 +1,25 @@
+{
+  "CHECK_EXIT": 0,
+  "TAIL": [
+    "> ai-video-studio@1.0.1 check:syntax",
+    "> node nova/scripts/syntax-check.js",
+    "",
+    "syntax check: 330 files passed",
+    "",
+    "> ai-video-studio@1.0.1 check:ipc",
+    "> node nova/scripts/ipc-inventory.js",
+    "",
+    "IPC inventory: 143 channels, 20 events, 2276 files",
+    "D:\\AI Video Studio\\nova\\ipc-inventory.json",
+    "",
+    "> ai-video-studio@1.0.1 check:parity",
+    "> node nova/scripts/parity-check.js",
+    "",
+    "protected/plain parity: 0 pairs present",
+    "",
+    "> ai-video-studio@1.0.1 check:shared",
+    "> node nova/scripts/shared-names-check.js",
+    "",
+    "shared names check: 25 files, 16 state keys passed"
+  ]
+}

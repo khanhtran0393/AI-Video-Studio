@@ -2063,10 +2063,6 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
             </div>
             
             <input type="hidden" id="tsWords" value="4800">
-            <div style="display:flex;gap:10px;align-items:center;margin-top:14px;flex-wrap:wrap">
-              <span id="tsNovelBtn" class="ts-chip" style="cursor:pointer;padding:8px 14px;user-select:none" onclick="tsToggleNovel()">📖 Chế độ Novel</span>
-              <span id="tsNovelHint" style="font-size:11.5px;color:var(--text-dim);display:none;flex:1;min-width:220px">Bật: viết theo <b>chương</b> (≈450 từ/chương) — AI giữ bộ nhớ nhân vật · biến cố · tuyến nội dung xuyên suốt kịch bản, mỗi chương 1 lượt viết + 1 lượt ghi nhớ. Chậm hơn chế độ thường.</span>
-            </div>
           </div>
 
           <div class="ts-card" style="margin-top:16px;padding:12px 16px;">
@@ -2093,9 +2089,22 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
                document.getElementById('tsWords').value = total;
                
                const nb = document.getElementById('tsNovelBtn');
-               if(nb) { if(ch > 1) nb.classList.add('on'); else nb.classList.remove('on'); }
-               
-               const speed = 140; 
+               if(nb) {
+                  // Đồng bộ ĐỦ 3 lớp khi QUY MÔ thay đổi. Novel cần ≥ 2 chương:
+                  // CHƯƠNG > 1 → tự bật chip; CHƯƠNG quay về 1 → tự tắt + báo rõ.
+                  const wasOn = nb.classList.contains('on');
+                  const on = ch > 1;
+                  nb.classList.toggle('on', on);
+                  nb.style.borderColor = on ? 'var(--accent)' : '';
+                  nb.style.color = on ? 'var(--accent)' : '';
+                  nb.innerHTML = on ? '📖 Novel: <b style="color:var(--accent)">BẬT</b>' : '📖 Novel: TẮT';
+                  try { localStorage.setItem('ts_novel_mode', on ? '1' : '0'); } catch (e) {}
+                  const h = document.getElementById('tsNovelHint'); if (h) h.style.display = on ? '' : 'none';
+                  if (wasOn && !on && typeof setStatusScript === 'function')
+                    setStatusScript('Đã tắt Chế độ Novel — cần tối thiểu 2 chương trong khối QUY MÔ.', 'info');
+                }
+                
+                const speed = 140; 
                const mPer = Math.max(1, Math.round(wpc / speed));
                const mTot = Math.max(1, Math.round(total / speed));
                const ePer = document.getElementById('tsScalePerEst');
@@ -2107,9 +2116,11 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
           </script>
 
           <div style="display:flex;gap:10px;margin-top:16px">
+            <button class="btn ghost" id="tsNovelBtn" style="white-space:nowrap" onclick="tsToggleNovel()">📖 Chế độ Novel</button>
             <button class="btn primary" id="tsGenBtn" style="flex:1" onclick="tsGenerate()">✍️ Viết kịch bản</button>
             <button class="btn ghost" onclick="tsGenerate(true)" title="Viết lại bản khác">↻ Viết lại</button>
           </div>
+          <div id="tsNovelHint" style="font-size:11.5px;color:var(--text-dim);display:none;margin-top:8px">Bật: viết theo <b>chương</b> — điều kiện: khối <b>QUY MÔ</b> bên trên đặt <b>tối thiểu 2 chương</b> (số chương &amp; số từ/chương lấy đúng theo QUY MÔ) — AI giữ bộ nhớ nhân vật · biến cố · tuyến nội dung xuyên suốt kịch bản, mỗi chương 1 lượt viết + 1 lượt ghi nhớ. Chậm hơn chế độ thường.</div>
           <div style="font-size:11px;color:var(--text-dim);margin-top:8px">💡 Kịch bản “sạch” cho TTS: không tiêu đề, không chú thích, không emoji — chỉ lời đọc liền mạch.</div>
           <div class="status-bar" id="statusScript" style="margin-top:10px">Sẵn sàng. Nhập chủ đề rồi bấm Viết kịch bản.</div>
         </div>
@@ -8521,11 +8532,17 @@ function tsInit(){
   const nameEl = document.getElementById('tsProfName'); if (nameEl) nameEl.textContent = p?.tenKenh ? '· ' + p.tenKenh : '';
   const pp = document.getElementById('tsProfPrompt');
   if (pp) pp.textContent = (p?.scriptPrompt || '').trim() || 'Chưa có — bấm "Sửa ở Profile" để thêm phong cách viết kịch bản cho kênh.';
-  // Trạng thái nút Novel (giữ giữa các phiên app)
+  // Trạng thái nút Novel (giữ giữa các phiên app) — chỉ khôi phục khi QUY MÔ
+  // vẫn hợp lệ (≥ 2 chương); localStorage cũ lệch điều kiện thì xoá sạch.
   const nb = document.getElementById('tsNovelBtn');
   if (nb && localStorage.getItem('ts_novel_mode') === '1'){
-    nb.classList.add('on');
-    const h = document.getElementById('tsNovelHint'); if (h) h.style.display = '';
+    const ch = parseInt(document.getElementById('tsChapters')?.value) || 1;
+    if (ch < 2){
+      try { localStorage.setItem('ts_novel_mode', '0'); } catch (e) {}
+    } else {
+      nb.classList.add('on');
+      const h = document.getElementById('tsNovelHint'); if (h) h.style.display = '';
+    }
   }
   tsEstimate(); tsOutMeta();
 }
@@ -8556,10 +8573,17 @@ async function tsGenerate(rewrite){
   // Chế độ Novel (chip 📖 bật): pipeline viết theo chương + memory xuyên suốt.
   // Luồng thường (1 lần gọi) giữ nguyên — tắt chip là quay về y như cũ.
   if (tsNovelOn()){
-    const customCh = document.getElementById('tsChapters');
-    const customWpc = document.getElementById('tsWordsPerChapter');
-    const n = customCh ? parseInt(customCh.value) : Math.max(2, Math.ceil(words / TS_NOVEL_CH_WORDS));
-    const chWords = customWpc ? parseInt(customWpc.value) : Math.round(words / n);
+    // Novel yêu cầu QUY MÔ ≥ 2 chương (chip đã chặn bật khi < 2 — tsToggleNovel).
+    // Nếu vẫn lọt vào đây do state lệch (vd localStorage cũ) → chết LỘ LIỄU,
+    // KHÔNG tự tách chương ngầm (Luật 10).
+    const n = parseInt(document.getElementById('tsChapters')?.value) || 0;
+    if (n < 2){
+      setStatusScript('Chế độ Novel cần tối thiểu 2 chương trong khối QUY MÔ (đang là ' + (n || 1) + ') — chỉnh CHƯƠNG ≥ 2 hoặc tắt chip Novel.', 'error');
+      return;
+    }
+    // chWords tính từ tổng words/n (không đọc trực tiếp tsWordsPerChapter) để
+    // không lệch tổng khi user chọn số từ bằng chip tsSetWords().
+    const chWords = Math.max(100, Math.round(words / n));
     return tsGenerateNovel({ topic, words, lang, tone, style: sp, rewrite: !!rewrite,
       n, chWords });
   }
@@ -8616,14 +8640,25 @@ Return only the script content, nothing else.`;
    nhất giữ tóm tắt đầy đủ, chương cũ hơn nén 1 câu → không phình context.
    Không đụng IPC/main, không dependency mới. Lỗi trích memory → degrade
    LỘ LIỄU (Luật 10): báo status + dùng 4 câu đầu chương làm tóm tắt thay thế.
+   Điều kiện bật: QUY MÔ tối thiểu 2 chương (chip chặn bật khi < 2; KHÔNG tự
+   tách chương ngầm). Số chương & số từ/chương lấy đúng theo QUY MÔ.
    ============================================================ */
-const TS_NOVEL_CH_WORDS = 450;   // ~450 từ/chương: đủ mạch truyện, vừa output token
 function tsNovelOn(){
   const b = document.getElementById('tsNovelBtn');
   return !!(b && b.classList.contains('on'));
 }
 function tsToggleNovel(){
   const b = document.getElementById('tsNovelBtn'); if (!b) return;
+  const turningOn = !b.classList.contains('on');
+  if (turningOn){
+    // Điều kiện bật Novel: QUY MÔ tối thiểu 2 chương (memory xuyên suốt chỉ có
+    // ý nghĩa từ chương 2 trở đi). Chặn bật + báo rõ, không tự tách chương ngầm.
+    const ch = parseInt(document.getElementById('tsChapters')?.value) || 1;
+    if (ch < 2){
+      setStatusScript('Chế độ Novel cần tối thiểu 2 chương — chỉnh CHƯƠNG trong khối QUY MÔ lên ≥ 2 rồi bật lại.', 'error');
+      return;
+    }
+  }
   b.classList.toggle('on');
   const on = b.classList.contains('on');
   try { localStorage.setItem('ts_novel_mode', on ? '1' : '0'); } catch (e) {}

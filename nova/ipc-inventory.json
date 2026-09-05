@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-05T13:56:22.281Z",
+  "generatedAt": "2026-09-05T15:05:30.463Z",
   "sourceFiles": [
     "chrome-extension/app.js",
     "chrome-extension/background.js",
@@ -224,6 +224,7 @@
     "scripts/tmp-splash-probe.js",
     "scripts/tmp-voice-crash.js",
     "scripts/tmp-voice-path-test.js",
+    "scripts/tmp-watch-build.js",
     "scripts/tmp-watch-dist.js",
     "scripts/tmp-watch-tree.js",
     "scripts/tmp-wb-dev-check.js",

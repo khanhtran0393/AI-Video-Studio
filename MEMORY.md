@@ -44,16 +44,21 @@ File này ghi **trạng thái dài hạn và lịch sử quyết định**. AGEN
 
 ## Đang treo / nợ kỹ thuật
 
-- **Build lại dist sau tính năng Novel**: `npm run build:win` lần cuối đang chạy
-  (PID 52544, 20:56). Lịch sử: build 20:21 fail NSIS "failed creating mmap of
-  .nsis.7z" (Setup exe 0.5MB hỏng — ĐÃ XOÁ); các lần sau bị kill nhầm giữa chừng
-  vì tưởng treo (thực ra 7za -mx=9 nén 970MB rất lâu). Bài học: **build:win trên
-  máy này mất ~45-60 phút và KHÔNG được kill/overlay giữa chừng; chỉ chạy 1
-  build tại 1 thời điểm** (2 build song song xung đột ghi dist → mất asar).
-  Bản Portable 9/4 đã khôi phục từ `.old`; khi build xong phải verify: asar chứa
-  `tsNovelBtn` + Setup ~500MB + Portable mới.
+- **Đóng gói sau tính năng Novel — KẾT LUẬN**: `dist\win-unpacked\` MỚI hoàn chỉnh
+  (AI Video Studio.exe 225MB + app.asar 476MB @ 21:21, verified chứa `tsNovelBtn` +
+  `tsGenerateNovel`) — chạy trực tiếp được, CÓ nút Novel (boot smoke: app sống 30s;
+  bridge EADDRINUSE + render crash khi smoke là do dev app đang mở song song chiếm
+  cổng 8793-8796 + profile — test lại khi chỉ chạy MỘT mình). NSIS Setup/Portable
+  KHÔNG ra sau 6 lần build (1 fail mmap NSIS; 3 lần bị kill nhầm giữa chừng vì tưởng
+  treo — thực ra 7za -mx=9 nén rất lâu; 1 fail ENOENT rename electron.exe vì
+  win-unpacked dở dang sót; 1 lần nsis.7z phình 3.1GB + Setup 0.5MB hỏng do các
+  build đè chồng dữ liệu). Rác 3.1GB đã xoá; Portable 9/4 mất khi dọn dist.
+  **Muốn có installer lần sau**: xoá `dist\win-unpacked` + `*.nsis.7z` TRƯỚC,
+  chạy MỘT `npm run build:win` duy nhất, không kill giữa chừng (~45-60 phút;
+  7za -mx=9 một mình đã chiếm ~20 phút, CPU nghìn giây là BÌNH THƯỜNG).
 - `nova/scripts/` còn nhiều script `tmp-*` dùng một lần (tmp-watch-dist,
-  tmp-voice-crash…) — chưa dọn thành archive.
+  tmp-voice-crash, tmp-watch-build, tmp-check-index-html-js, tmp-smoke-novel…) —
+  chưa dọn thành archive.
 - Binary runtime tự tải (upscaler-bin, inpaint-bin, voice-backend, sqlite-bin,
   onnx-bin, ytdlp-bin, editor-pro/remotion-browser) — không track trong git.
 - Video Agent Phase 3: model rembg/SAM (u2net ~170MB) chưa tải → segmentation
@@ -182,3 +187,30 @@ File này ghi **trạng thái dài hạn và lịch sử quyết định**. AGEN
   `test:voice` sau khi backend chạy cần dọn `backend/__pycache__` +
   `backend/engines/__pycache__` trước.
 - [2026-09-05] Mở rộng Visual Grammar theo pattern seedance-2.0 (từ vựng góc máy điện ảnh) — 3 tầng: (1) `nova/video-agent/visual-grammar/grammar.js`: CAMERA 5→9 (`pan-up`/`pan-down` map `panU`/`panD`, `crane-in`, `handheld`), TRANSITIONS 7→18 (map 1-1 sang `transitions.json` sẵn có: dip-white, flash-cut, zoom-through, match-zoom, push-left/up, barn-door, shutter, iris, paper-slide, grain) — giữ nguyên module.exports, ai-gateway tự nhận enum mới qua `Object.keys(grammar.CAMERA)`. `visual-plan/plan.js`: CAMERAS rotation 4→8 + TRANSITION_CYCLE deterministic (cut chủ đạo, nhấn match-zoom/whip định kỳ); `behavior-engine/legacy.js`: pan-up/down → `camera.pan` y±5, crane-in → `camera.push_in`. (2) Renderer: HOLD preset mới `handheld` (rung sin 2 trục lệch pha) + `craneIn` (scale+translateY) thêm ĐỒNG THỜI ở `nova/editor-pro/nova-remotion/src/anim.js` VÀ `bundle/bundle.js` (bundle là runtime, phải sửa cả hai). (3) Documentary `ai/visual-planner.js` §7: schema + heuristic + buildPromptFromPlan + LLM prompt thêm `lens`/`lighting`/`grade` (enum cố định, AI chỉ chọn tên — Luật 8). Kiểm định: `npm run check` PASS (syntax 329 file, IPC 143 kênh, parity, shared); `test:video-agent` 6 suite PASS (114 pass, BRIDGE-CONTRACT HOLD=13 xác nhận preset mới); `nova/documentary/test.js` PASS; `test:video-agent:render` REAL-RENDER-OK (2.454s). Ghi chú: không dùng trực tiếp repo github seedance-2.0 (đó là prompt-skill docs, không phải module) — chỉ port tư duy vocabulary vào grammar hiện có.
+- [2026-09-05] Toolscript — sửa lệch giữa hint và logic **Chế độ Novel**
+  (`nova/web/index.html`): hint cũ ghi "≈450 từ/chương" nhưng logic thật lấy số
+  chương & số từ/chương từ khối QUY MÔ (`tsChapters` × `tsWordsPerChapter`),
+  khiến `TS_NOVEL_CH_WORDS=450` thành dead code (element luôn tồn tại nên nhánh
+  fallback không bao giờ chạy). Fix 3 điểm: (1) nhánh Novel trong `tsGenerate`
+  clamp `n >= 2` — nếu QUY MÔ để 1 chương thì tự tách theo ~450 từ/chương giữ
+  đúng tổng số từ (trước đây n=1 làm Architect validate `chapters.length >= 2`
+  chết sau 3 tries hoặc LLM tự trả 2×1200=2400 từ, gấp đôi yêu cầu); (2)
+  `chWords = Math.round(words/n)` thay vì đọc thẳng `tsWordsPerChapter` để hết
+  lệch tổng khi user chọn số từ bằng chip `tsSetWords()`; (3) `tsUpdateScale`
+  đồng bộ đủ 3 lớp (class + localStorage `ts_novel_mode` + hint) khi auto
+  bật/tắt chip theo QUY MÔ — trước đây chỉ đổi class nên phiên sau `tsInit`
+  khôi phục sai trạng thái. Hint UI viết lại mô tả đúng hành vi. Renderer-only,
+  không đụng IPC/contract. Kiểm định: `npm run check` PASS; node sanity test
+  các case 1×1200 / 2×1200 / 5×1000 / chip-3000-từ / 800-từ-1-chương đều giữ
+  đúng tổng số từ.
+- [2026-09-05] Toolscript — **thay quyết định phía trên**: bỏ hẳn hành vi
+  "tự tách ~450 từ/chương", thay bằng **điều kiện tường minh: Chế độ Novel chỉ
+  bật được khi QUY MÔ ≥ 2 chương**. Lý do: tách ngầm làm user khó hiểu nguồn
+  gốc số chương (feedback trực tiếp). Thay đổi trong `nova/web/index.html`:
+  (1) `tsToggleNovel` chặn bật + báo lỗi rõ khi CHƯƠNG < 2; (2) nhánh Novel
+  trong `tsGenerate` fail lộ liễu nếu n < 2 lọt qua state lệch (Luật 10 —
+  không tự tách ngầm); (3) xoá hằng chết `TS_NOVEL_CH_WORDS`; (4) `tsInit`
+  chỉ khôi phục chip từ localStorage khi QUY MÔ vẫn ≥ 2 chương, lệch thì xoá;
+  (5) `tsUpdateScale` tự tắt chip + báo status khi CHƯƠNG quay về 1; (6) hint
+  UI ghi rõ điều kiện "tối thiểu 2 chương, số chương & từ/chương lấy đúng theo
+  QUY MÔ". Renderer-only. Kiểm định: `npm run check` PASS.
