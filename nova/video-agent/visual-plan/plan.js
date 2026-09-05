@@ -5,7 +5,9 @@
 const grammar = require('../visual-grammar/grammar');
 const ROUND3 = (v) => Math.round(v * 1000) / 1000;
 
-const CAMERAS = ['push-in', 'pull-out', 'pan-left', 'pan-right'];
+const CAMERAS = ['push-in', 'pull-out', 'pan-left', 'pan-right', 'pan-up', 'pan-down', 'crane-in', 'handheld'];
+// Xoay transition deterministic: đa số là cut (nguyên tắc transitions.json), điểm nhấn định kỳ.
+const TRANSITION_CYCLE = ['cut', 'cut', 'cut', 'cut', 'dissolve', 'cut', 'match-zoom', 'cut', 'cut', 'whip'];
 const ACTIONS_ANIM = { walk: 'walk', 'đi': 'walk', run: 'run', 'chạy': 'run',
   enter: 'enter-left', 'vào': 'enter-left', leave: 'enter-right', 'ra': 'enter-right', look: 'look-left', 'nhìn': 'look-left' };
 
@@ -42,7 +44,7 @@ function visualsFor(scene, index, manifest, used, config) {
   const chars = pickCharacters(scene, manifest);
   const camera = CAMERAS[index % CAMERAS.length];
   const actionAnim = (scene.actions || []).map(a => ACTIONS_ANIM[String(a).toLowerCase()]).find(Boolean);
-  const transition = index === 0 ? 'cut' : (config && config.transitions && config.transitions[index - 1]) || (index % 5 === 4 ? 'dissolve' : 'cut');
+  const transition = index === 0 ? 'cut' : (config && config.transitions && config.transitions[index - 1]) || TRANSITION_CYCLE[index % TRANSITION_CYCLE.length];
   return {
     sceneId: scene.sceneId,
     visuals: {

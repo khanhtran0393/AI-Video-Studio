@@ -80,7 +80,16 @@ window.native = {
     pickImage: async () => ({ canceled: true }),
     pickImages: async () => ({ canceled: true }),
     pickImagesDir: async () => ({ canceled: true }),
-    pickOutput: async () => ({ canceled: true }),
+    // ĐÚNG chữ ký preload.js (dòng 141): pickOutput(defaultName) → invoke('whiteboard:pickOutput', { defaultName }).
+    // Mô phỏng thêm validation Electron: defaultPath không phải chuỗi → ném
+    // "Default path must be a string" (bug thật 9/5 khi panel truyền object).
+    pickOutput: async (defaultName) => {
+      window.__hdPickArg = defaultName;
+      if (typeof defaultName !== 'string' || !defaultName.trim()) {
+        return { ok: false, error: 'Default path must be a string (mô phỏng validation Electron — panel truyền sai kiểu)' };
+      }
+      return { canceled: true };
+    },
     exportCancel: async () => ({ ok: false }),
     export: async (payload) => {
       // mô phỏng đúng handler whiteboard:export trong ipc.js
@@ -128,6 +137,17 @@ window.native = {
   const rsBtn = byId['hd-reschedBtn'];
   if (rsBtn && rsBtn._ev && rsBtn._ev.click) { rsBtn._ev.click(); console.log('[4] phân lại giờ 2/8 OK'); }
   else console.log('[4] ⚠ reschedBtn chưa wire');
+
+  /* 4b · bấm "🎬 Xuất MP4" (không truyền path) → panel phải gọi pickOutput(STRING)
+         đúng contract preload — nếu truyền object, mock sẽ trả lỗi như Electron thật */
+  const expBtn = byId['hd-exportBtn'];
+  if (!expBtn || !expBtn._ev || !expBtn._ev.click) throw new Error('exportBtn chưa wire click');
+  expBtn._ev.click();
+  await new Promise((res) => setTimeout(res, 500));
+  if (typeof window.__hdPickArg !== 'string') {
+    throw new Error('contract lệch: pickOutput nhận ' + JSON.stringify(window.__hdPickArg) + ' — preload kỳ vọng chuỗi');
+  }
+  console.log('[4b] contract pickOutput OK — panel truyền chuỗi: "' + window.__hdPickArg + '"');
 
   /* 5 · bấm "🎬 Xuất MP4" qua handler exportVideo → PyBackend thật */
   const dumpLog = (tag) => {

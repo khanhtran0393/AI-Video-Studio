@@ -72,6 +72,54 @@ function spawnTracked(cmd, args, opts) {
   return child;
 }
 
+/* ── dọn rác ──
+   Luật 10 áp dụng nghịch: rác là lỗi phải LO, không nuốt thầm.
+   removeDirWithRetry: xoá ngay; Windows còn giữ handle (AV/indexer) thì thử lại
+   5s → 15s; hết lượt thì nói rõ để sweep lần sau dọn nốt. */
+function removeDirNow(dir) {
+  try { fs.rmSync(dir, { recursive: true, force: true }); return true; } catch (_) { return false; }
+}
+function removeDirWithRetry(dir, say) {
+  if (!dir) return;
+  if (removeDirNow(dir)) return;
+  const delays = [5000, 15000];
+  let k = 0;
+  const tick = () => {
+    if (k >= delays.length) {
+      if (say) say('⚠ chưa xoá được thư mục tạm ' + dir + ' — sẽ bị dọn bởi sweep lần sau.');
+      return;
+    }
+    const t = setTimeout(() => { if (!removeDirNow(dir)) tick(); }, delays[k++]);
+    if (t.unref) t.unref();
+  };
+  tick();
+}
+
+/* sweep rác mồ côi trong tmpdir: wb-stream-* cũ >1h (app crash/thoát sớm,
+   smoke test node thoát trước timer 5s) + wb-studio-preview-* cũ >24h.
+   Gọi từ status() khi panel mở tool; guard 1 lần/giờ để không quét liên tục. */
+let _lastSweep = 0;
+function sweepStale(now) {
+  const ts = now || Date.now();
+  if (ts - _lastSweep < 3600 * 1000) return { swept: 0, skipped: true };
+  _lastSweep = ts;
+  let swept = 0;
+  try {
+    for (const name of fs.readdirSync(os.tmpdir())) {
+      const isStream = /^wb-stream-/.test(name);
+      const isPreview = /^wb-studio-preview-/.test(name);
+      const isSmoke = /^hd-smoke-/.test(name);   // output mp4 của _smoke_handdraw.js
+      if (!isStream && !isPreview && !isSmoke) continue;
+      const dir = path.join(os.tmpdir(), name);
+      let age = 0;
+      try { age = ts - fs.statSync(dir).mtimeMs; } catch (_) { continue; }
+      const limitMs = isStream ? 3600 * 1000 : 24 * 3600 * 1000;
+      if (age > limitMs && removeDirNow(dir)) swept++;
+    }
+  } catch (_) { /* sweep fail không được chặn status() — lần sau thử lại */ }
+  return { swept };
+}
+
 function runCapture(cmd, args, opts = {}) {
   return new Promise((resolve) => {
     let stdout = '', stderr = '', done = false, timer = null;
@@ -112,10 +160,12 @@ async function depsReady(py) {
 }
 
 async function status() {
+  const swept = sweepStale();   // dọn rác mồ côi (wb-stream-*/wb-studio-preview-*) khi panel mở tool
   const py = venvReady() ? venvPythonPath() : null;
   const deps = py ? await depsReady(py) : false;
   return {
     ok: !!(repoPresent() && py && deps && handReady() && ffmpegAvailable()),
+    swept: swept.swept,
     repoPath: REPO_DIR,
     repoPresent: repoPresent(),
     venvReady: !!(py && venvReady()),
@@ -252,9 +302,22 @@ async function exportVideo({ scenes, outputPath, audioTracks, options, onProgres
   }
   if (!outputPath) return { ok: false, error: 'Thiếu outputPath' };
 
+  const say = (msg) => { if (onLog) { try { onLog(msg); } catch (_) {} } };
+  /* File bán phần tại outputPath người dùng chọn: khi export lỗi/huỷ, xoá file
+     hỏng ta vừa ghi (chỉ khi do export này tạo) — không để rác trên Desktop.
+     Luật 10: mọi đường fail phải qua đây để vừa trả lỗi vừa dọn. */
+  let wroteOutput = false;
+  const fail = (error) => {
+    if (wroteOutput && outputPath && fs.existsSync(outputPath)) {
+      try { fs.rmSync(outputPath, { force: true }); say('⚠ đã xoá file bán phần hỏng tại ' + outputPath); }
+      catch (e) { say('⚠ không xoá được file bán phần tại ' + outputPath + ' (' + ((e && e.message) || e) + ') — hãy xoá tay.'); }
+    }
+    return { ok: false, error };
+  };
+
   const st = await status();
   if (!st.ok) {
-    return { ok: false, error: 'Engine Python chưa sẵn sàng (repo/venv/deps/hand): ' + JSON.stringify({ repo: st.repoPresent, venv: st.venvReady, deps: st.deps, hand: st.hand }) };
+    return fail('Engine Python chưa sẵn sàng (repo/venv/deps/hand): ' + JSON.stringify({ repo: st.repoPresent, venv: st.venvReady, deps: st.deps, hand: st.hand }));
   }
   const py = st.venvPy;
 
@@ -262,7 +325,6 @@ async function exportVideo({ scenes, outputPath, audioTracks, options, onProgres
   const report = (percent, statusMsg) => {
     if (onProgress) { try { onProgress({ percent, status: statusMsg }); } catch (_) {} }
   };
-  const say = (msg) => { if (onLog) { try { onLog(msg); } catch (_) {} } };
 
   report(2, 'khởi tạo engine stream-ink');
   const sceneFiles = [];
@@ -271,7 +333,7 @@ async function exportVideo({ scenes, outputPath, audioTracks, options, onProgres
       const scene = scenes[i];
       const size = await probeImageSize(scene.image);
       if (!size || !size.width || !size.height) {
-        return { ok: false, error: 'Không đọc được kích thước ảnh: ' + scene.image };
+        return fail('Không đọc được kích thước ảnh: ' + scene.image);
       }
       // annotation: ưu tiên scene.annotation; ngược lại dựng từ elements (UI)
       let ann;
@@ -285,7 +347,7 @@ async function exportVideo({ scenes, outputPath, audioTracks, options, onProgres
       ann.sceneDurationMs = durationMs;
       const v = Annotation.validateAnnotation(ann);
       if (!v.ok) {
-        return { ok: false, error: 'Cảnh ' + (i + 1) + ' annotation lỗi: ' + v.errors.join('; ') };
+        return fail('Cảnh ' + (i + 1) + ' annotation lỗi: ' + v.errors.join('; '));
       }
       for (const w of (v.warnings || [])) say('⚠ ' + w);
 
@@ -314,7 +376,7 @@ async function exportVideo({ scenes, outputPath, audioTracks, options, onProgres
       const om = /OUTPUT=(.+)/.exec((r.stdout || '') + '\n' + (r.stderr || ''));
       const finalScene = om ? om[1].trim() : sceneOut;
       if (!r.ok || !fs.existsSync(finalScene)) {
-        return { ok: false, error: 'Render cảnh ' + (i + 1) + ' lỗi: ' + ((r.stderr || r.stdout || '').trim().split('\n').slice(-4).join(' | ') || 'không rõ') };
+        return fail('Render cảnh ' + (i + 1) + ' lỗi: ' + ((r.stderr || r.stdout || '').trim().split('\n').slice(-4).join(' | ') || 'không rõ'));
       }
       sceneFiles.push(fs.realpathSync(finalScene));
       report(5 + Math.round(((i + 1) / scenes.length) * 80), 'xong cảnh ' + (i + 1) + '/' + scenes.length);
@@ -324,20 +386,23 @@ async function exportVideo({ scenes, outputPath, audioTracks, options, onProgres
     const hasAudio = !!(audioTracks && audioTracks.length && audioTracks[0] && audioTracks[0].path && fs.existsSync(audioTracks[0].path));
     const mergedPath = hasAudio ? path.join(workDir, 'merged.mp4') : outputPath;
     if (sceneFiles.length === 1 && !hasAudio) {
+      wroteOutput = true;                       // copy ghi thẳng vào đích người dùng
       fs.copyFileSync(sceneFiles[0], outputPath);
       report(92, 'sao chép video');
     } else {
       report(88, 'ghép ' + sceneFiles.length + ' cảnh');
+      if (!hasAudio) wroteOutput = true;        // mergedPath === outputPath — merge ghi thẳng đích
       const mArgs = [MERGE_SCRIPT, '--inputs'].concat(sceneFiles).concat(['--output', mergedPath]);
       const mr = await runCapture(py, mArgs, { timeoutMs: 10 * 60 * 1000, onStderr: say });
       if (!mr.ok || !fs.existsSync(mergedPath)) {
-        return { ok: false, error: 'Merge lỗi: ' + ((mr.stderr || mr.stdout || '').trim().slice(0, 300) || 'không rõ') };
+        return fail('Merge lỗi: ' + ((mr.stderr || mr.stdout || '').trim().slice(0, 300) || 'không rõ'));
       }
     }
 
     /* ghép voice-over nếu có */
     if (hasAudio) {
       report(94, 'ghép voice-over');
+      wroteOutput = true;                       // mux ghi thẳng vào outputPath
       const ar = await muxAudio(mergedPath, audioTracks[0], outputPath, say);
       if (!ar.ok) {
         say('⚠ Không ghép được voice (' + (ar.error || '?') + ') — xuất video không tiếng.');
@@ -349,16 +414,14 @@ async function exportVideo({ scenes, outputPath, audioTracks, options, onProgres
     report(100, 'done');
     return { ok: true, path: outputPath, durationSec, scenes: sceneFiles.length, engine: 'srt-whiteboard-animation' };
   } finally {
-    // dọn workdir nền (trễ 5s tránh Windows còn giữ file handle)
-    const t = setTimeout(() => {
-      try { fs.rmSync(workDir, { recursive: true, force: true }); } catch (_) {}
-    }, 5000);
-    if (t.unref) t.unref();
+    // dọn workdir nền trên MỌI đường thoát (ok/lỗi/huỷ/timed-out);
+    // xoá ngay, Windows còn giữ handle thì retry 5s→15s (removeDirWithRetry)
+    removeDirWithRetry(workDir, say);
   }
 }
 
 module.exports = {
   status, prepare, parseSrt, cancelAll, exportVideo, previewAnnotation,
-  probeImageSize, probeMediaDuration, repoDir: REPO_DIR,
+  probeImageSize, probeMediaDuration, repoDir: REPO_DIR, sweepStale,
 };
 

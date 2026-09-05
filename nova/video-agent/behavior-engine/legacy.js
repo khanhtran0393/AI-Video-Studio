@@ -13,6 +13,10 @@ function legacyBehaviorsFromSpec(spec) {
       timing: { start: scene.start, end: scene.end }, parameters: { fromScale: scene.camera.from, toScale: scene.camera.to, easing: 'easeInOut' }, reason: 'legacy camera grammar' });
     if (cameraType === 'pan-left' || cameraType === 'pan-right') behaviors.push({ behaviorId: cameraId, type: 'camera.pan', actor: 'CAMERA_MAIN',
       timing: { start: scene.start, end: scene.end }, parameters: { from: { x: 0, y: 0 }, to: { x: cameraType === 'pan-left' ? -5 : 5, y: 0 }, easing: 'easeInOut' }, reason: 'legacy camera grammar' });
+    if (cameraType === 'pan-up' || cameraType === 'pan-down') behaviors.push({ behaviorId: cameraId, type: 'camera.pan', actor: 'CAMERA_MAIN',
+      timing: { start: scene.start, end: scene.end }, parameters: { from: { x: 0, y: 0 }, to: { x: 0, y: cameraType === 'pan-up' ? -5 : 5 }, easing: 'easeInOut' }, reason: 'legacy camera grammar' });
+    if (cameraType === 'crane-in') behaviors.push({ behaviorId: cameraId, type: 'camera.push_in', actor: 'CAMERA_MAIN',
+      timing: { start: scene.start, end: scene.end }, parameters: { fromScale: scene.camera.from, toScale: scene.camera.to, easing: 'easeInOut' }, reason: 'legacy camera grammar' });
 
     (scene.elements || []).forEach((el, i) => {
       const actor = elementId(scene, el, i); const anim = String(el.animation || 'breathe');

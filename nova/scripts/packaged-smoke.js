@@ -148,8 +148,8 @@ function assertCleanPath(restrictedPath) {
 /**
  * Quét toàn bộ tool nav của app như người dùng thật: click từng tab, chờ panel
  * kích hoạt, ghi lại mọi exception/console-error phát sinh trong lúc init của
- * tool đó. toolvideoagent còn phải dựng đủ 12 panel (#panels .panel) — guard
- * hồi quy cho lỗi "panelsEl is null" từng làm panel Video Agent chết toàn bộ.
+ * tool đó. Video Agent hiện là wizard (không còn lưới 12 panel cũ), nên contract
+ * là đủ bốn bước dễ cùng các control đầu/cuối; chế độ nâng cao có thêm ba bước.
  */
 async function runToolSweep(cdp, report) {
   const tools = await cdp.evaluate(`(() => [...document.querySelectorAll('.nav-item[data-tool]')].map((el) => el.dataset.tool))()`);
@@ -173,8 +173,51 @@ async function runToolSweep(cdp, report) {
     const consoleErrors = report.diagnostics.rendererConsole.filter(isRendererConsoleError).slice(errBefore);
     results.push({ tool, activated: true, exceptions, consoleErrors });
   }
-  const videoAgentResult = await cdp.evaluate(`document.querySelectorAll('#panels .panel').length`);
-  return { tools: results, videoAgentPanels: videoAgentResult };
+  const videoAgentWizard = await cdp.evaluate(`(() => {
+    const root = document.querySelector('#videoAgentRoot');
+    const boxes = root ? [...root.children].filter((el) => !el.classList.contains('va-notice') && !el.classList.contains('va-tabs')) : [];
+    return {
+      totalSteps: root?.querySelectorAll('.va-step').length || 0,
+      easySteps: boxes[0]?.querySelectorAll('.va-step').length || 0,
+      advancedSteps: boxes[1]?.querySelectorAll('.va-step').length || 0,
+      titleInput: !!root?.querySelector('#vaTitle'),
+      runButton: !!root?.querySelector('#vaRunBtn'),
+      result: !!root?.querySelector('#vaResult'),
+    };
+  })()`);
+  return { tools: results, videoAgentWizard };
+}
+
+async function runTdtStudioCheck(cdp) {
+  await cdp.click('[data-tool="toolstudio"]');
+  await cdp.waitFor(`document.querySelector('#tool-toolstudio')?.classList.contains('active')`, 'Studio tool activation', 10000);
+  const panel = await cdp.waitFor(`(() => {
+    const dock = document.querySelector('#tsNativeDock');
+    if (!dock || !window.native?.tdtStudio) return null;
+    const rect = dock.getBoundingClientRect();
+    return rect.width >= 100 && rect.height >= 80 ? {
+      width: Math.round(rect.width), height: Math.round(rect.height), dpr: window.devicePixelRatio || 1,
+    } : null;
+  })()`, 'Studio dock layout', 10000);
+  const status = await cdp.waitFor(`(async () => {
+    const st = await window.native.tdtStudio.status();
+    return st?.running && st.ready ? st : null;
+  })()`, 'bundled Studio startup', 90000, 500);
+  const appDir = String(status.appDir || '');
+  if (!status.pythonExists || !status.pysideOk || !status.cv2Ok || !status.hostScriptExists || !status.appMainExists) {
+    throw new Error(`Studio bundled runtime is incomplete: ${JSON.stringify(status)}`);
+  }
+  if (!status.embed || !status.pid) throw new Error(`Studio did not enter embedded mode: ${JSON.stringify(status)}`);
+  if (/D:\\repo\\TDTStudio/i.test(appDir) || !/app\.asar\.unpacked[\\/]nova[\\/]tdt-studio[\\/]app$/i.test(appDir)) {
+    throw new Error(`Studio resolved an unexpected app directory: ${appDir}`);
+  }
+  const resize = await cdp.evaluate(`window.native.tdtStudio.setRect(${JSON.stringify({ relX: 240, relY: 180, width: 640, height: 360, dpr: 1 })})`);
+  if (!resize?.ok) throw new Error(`Studio rejected a dock resize command: ${JSON.stringify(resize)}`);
+  return {
+    ok: true, pid: status.pid, embed: status.embed, startup: 'ready',
+    runtime: { python: status.pythonExists, pyside: status.pysideOk, cv2: status.cv2Ok },
+    appDir, dock: panel, resize: { ok: true },
+  };
 }
 
 async function closeApp(cdp, child) {
@@ -290,12 +333,17 @@ async function main() {
     // Quét UI như người dùng thật: click toàn bộ 11 tool, bắt lỗi từng tool.
     const sweep = await runToolSweep(cdp, report);
     const sweepFailures = sweep.tools.filter((entry) => (entry.exceptions && entry.exceptions.length) || (entry.consoleErrors && entry.consoleErrors.length));
-    if (sweep.videoAgentPanels < 12) throw new Error(`Video Agent panel regression: expected 12 panels in #panels, found ${sweep.videoAgentPanels}.`);
+    const wizard = sweep.videoAgentWizard || {};
+    if (wizard.easySteps !== 4 || wizard.advancedSteps < 1 || wizard.totalSteps !== wizard.easySteps + wizard.advancedSteps
+      || !wizard.titleInput || !wizard.runButton || !wizard.result) {
+      throw new Error(`Video Agent wizard regression: expected four easy steps, advanced steps, and primary controls; found ${JSON.stringify(wizard)}.`);
+    }
     if (sweepFailures.length) {
       const detail = sweepFailures.map((entry) => `${entry.tool}: ${[...(entry.exceptions || []), ...(entry.consoleErrors || [])].join(' | ')}`).join('\n');
       throw new Error(`UI tool sweep surfaced renderer errors:\n${detail}`);
     }
-    report.checks.toolSweep = { ok: true, tools: sweep.tools.map((entry) => entry.tool), videoAgentPanels: sweep.videoAgentPanels };
+    report.checks.toolSweep = { ok: true, tools: sweep.tools.map((entry) => entry.tool), videoAgentWizard: wizard };
+    report.checks.tdtStudio = await runTdtStudioCheck(cdp);
 
     await cdp.click('[data-tool="toolsettings"]');
     await cdp.waitFor(`getComputedStyle(document.querySelector('#apiSection')).display !== 'none'`, 'API settings visibility', 10000);

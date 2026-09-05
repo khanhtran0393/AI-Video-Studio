@@ -158,13 +158,24 @@ function registerWhiteboardIpc(ipcMain, { getState } = {}) {
 
   /* ── chọn nơi lưu MP4 (dialog thật) ── */
   handle('whiteboard:pickOutput', async (_e, p = {}) => {
-    const r = await dialog.showSaveDialog(ownerWin(), {
-      title: 'Xuất video MP4',
-      defaultPath: p.defaultName || 'whiteboard_video.mp4',
-      filters: [{ name: 'MP4 Video', extensions: ['mp4'] }],
-    });
-    if (r.canceled || !r.filePath) return { canceled: true };
-    return { path: r.filePath };
+    try {
+      // cưỡng chế kiểu: preload truyền { defaultName: string } nhưng phải chịu
+      // được payload lệch (object/null) — Electron ném "Default path must be a
+      // string" nếu defaultPath không phải chuỗi (đã xảy ra, 9/5).
+      const raw = p && p.defaultName;
+      const def = (typeof raw === 'string' && raw.trim()) ? raw : 'whiteboard_video.mp4';
+      const opts = {
+        title: 'Xuất video MP4',
+        defaultPath: def,
+        filters: [{ name: 'MP4 Video', extensions: ['mp4'] }],
+      };
+      const win = ownerWin();
+      const r = win ? await dialog.showSaveDialog(win, opts) : await dialog.showSaveDialog(opts);
+      if (r.canceled || !r.filePath) return { canceled: true };
+      return { path: r.filePath };
+    } catch (err) {
+      return { ok: false, error: errOf(err) };
+    }
   });
 
   /* ── bước cuối: render từng cảnh → merge → ghép voice ── */
@@ -179,7 +190,7 @@ function registerWhiteboardIpc(ipcMain, { getState } = {}) {
         annotation: s.annotation || null,
       }));
       const audioTracks = (payload.audioTracks || []).filter((t) => t && t.path && fs.existsSync(t.path));
-      return await PyBackend.exportVideo({
+      const result = await PyBackend.exportVideo({
         scenes,
         audioTracks,
         outputPath: payload.outputPath || null,
@@ -187,6 +198,16 @@ function registerWhiteboardIpc(ipcMain, { getState } = {}) {
         onProgress: relayProgress,
         onLog: relayLog,
       });
+      /* Resilience: kết quả cũng đi qua kênh event — nếu reply invoke bị lạc,
+         renderer vẫn nhận được trạng thái cuối (Luật 10: không chết thầm). */
+      try {
+        if (result && result.ok) relayProgress({ percent: 100, status: 'done' });
+        else relayProgress({ status: 'error: ' + ((result && result.error) || 'không rõ') });
+      } catch (_) {}
+      console.log('[whiteboard:export]', (result && result.ok)
+        ? ('OK → ' + result.path + ' (' + (result.durationSec || '?') + 's, ' + (result.scenes || '?') + ' cảnh)')
+        : ('FAIL: ' + ((result && result.error) || 'không rõ')));
+      return result;
     } catch (err) { return { ok: false, error: errOf(err) }; }
   });
 

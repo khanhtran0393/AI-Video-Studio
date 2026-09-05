@@ -73,17 +73,24 @@
   const hide = (e) => { if (e) e.classList.add('wb-hide'); };
 
   /* ── tiến trình render (IPC main → renderer) ── */
+  let lastProgressAt = 0;          // mốc event gần nhất — watchdog dựa vào đây
   function listenProgress() {
     if (!window.native || !window.native.whiteboard || !window.native.whiteboard.onExportProgress) return;
     window.native.whiteboard.onExportProgress((s) => {
-      if (!s) return;
-      if (typeof s.percent === 'number') {
-        if (els.progressBar) els.progressBar.style.width = Math.max(0, Math.min(100, s.percent)) + '%';
-        if (els.progressPct) els.progressPct.textContent = Math.round(Math.max(0, Math.min(100, s.percent))) + '%';
+      try {
+        if (!s) return;
+        lastProgressAt = Date.now();
+        if (typeof s.percent === 'number') {
+          if (els.progressBar) els.progressBar.style.width = Math.max(0, Math.min(100, s.percent)) + '%';
+          if (els.progressPct) els.progressPct.textContent = Math.round(Math.max(0, Math.min(100, s.percent))) + '%';
+        }
+        if (typeof s.status === 'string' && s.status) log(s.status);
+        if (s.status === 'error' || s.status === 'done') state.exporting = false;
+        syncButtons();
+      } catch (e) {
+        /* Luật 10: event hỏng phải lộ ra, không chết thầm làm listener ngừng hoạt động */
+        try { log('⚠ lỗi xử lý event tiến trình: ' + String((e && e.message) || e)); } catch (_) {}
       }
-      if (typeof s.status === 'string' && s.status) log(s.status);
-      if (s.status === 'error' || s.status === 'done') state.exporting = false;
-      syncButtons();
     });
   }
 
@@ -905,8 +912,11 @@
     if (typeof outPath === 'string' && outPath) {
       out = { path: outPath };                 // API path: bỏ qua dialog
     } else {
-      out = await window.native.whiteboard.pickOutput({ defaultName: 'handdraw_animation.mp4' });
-      if (!out || out.canceled || !out.path) return;
+      // contract preload: pickOutput(defaultName: string) — KHÔNG truyền object
+      out = await window.native.whiteboard.pickOutput('handdraw_animation.mp4');
+      if (!out) return;                                   // bridge trả undefined bất thường
+      if (out.ok === false) { log('❌ chọn nơi lưu lỗi: ' + (out.error || 'không rõ')); return; }
+      if (out.canceled || !out.path) return;              // người dùng huỷ dialog
     }
     const payload = {
       scenes: state.scenes.map((s) => ({
@@ -928,20 +938,41 @@
     setProgress(0, 'khởi động…');
     log('▶ vẽ tay ' + payload.scenes.length + ' ảnh → ' + out.path +
         ' (bút: ' + state.brush.tipMode + ' · nét: ' + state.brush.inkPath + ' · tô: ' + state.brush.colorFill + ')');
+    /* watchdog: nếu 60s không có event nào từ main → cảnh báo lộ liễu thay vì im lặng */
+    lastProgressAt = Date.now();
+    const watchdog = setInterval(() => {
+      if (!state.exporting) { clearInterval(watchdog); return; }
+      const idleMs = Date.now() - lastProgressAt;
+      if (idleMs > 60000) {
+        log('⏳ đã ' + Math.round(idleMs / 1000) + 's không nhận tiến trình mới — engine có thể đang render cảnh dài hoặc bị treo. Nếu chắc chắn treo: bấm Dừng rồi thử lại.');
+      }
+    }, 20000);
     let r;
     try {
       r = await window.native.whiteboard.export(payload);
     } catch (err) {
       r = { ok: false, error: String((err && err.message) || err) };
     }
-    state.exporting = false;
-    syncButtons();
-    if (r.ok) {
-      setProgress(100, 'xong');
-      log('✓ hoàn tất: ' + r.path + (r.durationSec ? ' (' + r.durationSec.toFixed(1) + 's)' : ''));
-    } else {
+    clearInterval(watchdog);
+    try {
+      state.exporting = false;
+      syncButtons();
+      if (!r || typeof r !== 'object') {
+        setProgress(0, 'lỗi');
+        log('❌ export trả kết quả bất thường (' + JSON.stringify(r) + ') — bridge main↔renderer lỗi, thử Ctrl+F5 rồi xuất lại.');
+        return;
+      }
+      if (r.ok) {
+        setProgress(100, 'xong');
+        log('✓ hoàn tất: ' + r.path + (r.durationSec ? ' (' + r.durationSec.toFixed(1) + 's)' : ''));
+      } else {
+        setProgress(0, 'lỗi');
+        log('❌ export lỗi: ' + (r.error || 'không rõ'));
+      }
+    } catch (e) {
+      /* Luật 10: exception sau export phải lộ ra Log, không chết thầm để bar kẹt giữa chừng */
       setProgress(0, 'lỗi');
-      log('❌ export lỗi: ' + (r.error || 'không rõ'));
+      log('❌ lỗi sau export: ' + String((e && e.message) || e));
     }
   }
 
@@ -1122,7 +1153,7 @@
     bind();
     // MARKER PHIÊN BẢN — dòng đầu Log: nếu KHÔNG thấy dòng này khi mở tool
     // nghĩa là renderer còn JS cũ (cache) → Ctrl+F5 hoặc mở lại app.
-    log('[hdlasso5] panel Vẽ Tay Ảnh đã khởi động (bản mới nhất)');
+    log('[hdlasso6] panel Vẽ Tay Ảnh đã khởi động (sửa bar kẹt 5%: watchdog + lộ lỗi sau export)');
     hdBuildCards();
     wireEvents();
     renderSceneList();

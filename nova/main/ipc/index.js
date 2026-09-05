@@ -19,6 +19,7 @@ const { registerVoiceIpc } = require('./voice');
 const { registerWatermarkIpc } = require('./watermark');
 const { registerSystemIpc } = require('./system');
 const { registerWhiteboardIpc } = require('../../whiteboard-studio/ipc');
+const { registerTdtStudioIpc } = require('../../tdt-studio/ipc');
 
 function registerAllIpc() {
   registerFlowIpc();
@@ -35,6 +36,12 @@ function registerAllIpc() {
   try {
     registerWhiteboardIpc(ipcMain, { getState: () => state });
   } catch (e) { console.warn('[whiteboard-studio]', e && e.message); }
+
+  // ── TDT Studio ("Studio") — app PyQt TDTStudio vendored tại nova/tdt-studio/app,
+  //    runtime Python nội bộ (nova/tdt-studio/runtime), nhúng Qt window dock ──
+  try {
+    registerTdtStudioIpc(ipcMain, { getState: () => state });
+  } catch (e) { console.warn('[tdt-studio]', e && e.message); }
 
   // ── CLI bridge native: app tự chạy gói Claude/ChatGPT của user (localhost:8795/8796) ──
   try { cliBridge.startAll(); } catch (e) { console.warn('[cli-bridge]', e && e.message); }

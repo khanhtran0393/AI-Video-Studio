@@ -25,6 +25,10 @@ const VISUAL_PLAN_SCHEMA = {
     requiredAssetType: { type: 'string', enum: ['image', 'video', 'map', 'motion-graphics', 'any'] },
     desiredMotion: { type: 'string' },
     transition: { type: 'string' },
+    // Ngữ pháp điện ảnh cho prompt sinh ảnh (mở rộng §7, 2026-09) — AI chỉ CHỌN tên, enum cố định.
+    lens: { type: 'string', enum: ['wide-angle', 'standard', 'telephoto', 'macro', 'anamorphic'] },
+    lighting: { type: 'string', enum: ['golden-hour', 'overcast', 'harsh-noon', 'night', 'studio', 'candlelight'] },
+    grade: { type: 'string', enum: ['natural', 'warm-vintage', 'cold-documentary', 'high-contrast', 'bleach-bypass'] },
     visualPrompt: { type: 'string' },
     negativePrompt: { type: 'string' },
   },
@@ -50,6 +54,10 @@ function heuristicPlan(beat, anchor, index) {
     requiredAssetType: (a.location && /map|bản đồ|lãnh thổ|empire|mở rộng/.test((a.location || []).join(' '))) ? 'map' : 'image',
     desiredMotion: importance === 'high' ? 'parallax' : 'ken-burns',
     transition: 'crossfade',
+    // Heuristic điện ảnh: ánh sáng theo mood, lens theo shotType — deterministic, không đổi khi same input.
+    lens: shotType === 'wide' || shotType === 'environment' ? 'wide-angle' : shotType === 'detail' ? 'macro' : shotType === 'portrait' ? 'telephoto' : 'standard',
+    lighting: /somber|dark|night|tối|hạ/i.test(a.mood || '') ? 'night' : /warm|golden|ấm/i.test(a.mood || '') ? 'golden-hour' : 'overcast',
+    grade: /old|ancient|lịch sử|xưa|vintage/i.test((a.location || []).join(' ')) ? 'warm-vintage' : 'natural',
     visualPrompt: '',
     negativePrompt: 'text, watermark, low quality, distorted faces',
   };
@@ -62,6 +70,9 @@ function buildPromptFromPlan(plan, beat) {
     plan.environment ? `environment: ${plan.environment}` : '',
     plan.action ? `action: ${plan.action}` : '',
     `${plan.shotType} shot, ${plan.composition}`,
+    plan.lens ? `${plan.lens} lens` : '',
+    plan.lighting ? `${plan.lighting} lighting` : '',
+    plan.grade ? `${plan.grade} color grade` : '',
     plan.mood ? `mood: ${plan.mood}` : '',
     'photorealistic documentary cinematography, cinematic lighting, 16:9',
   ].filter(Boolean);
@@ -86,7 +97,7 @@ function createVisualPlanner({ providers, cache, costs, logger } = {}) {
         if (hasLLM) {
           try {
             const context = anchor ? JSON.stringify(anchor.anchor) : '{}';
-            const prompt = `Design a visual plan for this documentary beat. Return JSON with keys: visualIntent, subject (array), action, environment, composition, camera, shotType (wide|medium|close-up|detail|map|environment|portrait), mood, visualImportance (low|medium|high), requiredAssetType (image|video|map|motion-graphics|any), desiredMotion, transition.\nNarration beat: "${beat.text}"\nNarrative anchor: ${context}`;
+            const prompt = `Design a visual plan for this documentary beat. Return JSON with keys: visualIntent, subject (array), action, environment, composition, camera, shotType (wide|medium|close-up|detail|map|environment|portrait), mood, visualImportance (low|medium|high), requiredAssetType (image|video|map|motion-graphics|any), desiredMotion, transition, lens (wide-angle|standard|telephoto|macro|anamorphic), lighting (golden-hour|overcast|harsh-noon|night|studio|candlelight), grade (natural|warm-vintage|cold-documentary|high-contrast|bleach-bypass).\nNarration beat: "${beat.text}"\nNarrative anchor: ${context}`;
             const result = await providers.call('analyze', 'analyze', { prompt });
             if (costs) costs.recordFromProvider(result);
             const parsed = parseStructured(result.content || '', VISUAL_PLAN_SCHEMA);

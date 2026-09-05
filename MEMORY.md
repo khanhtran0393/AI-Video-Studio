@@ -44,6 +44,14 @@ File này ghi **trạng thái dài hạn và lịch sử quyết định**. AGEN
 
 ## Đang treo / nợ kỹ thuật
 
+- **Build lại dist sau tính năng Novel**: `npm run build:win` lần cuối đang chạy
+  (PID 52544, 20:56). Lịch sử: build 20:21 fail NSIS "failed creating mmap of
+  .nsis.7z" (Setup exe 0.5MB hỏng — ĐÃ XOÁ); các lần sau bị kill nhầm giữa chừng
+  vì tưởng treo (thực ra 7za -mx=9 nén 970MB rất lâu). Bài học: **build:win trên
+  máy này mất ~45-60 phút và KHÔNG được kill/overlay giữa chừng; chỉ chạy 1
+  build tại 1 thời điểm** (2 build song song xung đột ghi dist → mất asar).
+  Bản Portable 9/4 đã khôi phục từ `.old`; khi build xong phải verify: asar chứa
+  `tsNovelBtn` + Setup ~500MB + Portable mới.
 - `nova/scripts/` còn nhiều script `tmp-*` dùng một lần (tmp-watch-dist,
   tmp-voice-crash…) — chưa dọn thành archive.
 - Binary runtime tự tải (upscaler-bin, inpaint-bin, voice-backend, sqlite-bin,
@@ -55,6 +63,55 @@ File này ghi **trạng thái dài hạn và lịch sử quyết định**. AGEN
 
 ## Nhật ký thay đổi
 
+- [2026-09-05] Tạo Kịch Bản — **chế độ Novel (chip 📖)**: port pattern quản lý ngữ cảnh
+  của repo `D:\repo\ainovel-cli-main` (fork tiếng Việt của ainovel-cli, Go — KHÔNG tích
+  hợp binary, chỉ mượn thuật toán) sang JS thuần renderer, theo yêu cầu "nhớ ngữ cảnh /
+  nội dung / nhân vật xuyên suốt kịch bản". Toàn bộ nằm trong `nova/web/index.html`
+  (global script, không import/export, không đụng IPC/main/preload → inventory IPC
+  không đổi, không dependency mới):
+  (a) UI: chip toggle `tsNovelBtn` + hint giải thích; trạng thái lưu localStorage
+      `ts_novel_mode`, khôi phục trong `tsInit`;
+  (b) `tsGenerate` rẽ nhánh `tsGenerateNovel()` khi chip BẬT — luồng thường
+      (1 lần gọi LLM) giữ nguyên 100% khi chip TẮT;
+  (c) pipeline 3 pha mô phỏng Architect→Writer→Editor của ainovel-cli:
+      Architect (`_tsNovelArchitect`, callLLMJson) dựng story bible JSON (tiền đề,
+      hướng kết cục, 3–7 nhân vật, 3–6 tuyến, kế hoạch ~450 từ/chương); Writer viết
+      từng chương với prompt kèm STORY MEMORY (`_tsNovelMemBlock`: 3 chương gần nhất
+      tóm tắt đầy đủ, chương cũ nén 1 câu — pattern "ngữ cảnh phân tầng nén dần");
+      Editor (`_tsNovelRemember`) sau mỗi chương trích {summary, stateChanges
+      (entity/field/from/to/reason), threads (open/advanced/resolved)} rồi
+      `_tsNovelMerge` vào memory cho chương sau;
+  (d) Luật 10: lỗi trích memory → cảnh báo status + degrade khai báo rõ (dùng 4 câu
+      đầu chương làm tóm tắt thay thế, không nuốt); output ghi dần từng chương vào
+      tsOutput nên lỗi giữa chừng không mất phần đã viết.
+  Kiểm định: node --check 6/6 inline script block PASS (`scripts/tmp-check-index-html-js.js`);
+  `npm run check` PASS (328 file, 143 kênh IPC); smoke logic `scripts/tmp-smoke-novel.js`
+  PASS (mock LLM: 2 chương viết, 1 architect + 1 remember, prompt chương 2 chứa đủ
+  summary + stateChange `location=nhà kho` + tuyến T1); `npm start` boot 35s sạch
+  (bridge 8793–8796 lên, không stderr). Còn treo: chưa có nút "tiếp tục viết thêm
+  chương" (memory chỉ sống trong 1 lần generate, không persist sang job sau).
+- [2026-09-05] Handdraw/Whiteboard — **dọn rác khi lỗi/huỷ export** (tiếp nối hdlasso6):
+  phát hiện qua câu hỏi audit "có xoá rác khi tiến trình lỗi/huỷ?". Trước đây chỉ có
+  `finally` xoá workdir `wb-stream-*` sau 5s nhưng `catch(_){}` nuốt lỗi xoá (Windows
+  giữ handle → orphan vĩnh viễn), app thoát trước 5s → orphan, và KHÔNG có sweep —
+  bằng chứng 31 dir rác + 14 mp4 smoke nằm trong %TEMP%. Đã vá trong
+  `whiteboard-studio/py-backend.js` (hợp đồng `module.exports` giữ nguyên, chỉ thêm
+  `sweepStale`):
+  (a) `removeDirWithRetry()`: xoá workdir NGAY trên mọi đường thoát (ok/lỗi/huỷ/
+  timed-out), Windows còn giữ handle thì retry 5s→15s, hết lượt thì say('⚠…') lộ
+  liễu (Luật 10 áp dụng cho rác);
+  (b) helper `fail()` trong exportVideo: mọi return lỗi giờ xoá **file bán phần tại
+  outputPath người dùng** (Desktop) nếu export này vừa ghi ra đó (merge ghi thẳng
+  đích khi không audio / mux ghi thẳng đích) — trước đây để lại file hỏng trên máy
+  user; cờ `wroteOutput` đặt tại 3 điểm ghi đích; LƯU Ý TDZ: fail/say phải định
+  nghĩa TRƯỚC lệnh `await status()` đầu hàm;
+  (c) `sweepStale()` gọi từ `status()` (panel mở tool), guard 1 lần/giờ: xoá
+  `wb-stream-*` >1h, `wb-studio-preview-*` + `hd-smoke-*` >24h trong os.tmpdir();
+  `status()` trả thêm `swept`.
+  Kiểm định: tmp-test-cleanup.js PASS (sweep 24/31 dir mồ côi thật; huỷ giữa render:
+  kill 1 con python, trả lỗi, không partial file, 0 dir rác mới — test đã xoá);
+  `node --check`; `_smoke_handdraw.js` PASS (0.56MB hand + 0.29MB pen); `npm run
+  check` PASS (324 file, 135 kênh IPC).
 - [2026-09-05] Khởi tạo bộ tài liệu chuẩn cho AI agent (AGENTS.md, CLAUDE.md,
   MEMORY.md) — học pattern AGENTS/CLAUDE/MEMORY của repo AI-Novel, nội dung viết
   lại 100% theo thực tế AI Video Studio. Mục đích: mọi agent/dev sửa code theo
@@ -64,3 +121,64 @@ File này ghi **trạng thái dài hạn và lịch sử quyết định**. AGEN
   (.github/copilot-instructions.md), Gemini CLI (GEMINI.md), Cursor
   (.cursor/rules/ai-video-studio.mdc). Cơ chế ghi rõ tại AGENTS.md §9 — cấm
   nhân bản quy chuẩn vào pointer.
+- [2026-09-05] Handdraw Studio — hiện tượng "thanh tiến trình kẹt 5%": phân tích
+  hiện trường cho thấy **video ĐÃ xuất thành công** (`Desktop\handdraw_animation.mp4`
+  1.26MB, 15:05:18; không process python/ff nào treo, workdir tạm đã dọn) — lỗi chỉ
+  còn ở phía renderer không hiển thị trạng thái cuối. Đã cứng hoá 3 lớp:
+  (a) panel `hdlasso6`: bọc try/catch TOÀN BỘ đoạn sau `await export` (rất có thể
+  exception chết thầm ở đây giữ bar kẹt giữa chừng — Luật 10), xử lý kết quả
+  bất thường (`r` undefined/non-object), watchdog 60s không-event thì log cảnh báo
+  lộ liễu, listener `onExportProgress` bọc try/catch;
+  (b) `whiteboard-studio/ipc.js`: sau khi PyBackend settle, relay kết quả qua
+  KÊNH EVENT (`percent:100 status:'done'` / `status:'error …'`) — nếu reply
+  invoke bị lạc, renderer vẫn nhận trạng thái cuối; đồng thời console.log
+  `[whiteboard:export] OK/FAIL` ở main để chẩn đoán qua terminal `npm start`;
+  (c) marker phiên bản `[hdlasso6]` + `?v=hdlasso6` trong index.html.
+  Kiểm định PASS: check, _check_hd_ids, _smoke_handdraw (0.56MB hand + 0.29MB pen).
+  Bài học encoding: **CẤM dùng PowerShell `Get-Content -Raw`/`Set-Content` cho
+  file UTF-8 chứa tiếng Việt** (PS5.1 đọc không-BOM file thành CP1252 → mojibake
+  toàn file khi ghi lại; đã đảo ngược cơ học bằng node script CP1252 và phục hồi
+  panel.js + index.html). Từ nay mọi bump version marker/sửa file UTF-8 phải dùng
+  editor tool hoặc node script (fs.readFileSync/`'utf8'`/writeFileSync).
+- [2026-09-05] Handdraw Studio — 5 feedback item đã xong: (1) multi-lasso region
+  point-in-polygon (pvPointInRegion, Shift+kép vùng mới đè vùng cũ, chuột phải
+  xoá theo polygon); (2) chia giờ 8:2 chuẩn + nút "↻ Phân lại giờ 2/8"; (3) AI
+  vision khoanh vùng (hdImageDataUrl → callLLMJson với image part, toạ độ 0–1000
+  → pixel); (4) tách card "Bước 3 · Mẫu bút vẽ & bàn tay" (tip/ink/fill thumbnail
+  canvas) khỏi "Bước 4 · Xuất MP4"; (5) export hardening. Bài học RẤT QUAN TRỌNG:
+  - **Bug "Xuất MP4 chết thầm"**: panel gọi `pickOutput({ defaultName })` (object)
+    trong khi preload.js chữ ký là `pickOutput(defaultName: string)` → main nhận
+    `p.defaultName` = object → Electron `showSaveDialog` ném "Default path must
+    be a string" và handler cũ KHÔNG try/catch → promise reject thầm, thanh tiến
+    trình không chạy. Đã sửa cả 2 phía (panel truyền chuỗi; ipc.js cưỡng chế kiểu
+    + try/catch trả `{ok:false,error}`) và panel hiển thị lỗi pickOutput ra Log box.
+  - Smoke test mock `window.native` phải nhân bản **chữ ký từng hàm của preload
+    thật** (không phải chỉ kênh IPC) — nếu không sẽ không bắt được lệch contract
+    kiểu này. `web/_smoke_handdraw.js` giờ mô phỏng cả validation Electron
+    (defaultPath phải string) + bước [4b] assert contract; `web/_check_hd_ids.js`
+    assert SHELL_HTML ↔ bind() ↔ els.*.
+  - `nova/main/server.js` giờ gửi `Cache-Control: no-cache` cho static file —
+    renderer không bao giờ chạy JS cũ sau khi dev sửa (gốc rễ 2 lần "panel chết
+    vì cache"). Marker phiên bản trong Log: dòng đầu `[hdlasso5] panel Vẽ Tay Ảnh
+    đã khởi động`. App đóng gói trong `dist/` build 9/4 KHÔNG có tool handdraw —
+    user phải chạy dev từ `nova/`, không chạy exe trong dist.
+  - Kiểm định: `npm run check` PASS; `npm run test:whiteboard` PASS;
+    `node nova/web/_smoke_handdraw.js` PASS (export MP4 thật 0.56MB hand +
+    0.29MB pen).
+- [2026-09-05] Voice Studio — tính năng **cao độ (pitch)** triển khai ở TẦNG
+  BACKEND: `TTSBody.pitch` (nửa cung, -12..+12, mặc định 0) +
+  `audio_utils.pitch_shift_wav()` (ffmpeg `asetrate→aresample→atempo`, giữ
+  tempo, ghi đè tại chỗ qua `os.replace`) áp TRƯỚC `wav_duration` để SRT đúng;
+  xử lý trung tâm trong `_run_tts` nên cả 3 engine OmniVoice/VieNeu/XTTS đều
+  có pitch mà không sửa engine nào, không thêm dependency Python. UI
+  (`web/index.html`): slider Cao độ (voicePitch) giữa Tốc độ và Nghỉ giữa câu;
+  đổi thứ tự cột phải thành Backend → Ngôn ngữ → Giọng đọc → Tốc độ → Cao độ →
+  Nghỉ giữa câu; gửi `pitch` trong POST /api/tts; lưu theo profile
+  (`_VOICE_FIELDS`). Contract test mục 10 chốt toàn chuỗi. Kiểm định: `npm run
+  check` PASS, `test:voice` PASS, E2E qua venv-omni production PASS (tỉ lệ tần
+  số +5st = 1.3352 vs lý thuyết 1.3348; -7st = 0.6673 vs 0.6674; tempo giữ
+  nguyên ±0.02s). Lưu ý: `__pycache__` cpython-311 xuất hiện trong source là
+  do backend chạy thật từ source (runtime bình thường, đã git-ignore) — chạy
+  `test:voice` sau khi backend chạy cần dọn `backend/__pycache__` +
+  `backend/engines/__pycache__` trước.
+- [2026-09-05] Mở rộng Visual Grammar theo pattern seedance-2.0 (từ vựng góc máy điện ảnh) — 3 tầng: (1) `nova/video-agent/visual-grammar/grammar.js`: CAMERA 5→9 (`pan-up`/`pan-down` map `panU`/`panD`, `crane-in`, `handheld`), TRANSITIONS 7→18 (map 1-1 sang `transitions.json` sẵn có: dip-white, flash-cut, zoom-through, match-zoom, push-left/up, barn-door, shutter, iris, paper-slide, grain) — giữ nguyên module.exports, ai-gateway tự nhận enum mới qua `Object.keys(grammar.CAMERA)`. `visual-plan/plan.js`: CAMERAS rotation 4→8 + TRANSITION_CYCLE deterministic (cut chủ đạo, nhấn match-zoom/whip định kỳ); `behavior-engine/legacy.js`: pan-up/down → `camera.pan` y±5, crane-in → `camera.push_in`. (2) Renderer: HOLD preset mới `handheld` (rung sin 2 trục lệch pha) + `craneIn` (scale+translateY) thêm ĐỒNG THỜI ở `nova/editor-pro/nova-remotion/src/anim.js` VÀ `bundle/bundle.js` (bundle là runtime, phải sửa cả hai). (3) Documentary `ai/visual-planner.js` §7: schema + heuristic + buildPromptFromPlan + LLM prompt thêm `lens`/`lighting`/`grade` (enum cố định, AI chỉ chọn tên — Luật 8). Kiểm định: `npm run check` PASS (syntax 329 file, IPC 143 kênh, parity, shared); `test:video-agent` 6 suite PASS (114 pass, BRIDGE-CONTRACT HOLD=13 xác nhận preset mới); `nova/documentary/test.js` PASS; `test:video-agent:render` REAL-RENDER-OK (2.454s). Ghi chú: không dùng trực tiếp repo github seedance-2.0 (đó là prompt-skill docs, không phải module) — chỉ port tư duy vocabulary vào grammar hiện có.

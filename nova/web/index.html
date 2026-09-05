@@ -1522,6 +1522,9 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
         <div class="nav-item" data-tool="toolhanddraw" onclick="switchTool('toolhanddraw')">
           <span class="num"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></span><span>Vẽ Tay Ảnh</span>
         </div>
+        <div class="nav-item" data-tool="toolstudio" onclick="switchTool('toolstudio')" title="TDTStudio PyQt nhúng: kho media, ghép video, stem Demucs, LUT, OCR, TTS… — chạy bằng runtime Python nội bộ">
+          <span class="num"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M2 8h20"/><path d="M6 21h12"/><path d="M12 17v4"/></svg></span><span>Studio</span>
+        </div>
         <div class="nav-group">Cài đặt</div>
         <div class="nav-item" data-tool="toolsettings" onclick="switchTool('toolsettings')">
           <span class="num"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="3.5" cy="6" r="1.5"/><circle cx="3.5" cy="12" r="1.5"/><circle cx="3.5" cy="18" r="1.5"/></svg></span><span>API &amp; Tài khoản</span>
@@ -1734,6 +1737,15 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
       <div id="handdrawRoot"></div>
     </div>
 
+    <!-- STUDIO TOOL (TDTStudio PyQt nhúng — runtime Python nội bộ nova/tdt-studio/) -->
+    <div class="tool" id="tool-toolstudio">
+      <div class="tool-head">
+        <div class="tool-title">🎬 Studio</div>
+        <div class="tool-subtitle">Toàn bộ app TDTStudio (PyQt) chạy nhúng trong khung này — 13 module: kho media (ảnh/video/LUT), ghép &amp; xuất video, tách stem Demucs, OCR phụ đề, TTS, CapCut… Cửa sổ Studio tự bám theo vùng nội dung khi kéo/thay đổi kích thước.</div>
+      </div>
+      <div id="tdtStudioRoot"></div>
+    </div>
+
     <!-- TOOL 1: PROFILE KÊNH -->
     <!-- DASHBOARD -->
     <div class="tool active" id="tool-tooldash">
@@ -1787,27 +1799,312 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
         <!-- INPUT -->
         <div class="ts-card">
           <label class="ts-lbl">Chủ đề / Tiêu đề video</label>
-          <input id="tsTopic" class="ts-field" placeholder="VD: Bí ẩn sự sụp đổ của Đế chế La Mã">
+          <div style="display:flex;gap:8px;margin-bottom:8px">
+            <select class="ts-field" style="flex:1;font-size:12px;padding:7px 10px;" onchange="let m=this.value, s=this.nextElementSibling.value; document.getElementById('tsTopic').value = m + (s ? ' - ' + s : '');">
+              <option value="" disabled selected>-- Chọn Chủ Đề --</option>
+              <optgroup label="1. CHỦ ĐỀ">
+                <option value="Xuyên Không">Xuyên Không</option>
+                <option value="Trùng Sinh">Trùng Sinh</option>
+                <option value="Hệ Thống">Hệ Thống</option>
+                <option value="Sinh Tồn">Sinh Tồn</option>
+                <option value="Võ Hiệp">Võ Hiệp</option>
+                <option value="Trinh Thám">Trinh Thám</option>
+                <option value="Dị Năng">Dị Năng</option>
+                <option value="Linh Khí Khôi Phục">Linh Khí Khôi Phục</option>
+                <option value="Kinh Dị">Kinh Dị</option>
+                <option value="Hài Hước">Hài Hước</option>
+                <option value="Cơ Giáp / Mecha">Cơ Giáp / Mecha</option>
+                <option value="Ngôn Tình">Ngôn Tình</option>
+                <option value="Báo Thù">Báo Thù</option>
+                <option value="Phản Công">Phản Công</option>
+                <option value="Nông Trường">Nông Trường</option>
+                <option value="Thương Chiến">Thương Chiến</option>
+                <option value="Quân Sự">Quân Sự</option>
+                <option value="Cung Đấu">Cung Đấu</option>
+                <option value="Học Đường">Học Đường</option>
+                <option value="Thể Thao">Thể Thao</option>
+                <option value="Ẩm Thực">Ẩm Thực</option>
+                <option value="Y Học">Y Học</option>
+                <option value="Game / Võng Du">Game / Võng Du</option>
+                <option value="Kỳ Ảo Mạo Hiểm">Kỳ Ảo Mạo Hiểm</option>
+                <option value="Thần Thoại">Thần Thoại</option>
+                <option value="Đồng Nhân">Đồng Nhân</option>
+                <option value="Đạo Tặc / Heist">Đạo Tặc / Heist</option>
+                <option value="Chính Trị">Chính Trị</option>
+                <option value="Tình Báo">Tình Báo</option>
+                <option value="Du Hành / Di Cư">Du Hành / Di Cư</option>
+                <option value="Trộm Mộ / Thám Hiểm Cổ Mộ">Trộm Mộ / Thám Hiểm Cổ Mộ</option>
+                <option value="Xuyên Sách / Phản Diện">Xuyên Sách / Phản Diện</option>
+                <option value="Giải Trí / Showbiz">Giải Trí / Showbiz</option>
+                <option value="Điền Viên / Chữa Lành">Điền Viên / Chữa Lành</option>
+                <option value="Mạt Thế / Xác Sống">Mạt Thế / Xác Sống</option>
+                <option value="Binh Vương / Đặc Chủng">Binh Vương / Đặc Chủng</option>
+                <option value="Sống Trùng Lặp (Time Loop)">Sống Trùng Lặp (Time Loop)</option>
+                <option value="Triệu Hoán / Ngự Thú">Triệu Hoán / Ngự Thú</option>
+                <option value="Xây Dựng Tông Môn">Xây Dựng Tông Môn</option>
+                <option value="Nữ Cường / Quyền Lực">Nữ Cường / Quyền Lực</option>
+                <option value="Hào Môn Thế Gia">Hào Môn Thế Gia</option>
+                <option value="Thần Bí / Cthulhu">Thần Bí / Cthulhu</option>
+                <option value="Tâm Cơ / Trí Đấu">Tâm Cơ / Trí Đấu</option>
+                <option value="Đa Vũ Trụ">Đa Vũ Trụ</option>
+                <option value="Khoa Kỹ / Xây Dựng Căn Cứ">Khoa Kỹ / Xây Dựng Căn Cứ</option>
+                <option value="Nghệ Thuật / Âm Nhạc">Nghệ Thuật / Âm Nhạc</option>
+                <option value="Tâm Trí / Hack Não">Tâm Trí / Hack Não</option>
+                <option value="Quái Vật Khổng Lồ (Kaiju)">Quái Vật Khổng Lồ (Kaiju)</option>
+                <option value="Sứ Giả Thần Linh">Sứ Giả Thần Linh</option>
+                <option value="Người Ngoài Hành Tinh">Người Ngoài Hành Tinh</option>
+                <option value="Truy Tìm Kho Báu">Truy Tìm Kho Báu</option>
+                <option value="Thần Đồng / Thiên Tài">Thần Đồng / Thiên Tài</option>
+                <option value="Khảo Cổ Viễn Tưởng">Khảo Cổ Viễn Tưởng</option>
+                <option value="Đấu Sủng (Trận Chiến Thú Cưng)">Đấu Sủng (Trận Chiến Thú Cưng)</option>
+                <option value="Dưỡng Thành (Nuôi Dưỡng Trưởng Thành)">Dưỡng Thành (Nuôi Dưỡng Trưởng Thành)</option>
+                <option value="Nghề Nghiệp Đặc Thù">Nghề Nghiệp Đặc Thù (Pháp Y, Tâm Lý...)</option>
+                <option value="Trộm Mệnh / Đổi Đời">Trộm Mệnh / Đổi Đời</option>
+                <option value="Giấu Giếm Thân Phận (Ẩn Nhẫn)">Giấu Giếm Thân Phận (Ẩn Nhẫn)</option>
+                <option value="Nhặt Nhạnh Đồng Nát">Nhặt Nhạnh Đồng Nát (Nhặt ve chai)</option>
+                <option value="Phục Sinh / Hồi Sinh">Phục Sinh / Hồi Sinh</option>
+                <option value="Siêu Trí Tuệ Ái Nhân (AI Romance)">Siêu Trí Tuệ Ái Nhân (AI Romance)</option>
+                <option value="Đấu Trí Phòng Kín (Escape Room)">Đấu Trí Phòng Kín (Escape Room)</option>
+                <option value="Phá Mộng / Xuyên Mộng">Phá Mộng / Xuyên Mộng</option>
+                <option value="Thế Giới Ngầm (Underworld)">Thế Giới Ngầm (Underworld)</option>
+                <option value="Cuộc Chiến Băng Đảng">Cuộc Chiến Băng Đảng</option>
+                <option value="Bảo Tiêu / Lính Đánh Thuê">Bảo Tiêu / Lính Đánh Thuê</option>
+                <option value="Ma Pháp Sư / Phù Thủy Học Việc">Ma Pháp Sư / Phù Thủy Học Việc</option>
+                <option value="Đọa Lạc / Sa Ngã (Corruption Arc)">Đọa Lạc / Sa Ngã (Corruption Arc)</option>
+                <option value="Thay Trời Hành Đạo">Thay Trời Hành Đạo</option>
+                <option value="Diệt Thần (Godslayer)">Diệt Thần (Godslayer)</option>
+                <option value="Săn Lùng Quái Vật (Monster Hunter)">Săn Lùng Quái Vật (Monster Hunter)</option>
+                <option value="Thức Tỉnh Cột Mốc">Thức Tỉnh Cột Mốc (Awakening Event)</option>
+                <option value="Sinh Sinh Diệt Diệt">Sinh Sinh Diệt Diệt (Reincarnation Cycle)</option>
+                <option value="Trốn Tìm Sinh Tử">Trốn Tìm Sinh Tử (Deadly Hide & Seek)</option>
+                <option value="Cấm Thuật / Huyết Tế">Cấm Thuật / Huyết Tế</option>
+                <option value="Nghịch Thiên Cải Mệnh">Nghịch Thiên Cải Mệnh</option>
+                <option value="Cờ Bạc / Xúc Xắc Sinh Tử">Cờ Bạc / Xúc Xắc Sinh Tử</option>
+                <option value="Sinh Tồn Nơi Hoang Dã">Sinh Tồn Nơi Hoang Dã</option>
+                <option value="Chinh Phục Ngọn Núi">Chinh Phục Ngọn Núi</option>
+                <option value="Thám Hiểm Đáy Biển">Thám Hiểm Đáy Biển Mảnh Vỡ</option>
+                <option value="Phiêu Lưu Trên Bầu Trời">Phiêu Lưu Trên Bầu Trời (Sky Islands)</option>
+                <option value="Sát Thủ Bàn Phím (Cyber Hacker)">Sát Thủ Bàn Phím (Cyber Hacker)</option>
+                <option value="Truy Ký Hiệp Khách">Truy Ký Hiệp Khách</option>
+                <option value="Giới Thượng Lưu / Gia Tộc">Giới Thượng Lưu / Gia Tộc Bí Ẩn</option>
+                <option value="Đảo Ngược Thời Gian (Rewind)">Đảo Ngược Thời Gian (Rewind)</option>
+                <option value="Cây Sinh Mệnh / Thần Mộc">Cây Sinh Mệnh / Thần Mộc</option>
+                <option value="Hồi Ức Chắp Vá (Amnesia)">Hồi Ức Chắp Vá (Amnesia)</option>
+                <option value="Sinh Vật Biến Đổi Gen">Sinh Vật Biến Đổi Gen</option>
+                <option value="Kho Tàng Thư Viện">Kho Tàng Thư Viện Chứa Bí Mật</option>
+                <option value="Tội Phạm Hoàn Hảo">Tội Phạm Hoàn Hảo</option>
+                <option value="Lãnh Chúa / Lãnh Địa">Lãnh Chúa / Lãnh Địa Khai Hoang</option>
+                <option value="Nhà Thám Hiểm / Phiêu Lưu Giả">Nhà Thám Hiểm / Phiêu Lưu Giả</option>
+                <option value="Truy Tìm Dấu Tích">Truy Tìm Dấu Tích Chủng Tộc Cũ</option>
+                <option value="Giả Tưởng Học Đường">Giả Tưởng Học Đường (Magic School)</option>
+                <option value="Giới Trẻ Lạc Lối">Giới Trẻ Lạc Lối (Youth Rebellion)</option>
+                <option value="Nuôi Con / Papa/Mama">Nuôi Con / Papa/Mama (Parenting)</option>
+                <option value="Nhập Vai Kháng Địch">Nhập Vai Kháng Địch (Tower Defense)</option>
+                <option value="Cảnh Sát Hình Sự">Cảnh Sát Hình Sự / Thám Tử Tư</option>
+                <option value="Bậc Thầy Sân Khấu / Ảo Thuật">Bậc Thầy Sân Khấu / Ảo Thuật</option>
+                <option value="Giao Dịch Ác Quỷ">Giao Dịch Ác Quỷ (Devil's Bargain)</option>
+              </optgroup>
+            </select>
+            <select class="ts-field" style="flex:1;font-size:12px;padding:7px 10px;" onchange="let m=this.previousElementSibling.value, s=this.value; document.getElementById('tsTopic').value = (m || '') + (m && s ? ' - ' : '') + s;">
+              <option value="" selected>-- Phong Cách --</option>
+              <optgroup label="2. PHONG CÁCH">
+                <option value="Tu Tiên / Tiên Hiệp">Tu Tiên / Tiên Hiệp</option>
+                <option value="Huyền Huyễn">Huyền Huyễn</option>
+                <option value="Đô Thị">Đô Thị</option>
+                <option value="Viễn Tưởng">Viễn Tưởng</option>
+                <option value="Dystopia">Dystopia</option>
+                <option value="Cổ Đại">Cổ Đại</option>
+                <option value="Cyberpunk">Cyberpunk</option>
+                <option value="Steampunk">Steampunk</option>
+                <option value="Hắc Ám">Hắc Ám</option>
+                <option value="Đồng Nhân">Đồng Nhân</option>
+                <option value="Kiếm Hiệp">Kiếm Hiệp</option>
+                <option value="Huyền Nghi">Huyền Nghi</option>
+                <option value="Tâm Lý Tội Phạm">Tâm Lý Tội Phạm</option>
+                <option value="Siêu Anh Hùng">Siêu Anh Hùng</option>
+                <option value="Western">Western</option>
+                <option value="Hải Tặc">Hải Tặc</option>
+                <option value="Không Gian">Không Gian</option>
+                <option value="Xây Dựng Thế Giới">Xây Dựng Thế Giới</option>
+                <option value="Đông Phương Kỳ Ảo">Đông Phương Kỳ Ảo</option>
+                <option value="Phương Tây Kỳ Ảo">Phương Tây Kỳ Ảo</option>
+                <option value="LitRPG">LitRPG</option>
+                <option value="Military Sci-Fi">Military Sci-Fi</option>
+                <option value="Romantasy">Romantasy</option>
+                <option value="Slice of Life">Slice of Life</option>
+                <option value="Epic / Sử Thi">Epic / Sử Thi</option>
+                <option value="Gothic">Gothic</option>
+                <option value="Thriller">Thriller</option>
+                <option value="Hard Sci-Fi">Hard Sci-Fi</option>
+                <option value="Noir">Noir</option>
+                <option value="Biopunk">Biopunk</option>
+                <option value="Post-Apocalyptic">Post-Apocalyptic (Hậu Tận Thế)</option>
+                <option value="Lovecraftian">Lovecraftian / Cosmic Horror</option>
+                <option value="Dark Comedy">Dark Comedy (Hài Đen)</option>
+                <option value="Magical Realism">Magical Realism (Hiện Thực Huyền Ảo)</option>
+                <option value="Grimdark">Grimdark</option>
+                <option value="Urban Legend">Urban Legend (Truyền Thuyết Đô Thị)</option>
+                <option value="Dark Fairy Tale">Dark Fairy Tale (Cổ Tích Đen)</option>
+                <option value="Alternate History">Alternate History (Lịch Sử Giả Định)</option>
+                <option value="Whodunit">Whodunit (Phá Án Suy Luận)</option>
+                <option value="Space Opera">Space Opera</option>
+                <option value="Solar Punk">Solar Punk</option>
+                <option value="Atompunk">Atompunk</option>
+                <option value="Giallo">Giallo / Án mạng kinh dị</option>
+                <option value="Isekai">Isekai</option>
+                <option value="Wuxia Truyền Thống">Wuxia Truyền Thống</option>
+                <option value="Xianxia Cổ Điển">Xianxia Cổ Điển</option>
+                <option value="Low Fantasy">Low Fantasy</option>
+                <option value="High Fantasy">High Fantasy</option>
+                <option value="Surrealism">Surrealism (Siêu Thực)</option>
+                <option value="Psychological Horror">Psychological Horror (Kinh Dị Tâm Lý)</option>
+                <option value="Mythopoeia">Mythopoeia (Kiến tạo Thần Thoại)</option>
+                <option value="Urban Fantasy">Urban Fantasy (Kỳ Ảo Đô Thị)</option>
+                <option value="Dark Academia">Dark Academia</option>
+                <option value="Light Academia">Light Academia</option>
+                <option value="Sword and Sorcery">Sword and Sorcery (Kiếm & Ma Thuật)</option>
+                <option value="Flintlock Fantasy">Flintlock Fantasy (Kỳ Ảo Súng Hỏa Mai)</option>
+                <option value="Gaslamp Fantasy">Gaslamp Fantasy (Kỳ Ảo Đèn Khí Đá)</option>
+                <option value="Weird West">Weird West (K Kỳ Ảo Viễn Tây)</option>
+                <option value="Space Western">Space Western (Viễn Tây Vũ Trụ)</option>
+                <option value="Cassette Futurism">Cassette Futurism</option>
+                <option value="Raypunk">Raypunk (Sci-Fi Thập niên 50)</option>
+                <option value="Nanopunk">Nanopunk (Công nghệ Nano)</option>
+                <option value="Splatterpunk">Splatterpunk (Bạo lực máu me)</option>
+                <option value="Bizarro Fiction">Bizarro Fiction (Viễn Tưởng Kỳ Dị)</option>
+                <option value="Slipstream">Slipstream (Giả Tưởng Đa Tầng)</option>
+                <option value="Paranormal Romance">Paranormal Romance (Lãng Mạn Siêu Nhiên)</option>
+                <option value="Apocalyptic">Apocalyptic (Hủy Diệt Đồng Loạt)</option>
+                <option value="Cli-Fi">Cli-Fi (Viễn Tưởng Khí Hậu)</option>
+                <option value="Solarpunk Cổ Điển">Solarpunk Cổ Điển</option>
+                <option value="Decopunk">Decopunk (Nghệ thuật & Công nghệ)</option>
+                <option value="Mythic Fiction">Mythic Fiction (Tiểu Thuyết Huyền Đam)</option>
+                <option value="Fairy Tale Retelling">Fairy Tale Retelling (Kể Lại Cổ Tích)</option>
+                <option value="Grimms' Fairy Tales">Grimms' Fairy Tales (Phong cách Grimm)</option>
+                <option value="Arthurian Legend">Arthurian Legend (Huyền thoại vua Arthur)</option>
+                <option value="Ninja / Samurai Fiction">Ninja / Samurai Fiction</option>
+                <option value="Mecha-Musume">Mecha-Musume (Cơ Giáp Nữ Sinh)</option>
+                <option value="Sentai / Tokusatsu">Sentai / Tokusatsu</option>
+                <option value="Magical Girl">Magical Girl (Mahou Shoujo)</option>
+                <option value="B-Movie Horror">B-Movie Horror (Kinh Dị Bình Dân)</option>
+                <option value="Slasher">Slasher (Sát Nhân Hàng Loạt)</option>
+                <option value="Found Footage">Found Footage (Phim Tài Liệu Giả)</option>
+                <option value="Gothic Romance">Gothic Romance</option>
+                <option value="Southern Gothic">Southern Gothic</option>
+                <option value="Suburban Gothic">Suburban Gothic</option>
+                <option value="Hard-boiled Detective">Hard-boiled Detective (Thám Tử Gai Góc)</option>
+                <option value="Cozy Mystery">Cozy Mystery (Trinh Thám Ấm Áp)</option>
+                <option value="Legal Thriller">Legal Thriller (Giật Gân Tòa Án)</option>
+                <option value="Medical Thriller">Medical Thriller (Giật Gân Y Khoa)</option>
+                <option value="Techno-Thriller">Techno-Thriller (Giật Gân Công Nghệ)</option>
+                <option value="Spy Fiction">Spy Fiction (Tiểu Thuyết Gián Điệp)</option>
+                <option value="Heist / Caper">Heist / Caper (Siêu Trộm)</option>
+                <option value="Picaresque">Picaresque (Lãng Tử / Giang Hồ)</option>
+                <option value="Bildungsroman">Bildungsroman (Trưởng Thành qua Thử Thách)</option>
+                <option value="Epistolary">Epistolary (Viết Dưới Dạng Thư Từ)</option>
+                <option value="Metafiction">Metafiction (Tiểu Thuyết Siêu Cấu Trúc)</option>
+                <option value="Satire / Trào Phúng">Satire / Trào Phúng</option>
+                <option value="Absurdist Fiction">Absurdist Fiction (Phi Lý)</option>
+                <option value="Utopian">Utopian (Xã Hội Không Tưởng)</option>
+                <option value="Speculative Evolution">Speculative Evolution (Tiến Hóa Giả Định)</option>
+                <option value="New Weird">New Weird (Tân Kỳ Dị)</option>
+              </optgroup>
+            </select>
+          </div>
+          <input id="tsTopic" class="ts-field" placeholder="Hoặc tự nhập: Bí ẩn sự sụp đổ của Đế chế La Mã">
 
-          <label class="ts-lbl">Số lượng từ</label>
-          <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap">
-            <span class="ts-chip" onclick="tsSetWords(300)">300</span>
-            <span class="ts-chip on" onclick="tsSetWords(800)">800</span>
-            <span class="ts-chip" onclick="tsSetWords(1200)">1200</span>
-            <span class="ts-chip" onclick="tsSetWords(2000)">2000</span>
-            <input id="tsWords" class="ts-field" style="width:110px" type="number" value="800" oninput="tsEstimate()">
-            <span id="tsWordEst" class="text-muted" style="font-size:12px;color:var(--text-dim)">≈ 5–6 phút đọc</span>
+          <div class="ts-card" style="margin-top:16px;padding:12px 16px;">
+            <label class="ts-lbl" style="margin-bottom:10px;font-weight:700;letter-spacing:0.5px">QUY MÔ</label>
+            <div style="display:flex;gap:12px;flex-wrap:wrap">
+              <div style="flex:1;min-width:120px">
+                <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px;font-weight:600">CHƯƠNG</label>
+                <input type="number" id="tsChapters" class="ts-field" style="padding:6px 10px" value="1" min="1" oninput="tsUpdateScale()">
+              </div>
+              <div style="flex:1;min-width:120px">
+                <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px;font-weight:600">TỪ / CHƯƠNG</label>
+                <input type="number" id="tsWordsPerChapter" class="ts-field" style="padding:6px 10px" value="1200" min="100" step="100" oninput="tsUpdateScale()">
+              </div>
+              <div style="flex:1;min-width:120px">
+                <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px;font-weight:600">NGÔN NGỮ</label>
+                <select id="tsLang" class="ts-field" style="padding:6px 10px">
+                  <option>Tiếng Việt</option>
+                  <option>English</option>
+                  <option>Español (Tây Ban Nha)</option>
+                  <option>Français (Pháp)</option>
+                  <option>Deutsch (Đức)</option>
+                  <option>Italiano (Ý)</option>
+                  <option>Português (Bồ Đào Nha)</option>
+                  <option>Русский (Nga)</option>
+                  <option>中文 (Trung Quốc)</option>
+                  <option>日本語 (Nhật Bản)</option>
+                  <option>한국어 (Hàn Quốc)</option>
+                  <option>हिन्दी (Hindi)</option>
+                  <option>العربية (Ả Rập)</option>
+                  <option>Türkçe (Thổ Nhĩ Kỳ)</option>
+                  <option>Bahasa Indonesia</option>
+                  <option>ภาษาไทย (Thái Lan)</option>
+                  <option>Bahasa Melayu (Malaysia)</option>
+                  <option>Tagalog (Philippines)</option>
+                  <option>Nederlands (Hà Lan)</option>
+                  <option>Polski (Ba Lan)</option>
+                  <option>Svenska (Thụy Điển)</option>
+                  <option>Dansk (Đan Mạch)</option>
+                  <option>Suomi (Phần Lan)</option>
+                  <option>Norsk (Na Uy)</option>
+                  <option>Ελληνικά (Hy Lạp)</option>
+                  <option>Čeština (Séc)</option>
+                  <option>Magyar (Hungary)</option>
+                </select>
+              </div>
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-top:10px;font-size:11.5px;font-weight:600">
+              <span id="tsScaleTotalEst" style="color:var(--accent)">Tổng dự tính: ~34 phút</span>
+              <span id="tsScalePerEst" style="color:var(--teal)">≈ 11 phút/chương</span>
+            </div>
+            
+            <input type="hidden" id="tsWords" value="4800">
+            <div style="display:flex;gap:10px;align-items:center;margin-top:14px;flex-wrap:wrap">
+              <span id="tsNovelBtn" class="ts-chip" style="cursor:pointer;padding:8px 14px;user-select:none" onclick="tsToggleNovel()">📖 Chế độ Novel</span>
+              <span id="tsNovelHint" style="font-size:11.5px;color:var(--text-dim);display:none;flex:1;min-width:220px">Bật: viết theo <b>chương</b> (≈450 từ/chương) — AI giữ bộ nhớ nhân vật · biến cố · tuyến nội dung xuyên suốt kịch bản, mỗi chương 1 lượt viết + 1 lượt ghi nhớ. Chậm hơn chế độ thường.</span>
+            </div>
           </div>
 
-          <div style="display:flex;gap:10px">
-            <div style="flex:1"><label class="ts-lbl">Ngôn ngữ</label>
-              <select id="tsLang" class="ts-field"><option>Tiếng Việt</option><option>English</option></select></div>
-            <div style="flex:1"><label class="ts-lbl">Giọng văn</label>
-              <select id="tsTone" class="ts-field"><option>Kể chuyện cuốn hút</option><option>Trang trọng tư liệu</option><option>Gần gũi vlog</option><option>Kịch tính</option></select></div>
+          <div class="ts-card" style="margin-top:16px;padding:12px 16px;">
+            <label class="ts-lbl" style="margin-bottom:10px;font-weight:700;letter-spacing:0.5px">PHONG CÁCH KỊCH BẢN</label>
+            <select id="tsTone" class="ts-field" style="padding:8px 12px;margin-bottom:12px">
+              <option value="Kịch bản chuyên sâu">KỊCH BẢN CHUYÊN SÂU (Audio dài: ~130 WPM, beat ~7s, không cold-open, thực tế)</option>
+              <option value="Sảng văn">SẢNG VĂN - DOPAMINE HIT (Recap dồn: ~155 WPM, beat ~4.5s, cold-open vả mặt)</option>
+              <option value="Short / Manhua">SHORT / MANHUA (Shorts/Reels: ~170 WPM, beat ~3.5s, cold-open bắt buộc, 1200 từ/tập)</option>
+              <option value="Kể chuyện cuốn hút">Kể chuyện cuốn hút (Mặc định AI Video Studio)</option>
+              <option value="Trang trọng tư liệu">Trang trọng tư liệu</option>
+              <option value="Gần gũi vlog">Gần gũi vlog</option>
+              <option value="Kịch tính">Kịch tính</option>
+            </select>
+            
+            <label class="ts-lbl" style="margin-top:0">📋 Prompt kịch bản (từ Profile) <span id="tsProfName" style="color:var(--accent)"></span></label>
+            <div id="tsProfPrompt" class="ts-prof">—</div>
           </div>
 
-          <label class="ts-lbl">📋 Prompt kịch bản (từ Profile) <span id="tsProfName" style="color:var(--accent)"></span></label>
-          <div id="tsProfPrompt" class="ts-prof">—</div>
+          <script>
+            function tsUpdateScale() {
+               const ch = parseInt(document.getElementById('tsChapters').value) || 1;
+               const wpc = parseInt(document.getElementById('tsWordsPerChapter').value) || 1600;
+               const total = ch * wpc;
+               document.getElementById('tsWords').value = total;
+               
+               const nb = document.getElementById('tsNovelBtn');
+               if(nb) { if(ch > 1) nb.classList.add('on'); else nb.classList.remove('on'); }
+               
+               const speed = 140; 
+               const mPer = Math.max(1, Math.round(wpc / speed));
+               const mTot = Math.max(1, Math.round(total / speed));
+               const ePer = document.getElementById('tsScalePerEst');
+               const eTot = document.getElementById('tsScaleTotalEst');
+               if(ePer) ePer.textContent = '≈ ' + mPer + ' phút/chương';
+               if(eTot) eTot.textContent = 'Tổng dự tính: ~' + mTot + ' phút';
+            }
+            setTimeout(() => { if(typeof tsUpdateScale === 'function') tsUpdateScale(); }, 100);
+          </script>
 
           <div style="display:flex;gap:10px;margin-top:16px">
             <button class="btn primary" id="tsGenBtn" style="flex:1" onclick="tsGenerate()">✍️ Viết kịch bản</button>
@@ -6069,7 +6366,219 @@ function renderDashboard(){
       </div>
       <div id="dashTopicRow" style="margin-bottom:14px">
         <label class="dsh-lbl">Chủ đề / Tiêu đề video</label>
-        <input id="dashTopic" class="dsh-field" placeholder="VD: Bí ẩn sự sụp đổ của Đế chế La Mã" oninput="_autoTopic=this.value">
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <select class="dsh-field" style="flex:1;font-size:12px;padding:7px 10px;" onchange="let m=this.value, s=this.nextElementSibling.value, v = m + (s ? ' - ' + s : ''); const tt=document.getElementById('dashTopic'); tt.value=v; window._autoTopic=v;">
+            <option value="" disabled selected>-- Chọn Chủ Đề --</option>
+            <optgroup label="1. CHỦ ĐỀ">
+                <option value="Xuyên Không">Xuyên Không</option>
+                <option value="Trùng Sinh">Trùng Sinh</option>
+                <option value="Hệ Thống">Hệ Thống</option>
+                <option value="Sinh Tồn">Sinh Tồn</option>
+                <option value="Võ Hiệp">Võ Hiệp</option>
+                <option value="Trinh Thám">Trinh Thám</option>
+                <option value="Dị Năng">Dị Năng</option>
+                <option value="Linh Khí Khôi Phục">Linh Khí Khôi Phục</option>
+                <option value="Kinh Dị">Kinh Dị</option>
+                <option value="Hài Hước">Hài Hước</option>
+                <option value="Cơ Giáp / Mecha">Cơ Giáp / Mecha</option>
+                <option value="Ngôn Tình">Ngôn Tình</option>
+                <option value="Báo Thù">Báo Thù</option>
+                <option value="Phản Công">Phản Công</option>
+                <option value="Nông Trường">Nông Trường</option>
+                <option value="Thương Chiến">Thương Chiến</option>
+                <option value="Quân Sự">Quân Sự</option>
+                <option value="Cung Đấu">Cung Đấu</option>
+                <option value="Học Đường">Học Đường</option>
+                <option value="Thể Thao">Thể Thao</option>
+                <option value="Ẩm Thực">Ẩm Thực</option>
+                <option value="Y Học">Y Học</option>
+                <option value="Game / Võng Du">Game / Võng Du</option>
+                <option value="Kỳ Ảo Mạo Hiểm">Kỳ Ảo Mạo Hiểm</option>
+                <option value="Thần Thoại">Thần Thoại</option>
+                <option value="Đồng Nhân">Đồng Nhân</option>
+                <option value="Đạo Tặc / Heist">Đạo Tặc / Heist</option>
+                <option value="Chính Trị">Chính Trị</option>
+                <option value="Tình Báo">Tình Báo</option>
+                <option value="Du Hành / Di Cư">Du Hành / Di Cư</option>
+                <option value="Trộm Mộ / Thám Hiểm Cổ Mộ">Trộm Mộ / Thám Hiểm Cổ Mộ</option>
+                <option value="Xuyên Sách / Phản Diện">Xuyên Sách / Phản Diện</option>
+                <option value="Giải Trí / Showbiz">Giải Trí / Showbiz</option>
+                <option value="Điền Viên / Chữa Lành">Điền Viên / Chữa Lành</option>
+                <option value="Mạt Thế / Xác Sống">Mạt Thế / Xác Sống</option>
+                <option value="Binh Vương / Đặc Chủng">Binh Vương / Đặc Chủng</option>
+                <option value="Sống Trùng Lặp (Time Loop)">Sống Trùng Lặp (Time Loop)</option>
+                <option value="Triệu Hoán / Ngự Thú">Triệu Hoán / Ngự Thú</option>
+                <option value="Xây Dựng Tông Môn">Xây Dựng Tông Môn</option>
+                <option value="Nữ Cường / Quyền Lực">Nữ Cường / Quyền Lực</option>
+                <option value="Hào Môn Thế Gia">Hào Môn Thế Gia</option>
+                <option value="Thần Bí / Cthulhu">Thần Bí / Cthulhu</option>
+                <option value="Tâm Cơ / Trí Đấu">Tâm Cơ / Trí Đấu</option>
+                <option value="Đa Vũ Trụ">Đa Vũ Trụ</option>
+                <option value="Khoa Kỹ / Xây Dựng Căn Cứ">Khoa Kỹ / Xây Dựng Căn Cứ</option>
+                <option value="Nghệ Thuật / Âm Nhạc">Nghệ Thuật / Âm Nhạc</option>
+                <option value="Tâm Trí / Hack Não">Tâm Trí / Hack Não</option>
+                <option value="Quái Vật Khổng Lồ (Kaiju)">Quái Vật Khổng Lồ (Kaiju)</option>
+                <option value="Sứ Giả Thần Linh">Sứ Giả Thần Linh</option>
+                <option value="Người Ngoài Hành Tinh">Người Ngoài Hành Tinh</option>
+                <option value="Truy Tìm Kho Báu">Truy Tìm Kho Báu</option>
+                <option value="Thần Đồng / Thiên Tài">Thần Đồng / Thiên Tài</option>
+                <option value="Khảo Cổ Viễn Tưởng">Khảo Cổ Viễn Tưởng</option>
+                <option value="Đấu Sủng (Trận Chiến Thú Cưng)">Đấu Sủng (Trận Chiến Thú Cưng)</option>
+                <option value="Dưỡng Thành (Nuôi Dưỡng Trưởng Thành)">Dưỡng Thành (Nuôi Dưỡng Trưởng Thành)</option>
+                <option value="Nghề Nghiệp Đặc Thù">Nghề Nghiệp Đặc Thù (Pháp Y, Tâm Lý...)</option>
+                <option value="Trộm Mệnh / Đổi Đời">Trộm Mệnh / Đổi Đời</option>
+                <option value="Giấu Giếm Thân Phận (Ẩn Nhẫn)">Giấu Giếm Thân Phận (Ẩn Nhẫn)</option>
+                <option value="Nhặt Nhạnh Đồng Nát">Nhặt Nhạnh Đồng Nát (Nhặt ve chai)</option>
+                <option value="Phục Sinh / Hồi Sinh">Phục Sinh / Hồi Sinh</option>
+                <option value="Siêu Trí Tuệ Ái Nhân (AI Romance)">Siêu Trí Tuệ Ái Nhân (AI Romance)</option>
+                <option value="Đấu Trí Phòng Kín (Escape Room)">Đấu Trí Phòng Kín (Escape Room)</option>
+                <option value="Phá Mộng / Xuyên Mộng">Phá Mộng / Xuyên Mộng</option>
+                <option value="Thế Giới Ngầm (Underworld)">Thế Giới Ngầm (Underworld)</option>
+                <option value="Cuộc Chiến Băng Đảng">Cuộc Chiến Băng Đảng</option>
+                <option value="Bảo Tiêu / Lính Đánh Thuê">Bảo Tiêu / Lính Đánh Thuê</option>
+                <option value="Ma Pháp Sư / Phù Thủy Học Việc">Ma Pháp Sư / Phù Thủy Học Việc</option>
+                <option value="Đọa Lạc / Sa Ngã (Corruption Arc)">Đọa Lạc / Sa Ngã (Corruption Arc)</option>
+                <option value="Thay Trời Hành Đạo">Thay Trời Hành Đạo</option>
+                <option value="Diệt Thần (Godslayer)">Diệt Thần (Godslayer)</option>
+                <option value="Săn Lùng Quái Vật (Monster Hunter)">Săn Lùng Quái Vật (Monster Hunter)</option>
+                <option value="Thức Tỉnh Cột Mốc">Thức Tỉnh Cột Mốc (Awakening Event)</option>
+                <option value="Sinh Sinh Diệt Diệt">Sinh Sinh Diệt Diệt (Reincarnation Cycle)</option>
+                <option value="Trốn Tìm Sinh Tử">Trốn Tìm Sinh Tử (Deadly Hide & Seek)</option>
+                <option value="Cấm Thuật / Huyết Tế">Cấm Thuật / Huyết Tế</option>
+                <option value="Nghịch Thiên Cải Mệnh">Nghịch Thiên Cải Mệnh</option>
+                <option value="Cờ Bạc / Xúc Xắc Sinh Tử">Cờ Bạc / Xúc Xắc Sinh Tử</option>
+                <option value="Sinh Tồn Nơi Hoang Dã">Sinh Tồn Nơi Hoang Dã</option>
+                <option value="Chinh Phục Ngọn Núi">Chinh Phục Ngọn Núi</option>
+                <option value="Thám Hiểm Đáy Biển">Thám Hiểm Đáy Biển Mảnh Vỡ</option>
+                <option value="Phiêu Lưu Trên Bầu Trời">Phiêu Lưu Trên Bầu Trời (Sky Islands)</option>
+                <option value="Sát Thủ Bàn Phím (Cyber Hacker)">Sát Thủ Bàn Phím (Cyber Hacker)</option>
+                <option value="Truy Ký Hiệp Khách">Truy Ký Hiệp Khách</option>
+                <option value="Giới Thượng Lưu / Gia Tộc">Giới Thượng Lưu / Gia Tộc Bí Ẩn</option>
+                <option value="Đảo Ngược Thời Gian (Rewind)">Đảo Ngược Thời Gian (Rewind)</option>
+                <option value="Cây Sinh Mệnh / Thần Mộc">Cây Sinh Mệnh / Thần Mộc</option>
+                <option value="Hồi Ức Chắp Vá (Amnesia)">Hồi Ức Chắp Vá (Amnesia)</option>
+                <option value="Sinh Vật Biến Đổi Gen">Sinh Vật Biến Đổi Gen</option>
+                <option value="Kho Tàng Thư Viện">Kho Tàng Thư Viện Chứa Bí Mật</option>
+                <option value="Tội Phạm Hoàn Hảo">Tội Phạm Hoàn Hảo</option>
+                <option value="Lãnh Chúa / Lãnh Địa">Lãnh Chúa / Lãnh Địa Khai Hoang</option>
+                <option value="Nhà Thám Hiểm / Phiêu Lưu Giả">Nhà Thám Hiểm / Phiêu Lưu Giả</option>
+                <option value="Truy Tìm Dấu Tích">Truy Tìm Dấu Tích Chủng Tộc Cũ</option>
+                <option value="Giả Tưởng Học Đường">Giả Tưởng Học Đường (Magic School)</option>
+                <option value="Giới Trẻ Lạc Lối">Giới Trẻ Lạc Lối (Youth Rebellion)</option>
+                <option value="Nuôi Con / Papa/Mama">Nuôi Con / Papa/Mama (Parenting)</option>
+                <option value="Nhập Vai Kháng Địch">Nhập Vai Kháng Địch (Tower Defense)</option>
+                <option value="Cảnh Sát Hình Sự">Cảnh Sát Hình Sự / Thám Tử Tư</option>
+                <option value="Bậc Thầy Sân Khấu / Ảo Thuật">Bậc Thầy Sân Khấu / Ảo Thuật</option>
+                <option value="Giao Dịch Ác Quỷ">Giao Dịch Ác Quỷ (Devil's Bargain)</option>
+            </optgroup>
+          </select>
+          <select class="dsh-field" style="flex:1;font-size:12px;padding:7px 10px;" onchange="let m=this.previousElementSibling.value, s=this.value, v = (m || '') + (m && s ? ' - ' : '') + s; const tt=document.getElementById('dashTopic'); tt.value=v; window._autoTopic=v;">
+            <option value="" selected>-- Phong Cách --</option>
+            <optgroup label="2. PHONG CÁCH">
+                <option value="Tu Tiên / Tiên Hiệp">Tu Tiên / Tiên Hiệp</option>
+                <option value="Huyền Huyễn">Huyền Huyễn</option>
+                <option value="Đô Thị">Đô Thị</option>
+                <option value="Viễn Tưởng">Viễn Tưởng</option>
+                <option value="Dystopia">Dystopia</option>
+                <option value="Cổ Đại">Cổ Đại</option>
+                <option value="Cyberpunk">Cyberpunk</option>
+                <option value="Steampunk">Steampunk</option>
+                <option value="Hắc Ám">Hắc Ám</option>
+                <option value="Đồng Nhân">Đồng Nhân</option>
+                <option value="Kiếm Hiệp">Kiếm Hiệp</option>
+                <option value="Huyền Nghi">Huyền Nghi</option>
+                <option value="Tâm Lý Tội Phạm">Tâm Lý Tội Phạm</option>
+                <option value="Siêu Anh Hùng">Siêu Anh Hùng</option>
+                <option value="Western">Western</option>
+                <option value="Hải Tặc">Hải Tặc</option>
+                <option value="Không Gian">Không Gian</option>
+                <option value="Xây Dựng Thế Giới">Xây Dựng Thế Giới</option>
+                <option value="Đông Phương Kỳ Ảo">Đông Phương Kỳ Ảo</option>
+                <option value="Phương Tây Kỳ Ảo">Phương Tây Kỳ Ảo</option>
+                <option value="LitRPG">LitRPG</option>
+                <option value="Military Sci-Fi">Military Sci-Fi</option>
+                <option value="Romantasy">Romantasy</option>
+                <option value="Slice of Life">Slice of Life</option>
+                <option value="Epic / Sử Thi">Epic / Sử Thi</option>
+                <option value="Gothic">Gothic</option>
+                <option value="Thriller">Thriller</option>
+                <option value="Hard Sci-Fi">Hard Sci-Fi</option>
+                <option value="Noir">Noir</option>
+                <option value="Biopunk">Biopunk</option>
+                <option value="Post-Apocalyptic">Post-Apocalyptic (Hậu Tận Thế)</option>
+                <option value="Lovecraftian">Lovecraftian / Cosmic Horror</option>
+                <option value="Dark Comedy">Dark Comedy (Hài Đen)</option>
+                <option value="Magical Realism">Magical Realism (Hiện Thực Huyền Ảo)</option>
+                <option value="Grimdark">Grimdark</option>
+                <option value="Urban Legend">Urban Legend (Truyền Thuyết Đô Thị)</option>
+                <option value="Dark Fairy Tale">Dark Fairy Tale (Cổ Tích Đen)</option>
+                <option value="Alternate History">Alternate History (Lịch Sử Giả Định)</option>
+                <option value="Whodunit">Whodunit (Phá Án Suy Luận)</option>
+                <option value="Space Opera">Space Opera</option>
+                <option value="Solar Punk">Solar Punk</option>
+                <option value="Atompunk">Atompunk</option>
+                <option value="Giallo">Giallo / Án mạng kinh dị</option>
+                <option value="Isekai">Isekai</option>
+                <option value="Wuxia Truyền Thống">Wuxia Truyền Thống</option>
+                <option value="Xianxia Cổ Điển">Xianxia Cổ Điển</option>
+                <option value="Low Fantasy">Low Fantasy</option>
+                <option value="High Fantasy">High Fantasy</option>
+                <option value="Surrealism">Surrealism (Siêu Thực)</option>
+                <option value="Psychological Horror">Psychological Horror (Kinh Dị Tâm Lý)</option>
+                <option value="Mythopoeia">Mythopoeia (Kiến tạo Thần Thoại)</option>
+                <option value="Urban Fantasy">Urban Fantasy (Kỳ Ảo Đô Thị)</option>
+                <option value="Dark Academia">Dark Academia</option>
+                <option value="Light Academia">Light Academia</option>
+                <option value="Sword and Sorcery">Sword and Sorcery (Kiếm & Ma Thuật)</option>
+                <option value="Flintlock Fantasy">Flintlock Fantasy (Kỳ Ảo Súng Hỏa Mai)</option>
+                <option value="Gaslamp Fantasy">Gaslamp Fantasy (Kỳ Ảo Đèn Khí Đá)</option>
+                <option value="Weird West">Weird West (K Kỳ Ảo Viễn Tây)</option>
+                <option value="Space Western">Space Western (Viễn Tây Vũ Trụ)</option>
+                <option value="Cassette Futurism">Cassette Futurism</option>
+                <option value="Raypunk">Raypunk (Sci-Fi Thập niên 50)</option>
+                <option value="Nanopunk">Nanopunk (Công nghệ Nano)</option>
+                <option value="Splatterpunk">Splatterpunk (Bạo lực máu me)</option>
+                <option value="Bizarro Fiction">Bizarro Fiction (Viễn Tưởng Kỳ Dị)</option>
+                <option value="Slipstream">Slipstream (Giả Tưởng Đa Tầng)</option>
+                <option value="Paranormal Romance">Paranormal Romance (Lãng Mạn Siêu Nhiên)</option>
+                <option value="Apocalyptic">Apocalyptic (Hủy Diệt Đồng Loạt)</option>
+                <option value="Cli-Fi">Cli-Fi (Viễn Tưởng Khí Hậu)</option>
+                <option value="Solarpunk Cổ Điển">Solarpunk Cổ Điển</option>
+                <option value="Decopunk">Decopunk (Nghệ thuật & Công nghệ)</option>
+                <option value="Mythic Fiction">Mythic Fiction (Tiểu Thuyết Huyền Đam)</option>
+                <option value="Fairy Tale Retelling">Fairy Tale Retelling (Kể Lại Cổ Tích)</option>
+                <option value="Grimms' Fairy Tales">Grimms' Fairy Tales (Phong cách Grimm)</option>
+                <option value="Arthurian Legend">Arthurian Legend (Huyền thoại vua Arthur)</option>
+                <option value="Ninja / Samurai Fiction">Ninja / Samurai Fiction</option>
+                <option value="Mecha-Musume">Mecha-Musume (Cơ Giáp Nữ Sinh)</option>
+                <option value="Sentai / Tokusatsu">Sentai / Tokusatsu</option>
+                <option value="Magical Girl">Magical Girl (Mahou Shoujo)</option>
+                <option value="B-Movie Horror">B-Movie Horror (Kinh Dị Bình Dân)</option>
+                <option value="Slasher">Slasher (Sát Nhân Hàng Loạt)</option>
+                <option value="Found Footage">Found Footage (Phim Tài Liệu Giả)</option>
+                <option value="Gothic Romance">Gothic Romance</option>
+                <option value="Southern Gothic">Southern Gothic</option>
+                <option value="Suburban Gothic">Suburban Gothic</option>
+                <option value="Hard-boiled Detective">Hard-boiled Detective (Thám Tử Gai Góc)</option>
+                <option value="Cozy Mystery">Cozy Mystery (Trinh Thám Ấm Áp)</option>
+                <option value="Legal Thriller">Legal Thriller (Giật Gân Tòa Án)</option>
+                <option value="Medical Thriller">Medical Thriller (Giật Gân Y Khoa)</option>
+                <option value="Techno-Thriller">Techno-Thriller (Giật Gân Công Nghệ)</option>
+                <option value="Spy Fiction">Spy Fiction (Tiểu Thuyết Gián Điệp)</option>
+                <option value="Heist / Caper">Heist / Caper (Siêu Trộm)</option>
+                <option value="Picaresque">Picaresque (Lãng Tử / Giang Hồ)</option>
+                <option value="Bildungsroman">Bildungsroman (Trưởng Thành qua Thử Thách)</option>
+                <option value="Epistolary">Epistolary (Viết Dưới Dạng Thư Từ)</option>
+                <option value="Metafiction">Metafiction (Tiểu Thuyết Siêu Cấu Trúc)</option>
+                <option value="Satire / Trào Phúng">Satire / Trào Phúng</option>
+                <option value="Absurdist Fiction">Absurdist Fiction (Phi Lý)</option>
+                <option value="Utopian">Utopian (Xã Hội Không Tưởng)</option>
+                <option value="Speculative Evolution">Speculative Evolution (Tiến Hóa Giả Định)</option>
+                <option value="New Weird">New Weird (Tân Kỳ Dị)</option>
+            </optgroup>
+          </select>
+        </div>
+        <input id="dashTopic" class="dsh-field" placeholder="Hoặc tự nhập: Bí ẩn sự sụp đổ của Đế chế La Mã" oninput="_autoTopic=this.value">
         <div id="dashWordsWrap" style="display:flex;align-items:flex-end;gap:12px;margin-top:12px">
           <div>
             <label class="dsh-lbl">Số lượng từ</label>
@@ -7612,6 +8121,12 @@ function switchTool(name){
     /* trang Cài đặt: luôn cho vào */
   }
   // Free XEM được mọi tool (không chặn ở đây); chặn ở NÚT hành động trong từng tool → hiện thông báo.
+  // Studio (TDTStudio nhúng): rời tool → ẩn cửa sổ Qt (tiến trình vẫn sống để mở lại nhanh)
+  if (state.tool === 'toolstudio' && name !== 'toolstudio') {
+    if (window.TdtStudioPanel && typeof window.TdtStudioPanel.leave === 'function') {
+      try { window.TdtStudioPanel.leave(); } catch (e) {}
+    }
+  }
   state.tool = name;
   document.querySelectorAll('.nav-item').forEach(t =>
     t.classList.toggle('active', t.dataset.tool === name)
@@ -7658,6 +8173,13 @@ function switchTool(name){
     if (_hdC && window.HanddrawPanel && typeof window.HanddrawPanel.init === 'function') {
       try { window.HanddrawPanel.init(_hdC); }
       catch (e) { console.error('[handdraw] init lỗi:', e); }
+    }
+  }
+  if (name === 'toolstudio') {
+    const _tsC = document.getElementById('tdtStudioRoot');
+    if (_tsC && window.TdtStudioPanel && typeof window.TdtStudioPanel.init === 'function') {
+      try { window.TdtStudioPanel.init(_tsC); }
+      catch (e) { console.error('[tdt-studio] init lỗi:', e); }
     }
   }
   if (name === 'tooladmin' && typeof admListUsers === 'function') admListUsers();
@@ -7999,6 +8521,12 @@ function tsInit(){
   const nameEl = document.getElementById('tsProfName'); if (nameEl) nameEl.textContent = p?.tenKenh ? '· ' + p.tenKenh : '';
   const pp = document.getElementById('tsProfPrompt');
   if (pp) pp.textContent = (p?.scriptPrompt || '').trim() || 'Chưa có — bấm "Sửa ở Profile" để thêm phong cách viết kịch bản cho kênh.';
+  // Trạng thái nút Novel (giữ giữa các phiên app)
+  const nb = document.getElementById('tsNovelBtn');
+  if (nb && localStorage.getItem('ts_novel_mode') === '1'){
+    nb.classList.add('on');
+    const h = document.getElementById('tsNovelHint'); if (h) h.style.display = '';
+  }
   tsEstimate(); tsOutMeta();
 }
 function _tsClean(t){
@@ -8025,6 +8553,16 @@ async function tsGenerate(rewrite){
   const tone = document.getElementById('tsTone')?.value || 'Kể chuyện cuốn hút';
   const p = (typeof getProfile === 'function') ? getProfile() : null;
   const sp = (p?.scriptPrompt || '').trim();
+  // Chế độ Novel (chip 📖 bật): pipeline viết theo chương + memory xuyên suốt.
+  // Luồng thường (1 lần gọi) giữ nguyên — tắt chip là quay về y như cũ.
+  if (tsNovelOn()){
+    const customCh = document.getElementById('tsChapters');
+    const customWpc = document.getElementById('tsWordsPerChapter');
+    const n = customCh ? parseInt(customCh.value) : Math.max(2, Math.ceil(words / TS_NOVEL_CH_WORDS));
+    const chWords = customWpc ? parseInt(customWpc.value) : Math.round(words / n);
+    return tsGenerateNovel({ topic, words, lang, tone, style: sp, rewrite: !!rewrite,
+      n, chWords });
+  }
   const buildPrompt = (style) =>
 `You are a professional voiceover scriptwriter for faceless YouTube videos.
 TASK: Write ONE complete voiceover script for this topic: "${topic}".
@@ -8065,6 +8603,187 @@ Return only the script content, nothing else.`;
     tsOutMeta();
     setStatusScript('✓ Đã viết xong. Kiểm tra rồi Đưa vào Giọng nói / Sang Phân Cảnh.', 'ok');
   } catch (e){ _stopElapsed(_tk); setStatusScript('Lỗi: ' + (e.message || e), 'error'); }
+  if (btn) btn.disabled = false;
+}
+
+/* ============================================================
+   CHẾ ĐỘ NOVEL — memory xuyên suốt khi viết kịch bản dài (chip tsNovelBtn)
+   Port pattern ainovel-cli (Go) sang JS thuần, chạy hoàn toàn ở renderer:
+   - Architect: story bible (tiền đề + hướng kết cục + nhân vật + tuyến nội dung).
+   - Writer: viết TỪNG CHƯƠNG, prompt luôn kèm STORY MEMORY.
+   - Editor: sau mỗi chương trích tóm tắt + stateChanges + trạng thái tuyến.
+   Memory nén dần (pattern "ngữ cảnh phân tầng" của ainovel-cli): 3 chương gần
+   nhất giữ tóm tắt đầy đủ, chương cũ hơn nén 1 câu → không phình context.
+   Không đụng IPC/main, không dependency mới. Lỗi trích memory → degrade
+   LỘ LIỄU (Luật 10): báo status + dùng 4 câu đầu chương làm tóm tắt thay thế.
+   ============================================================ */
+const TS_NOVEL_CH_WORDS = 450;   // ~450 từ/chương: đủ mạch truyện, vừa output token
+function tsNovelOn(){
+  const b = document.getElementById('tsNovelBtn');
+  return !!(b && b.classList.contains('on'));
+}
+function tsToggleNovel(){
+  const b = document.getElementById('tsNovelBtn'); if (!b) return;
+  b.classList.toggle('on');
+  const on = b.classList.contains('on');
+  try { localStorage.setItem('ts_novel_mode', on ? '1' : '0'); } catch (e) {}
+  const h = document.getElementById('tsNovelHint'); if (h) h.style.display = on ? '' : 'none';
+}
+
+// ── Pha 1 · Architect: dựng khung truyện (JSON) ──
+async function _tsNovelArchitect(o){
+  const prompt =
+`You are the story ARCHITECT for a long multi-chapter faceless YouTube voiceover script.
+TOPIC: "${o.topic}". LANGUAGE: ${o.lang}. TONE: ${o.tone}. TOTAL: about ${o.words} words, split into ${o.n} chapters of ~${o.chWords} words each.
+${o.style ? 'CHANNEL STYLE (voice & tone only; ignore any word counts inside it):\n' + o.style.replace(/\{\{\s*WORDS\s*\}\}/gi, String(o.words)) + '\n' : ''}${o.rewrite ? 'Design a DIFFERENT angle and a different opening twist than the obvious approach.\n' : ''}
+Design the skeleton so later chapters CAN stay consistent with earlier ones.
+Return ONLY raw JSON, EXACTLY these keys:
+{"premise":"1-2 câu tiền đề","ending":"hướng kết cục (mở/đóng) + cảm xúc cuối","characters":[{"name":"","role":"","description":"1 câu"}],"threads":[{"id":"T1","name":"","description":"1 câu"}],"chapters":[{"title":"","goal":"1 câu — chương này đạt được gì để mạch truyện tiến","words":${o.chWords}}]}
+Rules: 3-7 characters (tên theo ${o.lang}), 3-6 threads (id T1,T2,…), EXACTLY ${o.n} chapters. Threads mở/đẩy/khép dần qua các chương — chương cuối khép các tuyến chính.`;
+  return await callLLMJson(prompt, { maxTokens: 2200, tries: 3,
+    validate: (d) => d && typeof d === 'object' && !Array.isArray(d)
+      && Array.isArray(d.chapters) && d.chapters.length >= 2
+      && Array.isArray(d.characters) && Array.isArray(d.threads) });
+}
+
+// ── STORY MEMORY → text nhét vào prompt chương mới (nén dần) ──
+function _tsNovelMemBlock(mem){
+  const parts = [];
+  const n = mem.chapters.length;
+  if (!n) parts.push('(Chưa có chương nào đã viết — đây là chương đầu tiên.)');
+  mem.chapters.forEach((c, i) => {
+    const s = String(c.summary || '').trim() || '(trống)';
+    parts.push(`- (Ch.${i + 1}${c.title ? ' · ' + c.title : ''}) `
+      + (i >= n - 3 ? s : (s.split(/(?<=[.!?…])\s+/)[0] || s)));
+  });
+  const states = Object.keys(mem.states).map((k) => {
+    const byField = {};
+    mem.states[k].forEach((c) => { if (c.field) byField[c.field] = c; });
+    const s = Object.values(byField).map((c) => `${c.field}=${c.to}`).join('; ');
+    return `- ${k}: ${s || '(chưa đổi trạng thái)'}`;
+  });
+  const threads = mem.threads.map((t) =>
+    `- ${t.id}${t.name && t.name !== t.id ? ' · ' + t.name : ''}: [${t.status}] ${t.note || ''}`);
+  return ['--- STORY MEMORY (bắt buộc nhất quán, không mâu thuẫn) ---',
+    'DIỄN BIẾN ĐẾN NAY (3 chương gần nhất đầy đủ, chương cũ nén 1 câu):', ...parts,
+    ...(states.length ? ['NHÂN VẬT & TRẠNG THÁI HIỆN TẠI (giá trị mới nhất từng trường):', ...states] : []),
+    ...(threads.length ? ['TUYẆN NỘI DUNG (open=chưa khép, advanced=đã đẩy, resolved=đã khép):', ...threads] : []),
+  ].join('\n');
+}
+
+// ── Pha 2 · Writer: prompt viết 1 chương ──
+function _tsNovelChapterPrompt(o, bible, mem, ch, i){
+  const chars = (bible.characters || []).map((c) => `${c.name} (${c.role || '?'}) — ${c.description || ''}`).join('; ');
+  return `You are a professional voiceover scriptwriter for faceless YouTube videos, writing ONE chapter of a multi-chapter story.
+TASK: Write ONLY chapter ${i + 1} of ${o.n} — "${ch.title}". CHAPTER GOAL: ${ch.goal || '(theo mạch truyện)'}.
+LANGUAGE: ${o.lang}. TONE: ${o.tone}. LENGTH: about ${ch.words} words (max 10% deviation).
+${o.style ? 'CHANNEL STYLE (giọng văn; quy tắc LENGTH dưới đây đè lên mọi số từ trong style):\n' + o.style.replace(/\{\{\s*WORDS\s*\}\}/gi, String(ch.words)) + '\n' : ''}
+STORY BIBLE (khung cố định):
+- Tiền đề: ${bible.premise || ''}
+- Hướng kết cục: ${bible.ending || ''}
+- Nhân vật: ${chars || '(tự định hình ít nhân vật)'}
+${_tsNovelMemBlock(mem)}
+ABSOLUTE CONSISTENCY (quan trọng nhất):
+- Tên, quan hệ, địa điểm, sự kiện PHẢI khớp STORY MEMORY ở trên. Không đặt lại tên nhân vật, không hồi sinh/hồi vị trí vô lý, không kể lại sự kiện đã xảy ra như thể mới.
+- Chương ${i === 0 ? '1: mở bằng hook ≤ 15 từ, trồng 1 câu hỏi/mâu thuẫn mở (open loop)' : (i + 1) + ': mở đầu nối mạch chương trước, KHÔNG tóm lại chương cũ'}.
+- Tuyến còn [open] thì chỉ ĐẨY TIẾN (thêm chi tiết mới, không lặp nguyên văn), chưa khép; khép các tuyến chính ở chương cuối.
+- Mỗi đoạn chỉ tiến THÊM 1 điều mới (biến cố/con số/hậu quả); cấm diễn giải lại ý cũ bằng lời khác.
+RETENTION:
+- Cấm: "ít ai biết rằng", xưng hô khán giả ("các bạn ơi"), kết kiểu đạo lý.
+OUTPUT RULES (very important):
+- Return ONLY the narration text of THIS chapter. First character = first letter of the opening sentence.
+- No chapter titles, no numbering, no [labels], no markdown, no emoji, no lead-in, no word counts.
+- Chia đoạn ngắn 2-4 câu, dễ đọc cho TTS.`;
+}
+
+// ── Pha 3 · Editor: trích memory từ chương vừa viết (JSON) ──
+async function _tsNovelRemember(chText, bible, mem, i){
+  const prompt =
+`You are the STORY CONTINUITY EDITOR. Chapter ${i + 1} was just written. Extract memory updates for future chapters.
+Return ONLY raw JSON, EXACTLY these keys:
+{"summary":"3-5 câu tóm tắt chương này (tiếng Việt, kể đủ biến cố chính)","stateChanges":[{"entity":"","field":"location|status|relation|knowledge|possession|alive|khác","from":"","to":"","reason":""}],"threads":[{"id":"T1","status":"open|advanced|resolved","note":"1 câu"}]}
+Rules: stateChanges CHỈ ghi thay đổi THẬT so với MEMORY cũ (không lặp lại trạng thái chưa đổi). threads: chỉ tuyến được mở/đẩy/khép trong chương này, giữ nguyên id.
+
+STORY BIBLE (tham chiếu):
+- Tiền đề: ${String(bible.premise || '').slice(0, 400)}
+- Tuyến đã biết: ${(mem.threads || []).map((t) => t.id).join(', ') || '(chưa có)'}
+
+MEMORY HIỆN TẠI:
+${_tsNovelMemBlock(mem)}
+
+CHƯƠNG VỪA VIẾT:
+${chText.slice(0, 9000)}`;
+  return await callLLMJson(prompt, { maxTokens: 900, tries: 2,
+    validate: (d) => d && typeof d === 'object' && typeof d.summary === 'string' && d.summary.trim().length > 20 });
+}
+
+// ── Merge kết quả editor vào memory ──
+function _tsNovelMerge(mem, up, chTitle){
+  mem.chapters.push({ title: String(chTitle || ''), summary: String(up.summary || '').trim() });
+  (Array.isArray(up.stateChanges) ? up.stateChanges : []).forEach((c) => {
+    const k = String((c && c.entity) || '').trim(); if (!k) return;
+    (mem.states[k] = mem.states[k] || []).push({
+      field: String((c && c.field) || '').trim() || 'status',
+      to: String((c && (c.to ?? c.new_value)) || '').trim(),
+      reason: String((c && c.reason) || '').trim(),
+    });
+  });
+  (Array.isArray(up.threads) ? up.threads : []).forEach((t) => {
+    const id = String((t && t.id) || '').trim().toUpperCase(); if (!id) return;
+    const cur = mem.threads.find((x) => x.id === id);
+    if (cur){ if (t.status) cur.status = String(t.status); if (t.note) cur.note = String(t.note); }
+    else mem.threads.push({ id, name: id, status: String((t && t.status) || 'open'), note: String((t && t.note) || '') });
+  });
+}
+
+// ── Orchestrator: Architect → (Writer → Remember) lặp theo từng chương ──
+async function tsGenerateNovel(o){
+  const btn = document.getElementById('tsGenBtn'); if (btn) btn.disabled = true;
+  const out = document.getElementById('tsOutput'); if (out) out.value = '';
+  const _tk = _startElapsed('📖 Novel · đang dựng khung truyện', setStatusScript,
+    'chế độ Novel viết từng chương + ghi nhớ sau mỗi chương — chậm hơn thường, cứ để yên');
+  try {
+    const bible = await _tsNovelArchitect(o);
+    const chapters = (bible.chapters || []).map((c) => ({
+      title: String((c && c.title) || ''), goal: String((c && c.goal) || ''),
+      words: parseInt(c && c.words) || o.chWords,
+    }));
+    if (chapters.length < 2) throw new Error('Architect trả về ít hơn 2 chương.');
+    o.n = chapters.length;
+    const mem = {
+      chapters: [], states: {},
+      threads: (bible.threads || []).map((t) => ({
+        id: (String((t && t.id) || '').trim().toUpperCase() || 'T?'),
+        name: String((t && t.name) || ''), status: 'open', note: String((t && t.description) || ''),
+      })),
+    };
+    setStatusScript(`📖 Khung truyện xong: ${o.n} chương · ${(bible.characters || []).length} nhân vật · ${mem.threads.length} tuyến. Bắt đầu viết từng chương…`, 'working');
+    const parts = [];
+    for (let i = 0; i < chapters.length; i++){
+      const ch = chapters[i];
+      const raw = await callLLM(_tsNovelChapterPrompt(o, bible, mem, ch, i),
+        { maxTokens: Math.min(16000, Math.round(ch.words * 2.5) + 600) });
+      const clean = _tsClean(raw);
+      if (!clean) throw new Error('Chương ' + (i + 1) + '/' + o.n + ' trả về rỗng.');
+      parts.push(clean);
+      if (out){ out.value = parts.join('\n\n'); tsOutMeta(); }   // ghi dần: lỗi giữa chừng không mất chương đã viết
+      if (i < chapters.length - 1){
+        setStatusScript(`📖 Novel · Chương ${i + 1}/${o.n} xong · đang ghi nhớ (tóm tắt + nhân vật + tuyến)…`, 'working');
+        let up = null;
+        try { up = await _tsNovelRemember(clean, bible, mem, i); }
+        catch (e){   // Luật 10: degrade LỘ LIỄU, không nuốt lỗi
+          setStatusScript(`⚠ Chương ${i + 1}: trích memory lỗi (${String(e.message || e).slice(0, 70)}) — tạm dùng 4 câu đầu chương làm tóm tắt.`, 'error');
+          up = { summary: clean.split(/(?<=[.!?…])\s+/).slice(0, 4).join(' '), stateChanges: [], threads: [] };
+        }
+        _tsNovelMerge(mem, up, ch.title);
+      }
+    }
+    _stopElapsed(_tk);
+    setStatusScript(`✓ Novel xong: ${o.n} chương · ${_tsWordCount(parts.join(' '))} từ. Kiểm tra rồi Đưa vào Giọng nói / Sang Phân Cảnh.`, 'ok');
+  } catch (e){
+    _stopElapsed(_tk);
+    setStatusScript('Lỗi Novel: ' + (e.message || e) + (out && out.value.trim() ? ' — phần chương đã viết còn trong ô Kịch bản.' : ''), 'error');
+  }
   if (btn) btn.disabled = false;
 }
 // Đồng hồ đếm khi AI đang chạy (để không tưởng bị treo). Trả về handle để _stopElapsed dừng.
@@ -26301,10 +27020,12 @@ function toggleApiSection(){
 
   <script src="video-agent-panel.js"></script>
   <!-- Whiteboard Studio: annotation core (UMD — dùng chung main + renderer) + panel (UI luồng srt-whiteboard-animation) -->
-  <script src="whiteboard-annotation.js?v=hdlasso5"></script>
-  <script src="whiteboard-studio-panel.js?v=hdlasso5"></script>
+  <script src="whiteboard-annotation.js?v=hdlasso6"></script>
+  <script src="whiteboard-studio-panel.js?v=hdlasso6"></script>
   <!-- Vẽ Tay Ảnh: tách phần animation vẽ tay từ Whiteboard Studio (tái dùng whiteboard-annotation.js + IPC whiteboard:*) -->
-  <script src="handdraw-studio-panel.js?v=hdlasso5"></script>
+  <script src="handdraw-studio-panel.js?v=hdlasso6"></script>
+  <!-- Studio (TDTStudio PyQt nhúng): panel điều khiển + đồng bộ vùng dock với IPC tdt-studio:* -->
+  <script src="tdt-studio-panel.js?v=tdtst2"></script>
 
 <script>
 /* ============================================================================

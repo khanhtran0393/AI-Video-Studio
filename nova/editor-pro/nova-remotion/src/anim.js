@@ -60,6 +60,10 @@ const HOLD = {
   drift:  (p, f, a) => `translateY(${Math.sin(f / 42) * 0.5 * a}%)`,
   // Nhịp thở cho nhãn/biểu tượng cần hút mắt mà không nhấp nháy.
   breathe:(p, f, a) => `scale(${1 + Math.sin(f / 30) * 0.012 * a})`,
+  // Handheld — rung sin 2 trục lệch pha, cho cảnh tư liệu/hành động (mở rộng §13, 2026-09).
+  handheld: (p, f, a) => `translate(${(Math.sin(f / 13) * 0.35 * a).toFixed(3)}%, ${(Math.cos(f / 17) * 0.25 * a).toFixed(3)}%)`,
+  // Crane — pan dọc + zoom kết hợp, cho establishing shot / reveal từ trên xuống.
+  craneIn: (p, f, a) => `scale(${1 + 0.12 * a * clamp01(p)}) translateY(${-1.8 * a * clamp01(p)}%)`,
 };
 
 
