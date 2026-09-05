@@ -89,3 +89,4 @@ tmp*
 nova/tmp*
 build-wt/
 *.mp3
+*.mp4

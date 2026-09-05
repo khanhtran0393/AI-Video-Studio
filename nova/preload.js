@@ -132,17 +132,20 @@ contextBridge.exposeInMainWorld('native', {
   // (ffmpeg nội bộ). KHÔNG nhận đường dẫn repo ngoài từ GUI.
   whiteboard: {
     runtime: () => ipcRenderer.invoke('whiteboard:runtime'),
+    // dialogs media thật (main process) — không nhận đường dẫn hard-code từ GUI
     pickSrt: () => ipcRenderer.invoke('whiteboard:pickSrt'),
     pickAudio: () => ipcRenderer.invoke('whiteboard:pickAudio'),
     pickImage: () => ipcRenderer.invoke('whiteboard:pickImage'),
+    pickImages: () => ipcRenderer.invoke('whiteboard:pickImages'),
     pickImagesDir: () => ipcRenderer.invoke('whiteboard:pickImagesDir'),
-    probeDuration: (p) => ipcRenderer.invoke('whiteboard:probeDuration', p),
-    framePrompts: (payload) => ipcRenderer.invoke('whiteboard:framePrompts', payload),
-    topicKeywords: (topic, count) => ipcRenderer.invoke('whiteboard:topicKeywords', { topic, count }),
-    buildAutoProject: (payload) => ipcRenderer.invoke('whiteboard:buildAutoProject', payload),
-    saveFrames: (payload) => ipcRenderer.invoke('whiteboard:saveFrames', payload),
-    exportVideo: (payload) => ipcRenderer.invoke('whiteboard:export', payload),
     pickOutput: (defaultName) => ipcRenderer.invoke('whiteboard:pickOutput', { defaultName }),
+    // engine stream-ink (srt-whiteboard-animation, Python vendored)
+    pyStatus: () => ipcRenderer.invoke('whiteboard:pyStatus'),
+    pyPrepare: () => ipcRenderer.invoke('whiteboard:pyPrepare'),
+    parseSrt: (srtPath, opts) => ipcRenderer.invoke('whiteboard:parseSrt', { srtPath, opts }),
+    probeImage: (path) => ipcRenderer.invoke('whiteboard:probeImage', { path }),
+    annotationPreview: (image, annotation) => ipcRenderer.invoke('whiteboard:annotationPreview', { image, annotation }),
+    export: (payload) => ipcRenderer.invoke('whiteboard:export', payload),
     exportCancel: () => ipcRenderer.invoke('whiteboard:exportCancel'),
     onExportProgress: (cb) => {
       const listener = (_e, s) => cb && cb(s);

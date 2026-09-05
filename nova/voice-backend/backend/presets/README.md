@@ -1,23 +1,31 @@
 # Factory voices (ready-made for customers — no cloning needed)
 
-Drop the reference recordings into **this folder**, named exactly as in `presets.json`.
-On app start, the backend loads them into the VoiceBank → customers pick them under "GIỌNG ĐÃ LƯU".
+On app start, the backend loads `presets.json` into the VoiceBank → customers pick them under "GIỌNG ĐÃ LƯU".
 
-These presets are **English, male voices**. When a customer picks one, the app auto-sets language to English.
+Two sources:
+- **WAV clone**: drop a `.wav` named exactly as `file` in this folder.
+- **Built-in engine voice**: no WAV needed. Set `attributes.voice` to a VieNeu preset name (e.g. `"Minh Đức"`). OmniVoice uses `attributes.instruct` as a design prompt.
 
-## Files to drop in (per current presets.json)
+When a customer picks a voice, the app auto-sets language from `attributes.lang`.
+
+## English (WAV clone)
 | Filename | Voice |
 |---|---|
 | `en-male-narrator.wav` | English — Male, Narrator |
 | `en-male-deep.wav`     | English — Male, Deep     |
 | `en-male-casual.wav`   | English — Male, Casual   |
 
-Missing files are simply skipped (safe — no empty voice is created).
+Missing WAV files are simply skipped (safe — no empty voice is created).
 
-## Recording requirements
+## Vietnamese (VieNeu built-in, no WAV)
+20 factory voices from VieNeu-TTS: Bắc / Trung / Nam, nam / nữ, tin tức / kể chuyện / tự nhiên / đọc truyện.
+
+These seed even without a `.wav` because they carry `attributes.voice`.
+
+## Recording requirements (WAV clone only)
 - **WAV** format, clean, **NO background noise / music**.
 - **10–20 seconds** is enough (clear, natural delivery in the tone you want to clone).
-- **English**, male speaker, one person per file.
+- One person per file.
 
 ## Optional quality boost
 Fill `ref_text` in `presets.json` = the **exact words** spoken in the file
@@ -25,9 +33,12 @@ Fill `ref_text` in `presets.json` = the **exact words** spoken in the file
 
 ## Add / rename / change a voice
 Edit `presets.json`: each item needs `id` (unique, keep it stable across updates),
-`name` (what the customer sees), `file` (the .wav filename in this folder),
-and optional `attributes.lang` (e.g. "en", "vi") to auto-select the language.
-Replace a file with a new one of the same name → app updates it on next launch.
+`name` (what the customer sees), and either:
+- `file` (the .wav filename in this folder), or
+- `attributes.voice` (VieNeu built-in speaker name).
+
+Optional: `attributes.lang` (e.g. "en", "vi"), `attributes.instruct` (OmniVoice design prompt).
+Replace a WAV file with a new one of the same name → app updates it on next launch.
 
 ## Copyright
 Use only voices **you own / have permission for / licensed**.

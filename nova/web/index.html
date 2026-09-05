@@ -1186,6 +1186,19 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
 .wb-item-x{ padding:2px 8px;font-size:11px; }
 .wb-topic-input{ flex:1;min-width:220px;font-family:inherit;font-size:12px; }
 .wb-canvas{ cursor:grab; }
+/* panel whiteboard rewrite (srt-whiteboard-animation) */
+.wb-hide{ display:none; }
+.wb-item.selected{ border-color:var(--accent);background:rgba(124,58,237,.08); }
+.wb-item-head{ display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px; }
+.wb-item-text{ font-size:11.5px;color:var(--text-muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis; }
+.wb-item-actions{ display:flex;gap:6px;margin-top:6px; }
+.wb-el-table{ width:100%;max-width:860px;border-collapse:collapse;font-size:12px; }
+.wb-el-table th{ text-align:left;font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px; }
+.wb-el-table td{ padding:4px 6px;border-top:1px solid var(--border);vertical-align:middle; }
+.wb-el-table .wb-seq{ width:30px;font-weight:600; }
+.wb-el-table .wb-act{ white-space:nowrap; }
+.wb-label-in{ width:100%;font-family:inherit;font-size:12px; }
+.wb-num-in{ width:70px;font-family:inherit;font-size:12px; }
 </style>
 </head>
 <body>
@@ -1471,11 +1484,8 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
         <div class="nav-item" data-tool="tool7" onclick="switchTool('tool7')">
           <span class="num"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10l5-3v10l-5-3"/></svg></span><span>Dựng Video</span>
         </div>
-        <!-- Cửa vào riêng cho kho hiệu ứng chuyển động (mẫu, bit, chuyển cảnh) —
-             trước đây chỉ nằm ẩn trong tab "Hiệu ứng" của Dựng Video nên khó thấy. -->
-        <div class="nav-item" data-tool="toolanim" onclick="switchTool('toolanim')">
-          <span class="num"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.9 2.9M15.5 15.5l2.9 2.9M18.4 5.6l-2.9 2.9M8.5 15.5l-2.9 2.9"/></svg></span><span>Hoạt Ảnh</span>
-        </div>
+        <!-- Kho hiệu ứng chuyển động (Hoạt Ảnh) không còn là mục sidebar riêng —
+             mở bằng nút "✨ Kho hiệu ứng" ngay trong Dựng Video (Tool 7). -->
         <div class="nav-item" data-tool="toolupscale" onclick="switchTool('toolupscale')">
           <span class="num"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 15l3-3 2 2 3-4"/><path d="M14 6h4v4" stroke-linecap="round"/><path d="M18 6l-5 5" stroke-linecap="round"/></svg></span><span>Nâng cấp ảnh</span>
         </div>
@@ -1490,6 +1500,9 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
         </div>
         <div class="nav-item" data-tool="toolwhiteboard" onclick="switchTool('toolwhiteboard')">
           <span class="num"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg></span><span>Whiteboard Studio</span>
+        </div>
+        <div class="nav-item" data-tool="toolhanddraw" onclick="switchTool('toolhanddraw')">
+          <span class="num"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></span><span>Vẽ Tay Ảnh</span>
         </div>
         <div class="nav-group">Cài đặt</div>
         <div class="nav-item" data-tool="toolsettings" onclick="switchTool('toolsettings')">
@@ -1613,13 +1626,22 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
       <div class="grid" id="panels" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;"></div>
     </div>
 
-    <!-- WHITEBOARD STUDIO TOOL (port TPL Studio Stories v1.0.2) -->
+    <!-- WHITEBOARD STUDIO TOOL (srt-whiteboard-animation: SRT → cảnh → ảnh → stream-ink → MP4) -->
     <div class="tool" id="tool-toolwhiteboard">
       <div class="tool-head">
         <div class="tool-title">🖊 Whiteboard Studio</div>
-        <div class="tool-subtitle">Video whiteboard từ SRT + giọng đọc + ảnh thật — preview canvas, xuất MP4 bằng ffmpeg nội bộ</div>
+        <div class="tool-subtitle">Video whiteboard từ SRT + ảnh (mỗi cảnh 1 ảnh) — vẽ stream-ink bàn tay như srt-whiteboard-animation, ghép voice, xuất MP4</div>
       </div>
       <div id="whiteboardRoot"></div>
+    </div>
+
+    <!-- VẼ TAY ẢNH TOOL (tách từ Whiteboard Studio: 1 ảnh tĩnh → stream-ink bàn tay vẽ lại → MP4, không SRT/voice) -->
+    <div class="tool" id="tool-toolhanddraw">
+      <div class="tool-head">
+        <div class="tool-title">✏️ Vẽ Tay Ảnh</div>
+        <div class="tool-subtitle">Biến ảnh tĩnh (PNG line-art) thành video vẽ tay — nét mực chạy dần theo từng vùng như bàn tay đang vẽ lại ảnh, tô màu dần, xuất MP4. Không cần SRT hay giọng đọc.</div>
+      </div>
+      <div id="handdrawRoot"></div>
     </div>
 
     <!-- TOOL 1: PROFILE KÊNH -->
@@ -3192,6 +3214,7 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
         <span id="t7FocusInfo" class="t7-dim" style="font-size:11.5px"></span>
         <span style="flex:1"></span>
         <button class="btn ghost sm" id="t7AiGfxBtn" onclick="t7AiDesign()">🎬 AI dựng đồ hoạ</button>
+        <button class="btn ghost sm" onclick="animOpen()" title="Xem kho hiệu ứng chuyển động toàn màn hình">✨ Kho hiệu ứng</button>
         <button class="btn ghost sm" onclick="t7Save()">🗂 Lưu</button>
         <button class="btn primary sm" onclick="t7OpenExport()">⬆ Xuất Video</button>
         <button class="btn ghost sm" onclick="t7Focus(false)" title="Thoát (Esc)">✕ Thoát</button>
@@ -3210,6 +3233,7 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
         </div>
         <div class="t7-actions">
           <button class="btn ghost" onclick="t7Focus(true)" title="Mở rộng Dựng Video ra toàn cửa sổ (Esc để thoát)">⤢ Toàn màn</button>
+          <button class="btn ghost" onclick="animOpen()" title="Xem kho hiệu ứng chuyển động toàn màn hình: mẫu đồ hoạ động, bit Remotion, chuyển cảnh — bấm thẻ để áp vào cảnh đang chọn">✨ Kho hiệu ứng</button>
           <button class="btn ghost" id="t7AiDesignBtn" onclick="t7AiPropose()" title="Trợ lý đọc lời từng cảnh, đề xuất mẫu chuyển động kèm LÝ DO — bạn duyệt từng cảnh rồi mới gắn">✨ Trợ lý dựng</button>
           <button class="btn ghost" onclick="t7Save()">🗂 Lưu</button>
           <button class="btn primary" id="t7ExportBtn" onclick="t7OpenExport()">⬆ Xuất Video</button>
@@ -3461,9 +3485,10 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
 
     </div>
 
-    <!-- ═══════════ TOOL HOẠT ẢNH — cửa vào riêng cho kho hiệu ứng chuyển động ═══════════
-         Mẫu đồ hoạ động + bit Remotion + các chuyển cảnh. Trước đây các thứ này chỉ nằm
-         trong tab "Hiệu ứng" của Dựng Video nên khó thấy. Dùng lại y nguyên kho của Tool 7. -->
+    <!-- ═══════════ TOOL HOẠT ẢNH — kho hiệu ứng chuyển động, mở từ Dựng Video ═══════════
+         Mẫu đồ hoạ động + bit Remotion + các chuyển cảnh. Không phải công cụ riêng — chỉ là
+         chế độ xem kho toàn màn hình, vào bằng nút "✨ Kho hiệu ứng" của Dựng Video (Tool 7).
+         Dùng lại y nguyên kho của Tool 7 nên hai nơi không bao giờ lệch nhau. -->
     <div class="tool" id="tool-toolanim">
       <style>
         #tool-toolanim .anim-wrap{width:100%}
@@ -7484,6 +7509,13 @@ function switchTool(name){
     if (_wbC && window.WhiteboardPanel && typeof window.WhiteboardPanel.init === 'function') {
       try { window.WhiteboardPanel.init(_wbC); }
       catch (e) { console.error('[whiteboard] init lỗi:', e); }
+    }
+  }
+  if (name === 'toolhanddraw') {
+    const _hdC = document.getElementById('handdrawRoot');
+    if (_hdC && window.HanddrawPanel && typeof window.HanddrawPanel.init === 'function') {
+      try { window.HanddrawPanel.init(_hdC); }
+      catch (e) { console.error('[handdraw] init lỗi:', e); }
     }
   }
   if (name === 'tooladmin' && typeof admListUsers === 'function') admListUsers();
@@ -20083,12 +20115,17 @@ function t7FxSetTrans(id){
 }
 
 /* ============================================================
-   HOẠT ẢNH (toolanim) — CỬA VÀO RIÊNG cho kho hiệu ứng chuyển động.
+   HOẠT ẢNH (toolanim) — KHO HIỆU ỨNG chuyển động, mở từ nút "✨ Kho hiệu ứng" của Dựng Video.
    Dùng lại y nguyên kho + bộ nạp của Tool 7 (_t7LoadFx / _t7Cat /
    _t7Trans / _t7Bits / _t7Prev) nên hai nơi không bao giờ lệch nhau.
    Bấm thẻ: có cảnh đang chọn → áp ngay vào spec; chưa có → mở Tool 7.
 ============================================================ */
 let _animLoaded = false;
+// Mở kho toàn màn hình từ Dựng Video — thoát chế độ toàn màn (nếu đang bật) rồi đổi tab.
+function animOpen(){
+  try { if (typeof t7Focus === 'function') t7Focus(false); } catch (e) {}
+  switchTool('toolanim');                                  // switchTool tự gọi animInit()
+}
 async function animInit(){
   const body = document.getElementById('animBody'); if (!body) return;
   if (!_animLoaded){
@@ -25698,9 +25735,11 @@ function toggleApiSection(){
 </script>
 
   <script src="video-agent-panel.js"></script>
-  <!-- Whiteboard Studio: core PHẢI nạp trước panel (panel đọc window.WhiteboardCore ngay khi execute) -->
-  <script src="whiteboard-studio-core.js"></script>
+  <!-- Whiteboard Studio: annotation core (UMD — dùng chung main + renderer) + panel (UI luồng srt-whiteboard-animation) -->
+  <script src="whiteboard-annotation.js"></script>
   <script src="whiteboard-studio-panel.js"></script>
+  <!-- Vẽ Tay Ảnh: tách phần animation vẽ tay từ Whiteboard Studio (tái dùng whiteboard-annotation.js + IPC whiteboard:*) -->
+  <script src="handdraw-studio-panel.js"></script>
 
 <script>
 /* ============================================================================

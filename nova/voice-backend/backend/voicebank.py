@@ -19,8 +19,13 @@ def _preset_path(pid: str) -> Path:
 
 
 def seed_factory() -> int:
-    """Nạp giọng NHÀ MÁY (presets/presets.json + file .wav) vào VoiceBank. Idempotent, chạy mỗi lần mở app.
-    Bỏ qua mục nào chưa có file mẫu (dev/khách chưa bỏ vào) → an toàn khi ship manifest trước."""
+    """Nạp giọng NHÀ MÁY vào VoiceBank. Idempotent, chạy mỗi lần mở app.
+
+    Hai nguồn:
+      - Có ``file`` WAV: copy vào voicebank, dùng làm ref_audio (clone).
+      - Không file nhưng ``attributes.voice``: giọng built-in của engine (VieNeu).
+    Bỏ qua mục không có nguồn → không tạo giọng rỗng.
+    """
     manifest = PRESETS_DIR / "presets.json"
     if not manifest.exists():
         return 0
@@ -31,26 +36,32 @@ def seed_factory() -> int:
     n = 0
     for it in items:
         pid = it.get("id")
-        wav_name = it.get("file")
-        if not pid or not wav_name:
+        if not pid:
             continue
-        src = PRESETS_DIR / wav_name
-        if not src.exists():
-            continue  # chưa có file mẫu → bỏ qua, không tạo giọng rỗng
-        dst = VOICEBANK_DIR / f"{pid}{src.suffix or '.wav'}"
-        try:
-            if (not dst.exists()) or dst.stat().st_size != src.stat().st_size:
-                shutil.copy(src, dst)
-        except Exception:
+        attrs = it.get("attributes") or {}
+        wav_name = it.get("file")
+        builtin = str(attrs.get("voice") or "").strip()
+        dst = None
+        if wav_name:
+            src = PRESETS_DIR / wav_name
+            if not src.exists():
+                continue  # chưa có file mẫu → bỏ qua, không tạo giọng rỗng
+            dst = VOICEBANK_DIR / f"{pid}{src.suffix or '.wav'}"
+            try:
+                if (not dst.exists()) or dst.stat().st_size != src.stat().st_size:
+                    shutil.copy(src, dst)
+            except Exception:
+                continue
+        elif not builtin:
             continue
         prev = get_voice(pid) or {}
         voice = {
             "id": pid,
             "name": it.get("name", pid),
-            "ref_audio": str(dst),
+            "ref_audio": str(dst) if dst else None,
             "ref_text": it.get("ref_text", ""),
             "tags": it.get("tags", []),
-            "attributes": it.get("attributes", {}),
+            "attributes": attrs,
             "is_favorite": bool(it.get("is_favorite", False)),
             "is_factory": True,
             "created_at": prev.get("created_at", time.time()),

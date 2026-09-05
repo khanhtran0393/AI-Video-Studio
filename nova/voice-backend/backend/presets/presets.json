@@ -24,5 +24,148 @@
     "ref_text": "",
     "tags": ["english", "male", "casual"],
     "attributes": { "lang": "en" }
+  },
+  {
+    "id": "factory_vi_minh_duc",
+    "name": "⭐ Việt — Minh Đức (Nam, Bắc, tin tức)",
+    "ref_text": "",
+    "tags": ["vietnamese", "male", "north", "news"],
+    "attributes": { "lang": "vi", "voice": "Minh Đức", "instruct": "male, northern Vietnamese accent, news announcer" },
+    "is_favorite": true
+  },
+  {
+    "id": "factory_vi_pham_tuyen",
+    "name": "⭐ Việt — Phạm Tuyên (Nam, Bắc, tự nhiên)",
+    "ref_text": "",
+    "tags": ["vietnamese", "male", "north", "natural"],
+    "attributes": { "lang": "vi", "voice": "Phạm Tuyên", "instruct": "male, northern Vietnamese accent, natural conversational" }
+  },
+  {
+    "id": "factory_vi_thai_son",
+    "name": "⭐ Việt — Thái Sơn (Nam, Nam Bộ, kể chuyện)",
+    "ref_text": "",
+    "tags": ["vietnamese", "male", "south", "story"],
+    "attributes": { "lang": "vi", "voice": "Thái Sơn", "instruct": "male, southern Vietnamese accent, storytelling" },
+    "is_favorite": true
+  },
+  {
+    "id": "factory_vi_xuan_vinh",
+    "name": "⭐ Việt — Xuân Vĩnh (Nam, Nam Bộ, tự nhiên)",
+    "ref_text": "",
+    "tags": ["vietnamese", "male", "south", "natural"],
+    "attributes": { "lang": "vi", "voice": "Xuân Vĩnh", "instruct": "male, southern Vietnamese accent, natural conversational" }
+  },
+  {
+    "id": "factory_vi_thanh_binh",
+    "name": "⭐ Việt — Thanh Bình (Nam, Bắc, kể chuyện)",
+    "ref_text": "",
+    "tags": ["vietnamese", "male", "north", "story"],
+    "attributes": { "lang": "vi", "voice": "Thanh Bình", "instruct": "male, northern Vietnamese accent, storytelling" }
+  },
+  {
+    "id": "factory_vi_truc_ly",
+    "name": "⭐ Việt — Trúc Ly (Nữ, Bắc, tự nhiên)",
+    "ref_text": "",
+    "tags": ["vietnamese", "female", "north", "natural"],
+    "attributes": { "lang": "vi", "voice": "Trúc Ly", "instruct": "female, northern Vietnamese accent, natural conversational" },
+    "is_favorite": true
+  },
+  {
+    "id": "factory_vi_ngoc_linh",
+    "name": "⭐ Việt — Ngọc Linh (Nữ, Bắc, kể chuyện)",
+    "ref_text": "",
+    "tags": ["vietnamese", "female", "north", "story"],
+    "attributes": { "lang": "vi", "voice": "Ngọc Linh", "instruct": "female, northern Vietnamese accent, storytelling" }
+  },
+  {
+    "id": "factory_vi_doan_trang",
+    "name": "⭐ Việt — Đoan Trang (Nữ, Bắc, tự nhiên)",
+    "ref_text": "",
+    "tags": ["vietnamese", "female", "north", "natural"],
+    "attributes": { "lang": "vi", "voice": "Đoan Trang", "instruct": "female, northern Vietnamese accent, natural conversational" }
+  },
+  {
+    "id": "factory_vi_mai_anh",
+    "name": "⭐ Việt — Mai Anh (Nữ, Bắc, tin tức)",
+    "ref_text": "",
+    "tags": ["vietnamese", "female", "north", "news"],
+    "attributes": { "lang": "vi", "voice": "Mai Anh", "instruct": "female, northern Vietnamese accent, news announcer" }
+  },
+  {
+    "id": "factory_vi_thuc_doan",
+    "name": "⭐ Việt — Thục Đoan (Nữ, Nam Bộ, kể chuyện)",
+    "ref_text": "",
+    "tags": ["vietnamese", "female", "south", "story"],
+    "attributes": { "lang": "vi", "voice": "Thục Đoan", "instruct": "female, southern Vietnamese accent, storytelling" }
+  },
+  {
+    "id": "factory_vi_minh_triet",
+    "name": "⭐ Việt — Minh Triết (Nam, Nam Bộ, tin tức)",
+    "ref_text": "",
+    "tags": ["vietnamese", "male", "south", "news"],
+    "attributes": { "lang": "vi", "voice": "Minh Triết", "instruct": "male, southern Vietnamese accent, news announcer" }
+  },
+  {
+    "id": "factory_vi_thuy_dung",
+    "name": "⭐ Việt — Thùy Dung (Nữ, Nam Bộ, tin tức)",
+    "ref_text": "",
+    "tags": ["vietnamese", "female", "south", "news"],
+    "attributes": { "lang": "vi", "voice": "Thùy Dung", "instruct": "female, southern Vietnamese accent, news announcer" }
+  },
+  {
+    "id": "factory_vi_quang_son",
+    "name": "⭐ Việt — Quang Sơn (Nam, Trung, tự nhiên)",
+    "ref_text": "",
+    "tags": ["vietnamese", "male", "central", "natural"],
+    "attributes": { "lang": "vi", "voice": "Quang Sơn", "instruct": "male, central Vietnamese accent, natural conversational" }
+  },
+  {
+    "id": "factory_vi_ngoc_tran",
+    "name": "⭐ Việt — Ngọc Trân (Nữ, Trung, tự nhiên)",
+    "ref_text": "",
+    "tags": ["vietnamese", "female", "central", "natural"],
+    "attributes": { "lang": "vi", "voice": "Ngọc Trân", "instruct": "female, central Vietnamese accent, natural conversational" }
+  },
+  {
+    "id": "factory_vi_my_duyen",
+    "name": "⭐ Việt — Mỹ Duyên (Nữ, Nam Bộ, đọc truyện)",
+    "ref_text": "",
+    "tags": ["vietnamese", "female", "south", "story"],
+    "attributes": { "lang": "vi", "voice": "Mỹ Duyên", "instruct": "female, southern Vietnamese accent, audiobook narration" }
+  },
+  {
+    "id": "factory_vi_quynh_anh",
+    "name": "⭐ Việt — Quỳnh Anh (Nữ, Bắc, đọc truyện)",
+    "ref_text": "",
+    "tags": ["vietnamese", "female", "north", "story"],
+    "attributes": { "lang": "vi", "voice": "Quỳnh Anh", "instruct": "female, northern Vietnamese accent, audiobook narration" }
+  },
+  {
+    "id": "factory_vi_duc_tri",
+    "name": "⭐ Việt — Đức Trí (Nam, Nam Bộ, đọc truyện)",
+    "ref_text": "",
+    "tags": ["vietnamese", "male", "south", "story"],
+    "attributes": { "lang": "vi", "voice": "Đức Trí", "instruct": "male, southern Vietnamese accent, audiobook narration" }
+  },
+  {
+    "id": "factory_vi_kim_thanh",
+    "name": "⭐ Việt — Kim Thanh (Nữ, Nam Bộ, đọc truyện)",
+    "ref_text": "",
+    "tags": ["vietnamese", "female", "south", "story"],
+    "attributes": { "lang": "vi", "voice": "Kim Thanh", "instruct": "female, southern Vietnamese accent, audiobook narration" }
+  },
+  {
+    "id": "factory_vi_ngoc_huyen",
+    "name": "⭐ Việt — Ngọc Huyền (Nữ, Bắc, tự nhiên)",
+    "ref_text": "",
+    "tags": ["vietnamese", "female", "north", "natural"],
+    "attributes": { "lang": "vi", "voice": "Ngọc Huyền", "instruct": "female, northern Vietnamese accent, natural reading" }
+  },
+  {
+    "id": "factory_vi_adam",
+    "name": "⭐ Việt — Adam (Nam, Nam Bộ, tự nhiên)",
+    "ref_text": "",
+    "tags": ["vietnamese", "male", "south", "natural"],
+    "attributes": { "lang": "vi", "voice": "Adam", "instruct": "male, southern Vietnamese accent, natural reading" }
   }
 ]
