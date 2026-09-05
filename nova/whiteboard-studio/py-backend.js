@@ -36,6 +36,8 @@ const DEPS_CODE = 'import cv2, numpy, av, PIL';
 const DEFAULTS = {
   inkPath: 'grid',          // grid | skeleton
   colorFill: 'contour-wipe', // contour-wipe | brush
+  tipMode: 'hand',           // hand (bàn tay cầm bút) | pen (ngòi bút) | none (không hiệu ứng)
+  brushRadius: null,         // null = mặc định renderer
   capLongEdge: 1080,
   fps: null,                 // null = mặc định renderer
   pause: null,               // null = mặc định renderer (heavy)
@@ -292,13 +294,17 @@ async function exportVideo({ scenes, outputPath, audioTracks, options, onProgres
       const sceneOut = path.join(workDir, base + '.mp4');
       fs.writeFileSync(annPath, JSON.stringify(ann, null, 2), 'utf8');
 
+      // tipMode: 'hand' → sprite bàn tay | 'pen' → hand='' (engine tự vẽ ngòi bút procedural) | 'none' → --bare-tip
+      const handArg = opt.tipMode === 'pen' ? '' : HAND_PNG;
       const args = [
-        RENDER_SCRIPT, scene.image, annPath, sceneOut, HAND_PNG,
+        RENDER_SCRIPT, scene.image, annPath, sceneOut, handArg,
         '--total-ms', String(durationMs),
         '--ink-path', String(opt.inkPath),
         '--color-fill', String(opt.colorFill),
         '--cap-long-edge', String(opt.capLongEdge || 1080),
       ];
+      if (opt.tipMode === 'none') args.push('--bare-tip');
+      if (opt.brushRadius) args.push('--brush-radius', String(Math.max(1, Math.round(opt.brushRadius))));
       if (opt.fps) args.push('--fps', String(Math.round(opt.fps)));
       if (opt.pause) args.push('--pause', String(opt.pause));
 

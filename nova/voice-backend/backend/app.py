@@ -5,6 +5,7 @@ tải file khi completed. Model chạy tuần tự qua 1 worker + mutex (giống
 """
 from __future__ import annotations
 
+import os
 import shutil
 import threading
 import time
@@ -135,11 +136,6 @@ def _run_tts(task: dict) -> None:
     sentences = split_sentences(p["text"])
     if not sentences:
         raise ValueError("Văn bản trống")
-    # TĂNG TỐC: gộp câu thành khối ~240 ký tự (2-4 câu) → giảm số lần gọi model. chunk_chars=0 để tắt.
-    max_chars = int(p.get("chunk_chars", 240) or 0)
-    if max_chars > 0:
-        sentences = _chunk_sentences(sentences, max_chars)
-    task["total"] = len(sentences)
 
     ref_audio, ref_text, attributes = _resolve_voice(p)
     engine_name, engine = _resolve_tts_engine(p)
@@ -156,30 +152,101 @@ def _run_tts(task: dict) -> None:
     job_dir = config.OUTPUT_DIR / task["id"]
     job_dir.mkdir(parents=True, exist_ok=True)
 
-    parts, srt_items, line_files = [], [], []
-    for i, sent in enumerate(sentences):
-        wav = job_dir / f"line_{i:03d}.wav"
+    # ── Fast path: VieNeu trên GPU (CUDA/MPS/XPU) ─────────────────────────
+    # Gọi model MỘT lần với toàn bộ văn bản → Vieneu v3 Turbo tự tách câu và
+    # gộp nhiều chunk vào cùng 1 forward (static batching, theo độ dài phoneme)
+    # → throughput GPU cao hơn hẳn so với gọi rời từng khối. Frontend của app
+    # chỉ dùng results.merged nên SRT 1 dòng là đủ (phụ đề thật đi đường Whisper).
+    # THEO TÙY CHỌN NGƯỜI DÙNG:
+    #   - gpu_batch=False (body) → tắt; True → ép bật; None → tự động.
+    #   - Tự động chỉ bật khi gap_ms đang là MẶC ĐỊNH (100) — user chỉnh khoảng
+    #     lặng thì đi đường từng khối để gap được áp đúng ý user.
+    #   - chunk_chars=0 (muốn từng câu) hoặc env VOICE_VIENEU_NO_BATCH=1 để tắt.
+    cc = p.get("chunk_chars")
+    cc = 240 if cc is None else int(cc)
+    hw = _probe_hardware()
+    gpu_batch = p.get("gpu_batch")
+    auto_ok = int(p.get("gap_ms", 100)) == 100 and cc != 0
+    if (
+        engine_name == "vieneu"
+        and (gpu_batch is True or (gpu_batch is None and auto_ok))
+        and hw.get("device") in ("cuda", "mps", "xpu")
+        and not os.environ.get("VOICE_VIENEU_NO_BATCH")
+        and len(sentences) > 1
+    ):
+        task["total"] = 1
+        wav = job_dir / "line_000.wav"
         engine.synthesize(
             TTSRequest(
-                text=sent,
-                language=lang,
-                ref_audio=ref_audio,
-                ref_text=ref_text,
-                device_preference=device_preference,
-                speed=speed,
-                attributes=attributes,
+                text=p["text"].strip(), language=lang, ref_audio=ref_audio,
+                ref_text=ref_text, device_preference=device_preference,
+                speed=speed, attributes=attributes,
             ),
             wav,
         )
-        # Cao độ: dịch hậu kỳ cho MỌI engine (OmniVoice/VieNeu/XTTS không nhận
-        # tham số pitch khi synth) — áp TRƯỚC khi đo thời lượng để SRT đúng.
         if abs(pitch) >= 1e-6:
             pitch_shift_wav(wav, pitch)
-        dur = wav_duration(wav)
-        parts.append(wav)
-        srt_items.append({"text": sent, "duration": dur})
-        line_files.append({"text": sent, "file": f"/api/files/{task['id']}/{wav.name}", "duration": round(dur, 2)})
-        task["progress"] = i + 1
+        merged_wav = job_dir / "output.wav"
+        concat_wavs([wav], merged_wav)
+        write_srt([{"text": p["text"].strip(), "duration": wav_duration(merged_wav)}],
+                  job_dir / "output.srt")
+        mp3 = job_dir / "output.mp3"
+        try:
+            to_mp3(merged_wav, mp3)
+            merged_url = f"/api/files/{task['id']}/output.mp3"
+        except Exception:
+            merged_url = f"/api/files/{task['id']}/output.wav"
+        task["progress"] = 1
+        task["results"] = {
+            "merged": merged_url,
+            "srt": f"/api/files/{task['id']}/output.srt",
+            "lines": [{"text": p["text"].strip(), "file": f"/api/files/{task['id']}/output.wav",
+                       "duration": round(wav_duration(merged_wav), 2)}],
+            "mode": "vieneu-gpu-batch",
+        }
+        return
+
+    # ── Đường tổng quát (OmniVoice/XTTS, VieNeu CPU, chunk_chars=0) ────────
+    # TĂNG TỐC: gộp câu thành khối ~240 ký tự (2-4 câu) → giảm số lần gọi model.
+    max_chars = cc
+    if max_chars > 0:
+        sentences = _chunk_sentences(sentences, max_chars)
+    task["total"] = len(sentences)
+
+    from concurrent.futures import ThreadPoolExecutor
+
+    parts, srt_items, line_files = [], [], []
+
+    def _post(wav, _pitch):
+        # Hậu kỳ chạy ở thread pool: pitch (ffmpeg subprocess) + đo thời lượng
+        # song song trong khi model render khối kế tiếp → GPU không phải chờ.
+        if abs(_pitch) >= 1e-6:
+            pitch_shift_wav(wav, _pitch)
+        return wav_duration(wav)
+
+    with ThreadPoolExecutor(max_workers=2) as post:
+        futs = []
+        for i, sent in enumerate(sentences):
+            wav = job_dir / f"line_{i:03d}.wav"
+            engine.synthesize(
+                TTSRequest(
+                    text=sent,
+                    language=lang,
+                    ref_audio=ref_audio,
+                    ref_text=ref_text,
+                    device_preference=device_preference,
+                    speed=speed,
+                    attributes=attributes,
+                ),
+                wav,
+            )
+            futs.append((sent, wav, post.submit(_post, wav, pitch)))
+            task["progress"] = i + 1
+        for sent, wav, fut in futs:
+            dur = fut.result()
+            parts.append(wav)
+            srt_items.append({"text": sent, "duration": dur})
+            line_files.append({"text": sent, "file": f"/api/files/{task['id']}/{wav.name}", "duration": round(dur, 2)})
 
     # Ghép + xuất SRT + MP3
     merged_wav = job_dir / "output.wav"
@@ -233,6 +300,9 @@ class TTSBody(BaseModel):
     # OmniVoice/VieNeu/XTTS đều không nhận pitch → backend xử lý hậu kỳ bằng ffmpeg.
     pitch: float = 0.0
     gap_ms: int = 100
+    # GPU batch (VieNeu + GPU): None = tự động (chỉ bật khi gap_ms mặc định),
+    # True = ép bật, False = tắt hẳn — người dùng toàn quyền.
+    gpu_batch: Optional[bool] = None
     # Số ký tự tối đa mỗi khối đọc (gộp nhiều câu để giảm lần gọi model).
     # 0 = tắt gộp, đọc từng câu. Frontend gửi 400 cho kịch bản dài → nhanh hơn.
     chunk_chars: Optional[int] = 240
@@ -245,6 +315,78 @@ class SaveVoiceBody(BaseModel):
     ref_text: str = ""
     tags: list[str] = []
     attributes: dict = {}
+
+
+# ---- Dò phần cứng (gọi 1 lần rồi cache) ----
+_HW_CACHE: dict = {"data": None}
+
+
+def _probe_hardware() -> dict:
+    """Dò thiết bị tính toán + đề xuất thông số đọc tối ưu CHO TỪNG MÁY.
+
+    Máy người dùng rất khác nhau (GPU 4-24GB, CPU 2-56 nhân) → kích thước khối
+    đọc (chunk_chars) và độ dài đoạn render tối ưu cũng phải khác. Frontend gọi
+    /api/hardware ngay khi backend lên để tự chỉnh — khỏi đo lại mỗi task.
+    """
+    if _HW_CACHE["data"]:
+        return _HW_CACHE["data"]
+    info = {
+        "device": "cpu", "gpu": None, "vram_gb": 0.0,
+        "cpu_cores": os.cpu_count() or 2, "ram_gb": 0.0,
+        "torch": None, "cuda_available": False,
+    }
+    try:
+        import torch  # nạp lười — backend chưa cài torch vẫn trả được CPU profile
+
+        info["torch"] = torch.__version__
+        if torch.cuda.is_available():
+            info["device"] = "cuda"
+            info["cuda_available"] = True
+            p = torch.cuda.get_device_properties(0)
+            info["gpu"] = p.name
+            info["vram_gb"] = round(p.total_memory / (1024 ** 3), 1)
+        elif getattr(torch, "xpu", None) and torch.xpu.is_available():
+            # Intel GPU (Arc) — cần torch bản XPU; VieNeu chạy qua env VOICE_VIENEU_MODE=xpu
+            info["device"] = "xpu"
+            try:
+                info["gpu"] = torch.xpu.get_device_name(0)
+            except Exception:
+                info["gpu"] = "Intel GPU"
+        elif getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
+            info["device"] = "mps"
+    except Exception:
+        pass
+    try:
+        import psutil  # tuỳ chọn — thiếu thì bỏ qua RAM
+
+        info["ram_gb"] = round(psutil.virtual_memory().total / (1024 ** 3), 1)
+    except Exception:
+        pass
+    cores = info["cpu_cores"]
+    if info["device"] in ("cuda", "mps", "xpu"):
+        profile = "gpu"
+        if info["vram_gb"] >= 6:
+            chunk = 600       # VRAM rộng → khối to, giảm số lần gọi model
+        elif info["vram_gb"] >= 3.5:
+            chunk = 480       # như GTX 1050 Ti 4GB — vừa sức, không sợ OOM
+        else:
+            chunk = 400
+        seg = 500 if chunk >= 480 else 400
+    elif cores >= 8:
+        profile = "cpu"
+        chunk, seg = 400, 350
+    else:
+        profile = "cpu-weak"
+        chunk, seg = 200, 250   # đoạn nhỏ → có audio sớm, không dính trần chờ
+    info["profile"] = profile
+    info["recommended"] = {"chunk_chars": chunk, "seg_words": seg}
+    _HW_CACHE["data"] = info
+    return info
+
+
+@app.get("/api/hardware")
+def api_hardware():
+    return _probe_hardware()
 
 
 # ---- Endpoints ----

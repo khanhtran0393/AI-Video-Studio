@@ -4336,6 +4336,7 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
       <div class="panel mb-16">
         <div class="panel-head"><span>Đã tạo</span><span style="text-transform:none;letter-spacing:0;font-weight:500;color:var(--text-dim);font-size:12px">trong phiên này</span></div>
         <div class="panel-body" style="padding:10px">
+          <button class="btn primary sm" id="giongGhepBtn" style="display:none;width:100%;margin-bottom:8px" onclick="giongSuGhep()">🔗 Ghép các đoạn đã xong</button>
           <div id="giongSu"><div class="empty-state">Chưa tạo bản nào trong phiên này.</div></div>
         </div>
       </div>
@@ -8117,7 +8118,7 @@ async function voiceInit(){
   }
   // Xác minh backend còn sống (không chỉ dựa cờ cũ — phòng khi backend đã tắt/khởi động lại).
   const cur = await window.native.voiceStatus().catch(() => null);
-  if (cur?.running){ _voiceReady = true; if (cur?.url) VOICE_URL = cur.url; if (st) st.innerHTML = '<span style="color:var(--green)">● Giọng nói sẵn sàng (OmniVoice · VieNeu · XTTS)</span>'; voiceLoadVoices(); return; }
+  if (cur?.running){ _voiceReady = true; if (cur?.url) VOICE_URL = cur.url; if (st) st.innerHTML = '<span style="color:var(--green)">● Giọng nói sẵn sàng (OmniVoice · VieNeu · XTTS)</span>'; voiceLoadVoices(); voiceHWNap(); return; }
   _voiceReady = false;
   // Đã cài backend trên máy chưa? (thay vì báo lỗi đỏ → hiện panel hướng dẫn cài)
   const pb = window.native.voiceProbe ? await window.native.voiceProbe().catch(() => null) : null;
@@ -8127,8 +8128,38 @@ async function voiceInit(){
   if (st) st.innerHTML = '⏳ Đang khởi động backend giọng nói (OmniVoice · VieNeu · XTTS)… lần đầu ~30-60s, giữ app mở.';
   if (!_voiceStarting) _voiceStarting = window.native.voiceStart();
   const r = await _voiceStarting; _voiceStarting = null;
-  if (r?.ok){ _voiceReady = true; if (r?.url) VOICE_URL = r.url; if (st) st.innerHTML = '<span style="color:var(--green)">● Giọng nói sẵn sàng (OmniVoice · VieNeu · XTTS)</span>'; voiceLoadVoices(); }
+  if (r?.ok){ _voiceReady = true; if (r?.url) VOICE_URL = r.url; if (st) st.innerHTML = '<span style="color:var(--green)">● Giọng nói sẵn sàng (OmniVoice · VieNeu · XTTS)</span>'; voiceLoadVoices(); voiceHWNap(); }
   else if (st) st.innerHTML = '<span style="color:var(--red)">Lỗi khởi động: ' + escapeHtml(r?.error || '') + '</span>';
+}
+
+/* ── Tự dò phần cứng của từng máy để đọc TTS nhanh nhất ────────────────
+   Backend trả /api/hardware (device/gpu/vram/cpu_cores + recommended).
+   - Hiện rõ đang chạy GPU hay CPU ngay trên dòng trạng thái.
+   - chunk_chars + độ dài đoạn auto-split theo khuyến nghị của máy đó.
+   - Máy KHÔNG có GPU → mặc định VieNeu (ONNX tối ưu CPU) thay vì OmniVoice
+     vốn chậm trên CPU — chỉ khi người dùng CHƯA từng chọn engine tay.        */
+let _voiceHW = null;   // { device, gpu, vram_gb, cpu_cores, profile, recommended }
+async function voiceHWNap(){
+  if (!_voiceReady) return;
+  try {
+    const h = await _giongFetchJson(VOICE_URL + '/api/hardware');
+    if (!h || !h.profile) return;
+    _voiceHW = h;
+    const st = document.getElementById('voiceBackendStatus');
+    if (st && /sẵn sàng/.test(st.textContent || '')){
+      const chip = h.device === 'cuda'
+        ? ' · ' + (h.gpu || 'GPU') + (h.vram_gb ? ' ' + h.vram_gb + 'GB' : '') + ' 🚀'
+        : (h.device === 'xpu' ? ' · ' + (h.gpu || 'Intel GPU') + ' 🚀'
+        : (h.device === 'mps' ? ' · Apple GPU' : ' · CPU ' + (h.cpu_cores || '?') + ' nhân'));
+      st.innerHTML += '<span style="color:var(--text-dim)">' + escapeHtml(chip) + '</span>';
+    }
+    if (h.profile !== 'gpu' && _voiceBackendMacDinh && _voiceBackend === 'omni'){
+      _voiceBackend = 'vieneu';
+      _voiceBackendMacDinh = false;   // đã chủ đích chọn theo phần cứng — health không đè lại
+      try { novaLog('🎙 máy không có GPU → mặc định VieNeu (ONNX CPU, nhanh hơn OmniVoice trên CPU)'); } catch (_){}
+      voiceBackendVe(); try { giongVe(); giongVeThanh(); } catch (_){}
+    }
+  } catch (_){}   // backend cũ chưa có /api/hardware → dùng mặc định 400/400
 }
 
 // Panel hướng dẫn khách tự tải + cài backend giọng nói (thay cho dòng lỗi đỏ)
@@ -8499,8 +8530,9 @@ function giongDocTuyChon(){
 async function _ttsLocal(eng, v, text, o, onTien){
   if (!_voiceReady){ await voiceInit(); if (!_voiceReady) throw new Error('Backend giọng nói chưa sẵn sàng.'); }
   if (!v || !v.id) throw new Error('Chưa chọn giọng.');
-  // chunk_chars 400: gộp ~2-4 câu/lần gọi model → kịch bản dài xong nhanh hơn hẳn (0 = từng câu).
-  const body = { text, language: o.lang, speed: o.tocDo, pitch: o.caoDo || 0, gap_ms: Math.round(o.gap), chunk_chars: 400, attributes: {}, preset_id: v.id, engine: _TTS_BACKEND_ID[eng] || 'omnivoice' };
+  // chunk_chars theo phần cứng backend dò được (/api/hardware): GPU VRAM rộng → khối
+  // to (600, giảm số lần gọi model); máy yếu CPU → khối nhỏ (200, ra audio sớm). Mặc định 400.
+  const body = { text, language: o.lang, speed: o.tocDo, pitch: o.caoDo || 0, gap_ms: Math.round(o.gap), chunk_chars: (_voiceHW && _voiceHW.recommended && _voiceHW.recommended.chunk_chars) || 400, attributes: {}, preset_id: v.id, engine: _TTS_BACKEND_ID[eng] || 'omnivoice' };
   const sub = await _giongFetchJson(VOICE_URL + '/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   const tid = sub.task_id;
   if (!tid) throw new Error('Backend không nhận việc.');
@@ -8614,7 +8646,9 @@ async function voiceGenerate(){
   if (btn){ btn.disabled = true; btn.textContent = '⏳ Đang tạo…'; }
   try {
     const t0 = Date.now();
-    const doan = _giongTachDoan(text, 400);
+    // Độ dài đoạn theo phần cứng (/api/hardware): GPU nhanh → đoạn dài 500 từ (khỏi tách
+    // vụn); máy yếu CPU → 250 từ (nghe được sớm, không dính trần chờ). Mặc định 400.
+    const doan = _giongTachDoan(text, (_voiceHW && _voiceHW.recommended && _voiceHW.recommended.seg_words) || 400);
 
     if (doan.length <= 1){
       // Ngắn — giữ nguyên luồng cũ: 1 task trọn vẹn.
@@ -8648,7 +8682,7 @@ async function voiceGenerate(){
         return;
       }
     }
-    giongBao('✓ Xong ' + doan.length + ' đoạn sau ' + Math.round((Date.now() - t0) / 1000) + ' giây — tải từng đoạn trong lịch sử bên dưới theo thứ tự (Đoạn 1 → ' + doan.length + ') rồi ghép khi dựng video.', 'green');
+    giongBao('✓ Xong ' + doan.length + ' đoạn sau ' + Math.round((Date.now() - t0) / 1000) + ' giây — bấm “🔗 Ghép các đoạn đã xong” ở khung Đã tạo để có 1 file trọn vẹn.', 'green');
   } catch (e){
     giongBao('Lỗi: ' + (e.message || e), 'red');
   } finally {
@@ -8659,6 +8693,14 @@ async function voiceGenerate(){
 function giongSuVe(){
   const box = document.getElementById('giongSu');
   if (!box) return;
+  // Nút gộp: chỉ hiện khi có nhóm ≥2 đoạn auto-split đã xong (kể cả thiếu đoạn).
+  const g = _giongNhomDoan();
+  const gb = document.getElementById('giongGhepBtn');
+  if (gb){
+    const ok = !!(g && g.items.length >= 2);
+    gb.style.display = ok ? '' : 'none';
+    if (ok) gb.textContent = '🔗 Ghép các đoạn đã xong (' + g.items.length + '/' + g.N + ')';
+  }
   if (!_giongSu.length){ box.innerHTML = '<div class="empty-state">Chưa tạo bản nào trong phiên này.</div>'; return; }
   box.innerHTML = _giongSu.map((h, i) => {
     const ph = Math.floor(h.giay / 60), gi = Math.round(h.giay % 60);
@@ -8699,6 +8741,97 @@ function giongSuDungChoVideo(i){
   // t7HandleAudio lo hết: sóng âm, lưu theo video, đồng bộ Tool 2, kéo dài cảnh cuối.
   try { t7HandleAudio(f); } catch (e){ t7State.audioFile = f; }
   giongBao('✓ Đã gán vào dựng video — sang tab Dựng video là thấy.', 'green');
+}
+
+/* ── Ghép các đoạn đã xong thành 1 file ─────────────────────────────────
+   Kịch bản dài được auto-split thành "Đoạn i/N" và lưu từng đoạn vào lịch
+   sử. Nút này gom nhóm đoạn mới nhất (cùng N + cùng giọng; trùng số đoạn
+   thì lấy bản MỚI NHẤT — render lại chỉ đè đoạn cũ) rồi ghép thành 1 file
+   ngay trong app bằng Web Audio: decode → nối qua OfflineAudioContext
+   (tự chuẩn hoá nếu khác sample-rate) → encode WAV 16-bit. Kết quả lưu vào
+   lịch sử như 1 bản "Gộp…" nên Tải / Dùng cho video như các bản khác.     */
+const _GIONG_DOAN_RE = /^Đoạn (\d+)\/(\d+) · (.+)$/;
+function _giongNhomDoan(){
+  let best = null;   // nhóm "Đoạn i/N" có entry mới nhất
+  for (const h of _giongSu){
+    if (!h.ten) continue;
+    const m = _GIONG_DOAN_RE.exec(h.ten);
+    if (!m) continue;
+    if (!best || h.khi > best.khi) best = { N: +m[2], giong: m[3], khi: h.khi };
+  }
+  if (!best) return null;
+  const map = new Map();   // số đoạn → entry mới nhất
+  for (const h of _giongSu){
+    if (!h.ten) continue;
+    const m = _GIONG_DOAN_RE.exec(h.ten);
+    if (!m || +m[2] !== best.N || m[3] !== best.giong) continue;
+    const idx = +m[1];
+    if (!map.has(idx) || map.get(idx).h.khi < h.khi) map.set(idx, { idx, h });
+  }
+  return { N: best.N, giong: best.giong, items: Array.from(map.values()).sort((a, b) => a.idx - b.idx) };
+}
+function _giongWav16(ab){   // AudioBuffer → Blob WAV PCM 16-bit
+  const nCh = ab.numberOfChannels, sr = ab.sampleRate, len = ab.length;
+  const bytes = 44 + len * nCh * 2;
+  const dv = new DataView(new ArrayBuffer(bytes));
+  const wstr = (o, s) => { for (let i = 0; i < s.length; i++) dv.setUint8(o + i, s.charCodeAt(i)); };
+  wstr(0, 'RIFF'); dv.setUint32(4, bytes - 8, true); wstr(8, 'WAVE');
+  wstr(12, 'fmt '); dv.setUint32(16, 16, true); dv.setUint16(20, 1, true);
+  dv.setUint16(22, nCh, true); dv.setUint32(24, sr, true);
+  dv.setUint32(28, sr * nCh * 2, true); dv.setUint16(32, nCh * 2, true); dv.setUint16(34, 16, true);
+  wstr(36, 'data'); dv.setUint32(40, len * nCh * 2, true);
+  const chans = []; for (let c = 0; c < nCh; c++) chans.push(ab.getChannelData(c));
+  let o = 44;
+  for (let i = 0; i < len; i++) for (let c = 0; c < nCh; c++){
+    const v = Math.max(-1, Math.min(1, chans[c][i]));
+    dv.setInt16(o, v < 0 ? v * 0x8000 : v * 0x7FFF, true); o += 2;
+  }
+  return new Blob([dv], { type: 'audio/wav' });
+}
+async function giongSuGhep(){
+  const g = _giongNhomDoan();
+  if (!g || g.items.length < 2){ giongBao('Cần ít nhất 2 đoạn đã xong trong lịch sử để ghép.', 'red'); return; }
+  const btn = document.getElementById('giongGhepBtn');
+  if (btn){ btn.disabled = true; btn.textContent = '⏳ Đang ghép ' + g.items.length + ' đoạn…'; }
+  try {
+    // 1) Decode từng blob (mp3/wav đều được).
+    const AC = window.AudioContext || window.webkitAudioContext;
+    const ctx = new AC();
+    const bufs = [];
+    for (const it of g.items) bufs.push(await ctx.decodeAudioData(await it.h.blob.arrayBuffer()));
+    try { ctx.close(); } catch (_){ }
+    // 2) Nối qua OfflineAudioContext — tự resample nếu các đoạn khác sample-rate.
+    const sr = Math.max(...bufs.map(b => b.sampleRate));
+    const nCh = Math.max(...bufs.map(b => b.numberOfChannels));
+    const total = bufs.reduce((a, b) => a + b.length, 0);
+    const off = new OfflineAudioContext(nCh, total, sr);
+    let t = 0;
+    for (const b of bufs){
+      const s = off.createBufferSource(); s.buffer = b;
+      s.connect(off.destination); s.start(t);
+      t += b.length / b.sampleRate;
+    }
+    const out = await off.startRendering();
+    // 3) Encode WAV → lưu vào lịch sử như 1 bản (Tải / Dùng cho video như bản khác).
+    const blob = _giongWav16(out);
+    _giongSu.unshift({
+      url: URL.createObjectURL(blob), blob,
+      ten: 'Gộp ' + g.items.length + ' đoạn · ' + g.giong,
+      engine: g.items[0].h.engine, giay: out.duration,
+      text: g.items.map(x => x.h.text).join(' '), khi: Date.now(),
+    });
+    _giongSu = _giongSu.slice(0, 40);
+    giongSuVe();
+    const thieu = g.N - g.items.length;
+    giongBao('✓ Đã ghép ' + g.items.length + '/' + g.N + ' đoạn thành 1 file (' + Math.round(out.duration) + ' giây)'
+      + (thieu > 0 ? ' — thiếu ' + thieu + ' đoạn chưa xong, render nốt rồi ghép lại sẽ đủ.' : '')
+      + ' Bản "Gộp…" nằm đầu lịch sử: bấm Tải hoặc Dùng cho video.', 'green');
+  } catch (e){
+    giongBao('Lỗi ghép: ' + (e.message || e), 'red');
+  } finally {
+    if (btn) btn.disabled = false;
+    giongSuVe();
+  }
 }
 
 // ── Thêm giọng ──────────────────────────────────────────────────────
@@ -23538,6 +23671,26 @@ function t7AddSfx(file){
 function t7DelSfx(id){ t7State.sfx = (t7State.sfx || []).filter(s => s.id !== id); _t7PersistClips(); t7RenderTimeline(); setStatus7('Đã xoá hiệu ứng âm thanh.', 'info'); }
 // ---- Thư viện SFX dựng sẵn ----
 let _t7SfxCache = null; let _t7SfxAudio = null;
+// Cache dataUrl theo id — nghe thử cùng hiệu ứng lần 2 không phải đọc lại đĩa
+// qua IPC + base64 nữa (từng lần bấm ▶ đọc file + encode một chuỗi mới).
+// Giới hạn ~24 bản gần nhất để wav lớn không phình RAM vô hạn.
+const _t7SfxAudioCache = new Map();
+async function _t7SfxDoc(id){
+  const x = (_t7SfxCache || []).find(i => i.id === id);
+  if (!x) return null;
+  let d = _t7SfxAudioCache.get(id);
+  if (d === undefined){
+    try { const b = await window.native.readFileB64(x.path); d = (b && b.dataUrl) || null; }
+    catch (_){ d = null; }
+    if (d){
+      _t7SfxAudioCache.set(id, d);
+      while (_t7SfxAudioCache.size > 24) _t7SfxAudioCache.delete(_t7SfxAudioCache.keys().next().value);
+    } else {
+      _t7SfxAudioCache.set(id, null);   // nhớ cả lỗi để bấm lại không đọc đĩa thêm lần nữa
+    }
+  }
+  return d;
+}
 async function t7SfxLibOpen(){
   const m = document.getElementById('t7SfxModal'); if (!m) return;
   m.style.display = 'flex';
@@ -23572,15 +23725,15 @@ function t7SfxLibRender(){
 }
 async function t7SfxLibPreview(id){
   const x = (_t7SfxCache || []).find(i => i.id === id); if (!x) return;
-  try { if (_t7SfxAudio){ _t7SfxAudio.pause(); } const b = await window.native.readFileB64(x.path); if (b && b.dataUrl){ _t7SfxAudio = new Audio(b.dataUrl); _t7SfxAudio.volume = 0.9; _t7SfxAudio.play().catch(() => {}); } } catch (_) {}
+  try { if (_t7SfxAudio){ _t7SfxAudio.pause(); } const d = await _t7SfxDoc(id); if (d){ _t7SfxAudio = new Audio(d); _t7SfxAudio.volume = 0.9; _t7SfxAudio.play().catch(() => {}); } } catch (_) {}
 }
 async function t7SfxLibAdd(id){
   const x = (_t7SfxCache || []).find(i => i.id === id); if (!x) return;
   try {
-    const b = await window.native.readFileB64(x.path);
-    if (!b || !b.dataUrl){ setStatus7('Không đọc được hiệu ứng.', 'error'); return; }
+    const d = await _t7SfxDoc(id);   // nghe thử rồi → thêm không phải đọc đĩa lại
+    if (!d){ setStatus7('Không đọc được hiệu ứng.', 'error'); return; }
     if (!Array.isArray(t7State.sfx)) t7State.sfx = [];
-    t7State.sfx.push({ id: _t7NewId(), name: x.name, dataUrl: b.dataUrl, start: +(t7State.playT || 0).toFixed(2), volume: 0.9 });
+    t7State.sfx.push({ id: _t7NewId(), name: x.name, dataUrl: d, start: +(t7State.playT || 0).toFixed(2), volume: 0.9 });
     if (typeof _t7PersistClips === 'function') _t7PersistClips();
     t7RenderTimeline();
     setStatus7('🔊 Đã thêm "' + x.name + '" tại ' + (t7State.playT || 0).toFixed(1) + 's.', 'ok');
@@ -26148,10 +26301,10 @@ function toggleApiSection(){
 
   <script src="video-agent-panel.js"></script>
   <!-- Whiteboard Studio: annotation core (UMD — dùng chung main + renderer) + panel (UI luồng srt-whiteboard-animation) -->
-  <script src="whiteboard-annotation.js"></script>
-  <script src="whiteboard-studio-panel.js"></script>
+  <script src="whiteboard-annotation.js?v=hdlasso4"></script>
+  <script src="whiteboard-studio-panel.js?v=hdlasso4"></script>
   <!-- Vẽ Tay Ảnh: tách phần animation vẽ tay từ Whiteboard Studio (tái dùng whiteboard-annotation.js + IPC whiteboard:*) -->
-  <script src="handdraw-studio-panel.js"></script>
+  <script src="handdraw-studio-panel.js?v=hdlasso4"></script>
 
 <script>
 /* ============================================================================

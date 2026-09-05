@@ -25,6 +25,14 @@
     scenes: [],        // { sceneId, image, canvas, durationMs, elements, previewPath }
     selected: -1,
     exporting: false,
+    /* lựa chọn mẫu bút/bàn tay (Bước 3) — đọc khi export, không dính nút Xuất MP4 */
+    brush: {
+      tipMode: 'hand',            // hand | pen | none
+      inkPath: 'grid',            // grid | skeleton
+      colorFill: 'contour-wipe',  // contour-wipe | brush
+      brushRadius: null,          // null = mặc định engine
+      capLongEdge: 1080,
+    },
   };
 
   /* ── URL ảnh an toàn cho origin http://localhost ──
@@ -44,8 +52,8 @@
       'pickImageBtn', 'pickImagesBtn', 'pickDirBtn', 'clearBtn',
       'sceneImageLabel', 'sceneCanvasLabel', 'durationInput',
       'genElementsBtn',
-      'elementsBody', 'elementsTable',
-      'inkPathSel', 'colorFillSel', 'capSel',
+      'elementsBody', 'elementsTable', 'reschedBtn', 'aiElementsBtn',
+      'tipCards', 'inkCards', 'fillCards', 'radiusInput', 'capSel',
       'exportBtn', 'stopBtn', 'progressBar', 'progressPct', 'progressMsg', 'logBox',
       'pyPrepareBtn',
       'cvWrap', 'previewCanvas', 'editCanvas',
@@ -177,8 +185,9 @@
       s.canvas
     );
     s.elements = ann.elements;
+    rescheduleElements(s);   // chia đều thời lượng theo tỉ lệ 8 vẽ : 2 nghỉ
     s.previewPath = null;
-    if (!quiet) log('✓ sinh ' + s.elements.length + ' phần tử (vùng vẽ + thứ tự + reveal)');
+    if (!quiet) log('✓ sinh ' + s.elements.length + ' phần tử — chia giờ tỉ lệ 8 vẽ : 2 nghỉ');
     renderSceneDetail();
   }
 
@@ -197,7 +206,6 @@
       });
     }
     renderSceneList();
-    pvSetTime(Math.min(pvCurT(), s.durationMs));
   }
 
   function moveElement(i, d) {
@@ -228,7 +236,7 @@
   function elementEdited() {
     const s = state.scenes[state.selected];
     if (s) s.previewPath = null;
-    pvRender(pvCurT());   // vùng/thời lượng vừa sửa → vẽ lại khung hiện tại
+    pvRender();   // vùng/thời lượng vừa sửa → vẽ lại bảng khoanh
   }
 
   /* ════════ BẢNG KHOANH VÙNG — canvas hiển thị ảnh gốc + nét lasso ════════
@@ -298,107 +306,6 @@
   }
 
   /* ========= KHOANH VUNG TREN CANVAS -- chon khu vuc ve truoc/sau =========
-    // mask wipe theo huong reveal, vien luon song 2 tan so -- cac cot/hang duoc to
-    // duoc gop thanh run roi fill 1 path voi destination-in (thay ~700 fillRect 1px)
-    TC.globalCompositeOperation = 'destination-in';
-    TC.fillStyle = '#000';
-    const waveA = Math.max(2, pv.W / 150);
-    let frontRel = 0;
-    TC.beginPath();
-    if (dir === 'left_to_right' || dir === 'right_to_left') {
-      const span = Math.max(1, w);
-      frontRel = dir === 'left_to_right' ? span * p : w - span * p;
-      const w1 = span / 8 + 1, w2 = span / 28 + 1;
-      let run = -1;
-      for (let x = 0; x < w; x++) {
-        const wob = waveA * Math.sin((x + R.x0) / w1) + waveA * 0.35 * Math.sin((x + R.x0) / w2 + 1.7);
-        const on = dir === 'left_to_right' ? x <= frontRel + wob : x >= frontRel - wob;
-        if (on && run < 0) run = x;
-        else if (!on && run >= 0) { TC.rect(run, 0, x - run, h); run = -1; }
-      }
-      if (run >= 0) TC.rect(run, 0, w - run, h);
-    } else {
-      const span = Math.max(1, h);
-      frontRel = dir === 'top_to_bottom' ? span * p : h - span * p;
-      const w1 = span / 8 + 1, w2 = span / 28 + 1;
-      let run = -1;
-      for (let y = 0; y < h; y++) {
-        const wob = waveA * Math.sin((y + R.y0) / w1) + waveA * 0.35 * Math.sin((y + R.y0) / w2 + 1.7);
-        const on = dir === 'top_to_bottom' ? y <= frontRel + wob : y >= frontRel - wob;
-        if (on && run < 0) run = y;
-        else if (!on && run >= 0) { TC.rect(0, run, w, y - run); run = -1; }
-      }
-      if (run >= 0) TC.rect(0, run, w, h - run);
-    }
-    TC.fill();
-    TC.globalCompositeOperation = 'source-over';
-
-    if (done && layerKey) {
-      // snapshot lop da ve xong vao canvas cache rieng (T duoc tai su dung)
-      let cv;
-      const hit = pv.layers.get(layerKey);
-      if (hit) cv = hit.cv;
-      else { cv = document.createElement('canvas'); pv.layers.set(layerKey, { cv, sig: '' }); }
-      if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
-      const cc = cv.getContext('2d');
-      cc.clearRect(0, 0, w, h);
-      cc.drawImage(T, 0, 0);
-      pv.layers.get(layerKey).sig = sig;
-      ctx.drawImage(cv, R.x0, R.y0);
-      return null;
-    }
-    ctx.drawImage(T, R.x0, R.y0);
-    if (p > 0.002 && p < 0.998) {
-      if (poly) {                 // bút chạy dọc nét khoanh của người dùng
-        const tp = pvPathPoint(el, p);
-        if (tp) return tp;
-      }
-      if (dir === 'left_to_right' || dir === 'right_to_left') {
-        return { x: R.x0 + Math.max(0, Math.min(w, frontRel)), y: (R.y0 + R.y1) / 2 };
-      }
-      return { x: (R.x0 + R.x1) / 2, y: R.y0 + Math.max(0, Math.min(h, frontRel)) };
-    }
-    return null;
-  }
-
-  /* but marker thu tuc (port _procedural_tip): neo but (0.5, 0.7) trung diem roi muc.
-     Toi uu: ve vector 1 lan thanh sprite theo chieu cao preview -> moi frame chi drawImage */
-  function pvTipSprite() {
-    const h = Math.max(36, Math.round(pv.H * 0.18));
-    if (pv.tipCv && pv.tipH === h) return pv.tipCv;
-    const w = Math.max(10, Math.round(h * 0.34));
-    const m = 8;   // le sprite: khong cat bong/duong vien
-    const cv = document.createElement('canvas');
-    cv.width = w + m * 2; cv.height = h + m * 2;
-    const ctx = cv.getContext('2d');
-    ctx.translate(m, m);
-    ctx.globalAlpha = 0.18;
-    ctx.fillStyle = '#000';
-    ctx.fillRect(3 + w * 0.1, h * 0.08, w - 3, h * 0.6);
-    ctx.globalAlpha = 1;
-    const grad = ctx.createLinearGradient(0, 0, 0, h * 0.7);
-    grad.addColorStop(0, '#e2e2ea');
-    grad.addColorStop(1, '#3a3a44');
-    ctx.fillStyle = grad;
-    ctx.fillRect(2, h * 0.04, w - 4, h * 0.66);
-    ctx.strokeStyle = 'rgba(0,0,0,0.55)';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(2.5, h * 0.04 + 0.5, w - 5, h * 0.66);
-    ctx.beginPath();
-    ctx.arc(w / 2, h * 0.70, Math.max(3, w / 4), 0, Math.PI * 2);
-    ctx.fillStyle = '#4a2f16';
-    ctx.fill();
-    pv.tipCv = cv; pv.tipH = h; pv.tipW = w; pv.tipM = m;
-    return cv;
-  }
-
-  function pvDrawTip(ctx, x, y) {
-    pvTipSprite();
-    // neo but: diem (w/2, 0.7h) cua sprite trung dung diem roi muc (x, y)
-    ctx.drawImage(pv.tipCv, x - (pv.tipW / 2 + pv.tipM), y - (pv.tipH * 0.7 + pv.tipM));
-  }
-
-  /* ========= KHOANH VUNG TREN CANVAS -- chon khu vuc ve truoc/sau =========
      - keo chuot tren vung trong -> tao vung ve MOI (xep ve cuoi, tu canh startMs,
        tu keo dai canh neu thieu thoi gian)
      - keo giua vung co san -> di chuyen - keo goc tron -> resize
@@ -421,6 +328,27 @@
     return [[R.x0, R.y0], [R.x1, R.y0], [R.x0, R.y1], [R.x1, R.y1]];   // nw ne sw se
   }
 
+  /* điểm có nằm trong polygon khoanh tay không (toạ độ preview) — ray casting */
+  function pvPointInPoly(x, y, region) {
+    const pts = region && region.points;
+    if (!pts || pts.length < 3) return false;
+    let inside = false;
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+      const xi = pts[i][0] * pv.sx, yi = pts[i][1] * pv.sy;
+      const xj = pts[j][0] * pv.sx, yj = pts[j][1] * pv.sy;
+      if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+    }
+    return inside;
+  }
+
+  /* điểm có nằm trong vùng (polygon → theo nét khoanh thật; rect → theo hộp) */
+  function pvPointInRegion(p, region) {
+    if (!region) return false;
+    if (region.points && region.points.length >= 3) return pvPointInPoly(p.x, p.y, region);
+    const R = pvRect(region);
+    return p.x >= R.x0 && p.x <= R.x1 && p.y >= R.y0 && p.y <= R.y1;
+  }
+
   function pvHit(p) {
     const s = state.selected >= 0 ? state.scenes[state.selected] : null;
     if (!s || !s.elements || !s.elements.length) return null;
@@ -438,9 +366,10 @@
         }
       }
     }
+    // hit theo VÙNG THẬT (polygon của nét khoanh / hộp của rect) — không theo hộp bao
+    // của polygon: kéo chỗ trống trong hộp bao vẫn tạo vùng mới → khoanh được nhiều vùng
     for (let i = list.length - 1; i >= 0; i--) {       // vùng vẽ sau đè lên → lấy topmost
-      const R = pvRect(list[i].region);
-      if (p.x >= R.x0 && p.x <= R.x1 && p.y >= R.y0 && p.y <= R.y1) return { i, mode: 'move' };
+      if (pvPointInRegion(p, list[i].region)) return { i, mode: 'move' };
     }
     return null;
   }
@@ -465,14 +394,19 @@
     };
   }
 
-  /* thời điểm vẽ cho vùng mới: nối tiếp cuối, thiếu giờ thì kéo dài cảnh */
+  /* thời điểm vẽ cho vùng mới: nối tiếp cuối + nghỉ theo tỉ lệ 2/8
+     (2 phần nghỉ trên 8 phần vẽ = 20% nghỉ, 80% vẽ), thiếu giờ thì kéo dài cảnh */
   function pvNextTiming(s) {
-    let lastEnd = 0;
+    let lastEnd = 0, lastDur = 0;
     (s.elements || []).forEach((e) => {
-      lastEnd = Math.max(lastEnd, (e.reveal.startMs || 0) + (e.reveal.durationMs || 0));
+      const end = (e.reveal.startMs || 0) + (e.reveal.durationMs || 0);
+      if (end > lastEnd) { lastEnd = end; lastDur = (e.reveal.durationMs || 0); }
     });
-    const start = Math.max(A.LEAD_IN_MS, lastEnd);
     const dur = 1500;
+    const gap = Math.round(dur * 2 / 8);   // 2/8 × thời lượng vẽ
+    const start = (s.elements && s.elements.length)
+      ? lastEnd + (lastDur ? Math.round(lastDur * 2 / 8) : gap)
+      : A.LEAD_IN_MS;
     if (start + dur + A.HOLD_MS > (s.durationMs || 0)) {
       s.durationMs = start + dur + A.HOLD_MS;
       if (els.durationInput) els.durationInput.value = (s.durationMs / 1000).toFixed(1);
@@ -480,6 +414,22 @@
       log('⏱ vùng mới vượt thời lượng → tự kéo dài cảnh thành ' + sec(s.durationMs));
     }
     return { startMs: start, durationMs: dur };
+  }
+
+  /* ↻ Phân lại giờ 2/8: chia ĐỀU toàn bộ thời lượng cảnh cho N phần tử —
+     mỗi phần tử 1 khe = 8 phần vẽ + 2 phần nghỉ (tỉ lệ 2/8), giữ nguyên thứ tự.
+     Bắt đầu (s) / Dài (s) trong bảng được tính lại theo đúng tỉ lệ này. */
+  function rescheduleElements(s) {
+    if (!s || !s.elements || !s.elements.length || !s.canvas) return false;
+    const N = s.elements.length;
+    const usable = Math.max(N * 600, (s.durationMs || DEFAULT_DURATION_MS) - A.LEAD_IN_MS - A.HOLD_MS);
+    const slot = Math.floor(usable / N);            // 1 khe = 10 phần (8 vẽ + 2 nghỉ)
+    const draw = Math.max(200, Math.round(slot * 8 / 10));
+    s.elements.forEach((e, i) => {
+      e.reveal.startMs = A.LEAD_IN_MS + i * slot;
+      e.reveal.durationMs = Math.min(draw, slot);
+    });
+    return true;
   }
 
   /* vùng khoanh tay: dịch toàn bộ polygon (toạ độ annotation) + tính lại hộp bao */
@@ -585,7 +535,7 @@
         return {
           direction: Math.abs(x1 - x0) >= Math.abs(y1 - y0) ? 'left_to_right' : 'top_to_bottom',
           startMs: t.startMs,
-          durationMs: t.durMs,
+          durationMs: t.durationMs,
           maskPaddingPx: 16,
           protectedRegions: [],
         };
@@ -610,19 +560,15 @@
     ctx.clearRect(0, 0, pv.W, pv.H);
     const s = state.selected >= 0 ? state.scenes[state.selected] : null;
     if (!s) return;
-    const t = pvCurT();
     const list = s.elements || [];
     if (pv.sel >= list.length) pv.sel = -1;
     list.forEach((el, i) => {
       const R = pvRect(el.region);
       if (R.x1 <= R.x0 || R.y1 <= R.y0) return;
-      const st = el.reveal.startMs || 0;
-      const du = Math.max(100, el.reveal.durationMs || 100);
-      const done = t >= st + du, active = t > st && !done;
-      const col = done ? 'rgba(37,165,66,1)' : active ? 'rgba(230,126,34,1)' : 'rgba(96,125,200,1)';
+      const col = i === pv.sel ? 'rgba(230,126,34,1)' : (i === pv.hover ? 'rgba(96,125,200,1)' : 'rgba(37,165,66,1)');
       ctx.lineWidth = (i === pv.sel || i === pv.hover) ? 2 : 1.2;
       ctx.strokeStyle = col;
-      ctx.setLineDash(done ? [] : [6, 4]);
+      ctx.setLineDash([]);
       if (el.region.points && el.region.points.length >= 3) {
         // nét khoanh của người dùng — đóng kín (điểm cuối nối điểm đầu)
         const pts = el.region.points;
@@ -697,9 +643,8 @@
     if (!pv.imgOk || ev.button === 2) return;   // nút phải → contextmenu xoá
     const s = state.selected >= 0 ? state.scenes[state.selected] : null;
     if (!s) return;
-    if (pv.playing) pvStop();
     const p = pvXY(ev);
-    const hit = pvHit(p);
+    const hit = ev.shiftKey ? null : pvHit(p);   // Shift + kéo = luôn khoanh VÙNG MỚI (kể cả đè lên vùng cũ)
     if (hit) {
       pv.sel = hit.i;
       const el = s.elements[hit.i];
@@ -716,7 +661,7 @@
       pv.drag = { mode: 'lasso', pts: [{ x: p.x, y: p.y }] };
     }
     try { els.editCanvas.setPointerCapture(ev.pointerId); } catch (e) { /* ignore */ }
-    pvRender(pvCurT());
+    pvRender();
   }
 
   function pvPointerMove(ev) {
@@ -729,7 +674,7 @@
       const hit = pvHit(p);
       c.style.cursor = hit ? (hit.mode === 'resize' ? 'nwse-resize' : 'move') : 'crosshair';
       const h = hit ? hit.i : -1;
-      if (h !== pv.hover) { pv.hover = h; pvRender(pvCurT()); }
+      if (h !== pv.hover) { pv.hover = h; pvRender(); }
       return;
     }
     const s = state.selected >= 0 ? state.scenes[state.selected] : null;
@@ -737,7 +682,7 @@
     if (d.mode === 'lasso') {      // đang khoanh: ghi tiếp điểm mỗi khi chuột đi đủ xa
       const last = d.pts[d.pts.length - 1];
       if (Math.hypot(p.x - last.x, p.y - last.y) >= 3) d.pts.push({ x: p.x, y: p.y });
-      pvRender(pvCurT());
+      pvRender();
       return;
     }
     const el = s.elements[d.i];
@@ -759,7 +704,7 @@
       pvSetRegion(el, x0, y0, x1, y1);
     }
     s.previewPath = null;
-    pvRender(pvCurT());
+    pvRender();
   }
 
   function pvPointerUp(ev) {
@@ -780,13 +725,13 @@
         pvCreateLassoElement(d.pts);
         return;
       }
-      pvRender(pvCurT());      // khoanh quá nhỏ → bỏ qua
+      pvRender();      // khoanh quá nhỏ → bỏ qua
       return;
     } else {
       renderSceneDetail();   // đồng bộ bảng + vẽ lại khung (đã live-update khi kéo)
       return;
     }
-    pvRender(pvCurT());      // kéo hụt → xoá rubber band
+    pvRender();      // kéo hụt → xoá rubber band
   }
 
   function pvContextMenu(ev) {
@@ -795,8 +740,7 @@
     if (!s || !s.elements || !s.elements.length) return;
     const p = pvXY(ev);
     for (let i = s.elements.length - 1; i >= 0; i--) {
-      const R = pvRect(s.elements[i].region);
-      if (p.x >= R.x0 && p.x <= R.x1 && p.y >= R.y0 && p.y <= R.y1) {
+      if (pvPointInRegion(p, s.elements[i].region)) {
         pv.sel = -1;
         log('🗑 xoá vùng #' + s.elements[i].sequence);
         removeElement(i);
@@ -805,74 +749,152 @@
     }
   }
 
-  /* gop moi yeu cau ve trong 1 frame thanh dung 1 lan paint (rAF) -- chuot keo /
-     scrub / play goi don dap khong con render rieng tung event */
-  let _pvQueued = false, _pvWantT = 0;
-  function pvRender(t) {
-    _pvWantT = t;
+  /* gop moi yeu cau ve trong 1 frame thanh dung 1 lan paint (rAF) --
+     chuot keo goi don dap khong con render rieng tung event */
+  let _pvQueued = false;
+  function pvRender() {
     if (_pvQueued) return;
     _pvQueued = true;
-    requestAnimationFrame(() => { _pvQueued = false; pvPaint(_pvWantT); });
+    requestAnimationFrame(() => { _pvQueued = false; pvPaint(); });
   }
 
-  function pvPaint(t) {
+  function pvPaint() {
     const c = els.previewCanvas;
-    if (!c || !pv.imgOk || !pv.gray || !pv.img) return;
-    const s = state.selected >= 0 ? state.scenes[state.selected] : null;
-    if (!s) return;
-    pv.durMs = Math.max(1500, s.durationMs || DEFAULT_DURATION_MS);
+    if (!c || !pv.imgOk || !pv.img) return;
+    if (c.width !== pv.W || c.height !== pv.H) { c.width = pv.W; c.height = pv.H; }
     const ctx = c.getContext('2d');
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, pv.W, pv.H);
-    // sort + future-list chi tinh lai khi hinh hoc vung doi (signature), khong phai moi frame
-    const els2 = s.elements || [];
-    const sig = els2.map((el) => el.region.x + ',' + el.region.y + ',' + el.region.width + ',' +
-      el.region.height + '|' + (el.reveal.startMs || 0) + '|' + (el.reveal.direction || '')).join('~');
-    if (pv.listSig !== sig || !pv.list) {
-      pv.listSig = sig;
-      const sorted = els2.slice().sort((a, b) => (a.reveal.startMs || 0) - (b.reveal.startMs || 0));
-      pv.list = sorted.map((el, k) => ({ el, k, future: sorted.slice(k + 1) }));
-    }
-    let tip = null;
-    pv.list.forEach((it) => {
-      const el = it.el;
-      const st = el.reveal.startMs || 0;
-      const du = Math.max(100, el.reveal.durationMs || 100);
-      if (t <= st) return;
-      const p = Math.min(1, (t - st) / du);
-      const future = it.future;
-      const inkP = Math.min(1, p / PV_INK_SHARE);
-      const colStart = PV_INK_SHARE * 0.85;
-      const colP = Math.max(0, Math.min(1, (p - colStart) / (1 - colStart)));
-      const t1 = pvDrawLayer(ctx, pv.gray, el, pvEase(inkP), future, it.k + '|' + (el.id || '') + '|ink', inkP >= 1);
-      if (t1) tip = t1;
-      const t2 = pvDrawLayer(ctx, pv.img, el, pvEase(colP), future, it.k + '|' + (el.id || '') + '|col', colP >= 1);
-      if (t2) tip = t2;
+    ctx.drawImage(pv.img, 0, 0, pv.W, pv.H);   // bảng khoanh: nền = chính ảnh nguồn
+    pvOverlay();   // lớp đè: nét khoanh + số thứ tự + handles + rubber band
+  }
+
+  /* ════════ BƯỚC 2b · VÙNG MẪU AI (VISION) — AI soi ảnh, tự khoanh vật thể ════════
+     Dùng callLLMJson của app (index.html): provider hiện tại (Anthropic/OpenAI/
+     Gemini…), ảnh gửi kèm dạng Anthropic image-part → bridge tự chuyển cho từng
+     provider. AI trả polygon toạ độ chuẩn hoá 0–1000 → scale về pixel canvas,
+     tạo phần tử + phân lại giờ theo tỉ lệ 2/8. */
+  async function hdImageDataUrl(imagePath, maxEdge) {
+    const resp = await fetch(hdFileUrl(imagePath));
+    if (!resp || !resp.ok) throw new Error('không tải được ảnh (HTTP ' + (resp && resp.status) + ')');
+    const blob = await resp.blob();
+    const bmp = await createImageBitmap(blob);
+    const sc = Math.min(1, maxEdge / Math.max(bmp.width, bmp.height));
+    const w = Math.max(8, Math.round(bmp.width * sc));
+    const h = Math.max(8, Math.round(bmp.height * sc));
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    c.getContext('2d').drawImage(bmp, 0, 0, w, h);
+    const du = c.toDataURL('image/jpeg', 0.86);
+    const m = /^data:(image\/[a-z0-9.+-]+);base64,(.+)$/i.exec(du);
+    if (!m) throw new Error('không mã hoá được ảnh base64');
+    return { mediaType: m[1], data: m[2] };
+  }
+
+  function aiRegionToElement(raw, idx, s) {
+    const W = s.canvas.width, H = s.canvas.height;
+    const pts = [];
+    (raw && Array.isArray(raw.points) ? raw.points : []).forEach((q) => {
+      const x = Math.round((Number(q && q[0]) || 0) * W / 1000);
+      const y = Math.round((Number(q && q[1]) || 0) * H / 1000);
+      if (isFinite(x) && isFinite(y)) pts.push([Math.max(0, Math.min(W, x)), Math.max(0, Math.min(H, y))]);
     });
-    if (tip) pvDrawTip(ctx, tip.x, tip.y);
-    if (els.timeLabel) els.timeLabel.textContent = (t / 1000).toFixed(1) + 's / ' + (pv.durMs / 1000).toFixed(1) + 's';
-    pvOverlay();   // lop de: khung vung + so thu tu + handles + rubber band
+    if (pts.length < 3) return null;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    pts.forEach((q) => {
+      if (q[0] < minX) minX = q[0];
+      if (q[0] > maxX) maxX = q[0];
+      if (q[1] < minY) minY = q[1];
+      if (q[1] > maxY) maxY = q[1];
+    });
+    return A.normalizeElement({
+      id: 'element-' + (idx + 1),
+      label: String((raw && raw.label) || ('Vùng AI ' + (idx + 1))).slice(0, 60),
+      type: 'illustration',
+      region: { x: minX, y: minY, width: Math.max(8, maxX - minX), height: Math.max(8, maxY - minY), points: pts },
+      reveal: {
+        direction: (maxX - minX) >= (maxY - minY) ? 'left_to_right' : 'top_to_bottom',
+        startMs: 0, durationMs: 1000, maskPaddingPx: 16, protectedRegions: [],
+      },
+      handPath: {
+        start: [pts[0][0], pts[0][1]],
+        end: [pts[pts.length - 1][0], pts[pts.length - 1][1]],
+        easing: 'easeInOut',
+      },
+    }, idx, s.canvas);
   }
 
-  async function previewRegion() {
+  async function generateElementsAI() {
     const s = state.selected >= 0 ? state.scenes[state.selected] : null;
-    if (!s || !s.image || !s.elements || !s.elements.length) { log('⚠ cần ảnh + phần tử trước khi preview vùng'); return; }
-    els.previewBtn.disabled = true;
+    if (!s || !s.image || !s.canvas) { log('⚠ cần ảnh trước khi để AI khoanh vùng'); return; }
+    if (typeof callLLMJson !== 'function') {
+      log('⚠ chưa có bộ gọi AI (callLLMJson) — chạy panel trong app Nova');
+      return;
+    }
+    const btn = els.aiElementsBtn;
+    const btnOld = btn ? { disabled: btn.disabled, text: btn.textContent } : null;
+    if (btn) { btn.disabled = true; btn.textContent = '🤖 AI đang soi ảnh…'; }
     try {
-      const annotation = A.toAnnotation({ sceneId: s.sceneId, durationMs: s.durationMs, elements: s.elements }, s.canvas);
-      const v = A.validateAnnotation(annotation);
-      (v.warnings || []).forEach((w) => log('⚠ ' + w));
-      if (!v.ok) { log('❌ ' + v.errors.join('; ')); return; }
-      const r = await window.native.whiteboard.annotationPreview(s.image, annotation);
-      if (r.ok) { s.previewPath = r.previewPath; renderSceneDetail(); log('✓ sơ đồ vùng: ' + r.previewPath.split(/[\\/]/).pop()); }
-      else log('❌ preview lỗi: ' + r.error);
-    } finally { els.previewBtn.disabled = false; }
+      log('🤖 AI vision đang nhìn: ' + s.image.split(/[\\/]/).pop());
+      const img = await hdImageDataUrl(s.image, 896);
+      const prompt =
+        'You are looking at ONE image that will be redrawn as a hand-drawn animation. ' +
+        'Detect the 2–6 most important visual objects/subjects of the image (not the whole image, no tiny details, no text lines). ' +
+        'For each object output a closed polygon outlining it. ' +
+        'Coordinates are NORMALIZED 0–1000 relative to image width (x, right) and height (y, down). ' +
+        'Each polygon: 4–14 points [x, y] as integers, ordered clockwise. ' +
+        'Regions must be listed background → foreground (natural drawing order). ' +
+        'Return ONLY JSON: {"regions":[{"label":"short object name in Vietnamese","points":[[x,y],...]},...]}';
+      const messages = [{
+        role: 'user',
+        content: [
+          { type: 'image', source: { media_type: img.mediaType, data: img.data } },
+          { type: 'text', text: prompt },
+        ],
+      }];
+      const out = await callLLMJson(prompt, {
+        messages, maxTokens: 1200, tries: 2,
+        validate: (o) => {
+          if (!o || !Array.isArray(o.regions) || !o.regions.length) throw new Error('AI thiếu mảng regions');
+          o.regions.forEach((r, i) => {
+            if (!r || !Array.isArray(r.points) || r.points.length < 3) throw new Error('regions[' + i + '] thiếu points');
+          });
+          return o;
+        },
+      });
+      const built = [];
+      out.regions.forEach((r, i) => {
+        const el = aiRegionToElement(r, built.length, s);
+        if (el) built.push(el);
+        else log('⚠ vùng AI ' + (i + 1) + ' points không dùng được — bỏ qua');
+      });
+      if (!built.length) throw new Error('AI không trả vùng nào dùng được');
+      s.elements = built;           // vùng mẫu AI = thay toàn bộ vùng cũ (giống nút chia dải)
+      s.previewPath = null;
+      // đảm bảo đủ giờ: mỗi vùng 1500ms vẽ + 2/8 nghỉ, cộng lead-in + hold
+      const need = A.LEAD_IN_MS + built.length * (1500 + Math.round(1500 * 2 / 8)) + A.HOLD_MS;
+      if (need > (s.durationMs || 0)) s.durationMs = need;
+      rescheduleElements(s);
+      if (els.durationInput) els.durationInput.value = (s.durationMs / 1000).toFixed(1);
+      pv.sel = s.elements.length - 1;
+      log('✓ AI khoanh ' + s.elements.length + ' vùng: ' + s.elements.map((e) => e.label).join(' · '));
+      renderSceneList();
+      renderSceneDetail();
+    } catch (err) {
+      log('❌ AI vision lỗi: ' + String((err && err.message) || err));
+    } finally {
+      if (btn && btnOld) { btn.disabled = btnOld.disabled; btn.textContent = btnOld.text; }
+    }
   }
 
-  /* ════════ BƯỚC 3 · RENDER → MERGE → MP4 (không tiếng) ════════ */
+  /* ════════ BƯỚC 4 · RENDER → MERGE → MP4 (không tiếng) ════════ */
 
   async function exportVideo(outPath) {
     if (!state.scenes.length) { log('⚠ chưa có ảnh nào'); return; }
+    if (!window.native || !window.native.whiteboard || typeof window.native.whiteboard.export !== 'function') {
+      log('❌ không thấy bridge app (window.native.whiteboard) — chỉ xuất được trong app Nova desktop, không phải tab trình duyệt. Nếu đang trong app: bấm Ctrl+F5 tải lại JS mới.');
+      return;
+    }
     for (let i = 0; i < state.scenes.length; i++) {
       const s = state.scenes[i];
       const ann = A.toAnnotation({ sceneId: s.sceneId, durationMs: s.durationMs, elements: s.elements || [] }, s.canvas);
@@ -894,16 +916,24 @@
       audioTracks: [],           // vẽ tay thuần — không ghép tiếng
       outputPath: out.path,
       options: {
-        inkPath: els.inkPathSel.value,
-        colorFill: els.colorFillSel.value,
-        capLongEdge: parseInt(els.capSel.value, 10) || 1080,
+        inkPath: state.brush.inkPath,
+        colorFill: state.brush.colorFill,
+        tipMode: state.brush.tipMode,          // hand | pen | none → py-backend map sang --bare-tip / hand=''
+        brushRadius: state.brush.brushRadius,
+        capLongEdge: state.brush.capLongEdge,
       },
     };
     state.exporting = true;
     syncButtons();
     setProgress(0, 'khởi động…');
-    log('▶ vẽ tay ' + payload.scenes.length + ' ảnh → ' + out.path);
-    const r = await window.native.whiteboard.export(payload);
+    log('▶ vẽ tay ' + payload.scenes.length + ' ảnh → ' + out.path +
+        ' (bút: ' + state.brush.tipMode + ' · nét: ' + state.brush.inkPath + ' · tô: ' + state.brush.colorFill + ')');
+    let r;
+    try {
+      r = await window.native.whiteboard.export(payload);
+    } catch (err) {
+      r = { ok: false, error: String((err && err.message) || err) };
+    }
     state.exporting = false;
     syncButtons();
     if (r.ok) {
@@ -972,19 +1002,8 @@
       els.durationInput.disabled = !s;
     }
     els.genElementsBtn.disabled = !(s && s.image && s.canvas);
-    els.previewBtn.disabled = !(s && s.image && s.elements && s.elements.length);
-    if (s && s.previewPath && els.previewImg) {
-      els.previewImg.src = hdFileUrl(s.previewPath);
-      show(els.previewImg);
-    } else if (els.previewImg) {
-      hide(els.previewImg);
-    }
-    if (s && s.image && els.hdThumb) {
-      els.hdThumb.src = hdFileUrl(s.image);
-      show(els.hdThumb);
-    } else if (els.hdThumb) {
-      hide(els.hdThumb);
-    }
+    if (els.aiElementsBtn) els.aiElementsBtn.disabled = !(s && s.image && s.canvas);
+    if (els.reschedBtn) els.reschedBtn.disabled = !(s && s.elements && s.elements.length);
     pvLoad(s);
     renderElementsTable(s);
   }
@@ -1046,17 +1065,26 @@
     els.pickDirBtn.addEventListener('click', pickImageDir);
     els.clearBtn.addEventListener('click', clearAll);
     els.genElementsBtn.addEventListener('click', () => generateElements(state.selected, false));
-    els.previewBtn.addEventListener('click', previewRegion);
     els.exportBtn.addEventListener('click', exportVideo);
     els.stopBtn.addEventListener('click', stopExport);
     if (els.durationInput) els.durationInput.addEventListener('change', () => {
       applyDuration(parseFloat(els.durationInput.value) * 1000);
     });
-    if (els.scrub) els.scrub.addEventListener('input', () => {
-      if (pv.playing) { pv.offT = pvCurT(); pv.t0 = performance.now(); }
-      pvRender(pvCurT());
+    if (els.aiElementsBtn) els.aiElementsBtn.addEventListener('click', generateElementsAI);
+    if (els.reschedBtn) els.reschedBtn.addEventListener('click', () => {
+      const s = state.selected >= 0 ? state.scenes[state.selected] : null;
+      if (rescheduleElements(s)) {
+        log('↻ đã phân lại ' + s.elements.length + ' phần tử theo tỉ lệ 8 vẽ : 2 nghỉ');
+        renderSceneDetail();
+      } else log('⚠ chưa có phần tử nào để phân lại giờ');
     });
-    if (els.playBtn) els.playBtn.addEventListener('click', () => { if (pv.playing) pvStop(); else pvPlay(); });
+    if (els.radiusInput) els.radiusInput.addEventListener('change', () => {
+      const v = parseInt(els.radiusInput.value, 10);
+      state.brush.brushRadius = (isFinite(v) && v >= 2 && v <= 40) ? v : null;
+    });
+    if (els.capSel) els.capSel.addEventListener('change', () => {
+      state.brush.capLongEdge = parseInt(els.capSel.value, 10) || 1080;
+    });
     if (els.editCanvas) {
       // khoanh vùng: kéo tạo / di chuyển / resize / chuột phải xoá
       els.editCanvas.addEventListener('pointerdown', pvPointerDown);
@@ -1092,13 +1120,14 @@
 
   function init() {
     bind();
+    hdBuildCards();
     wireEvents();
     renderSceneList();
     renderSceneDetail();
     listenProgress();
     syncButtons();
     setProgress(0, '—');
-    log('Vẽ Tay Ảnh — chọn ảnh → kéo chuột khoanh quanh từng vật thể (điểm cuối tự nối điểm đầu khép vùng; số thứ tự khoanh = thứ tự bàn tay vẽ: mực chạy dần → tô màu dần) → MP4. Không cần SRT hay voice.');
+    log('Vẽ Tay Ảnh — chọn ảnh → kéo chuột khoanh từng vật thể (nhiều vùng, mỗi vùng 1 số thứ tự; Shift+kéo = khoanh thêm đè vùng cũ; hoặc 🤖 để AI vision khoanh sẵn) → chọn mẫu bút/bàn tay (Bước 3) → 🎬 Xuất MP4. Không cần SRT hay voice.');
     refreshEngine();
   }
 
@@ -1114,6 +1143,99 @@
     if (els.stopBtn) els.stopBtn.disabled = !state.exporting;
   }
 
+
+
+  /* ════════ BƯỚC 3 · THẺ MẪU BÚT VẼ / BÀN TAY — chọn riêng, không dính nút Xuất ════════ */
+  const TIP_STYLES = [
+    { id: 'hand', label: 'Bàn tay cầm bút', desc: 'tay thật lướt theo nét vẽ' },
+    { id: 'pen',  label: 'Ngòi bút',        desc: 'chỉ đầu bút chạy trên ảnh' },
+    { id: 'none', label: 'Không hiệu ứng',  desc: 'mực tự chạy, không bút/tay' },
+  ];
+  const INK_STYLES = [
+    { id: 'grid',     label: 'Nét lưới',         desc: 'mực chạy theo lưới đều' },
+    { id: 'skeleton', label: 'Nét theo nét chính', desc: 'mực bám nét chính của ảnh' },
+  ];
+  const FILL_STYLES = [
+    { id: 'contour-wipe', label: 'Quét viền', desc: 'màu lan theo viền vùng' },
+    { id: 'brush',        label: 'Cọ quét',   desc: 'màu quét như cọ vẽ' },
+  ];
+
+  /* thumbnail mẫu vẽ tay bằng canvas 64×40 (mô phỏng cảm giác từng kiểu) */
+  function hdMakeThumb(kind) {
+    const c = document.createElement('canvas');
+    c.width = 64; c.height = 40;
+    c.style.cssText = 'width:64px;height:40px;background:#fff;border:1px solid rgba(0,0,0,.15);border-radius:6px;flex:0 0 auto';
+    const x = c.getContext('2d');
+    x.lineWidth = 2; x.strokeStyle = '#c0392b'; x.fillStyle = '#333';
+    x.font = '20px system-ui,sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+    if (kind === 'hand' || kind === 'pen' || kind === 'none') {
+      x.fillText(kind === 'hand' ? '✍' : kind === 'pen' ? '🖊' : '⌀', 32, 19);
+      x.beginPath(); x.moveTo(8, 33); x.quadraticCurveTo(32, 26, 56, 33); x.stroke();
+    } else if (kind === 'grid') {
+      for (let i = 1; i < 4; i++) { x.beginPath(); x.moveTo(10 + i * 11, 6); x.lineTo(10 + i * 11, 34); x.stroke(); }
+      for (let j = 1; j < 3; j++) { x.beginPath(); x.moveTo(10, 6 + j * 14); x.lineTo(54, 6 + j * 14); x.stroke(); }
+    } else if (kind === 'skeleton') {
+      x.beginPath(); x.moveTo(8, 30); x.bezierCurveTo(20, 8, 44, 8, 56, 30); x.stroke();
+    } else if (kind === 'contour-wipe') {
+      const g = x.createLinearGradient(0, 0, 64, 0);
+      g.addColorStop(0, '#f5d7a0'); g.addColorStop(1, '#e67e22');
+      x.fillStyle = g; x.fillRect(8, 8, 48, 24);
+      x.strokeStyle = '#a93226'; x.strokeRect(8.5, 8.5, 47, 23);
+    } else if (kind === 'brush') {
+      for (let i = 0; i < 12; i++) {
+        x.fillStyle = i % 2 ? '#e67e22' : '#d35400';
+        x.beginPath();
+        x.arc(10 + ((i * 37) % 44), 12 + ((i * 23) % 16), 2 + ((i * 5) % 4), 0, Math.PI * 2);
+        x.fill();
+      }
+    }
+    return c;
+  }
+
+  function hdCardStyle(on) {
+    return 'display:inline-flex;align-items:center;gap:9px;padding:8px 12px;border-radius:10px;cursor:pointer;' +
+      'border:1.5px solid ' + (on ? 'var(--accent,#e67e22)' : 'var(--border,#c9c9c9)') + ';' +
+      'background:' + (on ? 'color-mix(in srgb,var(--accent,#e67e22) 14%,transparent)' : 'var(--surface,#fafafa)') + ';';
+  }
+
+  function hdBuildCards() {
+    const mk = (container, arr, key) => {
+      if (!container) return;
+      container.textContent = '';
+      arr.forEach((st) => {
+        const card = document.createElement('div');
+        card.dataset.v = st.id;
+        card.appendChild(hdMakeThumb(st.id));
+        const txt = document.createElement('div');
+        txt.innerHTML =
+          '<div style="font-weight:600;font-size:12px">' + st.label + '</div>' +
+          '<div style="font-size:11px;opacity:.75">' + st.desc + '</div>';
+        card.appendChild(txt);
+        card.addEventListener('click', () => {
+          state.brush[key] = st.id;
+          hdSyncCards();
+          log('🖌 mẫu bút: ' + st.label);
+        });
+        container.appendChild(card);
+      });
+    };
+    mk(els.tipCards, TIP_STYLES, 'tipMode');
+    mk(els.inkCards, INK_STYLES, 'inkPath');
+    mk(els.fillCards, FILL_STYLES, 'colorFill');
+    hdSyncCards();
+  }
+
+  function hdSyncCards() {
+    const sync = (container, cur) => {
+      if (!container) return;
+      Array.prototype.forEach.call(container.children, (card) => {
+        card.style.cssText = hdCardStyle(card.dataset.v === cur);
+      });
+    };
+    sync(els.tipCards, state.brush.tipMode);
+    sync(els.inkCards, state.brush.inkPath);
+    sync(els.fillCards, state.brush.colorFill);
+  }
 
 
   /* ════════ SHELL — panel tự dựng UI (id hd-*, CSS wb-*) trong root ════════ */
@@ -1139,39 +1261,43 @@
 
       <div class="wb-group">
         <div class="wb-group-title">Bước 2 · Ảnh đang chọn — thời lượng & khoanh vùng vẽ theo vật thể</div>
-        <img id="hd-thumb" class="wb-canvas wb-hide" alt="Ảnh nguồn">
         <div class="wb-media-row">
           <span class="wb-media-label" id="hd-sceneImageLabel">—</span>
           <span class="wb-media-label" id="hd-sceneCanvasLabel">—</span>
           <label class="wb-media-label">⏱ giây vẽ/ảnh <input type="number" id="hd-durationInput" min="1.5" step="0.5" style="width:70px" disabled></label>
           <button id="hd-genElementsBtn" disabled title="Chia dải ngang mặc định khi không muốn khoanh tay">✨ Vùng mẫu (chia dải)</button>
-          <button id="hd-previewBtn" disabled>🧭 Preview sơ đồ vùng</button>
+          <button id="hd-aiElementsBtn" disabled title="AI vision soi ảnh và tự khoanh các vật thể chính (cần provider có vision: Anthropic/OpenAI/Gemini)">🤖 Vùng mẫu AI (vision)</button>
+          <button id="hd-reschedBtn" disabled title="Chia lại Bắt đầu/Dài cho mọi phần tử theo tỉ lệ 8 vẽ : 2 nghỉ">↻ Phân lại giờ 2/8</button>
         </div>
         <div id="hd-cvWrap" class="wb-hide" style="margin-top:10px">
           <div style="position:relative;width:100%;max-width:720px">
             <canvas id="hd-previewCanvas" style="display:block;width:100%;background:#fff;border:1px solid var(--border);border-radius:10px"></canvas>
-            <canvas id="hd-editCanvas" style="position:absolute;left:0;top:0;width:100%;height:100%;touch-action:none;cursor:crosshair;border-radius:10px" title="Kéo chuột quanh vật thể = khoanh vùng vẽ (điểm cuối tự nối điểm đầu) · kéo trong vùng = di chuyển · chuột phải = xoá vùng"></canvas>
+            <canvas id="hd-editCanvas" style="position:absolute;left:0;top:0;width:100%;height:100%;touch-action:none;cursor:crosshair;border-radius:10px"></canvas>
           </div>
-          <input type="range" id="hd-scrub" min="0" max="1000" value="0" step="1" style="width:100%;max-width:720px;margin-top:8px">
-          <div class="wb-media-row" style="margin-top:4px">
-            <button id="hd-playBtn" disabled>▶ Xem trước</button>
-            <span class="wb-media-label" id="hd-timeLabel">0.0s / 0.0s</span>
-          </div>
+          <div class="wb-media-label" style="margin-top:6px">✍ <b>Kéo chuột quanh vật thể để khoanh</b> (thả = tự khép vùng kín; khoanh được <b>nhiều vùng</b>, mỗi vùng 1 số thứ tự vẽ) · <b>Shift + kéo = khoanh thêm vùng mới</b> (kể cả đè lên vùng cũ) · kéo trong vùng = di chuyển · chuột phải = xoá vùng</div>
         </div>
         <table id="hd-elementsTable" class="wb-el-table wb-hide">
           <thead><tr><th>#</th><th>Phần tử</th><th>Bắt đầu (s)</th><th>Dài (s)</th><th>Hướng reveal</th><th></th></tr></thead>
           <tbody id="hd-elementsBody"></tbody>
         </table>
-        <img id="hd-previewImg" class="wb-canvas wb-hide" alt="Sơ đồ vùng annotation">
       </div>
 
       <div class="wb-group">
-        <div class="wb-group-title">Bước 3 · Render stream-ink → MP4</div>
-        <div class="wb-media-row">
-          <select id="hd-inkPathSel" title="Ink path"><option value="grid">grid</option><option value="skeleton">skeleton</option></select>
-          <select id="hd-colorFillSel" title="Color fill"><option value="contour-wipe">contour-wipe</option><option value="brush">brush</option></select>
-          <select id="hd-capSel" title="Cap cạnh dài"><option value="720">720</option><option value="1080" selected>1080</option><option value="1440">1440</option></select>
+        <div class="wb-group-title">Bước 3 · Mẫu bút vẽ &amp; bàn tay (chọn trước khi xuất)</div>
+        <div class="wb-media-label" style="margin:4px 0">Hiệu ứng bút chạy theo nét vẽ trong video</div>
+        <div id="hd-tipCards" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+        <div class="wb-media-label" style="margin:10px 0 4px">Kiểu nét mực</div>
+        <div id="hd-inkCards" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+        <div class="wb-media-label" style="margin:10px 0 4px">Kiểu tô màu</div>
+        <div id="hd-fillCards" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+        <div class="wb-media-row" style="margin-top:10px">
+          <label class="wb-media-label">🖌 Cỡ nét <input type="number" id="hd-radiusInput" min="2" max="40" step="1" placeholder="mặc định" style="width:80px"></label>
+          <label class="wb-media-label">📏 Cạnh dài tối đa <select id="hd-capSel" title="Cap cạnh dài (px)"><option value="720">720</option><option value="1080" selected>1080</option><option value="1440">1440</option></select></label>
         </div>
+      </div>
+
+      <div class="wb-group">
+        <div class="wb-group-title">Bước 4 · Xuất MP4 (render → merge, không tiếng)</div>
         <div class="wb-export-bar">
           <button id="hd-exportBtn" class="wb-btn-primary" disabled>🎬 Xuất MP4</button>
           <button id="hd-stopBtn" disabled>■ Huỷ render</button>
@@ -1192,7 +1318,6 @@
   function mount(root) {
     if (!root) return;
     if (!root.querySelector('#hd-logBox')) root.innerHTML = SHELL_HTML;
-    els.hdThumb = root.querySelector('#hd-thumb');
     els.hdTotal = root.querySelector('#hd-total');
   }
 

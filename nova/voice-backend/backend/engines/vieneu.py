@@ -31,11 +31,36 @@ class VieNeuEngine(TTSEngine):
             return
         from vieneu import Vieneu
 
-        kwargs: dict = {"precision": self._precision}
+        # Mode đặc biệt (xpu = Intel GPU, turbo_gpu, fast, standard...) → chỉ truyền
+        # mode + device để không đụng tham số của mode mặc định (v3turbo).
+        mode = os.environ.get("VOICE_VIENEU_MODE")
+        if mode:
+            kwargs: dict = {"mode": mode.strip().lower()}
+            dev = os.environ.get("VOICE_VIENEU_DEVICE")
+            if dev:
+                kwargs["device"] = dev.strip()
+            self._model = Vieneu(**kwargs)
+            return
+
+        kwargs = {"precision": self._precision}
         if self._backend:
             kwargs["backend"] = self._backend
         if self._api_base:
             kwargs.update({"mode": "remote", "api_base": self._api_base})
+        # GPU: trần số chunk gộp vào 1 forward (static batching). Mặc định 8 —
+        # đủ nhanh trên GPU nhỏ (4GB), tránh tăng vọt VRAM như mặc định 32.
+        # Ghi đè bằng env VOICE_VIENEU_MAX_BATCH (GPU lớn → 16/32).
+        try:
+            kwargs["max_batch_size"] = max(1, int(os.environ.get("VOICE_VIENEU_MAX_BATCH", "8")))
+        except ValueError:
+            kwargs["max_batch_size"] = 8
+        # CPU/ONNX: số thread intra-op (0 = mặc định engine, ~nhân vật lý cap 8).
+        try:
+            threads = int(os.environ.get("VOICE_VIENEU_THREADS", "0"))
+            if threads > 0:
+                kwargs["threads"] = threads
+        except ValueError:
+            pass
         self._model = Vieneu(**kwargs)
 
     def unload(self) -> None:
