@@ -56,6 +56,23 @@ try {
   assert.strictEqual(dup.queued, false);
   assert.strictEqual(dup.reason, 'duplicate');
 
+  // Regression: production wiring (nova/main/error-reporter.js) passes BOTH
+  // queueFile and a plain queue-config object. A plain config object must be
+  // treated as LocalQueue options, not as the queue itself — otherwise the
+  // injected object has no enqueue() and every report fails 'report-failed'.
+  const wiredReporter = new ErrorReporter({
+    appVersion: '1.0.1',
+    buildId: 'build-2',
+    clientInstallationId: 'inst-2',
+    queueFile: path.join(temp, 'wired-queue.json'),
+    queue: { dedupWindowMs: 15 * 60 * 1000, maxPendingPerFingerprint: 3 },
+  });
+  assert.strictEqual(typeof wiredReporter.queue.enqueue, 'function', 'queue config object must not replace LocalQueue');
+  const wiredResult = wiredReporter.report(error);
+  assert.strictEqual(wiredResult.queued, true, 'production-style construction must enqueue reports');
+  assert.strictEqual(wiredReporter.queue.peek().length, 1);
+  assert.ok(fs.existsSync(path.join(temp, 'wired-queue.json')), 'queue file must be persisted');
+
   // installGlobalHandlers registers on the injectable emitter.
   const uninstall = reporter.installGlobalHandlers(fakeEmitter);
   assert.ok(fakeEmitter.handlers.has('uncaughtException'));

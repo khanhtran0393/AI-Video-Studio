@@ -44,18 +44,21 @@ File này ghi **trạng thái dài hạn và lịch sử quyết định**. AGEN
 
 ## Đang treo / nợ kỹ thuật
 
-- **Đóng gói sau tính năng Novel — KẾT LUẬN**: `dist\win-unpacked\` MỚI hoàn chỉnh
-  (AI Video Studio.exe 225MB + app.asar 476MB @ 21:21, verified chứa `tsNovelBtn` +
-  `tsGenerateNovel`) — chạy trực tiếp được, CÓ nút Novel (boot smoke: app sống 30s;
-  bridge EADDRINUSE + render crash khi smoke là do dev app đang mở song song chiếm
-  cổng 8793-8796 + profile — test lại khi chỉ chạy MỘT mình). NSIS Setup/Portable
-  KHÔNG ra sau 6 lần build (1 fail mmap NSIS; 3 lần bị kill nhầm giữa chừng vì tưởng
-  treo — thực ra 7za -mx=9 nén rất lâu; 1 fail ENOENT rename electron.exe vì
-  win-unpacked dở dang sót; 1 lần nsis.7z phình 3.1GB + Setup 0.5MB hỏng do các
-  build đè chồng dữ liệu). Rác 3.1GB đã xoá; Portable 9/4 mất khi dọn dist.
-  **Muốn có installer lần sau**: xoá `dist\win-unpacked` + `*.nsis.7z` TRƯỚC,
-  chạy MỘT `npm run build:win` duy nhất, không kill giữa chừng (~45-60 phút;
-  7za -mx=9 một mình đã chiếm ~20 phút, CPU nghìn giây là BÌNH THƯỜNG).
+- ~~**Đóng gói sau tính năng Novel — CHẨN ĐOÁN CUỐI**~~ **ĐÃ GIẢI QUYẾT (22:50)**:
+  root cause là `asarUnpack` kéo `nova/voice-backend/**/*` (venv .venv-omni 1.3GB)
+  + `nova/tdt-studio/**/*` (runtime/venv PySide6 805MB) → nsis.7z 3.1GB > ngưỡng
+  mmap 2GB của makensis 32-bit → Setup hỏng. **Fix phương án 1** (user duyệt): thêm
+  2 exclude vào `files` của `electron-builder.json`:
+  `!nova/voice-backend/.venv-omni{,/**/*}` + `!nova/tdt-studio/runtime/venv{,/**/*}`
+  → nsis.7z còn 1.38GB <2GB → build THÀNH CÔNG cả 2 target:
+  `dist\AI-Video-Studio-Setup-1.0.1-x64.exe` 1382.7MB + Portable 1380.8MB
+  (22:50), asar verified chứa `tsNovelBtn`/`tsGenerateNovel`.
+  **DEGRADE CÓ CHỦ Ý + KHAI BÁO (Luật 10)**: bản packaged KHÔNG chứa venv
+  OmniVoice (`.venv-omni`) và venv PySide6 của TDT Studio → Voice engine
+  OmniVoice + tool 🎬 Studio (PyQt) sẽ KHÔNG chạy được trong bản đóng gói cho
+  tới khi user chạy `nova/voice-backend/setup-omni.bat` (cài lại venv) / TDT tự
+  tạo venv lần đầu; bản full-runtime 9GB còn giữ ở
+  `dist\win-unpacked-novel-ok\` (21:21) — XOÁ ĐƯỢC khi không cần (giải phóng 9GB).
 - `nova/scripts/` còn nhiều script `tmp-*` dùng một lần (tmp-watch-dist,
   tmp-voice-crash, tmp-watch-build, tmp-check-index-html-js, tmp-smoke-novel…) —
   chưa dọn thành archive.
@@ -203,6 +206,13 @@ File này ghi **trạng thái dài hạn và lịch sử quyết định**. AGEN
   không đụng IPC/contract. Kiểm định: `npm run check` PASS; node sanity test
   các case 1×1200 / 2×1200 / 5×1000 / chip-3000-từ / 800-từ-1-chương đều giữ
   đúng tổng số từ.
+
+- [2026-09-05] Tích hợp công cụ **I-MZic** vào sidebar trái bằng iframe trong `nova/web/index.html`:
+  - Thêm nav item `toolimzic` (label: I-MZic), thêm section `<div class="tool" id="tool-toolimzic">` với `<iframe id="imzicFrame" data-src="img-to-vid.html">`.
+  - Lazy-load `img-to-vid.html` trong `switchTool('toolimzic')` khi mở lần đầu.
+  - Thêm CSS cho section `#tool-toolimzic` và `#tool-toolimzic iframe` để chiếm toàn bộ vùng tool, tránh lỗi hiển thị khi render.
+  - File `nova/web/img-to-vid.html` đã được copy từ `ImgToVid Ver1.4.html` để giữ nguyên UI/logic gốc I-MZic.
+
 - [2026-09-05] Toolscript — **thay quyết định phía trên**: bỏ hẳn hành vi
   "tự tách ~450 từ/chương", thay bằng **điều kiện tường minh: Chế độ Novel chỉ
   bật được khi QUY MÔ ≥ 2 chương**. Lý do: tách ngầm làm user khó hiểu nguồn
@@ -214,3 +224,137 @@ File này ghi **trạng thái dài hạn và lịch sử quyết định**. AGEN
   (5) `tsUpdateScale` tự tắt chip + báo status khi CHƯƠNG quay về 1; (6) hint
   UI ghi rõ điều kiện "tối thiểu 2 chương, số chương & từ/chương lấy đúng theo
   QUY MÔ". Renderer-only. Kiểm định: `npm run check` PASS.
+- [2026-09-05] UI dropdown **Chủ đề** — sửa không chọn lại được placeholder.
+  Nguyên nhân: option placeholder `-- Chọn Chủ Đề --` bị gắn `disabled` ở CẢ HAI
+  chỗ trong `nova/web/index.html` (dropdown của tool Tạo Kịch Bản, dòng ~1804,
+  và dropdown Dashboard tự động `dashTopicRow`, dòng ~6382), trong khi dropdown
+  **Phong cách** kề bên không `disabled` → user chọn lại/đặt lại được phong cách
+  nhưng không thể chọn lại "-- Chọn Chủ Đề --" sau khi đã chọn chủ đề. Fix: gỡ
+  `disabled` ở cả 2 placeholder + làm chắc handler `onchange` ghép chuỗi
+  `(m && s) ? (m + ' - ' + s) : (m || s || '')` để chọn lại placeholder không
+  sinh chuỗi thừa `" - "`. Renderer-only, không đụng IPC/contract. `_autoTopic`
+  rỗng đã có guard sẵn (dòng ~6639). Kiểm định: `npm run check` PASS
+  (syntax 331 file, IPC 143 kênh, parity, shared).
+- [2026-09-05] UI dropdown **Chủ đề** — fix lại logic ghép chuỗi để bật lại placeholder thực sự.
+  Người dùng vẫn không thể `-- Chọn Chủ Đề --` sau chọn chủ đề vì logic `onchange` trước đó
+  giữ lại giá trị phong cách khi chủ đề bị trống, tạo ra chuỗi dính hoặc không clear input.
+  Điều chỉnh 4 handler (Tạo Kịch Bản + Dashboard, Chủ đề/Phong cách) thành dạng:
+  `m ? (m + (s ? ' - ' : '') + s) : ''` cho input topic, và `(m && s) ? (m + ' - ' + s) : (m || '')` cho hai ô style.
+  Renderer-only, không đụng IPC/contract. Kiểm định: `npm run check` PASS
+  (syntax 331 file, IPC 143 kênh, parity, shared).
+- [2026-09-05] Auto-Fix — kiểm định toàn bộ hệ sinh thái `auto-fix/` và **bật/
+  xác minh live error-reporting runtime (observe-only, opt-in)**. Phát hiện BUG
+  thật trong wiring production: `client-error-reporter/reporter.js` constructor
+  gán `this.queue = options.queue || new LocalQueue(...)` — trong khi
+  `nova/main/error-reporter.js` truyền `queue` là OBJECT CẤU HÌNH thuần
+  (`{dedupWindowMs, maxPendingPerFingerprint}`) cùng `queueFile` → object truthy
+  thay thế LocalQueue → mọi `report()` trong app thật fail thầm với reason
+  `report-failed` (Luật 10 vi phạm ngầm). Test wiring cũ chỉ assert TEXT trong
+  source nên không bắt được. Fix: constructor chỉ coi object có `enqueue()` là
+  queue inject, còn lại là options cho LocalQueue. Thêm regression test vào
+  `client-error-reporter/test/reporter.test.js` mô phỏng đúng hình thức
+  constructor production. Chứng minh E2E qua Electron thật bằng probe
+  `nova/scripts/tmp-error-reporter-e2e.js` (identity thật, code path thật
+  `nova/main/error-reporter.js`): trước fix `queued:false/report-failed`, sau
+  fix `queued:true` + `crash-queue.json` ghi đúng cấu trúc (fingerprint SHA-256,
+  environment_id, event sequence, installation-id) trong
+  `%APPDATA%\AI Video Studio Independent`. Đã xoá report demo khỏi queue
+  production. Kiểm định: `npm --prefix auto-fix run test:all` PASS (13 suite,
+  exit 0), `npm run check` PASS (IPC 143 kênh, shared 16 state keys),
+  `test:video-agent` PASS (114 test). Lưu ý: Auto-Fix M1 runtime vẫn
+  `observe-only`/`runtimeEnabled:false` — chỉ error reporting opt-in
+  (`AI_VIDEO_STUDIO_ERROR_REPORTING=1`) được xác minh hoạt động; 13 gate
+  governance M1 vẫn BLOCKED chờ external evidence (CI run, branch protection,
+  signing, security review).
+
+- [2026-09-05] Bộ khởi động môi trường Crash Reporter + Crash Service/Worker:
+  - `start-stage.ps1`: chọn `-Stage dev|test|prod`, `-Target app|worker|env`,
+    `-NoLaunch`, `-Force` + các tham số `-AppUploadUrl/-AppUploadToken/-BuildId/
+    -CrashServiceUrl/-WorkerToken/-WorkerId` — tự set env nhóm `AI_VIDEO_STUDIO_ERROR_*`,
+    `CRASH_SERVICE_URL`, `WORKER_*`, `DATABASE_URL`, `*_TOKEN_HASH`, `DEVICE_ID_PEPPER`,
+    in cảnh báo thiếu biến theo stage.
+  - `start-stage.bat`: không tham số / `gui` / `-gui` / `/gui` → mở GUI
+    `start-stage-ui.ps1`; có tham số khác → forward toàn bộ vào `start-stage.ps1`.
+  - `start-stage-ui.ps1`: GUI WinForms chọn Stage/Target, nhập biến tùy chọn,
+    checkbox NoLaunch/Force, nút Run (spawn PowerShell mới) + Copy command.
+  - `auto-fix/crash-environment-templates.ps1`: in template `.env` DEV/TEST/PROD
+    (không chứa secret thật) để copy nhanh.
+  - **Fix cú pháp GUI (PS 5.1)**: dòng `return [string]::Join(' ', $cmdParts | ForEach-Object {...})`
+    bị parse error vì PS 5.1 không cho pipeline trực tiếp làm argument trong
+    method-call paren — đã tách ra `$quotedParts = @($cmdParts | ...)` rồi Join.
+  - Kiểm định: parser PASS cả 2 file `.ps1`; smoke `-Stage dev|test -Target env|app
+    -NoLaunch` qua `.bat` in/check env đúng (WARN thiếu biến là behavior chuẩn);
+    `npm run check` PASS (syntax 331 file, IPC 143 kênh, parity, shared, exit 0).
+
+- [2026-09-05] Handdraw Studio — **fix "thanh tiến trình không cập nhật" giữa
+  render** (tiếp nối hdlasso6): bar kẹt 5% + label kẹt "khởi động…" suốt lúc
+  render vì (1) panel chỉ vẽ %, label `progressMsg` không theo `s.status` của
+  event `whiteboard:exportProgress`; (2) engine Python vendored KHÔNG phát %
+  từng khung hình (script chỉ print đầu/cuối, cam kết không sửa nguồn repo) nên
+  `report()` chỉ có mốc thô 2→5→85→92→100; (3) ipc.js relay lỗi dạng
+  `status:'error: …'` nhưng panel chỉ so `=== 'error'` → nhánh reset
+  `exporting` qua event không khớp. Đã sửa:
+  - `nova/web/handdraw-studio-panel.js` (marker **hdlasso7**): listener cập nhật
+    cả `progressMsg` (cắt 90 ký tự) theo `s.status`; reset `exporting` khi
+    `status === 'done'` HOẶC tiền tố `error` (khớp định dạng relay thật).
+  - `nova/whiteboard-studio/py-backend.js` (`exportVideo`, `module.exports`
+    giữ nguyên): `report(1,…)` TRƯỚC bước `status()` (deps check mất vài giây);
+    **ticker ước tính 1.5s/cảnh** — lũy tiến tiệm cận trong phạm vi
+    [5+80·i/N, 5+80·(i+1)/N), cap `sceneEnd−1` đảm bảo không vượt/giảm so với
+    mốc thật, dọn bằng `finally`, `unref` để không giữ tiến trình node khi thoát,
+    status ghi rõ "ước tính, đã Xs" (Luật 10: không giả vờ là % thật).
+    Re-check sau fix: cap cứng thêm `estCeil = max(sceneStart, sceneEnd−1)` cho
+    edge case >80 cảnh (dải mỗi cảnh <1% — tránh % tụt giảm ngược).
+  Kiểm định: `node --check` 2 file PASS; `_check_hd_ids.js` PASS (SHELL_HTML ↔
+  bind() ↔ els.*); `_smoke_handdraw.js` PASS E2E (0.56MB hand + 0.29MB pen) —
+  log thấy event ước tính chảy liên tục 26s rồi nhảy mốc thật (xong cảnh →
+  sao chép → done); `npm run check` PASS (331 file, 143 kênh IPC, parity,
+  shared 16 state keys). Không đụng kênh IPC/preload/repo vendored.
+
+- [2026-09-05] I-MZic — rà soát lỗi phát sinh sau khi nhúng tool. Phát hiện &
+  fix 2 lỗi thật:
+  (1) **Chuyển tool giữa chừng lúc export làm video đứng hình**: iframe
+  `imzicFrame` bị `switchTool` ẩn → Chromium throttle canvas trong iframe ẩn →
+  MediaRecorder ghi đứng hình; warning `visibilitychange` của trang con nằm
+  bên trong iframe đã ẩn nên người dùng không thấy. Fix: expose cờ
+  `window.__imzicExporting` (getter đọc `isExporting`) trong
+  `nova/web/img-to-vid.html` + guard trong `switchTool` (`index.html`, ~dòng
+  8155): đang ghi thì chặn chuyển tool + `novaToast` giải thích.
+  (2) **`await audioEl.play()` không catch → `isExporting` kẹt vĩnh viễn**:
+  nếu `play()` reject, cờ giữ `true`, recorder không stop, 2 nút export chết
+  đến reload. Fix: try/catch đặt `aborted`, `recorder.stop()`, status lỗi lộ rõ
+  nguyên nhân (Luật 10), reset `isExporting` + `onstop` phân nhánh aborted.
+  Rủi ro chấp nhận (không fix): Google Fonts CDN — đã là pattern sẵn của
+  `index.html`, offline chỉ fallback font; `<a download>` blob trong iframe →
+  Electron save dialog mặc định (app không có handler `will-download`);
+  hàm `bindRange` chết & `state.colorTouched` khởi tạo ngầm (không gây bug).
+  Renderer-only, không đụng IPC/contract. Kiểm định: extract `<script>`
+  `img-to-vid.html` qua `node --check` PASS (39.569 bytes); `npm run check`
+  PASS (syntax 331 file, IPC 143 kênh, parity, shared 25 file/16 state keys).
+
+- [2026-09-05] I-MZic — **"sửa toàn bộ cho ổn định"**: harden tiếp `img-to-vid.html`
+  sau vòng audit 1 (6 nhóm sửa, giữ nguyên kiến trúc iframe + hợp đồng
+  `__imzicExporting`):
+  1. `playBtn`: `await audioEl.play()` không catch → unhandled rejection; giờ
+  try/catch + status lỗi rõ nguyên nhân.
+  2. Chọn ảnh: thêm validate loại file (image/* | đuôi png/jpg/gif/webp/bmp/avif),
+  `Image.onerror` (file hỏng báo ngay, không im lặng), revoke object URL cũ —
+  hết rò rỉ bộ nhớ khi đổi ảnh nhiều lần.
+  3. Chọn nhạc: thêm `audioEl.onerror` (file hỏng trước đó để seekBar kẹt
+  disable không thông báo), revoke URL cũ, seekBar max xử lý duration
+  `Infinity` (webm), thêm state `audioReady` — `checkReady` giờ yêu cầu metadata
+  đã nạp; `recordAndExport` chặn export khi chưa ready.
+  4. Export: thêm `recorder.onerror` (lỗi giữa chừng trước đó kẹt `isExporting`
+  vĩnh viễn — flag `failed`, không tải file nửa vời), watchdog dừng recorder
+  sau `duration+15s` (hoặc cap 2h nếu duration không finite) phòng `ended`
+  không bao giờ đến, `try/catch` quanh `recorder.start()`, cleanup dừng track
+  canvas (giữ nguyên audio track dùng chung `streamDest`), revoke blob URL
+  video/nhạc sau 60s.
+  5. Guard đang ghi: `playBtn`/`restartBtn`/`seekBar` bị chặn thao tác khi
+  `isExporting` (pause/seek giữa lúc ghi trước đó phá bản ghi — video lệch
+  nhịp/đứng khung).
+  6. Dọn code chết: xoá hàm `bindRange` (chưa từng gọi, chứa dòng no-op),
+  khai báo tường minh `state.colorTouched:false`.
+  Renderer-only, không đụng IPC/contract/env. Kiểm định: extract `<script>`
+  → `node --check` PASS (43.294 bytes); cả 4 script check PASS riêng lẻ
+  (syntax 331 file, IPC 143 kênh/20 events, parity 0, shared 25 file/16 key).

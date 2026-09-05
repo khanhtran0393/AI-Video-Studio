@@ -27,8 +27,14 @@ class ErrorReporter {
       ...(typeof identity.artifact_sha256 === 'string' ? { artifact_sha256: identity.artifact_sha256 } : {}),
     };
     this.buffer = options.buffer || new EventBuffer({ maxSize: options.eventBufferSize });
-    this.queue = options.queue
-      || new LocalQueue(options.queueFile || path.join(process.cwd(), 'crash-queue.json'), options.queue);
+    // A caller may either inject a ready LocalQueue instance or pass a plain
+    // options object (dedupWindowMs, maxPendingPerFingerprint, …) alongside
+    // queueFile. Treat only objects exposing enqueue() as an actual queue so
+    // the config-object form cannot silently replace the queue implementation
+    // (production bug: report() then failed with 'report-failed').
+    const injectedQueue = options.queue && typeof options.queue.enqueue === 'function' ? options.queue : null;
+    this.queue = injectedQueue
+      || new LocalQueue(options.queueFile || path.join(process.cwd(), 'crash-queue.json'), options.queue || {});
     this.uploader = options.uploader || null;
     this.environment = options.environment || environmentProfile();
     this.flushIntervalMs = options.flushIntervalMs != null ? options.flushIntervalMs : 30 * 1000;

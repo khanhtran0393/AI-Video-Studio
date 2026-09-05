@@ -1,0 +1,1626 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ảnh + Nhạc • Hiệu ứng theo nhịp</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=Be+Vietnam+Pro:wght@400;600;700&family=Montserrat:wght@400;600;700&family=Playfair+Display:wght@600;700&family=Bebas+Neue&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0b0c10;
+    --panel:#14161d;
+    --panel-2:#191c24;
+    --border:#242733;
+    --text:#e9e7f2;
+    --muted:#8c8a9c;
+    --accent:#7c5cff;
+    --accent-2:#ffb84d;
+    --accent-soft: rgba(124,92,255,0.18);
+    --radius:14px;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    background:
+      radial-gradient(1200px 700px at 15% -10%, rgba(124,92,255,0.10), transparent 60%),
+      radial-gradient(900px 600px at 100% 10%, rgba(255,184,77,0.06), transparent 55%),
+      var(--bg);
+    color:var(--text);
+    font-family:'Inter',system-ui,sans-serif;
+    min-height:100vh;
+  }
+  h1,h2,h3,.brand{font-family:'Space Grotesk',system-ui,sans-serif;}
+  .app{
+    display:grid;
+    grid-template-columns: 360px 1fr;
+    min-height:100vh;
+  }
+  @media (max-width: 920px){
+    .app{grid-template-columns: 1fr; grid-template-rows:auto auto;}
+  }
+
+  /* ---- sidebar ---- */
+  .sidebar{
+    border-right:1px solid var(--border);
+    padding:22px 20px 40px;
+    overflow-y:auto;
+    max-height:100vh;
+  }
+  @media (max-width:920px){ .sidebar{max-height:none; border-right:none; border-bottom:1px solid var(--border);} }
+
+  .brand{
+    display:flex; align-items:center; gap:10px;
+    font-size:19px; font-weight:700; letter-spacing:0.2px;
+    margin-bottom:4px;
+  }
+  .brand .dot{
+    width:10px;height:10px;border-radius:50%;
+    background:var(--accent);
+    box-shadow:0 0 0 4px var(--accent-soft);
+  }
+  .subtitle{color:var(--muted); font-size:12.5px; margin-bottom:22px; line-height:1.5;}
+
+  .section{margin-bottom:22px;}
+  .section-title{
+    font-size:11px; text-transform:uppercase; letter-spacing:1.2px;
+    color:var(--accent-2); font-weight:600; margin-bottom:10px;
+  }
+
+  .upload-box{
+    border:1.5px dashed var(--border);
+    border-radius:var(--radius);
+    padding:14px;
+    background:var(--panel);
+    display:flex; align-items:center; gap:10px;
+    cursor:pointer;
+    transition:border-color .15s, background .15s;
+    font-size:13px;
+  }
+  .upload-box:hover{border-color:var(--accent); background:var(--panel-2);}
+  .upload-box input{
+    position:absolute; width:1px; height:1px; padding:0; margin:-1px;
+    overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0;
+  }
+  .upload-box .ic{
+    width:34px;height:34px;border-radius:9px;
+    background:var(--accent-soft);
+    display:flex;align-items:center;justify-content:center;
+    flex-shrink:0; font-size:16px;
+  }
+  .upload-box .meta{overflow:hidden;}
+  .upload-box .meta .name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500;}
+  .upload-box .meta .hint{color:var(--muted);font-size:11.5px;}
+
+  .field{margin-bottom:14px;}
+  .field-row{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px;}
+  .field label{font-size:12.5px; color:#c9c7d6; font-weight:500;}
+  .field .val{font-size:11.5px; color:var(--accent-2); font-variant-numeric:tabular-nums;}
+
+  input[type="range"]{
+    -webkit-appearance:none; width:100%; height:4px; border-radius:3px;
+    background:var(--border); outline:none;
+  }
+  input[type="range"]::-webkit-slider-thumb{
+    -webkit-appearance:none; width:15px;height:15px;border-radius:50%;
+    background:var(--accent); cursor:pointer; border:2px solid #fff2;
+    box-shadow:0 0 0 4px var(--accent-soft);
+  }
+  input[type="color"]{
+    -webkit-appearance:none; width:38px;height:30px;border:1px solid var(--border);
+    border-radius:8px; background:none; cursor:pointer; padding:0;
+  }
+  input[type="color"]::-webkit-color-swatch{border-radius:6px; border:none;}
+
+  select{
+    width:100%; background:var(--panel); color:var(--text);
+    border:1px solid var(--border); border-radius:9px; padding:9px 10px;
+    font-size:13px; font-family:inherit; cursor:pointer;
+  }
+  textarea.ta{
+    width:100%; background:var(--panel); color:var(--text);
+    border:1px solid var(--border); border-radius:9px; padding:9px 10px;
+    font-size:12px; font-family:inherit; resize:vertical;
+  }
+  input.num-input{
+    width:100%; background:var(--panel); color:var(--text);
+    border:1px solid var(--border); border-radius:9px; padding:8px 10px;
+    font-size:13px; font-family:inherit;
+  }
+
+  .chip-group{display:flex; flex-wrap:wrap; gap:6px;}
+  .chip{
+    padding:7px 12px; border-radius:20px; border:1px solid var(--border);
+    background:var(--panel); font-size:12px; cursor:pointer; color:var(--muted);
+    transition:all .15s; user-select:none;
+  }
+  .chip:hover{border-color:var(--accent);}
+  .chip.active{background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600;}
+
+  .row2{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+  .color-row{display:flex; align-items:center; gap:10px;}
+
+  hr.sep{border:none; border-top:1px solid var(--border); margin:22px 0;}
+
+  /* ---- main / preview ---- */
+  .main{
+    display:flex; flex-direction:column; align-items:center;
+    padding:28px 24px 20px; gap:16px;
+  }
+  .stage-wrap{
+    position:relative;
+    width:min(92%, 620px);
+    aspect-ratio: 9/16;
+    border-radius:20px;
+    background:#000;
+    overflow:hidden;
+    border:1px solid var(--border);
+    box-shadow: 0 0 0 1px #000, 0 20px 60px -20px rgba(0,0,0,.7);
+  }
+  .glow-ring{
+    position:absolute; inset:0; border-radius:20px; pointer-events:none;
+    box-shadow: inset 0 0 0 2px rgba(124,92,255, var(--pulse, 0.15));
+    transition: box-shadow .05s linear;
+    z-index:5;
+  }
+  canvas#stage{width:100%; height:100%; display:block;}
+  .empty-state{
+    position:absolute; inset:0; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; text-align:center;
+    color:var(--muted); font-size:13px; gap:8px; padding:30px;
+  }
+  .empty-state .big{font-size:34px;}
+
+  .transport{
+    display:flex; align-items:center; gap:12px; flex-wrap:wrap; justify-content:center;
+    width:min(92%,620px);
+  }
+  .btn{
+    border:1px solid var(--border); background:var(--panel); color:var(--text);
+    padding:10px 16px; border-radius:11px; font-size:13px; font-weight:600;
+    cursor:pointer; display:flex; align-items:center; gap:8px;
+    font-family:inherit; transition:all .15s;
+  }
+  .btn:hover{border-color:var(--accent); background:var(--panel-2);}
+  .btn.primary{background:var(--accent); border-color:var(--accent); color:#fff;}
+  .btn.primary:hover{filter:brightness(1.08);}
+  .btn.gold{background:var(--accent-2); border-color:var(--accent-2); color:#1a1200;}
+  .btn:disabled{opacity:.4; cursor:not-allowed;}
+
+  .seek{
+    width:min(92%,620px); display:flex; align-items:center; gap:10px; font-size:11.5px; color:var(--muted);
+  }
+  .seek input[type=range]{flex:1;}
+
+  .status{
+    width:min(92%,620px); font-size:12px; color:var(--muted); text-align:center; min-height:16px;
+  }
+  .status.active{color:var(--accent-2);}
+
+  .export-note{
+    width:min(92%,620px); background:var(--panel); border:1px solid var(--border);
+    border-radius:12px; padding:14px 16px; font-size:12px; color:var(--muted); line-height:1.6;
+  }
+  .export-note b{color:#c9c7d6;}
+  .export-note code{
+    background:#000; padding:2px 6px; border-radius:5px; color:var(--accent-2);
+    font-size:11.5px; word-break:break-all;
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ============ SIDEBAR ============ -->
+  <div class="sidebar">
+    <div class="brand"><span class="dot"></span>Ảnh & Nhạc</div>
+    <div class="subtitle">Ghép ảnh với nhạc, zoom nảy theo nhịp bass, thêm hiệu ứng bay trên nền — mọi thứ chỉnh được, xem trước ngay.</div>
+
+    <div class="section">
+      <div class="section-title">1. Tệp gốc</div>
+      <label class="upload-box" style="margin-bottom:10px;">
+        <div class="ic">🖼️</div>
+        <div class="meta">
+          <div class="name" id="imgName">Chọn ảnh nền</div>
+          <div class="hint">JPG / PNG / WEBP</div>
+        </div>
+        <input type="file" id="imgInput" accept="image/*">
+      </label>
+      <label class="upload-box">
+        <div class="ic">🎵</div>
+        <div class="meta">
+          <div class="name" id="audName">Chọn file nhạc</div>
+          <div class="hint">MP3 / WAV / M4A — giữ nguyên chất lượng gốc</div>
+        </div>
+        <input type="file" id="audInput">
+      </label>
+      <div style="font-size:11px;color:var(--muted);margin-top:8px;line-height:1.5;">
+        Trên điện thoại không bấm chọn được file? Thường do đang mở trang này trong trình duyệt của app khác (Messenger, Zalo, TikTok, Facebook...) — hãy chọn "Mở bằng Chrome/Safari" rồi thử lại.
+      </div>
+    </div>
+
+    <hr class="sep">
+
+    <div class="section">
+      <div class="section-title">2. Zoom theo nhịp</div>
+      <div class="field">
+        <div class="field-row"><label>Zoom nhỏ nhất</label><span class="val" id="v-zmin">1.00x</span></div>
+        <input type="range" id="zoomMin" min="0.9" max="1.3" step="0.01" value="1.00">
+      </div>
+      <div class="field">
+        <div class="field-row"><label>Zoom lớn nhất (đỉnh nhịp)</label><span class="val" id="v-zmax">1.18x</span></div>
+        <input type="range" id="zoomMax" min="1.0" max="1.8" step="0.01" value="1.18">
+      </div>
+      <div class="field">
+        <div class="field-row"><label>Độ nhạy với nhịp bass</label><span class="val" id="v-sens">100%</span></div>
+        <input type="range" id="sensitivity" min="20" max="200" step="5" value="100">
+      </div>
+      <div class="field">
+        <div class="field-row"><label>Độ mượt (làm dịu giật)</label><span class="val" id="v-smooth">55%</span></div>
+        <input type="range" id="smoothness" min="10" max="95" step="5" value="55">
+      </div>
+    </div>
+
+    <hr class="sep">
+
+    <div class="section">
+      <div class="section-title">3. Hiệu ứng bay</div>
+      <div class="field">
+        <div class="chip-group" id="effectChips">
+          <div class="chip active" data-v="none">Không</div>
+          <div class="chip" data-v="snow">❄ Tuyết bay</div>
+          <div class="chip" data-v="leaves">🍂 Lá rơi</div>
+          <div class="chip" data-v="stars">✦ Sao bay</div>
+          <div class="chip" data-v="rain">🌧 Mưa bay</div>
+          <div class="chip" data-v="rain">🌧 Mưa bay</div>
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="field-row"><label>Hướng bay</label></div>
+        <div class="chip-group" id="dirChips">
+          <div class="chip active" data-v="random">Ngẫu nhiên</div>
+          <div class="chip" data-v="left">← Trái</div>
+          <div class="chip" data-v="right">Phải →</div>
+          <div class="chip" data-v="down">↓ Xuống</div>
+          <div class="chip" data-v="up">↑ Lên</div>
+          <div class="chip" data-v="center">◎ Toả từ tâm</div>
+        </div>
+      </div>
+
+      <div class="row2">
+        <div class="field">
+          <div class="field-row"><label>Mật độ</label><span class="val" id="v-density">70</span></div>
+          <input type="range" id="density" min="10" max="220" step="5" value="70">
+        </div>
+        <div class="field">
+          <div class="field-row"><label>Tốc độ bay</label><span class="val" id="v-speed">100%</span></div>
+          <input type="range" id="pspeed" min="20" max="300" step="5" value="100">
+        </div>
+      </div>
+
+      <div class="row2">
+        <div class="field">
+          <div class="field-row"><label>Kích thước nhỏ</label><span class="val" id="v-szmin">4px</span></div>
+          <input type="range" id="sizeMin" min="1" max="30" step="1" value="4">
+        </div>
+        <div class="field">
+          <div class="field-row"><label>Kích thước lớn</label><span class="val" id="v-szmax">12px</span></div>
+          <input type="range" id="sizeMax" min="2" max="60" step="1" value="12">
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="field-row"><label>Độ mờ (trong suốt)</label><span class="val" id="v-alpha">85%</span></div>
+        <input type="range" id="alpha" min="10" max="100" step="5" value="85">
+      </div>
+
+      <div class="field">
+        <div class="field-row"><label>Màu sắc</label></div>
+        <div class="color-row">
+          <input type="color" id="pcolor" value="#ffffff">
+          <span style="font-size:12px;color:var(--muted)" id="colorHint">Mặc định theo hiệu ứng — đổi màu để tự chỉnh</span>
+        </div>
+      </div>
+    </div>
+
+    <hr class="sep">
+
+    <div class="section">
+      <div class="section-title">4. Sóng nhạc</div>
+      <div class="field">
+        <div class="chip-group" id="waveChips">
+          <div class="chip active" data-v="off">Tắt</div>
+          <div class="chip" data-v="on">〜 Bật sóng nhạc</div>
+        </div>
+      </div>
+
+      <div class="field" id="waveStyleField">
+        <div class="field-row"><label>Kiểu sóng</label></div>
+        <div class="chip-group" id="waveStyleChips">
+          <div class="chip active" data-v="line">〜 Dòng chảy</div>
+          <div class="chip" data-v="ribbon">◠ Dải ruy băng</div>
+          <div class="chip" data-v="bars">▮▮▮ Cột nhạc gương</div>
+          <div class="chip" data-v="circular">◎ Vòng tròn nhịp</div>
+          <div class="chip" data-v="dots">•• Chấm nhấp nháy</div>
+          <div class="chip" data-v="rainbow">🌈 Dải cầu vồng</div>
+          <div class="chip" data-v="bottombars">▁▃▅ Cột đáy</div>
+          <div class="chip" data-v="arc">⌒ Vòng cung</div>
+          <div class="chip" data-v="glow">✨ Hạt phát sáng</div>
+          <div class="chip" data-v="twin">⌇⌇ Sóng đôi</div>
+          <div class="chip" data-v="dashed">┄┄ Nét đứt</div>
+          <div class="chip" data-v="spiral">🌀 Xoắn ốc</div>
+          <div class="chip" data-v="circledots">●●● Cột hạt tròn</div>
+          <div class="chip" data-v="neon">💡 Neon đôi</div>
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="field-row"><label>Vị trí (trên ↔ dưới)</label><span class="val" id="v-wpos">100%</span></div>
+        <input type="range" id="wavePos" min="0" max="100" step="1" value="100">
+        <div style="font-size:11px;color:var(--muted);margin-top:6px;">Mặc định 100% = ẩn nửa dưới ở rìa màn hình, chỉ nhô lên nửa trên.</div>
+      </div>
+
+      <div class="row2">
+        <div class="field">
+          <div class="field-row"><label>Độ lớn (nét)</label><span class="val" id="v-wsize">4px</span></div>
+          <input type="range" id="waveSize" min="1" max="14" step="1" value="4">
+        </div>
+        <div class="field">
+          <div class="field-row"><label>Độ cao (biên độ)</label><span class="val" id="v-wamp">60px</span></div>
+          <input type="range" id="waveHeight" min="10" max="220" step="5" value="60">
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="field-row"><label>Độ rộng</label><span class="val" id="v-wwidth">85%</span></div>
+        <input type="range" id="waveWidth" min="30" max="100" step="1" value="85">
+      </div>
+
+      <div class="field">
+        <div class="field-row"><label>Màu sắc</label></div>
+        <div class="color-row">
+          <input type="color" id="waveColor" value="#9b8bff">
+        </div>
+      </div>
+    </div>
+
+    <hr class="sep">
+
+    <div class="section">
+      <div class="section-title">5. Đồng bộ sớm</div>
+      <div class="field">
+        <div class="field-row"><label>Zoom & sóng nhạc phản ứng sớm trước nhạc</label><span class="val" id="v-lead">300 ms</span></div>
+        <input type="range" id="leadMs" min="0" max="800" step="10" value="300">
+        <div style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5;">Hình & sóng sẽ "đón đầu" nhịp, còn tiếng nhạc phát trễ lại đúng bằng số mili-giây này để khớp cảm giác — 0ms = tắt, phản ứng đúng lúc nhạc vang lên.</div>
+      </div>
+    </div>
+
+    <hr class="sep">
+
+    <div class="section">
+      <div class="section-title">6. Khung hình</div>
+      <div class="chip-group" id="ratioChips">
+        <div class="chip active" data-v="portrait">▯ Dọc • 9:16</div>
+        <div class="chip" data-v="landscape">▭ Ngang • 16:9</div>
+      </div>
+      <div class="field" id="customSizeField" style="display:none; margin-top:12px;">
+        <div class="field-row"><label>Kích thước tuỳ chỉnh (khổ ngang)</label></div>
+        <div class="row2">
+          <div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:4px;">Rộng (px)</div>
+            <input type="number" id="customW" min="480" max="3840" step="10" value="1280"
+              style="width:100%;background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:9px;padding:8px 10px;font-size:13px;font-family:inherit;">
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:4px;">Cao (px)</div>
+            <input type="number" id="customH" min="270" max="2160" step="10" value="720"
+              style="width:100%;background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:9px;padding:8px 10px;font-size:13px;font-family:inherit;">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <hr class="sep">
+
+    <div class="section">
+      <div class="section-title">7. Lời bài hát (.srt)</div>
+
+      <label class="upload-box" style="margin-bottom:10px;">
+        <div class="ic">📝</div>
+        <div class="meta">
+          <div class="name" id="srtName">Chọn file .srt</div>
+          <div class="hint">Hoặc dán trực tiếp bên dưới</div>
+        </div>
+        <input type="file" id="srtInput">
+      </label>
+
+      <div class="field">
+        <textarea id="srtPaste" rows="5" placeholder="Dán nội dung SRT vào đây...&#10;&#10;1&#10;00:00:01,000 --> 00:00:04,000&#10;Dòng lời đầu tiên"
+          style="width:100%;background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:9px;padding:10px;font-size:12px;font-family:inherit;resize:vertical;"></textarea>
+      </div>
+      <button class="btn" id="loadSrtPasteBtn" style="width:100%;justify-content:center;margin-bottom:18px;">Tải lời từ nội dung đã dán</button>
+
+      <div class="field">
+        <div class="field-row"><label>Font chữ</label></div>
+        <select id="lyricFont">
+          <option value="'Inter',system-ui,sans-serif">Inter — hiện đại</option>
+          <option value="'Be Vietnam Pro',system-ui,sans-serif">Be Vietnam Pro — thân thiện</option>
+          <option value="'Space Grotesk',system-ui,sans-serif">Space Grotesk — nổi bật</option>
+          <option value="Georgia,serif">Georgia — cổ điển</option>
+          <option value="'Courier New',monospace">Courier New — đánh máy</option>
+        </select>
+      </div>
+
+      <div class="row2">
+        <div class="field">
+          <div class="field-row"><label>Cỡ chữ</label><span class="val" id="v-lsize">32px</span></div>
+          <input type="range" id="lyricSize" min="14" max="80" step="1" value="32">
+        </div>
+        <div class="field">
+          <div class="field-row"><label>Màu chữ</label></div>
+          <div class="color-row">
+            <input type="color" id="lyricColor" value="#ffffff">
+          </div>
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="field-row"><label>Đổ bóng chữ</label></div>
+        <div class="chip-group" id="lyricShadowChips">
+          <div class="chip active" data-v="on">Bật</div>
+          <div class="chip" data-v="off">Tắt</div>
+        </div>
+      </div>
+
+      <div class="row2">
+        <div class="field">
+          <div class="field-row"><label>Vị trí ngang</label><span class="val" id="v-lposx">50%</span></div>
+          <input type="range" id="lyricPosX" min="5" max="95" step="1" value="50">
+        </div>
+        <div class="field">
+          <div class="field-row"><label>Vị trí dọc</label><span class="val" id="v-lposy">88%</span></div>
+          <input type="range" id="lyricPosY" min="5" max="95" step="1" value="88">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ MAIN ============ -->
+  <div class="main">
+    <div class="stage-wrap" id="stageWrap">
+      <canvas id="stage" width="720" height="1280"></canvas>
+      <div class="glow-ring" id="glowRing"></div>
+      <div class="empty-state" id="emptyState">
+        <div class="big">🎬</div>
+        <div>Chọn ảnh + nhạc ở bên trái<br>để bắt đầu xem trước</div>
+      </div>
+    </div>
+
+    <div class="seek">
+      <span id="tCur">0:00</span>
+      <input type="range" id="seekBar" min="0" max="100" value="0" step="0.1" disabled>
+      <span id="tDur">0:00</span>
+    </div>
+
+    <div class="transport">
+      <button class="btn primary" id="playBtn" disabled>▶ Phát thử</button>
+      <button class="btn" id="restartBtn" disabled>⟲ Từ đầu</button>
+      <button class="btn gold" id="exportAudioBtn" disabled>⬇ Xuất video (kèm nhạc)</button>
+      <button class="btn" id="exportSilentBtn" disabled>⬇ Xuất video hình (giữ nhạc gốc riêng)</button>
+    </div>
+
+    <div class="status" id="statusLine"></div>
+
+    <div class="export-note">
+      <b>Lưu ý quan trọng khi xuất video:</b> giữ tab này <b>đang mở và hiển thị trên màn hình</b> suốt quá trình ghi (không chuyển tab, không thu nhỏ cửa sổ). Trình duyệt tự làm chậm canvas khi tab bị ẩn, đó là nguyên nhân hiệu ứng có thể "biến mất" hoặc đứng khung ở một đoạn giữa video.
+      <br><br>
+      <b>Về chất lượng nhạc:</b> khi xem trước, nhạc phát trực tiếp từ file gốc — không đổi gì cả.
+      Nút <b>"kèm nhạc"</b> ghép nhanh 1 file, nhưng trình duyệt sẽ mã hoá lại âm thanh (chất lượng cao, nhưng không phải bản sao tuyệt đối).
+      Nút <b>"giữ nhạc gốc riêng"</b> xuất video câm + để bạn tải file nhạc gốc y nguyên, ghép lại bằng lệnh ffmpeg bên dưới (không mất chất lượng, vì chỉ copy luồng âm thanh):
+      <br><code id="ffmpegCmd">ffmpeg -i video_hinh.webm -i nhac_goc.mp3 -c:v copy -c:a copy -shortest ket_qua.mkv</code>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+
+  // ---- state ----
+  const state = {
+    img:null, imgFile:null,
+    audioFile:null,
+    effect:'none', direction:'random', dirTouched:false,
+    zoomMin:1.00, zoomMax:1.18, sensitivity:1.0, smoothness:0.55,
+    density:70, pspeed:1.0, sizeMin:4, sizeMax:12, alpha:0.85, color:null,
+    waveOn:false, waveStyle:'line', wavePos:100, waveSize:4, waveHeight:60, waveWidth:85, waveColor:'#9b8bff',
+    leadMs:300,
+    orientation:'portrait',
+    lyricsCues:[], lyricFont:"'Inter',system-ui,sans-serif", lyricColor:'#ffffff', lyricSize:32,
+    lyricShadow:true, lyricPosX:50, lyricPosY:88,
+    _lastLyricIdx:-2, _lyricFadeStart:0,
+    colorTouched:false, audioReady:false,
+    playing:false
+  };
+
+  const defaultColors = { snow:'#ffffff', leaves:'#d98a3d', stars:'#ffe28a', rain:'#bcd9ff', none:'#ffffff' };
+
+  // ---- canvas ----
+  const canvas = $('stage');
+  const ctx = canvas.getContext('2d');
+  const glowRing = $('glowRing');
+  const emptyState = $('emptyState');
+
+  // ---- audio graph ----
+  // Signal path: source -> analyser (UNDELAYED — this is what drives zoom/wave,
+  // so the visuals react to audio content before it's actually heard)
+  //            -> delayNode (leadMs) -> speakers + recording stream (what's actually heard/exported)
+  let audioCtx = null, analyser = null, sourceNode = null, streamDest = null, delayNode = null;
+  let audioEl = new Audio();
+  audioEl.crossOrigin = "anonymous";
+  let freqData = null;
+  let smoothedEnergy = 0;
+
+  function ensureAudioGraph(){
+    if(audioCtx) return;
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    sourceNode = audioCtx.createMediaElementSource(audioEl);
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 256;
+    freqData = new Uint8Array(analyser.frequencyBinCount);
+    delayNode = audioCtx.createDelay(2.0);
+    delayNode.delayTime.value = state.leadMs/1000;
+    streamDest = audioCtx.createMediaStreamDestination();
+
+    sourceNode.connect(analyser);         // undelayed tap, feeds the visuals
+    sourceNode.connect(delayNode);        // delayed path, feeds what's actually heard
+    delayNode.connect(audioCtx.destination);
+    delayNode.connect(streamDest);
+  }
+
+  // ---- particles ----
+  let particles = [];
+  let particleClock = 0;
+  function rand(a,b){ return a + Math.random()*(b-a); }
+
+  function spawnParticle(w,h, initial){
+    const dir = state.direction;
+
+    if(dir==='center'){
+      const maxR = Math.hypot(w,h)/2 * 1.05;
+      return {
+        mode:'center',
+        cx: w/2, cy: h/2,
+        angle: rand(0,Math.PI*2),
+        radius: initial ? rand(0,maxR) : 0,
+        maxR,
+        speedFactor: rand(0.5,1.3),
+        rot: rand(0,Math.PI*2),
+        vrot: rand(-0.02,0.02),
+        alphaJit: rand(0.6,1),
+        twinklePhase: rand(0,Math.PI*2), twinkleSpeed: rand(0.5,2.2)
+      };
+    }
+
+    let vx=0, vy=0;
+    const base = 0.4 * state.pspeed;
+    if(dir==='random'){ vx = rand(-1,1)*base; vy = rand(0.3,1)*base; }
+    else if(dir==='left'){ vx = -rand(0.5,1.2)*base; vy = rand(-0.2,0.2)*base; }
+    else if(dir==='right'){ vx = rand(0.5,1.2)*base; vy = rand(-0.2,0.2)*base; }
+    else if(dir==='down'){ vy = rand(0.6,1.3)*base; vx = rand(-0.2,0.2)*base; }
+    else if(dir==='up'){ vy = -rand(0.6,1.3)*base; vx = rand(-0.2,0.2)*base; }
+
+    return {
+      mode:'linear',
+      x: rand(0,w), y: initial ? rand(0,h) : rand(-40,-5),
+      size: rand(state.sizeMin, state.sizeMax),
+      vx, vy,
+      rot: rand(0,Math.PI*2),
+      vrot: rand(-0.02,0.02),
+      sway: rand(0,Math.PI*2),
+      alphaJit: rand(0.6,1),
+      twinklePhase: rand(0,Math.PI*2), twinkleSpeed: rand(0.5,2.2)
+    };
+  }
+
+  function rebuildParticles(){
+    const w = canvas.width, h = canvas.height;
+    const n = state.effect === 'none' ? 0 : Math.round(state.density);
+    particles = [];
+    for(let i=0;i<n;i++) particles.push(spawnParticle(w,h,true));
+  }
+
+  function updateParticle(p, w, h, dt){
+    p.rot += p.vrot * dt;
+
+    if(p.mode==='center'){
+      p.radius += p.speedFactor * state.pspeed * dt;
+      if(p.radius > p.maxR){
+        p.radius = 0;
+        p.angle = rand(0,Math.PI*2);
+        p.speedFactor = rand(0.5,1.3);
+      }
+      p.x = p.cx + Math.cos(p.angle)*p.radius;
+      p.y = p.cy + Math.sin(p.angle)*p.radius;
+      // grows from small (center) to large (edge)
+      p.curSize = state.sizeMin + (state.sizeMax - state.sizeMin) * Math.min(1, p.radius / p.maxR);
+      return;
+    }
+
+    p.sway += 0.02 * dt;
+    let x = p.x + (p.vx + Math.sin(p.sway)*0.6) * dt;
+    let y = p.y + p.vy * dt;
+    // wrap
+    if(x < -30) x = w+20; if(x > w+30) x = -20;
+    if(y < -30) y = h+20; if(y > h+30) y = -20;
+    p.x = x; p.y = y;
+  }
+
+  function drawStar(cx,cy,r,rot){
+    const spikes=5, step=Math.PI/spikes;
+    ctx.beginPath();
+    let angle = rot;
+    for(let i=0;i<spikes*2;i++){
+      const rad = (i%2===0) ? r : r*0.45;
+      const px = cx + Math.cos(angle)*rad;
+      const py = cy + Math.sin(angle)*rad;
+      i===0 ? ctx.moveTo(px,py) : ctx.lineTo(px,py);
+      angle += step;
+    }
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // proper 6-branch dendrite snowflake instead of a plain dot
+  function drawSnowflake(cx,cy,r,rot){
+    ctx.save();
+    ctx.translate(cx,cy); ctx.rotate(rot);
+    ctx.lineWidth = Math.max(0.6, r*0.16);
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    for(let i=0;i<6;i++){
+      const a = i*Math.PI/3;
+      const x2 = Math.cos(a)*r, y2 = Math.sin(a)*r;
+      ctx.moveTo(0,0); ctx.lineTo(x2,y2);
+      const bx = Math.cos(a)*r*0.55, by = Math.sin(a)*r*0.55;
+      const bl = r*0.32;
+      const a1 = a+Math.PI/4, a2 = a-Math.PI/4;
+      ctx.moveTo(bx,by); ctx.lineTo(bx+Math.cos(a1)*bl, by+Math.sin(a1)*bl);
+      ctx.moveTo(bx,by); ctx.lineTo(bx+Math.cos(a2)*bl, by+Math.sin(a2)*bl);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // teardrop raindrop shape, oriented along its direction of travel
+  function drawRaindrop(cx,cy,r,dirAngle){
+    ctx.save();
+    ctx.translate(cx,cy);
+    ctx.rotate(dirAngle - Math.PI/2);
+    ctx.beginPath();
+    ctx.moveTo(0,-r*1.6);
+    ctx.bezierCurveTo(r*0.85,-r*0.25, r*0.7,r*1.05, 0,r*1.3);
+    ctx.bezierCurveTo(-r*0.7,r*1.05, -r*0.85,-r*0.25, 0,-r*1.6);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // ---- audio wave: several smooth, popular visualizer styles ----
+  let waveTime = 0;
+
+  function waveEnergyAt(bins, t){
+    const idx = Math.min(bins.length-1, Math.floor(t*(bins.length-1)));
+    return analyser ? bins[idx]/255 : 0.15;
+  }
+
+  function hexToRgba(hex, a){
+    hex = hex.replace('#','');
+    if(hex.length===3) hex = hex.split('').map(c=>c+c).join('');
+    const r = parseInt(hex.substring(0,2),16), g = parseInt(hex.substring(2,4),16), b = parseInt(hex.substring(4,6),16);
+    return `rgba(${r},${g},${b},${a})`;
+  }
+
+  function hexToHsl(hex){
+    hex = hex.replace('#','');
+    if(hex.length===3) hex = hex.split('').map(c=>c+c).join('');
+    const r=parseInt(hex.substring(0,2),16)/255, g=parseInt(hex.substring(2,4),16)/255, b=parseInt(hex.substring(4,6),16)/255;
+    const max=Math.max(r,g,b), min=Math.min(r,g,b);
+    let h=0,s=0; const l=(max+min)/2;
+    if(max!==min){
+      const d=max-min;
+      s = l>0.5 ? d/(2-max-min) : d/(max+min);
+      if(max===r) h=(g-b)/d+(g<b?6:0);
+      else if(max===g) h=(b-r)/d+2;
+      else h=(r-g)/d+4;
+      h*=60;
+    }
+    return [h, s*100, l*100];
+  }
+
+  // shared, always-on shimmering gradient built from the user's chosen wave
+  // colour — this is what keeps every wave style looking like a glowing
+  // ribbon instead of one flat, plain colour
+  function buildWaveGradient(startX,widthPx){
+    const [h,s,l] = hexToHsl(state.waveColor);
+    const drift = waveTime*14;
+    const grad = ctx.createLinearGradient(startX,0,startX+widthPx,0);
+    grad.addColorStop(0,    `hsla(${h-32+drift},${Math.min(100,s+8)}%,${Math.min(80,l+18)}%,0.92)`);
+    grad.addColorStop(0.35, `hsla(${h+drift},${s}%,${l}%,1)`);
+    grad.addColorStop(0.65, `hsla(${h+26+drift},${s}%,${Math.max(28,l-8)}%,1)`);
+    grad.addColorStop(1,    `hsla(${h+50+drift},${Math.min(100,s+8)}%,${Math.min(80,l+18)}%,0.92)`);
+    return grad;
+  }
+
+  function roundRectPath(c,x,y,w,h,r){
+    r = Math.min(r, w/2, h/2);
+    c.moveTo(x+r,y);
+    c.arcTo(x+w,y,x+w,y+h,r);
+    c.arcTo(x+w,y+h,x,y+h,r);
+    c.arcTo(x,y+h,x,y,r);
+    c.arcTo(x,y,x+w,y,r);
+    c.closePath();
+  }
+
+  // 1) flowing line — travels side-to-side while riding up/down with the beat
+  function drawWaveLine(bins,w,h,baseY,startX,widthPx,amp){
+    const segments = 72;
+    const swayPhase = Math.sin(waveTime*0.55) * 2.2;
+    const swayPhase2 = Math.sin(waveTime*0.33 + 1.7) * 1.4;
+    ctx.beginPath();
+    for(let i=0;i<=segments;i++){
+      const t = i/segments;
+      const x = startX + t*widthPx;
+      const energy = waveEnergyAt(bins,t);
+      const y = baseY
+        + Math.sin(t*Math.PI*3.2 + swayPhase) * amp * (0.35 + energy*0.85)
+        + Math.sin(t*Math.PI*6.1 - swayPhase2) * amp * 0.22 * (0.3+energy);
+      if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+  }
+
+  // 2) filled ribbon / blob — soft glowing gradient band, very smooth (Siri-style)
+  function drawWaveRibbon(bins,w,h,baseY,startX,widthPx,amp){
+    const segments = 56;
+    const swayPhase = Math.sin(waveTime*0.5) * 2;
+    const topPts=[], botPts=[];
+    for(let i=0;i<=segments;i++){
+      const t = i/segments;
+      const x = startX + t*widthPx;
+      const energy = waveEnergyAt(bins,t);
+      const off = Math.abs(Math.sin(t*Math.PI*3 + waveTime + swayPhase)) * amp * (0.4+energy*0.85) + amp*0.12;
+      topPts.push({x, y: baseY-off});
+      botPts.push({x, y: baseY+off});
+    }
+    const [h2,s2,l2] = hexToHsl(state.waveColor);
+    const drift = waveTime*10;
+    const grad = ctx.createLinearGradient(startX,0,startX+widthPx,0);
+    grad.addColorStop(0,   `hsla(${h2-30},${s2}%,${l2}%,0.05)`);
+    grad.addColorStop(0.3, `hsla(${h2-8+drift},${s2}%,${Math.min(82,l2+12)}%,0.62)`);
+    grad.addColorStop(0.6, `hsla(${h2+24+drift},${s2}%,${l2}%,0.62)`);
+    grad.addColorStop(1,   `hsla(${h2+45},${s2}%,${l2}%,0.05)`);
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(topPts[0].x, topPts[0].y);
+    for(let i=1;i<topPts.length;i++) ctx.lineTo(topPts[i].x, topPts[i].y);
+    for(let i=botPts.length-1;i>=0;i--) ctx.lineTo(botPts[i].x, botPts[i].y);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // 3) mirrored equalizer bars — classic, punchy, symmetric around the baseline
+  function drawWaveBars(bins,w,h,baseY,startX,widthPx,amp){
+    const barCount = 38;
+    const barW = Math.max(2, state.waveSize*1.6);
+    for(let i=0;i<barCount;i++){
+      const t = barCount<=1 ? 0 : i/(barCount-1);
+      const x = startX + t*widthPx;
+      const energy = waveEnergyAt(bins,t);
+      const sway = 0.82 + Math.sin(waveTime*0.8 + t*Math.PI*2.4)*0.18;
+      const barH = Math.max(2, amp * (0.18 + energy*0.9) * sway);
+      ctx.beginPath();
+      roundRectPath(ctx, x-barW/2, baseY-barH, barW, barH*2, barW/2);
+      ctx.fill();
+    }
+  }
+
+  // 4) circular radial pulse — spectrum ring, slowly rotating
+  function drawWaveCircular(bins,w,h,baseY,startX,widthPx,amp){
+    const cx = w/2, cy = baseY;
+    const baseR = Math.max(20, widthPx*0.28);
+    const spikes = 64;
+    ctx.beginPath();
+    for(let i=0;i<=spikes;i++){
+      const t = i/spikes;
+      const angle = t*Math.PI*2 + waveTime*0.3;
+      const energy = waveEnergyAt(bins,t);
+      const r = baseR + amp*(0.3+energy*0.9);
+      const x = cx+Math.cos(angle)*r, y = cy+Math.sin(angle)*r;
+      if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    ctx.closePath();
+    ctx.stroke();
+  }
+
+  // 5) dotted wave — bouncing dots tracing the melody line, each one a soft glowing orb
+  function drawWaveDots(bins,w,h,baseY,startX,widthPx,amp){
+    const n = 46;
+    for(let i=0;i<n;i++){
+      const t = n<=1?0:i/(n-1);
+      const x = startX + t*widthPx;
+      const energy = waveEnergyAt(bins,t);
+      const y = baseY + Math.sin(t*Math.PI*3 + waveTime) * amp * (0.3+energy*0.9);
+      const r = Math.max(1.5, state.waveSize*0.6) * (0.55+energy*0.9);
+      const g = ctx.createRadialGradient(x,y,0,x,y,r*1.8);
+      g.addColorStop(0, hexToRgba(state.waveColor,0.95));
+      g.addColorStop(1, hexToRgba(state.waveColor,0));
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(x,y,r*1.8,0,Math.PI*2);
+      ctx.fill();
+    }
+  }
+
+  // 6) gradient rainbow ribbon line — hue travels along the wave over time
+  function drawWaveRainbow(bins,w,h,baseY,startX,widthPx,amp){
+    const segments = 60;
+    ctx.lineWidth = state.waveSize;
+    for(let i=0;i<segments;i++){
+      const t0=i/segments, t1=(i+1)/segments;
+      const e0=waveEnergyAt(bins,t0), e1=waveEnergyAt(bins,t1);
+      const x0=startX+t0*widthPx, x1=startX+t1*widthPx;
+      const y0=baseY+Math.sin(t0*Math.PI*3+waveTime)*amp*(0.35+e0*0.85);
+      const y1=baseY+Math.sin(t1*Math.PI*3+waveTime)*amp*(0.35+e1*0.85);
+      const hue = (t0*300 + waveTime*40) % 360;
+      ctx.strokeStyle = `hsl(${hue},85%,65%)`;
+      ctx.beginPath();
+      ctx.moveTo(x0,y0); ctx.lineTo(x1,y1);
+      ctx.stroke();
+    }
+  }
+
+  // 7) bottom-anchored equalizer bars — each bar glows brightest at its tip
+  function drawWaveBottomBars(bins,w,h,baseY,startX,widthPx,amp){
+    const barCount = 34, barW = Math.max(2, state.waveSize*1.5);
+    for(let i=0;i<barCount;i++){
+      const t = barCount<=1?0:i/(barCount-1);
+      const x = startX+t*widthPx;
+      const energy = waveEnergyAt(bins,t);
+      const sway = 0.85 + Math.sin(waveTime*0.8 + t*Math.PI*2.4)*0.15;
+      const barH = Math.max(2, amp*(0.2+energy*1.1)*sway);
+      const g = ctx.createLinearGradient(0, baseY-barH, 0, baseY);
+      g.addColorStop(0, hexToRgba(state.waveColor,1));
+      g.addColorStop(1, hexToRgba(state.waveColor,0.1));
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      roundRectPath(ctx, x-barW/2, baseY-barH, barW, barH, barW/2);
+      ctx.fill();
+    }
+  }
+
+  // 8) bouncing arc / rainbow bridge shape
+  function drawWaveArc(bins,w,h,baseY,startX,widthPx,amp){
+    const segments = 48;
+    ctx.beginPath();
+    for(let i=0;i<=segments;i++){
+      const t = i/segments;
+      const angle = Math.PI*(1-t);
+      const x = startX + t*widthPx;
+      const energy = waveEnergyAt(bins,t);
+      const archH = amp*(0.5+energy*0.9);
+      const y = baseY - Math.sin(angle)*archH;
+      if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+  }
+
+  // 9) glowing orb trail
+  function drawWaveGlow(bins,w,h,baseY,startX,widthPx,amp){
+    const n = 24;
+    for(let i=0;i<n;i++){
+      const t = n<=1?0:i/(n-1);
+      const x = startX+t*widthPx;
+      const energy = waveEnergyAt(bins,t);
+      const y = baseY + Math.sin(t*Math.PI*2.4+waveTime*1.1)*amp*(0.3+energy*0.9);
+      const r = Math.max(2, state.waveSize*0.9) * (0.6+energy*1.1);
+      const grad = ctx.createRadialGradient(x,y,0,x,y,r*2.2);
+      grad.addColorStop(0, hexToRgba(state.waveColor,0.9));
+      grad.addColorStop(1, hexToRgba(state.waveColor,0));
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(x,y,r*2.2,0,Math.PI*2);
+      ctx.fill();
+    }
+  }
+
+  // 10) twin mirrored lines with slight offset (interference look)
+  function drawWaveTwin(bins,w,h,baseY,startX,widthPx,amp){
+    for(const sign of [1,-1]){
+      ctx.beginPath();
+      for(let i=0;i<=64;i++){
+        const t = i/64;
+        const x = startX+t*widthPx;
+        const energy = waveEnergyAt(bins,t);
+        const y = baseY + sign*Math.abs(Math.sin(t*Math.PI*3+waveTime))*amp*(0.3+energy*0.8)*0.65;
+        if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+      }
+      ctx.stroke();
+    }
+  }
+
+  // 11) dashed traveling line
+  function drawWaveDashed(bins,w,h,baseY,startX,widthPx,amp){
+    ctx.setLineDash([state.waveSize*1.5, state.waveSize*1.2]);
+    ctx.lineDashOffset = -waveTime*40;
+    drawWaveLine(bins,w,h,baseY,startX,widthPx,amp);
+    ctx.setLineDash([]);
+  }
+
+  // 12) spiral, flattened to fit the frame, rotating slowly
+  function drawWaveSpiral(bins,w,h,baseY,startX,widthPx,amp){
+    const cx = w/2, cy = baseY, turns = 2.2, segments = 140;
+    const baseR = Math.max(10, widthPx*0.05);
+    ctx.beginPath();
+    for(let i=0;i<=segments;i++){
+      const t = i/segments;
+      const angle = t*Math.PI*2*turns + waveTime*0.6;
+      const energy = waveEnergyAt(bins,t);
+      const r = baseR + t*widthPx*0.35*(0.5+energy*0.8) + amp*0.2*energy;
+      const x = cx+Math.cos(angle)*r, y = cy+Math.sin(angle)*r*0.5;
+      if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+  }
+
+  // 13) stacked-circle bars ("beaded" bars) — brighter beads near the tip
+  function drawWaveCircleDots(bins,w,h,baseY,startX,widthPx,amp){
+    const barCount = 24, r = Math.max(2, state.waveSize*0.9);
+    for(let i=0;i<barCount;i++){
+      const t = barCount<=1?0:i/(barCount-1);
+      const x = startX+t*widthPx;
+      const energy = waveEnergyAt(bins,t);
+      const sway = 0.85 + Math.sin(waveTime*0.8+t*Math.PI*2)*0.15;
+      const count = Math.max(1, Math.round((amp*(0.2+energy*1.0)*sway)/(r*2.2)));
+      for(let k=0;k<count;k++){
+        const y = baseY - k*(r*2.2) - r;
+        const fade = 1 - (k/Math.max(1,count));
+        ctx.fillStyle = hexToRgba(state.waveColor, 0.3+fade*0.7);
+        ctx.beginPath();
+        ctx.arc(x,y,r,0,Math.PI*2);
+        ctx.fill();
+      }
+    }
+  }
+
+  // 14) neon double-stroke glow line
+  function drawWaveNeon(bins,w,h,baseY,startX,widthPx,amp){
+    ctx.save();
+    ctx.lineWidth = state.waveSize*2.4;
+    ctx.globalAlpha = 0.35;
+    ctx.shadowBlur = state.waveSize*4;
+    drawWaveLine(bins,w,h,baseY,startX,widthPx,amp);
+    ctx.restore();
+    ctx.save();
+    ctx.lineWidth = Math.max(1, state.waveSize*0.5);
+    ctx.strokeStyle = '#ffffff';
+    ctx.shadowBlur = state.waveSize*1.5;
+    drawWaveLine(bins,w,h,baseY,startX,widthPx,amp);
+    ctx.restore();
+  }
+
+  // ---- lyrics (SRT) ----
+  function srtTimeToSec(t){
+    const m = t.trim().match(/(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})/);
+    if(!m) return 0;
+    const ms = (m[4]+'00').slice(0,3);
+    return (+m[1])*3600 + (+m[2])*60 + (+m[3]) + (+ms)/1000;
+  }
+  function parseSRT(text){
+    const blocks = text.replace(/\r/g,'').trim().split(/\n\s*\n/);
+    const out = [];
+    for(const b of blocks){
+      const lines = b.split('\n').filter(l=>l.trim().length);
+      if(!lines.length) continue;
+      let idx = /^\d+$/.test(lines[0].trim()) ? 1 : 0;
+      const timeLine = lines[idx] || '';
+      const m = timeLine.match(/(\d{1,2}:\d{2}:\d{2}[,.]\d{1,3})\s*-->\s*(\d{1,2}:\d{2}:\d{2}[,.]\d{1,3})/);
+      if(!m) continue;
+      const start = srtTimeToSec(m[1]), end = srtTimeToSec(m[2]);
+      const text2 = lines.slice(idx+1).join('\n').trim();
+      if(text2) out.push({start, end, text:text2});
+    }
+    out.sort((a,b)=>a.start-b.start);
+    return out;
+  }
+  function loadLyricsFromText(text, sourceLabel){
+    const parsed = parseSRT(text);
+    if(!parsed.length){
+      setStatus('Không đọc được nội dung SRT — kiểm tra định dạng "00:00:01,000 --> 00:00:04,000" nhé.', true);
+      return;
+    }
+    state.lyricsCues = parsed;
+    state._lastLyricIdx = -2;
+    $('srtName').textContent = sourceLabel + ` (${parsed.length} dòng)`;
+    setStatus(`Đã tải ${parsed.length} dòng lời.`, false);
+  }
+
+  function wrapLyricText(text, maxWidth){
+    const paragraphs = text.split('\n');
+    const lines = [];
+    for(const para of paragraphs){
+      const words = para.split(' ');
+      let cur = '';
+      for(const w of words){
+        const test = cur ? cur+' '+w : w;
+        if(cur && ctx.measureText(test).width > maxWidth){ lines.push(cur); cur = w; }
+        else cur = test;
+      }
+      if(cur) lines.push(cur);
+    }
+    return lines;
+  }
+
+  function findActiveCue(t){
+    const cues = state.lyricsCues;
+    for(let i=0;i<cues.length;i++){
+      if(t >= cues[i].start && t <= cues[i].end) return {cue:cues[i], idx:i};
+    }
+    return null;
+  }
+
+  function drawLyrics(){
+    if(!state.lyricsCues.length) return;
+    const t = audioEl.currentTime || 0;
+    const found = findActiveCue(t);
+    if(!found) return;
+    const { cue } = found;
+
+    // fade-in envelope at the start of each line (plus a short fade-out so it
+    // never cuts off abruptly)
+    const fadeDur = 0.35;
+    const inT = t - cue.start, outT = cue.end - t;
+    let alpha = 1;
+    if(inT < fadeDur) alpha = Math.max(0, inT/fadeDur);
+    if(outT < fadeDur) alpha = Math.min(alpha, Math.max(0, outT/fadeDur));
+    if(alpha <= 0.01) return;
+
+    const w = canvas.width, h = canvas.height;
+    const size = state.lyricSize;
+    ctx.save();
+    ctx.font = `700 ${size}px ${state.lyricFont}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.globalAlpha = alpha;
+    if(state.lyricShadow){
+      ctx.shadowColor = 'rgba(0,0,0,0.85)';
+      ctx.shadowBlur = size*0.22;
+      ctx.shadowOffsetY = size*0.05;
+    }
+    ctx.fillStyle = state.lyricColor;
+
+    const maxWidth = w*0.86;
+    const lines = wrapLyricText(cue.text, maxWidth);
+    const lineHeight = size*1.25;
+    const x = w * (state.lyricPosX/100);
+    const totalH = lines.length*lineHeight;
+    let y = h*(state.lyricPosY/100) - totalH/2 + lineHeight/2;
+    for(const line of lines){
+      ctx.fillText(line, x, y);
+      y += lineHeight;
+    }
+    ctx.restore();
+  }
+
+  function drawWave(dt){
+    if(!state.waveOn) return;
+    waveTime += dt * 0.045;
+    const bins = freqData || new Uint8Array(64);
+    const w = canvas.width, h = canvas.height;
+    const baseY = h * (state.wavePos/100);
+    const widthPx = w * (state.waveWidth/100);
+    const startX = (w - widthPx)/2;
+    const amp = state.waveHeight;
+
+    ctx.save();
+    const grad = buildWaveGradient(startX, widthPx);
+    ctx.strokeStyle = grad;
+    ctx.fillStyle = grad;
+    ctx.lineWidth = state.waveSize;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    // colour radiates outward as a soft glow instead of a flat, hard edge
+    ctx.shadowColor = state.waveColor;
+    ctx.shadowBlur = state.waveSize * 3.4;
+
+    if(state.waveStyle==='ribbon') drawWaveRibbon(bins,w,h,baseY,startX,widthPx,amp);
+    else if(state.waveStyle==='bars') drawWaveBars(bins,w,h,baseY,startX,widthPx,amp);
+    else if(state.waveStyle==='circular') drawWaveCircular(bins,w,h,baseY,startX,widthPx,amp);
+    else if(state.waveStyle==='dots') drawWaveDots(bins,w,h,baseY,startX,widthPx,amp);
+    else if(state.waveStyle==='rainbow') drawWaveRainbow(bins,w,h,baseY,startX,widthPx,amp);
+    else if(state.waveStyle==='bottombars') drawWaveBottomBars(bins,w,h,baseY,startX,widthPx,amp);
+    else if(state.waveStyle==='arc') drawWaveArc(bins,w,h,baseY,startX,widthPx,amp);
+    else if(state.waveStyle==='glow') drawWaveGlow(bins,w,h,baseY,startX,widthPx,amp);
+    else if(state.waveStyle==='twin') drawWaveTwin(bins,w,h,baseY,startX,widthPx,amp);
+    else if(state.waveStyle==='dashed') drawWaveDashed(bins,w,h,baseY,startX,widthPx,amp);
+    else if(state.waveStyle==='spiral') drawWaveSpiral(bins,w,h,baseY,startX,widthPx,amp);
+    else if(state.waveStyle==='circledots') drawWaveCircleDots(bins,w,h,baseY,startX,widthPx,amp);
+    else if(state.waveStyle==='neon') drawWaveNeon(bins,w,h,baseY,startX,widthPx,amp);
+    else drawWaveLine(bins,w,h,baseY,startX,widthPx,amp);
+
+    ctx.restore();
+  }
+
+  function drawLeaf(cx,cy,r,rot){
+    ctx.save();
+    ctx.translate(cx,cy); ctx.rotate(rot);
+    ctx.beginPath();
+    ctx.moveTo(0,-r);
+    ctx.quadraticCurveTo(r*0.9, -r*0.2, 0, r);
+    ctx.quadraticCurveTo(-r*0.9, -r*0.2, 0, -r);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawParticles(dt){
+    if(state.effect==='none') return;
+    particleClock += dt*0.05;
+    const color = state.color || defaultColors[state.effect];
+    ctx.save();
+    ctx.fillStyle = color;
+    ctx.strokeStyle = color;
+    for(const p of particles){
+      updateParticle(p, canvas.width, canvas.height, dt);
+      const sz = p.mode==='center' ? p.curSize : p.size;
+      // fade in near the very center so particles don't "pop" at full alpha
+      const fadeIn = p.mode==='center' ? Math.min(1, p.radius / (p.maxR*0.08)) : 1;
+      // random flicker/fade per object — each particle dims & brightens on its own cycle
+      const twinkle = 0.5 + 0.5*Math.sin(particleClock*p.twinkleSpeed + p.twinklePhase);
+      ctx.globalAlpha = state.alpha * p.alphaJit * fadeIn * (0.45 + twinkle*0.55);
+      if(state.effect==='snow'){
+        drawSnowflake(p.x,p.y,sz*0.6,p.rot);
+      } else if(state.effect==='leaves'){
+        drawLeaf(p.x,p.y,sz*0.6,p.rot);
+      } else if(state.effect==='stars'){
+        drawStar(p.x,p.y,sz*0.6,p.rot);
+      } else if(state.effect==='rain'){
+        let dx,dy;
+        if(p.mode==='center'){ dx = Math.cos(p.angle); dy = Math.sin(p.angle); }
+        else { const mag = Math.hypot(p.vx,p.vy) || 0.001; dx = p.vx/mag; dy = p.vy/mag; }
+        const dirAngle = Math.atan2(dy,dx);
+        drawRaindrop(p.x,p.y,sz*0.5,dirAngle);
+      }
+    }
+    ctx.restore();
+  }
+
+  // ---- render loop ----
+  let rafId = null;
+  let lastT = performance.now();
+  function render(now){
+    now = now || performance.now();
+    let dtMs = now - lastT;
+    lastT = now;
+    // clamp so a big stall (tab was hidden) doesn't cause one huge jump,
+    // but still catches particles/zoom back up to real time quickly
+    dtMs = Math.min(dtMs, 250);
+    const dt = dtMs / 16.67; // 1.0 == normal 60fps frame
+
+    const w = canvas.width, h = canvas.height;
+    ctx.clearRect(0,0,w,h);
+
+    // audio energy -> zoom
+    let targetEnergy = 0;
+    if(analyser){
+      analyser.getByteFrequencyData(freqData);
+      const bassBins = Math.max(4, Math.floor(freqData.length*0.12));
+      let sum=0;
+      for(let i=0;i<bassBins;i++) sum += freqData[i];
+      targetEnergy = (sum/bassBins)/255; // 0..1
+      targetEnergy = Math.min(1, targetEnergy * state.sensitivity);
+    }
+    const smoothing = state.smoothness;
+    // time-based smoothing so convergence speed doesn't depend on frame rate
+    const smoothFactor = Math.pow(smoothing, dt);
+    smoothedEnergy += (targetEnergy - smoothedEnergy) * (1 - smoothFactor);
+    const scale = state.zoomMin + (state.zoomMax - state.zoomMin) * smoothedEnergy;
+
+    if(state.img){
+      const iw = state.img.width, ih = state.img.height;
+      const cover = Math.max(w/iw, h/ih) * scale;
+      const dw = iw*cover, dh = ih*cover;
+      const dx = (w-dw)/2, dy = (h-dh)/2;
+      ctx.drawImage(state.img, dx, dy, dw, dh);
+    } else {
+      ctx.fillStyle = '#050508';
+      ctx.fillRect(0,0,w,h);
+    }
+
+    drawWave(dt);
+    drawParticles(dt);
+    drawLyrics();
+
+    glowRing.style.setProperty('--pulse', (0.10 + smoothedEnergy*0.55).toFixed(3));
+
+    rafId = requestAnimationFrame(render);
+  }
+  requestAnimationFrame(render);
+
+  // ---- file loading ----
+  let imgObjUrl = null;
+  $('imgInput').addEventListener('change', e=>{
+    const f = e.target.files[0];
+    if(!f) return;
+    const looksImage = (f.type && f.type.startsWith('image')) || /\.(png|jpe?g|gif|webp|bmp|avif)$/i.test(f.name);
+    if(!looksImage){
+      setStatus('File này có vẻ không phải ảnh — chọn lại file png/jpg/webp nhé.', true);
+      e.target.value = '';
+      return;
+    }
+    state.imgFile = f;
+    $('imgName').textContent = f.name;
+    const url = URL.createObjectURL(f);
+    const im = new Image();
+    im.onload = ()=>{
+      // ảnh đã decode xong nằm trong bộ nhớ — thu hồi object URL cũ tránh rò rỉ
+      if(imgObjUrl && imgObjUrl !== url) URL.revokeObjectURL(imgObjUrl);
+      imgObjUrl = url;
+      state.img = im;
+      checkReady();
+      setStatus('Đã nạp ảnh: ' + f.name, false);
+    };
+    im.onerror = ()=>{
+      // lỗi lộ rõ (Luật 10): file hỏng / định dạng không hỗ trợ phải báo ngay
+      URL.revokeObjectURL(url);
+      setStatus('Không đọc được file ảnh này (file hỏng hoặc định dạng không hỗ trợ) — chọn ảnh khác nhé.', true);
+      e.target.value = '';
+    };
+    im.src = url;
+  });
+
+  let audObjUrl = null;
+  $('audInput').addEventListener('change', e=>{
+    const f = e.target.files[0];
+    if(!f) return;
+    const looksAudio = (f.type && f.type.startsWith('audio')) || /\.(mp3|wav|m4a|aac|ogg|flac|wma|opus|mp4|3gp)$/i.test(f.name);
+    if(!looksAudio){
+      setStatus('File này có vẻ không phải nhạc — chọn lại giúp mình file mp3/wav/m4a/aac nhé.', true);
+      e.target.value = '';
+      return;
+    }
+    state.audioFile = f;
+    state.audioReady = false;
+    $('audName').textContent = f.name;
+    if(audObjUrl) URL.revokeObjectURL(audObjUrl);
+    audObjUrl = URL.createObjectURL(f);
+    audioEl.src = audObjUrl;
+    audioEl.load();
+    audioEl.onloadedmetadata = ()=>{
+      const dur = isFinite(audioEl.duration) ? audioEl.duration : 100; // webm có thể trả Infinity lúc đầu
+      $('seekBar').max = dur;
+      $('seekBar').disabled = false;
+      $('tDur').textContent = fmtTime(audioEl.duration);
+      state.audioReady = true;
+      checkReady();
+    };
+    audioEl.onerror = ()=>{
+      state.audioReady = false;
+      setStatus('Không đọc được file nhạc này (file hỏng hoặc codec không hỗ trợ) — chọn file khác nhé.', true);
+    };
+  });
+
+  function checkReady(){
+    if(state.img && state.audioFile && state.audioReady){
+      emptyState.style.display = 'none';
+      $('playBtn').disabled = false;
+      $('restartBtn').disabled = false;
+      $('exportAudioBtn').disabled = false;
+      $('exportSilentBtn').disabled = false;
+    }
+  }
+
+  function fmtTime(s){
+    if(!isFinite(s)) return '0:00';
+    const m = Math.floor(s/60), sec = Math.floor(s%60);
+    return m+':'+String(sec).padStart(2,'0');
+  }
+
+  audioEl.addEventListener('timeupdate', ()=>{
+    if(!isSeeking){
+      $('seekBar').value = audioEl.currentTime;
+      $('tCur').textContent = fmtTime(audioEl.currentTime);
+    }
+  });
+  audioEl.addEventListener('ended', ()=>{
+    state.playing = false;
+    $('playBtn').textContent = '▶ Phát thử';
+  });
+
+  let isSeeking = false;
+  $('seekBar').addEventListener('input', e=>{ isSeeking = true; $('tCur').textContent = fmtTime(+e.target.value); });
+  $('seekBar').addEventListener('change', e=>{
+    if(isExporting){ setStatus('Đang ghi video — không tua lúc này (sẽ làm lệch đồng bộ bản ghi).', true); return; }
+    audioEl.currentTime = +e.target.value; isSeeking = false;
+  });
+
+  // ---- controls ----
+  $('playBtn').addEventListener('click', async ()=>{
+    if(isExporting){ setStatus('Đang ghi video — không phát/tạm dừng lúc này (sẽ làm hỏng bản ghi).', true); return; }
+    ensureAudioGraph();
+    if(audioCtx.state === 'suspended') await audioCtx.resume();
+    if(state.playing){
+      audioEl.pause(); state.playing=false; $('playBtn').textContent='▶ Phát thử';
+    } else {
+      try {
+        await audioEl.play();
+      } catch(err){
+        setStatus('Không phát được file nhạc: ' + (err && err.message ? err.message : String(err)) + ' — thử file khác nếu lỗi lặp lại.', true);
+        return;
+      }
+      state.playing=true; $('playBtn').textContent='⏸ Tạm dừng';
+    }
+  });
+  $('restartBtn').addEventListener('click', ()=>{
+    if(isExporting){ setStatus('Đang ghi video — không tua lại từ đầu lúc này.', true); return; }
+    audioEl.currentTime = 0; rebuildParticles();
+  });
+
+  $('zoomMin').addEventListener('input', e=>{ state.zoomMin = +e.target.value; $('v-zmin').textContent = state.zoomMin.toFixed(2)+'x'; });
+  $('zoomMax').addEventListener('input', e=>{ state.zoomMax = +e.target.value; $('v-zmax').textContent = state.zoomMax.toFixed(2)+'x'; });
+  $('sensitivity').addEventListener('input', e=>{ state.sensitivity = (+e.target.value)/100; $('v-sens').textContent = e.target.value+'%'; });
+  $('smoothness').addEventListener('input', e=>{ state.smoothness = (+e.target.value)/100; $('v-smooth').textContent = e.target.value+'%'; });
+
+  $('density').addEventListener('input', e=>{ state.density = +e.target.value; $('v-density').textContent = e.target.value; rebuildParticles(); });
+  $('pspeed').addEventListener('input', e=>{ state.pspeed = (+e.target.value)/100; $('v-speed').textContent = e.target.value+'%'; });
+  $('sizeMin').addEventListener('input', e=>{ state.sizeMin = +e.target.value; $('v-szmin').textContent = e.target.value+'px'; rebuildParticles(); });
+  $('sizeMax').addEventListener('input', e=>{ state.sizeMax = +e.target.value; $('v-szmax').textContent = e.target.value+'px'; rebuildParticles(); });
+  $('alpha').addEventListener('input', e=>{ state.alpha = (+e.target.value)/100; $('v-alpha').textContent = e.target.value+'%'; });
+  $('pcolor').addEventListener('input', e=>{ state.color = e.target.value; $('colorHint').textContent = 'Màu tuỳ chỉnh đang dùng'; });
+
+  function setupChips(groupId, key, after){
+    const chips = document.querySelectorAll('#'+groupId+' .chip');
+    chips.forEach(c=>{
+      c.addEventListener('click', ()=>{
+        chips.forEach(x=>x.classList.remove('active'));
+        c.classList.add('active');
+        state[key] = c.dataset.v;
+        if(after) after();
+      });
+    });
+  }
+  // programmatically select a chip (and update state) without a user click
+  function setChipValue(groupId, key, value){
+    document.querySelectorAll('#'+groupId+' .chip').forEach(c=>{
+      c.classList.toggle('active', c.dataset.v === value);
+    });
+    state[key] = value;
+  }
+  setupChips('effectChips','effect', ()=>{
+    if(!state.colorTouched) $('pcolor').value = defaultColors[state.effect];
+    if(state.effect==='rain' && !state.dirTouched){
+      setChipValue('dirChips','direction','down');
+    }
+    rebuildParticles();
+  });
+  setupChips('dirChips','direction', ()=>{ state.dirTouched = true; rebuildParticles(); });
+  $('pcolor').addEventListener('change', ()=>{ state.colorTouched = true; });
+
+  // ---- audio wave controls ----
+  setupChips('waveChips','waveOnRaw', ()=>{ state.waveOn = (state.waveOnRaw === 'on'); });
+  setupChips('waveStyleChips','waveStyle');
+  $('wavePos').addEventListener('input', e=>{ state.wavePos = +e.target.value; $('v-wpos').textContent = e.target.value+'%'; });
+  $('waveSize').addEventListener('input', e=>{ state.waveSize = +e.target.value; $('v-wsize').textContent = e.target.value+'px'; });
+  $('waveHeight').addEventListener('input', e=>{ state.waveHeight = +e.target.value; $('v-wamp').textContent = e.target.value+'px'; });
+  $('waveWidth').addEventListener('input', e=>{ state.waveWidth = +e.target.value; $('v-wwidth').textContent = e.target.value+'%'; });
+  $('waveColor').addEventListener('input', e=>{ state.waveColor = e.target.value; });
+
+  // ---- lead / early-sync ----
+  $('leadMs').addEventListener('input', e=>{
+    state.leadMs = +e.target.value;
+    $('v-lead').textContent = e.target.value+' ms';
+    if(delayNode) delayNode.delayTime.value = state.leadMs/1000;
+  });
+
+  // ---- orientation (khổ dọc / khổ ngang, có tuỳ chỉnh kích thước cho khổ ngang) ----
+  const stageWrap = $('stageWrap');
+  state.orientation = 'portrait';
+  function applyLandscapeCustomSize(){
+    const w = Math.max(480, Math.min(3840, +$('customW').value || 1280));
+    const h = Math.max(270, Math.min(2160, +$('customH').value || 720));
+    canvas.width = w; canvas.height = h;
+    stageWrap.style.aspectRatio = w+'/'+h;
+    rebuildParticles();
+  }
+  function setOrientation(o){
+    if(o === 'landscape'){
+      $('customSizeField').style.display = '';
+      applyLandscapeCustomSize();
+    } else {
+      $('customSizeField').style.display = 'none';
+      canvas.width = 720; canvas.height = 1280;
+      stageWrap.style.aspectRatio = '9/16';
+      rebuildParticles();
+    }
+  }
+  setupChips('ratioChips','orientation', ()=> setOrientation(state.orientation));
+  $('customW').addEventListener('change', applyLandscapeCustomSize);
+  $('customH').addEventListener('change', applyLandscapeCustomSize);
+
+  // ---- lyrics controls ----
+  $('srtInput').addEventListener('change', async e=>{
+    const f = e.target.files[0];
+    if(!f) return;
+    const text = await f.text();
+    loadLyricsFromText(text, f.name);
+  });
+  $('loadSrtPasteBtn').addEventListener('click', ()=>{
+    const text = $('srtPaste').value;
+    if(!text.trim()){ setStatus('Dán nội dung SRT vào ô trước đã nhé.', true); return; }
+    loadLyricsFromText(text, 'Đã dán');
+  });
+  $('lyricFont').addEventListener('change', e=>{ state.lyricFont = e.target.value; });
+  $('lyricSize').addEventListener('input', e=>{ state.lyricSize = +e.target.value; $('v-lsize').textContent = e.target.value+'px'; });
+  $('lyricColor').addEventListener('input', e=>{ state.lyricColor = e.target.value; });
+  setupChips('lyricShadowChips','lyricShadowRaw', ()=>{ state.lyricShadow = (state.lyricShadowRaw === 'on'); });
+  $('lyricPosX').addEventListener('input', e=>{ state.lyricPosX = +e.target.value; $('v-lposx').textContent = e.target.value+'%'; });
+  $('lyricPosY').addEventListener('input', e=>{ state.lyricPosY = +e.target.value; $('v-lposy').textContent = e.target.value+'%'; });
+
+  rebuildParticles();
+
+  // ---- status helper ----
+  function setStatus(msg, active){
+    $('statusLine').textContent = msg || '';
+    $('statusLine').classList.toggle('active', !!active);
+  }
+
+  // ---- EXPORT: video hình + nhạc gốc riêng (video-only, lossless-safe) ----
+  $('exportSilentBtn').addEventListener('click', async ()=>{
+    await recordAndExport(false);
+  });
+  // ---- EXPORT: video kèm nhạc (re-encoded, tiện dùng ngay) ----
+  $('exportAudioBtn').addEventListener('click', async ()=>{
+    await recordAndExport(true);
+  });
+
+  let isExporting = false;
+  // Cờ cho trang cha (index.html) đọc same-origin: đang ghi thì chặn chuyển tool,
+  // vì Chromium throttle canvas trong iframe ẩn → video xuất ra bị đứng hình.
+  Object.defineProperty(window, '__imzicExporting', { get(){ return isExporting === true; } });
+
+  async function recordAndExport(withAudio){
+    if(isExporting) return;
+    if(!state.img || !state.audioFile) return;
+    if(!state.audioReady){ setStatus('Nhạc chưa nạp xong metadata — chờ một nhịp rồi bấm xuất lại.', true); return; }
+    isExporting = true;
+    ensureAudioGraph();
+    if(audioCtx.state === 'suspended') await audioCtx.resume();
+
+    const fps = 30;
+    const canvasStream = canvas.captureStream(fps);
+    let tracks = [...canvasStream.getVideoTracks()];
+    if(withAudio){
+      tracks = tracks.concat(streamDest.stream.getAudioTracks());
+    }
+    const mixedStream = new MediaStream(tracks);
+
+    let mime = 'video/webm;codecs=vp9,opus';
+    if(!MediaRecorder.isTypeSupported(mime)) mime = 'video/webm;codecs=vp8,opus';
+    if(!MediaRecorder.isTypeSupported(mime)) mime = 'video/webm';
+
+    const recorder = new MediaRecorder(mixedStream, { mimeType: mime, videoBitsPerSecond: 8_000_000 });
+    const chunks = [];
+    let aborted = false;   // huỷ chủ động vì không phát được nhạc
+    let failed = false;    // recorder lỗi giữa chừng
+    let watchdog = null;
+    const cleanup = ()=>{
+      if(watchdog){ clearTimeout(watchdog); watchdog = null; }
+      // chỉ dừng track của canvas — audio track dùng chung qua streamDest phải giữ nguyên cho lần ghi sau
+      try { canvasStream.getTracks().forEach(t=>t.stop()); } catch(e){}
+    };
+    recorder.ondataavailable = e=>{ if(e.data.size>0) chunks.push(e.data); };
+
+    // lỗi recorder giữa chừng: nếu không xử lý, onstop có thể không bao giờ đến
+    // → isExporting kẹt vĩnh viễn và 2 nút export chết (đã từng xảy ra với play())
+    recorder.onerror = ev=>{
+      failed = true;
+      const name = (ev && ev.error && ev.error.name) ? ev.error.name : 'UnknownError';
+      try { recorder.stop(); } catch(e){}
+      isExporting = false;
+      setStatus('Trình ghi video gặp lỗi giữa chừng (' + name + ') — bản ghi đã bị huỷ, hãy bấm xuất lại. Nếu lặp lại, thử khổ hình nhỏ hơn.', true);
+    };
+
+    recorder.onstop = ()=>{
+      cleanup();
+      const blob = new Blob(chunks, {type:'video/webm'});
+      if(aborted){
+        setStatus('Đã huỷ ghi: không phát được file nhạc (file hỏng hoặc codec không hỗ trợ) — không tạo file nửa vời, hãy thử file nhạc khác.', true);
+        isExporting = false;
+        return;
+      }
+      if(failed){
+        setStatus('Bản ghi không đầy đủ vì lỗi giữa chừng — không tải file nửa vời, hãy bấm xuất lại.', true);
+        isExporting = false;
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = withAudio ? 'video_kem_nhac.webm' : 'video_hinh.webm';
+      a.click();
+
+      let aurl = null;
+      if(!withAudio){
+        // also offer the original audio file, untouched
+        aurl = URL.createObjectURL(state.audioFile);
+        const a2 = document.createElement('a');
+        a2.href = aurl;
+        a2.download = 'nhac_goc' + (state.audioFile.name.match(/\.[a-zA-Z0-9]+$/)||['.mp3'])[0];
+        setTimeout(()=>a2.click(), 400);
+        $('ffmpegCmd').textContent = 'ffmpeg -i video_hinh.webm -i "' + state.audioFile.name + '" -c:v copy -c:a copy -shortest ket_qua.mkv';
+      }
+      setStatus('Xuất xong! File đã tải xuống.', false);
+      isExporting = false;
+      // thu hồi blob URL sau khi save dialog / download đã kịp xử lý xong
+      setTimeout(()=>{ URL.revokeObjectURL(url); if(aurl) URL.revokeObjectURL(aurl); }, 60000);
+    };
+
+    // play from start, record until it ends
+    audioEl.currentTime = 0;
+    rebuildParticles();
+    await new Promise(r=>setTimeout(r,60));
+    try {
+      recorder.start();
+    } catch(err){
+      cleanup();
+      isExporting = false;
+      setStatus('Không khởi động được trình ghi video: ' + (err && err.message ? err.message : String(err)), true);
+      return;
+    }
+    // watchdog: nếu sự kiện 'ended' không bao giờ đến (metadata webm lỗi…),
+    // vẫn chốt recorder để isExporting không kẹt vĩnh viễn
+    const capMs = isFinite(audioEl.duration) ? audioEl.duration*1000 + 15000 : 7200000;
+    watchdog = setTimeout(()=>{ try { recorder.stop(); } catch(e){} }, capMs);
+    setStatus('Đang ghi video theo thời lượng nhạc — giữ tab này đang mở & hiển thị, đừng chuyển tab hay thu nhỏ cửa sổ...', true);
+    try {
+      await audioEl.play();
+    } catch(err){
+      // Không nuốt lỗi (Luật 10): lộ rõ nguyên nhân, reset cờ để nút export không kẹt.
+      aborted = true;
+      state.playing = false;
+      $('playBtn').textContent = '▶ Phát thử';
+      audioEl.onended = null;
+      if(watchdog){ clearTimeout(watchdog); watchdog = null; }
+      try { recorder.stop(); } catch(e){}
+      setStatus('Không phát được file nhạc để ghi: ' + (err && err.message ? err.message : String(err)), true);
+      isExporting = false;
+      return;
+    }
+    state.playing = true; $('playBtn').textContent='⏸ Tạm dừng';
+
+    audioEl.onended = ()=>{
+      if(watchdog){ clearTimeout(watchdog); watchdog = null; }
+      try { recorder.stop(); } catch(e){}
+      state.playing = false; $('playBtn').textContent='▶ Phát thử';
+      audioEl.onended = null;
+    };
+  }
+
+  // warn loudly if the user tabs away mid-export — that's what causes a
+  // frozen/missing-effect segment in the exported file, since the browser
+  // throttles canvas repaints on hidden tabs
+  document.addEventListener('visibilitychange', ()=>{
+    if(!isExporting) return;
+    if(document.hidden){
+      setStatus('⚠️ Tab đang bị ẩn — trình duyệt sẽ làm chậm hiệu ứng ở đoạn này! Quay lại tab ngay để video không bị đứng hình.', true);
+    } else {
+      setStatus('Đang ghi video theo thời lượng nhạc — giữ tab này đang mở & hiển thị, đừng chuyển tab hay thu nhỏ cửa sổ...', true);
+    }
+  });
+
+})();
+</script>
+</body>
+</html>

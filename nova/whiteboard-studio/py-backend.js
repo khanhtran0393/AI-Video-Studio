@@ -195,6 +195,7 @@ async function prepare(onLog) {
   if (!r.ok || !envPy) {
     return { ok: false, error: 'prepare_env.py thất bại: ' + ((r.stderr || r.stdout || '').trim().slice(0, 400)) };
   }
+  report(1, 'kiểm tra engine (repo/venv/deps)…');   // deps check có thể mất vài giây — bar phải nhích sớm
   const st = await status();
   return { ok: st.ok, envPy, status: st, error: st.ok ? undefined : 'Venv đã dựng nhưng thiếu dependencies' };
 }
@@ -372,7 +373,30 @@ async function exportVideo({ scenes, outputPath, audioTracks, options, onProgres
 
       report(5 + Math.round((i / scenes.length) * 80), 'render cảnh ' + (i + 1) + '/' + scenes.length);
       say('render_stream_whiteboard: ' + path.basename(scene.image) + ' (' + durationMs + 'ms)');
-      const r = await runCapture(py, args, { timeoutMs: 30 * 60 * 1000, onStderr: say });
+      /* Progress sống giữa render: engine Python (script vendored — không sửa
+         nguồn repo) KHÔNG phát % từng khung hình, nên ước tính trong phạm vi
+         cảnh hiện tại: lũy tiến tiệm cận, KHÔNG vượt mốc thật của cảnh (đảm bảo
+         không giảm % khi nhận report thật), dọn bằng finally, unref để không
+         giữ tiến trình node/Electron khi thoát. Khi render xong, report thật
+         thay ngay giá trị ước tính. */
+      const sceneStartPct = 5 + (i / scenes.length) * 80;
+      const sceneEndPct = 5 + ((i + 1) / scenes.length) * 80;
+      const estCeil = Math.max(sceneStartPct, sceneEndPct - 1);  // >80 cảnh: dải <1% — không cho tụt dưới mốc bắt đầu
+      let estPct = sceneStartPct + 0.5;
+      const estStart = Date.now();
+      const ticker = setInterval(() => {
+        estPct = Math.min(estCeil, estPct + (sceneEndPct - estPct) * 0.06);
+        report(Math.round(estPct),
+          'render cảnh ' + (i + 1) + '/' + scenes.length +
+          ' (ước tính, đã ' + Math.round((Date.now() - estStart) / 1000) + 's)');
+      }, 1500);
+      if (ticker.unref) ticker.unref();
+      let r;
+      try {
+        r = await runCapture(py, args, { timeoutMs: 30 * 60 * 1000, onStderr: say });
+      } finally {
+        clearInterval(ticker);
+      }
       const om = /OUTPUT=(.+)/.exec((r.stdout || '') + '\n' + (r.stderr || ''));
       const finalScene = om ? om[1].trim() : sceneOut;
       if (!r.ok || !fs.existsSync(finalScene)) {

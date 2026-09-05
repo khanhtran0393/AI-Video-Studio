@@ -1516,6 +1516,9 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
         <div class="nav-item" data-tool="toolvideoagent" onclick="switchTool('toolvideoagent')">
           <span class="num"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M8 12l5 3.5V8.5L8 12z"/></svg></span><span>Video Agent</span>
         </div>
+        <div class="nav-item" data-tool="toolimzic" onclick="switchTool('toolimzic')">
+          <span class="num"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 4h18M3 20h18"/><path d="M6 4v16"/></svg></span><span>I-MZic</span>
+        </div>
         <div class="nav-item" data-tool="toolwhiteboard" onclick="switchTool('toolwhiteboard')">
           <span class="num"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg></span><span>Whiteboard Studio</span>
         </div>
@@ -1719,6 +1722,11 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
       <div id="videoAgentRoot"></div>
     </div>
 
+    <!-- I-MZic TOOL -->
+    <div class="tool" id="tool-toolimzic">
+      <iframe id="imzicFrame" title="I-MZic" data-src="img-to-vid.html" src="" style="width:100%;border:0" loading="lazy"></iframe>
+    </div>
+
     <!-- WHITEBOARD STUDIO TOOL (srt-whiteboard-animation: SRT → cảnh → ảnh → stream-ink → MP4) -->
     <div class="tool" id="tool-toolwhiteboard">
       <div class="tool-head">
@@ -1800,8 +1808,8 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
         <div class="ts-card">
           <label class="ts-lbl">Chủ đề / Tiêu đề video</label>
           <div style="display:flex;gap:8px;margin-bottom:8px">
-            <select class="ts-field" style="flex:1;font-size:12px;padding:7px 10px;" onchange="let m=this.value, s=this.nextElementSibling.value; document.getElementById('tsTopic').value = m + (s ? ' - ' + s : '');">
-              <option value="" disabled selected>-- Chọn Chủ Đề --</option>
+            <select class="ts-field" style="flex:1;font-size:12px;padding:7px 10px;" onchange="let m=this.value, s=this.nextElementSibling.value; document.getElementById('tsTopic').value = m ? (m + (s ? ' - ' : '') + s) : '';">
+              <option value="" selected>-- Chọn Chủ Đề --</option>
               <optgroup label="1. CHỦ ĐỀ">
                 <option value="Xuyên Không">Xuyên Không</option>
                 <option value="Trùng Sinh">Trùng Sinh</option>
@@ -1905,7 +1913,7 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
                 <option value="Giao Dịch Ác Quỷ">Giao Dịch Ác Quỷ (Devil's Bargain)</option>
               </optgroup>
             </select>
-            <select class="ts-field" style="flex:1;font-size:12px;padding:7px 10px;" onchange="let m=this.previousElementSibling.value, s=this.value; document.getElementById('tsTopic').value = (m || '') + (m && s ? ' - ' : '') + s;">
+            <select class="ts-field" style="flex:1;font-size:12px;padding:7px 10px;" onchange="let m=this.previousElementSibling.value, s=this.value; document.getElementById('tsTopic').value = (m && s) ? (m + ' - ' + s) : (m || '');">
               <option value="" selected>-- Phong Cách --</option>
               <optgroup label="2. PHONG CÁCH">
                 <option value="Tu Tiên / Tiên Hiệp">Tu Tiên / Tiên Hiệp</option>
@@ -3606,6 +3614,12 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
       #t7Ai .pf .cnt{font-size:11.5px;color:var(--text-muted);font-family:ui-monospace,Menlo,monospace}
       .t7-empty{padding:40px 20px;text-align:center;color:var(--text-dim);font-size:13px}
     </style>
+    <style>
+      #tool-toolimzic{ position:relative; min-height:calc(100vh - 170px); }
+      #tool-toolimzic iframe{ position:relative; width:100%; height:100%; min-height:75vh; display:block; }
+      html.dark #tool-toolimzic iframe{ background:#09090b; }
+    </style>
+
     <div class="tool" id="tool-tool7">
       <div id="t7FocusBar">
         <span class="nm">🎬 Dựng Video</span><span class="dr">TẬP TRUNG</span>
@@ -6378,8 +6392,8 @@ function renderDashboard(){
       <div id="dashTopicRow" style="margin-bottom:14px">
         <label class="dsh-lbl">Chủ đề / Tiêu đề video</label>
         <div style="display:flex;gap:8px;margin-bottom:8px">
-          <select class="dsh-field" style="flex:1;font-size:12px;padding:7px 10px;" onchange="let m=this.value, s=this.nextElementSibling.value, v = m + (s ? ' - ' + s : ''); const tt=document.getElementById('dashTopic'); tt.value=v; window._autoTopic=v;">
-            <option value="" disabled selected>-- Chọn Chủ Đề --</option>
+            <select class="dsh-field" style="flex:1;font-size:12px;padding:7px 10px;" onchange="let m=this.value, s=this.nextElementSibling.value, v = m ? (m + (s ? ' - ' : '') + s) : ''; const tt=document.getElementById('dashTopic'); tt.value=v; window._autoTopic=v;">
+            <option value="" selected>-- Chọn Chủ Đề --</option>
             <optgroup label="1. CHỦ ĐỀ">
                 <option value="Xuyên Không">Xuyên Không</option>
                 <option value="Trùng Sinh">Trùng Sinh</option>
@@ -6483,7 +6497,7 @@ function renderDashboard(){
                 <option value="Giao Dịch Ác Quỷ">Giao Dịch Ác Quỷ (Devil's Bargain)</option>
             </optgroup>
           </select>
-          <select class="dsh-field" style="flex:1;font-size:12px;padding:7px 10px;" onchange="let m=this.previousElementSibling.value, s=this.value, v = (m || '') + (m && s ? ' - ' : '') + s; const tt=document.getElementById('dashTopic'); tt.value=v; window._autoTopic=v;">
+            <select class="dsh-field" style="flex:1;font-size:12px;padding:7px 10px;" onchange="let m=this.previousElementSibling.value, s=this.value, v = (m && s) ? (m + ' - ' + s) : (m || ''); const tt=document.getElementById('dashTopic'); tt.value=v; window._autoTopic=v;">
             <option value="" selected>-- Phong Cách --</option>
             <optgroup label="2. PHONG CÁCH">
                 <option value="Tu Tiên / Tiên Hiệp">Tu Tiên / Tiên Hiệp</option>
@@ -8138,6 +8152,18 @@ function switchTool(name){
       try { window.TdtStudioPanel.leave(); } catch (e) {}
     }
   }
+  // I-MZic: nếu iframe đang ghi video (MediaRecorder) thì CHẶN chuyển tool —
+  // Chromium throttle canvas của iframe ẩn → video xuất ra đứng hình giữa chừng.
+  if (state.tool === 'toolimzic' && name !== 'toolimzic') {
+    const _izFrame = document.getElementById('imzicFrame');
+    let _izExporting = false;
+    try { _izExporting = !!(_izFrame && _izFrame.contentWindow && _izFrame.contentWindow.__imzicExporting === true); }
+    catch (e) { /* iframe chưa nạp / lỗi same-origin — không chặn */ }
+    if (_izExporting) {
+      if (typeof novaToast === 'function') novaToast('Đang xuất video I-MZic — chờ ghi xong rồi mới chuyển tab (chuyển sớm sẽ làm video đứng hình).');
+      return;
+    }
+  }
   state.tool = name;
   document.querySelectorAll('.nav-item').forEach(t =>
     t.classList.toggle('active', t.dataset.tool === name)
@@ -8184,6 +8210,21 @@ function switchTool(name){
     if (_hdC && window.HanddrawPanel && typeof window.HanddrawPanel.init === 'function') {
       try { window.HanddrawPanel.init(_hdC); }
       catch (e) { console.error('[handdraw] init lỗi:', e); }
+    }
+  }
+  if (name === 'toolimzic') {
+    const frame = document.getElementById('imzicFrame');
+    const isLoaded = frame && (frame.getAttribute('data-loaded') === '1');
+    if (frame && !isLoaded) {
+      const target = frame.getAttribute('data-src') || 'img-to-vid.html';
+      frame.src = target;
+      frame.setAttribute('data-loaded', '1');
+    }
+    if (frame && frame.style) {
+      frame.style.display = 'block';
+      frame.style.width = '100%';
+      frame.style.height = '100%';
+      frame.style.minHeight = '75vh';
     }
   }
   if (name === 'toolstudio') {

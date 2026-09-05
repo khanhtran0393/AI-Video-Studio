@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-05T15:05:30.463Z",
+  "generatedAt": "2026-09-05T16:23:55.757Z",
   "sourceFiles": [
     "chrome-extension/app.js",
     "chrome-extension/background.js",
@@ -211,7 +211,9 @@
     "scripts/tmp-cft-ensure-test.js",
     "scripts/tmp-cft-race-live.js",
     "scripts/tmp-check-index-html-js.js",
+    "scripts/tmp-error-reporter-e2e.js",
     "scripts/tmp-grep-exit.js",
+    "scripts/tmp-imzic-check.js",
     "scripts/tmp-instrument-asar.js",
     "scripts/tmp-launch-matrix.js",
     "scripts/tmp-outage-evidence.js",
@@ -1273,6 +1275,7 @@
     "voice-backend/.venv-omni/Lib/site-packages/matplotlib/backends/web_backend/js/mpl.js",
     "voice-backend/.venv-omni/Lib/site-packages/matplotlib/backends/web_backend/js/mpl_tornado.js",
     "voice-backend/.venv-omni/Lib/site-packages/matplotlib/backends/web_backend/js/nbagg_mpl.js",
+    "voice-backend/.venv-omni/Lib/site-packages/pip/_vendor/urllib3/contrib/emscripten/emscripten_fetch_worker.js",
     "voice-backend/.venv-omni/Lib/site-packages/sklearn/utils/_repr_html/estimator.js",
     "voice-backend/.venv-omni/Lib/site-packages/tensorboard/plugins/projector/tf_projector_plugin/index.js",
     "voice-backend/.venv-omni/Lib/site-packages/tensorboard/plugins/projector/tf_projector_plugin/projector_binary.js",

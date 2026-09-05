@@ -84,8 +84,19 @@
           if (els.progressBar) els.progressBar.style.width = Math.max(0, Math.min(100, s.percent)) + '%';
           if (els.progressPct) els.progressPct.textContent = Math.round(Math.max(0, Math.min(100, s.percent))) + '%';
         }
-        if (typeof s.status === 'string' && s.status) log(s.status);
-        if (s.status === 'error' || s.status === 'done') state.exporting = false;
+        if (typeof s.status === 'string' && s.status) {
+          log(s.status);
+          /* label tiến trình phải SỐNG theo event (trước đây chỉ vào Log,
+             label kẹt "khởi động…" suốt lúc render — triệu chứng bar không cập nhật) */
+          if (els.progressMsg) {
+            const t = s.status.length > 90 ? s.status.slice(0, 90) + '…' : s.status;
+            els.progressMsg.textContent = t;
+          }
+        }
+        /* ipc.js relay lỗi dưới dạng 'error: <msg>' — khớp cả tiền tố, không chỉ === 'error' */
+        if (s.status === 'done' || (typeof s.status === 'string' && s.status.indexOf('error') === 0)) {
+          state.exporting = false;
+        }
         syncButtons();
       } catch (e) {
         /* Luật 10: event hỏng phải lộ ra, không chết thầm làm listener ngừng hoạt động */
@@ -1153,7 +1164,7 @@
     bind();
     // MARKER PHIÊN BẢN — dòng đầu Log: nếu KHÔNG thấy dòng này khi mở tool
     // nghĩa là renderer còn JS cũ (cache) → Ctrl+F5 hoặc mở lại app.
-    log('[hdlasso6] panel Vẽ Tay Ảnh đã khởi động (sửa bar kẹt 5%: watchdog + lộ lỗi sau export)');
+    log('[hdlasso7] panel Vẽ Tay Ảnh đã khởi động (progress sống giữa render: label theo event + ước tính từng cảnh từ engine)');
     hdBuildCards();
     wireEvents();
     renderSceneList();
