@@ -111,7 +111,12 @@ function startLocalServer() {
       if (!filePath.startsWith(root)) { res.writeHead(403); return res.end(); }
       fs.readFile(filePath, (err, data) => {
         if (err) { res.writeHead(404); return res.end('not found'); }
-        res.writeHead(200, { 'Content-Type': types[path.extname(filePath).toLowerCase()] || 'application/octet-stream' });
+        // no-cache: Chromium luôn kiểm tra lại — tránh renderer chạy JS cũ sau khi
+        // dev sửa file (lỗi "panel chết vì cache" đã xảy ra với handdraw panel).
+        res.writeHead(200, {
+          'Content-Type': types[path.extname(filePath).toLowerCase()] || 'application/octet-stream',
+          'Cache-Control': 'no-cache',
+        });
         res.end(data);
       });
     });

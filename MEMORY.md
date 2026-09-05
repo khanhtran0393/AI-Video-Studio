@@ -59,3 +59,8 @@ File này ghi **trạng thái dài hạn và lịch sử quyết định**. AGEN
   MEMORY.md) — học pattern AGENTS/CLAUDE/MEMORY của repo AI-Novel, nội dung viết
   lại 100% theo thực tế AI Video Studio. Mục đích: mọi agent/dev sửa code theo
   cùng quy chuẩn, không phá hợp đồng hệ thống.
+- [2026-09-05] Chuẩn hoá "1 nguồn rule": AGENTS.md là nguồn duy nhất; CLAUDE.md
+  và .clinerules giảm thành pointer; thêm pointer cho Copilot
+  (.github/copilot-instructions.md), Gemini CLI (GEMINI.md), Cursor
+  (.cursor/rules/ai-video-studio.mdc). Cơ chế ghi rõ tại AGENTS.md §9 — cấm
+  nhân bản quy chuẩn vào pointer.

@@ -1120,6 +1120,9 @@
 
   function init() {
     bind();
+    // MARKER PHIÊN BẢN — dòng đầu Log: nếu KHÔNG thấy dòng này khi mở tool
+    // nghĩa là renderer còn JS cũ (cache) → Ctrl+F5 hoặc mở lại app.
+    log('[hdlasso5] panel Vẽ Tay Ảnh đã khởi động (bản mới nhất)');
     hdBuildCards();
     wireEvents();
     renderSceneList();

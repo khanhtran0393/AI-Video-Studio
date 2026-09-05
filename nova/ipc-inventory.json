@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-05T05:03:55.648Z",
+  "generatedAt": "2026-09-05T07:07:42.563Z",
   "sourceFiles": [
     "chrome-extension/app.js",
     "chrome-extension/background.js",
@@ -2245,6 +2245,7 @@
     "voice-native/server.js",
     "watermark-native.js",
     "web/_smoke_annotation.js",
+    "web/_smoke_handdraw.js",
     "web/documentary-panel.js",
     "web/fractal-engine/chuyen.js",
     "web/fractal-engine/nen-tang.js",
@@ -2262,6 +2263,7 @@
     "web/whiteboard-studio-panel.js",
     "whiteboard-studio/ff-runtime.js",
     "whiteboard-studio/ipc.js",
+    "whiteboard-studio/py-backend-lasso-test.js",
     "whiteboard-studio/py-backend-test.js",
     "whiteboard-studio/py-backend-userregions-test.js",
     "whiteboard-studio/py-backend.js"
@@ -2369,6 +2371,9 @@
     "voice-log",
     "voice-pick-root",
     "voice-probe",
+    "voice-sample-clear",
+    "voice-sample-load",
+    "voice-sample-save",
     "voice-start",
     "voice-status",
     "web:clip",

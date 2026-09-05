@@ -144,3 +144,12 @@ COMPLETED | FAILED | CANCELLED`.
 - File script dùng một lần phải có tiền tố `tmp-` (như `nova/scripts/tmp-*.js`)
   để phân biệt với script kiểm định chính thức.
 
+## 9. MỘT NGUỒN RULE CHO MỌI CÔNG CỤ AI
+
+- Quy chuẩn nằm **duy nhất** ở file này (`AGENTS.md`) + `MEMORY.md` (trạng thái).
+- Các file `CLAUDE.md`, `.clinerules`, `GEMINI.md`, `.github/copilot-instructions.md`,
+  `.cursor/rules/ai-video-studio.mdc` chỉ là **pointer** (trỏ tới) cho từng tool —
+  **cấm nhân bản quy chuẩn vào đó**. Thêm tool mới? Tạo thêm pointer cùng pattern.
+- Khi đổi quy chuẩn: sửa duy nhất AGENTS.md; không phải sửa pointer nào cả.
+
+
