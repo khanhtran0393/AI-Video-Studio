@@ -10,6 +10,7 @@ const fs = require('fs');
 const state = require('./state');
 const { WEB_DIR, NOVA_REMOTION_DIR } = require('./state');
 const { brandIconPath } = require('./brand');
+const agentBridge = require('./agent-bridge');
 
 // ── phát media từ đĩa cho renderer ──
 // Trang app chạy origin http://localhost nên trình duyệt CHẶN mọi tài nguyên
@@ -85,6 +86,8 @@ function startLocalServer() {
       let p = decodeURIComponent((req.url || '/').split('?')[0]);
       if (p === '/' || p === '') p = '/index.html';
       if (p === '/local-media') return serveLocalMedia(req, res);
+      // Agent Bridge: điểm vào HTTP cho AI agent ngoài (Zisu_AI) gửi lệnh vào app.
+      if (p === agentBridge.AGENT_COMMAND_PATH) return agentBridge.handleAgentCommand(req, res);
       const r = remotionRoute(p);
       if (r && r.html) {
         // index.html của bundle trỏ src="/bundle.js" — đổi sang tên riêng để hai bundle sống chung.

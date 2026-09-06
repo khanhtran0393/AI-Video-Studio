@@ -15,6 +15,7 @@
     "check:shared": "node nova/scripts/shared-names-check.js",
     "check": "npm run check:syntax && npm run check:ipc && npm run check:parity && npm run check:shared",
     "test:foundation": "node nova/scripts/foundation-test.js",
+    "test:agent-bridge": "node nova/scripts/agent-bridge-test.js",
     "test:local-media": "node nova/scripts/local-media-test.js",
     "test:web-origin": "node nova/scripts/web-origin-qa.js",
     "test:video-agent": "node nova/video-agent/test.js && node nova/video-agent/test-ipc.js && node nova/video-agent/test-bridge.js && node nova/video-agent/test-phases.js && node nova/video-agent/test-behavior-frame.js && node nova/video-agent/test-ai-gateway.js",

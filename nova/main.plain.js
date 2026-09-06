@@ -14,6 +14,7 @@ const fs = require('fs');
 const { app, BrowserWindow, ipcMain } = require('electron');
 
 const { applyAppIdentity } = require('./main/identity');
+const { ensureSingleInstance } = require('./main/single-instance');
 const state = require('./main/state');
 const { installGlobalErrorHandlers } = require('./main/global-errors');
 const { setupErrorReporter } = require('./main/error-reporter');
@@ -35,6 +36,14 @@ const { registerElectronErrorBridge } = require('../auto-fix/client-error-report
 try { applyAppIdentity(); } catch (error) {
   console.warn('[startup] không thể chuẩn bị vùng dữ liệu Nova:', error && error.message);
 }
+
+// Single-instance (phải SAU applyAppIdentity vì lock gắn với userData): instance
+// thứ hai thoát ngay — instance đầu nhận 'second-instance' và focus cửa sổ.
+if (!ensureSingleInstance()) {
+  app.quit();
+  return;
+}
+
 // Tắt bớt log rác nội bộ của Chromium (vd "ffmpeg_common Unsupported pixel format") cho terminal sạch.
 // KHÔNG ảnh hưởng log console.log của app (Node) — vẫn thấy các dòng [flow].
 try { app.commandLine.appendSwitch('log-level', '3'); } catch (e) { /* */ }
