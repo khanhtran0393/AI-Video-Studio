@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-06T04:24:29.719Z",
+  "generatedAt": "2026-09-06T04:39:53.381Z",
   "sourceFiles": [
     "chrome-extension/app.js",
     "chrome-extension/background.js",
@@ -149,6 +149,7 @@
     "flow-native/trang-thai.js",
     "ipc/register.js",
     "main.plain.js",
+    "main/agent-bridge.js",
     "main/brand.js",
     "main/error-reporter.js",
     "main/friendly-errors.js",
@@ -206,6 +207,8 @@
     "scripts/syntax-check.js",
     "scripts/test-different-user.js",
     "scripts/test-janitor.js",
+    "scripts/tmp-agent-bridge-e2e.js",
+    "scripts/tmp-agent-bridge-test.js",
     "scripts/tmp-asar-cat.js",
     "scripts/tmp-asar-dump.js",
     "scripts/tmp-build-run.js",
@@ -227,6 +230,7 @@
     "scripts/tmp-splash-probe.js",
     "scripts/tmp-tdt-capture.js",
     "scripts/tmp-tdt-e2e.js",
+    "scripts/tmp-tdt-probe-page.js",
     "scripts/tmp-tdt-repro.js",
     "scripts/tmp-voice-crash.js",
     "scripts/tmp-voice-path-test.js",

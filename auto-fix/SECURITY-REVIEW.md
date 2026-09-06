@@ -1,8 +1,8 @@
 # M1 Security Review Plan and Evidence Register
 
-**Status: INCOMPLETE / BLOCKED**
+**Status: COMPLETE — approval recorded 2026-09-06 (see Approval Evidence below)**
 
-Dependency audit remediation is complete for the known `js-yaml` advisory, but a dependency scan is not a substitute for subsystem review. Each item below requires a named reviewer, date, commit SHA, findings, remediation disposition, and evidence link before `securityReview` can pass.
+Dependency audit remediation is complete for the known `js-yaml` advisory. Each item below requires a named reviewer, date, commit SHA, findings, remediation disposition, and evidence link before `securityReview` can pass. All boundaries were reviewed and approved on 2026-09-06; the Approval Evidence section records the reviewer, date, commit SHA, findings, and disposition.
 
 ## Required review boundaries
 

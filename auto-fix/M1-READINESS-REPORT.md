@@ -8,8 +8,6 @@
 
 This report covers Git/CI readiness only. Canonical source acceptance is necessary but not sufficient for M1. Nothing in this report grants runtime, source-write, command, build, signing, release, rollout, or rollback authority.
 
-## Confirmed evidence
-
 ## Recent updates (2026-08-27)
 - Test pipeline: `test:all` now includes `crash-server` (7/7 PASS) and `reproduction-lab` (4/4 PASS) in addition to existing suites.
 - Removed legacy workflow `.github/workflows/ci.yml` (unpinned actions, Node 20 vs. repo's Node 24, missing `--publish never`/disabled signing).
