@@ -35,7 +35,10 @@ async function main() {
 
   assert.strictEqual(fileUrl('C:\\media\\a.mp4'), 'file://C:\\media\\a.mp4');
   assert.strictEqual(fileUrl('file://C:\\media\\a.mp4'), 'file://C:\\media\\a.mp4');
-  assert.strictEqual(userDataPath({ getPath: () => 'X:\\data' }), 'X:\\data');
+  // Path tuyệt đối theo platform (CI chạy ubuntu, app chạy Windows/mac):
+  // userDataPath phải trả về đúng path absolute đã normalize qua path.resolve.
+  const absoluteUserData = path.resolve(os.tmpdir(), 'avs-userdata');
+  assert.strictEqual(userDataPath({ getPath: () => absoluteUserData }), absoluteUserData);
   assert.strictEqual(userDataPath({ getPath: () => { throw new Error('x'); } }, 'fallback'), 'fallback');
 
   const mainSource = readMainProcessSource();
