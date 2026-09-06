@@ -39,20 +39,9 @@ jobs:
       - name: Validate deny-by-default policy
         run: npm --prefix auto-fix run check:policy
 
-      - name: Run Auto-Fix test pipeline (control-plane + client reporter)
-        run: npm --prefix auto-fix run test:all
-
-      - name: Run application checks
-        run: |
-          npm run check:syntax
-          npm run check:ipc
-          npm run check:parity
-          npm run check:shared
-          npm run test:foundation
-
-      - name: Audit production dependencies
-        run: npm audit --omit=dev --audit-level=high
-
+      # Phải chạy TRƯỚC mọi step ghi file (check:ipc regenerate nova/ipc-inventory.json
+      # với generatedAt mới → worktree bẩn → gate clean-worktree FAIL thay vì BLOCKED).
+      # Ở đây checkout còn nguyên vẹn sau npm ci (chỉ đụng node_modules đã ignore).
       - name: Verify readiness remains fail-closed without governance evidence
         shell: bash
         run: |
@@ -71,3 +60,17 @@ jobs:
           path: ${{ runner.temp }}/m1-readiness.json
           if-no-files-found: error
           retention-days: 30
+
+      - name: Run Auto-Fix test pipeline (control-plane + client reporter)
+        run: npm --prefix auto-fix run test:all
+
+      - name: Run application checks
+        run: |
+          npm run check:syntax
+          npm run check:ipc
+          npm run check:parity
+          npm run check:shared
+          npm run test:foundation
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
