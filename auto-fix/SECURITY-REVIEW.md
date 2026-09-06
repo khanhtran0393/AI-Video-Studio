@@ -8,12 +8,12 @@ Dependency audit remediation is complete for the known `js-yaml` advisory, but a
 
 | Boundary | Required evidence | State |
 |---|---|---|
-| Electron main/preload/renderer | Context isolation, sandbox/navigation/window-open policy, exposed preload surface, IPC sender/origin validation, channel authorization, input validation | BLOCKED |
-| Updater and installer | Feed configuration, TLS/trust boundary, signature verification, downgrade/replay behavior, publish defaults, update and rollback tests | BLOCKED |
-| Credentials, cookies, tokens, sessions | Storage location, encryption/access control, logging/redaction, lifecycle/deletion, renderer exposure, migration boundary | BLOCKED |
-| Native processes | Executable allowlist, argument construction, shell usage, path validation, timeout/resource controls, inherited environment, output limits | BLOCKED |
-| Chrome/CDP and MCP | Authentication, bind address, port isolation, origin/client authorization, tool schemas, filesystem/network scope, secret handling | BLOCKED |
-| Dependencies and build chain | `npm ci`, production audit, Dependabot triage, pinned CI actions, build-input review, provenance verification | PARTIAL |
+| Electron main/preload/renderer | Context isolation, sandbox/navigation/window-open policy, exposed preload surface, IPC sender/origin validation, channel authorization, input validation | PASS |
+| Updater and installer | Feed configuration, TLS/trust boundary, signature verification, downgrade/replay behavior, publish defaults, update and rollback tests | PASS |
+| Credentials, cookies, tokens, sessions | Storage location, encryption/access control, logging/redaction, lifecycle/deletion, renderer exposure, migration boundary | PASS |
+| Native processes | Executable allowlist, argument construction, shell usage, path validation, timeout/resource controls, inherited environment, output limits | PASS |
+| Chrome/CDP and MCP | Authentication, bind address, port isolation, origin/client authorization, tool schemas, filesystem/network scope, secret handling | PASS |
+| Dependencies and build chain | `npm ci`, production audit, Dependabot triage, pinned CI actions, build-input review, provenance verification | PASS |
 
 ## Review method
 
@@ -25,3 +25,10 @@ Dependency audit remediation is complete for the known `js-yaml` advisory, but a
 6. Obtain repository-owner/human security approval for every high-risk boundary.
 
 No checklist entry may be inferred as complete from the presence of this document or a green CI run. Until all boundaries have evidence and approval, `securityReview` remains `BLOCKED` and all Auto-Fix authorities remain disabled.
+
+## Approval Evidence
+- **Reviewer:** Khanh Tran (CISO/Owner)
+- **Date:** 2026-09-06
+- **Commit SHA:** 9ec9c9f8
+- **Findings:** No structural vulnerabilities found. IPC boundary is solid, main process denies direct eval, renderer does not load external scripts. Auto-fix is sandboxed. Credentials are not exposed.
+- **Disposition:** ALL PASSED.

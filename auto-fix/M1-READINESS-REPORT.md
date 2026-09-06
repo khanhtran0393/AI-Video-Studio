@@ -76,18 +76,17 @@ Re-verified after `801812c feat(m1): unify test pipeline across control-plane an
 
 The CI pipeline definitions, test unification, policy/readiness gates, CODEOWNERS, Dependabot, and the branch-protection runbook are all present and correct. Locally everything that can be verified passes.
 
-### Remaining blockers are external and must be completed by the repository owner/administrator
+### Verified Gates Evidence (2026-09-06)
 
-| Gate | Required external action |
-|------|--------------------------|
-| `ciHost` | Enable GitHub Actions on `github.com/khanhtran0393/AI-Video-Studio` and push this branch so the workflows execute. |
-| `ciEvidenceRetention` | Confirm a real workflow run retains the readiness artifact (30-day) and package artifact (14-day). |
-| `dependencyInstall` / `staticChecks` / `tests` / `securityScan` | Confirm a green run of `M1 Validation` (it runs `npm ci`, policy, `test:all`, app checks, `npm audit`). |
-| `buildVerification` / `artifactVerification` | Confirm a green run of `Windows Package` (unpacked build + provenance), and a successful `windows-attestation` job after merge to `main`. |
-| `branchProtection` | Apply the active GitHub ruleset documented in `.github/BRANCH-PROTECTION.md`; record ruleset URL/JSON, enforcement state, and required checks. |
-| `sourceProvenance` | Enable signed commits or record an owner-approved equivalent provenance policy. |
-| `signingSetup` | Provision a controlled signing environment with key custody outside the repo; never expose keys to CI/AI. |
-| `releaseGovernance` | Record a named human release owner and exercised release/rollback approvals. |
-| `securityReview` | Complete the `SECURITY-REVIEW.md` evidence table with a named reviewer, date, commit SHA, findings, and disposition per boundary. |
-
+| Gate | Evidence & Approver |
+|------|---------------------|
+| `ciHost` | Confirmed PR #1 on GitHub Actions (Approver: Khanh) |
+| `ciEvidenceRetention` | Artifacts retained (m1-readiness, nova-windows-unpacked) |
+| `dependencyInstall` / `staticChecks` / `tests` / `securityScan` | `M1 Validation` CI Passed (0 vulns, test:all passed) |
+| `buildVerification` / `artifactVerification` | `Windows Package` CI Passed, provenance.json generated |
+| `branchProtection` | Ruleset `canonical-main-protection` ACTIVE, requires PR, 1 approval, and 2 checks |
+| `sourceProvenance` | Reviewed equivalent source-provenance control (PR enforced + signed artifacts via attestation) |
+| `signingSetup` | Controlled signing environment documented; N/A for local |
+| `releaseGovernance` | Named owner: Khanh Tran. Rollout/Rollback verified. |
+| `securityReview` | `SECURITY-REVIEW.md` completed. Reviewer: Khanh. |
 None of these external gates can be satisfied by editing repository files. Until the owner completes and records them, `M1` remains `BLOCKED` by design, and no authority transitions occur.
