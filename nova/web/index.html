@@ -3712,7 +3712,7 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
               <div class="t7-ptrack" id="t7Seek" onpointerdown="t7SeekPointerDown(event)" title="Bấm hoặc kéo để tua"><i id="t7SeekFill"></i></div>
               <div class="t7-pctl">
                 <span class="b" id="t7PlayBtn" onclick="t7TogglePlay()">▶</span>
-                <span class="tc" id="t7Rate" onclick="t7CycleRate()" title="Tốc độ xem trước" style="cursor:pointer;min-width:26px;text-align:center">1x</span>
+                <select id="t7Rate" onchange="t7SetRate(this.value)" title="Tốc độ xem trước" style="cursor:pointer;min-width:30px;text-align:center;background:transparent;border:0;font-size:11.5px;color:#e5ded4;padding:0 2px;appearance:auto"><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="1.5">1.5x</option><option value="2">2x</option></select>
                 <span class="tc" id="t7TimeCode">00:00 / 00:00</span>
                 <span class="sp"></span>
                 <span class="tc" id="t7LoopBtn" onclick="t7ToggleLoop()" title="Lặp lại khi hết" style="cursor:pointer">🔁</span>
@@ -6307,31 +6307,36 @@ function _dashStats(){
   const doneTotal = parseInt(localStorage.getItem('av_done_total') || '0') || 0;
   const doneMonth = parseInt(localStorage.getItem('av_done_' + _ymKey()) || '0') || 0;
   const producing = (typeof _autoBusy !== 'undefined' && _autoBusy) ? 1 : 0;
-  return { profiles, videos, doneTotal, doneMonth, producing };
+  const queue = (typeof _prodQueue !== 'undefined' && Array.isArray(_prodQueue)) ? _prodQueue.length : 0;
+  return { profiles, videos, doneTotal, doneMonth, producing, queue };
 }
 function _dashWorkflow(){
   const p = (typeof getProfile === 'function') ? getProfile() : null;
   const hasStyle = !!(p && (p.characterStyle || p.backgroundStyle || p.sceneStyle));
   const hasScript = (state.script || '').trim().length > 0;
+  // Giọng đọc: file đã nạp vào Dựng Video (t7State.audioFile) — pipeline hiện tại dùng file giọng làm master clock.
+  const hasVoice = !!(typeof t7State === 'object' && t7State && t7State.audioFile);
   const nScenes = (state.scenes || []).length;
   const nPrompts = Object.keys(state.scenePrompts || {}).filter(k => state.scenePrompts[k]).length;
   const nImg = Object.keys(state.sceneImages || {}).filter(k => state.sceneImages[k]?.base64).length;
   const sv = state.sceneVideos || {}; const nVid = Object.keys(sv).filter(k => sv[k] && !sv[k].error).length;
+  const nClips = (typeof t7State === 'object' && t7State && Array.isArray(t7State.clips)) ? t7State.clips.length : 0;
+  // 7 bước theo tool THẬT của app hiện tại (Prompt nhân vật & stock đã gộp vào Phân Cảnh).
   const steps = [
-    { nm: 'Profile', done: hasStyle, sb: hasStyle ? 'đã có style' : '—' },
-    { nm: 'Kịch bản', done: hasScript, sb: hasScript ? (state.script.length + ' ký tự') : '—' },
-    { nm: 'Phân cảnh', done: nScenes > 0, sb: nScenes ? (nScenes + ' cảnh') : '—' },
-    { nm: 'Prompt ảnh', done: nScenes > 0 && nPrompts >= nScenes, sb: nScenes ? (nPrompts + '/' + nScenes) : '—' },
-    { nm: 'Ảnh cảnh', done: nImg > 0, sb: nImg ? (nImg + ' ảnh') : '—' },
-    { nm: 'Video', done: nVid > 0, sb: nVid ? (nVid + ' clip') : '—' },
-    { nm: 'Dựng/Xuất', done: false, sb: '—' },
+    { nm: 'Profile', done: hasStyle, sb: hasStyle ? 'đã có style' : '—', tool: 'tool1' },
+    { nm: 'Kịch bản', done: hasScript, sb: hasScript ? (state.script.length + ' ký tự') : '—', tool: 'toolscript' },
+    { nm: 'Giọng đọc', done: hasVoice, sb: hasVoice ? 'đã nạp' : '—', tool: 'toolvoice' },
+    { nm: 'Phân cảnh', done: nScenes > 0, sb: nScenes ? (nScenes + ' cảnh · ' + nPrompts + ' prompt') : '—', tool: 'tool2' },
+    { nm: 'Ảnh cảnh', done: nImg > 0, sb: nImg ? (nImg + ' ảnh') : '—', tool: 'toolflow' },
+    { nm: 'Video cảnh', done: nVid > 0, sb: nVid ? (nVid + ' clip') : '—', tool: 'tool6' },
+    { nm: 'Dựng video', done: nClips > 0, sb: nClips ? (nClips + ' clip timeline') : '—', tool: 'tool7' },
   ];
   let cur = steps.findIndex(s => !s.done); if (cur < 0) cur = steps.length - 1;
   return { steps, cur };
 }
 function renderDashboard(){
   const box = document.getElementById('dashBody'); if (!box) return;
-  const name = (document.getElementById('userName')?.textContent || '').trim().replace(/^—$/, '') || 'bạn';
+  // Đăng nhập đã gỡ bỏ — không còn #userName; header không chào theo user nữa.
   let dateStr = ''; try { dateStr = new Date().toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' }); } catch {}
   const s = _dashStats();
   const wf = _dashWorkflow();
@@ -6348,13 +6353,41 @@ function renderDashboard(){
   const projs = (state.profiles || []).slice(0, 6).map((p, i) => `<div class="dproj"><span class="th">🎬</span><div style="flex:1;min-width:0"><div class="pn">${escapeHtml(p.tenKenh || 'Profile ' + (i + 1))}</div><div class="pd">${(Array.isArray(p.videos) ? p.videos.length : 1)} video · ${escapeHtml(p.ngach || p.visualStyle || '')}</div></div><button class="btn ghost sm" onclick="switchProfile(${i});switchTool('tool1')">Mở</button></div>`).join('') || '<div class="empty-state">Chưa có profile. Bấm "Tạo Profile mới".</div>';
 
   box.innerHTML = `
-    <div><h1 class="dash-hi">Xin chào, ${escapeHtml(name)} 👋</h1><p class="dash-sub">${dateStr ? dateStr[0].toUpperCase() + dateStr.slice(1) + ' · ' : ''}Chúc bạn một ngày làm việc hiệu quả!</p></div>
+    <div><h1 class="dash-hi">Trung tâm sản xuất video 🎬</h1><p class="dash-sub">${dateStr ? dateStr[0].toUpperCase() + dateStr.slice(1) + ' · ' : ''}Kịch bản → ảnh → giọng đọc → dựng video → YouTube, tất cả trong một app · mọi tính năng Pro/Max đã mở khoá sẵn.</p></div>
     <div class="dash-stats">
       ${card('di-green', '<path d="M20 6L9 17l-5-5"/>', 'Video hoàn thành', s.doneTotal)}
       ${card('di-accent', '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>', 'Đang sản xuất', s.producing)}
+      ${card('di-violet', '<path d="M4 6h3M4 12h3M4 18h3"/><rect x="8" y="4" width="12" height="16" rx="2"/>', 'Trong hàng đợi', s.queue)}
       ${card('di-blue', '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/>', 'Sản xuất tháng này', s.doneMonth)}
       ${card('di-violet', ic.prof, 'Kênh (profile)', s.profiles)}
       ${card('di-teal', ic.vid, 'Tổng video', s.videos)}
+    </div>
+    <div class="dsec">
+      <div class="dsec-h">⚡ Truy cập nhanh</div>
+      <div class="dqa">
+        ${qa("switchTool('toolscript')", '<path d="M14 3v5h5M8 13h8M8 17h5M6 3h9l5 5v11a1 1 0 01-1 1H6a1 1 0 01-1-1V4a1 1 0 011-1z"/>', 'Tạo Kịch Bản', 'AI viết kịch bản (chế độ Novel)')}
+        ${qa("switchTool('tool2')", '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 4v16"/>', 'Phân Cảnh', 'Chia cảnh, prompt ảnh &amp; nhân vật')}
+        ${qa("switchTool('toolflow')", '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.8"/><path d="M4 18l5-5 4 3 3-3 4 4"/>', 'Tạo Ảnh', 'Google Flow sinh ảnh')}
+        ${qa("switchTool('toolvoice')", '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/>', 'Tạo giọng nói', 'OmniVoice TTS')}
+        ${qa("switchTool('tool6')", '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10 9l5 3-5 3V9z"/>', 'Tạo Video', 'Xen video từng cảnh')}
+        ${qa("switchTool('tool7')", '<rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10l5-3v10l-5-3"/>', 'Dựng Video', 'Timeline, hiệu ứng, xuất file')}
+        ${qa("switchTool('toolvideoagent')", '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="M8 12l5 3.5V8.5L8 12z"/>', 'Video Agent', 'Pipeline tự động 17 bước')}
+        ${qa("switchTool('toolniche')", '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/><path d="M11 8v6M8 11h6"/>', 'Nghiên cứu Ngách', 'Chủ đề hot &amp; soi đối thủ')}
+        ${qa("switchTool('tool9')", '<path d="M12 3l9 4-9 4-9-4 9-4zM3 12l9 4 9-4M3 17l9 4 9-4"/>', 'YouTube SEO', 'Tiêu đề, mô tả, thumbnail')}
+        ${qa("switchTool('toolupscale')", '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 15l3-3 2 2 3-4"/><path d="M14 6h4v4"/><path d="M18 6l-5 5"/>', 'Nâng cấp ảnh', 'Làm nét ảnh cảnh')}
+        ${qa("switchTool('tool4')", '<path d="M4 7l3-3 3 3M7 4v9M20 17l-3 3-3-3M17 20v-9"/>', 'Đổi Tên Ảnh', 'Đổi tên hàng loạt')}
+        ${qa("switchTool('toolwhiteboard')", '<path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/>', 'Whiteboard Studio', 'SRT → video bảng vẽ tay')}
+        ${qa("switchTool('toolhanddraw')", '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/>', 'Vẽ Tay Ảnh', 'Ảnh tĩnh → video vẽ tay')}
+        ${qa("switchTool('toolimzic')", '<path d="M3 12h18M3 4h18M3 20h18"/><path d="M6 4v16"/>', 'I-MZic', 'Ảnh + nhạc, hiệu ứng theo nhịp')}
+        ${qa("switchTool('toolstudio')", '<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M2 8h20"/><path d="M6 21h12"/><path d="M12 17v4"/>', 'Studio', 'Kho media, ghép video, stem…')}
+      </div>
+    </div>
+    <div class="dsec">
+      <div class="dsec-h" style="display:flex;align-items:center;justify-content:space-between">
+        <span>📈 Tiến độ video hiện tại</span>
+        <button class="btn ghost sm" onclick="switchTool('${(wf.steps[wf.cur] && wf.steps[wf.cur].tool) || 'toolscript'}')" style="text-transform:none;letter-spacing:0">Tiếp tục bước này ➜</button>
+      </div>
+      <div class="dstep">${stepHtml}</div>
     </div>
     <div class="dsec dauto">
       <div class="dsec-h" style="display:flex;align-items:center;justify-content:space-between">
@@ -6645,7 +6678,14 @@ function renderDashboard(){
         <span onclick="event.preventDefault();_histClear()" style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-dim);cursor:pointer">Xoá lịch sử</span>
       </summary>
       <div id="histList" style="margin-top:10px"></div>
-    </details>`;
+    </details>
+    <div class="dsec">
+      <div class="dsec-h" style="display:flex;align-items:center;justify-content:space-between">
+        <span>🎬 Kênh của bạn</span>
+        <button class="btn ghost sm" onclick="switchTool('tool1')" style="text-transform:none;letter-spacing:0">Quản lý Profile ➜</button>
+      </div>
+      ${projs}
+    </div>`;
   try {
     _histRender();
     _dashFlowStatus();
@@ -6955,12 +6995,7 @@ function _slug(s){ return String(s || '').slice(0, 60).replace(/[^\w\sÀ-ỹ-]/g
 function queueAdd(){
   const p = (typeof getProfile === 'function') ? getProfile() : null;
   if (!p) return _autoLog('Chưa có Profile — tạo/chọn Profile trước.', 'error');
-  // Giới hạn hàng đợi tự động theo gói
-  if (!canAutoRun()) return showGate('Dashboard tự động (1 nút) & hàng đợi chỉ dành cho gói Sáng tạo trở lên. Nâng cấp để tự động hoá sản xuất.', { upgrade: true });
-  const qlim = getMaxQueue();
-  if (qlim !== Infinity && _prodQueue.length >= qlim) {
-    return showGate(`Gói ${tierPlanName(state.userTier)} chỉ xếp được ${qlim} video trong hàng đợi. Nâng cấp lên Studio để chạy không giới hạn.`, { upgrade: true });
-  }
+  // Hệ thống gói/tier đã gỡ bỏ (mọi tính năng mở khoá sẵn) — không còn giới hạn hàng đợi.
   const startFrom = document.getElementById('dashStart')?.value || 'script';
   const topic = (document.getElementById('dashTopic')?.value || '').trim();
   let script = (_autoScriptText || '').trim();
@@ -7292,7 +7327,6 @@ function _composeHasContent(){
 const _QRUN = ['queued', 'running', 'paused'];   // trạng thái còn phải chạy/chạy tiếp
 async function runQueue(){
   if (_queueRunning) return;
-  if (!canAutoRun()) { showGate('Sản xuất tự động (chạy hàng đợi) chỉ dành cho gói Sáng tạo trở lên. Nâng cấp để mở khoá.', { upgrade: true }); return; }
   _clearAutoRetry();   // chạy tay → huỷ hẹn tự thử lại
   // Form đang soạn còn nội dung → tự thêm thành 1 video trước khi chạy.
   if (_composeHasContent()) queueAdd();
@@ -20721,7 +20755,8 @@ const _T7_RAIL = [
   { k: 'ai',     ic: '🪄', lb: 'Trợ lý' },
 ];
 // Mẫu "chữ": lọc từ chính danh mục, không dựng danh sách cứng — thêm mẫu mới là tự có.
-const _t7IsTextTpl = (t) => !/vignette|film-grain|light-leak|blur-background|gradient-wipe|zoom-in|progress|circle|frame|khung/i.test(t.template + ' ' + (t.label || ''));
+// `fx-` = hiệu ứng phủ toàn khung (không phải khối chữ) → loại khỏi tab Chữ.
+const _t7IsTextTpl = (t) => !/vignette|film-grain|light-leak|blur-background|gradient-wipe|zoom-in|progress|circle|frame|khung|fx-/i.test(t.template + ' ' + (t.label || ''));
 function _t7RailCount(k){
   try {
     if (k === 'scenes') return (t7State.clips || []).length;
@@ -21327,6 +21362,25 @@ async function _t7LoadFx(){
   const c = document.getElementById('t7FxCount'); if (c) c.textContent = n || '—';
   return n;
 }
+// Swatch CSS SỐNG cho thẻ mẫu "fx-*": không có ảnh JPG pre-render nên lấy thẳng
+// các mảnh style từ previewLayers (chính effects.js mà bản xuất dùng) — nhìn thẻ
+// là thấy đúng hiệu ứng, không phải ảnh minh hoạ chế sẵn. Cache 1 lần.
+let _t7FxSw = null;
+async function _t7FxSwatchLoad(){
+  if (_t7FxSw) return _t7FxSw;
+  _t7FxSw = {};
+  const fxs = (_t7Cat || []).filter(t => /^fx-/.test(t.template));
+  for (const t of fxs){
+    try {
+      const r = await window.native.previewLayers({ spec: { durationSec: 2, layers: [{ template: t.template }] }, t: 1.2 });
+      const it = (r && r.ok && r.items || []).find(x => x && x.kind === 'fx');
+      if (it && (it.pieces || []).length){
+        _t7FxSw[t.template] = '<div style="position:relative;width:100%;height:100%;overflow:hidden">' + _t7LayerHtml(it) + '</div>';
+      }
+    } catch (e) {}
+  }
+  return _t7FxSw;
+}
 // ── Hai ảnh cảnh THẬT của dự án làm A/B cho mọi ô xem trước trong kho ──
 // Dùng ảnh của chính video đang dựng thì nhìn phát biết hiệu ứng hợp hay không,
 // khác hẳn ảnh mẫu chung chung.
@@ -21366,6 +21420,7 @@ async function t7FxTab(which){
   const box = document.getElementById('t7FxList'); if (!box) return;
   box.innerHTML = '<div class="t7-dim" style="font-size:11.5px;padding:8px">Đang nạp…</div>';
   await _t7LoadFx();
+  await _t7FxSwatchLoad();
   const esc = escapeHtml;
   const sel = t7State.clips.find(x => x.id === t7State.selClip);
   const head = sel
@@ -21378,8 +21433,10 @@ async function t7FxTab(which){
     const cat = (_t7Cat || []).filter(t => (_t7FxTab !== 'text' || _t7IsTextTpl(t)) && _hit(t.label + ' ' + t.template));
     html += '<div class="t7-fxgrid">' + cat.map(t => {
       const im = _t7Prev['tpl_' + t.template];
+      // Thẻ FX chưa có ảnh JPG → dùng swatch CSS sống (đúng engine, co theo thẻ).
+      const sw = (!im && /^fx-/.test(t.template) && _t7FxSw && _t7FxSw[t.template]) || null;
       return `<div class="t7-fxc" draggable="true" ondragstart="t7FxDrag(event,'tpl','${esc(t.template)}')" onclick="t7FxAddTpl('${esc(t.template)}')" title="${esc((t.params||[]).join(' · '))} — bấm để thêm, hoặc kéo xuống rãnh Đồ hoạ">
-        <div class="pv">${im ? `<img src="${im}" loading="lazy">` : '<span>—</span>'}</div>
+        <div class="pv">${im ? `<img src="${im}" loading="lazy">` : (sw || '<span>—</span>')}</div>
         <div class="nm">${esc(t.label)}</div></div>`;
     }).join('') + '</div>';
     // Nhóm "Chuyển động" gộp luôn bit Remotion — trước phải bấm sang tab con khác mới thấy.
@@ -24140,6 +24197,11 @@ function _t7LayerHtml(L){
     return `<div style="${w}"><img src="${_t7FileUrl(L.src)}" style="${cs}"></div>`;
   }
   if (L.kind === 'bit') return `<div style="${w}"><div style="width:100%;height:100%;border:0.3cqh dashed rgba(255,255,255,.5);border-radius:1cqh;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.75);font-size:2cqh">✨ ${escapeHtml(L.name)}</div></div>`;
+  // FX phủ toàn khung: main đã tính sẵn từng mảnh (effects.js) — chỉ dựng <div>.
+  if (L.kind === 'fx'){
+    const ps = (L.pieces || []).map(p => '<div style="' + Object.entries(p).filter(([,v]) => v !== '' && v != null).map(([k,v]) => _t7Kebab(k) + ':' + v).join(';') + '"></div>').join('');
+    return `<div style="${w}">${ps}</div>`;
+  }
   return '';
 }
 
@@ -24615,12 +24677,18 @@ function t7ClipPointerDown(e, id){
 //  Tốc độ xem trước · lặp · khung an toàn · bảng thiết lập chung.
 // ══════════════════════════════════════════════════════════════════════════
 const _T7_RATES = [0.5, 1, 1.5, 2];
-function t7CycleRate(){
-  const i = _T7_RATES.indexOf(t7State.rate || 1);
-  t7State.rate = _T7_RATES[(i + 1) % _T7_RATES.length];
-  const b = document.getElementById('t7Rate'); if (b) b.textContent = t7State.rate + 'x';
+// Tốc độ xem trước: chuyển từ chip bấm chu kỳ sang menu thả — thấy hết lựa chọn
+// ngay một glance, khỏi bấm 4 lần để vòng về. Giữ t7CycleRate làm alias cho chỗ gọi cũ.
+function t7SetRate(v){
+  const r = _T7_RATES.find(x => x === Number(v)) || 1;
+  t7State.rate = r;
+  const b = document.getElementById('t7Rate'); if (b) b.value = String(r);
   // Đang phát thì khởi động lại vòng phát để mốc thời gian tính theo tốc độ mới.
   if (t7State.playing){ t7Pause(); t7Play(); }
+}
+function t7CycleRate(){
+  const i = _T7_RATES.indexOf(t7State.rate || 1);
+  t7SetRate(_T7_RATES[(i + 1) % _T7_RATES.length]);
 }
 function t7ToggleLoop(){
   t7State.loop = !t7State.loop;
@@ -25012,12 +25080,17 @@ function _t7SubStyle(H){
   };
   return S[state.t7SubStyle || 'vien'] || S.vien;
 }
+// 5 kiểu phụ đề gom vào MỘT menu thả + ô xem trước "Aa" — thay cho dải chip
+// ngang chiếm chỗ: chọn nhanh hơn, đúng kiểu giữ nguyên state.t7SubStyle.
 function t7RenderSubStyleChips(){
   const box = document.getElementById('t7SubStyleChips'); if (!box) return;
   const cur = state.t7SubStyle || 'vien';
-  box.innerHTML = Object.entries(T7_SUBSTYLES).map(([k, v]) =>
-    `<button type="button" onclick="t7PickSubStyle('${k}')" style="border:1px solid ${k===cur?'var(--accent)':'var(--border)'};background:${k===cur?'color-mix(in srgb,var(--accent) 15%,transparent)':'var(--surface-2)'};color:${k===cur?'var(--accent)':'var(--text)'};border-radius:20px;padding:5px 12px;font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:7px">
-      <span style="display:inline-block;padding:0 6px;border-radius:3px;font-size:10px;font-weight:700;${v.prev}">Aa</span>${v.name}</button>`).join('');
+  const opts = Object.entries(T7_SUBSTYLES).map(([k, v]) =>
+    `<option value="${k}"${k === cur ? ' selected' : ''}>${v.name}</option>`).join('');
+  box.innerHTML =
+    `<select id="t7SubStyleSel" onchange="t7PickSubStyle(this.value)" title="Kiểu chữ phụ đề burn vào video" style="border:1px solid var(--border);background:var(--surface-2);color:var(--text);border-radius:8px;padding:5px 9px;font-size:12px;cursor:pointer;max-width:180px">${opts}</select>` +
+    `<span title="Xem trước kiểu đang chọn" style="display:inline-flex;align-items:center;border:1px solid var(--border);border-radius:8px;padding:4px 12px;background:var(--surface-2);flex:none">` +
+    `<span id="t7SubStylePrev" style="padding:0 6px;border-radius:3px;font-size:10px;font-weight:700;${T7_SUBSTYLES[cur].prev}">Aa</span></span>`;
 }
 function t7PickSubStyle(k){ state.t7SubStyle = k; t7RenderSubStyleChips(); try { if (typeof t7RenderPreview === 'function') t7RenderPreview(); } catch (_) {} }
 // 🎞 Video stock của cảnh ngắn hơn độ dài cảnh → tải thêm các ứng viên VIDEO khác để nối (không chia cảnh).

@@ -304,7 +304,10 @@ class CommandCenterWindow(QMainWindow):
         settings = QAction('Cài đặt', self)
         settings.setToolTip('Cài đặt xuất: CPU/GPU, codec, bitrate, hàng đợi… (thay cho tab Cài đặt trên thanh trái)')
         settings.triggered.connect(lambda: self._open_tool_module_sheet('settings'))
-        return {'undo': undo, 'redo': redo, 'open_project': open_project, 'new_project': new_project, 'save_project': save_project_action, 'reload_ui': reload_ui, 'error_log': error_log, 'storage_cleanup': storage_cleanup, 'reset': reset, 'fullscreen': fullscreen, 'export': export, 'batch_export': batch_export, 'open_export_folder': open_export_folder, 'stop': stop, 'settings': settings}
+        license_action = QAction('Bản quyền', self)
+        license_action.setToolTip('Kích hoạt / kiểm tra / gỡ bản quyền máy này')
+        license_action.triggered.connect(self.open_license_panel)
+        return {'undo': undo, 'redo': redo, 'open_project': open_project, 'new_project': new_project, 'save_project': save_project_action, 'reload_ui': reload_ui, 'error_log': error_log, 'storage_cleanup': storage_cleanup, 'reset': reset, 'fullscreen': fullscreen, 'export': export, 'batch_export': batch_export, 'open_export_folder': open_export_folder, 'stop': stop, 'settings': settings, 'license': license_action}
 
     def _create_toolbar(self) -> None:
         toolbar = QToolBar('Thanh công cụ chính', self)
@@ -358,6 +361,7 @@ class CommandCenterWindow(QMainWindow):
         toolbar.addAction(self.actions['batch_export'])
         toolbar.addAction(self.actions['export'])
         toolbar.addSeparator()
+        toolbar.addAction(self.actions['license'])
         menu_btn = QToolButton(self)
         menu_btn.setObjectName('capcutMenuButton')
         menu_btn.setText('Menu')
@@ -374,6 +378,7 @@ class CommandCenterWindow(QMainWindow):
         menu.addSeparator()
         menu.addAction(self.actions['fullscreen'])
         menu.addAction(self.actions['open_export_folder'])
+        menu.addAction(self.actions['license'])
         menu.addAction(self.actions['settings'])
         menu_btn.setMenu(menu)
         toolbar.addWidget(menu_btn)
@@ -1175,7 +1180,7 @@ class CommandCenterWindow(QMainWindow):
         self._refresh_export_ui()
 
     def start_face_reframe(self) -> None:
-        if not self._embedded_access_allowed(action='căn mặt tự động'):
+        if not self._ensure_licensed_or_warn(action='căn mặt tự động'):
             return None
         if self._has_background_job():
             self.statusBar().showMessage('Đang có tác vụ khác — chờ xong rồi auto căn mặt', 3500)
@@ -2862,7 +2867,7 @@ class CommandCenterWindow(QMainWindow):
 
     def _on_media_failed(self, path: str, message: str) -> None:
         self._replacing_source_for = None
-        self._report_error(f'Không thể mở {Path(path).name}', message)
+        self._report_error(f'Không thể mở {Path(path).name}', message, dialog=True)
         if self._import_batch_remaining > 0:
             self._import_batch_remaining = max(0, self._import_batch_remaining - 1)
             batch_left = self._import_batch_remaining
@@ -5629,7 +5634,7 @@ class CommandCenterWindow(QMainWindow):
         self._refresh_preset_library()
 
     def apply_saved_preset(self, preset_id: str, target_asset_id: str | None=None, *, auto_run_pipeline: bool) -> None:
-        if self._embedded_access_allowed(action='áp cấu hình'):
+        if self._ensure_licensed_or_warn(action='áp cấu hình'):
             from ui_qt.asset_export import apply_template_values_to_assets
             from ui_qt.edit_preset_library import load_preset_values
             asset_id = target_asset_id or self.state.selected_id
@@ -7264,7 +7269,7 @@ class CommandCenterWindow(QMainWindow):
         return str(picked[0]) if picked else ''
 
     def choose_export_path(self) -> None:
-        if not self._embedded_access_allowed(action='Xuất video'):
+        if not self._ensure_licensed_or_warn(action='Xuất video'):
             return None
         if self._has_exclusive_job():
             self._report_error('Chưa thể xuất video', 'Đang chạy phụ đề / TTS / CapCut. Bấm «Dừng xuất» hoặc chờ xong.', dialog=True)
@@ -7656,7 +7661,7 @@ class CommandCenterWindow(QMainWindow):
             self._suppress_autosave = False
 
     def choose_batch_export_folder(self) -> None:
-        if not self._embedded_access_allowed(action='Xuất hàng loạt'):
+        if not self._ensure_licensed_or_warn(action='Xuất hàng loạt'):
             return None
         if self._has_background_job():
             self._report_error('Chưa thể xuất hàng loạt', 'Đang có tác vụ chạy (xuất, STT, TTS, …). Bấm «Dừng xuất» rồi thử lại.', dialog=True)
@@ -9543,8 +9548,33 @@ class CommandCenterWindow(QMainWindow):
         else:
             return None
 
-    def _embedded_access_allowed(self, *, action: str) -> bool:
-        """The containing application owns access to every embedded feature."""
+    def open_license_panel(self) -> None:
+        from ui_qt.panels.license_panel import LicensePanel
+        dialog = LicensePanel(self, require_license=False)
+        dialog.exec()
+        QTimer.singleShot(0, self._license_startup_check)
+
+    def _license_startup_check(self) -> None:
+        from core.license_client import check, is_licensed, status_text
+        try:
+            check()
+        except Exception:
+            pass
+        if is_licensed():
+            pass
+        else:
+            self.statusBar().showMessage(status_text(), 8000)
+
+    def _ensure_licensed_or_warn(self, *, action: str) -> bool:
+        from core.license_client import check, is_licensed
+        from ui_qt.panels.license_panel import LicensePanel
+        try:
+            if not bool(check(force_online=True).get('ok')):
+                dialog = LicensePanel(self, require_license=False)
+                dialog.exec()
+                return bool(is_licensed())
+        except Exception:
+            pass
         return True
 
     def _report_error(self, title: str, detail: str='', *, dialog: bool) -> None:

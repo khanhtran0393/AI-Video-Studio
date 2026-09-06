@@ -214,6 +214,48 @@ const TEMPLATES = {
       return L;
     },
   },
+
+  /* ══ GÓI "FX-" — hiệu ứng PHỦ TOÀN KHUNG (vizzy-style: glitch, VHS, blur, ────
+     noise, beat-pulse). Mỗi mẫu bung đúng 1 lớp {type:'fx'} trỏ vào bảng FX
+     của effects.js — người dùng/AI chỉ chọn TÊN + cường độ, mọi phép tính nằm
+     trong engine (một nguồn: NovaScene và preview cùng đọc effects.js).
+     z:90 → đè lên chữ (z≤12) nhưng vẫn dưới ảnh đè/full-frame overlay.        */
+  'fx-glitch': {
+    label: 'FX · Glitch nhiễu số',
+    params: { intensity: 1, seed: 1 },
+    build: (p) => [{ type: 'fx', fx: 'glitch', box: { x: 0, y: 0, w: 100, h: 100 }, at: 0, z: 90,
+      style: { intensity: numOr(p.intensity, 1), seed: numOr(p.seed, 1) } }],
+  },
+  'fx-vhs': {
+    label: 'FX · VHS băng từ cũ',
+    params: { intensity: 1 },
+    build: (p) => [{ type: 'fx', fx: 'vhs', box: { x: 0, y: 0, w: 100, h: 100 }, at: 0, z: 90,
+      style: { intensity: numOr(p.intensity, 1) } }],
+  },
+  'fx-zoom-blur': {
+    label: 'FX · Zoom blur vệt phóng',
+    params: { intensity: 1, vignette: 0.5 },
+    build: (p) => [{ type: 'fx', fx: 'zoom-blur', box: { x: 0, y: 0, w: 100, h: 100 }, at: 0, z: 90,
+      style: { intensity: numOr(p.intensity, 1), vignette: numOr(p.vignette, 0.5) } }],
+  },
+  'fx-motion-blur': {
+    label: 'FX · Motion blur vệt quét',
+    params: { intensity: 1, dir: 'x' },
+    build: (p) => [{ type: 'fx', fx: 'motion-blur', box: { x: 0, y: 0, w: 100, h: 100 }, at: 0, z: 90,
+      style: { intensity: numOr(p.intensity, 1), dir: nz(p.dir, 'x') } }],
+  },
+  'fx-noise': {
+    label: 'FX · Noise hạt phim',
+    params: { intensity: 1, flicker: 1 },
+    build: (p) => [{ type: 'fx', fx: 'noise', box: { x: 0, y: 0, w: 100, h: 100 }, at: 0, z: 90,
+      style: { intensity: numOr(p.intensity, 1), flicker: numOr(p.flicker, 1) } }],
+  },
+  'fx-pulse': {
+    label: 'FX · Beat pulse theo BPM',
+    params: { bpm: 120, intensity: 1, color: '#ffffff' },
+    build: (p) => [{ type: 'fx', fx: 'pulse', box: { x: 0, y: 0, w: 100, h: 100 }, at: 0, z: 90,
+      style: { bpm: numOr(p.bpm, 120), intensity: numOr(p.intensity, 1), color: nz(p.color, '#ffffff') } }],
+  },
 };
 
 

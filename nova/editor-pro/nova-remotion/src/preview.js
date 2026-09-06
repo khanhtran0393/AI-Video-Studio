@@ -6,6 +6,7 @@
 'use strict';
 const { expandLayers } = require('./templates');
 const { layerStyleAt, charStyleAt } = require('./anim');
+const { fxOverlay } = require('./effects');
 
 const num = (v, d) => (Number.isFinite(Number(v)) ? Number(v) : d);
 
@@ -128,6 +129,15 @@ function previewAt(spec, t, sceneSrc) {
     } else if (L.type === 'bit') {
       // Bit là component React, DOM thường không dựng lại được → vẽ ô báo hiệu có mặt.
       out.push({ kind: 'bit', wrap, name: String(L.bit || '') });
+    } else if (L.type === 'fx') {
+      // Hiệu ứng phủ toàn khung — pieces là style ĐÃ TÍNH SẴN của effects.js
+      // (cùng nguồn với bản xuất NovaScene), renderer chỉ gán thẳng lên <div>.
+      const pieces = fxOverlay(L.fx, Math.max(0, Math.min(dur, t)), 30, L.style || {});
+      out.push({
+        kind: 'fx',
+        wrap: Object.assign({}, wrap, { left: '0%', top: '0%', width: '100%', height: '100%', zIndex: num(L.z, 90) }),
+        pieces,
+      });
     }
   });
   return out;

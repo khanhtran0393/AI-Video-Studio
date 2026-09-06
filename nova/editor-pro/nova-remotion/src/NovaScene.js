@@ -7,6 +7,7 @@ const { evolvePath } = require('@remotion/paths');
 const { layerStyleAt, charStyleAt } = require('./anim');
 const { expandLayers } = require('./templates');
 const { CharLayer } = require('./CharLayer');
+const { fxOverlay } = require('./effects');
 
 const h = React.createElement;
 const num = (v, d) => (Number.isFinite(Number(v)) ? Number(v) : d);
@@ -268,7 +269,18 @@ function BitLayer({ L }) {
   return h(def.component, props);
 }
 
-const RENDERERS = { text: TextLayer, shape: ShapeLayer, image: ImageLayer, video: VideoLayer, backdrop: BackdropLayer, bit: BitLayer, svg: SvgLayer, char: CharLayer };
+// ── LỚP "FX" — hiệu ứng phủ toàn khung (glitch/VHS/zoom-blur/noise/beat-pulse) ──
+// Bảng FX nằm ở effects.js (một nguồn): bản xem trước preview.js cũng gọi
+// fxOverlay() từ đó nên xem trước và bản xuất không bao giờ lệch nhau.
+function FxLayer({ L }) {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const pieces = fxOverlay(L.fx, frame / fps, fps, L.style || {});
+  if (!pieces.length) return null;
+  return h(React.Fragment, null, pieces.map((s, i) => h('div', { key: 'fxp' + i, style: s })));
+}
+
+const RENDERERS = { text: TextLayer, shape: ShapeLayer, image: ImageLayer, video: VideoLayer, backdrop: BackdropLayer, bit: BitLayer, svg: SvgLayer, char: CharLayer, fx: FxLayer };
 
 function NovaScene({ spec }) {
   const frame = useCurrentFrame();
@@ -289,7 +301,8 @@ function NovaScene({ spec }) {
       if (!anim) return null;                                  // ngoài khoảng sống của lớp
       const Renderer = RENDERERS[L.type] || TextLayer;
       const isBackdrop = L.type === 'backdrop';
-      const wrapStyle = isBackdrop
+      // Lớp fx phủ TOÀN KHUNG như backdrop — toạ độ từng mảnh do effects.js tự tính (%).
+      const wrapStyle = (isBackdrop || L.type === 'fx')
         ? { position: 'absolute', inset: 0 }
         : boxStyle(L.box);
       // Chỉnh tay: opacity/scale/rotate/nudge đặt thẳng trên lớp, NHÂN vào kết quả

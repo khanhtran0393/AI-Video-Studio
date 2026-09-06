@@ -55,12 +55,12 @@ def _kill_process_tree(pid: int) -> None:
         except OSError:
             pass
 
-def _probe(path: str, *, timeout_sec: float) -> dict:
+def _probe(path: str, *, timeout_sec: float = 30.0) -> dict:
     cmd = [FFPROBE_PATH, '-v', 'error', '-show_streams', '-show_format', '-of', 'json', path]
     limit = max(5.0, float(timeout_sec))
     proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8', errors='replace', creationflags=CREATE_NO_WINDOW)
     try:
-        stdout, stderr = (proc.communicate(timeout=limit)[0], proc.communicate(timeout=limit)[1])
+        stdout, stderr = proc.communicate(timeout=limit)
     except subprocess.TimeoutExpired:
         _kill_process_tree(int(getattr(proc, 'pid', 0) or 0))
         try:
@@ -75,7 +75,7 @@ def _probe(path: str, *, timeout_sec: float) -> dict:
     return json.loads(stdout or '{}')
 
 def _has_audio(path: str) -> bool:
-    return any((stream.get('codec_type') == 'audio' for stream in _probe).get('streams', [])())
+    return any(stream.get('codec_type') == 'audio' for stream in _probe(path).get('streams', []))
 
 def probe_av_codecs(path: str) -> tuple[str, str, dict]:
     probe = _probe(path)
