@@ -26,6 +26,7 @@ const Annotation = require('../web/whiteboard-annotation.js');
 const REPO_DIR = path.join(__dirname, 'srt-whiteboard-animation');
 const SCRIPTS_DIR = path.join(REPO_DIR, 'scripts');
 const RENDER_SCRIPT = path.join(SCRIPTS_DIR, 'render_stream_whiteboard.py');
+const BRIDGE_SCRIPT = path.join(__dirname, 'render-progress-bridge.py');  // chạy vendored script + đếm khung WBPROG (file của Nova, KHÔNG thuộc repo vendored)
 const PARSE_SCRIPT = path.join(SCRIPTS_DIR, 'parse_srt.py');
 const MERGE_SCRIPT = path.join(SCRIPTS_DIR, 'merge_scenes.py');
 const PREPARE_SCRIPT = path.join(SCRIPTS_DIR, 'prepare_env.py');
@@ -57,6 +58,7 @@ function childEnv() {
   const env = Object.assign({}, process.env);
   env.PYTHONUTF8 = '1';
   env.PYTHONIOENCODING = 'utf-8';
+  env.PYTHONUNBUFFERED = '1';   // stdout engine chảy live (mặc định bị buffer kín khi pipe)
   if (FFMPEG && path.isAbsolute(FFMPEG)) {
     env.PATH = path.dirname(FFMPEG) + path.delimiter + (env.PATH || '');
   }
@@ -125,7 +127,10 @@ function runCapture(cmd, args, opts = {}) {
     let stdout = '', stderr = '', done = false, timer = null;
     const finish = (r) => { if (done) return; done = true; if (timer) clearTimeout(timer); resolve(r); };
     const child = spawnTracked(cmd, args);
-    child.stdout.on('data', (d) => { stdout += d.toString('utf8'); });
+    child.stdout.on('data', (d) => {
+      stdout += d.toString('utf8');
+      if (opts.onStdout) { try { opts.onStdout(d.toString('utf8')); } catch (_) {} }
+    });
     child.stderr.on('data', (d) => {
       stderr += d.toString('utf8');
       if (opts.onStderr) { try { opts.onStderr(d.toString('utf8')); } catch (_) {} }
@@ -195,7 +200,7 @@ async function prepare(onLog) {
   if (!r.ok || !envPy) {
     return { ok: false, error: 'prepare_env.py thất bại: ' + ((r.stderr || r.stdout || '').trim().slice(0, 400)) };
   }
-  report(1, 'kiểm tra engine (repo/venv/deps)…');   // deps check có thể mất vài giây — bar phải nhích sớm
+  if (onLog) { try { onLog('kiểm tra engine (repo/venv/deps)…'); } catch (_) {} }   // deps check có thể mất vài giây — label phải nhích sớm (report() không tồn tại ở scope này)
   const st = await status();
   return { ok: st.ok, envPy, status: st, error: st.ok ? undefined : 'Venv đã dựng nhưng thiếu dependencies' };
 }
@@ -321,6 +326,9 @@ async function exportVideo({ scenes, outputPath, audioTracks, options, onProgres
     return fail('Engine Python chưa sẵn sàng (repo/venv/deps/hand): ' + JSON.stringify({ repo: st.repoPresent, venv: st.venvReady, deps: st.deps, hand: st.hand }));
   }
   const py = st.venvPy;
+  if (!fs.existsSync(BRIDGE_SCRIPT)) {
+    return fail('Thiếu render-progress-bridge.py: ' + BRIDGE_SCRIPT);
+  }
 
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wb-stream-'));
   const report = (percent, statusMsg) => {
@@ -329,6 +337,7 @@ async function exportVideo({ scenes, outputPath, audioTracks, options, onProgres
 
   report(2, 'khởi tạo engine stream-ink');
   const sceneFiles = [];
+  const sceneSecs = [];   // giây render mỗi cảnh đã xong — dự tính ETA các cảnh còn lại
   try {
     for (let i = 0; i < scenes.length; i++) {
       const scene = scenes[i];
@@ -360,7 +369,7 @@ async function exportVideo({ scenes, outputPath, audioTracks, options, onProgres
       // tipMode: 'hand' → sprite bàn tay | 'pen' → hand='' (engine tự vẽ ngòi bút procedural) | 'none' → --bare-tip
       const handArg = opt.tipMode === 'pen' ? '' : HAND_PNG;
       const args = [
-        RENDER_SCRIPT, scene.image, annPath, sceneOut, handArg,
+        scene.image, annPath, sceneOut, handArg,   // chạy qua BRIDGE_SCRIPT (đếm khung thật) — bridge tự thêm RENDER_SCRIPT
         '--total-ms', String(durationMs),
         '--ink-path', String(opt.inkPath),
         '--color-fill', String(opt.colorFill),
@@ -371,29 +380,129 @@ async function exportVideo({ scenes, outputPath, audioTracks, options, onProgres
       if (opt.fps) args.push('--fps', String(Math.round(opt.fps)));
       if (opt.pause) args.push('--pause', String(opt.pause));
 
-      report(5 + Math.round((i / scenes.length) * 80), 'render cảnh ' + (i + 1) + '/' + scenes.length);
+      report(5 + Math.round((i / scenes.length) * 80),
+        'cảnh ' + (i + 1) + '/' + scenes.length + ' · khởi động engine…');
       say('render_stream_whiteboard: ' + path.basename(scene.image) + ' (' + durationMs + 'ms)');
-      /* Progress sống giữa render: engine Python (script vendored — không sửa
-         nguồn repo) KHÔNG phát % từng khung hình, nên ước tính trong phạm vi
-         cảnh hiện tại: lũy tiến tiệm cận, KHÔNG vượt mốc thật của cảnh (đảm bảo
-         không giảm % khi nhận report thật), dọn bằng finally, unref để không
-         giữ tiến trình node/Electron khi thoát. Khi render xong, report thật
-         thay ngay giá trị ước tính. */
+
+      /* ── tiến trình THẬT theo khung hình ──
+         render-progress-bridge.py (file của Nova, repo vendored giữ nguyên)
+         bọc cv2.VideoWriter đếm TỪNG KHUNG engine ghi, phát WBPROG ra stderr.
+         % = khung đã ghi / tổng khung dự kiến (durationMs × fps + ~0.6s gaze
+         cuối cảnh); tốc độ + ETA tính từ nhịp khung thật. Engine im lặng giữa
+         các giai đoạn → ticker 2s KHÔNG bò % giả nữa, chỉ gán nhãn giai đoạn
+         (tính vùng/nét CPU trước khung đầu) và cảnh báo ngừng ghi khung (kẹt). */
       const sceneStartPct = 5 + (i / scenes.length) * 80;
       const sceneEndPct = 5 + ((i + 1) / scenes.length) * 80;
       const estCeil = Math.max(sceneStartPct, sceneEndPct - 1);  // >80 cảnh: dải <1% — không cho tụt dưới mốc bắt đầu
-      let estPct = sceneStartPct + 0.5;
-      const estStart = Date.now();
+      const clampPct = (p) => Math.max(sceneStartPct, Math.min(estCeil, p));
+      const t0 = Date.now();
+      let pyFps = 0;            // fps writer (WBPROG open)
+      let estTotal = 0;         // tổng khung dự kiến của cảnh
+      let frames = 0;           // khung đã ghi (WBPROG frame)
+      let lastFrameAt = 0;      // mốc khung cuối — phát hiện ngừng ghi
+      let transcode = false;    // đã vào giai đoạn chuyển mã H.264
+      let lastReportAt = 0;     // throttle sự kiện IPC (~2-3/s, không làm ngập relay)
+      let errBuf = '';          // stderr line-buffer (pipe gộp/ngắt dòng)
+      let outBuf = '';          // stdout line-buffer
+      const etaOf = (sec) => {
+        sec = Math.max(0, Math.round(sec));
+        return sec >= 90 ? '~' + Math.round(sec / 60) + ' phút' : '~' + sec + 's';
+      };
+      const restTxt = () => {   // ETA các cảnh CHƯA render (theo trung bình cảnh đã xong)
+        if (!sceneSecs.length || i + 1 >= scenes.length) return '';
+        const avg = sceneSecs.reduce((a, b) => a + b, 0) / sceneSecs.length;
+        return ' · sau đó ' + (scenes.length - i - 1) + ' cảnh ≈ ' + etaOf(avg * (scenes.length - i - 1));
+      };
+      const pushStatus = (pct, msg) => {
+        const now = Date.now();
+        if (now - lastReportAt < 400) return;
+        lastReportAt = now;
+        report(pct, msg);
+      };
+      const onFrame = (n) => {
+        frames = n;
+        lastFrameAt = Date.now();
+        if (!pyFps) return;     // chưa biết fps → chỉ theo dõi stall
+        const span = Math.max(0, sceneEndPct - sceneStartPct);
+        const done = Math.min(1, frames / Math.max(1, estTotal));
+        const rate = frames / Math.max(0.5, (lastFrameAt - t0) / 1000);   // khung/s trung bình
+        const eta = rate > 0.05 ? (Math.max(1, estTotal) - frames) / rate : 0;
+        pushStatus(clampPct(sceneStartPct + done * span),
+          'cảnh ' + (i + 1) + '/' + scenes.length +
+          ' · khung ' + frames + '/' + estTotal +
+          ' · ' + rate.toFixed(1) + ' khung/s' +
+          ' · còn ' + etaOf(eta) + restTxt());
+      };
+      const handleStderr = (chunk) => {
+        errBuf += chunk;
+        let nl;
+        while ((nl = errBuf.indexOf('\n')) >= 0) {
+          const line = errBuf.slice(0, nl).replace(/\r$/, '');
+          errBuf = errBuf.slice(nl + 1);
+          if (line.indexOf('WBPROG ') === 0) {
+            let m = /^WBPROG open fps=(\S+) w=(\d+) h=(\d+)/.exec(line);
+            if (m) {
+              pyFps = parseFloat(m[1]) || 0;
+              estTotal = pyFps > 0 ? Math.max(1, Math.round((durationMs / 1000) * pyFps)) : 0;
+              lastReportAt = 0;   // báo "bắt đầu ghi khung" đi qua throttle ngay
+              pushStatus(sceneStartPct,
+                'cảnh ' + (i + 1) + '/' + scenes.length + ' · bắt đầu ghi khung (' +
+                (pyFps ? Math.round(pyFps) + ' fps, ~' + estTotal + ' khung' : 'fps chưa rõ') + ')');
+            }
+            m = /^WBPROG frame=(\d+)/.exec(line);
+            if (m) onFrame(parseInt(m[1], 10));
+            if (/^WBPROG transcode\b/.test(line)) {
+              transcode = true;
+              lastReportAt = 0;
+              pushStatus(clampPct(estCeil),
+                'cảnh ' + (i + 1) + '/' + scenes.length + ' · chuyển mã H.264…' + restTxt());
+            }
+            if (/^WBPROG error/.test(line)) say('⚠ bridge: ' + line.slice('WBPROG error'.length).trim());
+            continue;   // WBPROG là tín hiệu nội bộ — không đưa vào Log renderer
+          }
+          if (line.trim()) say(line);
+        }
+      };
+      const handleStdout = (chunk) => {
+        outBuf += chunk;
+        let nl;
+        while ((nl = outBuf.indexOf('\n')) >= 0) {
+          const line = outBuf.slice(0, nl).replace(/\r$/, '');
+          outBuf = outBuf.slice(nl + 1);
+          if (line.indexOf('H.264') >= 0) {   // engine in dòng này khi chuyển mã xong → hoàn tất cảnh
+            lastReportAt = 0;
+            pushStatus(clampPct(estCeil), 'cảnh ' + (i + 1) + '/' + scenes.length + ' · hoàn tất…');
+          }
+        }
+      };
+      /* ticker 2s: gán nhãn giai đoạn im lặng của engine — KHÔNG bò % giả.
+         - chưa có khung nào → đang tính vùng/nét CPU trước khi vẽ;
+         - giữa chừng ngừng ghi >4s → đang nét vùng kế (nhãn sống, không đợi 25s);
+         - ngừng ghi >25s → cảnh báo kẹt lộ liễu. */
       const ticker = setInterval(() => {
-        estPct = Math.min(estCeil, estPct + (sceneEndPct - estPct) * 0.06);
-        report(Math.round(estPct),
-          'render cảnh ' + (i + 1) + '/' + scenes.length +
-          ' (ước tính, đã ' + Math.round((Date.now() - estStart) / 1000) + 's)');
-      }, 1500);
+        if (frames === 0 && !transcode) {
+          lastReportAt = 0;
+          pushStatus(sceneStartPct,
+            'cảnh ' + (i + 1) + '/' + scenes.length +
+            ' · đang tính vùng/nét trước khi vẽ (CPU, đã ' + Math.round((Date.now() - t0) / 1000) + 's)…' + restTxt());
+        } else if (frames > 0 && !transcode && Date.now() - lastFrameAt > 25000) {
+          lastReportAt = 0;
+          const span = Math.max(0, sceneEndPct - sceneStartPct);
+          const done = pyFps ? Math.min(1, frames / Math.max(1, estTotal)) : 0;
+          pushStatus(clampPct(sceneStartPct + done * span),
+            '⚠ cảnh ' + (i + 1) + '/' + scenes.length + ' · ngừng ghi khung ' +
+            Math.round((Date.now() - lastFrameAt) / 1000) + 's — engine đang tính nặng hoặc kẹt');
+        } else if (frames > 0 && !transcode && Date.now() - lastFrameAt > 4000) {
+          lastReportAt = 0;
+          pushStatus(clampPct(sceneStartPct + (Math.min(1, frames / Math.max(1, estTotal)) * Math.max(0, sceneEndPct - sceneStartPct))),
+            'cảnh ' + (i + 1) + '/' + scenes.length + ' · đang nét vùng tiếp theo (đã ' + frames + '/' + estTotal + ' khung)…');
+        }
+      }, 2000);
       if (ticker.unref) ticker.unref();
       let r;
       try {
-        r = await runCapture(py, args, { timeoutMs: 30 * 60 * 1000, onStderr: say });
+        r = await runCapture(py, [BRIDGE_SCRIPT].concat(args),
+          { timeoutMs: 30 * 60 * 1000, onStderr: handleStderr, onStdout: handleStdout });
       } finally {
         clearInterval(ticker);
       }
@@ -403,7 +512,11 @@ async function exportVideo({ scenes, outputPath, audioTracks, options, onProgres
         return fail('Render cảnh ' + (i + 1) + ' lỗi: ' + ((r.stderr || r.stdout || '').trim().split('\n').slice(-4).join(' | ') || 'không rõ'));
       }
       sceneFiles.push(fs.realpathSync(finalScene));
-      report(5 + Math.round(((i + 1) / scenes.length) * 80), 'xong cảnh ' + (i + 1) + '/' + scenes.length);
+      sceneSecs.push((Date.now() - t0) / 1000);
+      report(5 + Math.round(((i + 1) / scenes.length) * 80),
+        'xong cảnh ' + (i + 1) + '/' + scenes.length +
+        ' (' + sceneSecs[sceneSecs.length - 1].toFixed(1) + 's' +
+        (frames ? ' · ' + frames + ' khung' : '') + ')' + restTxt());
     }
 
     /* merge tất cả cảnh (merge_scenes.py) */

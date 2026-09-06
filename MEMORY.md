@@ -442,3 +442,36 @@ File này ghi **trạng thái dài hạn và lịch sử quyết định**. AGEN
   Kiểm định: extract `<script>` → `node --check` PASS (58.762 bytes); mô phỏng
   toán raster 4 case ALL-PASS; `npm run check` PASS (syntax 333, IPC 144/20,
   parity 0, shared 26/16). `tmp-imzic-check.js` đã xoá sau dùng.
+- [2026-09-06] Handdraw Studio — **tiến trình thật + ETA + phát hiện kẹt trong
+  export MP4** (tiếp nối hdlasso7; user feedback: "thanh tiến trình chưa đúng,
+  dự tính thời gian chưa chính xác, không biết đang làm gì hay bị kẹt"):
+  - Gốc rễ: engine vendored `render_stream_whiteboard.py` KHÔNG phát gì trong lúc
+    render (chỉ print đầu/cuối) → giải pháp cũ là ticker "bò % ước tính" giả.
+  - **`nova/whiteboard-studio/render-progress-bridge.py` (file MỚI của Nova,
+    repo vendored KHÔNG sửa)**: bọc `cv2.VideoWriter` bằng subclass đếm khung
+    (mọi khung engine ghi đều qua `write()`) + bọc `stream_render.transcode_h264`
+    → phát stderr flush từng dòng: `WBPROG open fps=/w=/h=`, `WBPROG frame=N`
+    (mỗi 5 khung), `WBPROG transcode`, `WBPROG error`. Chạy vendored script y
+    nguyên qua `runpy` forward argv + exit code. Subclass cv2.VideoWriter đã
+    test thủ công với venv thật trước khi áp dụng.
+  - `py-backend.js` exportVideo: render qua bridge (args không đổi, bridge tự
+    thêm RENDER_SCRIPT); parser stderr/stderr line-buffer tách WBPROG (không vào
+    Log renderer) → **% thật = khung đã ghi / (durationMs×fps)**, clamp `estCeil`
+    giữ tính đơn điệu; status dạng `cảnh i/N · khung X/Y · Z khung/s · còn ~Ts
+    · sau đó k cảnh ≈ ~Ts` (ETA cảnh theo tốc độ khung thật, ETA các cảnh còn
+    theo trung bình cảnh đã xong); ticker 2s BỎ crawl giả — chỉ gán nhãn giai
+    đoạn im lặng (>4s "đang nét vùng tiếp theo", >25s ⚠ kẹt, trước khung đầu
+    "đang tính vùng/nét CPU") + throttle IPC 400ms; `PYTHONUNBUFFERED=1` trong
+    childEnv (stdout engine chảy live); `runCapture` thêm opts.onStdout.
+  - **Sửa bug tiềm ẩn**: `prepare()` gọi `report(1,…)` — `report` không tồn tại
+    ở scope đó (ReferenceError khi bấm "dựng môi trường" lần đầu) → đổi sang
+    `onLog`.
+  - Panel `handdraw-studio-panel.js` (marker **hdlasso8**): label cắt 90→140 ký
+    tự (đủ chứa khung/tốc độ/ETA), watchdog 60s/20s → **15s/5s và cảnh báo
+    THẲNG vào label** (phân biệt "engine bận nhưng event vẫn chảy" vs "luồng chết").
+  - Kiểm định: node --check + py_compile PASS; `_check_hd_ids.js` PASS;
+    `_smoke_handdraw.js` E2E render MP4 thật 2 lần PASS — dòng tiến trình
+    `khung 110/300 · 16.3 khung/s · còn ~12s` chảy đều, estTotal khớp đúng 300
+    khung thật, nhãn transcode/hoàn tất đúng giai đoạn; `npm run check` PASS
+    (syntax 332, IPC 144/20, parity 0, shared 26/16).
+

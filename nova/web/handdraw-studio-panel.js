@@ -87,9 +87,10 @@
         if (typeof s.status === 'string' && s.status) {
           log(s.status);
           /* label tiến trình phải SỐNG theo event (trước đây chỉ vào Log,
-             label kẹt "khởi động…" suốt lúc render — triệu chứng bar không cập nhật) */
+             label kẹt "khởi động…" suốt lúc render — triệu chứng bar không cập nhật).
+             140 ký tự đủ chứa "cảnh i/N · khung X/Y · tốc độ · còn ETA · sau đó k cảnh" */
           if (els.progressMsg) {
-            const t = s.status.length > 90 ? s.status.slice(0, 90) + '…' : s.status;
+            const t = s.status.length > 140 ? s.status.slice(0, 140) + '…' : s.status;
             els.progressMsg.textContent = t;
           }
         }
@@ -949,15 +950,19 @@
     setProgress(0, 'khởi động…');
     log('▶ vẽ tay ' + payload.scenes.length + ' ảnh → ' + out.path +
         ' (bút: ' + state.brush.tipMode + ' · nét: ' + state.brush.inkPath + ' · tô: ' + state.brush.colorFill + ')');
-    /* watchdog: nếu 60s không có event nào từ main → cảnh báo lộ liễu thay vì im lặng */
+    /* watchdog: 15s không có event nào từ main → cảnh báo THẲNG vào label
+       (không chỉ Log, interval 5s) — phân biệt "engine bận nhưng vẫn chảy"
+       (event 2-3/s từ py-backend) với "luồng tiến trình chết/treo" */
     lastProgressAt = Date.now();
     const watchdog = setInterval(() => {
       if (!state.exporting) { clearInterval(watchdog); return; }
       const idleMs = Date.now() - lastProgressAt;
-      if (idleMs > 60000) {
-        log('⏳ đã ' + Math.round(idleMs / 1000) + 's không nhận tiến trình mới — engine có thể đang render cảnh dài hoặc bị treo. Nếu chắc chắn treo: bấm Dừng rồi thử lại.');
+      if (idleMs > 15000) {
+        const warn = '⚠ ' + Math.round(idleMs / 1000) + 's không nhận tiến trình — luồng có thể treo; nếu chắc chắn treo: bấm Dừng rồi thử lại';
+        if (els.progressMsg) els.progressMsg.textContent = warn;
+        log('⏳ ' + warn);
       }
-    }, 20000);
+    }, 5000);
     let r;
     try {
       r = await window.native.whiteboard.export(payload);
@@ -1164,7 +1169,7 @@
     bind();
     // MARKER PHIÊN BẢN — dòng đầu Log: nếu KHÔNG thấy dòng này khi mở tool
     // nghĩa là renderer còn JS cũ (cache) → Ctrl+F5 hoặc mở lại app.
-    log('[hdlasso7] panel Vẽ Tay Ảnh đã khởi động (progress sống giữa render: label theo event + ước tính từng cảnh từ engine)');
+    log('[hdlasso8] panel Vẽ Tay Ảnh đã khởi động (tiến trình thật theo khung hình qua render-progress-bridge + tốc độ/ETA + cảnh báo kẹt 15s)');
     hdBuildCards();
     wireEvents();
     renderSceneList();
