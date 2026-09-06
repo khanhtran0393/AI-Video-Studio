@@ -1,0 +1,3 @@
+[submodule "nova/whiteboard-studio/srt-whiteboard-animation"]
+	path = nova/whiteboard-studio/srt-whiteboard-animation
+	url = https://github.com/khanhtran0393/srt-whiteboard-animation.git
