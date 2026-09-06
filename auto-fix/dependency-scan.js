@@ -54,7 +54,23 @@ function generateSbom(root = '.') {
 }
 
 function runDependencyAudit(root = '.') {
-  const result = spawnSync('npm', ['audit', '--json', '--prefix', root], {
+  // Fail-closed: chỉ audit khi root tồn tại và có package-lock.json. Trên Linux,
+  // `npm audit --prefix <dir không tồn tại>` im lặng audit nhầm project ở cwd rồi
+  // trả 0 vulnerability (false-positive PASS) — phải chặn trước bằng kiểm tra tồn
+  // tại. Trên Windows guard này vô hại vì spawn 'npm' (npm.cmd) vốn đã ENOENT.
+  const resolvedRoot = path.resolve(root);
+  const lockPath = path.join(resolvedRoot, 'package-lock.json');
+  if (!fs.existsSync(resolvedRoot) || !fs.existsSync(lockPath)) {
+    return {
+      ok: false,
+      status: 'BLOCKED',
+      reason: 'audit-unavailable: target root or package-lock.json is missing',
+      vulnerabilities: null,
+      advisories: {},
+    };
+  }
+
+  const result = spawnSync('npm', ['audit', '--json', '--prefix', resolvedRoot], {
     encoding: 'utf8',
     shell: false,
     windowsHide: true,
