@@ -413,3 +413,32 @@ File này ghi **trạng thái dài hạn và lịch sử quyết định**. AGEN
   `node --check` imzic.js/index.js/preload.js PASS; `npm run check` PASS
   (syntax 333 file, IPC 144 kênh/20 events — +1 kênh `imzic-mux`, parity 0,
   shared 26 file/16 key). Script tạm `tmp-imzic-check.js` đã xoá.
+
+- [2026-09-06] I-MZic — **tối ưu tốc độ render loop, KHÔNG đổi tiêu chuẩn đầu ra**
+  (theo yêu cầu: nhanh hơn nhưng không giảm/hỏng chất lượng; renderer-only,
+  `nova/web/img-to-vid.html`):
+  1. **Raster cache ảnh nền** (điểm nóng #1): trước đây `ctx.drawImage` resample
+     ảnh GỐC (có thể 6000px) MỖI FRAME — nặng nhất khi ghi 1080×1920. Giờ quét
+     MỘT LẦN vào offscreen canvas khổ `cover(canvas vật lý) × zoomMax` (zoomMax
+     làm tròn LÊN bước 0.05 → kéo slider không rebuild liên tục), mỗi frame vẽ
+     từ raster. Raster luôn ≥ khổ hiển thị (chỉ downscale ≤ zoomMax, không bao
+     giờ upscale — đã mô phỏng verify 4 case PASS) + bước quét dùng
+     `imageSmoothingQuality:'high'` → độ nét tương đương hoặc TỐT HƠN trước.
+     Key = img.src + dims + canvas dims + zq; đổi ảnh/vào-ra chế độ ghi tự
+     rebuild, canvas không resize khi key giữ nguyên → không phá track ghi.
+     Raster cho ảnh 6000×4000 chỉ 3024×2016 (downscale to 1 lần, nhẹ hơn nhiều
+     so với 60 lần full-res mỗi giây).
+  2. **Cache wrap lời**: `wrapLyricTextCached` — bỏ `measureText` từng chữ mỗi
+     frame, chỉ tính lại khi đổi SRT (`lyricsVersion++` trong
+     `loadLyricsFromText`) / dòng / font / cỡ / khung. Kết quả wrap giữ nguyên
+     → vị trí chữ trên video KHÔNG đổi.
+  3. **Throttle UI tiến trình 100ms** (#2): DOM writes 60 lần/giây → 10 lần/giây,
+     refs `progEls` hoisted — thuần UI ngoài canvas, không dính file xuất.
+  4. **Memoize `hexToRgba`**: parse hex cache theo chuỗi màu (hàng trăm lần gọi
+     mỗi frame từ bead/dot/bar của sóng) — chuỗi rgba trả về GIỮ NGUYÊN từng ký tự.
+  KHÔNG đụng: bitrate, độ phân giải, shadowBlur, gradient động, số segment,
+  logic particle/zoom/timing/lead — mọi đặc tính hình ảnh của file xuất giữ nguyên
+  (CPU dư → ít rơi frame khi ghi → chất lượng file còn ổn định hơn).
+  Kiểm định: extract `<script>` → `node --check` PASS (58.762 bytes); mô phỏng
+  toán raster 4 case ALL-PASS; `npm run check` PASS (syntax 333, IPC 144/20,
+  parity 0, shared 26/16). `tmp-imzic-check.js` đã xoá sau dùng.
