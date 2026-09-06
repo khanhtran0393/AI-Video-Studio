@@ -27,7 +27,6 @@
     "!nova/voice-studio/data{,/**/*}",
     "!nova/voice-backend/data{,/**/*}",
     "!nova/voice-backend/.venv-omni{,/**/*}",
-    "!nova/tdt-studio/runtime/venv{,/**/*}",
     "!nova/tmp-asar-app{,/**/*}",
     "!nova/tmp-*",
     "!nova/.tmp-*",

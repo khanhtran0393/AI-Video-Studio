@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-06T03:18:07.079Z",
+  "generatedAt": "2026-09-06T04:24:29.719Z",
   "sourceFiles": [
     "chrome-extension/app.js",
     "chrome-extension/background.js",
@@ -213,8 +213,8 @@
     "scripts/tmp-cft-race-live.js",
     "scripts/tmp-check-index-html-js.js",
     "scripts/tmp-error-reporter-e2e.js",
+    "scripts/tmp-exstyle-probe.js",
     "scripts/tmp-grep-exit.js",
-    "scripts/tmp-imzic-check.js",
     "scripts/tmp-instrument-asar.js",
     "scripts/tmp-launch-matrix.js",
     "scripts/tmp-outage-evidence.js",
@@ -225,6 +225,8 @@
     "scripts/tmp-smoke-novel.js",
     "scripts/tmp-spawn-test.js",
     "scripts/tmp-splash-probe.js",
+    "scripts/tmp-tdt-capture.js",
+    "scripts/tmp-tdt-e2e.js",
     "scripts/tmp-tdt-repro.js",
     "scripts/tmp-voice-crash.js",
     "scripts/tmp-voice-path-test.js",
