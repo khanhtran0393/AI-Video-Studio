@@ -583,14 +583,25 @@
   const emptyState = $('emptyState');
 
   // ---- audio graph ----
-  // Signal path: source -> analyser (UNDELAYED — this is what drives zoom/wave,
-  // so the visuals react to audio content before it's actually heard)
+  // Signal path: source -> analyser (UNDELAYED — feeds zoom (bass), wave (full
+  // spectrum) and particle pulse (treble) from the SAME FFT scan, so the visuals
+  // react to audio content before it's actually heard)
   //            -> delayNode (leadMs) -> speakers + recording stream (what's actually heard/exported)
   let audioCtx = null, analyser = null, sourceNode = null, streamDest = null, delayNode = null;
   let audioEl = new Audio();
   audioEl.crossOrigin = "anonymous";
   let freqData = null;
   let smoothedEnergy = 0;
+  // #bands: năng lượng dải treble từ cùng FFT (0..1) — bass vẫn nuôi zoom qua
+  // smoothedEnergy, sóng nhạc vẫn dùng toàn bộ phổ (waveEnergyAt) như cũ.
+  let smoothedTreble = 0;
+  // trung bình biên độ bin [from, to) chuẩn hoá về 0..1
+  function avgFreqRange(from, to){
+    if(!freqData) return 0;
+    let sum = 0;
+    for(let i=from;i<to;i++) sum += freqData[i];
+    return (sum / Math.max(1, to-from)) / 255;
+  }
 
   function ensureAudioGraph(){
     if(audioCtx) return;
@@ -1214,21 +1225,26 @@
     ctx.restore();
   }
 
-  function drawParticles(dt){
+  function drawParticles(dt, treblePulse){
     if(state.effect==='none') return;
     particleClock += dt*0.05;
     const color = state.color || defaultColors[state.effect];
     ctx.save();
     ctx.fillStyle = color;
     ctx.strokeStyle = color;
+    // #bands: hệ số treble (0..1) — treble=0 thì grow=boost=1 → hình ảnh giữ
+    // NGUYÊN hệ cũ (nhạc trầm/im lặng không đổi gì); hi-hat mạnh thì hạt nở nhẹ
+    // (tối đa +30% cỡ) và sáng nhẹ (tối đa +25%) theo nhịp gõ.
+    const grow  = 1 + treblePulse*0.30;
+    const boost = 1 + treblePulse*0.25;
     for(const p of particles){
       updateParticle(p, logicW, logicH, dt);
-      const sz = p.mode==='center' ? p.curSize : p.size;
+      const sz = (p.mode==='center' ? p.curSize : p.size) * grow;
       // fade in near the very center so particles don't "pop" at full alpha
       const fadeIn = p.mode==='center' ? Math.min(1, p.radius / (p.maxR*0.08)) : 1;
       // random flicker/fade per object — each particle dims & brightens on its own cycle
       const twinkle = 0.5 + 0.5*Math.sin(particleClock*p.twinkleSpeed + p.twinklePhase);
-      ctx.globalAlpha = state.alpha * p.alphaJit * fadeIn * (0.45 + twinkle*0.55);
+      ctx.globalAlpha = Math.min(1, state.alpha * p.alphaJit * fadeIn * (0.45 + twinkle*0.55) * boost);
       if(state.effect==='snow'){
         drawSnowflake(p.x,p.y,sz*0.6,p.rot);
       } else if(state.effect==='leaves'){
@@ -1303,20 +1319,30 @@
     ctx.setTransform(canvas.width/logicW, 0, 0, canvas.height/logicH, 0, 0);
     ctx.clearRect(0,0,w,h);
 
-    // audio energy -> zoom
-    let targetEnergy = 0;
+    // audio energy -> zoom + particle pulse
+    // #bands: tách dải từ CÙNG một lần quét FFT mỗi frame (fftSize 256 → 128 bin
+    // × ~172 Hz/bin @44.1 kHz):
+    //   bass   = bin 0-3   (0-~690 Hz, kick/bass guitar) → zoom ảnh nền (như cũ
+    //            nhưng giờ đúng dải trầm, nhịp đấm mạnh hơn thay vì trộn cả giọng hát)
+    //   treble = bin 24-63 (~4.1-11 kHz, hi-hat/chuông)  → hạt tuyết/hoa/stars
+    //            nở nhẹ + sáng nhẹ theo nhịp gõ
+    // sóng nhạc giữ nguyên ánh xạ toàn bộ phổ (waveEnergyAt) như trước.
+    let targetEnergy = 0, targetTreble = 0;
     if(analyser){
       analyser.getByteFrequencyData(freqData);
-      const bassBins = Math.max(4, Math.floor(freqData.length*0.12));
-      let sum=0;
-      for(let i=0;i<bassBins;i++) sum += freqData[i];
-      targetEnergy = (sum/bassBins)/255; // 0..1
-      targetEnergy = Math.min(1, targetEnergy * state.sensitivity);
+      const n = freqData.length;
+      targetEnergy = Math.min(1, avgFreqRange(0, Math.min(4, n)) * state.sensitivity);
+      // bin treble thường nhỏ biên độ hơn bass → nhân 1.4 để nhịp vẫn thấy rõ
+      targetTreble = Math.min(1, avgFreqRange(Math.min(24, n), Math.min(64, n)) * 1.4);
     }
     const smoothing = state.smoothness;
     // time-based smoothing so convergence speed doesn't depend on frame rate
     const smoothFactor = Math.pow(smoothing, dt);
     smoothedEnergy += (targetEnergy - smoothedEnergy) * (1 - smoothFactor);
+    // #bands: treble dùng attack/decay nhanh hơn (0.72/frame @60fps) để hạt
+    // "phập" theo từng nhịp hi-hat thay vì trôi mượt như zoom
+    const trebleFactor = Math.pow(0.72, dt);
+    smoothedTreble += (targetTreble - smoothedTreble) * (1 - trebleFactor);
     const scale = state.zoomMin + (state.zoomMax - state.zoomMin) * smoothedEnergy;
 
     if(state.img){
@@ -1334,7 +1360,7 @@
     }
 
     drawWave(dt);
-    drawParticles(dt);
+    drawParticles(dt, smoothedTreble); // #bands: hạt nhịp theo dải treble
     drawLyrics();
 
     glowRing.style.setProperty('--pulse', (0.10 + smoothedEnergy*0.55).toFixed(3));

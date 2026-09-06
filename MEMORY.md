@@ -442,6 +442,26 @@ File này ghi **trạng thái dài hạn và lịch sử quyết định**. AGEN
   Kiểm định: extract `<script>` → `node --check` PASS (58.762 bytes); mô phỏng
   toán raster 4 case ALL-PASS; `npm run check` PASS (syntax 333, IPC 144/20,
   parity 0, shared 26/16). `tmp-imzic-check.js` đã xoá sau dùng.
+
+- [2026-09-06] I-MZic — **tách 3 dải tần số từ FFT có sẵn** (theo yêu cầu user:
+  zoom theo bass, particle nhịp theo treble, sóng giữ nguyên; renderer-only,
+  `nova/web/img-to-vid.html`):
+  1. Cùng MỘT lần `getByteFrequencyData` mỗi frame, chia phổ (fftSize 256 → 128
+     bin × ~172 Hz/bin @44.1 kHz): bass = bin 0-3 (0-~690 Hz), treble = bin 24-63
+     (~4.1-11 kHz, nhân 1.4 vì biên độ bin treble vốn nhỏ). Helper `avgFreqRange`
+     chuẩn hoá 0..1; guard khi `freqData` null.
+  2. **Zoom ảnh nền giờ ăn đúng dải trầm** (trước đây trộn ~15 bin đầu gồm cả
+     giọng hát) → nhịp phóng "đấm" theo kick rõ hơn; vẫn qua `state.sensitivity`
+     + smoothing theo `state.smoothness` như cũ.
+  3. **Particle (tuyết/hoa/stars/mưa) pulse theo treble**: `smoothedTreble`
+     attack/decay nhanh (pow(0.72, dt)) để "phập" theo hi-hat; `drawParticles`
+     nhận `treblePulse` → hạt nở tối đa +30% cỡ (`grow`) và sáng +25% (`boost`,
+     alpha clamp 1). **treble=0 → grow=boost=1 → hình ảnh giống hệt hệ cũ** (nhạc
+     trầm/im lặng không đổi) — đây là bảo đảm "không hỏng baseline".
+  4. Sóng nhạc: KHÔNG đụng — `waveEnergyAt` vẫn ánh xạ toàn bộ 128 bin như trước.
+  Không thêm dependency, không đổi IPC/state key. Kiểm định: extract `<script>`
+  → `node --check` PASS (60.454 bytes); `npm run check` PASS (syntax 337,
+  IPC 144/20, parity 0, shared 26/16). `tmp-imzic-check.js` đã xoá sau dùng.
 - [2026-09-06] Handdraw Studio — **tiến trình thật + ETA + phát hiện kẹt trong
   export MP4** (tiếp nối hdlasso7; user feedback: "thanh tiến trình chưa đúng,
   dự tính thời gian chưa chính xác, không biết đang làm gì hay bị kẹt"):
