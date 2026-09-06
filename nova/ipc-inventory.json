@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-05T16:23:55.757Z",
+  "generatedAt": "2026-09-06T03:09:44.246Z",
   "sourceFiles": [
     "chrome-extension/app.js",
     "chrome-extension/background.js",
@@ -157,6 +157,7 @@
     "main/identity.js",
     "main/ipc/files.js",
     "main/ipc/flow.js",
+    "main/ipc/imzic.js",
     "main/ipc/index.js",
     "main/ipc/llm.js",
     "main/ipc/native-tools.js",
@@ -2312,6 +2313,7 @@
     "flowBridgeStatus",
     "flowChrome",
     "flowExt",
+    "imzic-mux",
     "llm-fetch",
     "login-window",
     "nova-log",

@@ -198,6 +198,20 @@
   }
   .status.active{color:var(--accent-2);}
 
+  .prog{
+    width:min(92%,620px); display:flex; align-items:center; gap:10px;
+    font-size:11.5px; color:var(--muted);
+  }
+  .prog-track{
+    flex:1; height:8px; background:var(--panel); border:1px solid var(--border);
+    border-radius:99px; overflow:hidden;
+  }
+  .prog-bar{
+    height:100%; width:0%;
+    background:linear-gradient(90deg, var(--accent), var(--accent-2));
+    transition:width .3s ease;
+  }
+
   .export-note{
     width:min(92%,620px); background:var(--panel); border:1px solid var(--border);
     border-radius:12px; padding:14px 16px; font-size:12px; color:var(--muted); line-height:1.6;
@@ -272,7 +286,6 @@
           <div class="chip" data-v="snow">❄ Tuyết bay</div>
           <div class="chip" data-v="leaves">🍂 Lá rơi</div>
           <div class="chip" data-v="stars">✦ Sao bay</div>
-          <div class="chip" data-v="rain">🌧 Mưa bay</div>
           <div class="chip" data-v="rain">🌧 Mưa bay</div>
         </div>
       </div>
@@ -509,16 +522,24 @@
       <button class="btn" id="restartBtn" disabled>⟲ Từ đầu</button>
       <button class="btn gold" id="exportAudioBtn" disabled>⬇ Xuất video (kèm nhạc)</button>
       <button class="btn" id="exportSilentBtn" disabled>⬇ Xuất video hình (giữ nhạc gốc riêng)</button>
+      <button class="btn" id="cancelExportBtn" style="display:none;">✕ Huỷ ghi</button>
+      <button class="btn gold" id="muxBtn" style="display:none;">⚡ Ghép nhạc tự động (.mkv)</button>
     </div>
 
     <div class="status" id="statusLine"></div>
+    <div class="prog" id="progWrap" style="display:none;">
+      <div class="prog-track"><div class="prog-bar" id="progBar"></div></div>
+      <span id="progText">0:00 / 0:00 · 0%</span>
+    </div>
 
     <div class="export-note">
       <b>Lưu ý quan trọng khi xuất video:</b> giữ tab này <b>đang mở và hiển thị trên màn hình</b> suốt quá trình ghi (không chuyển tab, không thu nhỏ cửa sổ). Trình duyệt tự làm chậm canvas khi tab bị ẩn, đó là nguyên nhân hiệu ứng có thể "biến mất" hoặc đứng khung ở một đoạn giữa video.
       <br><br>
+      <b>Về độ nét:</b> file xuất được render ở độ phân giải gấp ~1.5 lần khung xem trước (khổ dọc 720 → 1080×1920), nên file luôn nét hơn phần đang xem trên màn hình.
+      <br><br>
       <b>Về chất lượng nhạc:</b> khi xem trước, nhạc phát trực tiếp từ file gốc — không đổi gì cả.
       Nút <b>"kèm nhạc"</b> ghép nhanh 1 file, nhưng trình duyệt sẽ mã hoá lại âm thanh (chất lượng cao, nhưng không phải bản sao tuyệt đối).
-      Nút <b>"giữ nhạc gốc riêng"</b> xuất video câm + để bạn tải file nhạc gốc y nguyên, ghép lại bằng lệnh ffmpeg bên dưới (không mất chất lượng, vì chỉ copy luồng âm thanh):
+      Nút <b>"giữ nhạc gốc riêng"</b> xuất video câm + để bạn tải file nhạc gốc y nguyên. Trong app Nova, chỉ cần bấm tiếp <b>"⚡ Ghép nhạc tự động"</b> — app sẽ ghép hộ bằng FFmpeg có sẵn (copy stream, không mất chất lượng). Mở bằng trình duyệt thường thì dùng lệnh ffmpeg bên dưới (cũng chỉ copy luồng âm thanh):
       <br><code id="ffmpegCmd">ffmpeg -i video_hinh.webm -i nhac_goc.mp3 -c:v copy -c:a copy -shortest ket_qua.mkv</code>
     </div>
   </div>
@@ -550,6 +571,13 @@
 
   // ---- canvas ----
   const canvas = $('stage');
+  // Hệ toạ độ vẽ LOGIC: mọi phép vẽ dùng khung logic này. Canvas VẬT LÝ to hơn
+  // khi đang ghi file xuất (#9) — khi đó render phóng bằng ctx.setTransform,
+  // còn toàn bộ logic (particles, sóng, lyric, zoom) giữ nguyên hệ toạ độ.
+  let logicW = 720, logicH = 1280;
+  // #9: file xuất render 1.5× khung xem trước (khổ dọc 720 → 1080) cho file nét hơn.
+  const EXPORT_UPSCALE = 1.5;
+  const MAX_EXPORT_DIM = 4096; // giới hạn an toàn của encoder VP8/VP9
   const ctx = canvas.getContext('2d');
   const glowRing = $('glowRing');
   const emptyState = $('emptyState');
@@ -627,7 +655,7 @@
   }
 
   function rebuildParticles(){
-    const w = canvas.width, h = canvas.height;
+    const w = logicW, h = logicH;
     const n = state.effect === 'none' ? 0 : Math.round(state.density);
     particles = [];
     for(let i=0;i<n;i++) particles.push(spawnParticle(w,h,true));
@@ -1088,7 +1116,7 @@
     if(outT < fadeDur) alpha = Math.min(alpha, Math.max(0, outT/fadeDur));
     if(alpha <= 0.01) return;
 
-    const w = canvas.width, h = canvas.height;
+    const w = logicW, h = logicH;
     const size = state.lyricSize;
     ctx.save();
     ctx.font = `700 ${size}px ${state.lyricFont}`;
@@ -1119,7 +1147,7 @@
     if(!state.waveOn) return;
     waveTime += dt * 0.045;
     const bins = freqData || new Uint8Array(64);
-    const w = canvas.width, h = canvas.height;
+    const w = logicW, h = logicH;
     const baseY = h * (state.wavePos/100);
     const widthPx = w * (state.waveWidth/100);
     const startX = (w - widthPx)/2;
@@ -1173,7 +1201,7 @@
     ctx.fillStyle = color;
     ctx.strokeStyle = color;
     for(const p of particles){
-      updateParticle(p, canvas.width, canvas.height, dt);
+      updateParticle(p, logicW, logicH, dt);
       const sz = p.mode==='center' ? p.curSize : p.size;
       // fade in near the very center so particles don't "pop" at full alpha
       const fadeIn = p.mode==='center' ? Math.min(1, p.radius / (p.maxR*0.08)) : 1;
@@ -1209,7 +1237,9 @@
     dtMs = Math.min(dtMs, 250);
     const dt = dtMs / 16.67; // 1.0 == normal 60fps frame
 
-    const w = canvas.width, h = canvas.height;
+    const w = logicW, h = logicH;
+    // canvas vật lý to hơn khi đang ghi xuất (#9) — phóng hệ toạ độ logic bằng transform
+    ctx.setTransform(canvas.width/logicW, 0, 0, canvas.height/logicH, 0, 0);
     ctx.clearRect(0,0,w,h);
 
     // audio energy -> zoom
@@ -1245,6 +1275,14 @@
 
     glowRing.style.setProperty('--pulse', (0.10 + smoothedEnergy*0.55).toFixed(3));
 
+    // #2 — tiến trình ghi theo vị trí phát của nhạc (chỉ khi đang xuất)
+    if(isExporting && $('progWrap').style.display !== 'none'){
+      const d = audioEl.duration;
+      const p = (isFinite(d) && d > 0) ? Math.min(100, (audioEl.currentTime / d) * 100) : 0;
+      $('progBar').style.width = p.toFixed(1) + '%';
+      $('progText').textContent = fmtTime(audioEl.currentTime) + ' / ' + fmtTime(d) + '  ·  ' + Math.floor(p) + '%';
+    }
+
     rafId = requestAnimationFrame(render);
   }
   requestAnimationFrame(render);
@@ -1254,6 +1292,7 @@
   $('imgInput').addEventListener('change', e=>{
     const f = e.target.files[0];
     if(!f) return;
+    if(isExporting){ setStatus('Đang ghi video — không đổi ảnh giữa chừng (bản ghi sẽ hỏng). Chờ ghi xong rồi đổi nhé.', true); e.target.value = ''; return; }
     const looksImage = (f.type && f.type.startsWith('image')) || /\.(png|jpe?g|gif|webp|bmp|avif)$/i.test(f.name);
     if(!looksImage){
       setStatus('File này có vẻ không phải ảnh — chọn lại file png/jpg/webp nhé.', true);
@@ -1285,6 +1324,7 @@
   $('audInput').addEventListener('change', e=>{
     const f = e.target.files[0];
     if(!f) return;
+    if(isExporting){ setStatus('Đang ghi video — không đổi nhạc giữa chừng (bản ghi sẽ hỏng). Chờ ghi xong rồi đổi nhé.', true); e.target.value = ''; return; }
     const looksAudio = (f.type && f.type.startsWith('audio')) || /\.(mp3|wav|m4a|aac|ogg|flac|wma|opus|mp4|3gp)$/i.test(f.name);
     if(!looksAudio){
       setStatus('File này có vẻ không phải nhạc — chọn lại giúp mình file mp3/wav/m4a/aac nhé.', true);
@@ -1340,9 +1380,17 @@
   });
 
   let isSeeking = false;
-  $('seekBar').addEventListener('input', e=>{ isSeeking = true; $('tCur').textContent = fmtTime(+e.target.value); });
+  $('seekBar').addEventListener('input', e=>{
+    if(isExporting) return; // vẫn cho kéo nhưng không cập nhật trạng thái seek
+    isSeeking = true; $('tCur').textContent = fmtTime(+e.target.value);
+  });
   $('seekBar').addEventListener('change', e=>{
-    if(isExporting){ setStatus('Đang ghi video — không tua lúc này (sẽ làm lệch đồng bộ bản ghi).', true); return; }
+    if(isExporting){
+      // phải reset isSeeking, không thì timeupdate bị khoá vĩnh viễn sau khi ghi xong
+      isSeeking = false;
+      setStatus('Đang ghi video — không tua lúc này (sẽ làm lệch đồng bộ bản ghi).', true);
+      return;
+    }
     audioEl.currentTime = +e.target.value; isSeeking = false;
   });
 
@@ -1419,6 +1467,13 @@
 
   // ---- lead / early-sync ----
   $('leadMs').addEventListener('input', e=>{
+    if(isExporting){
+      // đổi delay giữa lúc ghi sẽ làm lệch nhịp audio của chính bản ghi — hoàn tác
+      e.target.value = state.leadMs;
+      $('v-lead').textContent = state.leadMs + ' ms';
+      setStatus('Đang ghi video — không đổi độ đồng bộ sớm giữa chừng (âm thanh bản ghi sẽ lệch nhịp).', true);
+      return;
+    }
     state.leadMs = +e.target.value;
     $('v-lead').textContent = e.target.value+' ms';
     if(delayNode) delayNode.delayTime.value = state.leadMs/1000;
@@ -1427,20 +1482,38 @@
   // ---- orientation (khổ dọc / khổ ngang, có tuỳ chỉnh kích thước cho khổ ngang) ----
   const stageWrap = $('stageWrap');
   state.orientation = 'portrait';
+  let appliedOrientation = 'portrait'; // khổ đã THỰC SỰ áp lên canvas — dùng hoàn tác khi đang ghi
   function applyLandscapeCustomSize(){
+    if(isExporting){
+      // đổi kích thước canvas giữa lúc captureStream đang ghi sẽ làm hỏng track video
+      $('customW').value = canvas.width;
+      $('customH').value = canvas.height;
+      setStatus('Đang ghi video — không đổi kích thước khung hình giữa chừng (bản ghi sẽ hỏng).', true);
+      return;
+    }
     const w = Math.max(480, Math.min(3840, +$('customW').value || 1280));
     const h = Math.max(270, Math.min(2160, +$('customH').value || 720));
     canvas.width = w; canvas.height = h;
+    logicW = w; logicH = h;
     stageWrap.style.aspectRatio = w+'/'+h;
     rebuildParticles();
   }
   function setOrientation(o){
+    if(isExporting){
+      // chip click đã ghi state.orientation = o — hoàn tác về khổ đang áp dụng
+      state.orientation = appliedOrientation;
+      setChipValue('ratioChips','orientation', appliedOrientation);
+      setStatus('Đang ghi video — không đổi khổ dọc/ngang giữa chừng (bản ghi sẽ hỏng).', true);
+      return;
+    }
+    appliedOrientation = o;
     if(o === 'landscape'){
       $('customSizeField').style.display = '';
       applyLandscapeCustomSize();
     } else {
       $('customSizeField').style.display = 'none';
       canvas.width = 720; canvas.height = 1280;
+      logicW = 720; logicH = 1280;
       stageWrap.style.aspectRatio = '9/16';
       rebuildParticles();
     }
@@ -1453,10 +1526,18 @@
   $('srtInput').addEventListener('change', async e=>{
     const f = e.target.files[0];
     if(!f) return;
-    const text = await f.text();
+    if(isExporting){ setStatus('Đang ghi video — không đổi lời giữa chừng (lời sẽ lệch bản ghi). Chờ ghi xong rồi đổi nhé.', true); e.target.value = ''; return; }
+    let text;
+    try { text = await f.text(); }
+    catch(err){
+      setStatus('Không đọc được file SRT này: ' + (err && err.message ? err.message : String(err)), true);
+      e.target.value = '';
+      return;
+    }
     loadLyricsFromText(text, f.name);
   });
   $('loadSrtPasteBtn').addEventListener('click', ()=>{
+    if(isExporting){ setStatus('Đang ghi video — không đổi lời giữa chừng (lời sẽ lệch bản ghi). Chờ ghi xong rồi đổi nhé.', true); return; }
     const text = $('srtPaste').value;
     if(!text.trim()){ setStatus('Dán nội dung SRT vào ô trước đã nhé.', true); return; }
     loadLyricsFromText(text, 'Đã dán');
@@ -1469,6 +1550,82 @@
   $('lyricPosY').addEventListener('input', e=>{ state.lyricPosY = +e.target.value; $('v-lposy').textContent = e.target.value+'%'; });
 
   rebuildParticles();
+
+  // ---- #4: nhớ cài đặt giữa các lần mở tool (localStorage, best-effort) ----
+  // Khôi phục bằng cách set giá trị rồi dispatch lại event — listener sẵn có
+  // sẽ tự cập nhật state + nhãn + rebuild, nên không phải nhân bản logic.
+  const SETTINGS_KEY = 'imzic:settings:v1';
+  const SETTINGS_RANGE_IDS = ['zoomMin','zoomMax','sensitivity','smoothness','density','pspeed','sizeMin','sizeMax','alpha','wavePos','waveSize','waveHeight','waveWidth','leadMs','lyricSize','lyricPosX','lyricPosY'];
+  const SETTINGS_COLOR_IDS = ['pcolor','waveColor','lyricColor'];
+  const SETTINGS_SELECT_IDS = ['lyricFont'];
+  const SETTINGS_NUMBER_IDS = ['customW','customH'];
+  const SETTINGS_CHIP_GROUPS = ['ratioChips','effectChips','dirChips','waveChips','waveStyleChips','lyricShadowChips'];
+
+  function saveSettings(){
+    try{
+      const inputs = {};
+      SETTINGS_RANGE_IDS.concat(SETTINGS_COLOR_IDS, SETTINGS_SELECT_IDS, SETTINGS_NUMBER_IDS).forEach(id=>{
+        const el = $(id); if(el) inputs[id] = el.value;
+      });
+      const srtBox = $('srtPaste'); if(srtBox) inputs.srtPaste = srtBox.value.slice(0, 20000);
+      const chips = {};
+      SETTINGS_CHIP_GROUPS.forEach(gid=>{
+        const act = document.querySelector('#'+gid+' .chip.active');
+        if(act) chips[gid] = act.dataset.v;
+      });
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify({v:1, inputs, chips}));
+    }catch(e){
+      // tiện ích best-effort: localStorage có thể bị khoá theo origin — không để chết tool
+      console.warn('[I-MZic] Không lưu được cài đặt:', e && e.message);
+    }
+  }
+  let saveSettingsTimer = null;
+  function saveSettingsSoon(){
+    if(saveSettingsTimer) clearTimeout(saveSettingsTimer);
+    saveSettingsTimer = setTimeout(saveSettings, 400);
+  }
+  function loadSettings(){
+    let data = null;
+    try{ data = JSON.parse(localStorage.getItem(SETTINGS_KEY) || 'null'); }catch(e){ return; }
+    if(!data || data.v !== 1 || !data.inputs) return;
+    try{
+      const inp = data.inputs;
+      // 1) giá trị số phải vào TRƯỚC — chip khổ ngang được click sẽ đọc customW/H ngay
+      SETTINGS_NUMBER_IDS.forEach(id=>{ if(inp[id] !== undefined && $(id)) $(id).value = inp[id]; });
+      // 2) chips — click() chạy đúng callback (đổi khổ, đặt màu mặc định hiệu ứng…)
+      SETTINGS_CHIP_GROUPS.forEach(gid=>{
+        const v = data.chips && data.chips[gid];
+        if(!v) return;
+        const chip = document.querySelector('#'+gid+' .chip[data-v="'+v+'"]');
+        if(chip && !chip.classList.contains('active')) chip.click();
+      });
+      // 3) khổ ngang: áp kích thước tuỳ chỉnh đã lưu
+      if(state.orientation === 'landscape'){
+        ['customW','customH'].forEach(id=>{ if(inp[id] !== undefined && $(id)) $(id).dispatchEvent(new Event('change')); });
+      }
+      // 4) range + màu + select — dispatch để listener cũ tự cập nhật state/nhãn
+      SETTINGS_RANGE_IDS.forEach(id=>{ if(inp[id] !== undefined && $(id)){ $(id).value = inp[id]; $(id).dispatchEvent(new Event('input')); } });
+      SETTINGS_COLOR_IDS.forEach(id=>{ if(inp[id] !== undefined && $(id)){ $(id).value = inp[id]; $(id).dispatchEvent(new Event('input')); } });
+      SETTINGS_SELECT_IDS.forEach(id=>{ if(inp[id] !== undefined && $(id)){ $(id).value = inp[id]; $(id).dispatchEvent(new Event('change')); } });
+      // 5) ô dán SRT: chỉ điền lại nội dung — không tự nạp lời
+      if(inp.srtPaste && $('srtPaste')) $('srtPaste').value = inp.srtPaste;
+    }catch(e){
+      console.warn('[I-MZic] Cài đặt đã lưu bị hỏng, bỏ qua:', e && e.message);
+    }
+  }
+  // mọi thay đổi của người dùng → lưu lại (debounce 400ms)
+  SETTINGS_RANGE_IDS.concat(SETTINGS_COLOR_IDS).forEach(id=>{
+    const el = $(id); if(el) el.addEventListener('input', saveSettingsSoon);
+  });
+  SETTINGS_SELECT_IDS.concat(SETTINGS_NUMBER_IDS).forEach(id=>{
+    const el = $(id); if(el) el.addEventListener('change', saveSettingsSoon);
+  });
+  SETTINGS_CHIP_GROUPS.forEach(gid=>{
+    const g = $(gid); if(g) g.addEventListener('click', saveSettingsSoon);
+  });
+  const srtBox = $('srtPaste'); if(srtBox) srtBox.addEventListener('input', saveSettingsSoon);
+  // loadSettings() được gọi SAU khi `let isExporting` được khai báo (bên dưới):
+  // các listener nó kích hoạt (leadMs, setOrientation…) đều đọc isExporting.
 
   // ---- status helper ----
   function setStatus(msg, active){
@@ -1489,16 +1646,75 @@
   // Cờ cho trang cha (index.html) đọc same-origin: đang ghi thì chặn chuyển tool,
   // vì Chromium throttle canvas trong iframe ẩn → video xuất ra bị đứng hình.
   Object.defineProperty(window, '__imzicExporting', { get(){ return isExporting === true; } });
+  let activeExportCancel = null; // hàm huỷ bản ghi đang chạy — gọi từ nút "✕ Huỷ ghi"
+  let lastSilentBlob = null;     // blob video câm vừa xuất — cho nút "⚡ Ghép nhạc tự động"
+  function finishExportUI(){
+    isExporting = false;
+    activeExportCancel = null;
+    $('cancelExportBtn').style.display = 'none';
+    $('progWrap').style.display = 'none';
+  }
+  // giờ mới an toàn để khôi phục cài đặt: mọi listener đã đăng ký + isExporting đã khởi tạo
+  loadSettings();
+
+  // ---- #3: nút huỷ ghi giữa chừng ----
+  $('cancelExportBtn').addEventListener('click', ()=>{
+    if(typeof activeExportCancel === 'function') activeExportCancel();
+  });
+
+  // ---- #12: ghép video câm + nhạc gốc bằng FFmpeg trong app (IPC imzic-mux) ----
+  $('muxBtn').addEventListener('click', async ()=>{
+    // tool chạy trong iframe cùng origin → mượn bridge native của trang cha
+    const nat = (typeof window.native === 'object' && window.native) ||
+                (window.parent && window.parent.native);
+    if(!nat || typeof nat.imzicMux !== 'function'){
+      setStatus('Ghép tự động chỉ chạy trong app Nova — nếu mở bằng trình duyệt thường, dùng lệnh ffmpeg bên dưới nhé.', true);
+      return;
+    }
+    if(isExporting){ setStatus('Đang ghi video — chờ ghi xong rồi bấm ghép nhé.', true); return; }
+    if(!lastSilentBlob || !state.audioFile){
+      setStatus('Chưa có video câm + nhạc gốc để ghép — bấm "Xuất video hình" trước đã.', true);
+      return;
+    }
+    $('muxBtn').disabled = true;
+    setStatus('Đang ghép video + nhạc bằng FFmpeg (copy stream — không mã hoá lại)…', true);
+    try{
+      const video = new Uint8Array(await lastSilentBlob.arrayBuffer());
+      const audio = new Uint8Array(await state.audioFile.arrayBuffer());
+      const res = await nat.imzicMux({ video, audio, videoName: 'video_hinh.webm', audioName: state.audioFile.name });
+      if(res && res.canceled){
+        setStatus('Đã bỏ chọn chỗ lưu — chưa ghép file nào.', false);
+      } else if(res && res.ok){
+        setStatus('Ghép xong! File: ' + res.path, false);
+      } else {
+        setStatus('Ghép thất bại' + (res && res.code ? ' (' + res.code + ')' : '') + ': ' + ((res && res.message) || 'không rõ lỗi'), true);
+      }
+    }catch(err){
+      setStatus('Ghép thất bại: ' + (err && err.message ? err.message : String(err)), true);
+    }finally{
+      $('muxBtn').disabled = false;
+    }
+  });
 
   async function recordAndExport(withAudio){
-    if(isExporting) return;
-    if(!state.img || !state.audioFile) return;
+    if(isExporting){ setStatus('Đang ghi video rồi — chờ bản ghi hiện tại xong rồi hãy bấm xuất tiếp nhé.', true); return; }
+    if(!state.img || !state.audioFile){ setStatus('Chưa có ảnh hoặc nhạc — chọn đủ 2 file ở panel bên trái trước đã.', true); return; }
     if(!state.audioReady){ setStatus('Nhạc chưa nạp xong metadata — chờ một nhịp rồi bấm xuất lại.', true); return; }
     isExporting = true;
+    $('muxBtn').style.display = 'none'; // bản ghi mới vô hiệu hoá blob cũ — ghép lại sau khi xong
     ensureAudioGraph();
     if(audioCtx.state === 'suspended') await audioCtx.resume();
 
     const fps = 30;
+    // #9 — file xuất render ở độ phân giải CAO hơn khung xem trước: phóng canvas
+    // vật lý lên (mọi phép vẽ vẫn chạy trong hệ toạ độ logic rồi transform phóng),
+    // nên preview nhẹ máy còn file xuất nét gấp ~1.5×. Canvas trả về đúng khổ ở cleanup().
+    const baseW = canvas.width, baseH = canvas.height;
+    const up = Math.max(1, Math.min(EXPORT_UPSCALE, MAX_EXPORT_DIM/baseW, MAX_EXPORT_DIM/baseH));
+    if(up > 1.001){
+      canvas.width  = Math.round(baseW * up);
+      canvas.height = Math.round(baseH * up);
+    }
     const canvasStream = canvas.captureStream(fps);
     let tracks = [...canvasStream.getVideoTracks()];
     if(withAudio){
@@ -1510,15 +1726,21 @@
     if(!MediaRecorder.isTypeSupported(mime)) mime = 'video/webm;codecs=vp8,opus';
     if(!MediaRecorder.isTypeSupported(mime)) mime = 'video/webm';
 
-    const recorder = new MediaRecorder(mixedStream, { mimeType: mime, videoBitsPerSecond: 8_000_000 });
+    const recorder = new MediaRecorder(mixedStream, { mimeType: mime, videoBitsPerSecond: (up > 1.001 ? 14_000_000 : 8_000_000) });
     const chunks = [];
-    let aborted = false;   // huỷ chủ động vì không phát được nhạc
+    let aborted = false;   // huỷ chủ động: không phát được nhạc HOẶC người dùng bấm "✕ Huỷ ghi"
+    let abortMsg = null;   // thông điệp hiển thị khi onstop thấy aborted (phân biệt 2 nguyên nhân)
     let failed = false;    // recorder lỗi giữa chừng
     let watchdog = null;
     const cleanup = ()=>{
       if(watchdog){ clearTimeout(watchdog); watchdog = null; }
       // chỉ dừng track của canvas — audio track dùng chung qua streamDest phải giữ nguyên cho lần ghi sau
       try { canvasStream.getTracks().forEach(t=>t.stop()); } catch(e){}
+      // #9 — trả canvas về đúng khung xem trước sau khi đã phóng để ghi
+      if(canvas.width !== baseW || canvas.height !== baseH){
+        canvas.width = baseW; canvas.height = baseH;
+        rebuildParticles();
+      }
     };
     recorder.ondataavailable = e=>{ if(e.data.size>0) chunks.push(e.data); };
 
@@ -1528,7 +1750,7 @@
       failed = true;
       const name = (ev && ev.error && ev.error.name) ? ev.error.name : 'UnknownError';
       try { recorder.stop(); } catch(e){}
-      isExporting = false;
+      finishExportUI();
       setStatus('Trình ghi video gặp lỗi giữa chừng (' + name + ') — bản ghi đã bị huỷ, hãy bấm xuất lại. Nếu lặp lại, thử khổ hình nhỏ hơn.', true);
     };
 
@@ -1536,13 +1758,13 @@
       cleanup();
       const blob = new Blob(chunks, {type:'video/webm'});
       if(aborted){
-        setStatus('Đã huỷ ghi: không phát được file nhạc (file hỏng hoặc codec không hỗ trợ) — không tạo file nửa vời, hãy thử file nhạc khác.', true);
-        isExporting = false;
+        setStatus(abortMsg || 'Đã huỷ ghi — không tạo file nửa vời, bấm xuất lại khi sẵn sàng.', true);
+        finishExportUI();
         return;
       }
       if(failed){
         setStatus('Bản ghi không đầy đủ vì lỗi giữa chừng — không tải file nửa vời, hãy bấm xuất lại.', true);
-        isExporting = false;
+        finishExportUI();
         return;
       }
       const url = URL.createObjectURL(blob);
@@ -1560,9 +1782,12 @@
         a2.download = 'nhac_goc' + (state.audioFile.name.match(/\.[a-zA-Z0-9]+$/)||['.mp3'])[0];
         setTimeout(()=>a2.click(), 400);
         $('ffmpegCmd').textContent = 'ffmpeg -i video_hinh.webm -i "' + state.audioFile.name + '" -c:v copy -c:a copy -shortest ket_qua.mkv';
+        // #12 — giữ lại blob video câm để nút "⚡ Ghép nhạc tự động" ghép bằng FFmpeg
+        lastSilentBlob = blob;
+        $('muxBtn').style.display = '';
       }
       setStatus('Xuất xong! File đã tải xuống.', false);
-      isExporting = false;
+      finishExportUI();
       // thu hồi blob URL sau khi save dialog / download đã kịp xử lý xong
       setTimeout(()=>{ URL.revokeObjectURL(url); if(aurl) URL.revokeObjectURL(aurl); }, 60000);
     };
@@ -1575,10 +1800,26 @@
       recorder.start();
     } catch(err){
       cleanup();
-      isExporting = false;
+      finishExportUI();
       setStatus('Không khởi động được trình ghi video: ' + (err && err.message ? err.message : String(err)), true);
       return;
     }
+    // #2 + #3 — từ đây bản ghi đang chạy thật: hiện tiến trình + nút huỷ
+    $('progWrap').style.display = 'flex';
+    $('cancelExportBtn').style.display = '';
+    // huỷ theo yêu cầu: dừng nhạc + chốt recorder; onstop thấy aborted nên
+    // KHÔNG tải file nửa vời (cùng cơ chế với nhánh "không phát được nhạc")
+    activeExportCancel = ()=>{
+      if(!isExporting) return;
+      aborted = true;
+      abortMsg = 'Đã huỷ ghi theo yêu cầu — không tạo file nửa vời, bấm xuất lại khi sẵn sàng.';
+      state.playing = false;
+      $('playBtn').textContent = '▶ Phát thử';
+      audioEl.onended = null;
+      try { audioEl.pause(); } catch(e){}
+      if(watchdog){ clearTimeout(watchdog); watchdog = null; }
+      try { recorder.stop(); } catch(e){}
+    };
     // watchdog: nếu sự kiện 'ended' không bao giờ đến (metadata webm lỗi…),
     // vẫn chốt recorder để isExporting không kẹt vĩnh viễn
     const capMs = isFinite(audioEl.duration) ? audioEl.duration*1000 + 15000 : 7200000;
@@ -1589,13 +1830,14 @@
     } catch(err){
       // Không nuốt lỗi (Luật 10): lộ rõ nguyên nhân, reset cờ để nút export không kẹt.
       aborted = true;
+      abortMsg = 'Không phát được file nhạc để ghi: ' + (err && err.message ? err.message : String(err)) + ' — không tạo file nửa vời, hãy thử file nhạc khác.';
       state.playing = false;
       $('playBtn').textContent = '▶ Phát thử';
       audioEl.onended = null;
       if(watchdog){ clearTimeout(watchdog); watchdog = null; }
       try { recorder.stop(); } catch(e){}
-      setStatus('Không phát được file nhạc để ghi: ' + (err && err.message ? err.message : String(err)), true);
-      isExporting = false;
+      finishExportUI();
+      setStatus(abortMsg, true);
       return;
     }
     state.playing = true; $('playBtn').textContent='⏸ Tạm dừng';

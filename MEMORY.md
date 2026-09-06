@@ -358,3 +358,58 @@ File này ghi **trạng thái dài hạn và lịch sử quyết định**. AGEN
   Renderer-only, không đụng IPC/contract/env. Kiểm định: extract `<script>`
   → `node --check` PASS (43.294 bytes); cả 4 script check PASS riêng lẻ
   (syntax 331 file, IPC 143 kênh/20 events, parity 0, shared 25 file/16 key).
+
+- [2026-09-06] I-MZic — harden vòng 2 (các thao tác phá bản ghi giữa lúc ghi,
+  `nova/web/img-to-vid.html`):
+  1. **Đổi ảnh/nhạc/SRT giữa lúc ghi**: guard ở `imgInput`/`audInput`/`srtInput`/
+  `loadSrtPasteBtn` — chặn + xoá selection + status giải thích (đổi file giữa
+  lúc MediaRecorder chạy sẽ phá track hình/âm của bản ghi).
+  2. **Đổi khổ hình giữa lúc ghi**: guard `applyLandscapeCustomSize` (hoàn tác
+  ô customW/customH về đúng canvas hiện tại) + `setOrientation` (biến
+  `appliedOrientation` hoàn tác `state.orientation` & chip vì chip click đã
+  mutate state trước khi guard chạy). Đổi `canvas.width/height` giữa lúc
+  `captureStream` đang ghi làm hỏng track video.
+  3. **Đổi leadMs giữa lúc ghi**: guard + hoàn tác slider về `state.leadMs` —
+  đổi `delayNode.delayTime` giữa lúc ghi làm lệch nhịp audio của chính bản ghi.
+  4. **Bug `isSeeking` kẹt vĩnh viễn**: nhánh chặn seek khi đang ghi trả về
+  mà không reset `isSeeking` → `timeupdate` bị khoá vĩnh viễn sau khi ghi xong
+  (seekBar đứng im). Fix: reset `isSeeking=false` trước khi return.
+  5. **`f.text()` không catch** (srtInput): unhandled rejection nếu file SRT
+  không đọc được → try/catch + status lỗi (Luật 10).
+  6. **`recordAndExport` early-return im lặng**: bấm export khi đang ghi /
+  thiếu file trước đây không báo gì → giờ có status message rõ.
+  Renderer-only. Kiểm định: extract `<script>` → `node --check` exit 0;
+  `npm run check` PASS (CHECK_EXIT:0 — syntax 331, IPC 143, parity 0,
+  shared 25 file/16 key). Đã xác minh `novaToast` (index.html dòng 6161)
+  tồn tại → guard chặn chuyển tool ở `switchTool` hiển thị thông báo đúng.
+
+- [2026-09-06] I-MZic — **gói 4 cải tiến** (#1–#4 + #9 + #12, theo lựa chọn của user):
+  1. **#1 Bug UI**: chip "🌧 Mưa bay" bị lặp 2 lần trong `effectChips` → xoá 1 dòng.
+  2. **#2 Tiến trình ghi**: thanh progress (`progWrap/progBar/progText`) cập nhật
+     trong render loop theo `audioEl.currentTime/duration` khi `isExporting`.
+  3. **#3 Huỷ ghi**: nút "✕ Huỷ ghi" — `activeExportCancel` (closure trong
+     `recordAndExport`) dừng nhạc + chốt recorder; `onstop` thấy `aborted` (tái dùng
+     cơ chế cũ) + `abortMsg` phân biệt "user huỷ" vs "không phát được nhạc" →
+     KHÔNG tải file nửa vời. Mọi điểm reset UI gom về `finishExportUI()` (điểm gán
+     `isExporting=false` duy nhất).
+  4. **#4 Nhớ cài đặt**: localStorage key `imzic:settings:v1` — lưu mọi range/
+     color/select/customW-H + 6 nhóm chip + nội dung srtPaste (cap 20k chars).
+     Khôi phục bằng set value + dispatch event để listener sẵn có tự cập nhật
+     state/nhãn/rebuild (không nhân bản logic). `loadSettings()` phải gọi SAU
+     `let isExporting` (TDZ: listener leadMs/setOrientation đọc isExporting).
+  5. **#9 Xuất 1080p**: tách hệ toạ độ LOGIC (`logicW/logicH`, mặc định 720×1280)
+     khỏi canvas VẬT LÝ — khi ghi, canvas phóng `EXPORT_UPSCALE=1.5` (cap 4096px,
+     bitrate 8→14 Mbps khi phóng) rồi render() áp `ctx.setTransform(canvas/logic)`
+     nên mọi hiệu ứng giữ nguyên hệ toạ độ; `cleanup()` trả canvas về khổ preview.
+     Đã đổi `rebuildParticles/drawWave/drawLyrics/drawParticles/updateParticle/
+     applyLandscapeCustomSize/setOrientation` sang dùng logic dims.
+  6. **#12 Ghép nhạc tự động**: kênh IPC MỚI `imzic-mux` (main `nova/main/ipc/imzic.js`
+     — ffmpeg-static, `-c copy -shortest` ra .mkv, save dialog, dọn tmp, error code
+     `IMZIC_*` theo Luật 10), đăng ký trong `nova/main/ipc/index.js`, preload
+     `window.native.imzicMux`. Renderer: nút "⚡ Ghép nhạc tự động" hiện sau khi
+     xuất video câm (`lastSilentBlob`), mượn `window.parent.native` vì tool chạy
+     trong iframe cùng origin (bridge `native` chỉ expose ở main frame).
+  Kiểm định: extract `<script>` → `node --check` PASS (55.235 bytes);
+  `node --check` imzic.js/index.js/preload.js PASS; `npm run check` PASS
+  (syntax 333 file, IPC 144 kênh/20 events — +1 kênh `imzic-mux`, parity 0,
+  shared 26 file/16 key). Script tạm `tmp-imzic-check.js` đã xoá.

@@ -199,6 +199,8 @@ contextBridge.exposeInMainWorld('native', {
   pickFolder: () => ipcRenderer.invoke('pick-folder'),
   pickMediaFile: (kind) => ipcRenderer.invoke('pick-media-file', kind),   // chọn ảnh/video cho ô media của lớp
   saveFile: (payload) => ipcRenderer.invoke('save-file', payload),
+  // I-MZic (Ảnh & Nhạc): ghép video câm + nhạc gốc bằng FFmpeg (copy stream).
+  imzicMux: (payload) => ipcRenderer.invoke('imzic-mux', payload),
   exportDir: () => ipcRenderer.invoke('export-dir'),
   loginWindow: (isLogin) => ipcRenderer.invoke('login-window', isLogin),
   flowCftAdd: () => ipcRenderer.invoke('flow-cft-add'),
