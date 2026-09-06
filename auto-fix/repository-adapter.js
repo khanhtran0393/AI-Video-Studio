@@ -137,7 +137,14 @@ function inspectRepository(rootPath = process.cwd()) {
     result.path = existingPath(topLevel);
     result.isGitRepository = true;
     result.commitSha = runGit(result.path, ['rev-parse', 'HEAD']) || null;
-    result.branch = runGit(result.path, ['symbolic-ref', '--short', '-q', 'HEAD']) || 'DETACHED';
+    // Detached HEAD (vd CI checkout PR) là trạng thái hợp lệ: `symbolic-ref -q`
+    // exit 1 thay vì trả chuỗi rỗng, nên phải bắt lỗi riêng rồi map sang 'DETACHED'
+    // (không phải fallback ngầm — đây là contract đã được control-plane.test.js assert).
+    try {
+      result.branch = runGit(result.path, ['symbolic-ref', '--short', '-q', 'HEAD']) || 'DETACHED';
+    } catch (_) {
+      result.branch = 'DETACHED';
+    }
     result.dirty = runGit(result.path, ['status', '--porcelain=v1', '--untracked-files=normal']).length > 0;
   } catch (error) {
     result.errors.push(error.code === 'GIT_COMMAND_FAILED' ? error.message : 'git unavailable');
