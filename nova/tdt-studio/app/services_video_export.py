@@ -341,9 +341,9 @@ def _volume_root(path: Path) -> Path:
 
 def _free_bytes(path: Path) -> int | None:
     try:
-        pass
+        return shutil.disk_usage(os.fspath(path)).free
     except OSError:
-        pass
+        return None
 
 def _format_free_gb(path: Path) -> str:
     free = _free_bytes(path)
@@ -447,7 +447,7 @@ def _mp4_playable(path: Path) -> bool:
     if not text or text.upper() == 'N/A':
         return False
     try:
-        pass
+        return float(text) > 0
     except ValueError:
         return False
 

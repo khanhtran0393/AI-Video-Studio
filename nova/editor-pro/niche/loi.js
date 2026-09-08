@@ -65,7 +65,13 @@ async function _goiApiMot(sys, content, kho) {
   const goc = String(kho.api_base_url || '').trim();
   if (nc.kieu !== 'an' && !nc.url && !goc) return null;        // openai-compatible mà thiếu base URL
   // Ô key cho phép nhiều khoá (mỗi dòng một khoá) — chỉ lấy khoá dòng đầu, gửi nguyên xâu sẽ 401.
-  const key = String(kho[nc.khoa] || kho.api_key || '').split(/[\r\n]+/).map(s => s.trim()).filter(Boolean)[0] || '';
+  let key = '';
+  if (nc.khoa === 'api_key_gemini') {
+    const flowKeys = kho.api_key_flow || [];
+    key = (Array.isArray(flowKeys) ? flowKeys : [String(flowKeys)]).map(s => String(s).trim()).filter(Boolean)[0] || '';
+  } else {
+    key = String(kho[nc.khoa] || kho.api_key || '').split(/[\r\n]+/).map(s => s.trim()).filter(Boolean)[0] || '';
+  }
   if (!key) return null;
   const model = String(kho.api_model || '').trim() || nc.mac;
   if (!model) return null;
@@ -119,8 +125,15 @@ async function _goiApiMot(sys, content, kho) {
   } finally { clearTimeout(killer); }
 }
 // Claude/AI: 1) API đã cấu hình trong Cài đặt → gọi thẳng; 2) CLI bridge nội bộ làm chỗ lùi.
-async function claude(sys, content) {
-  const kho = _KHO();
+async function claude(sys, content, opts) {
+  const khoGoc = _KHO() || {};
+  const kho = Object.assign({}, khoGoc);
+  // Ghi đè provider/model/baseUrl khi caller cần (vd SRT translate buộc Gemini làm mặc định).
+  if (opts && typeof opts === 'object') {
+    if (typeof opts.provider === 'string' && opts.provider.trim()) kho.api_provider = opts.provider.trim();
+    if (typeof opts.model === 'string' && opts.model.trim()) kho.api_model = opts.model.trim();
+    if (opts.baseUrl != null) kho.api_base_url = opts.baseUrl;
+  }
   try {
     const r = await _goiApi(sys, content, kho);
     if (r != null && String(r).trim()) return r;
@@ -172,19 +185,47 @@ function daysSince(yyyymmdd) {
 }
 const kfmt = (n) => n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(1) + 'K' : String(n | 0);
 
-// ── CACHE (memory + đĩa), TTL 6h, key = mod:seed ──
+// ── POOL: chạy song song có giới hạn luồng ──
+// Quét nhiều góc/candidates yt-dlp là các tiến trình ĐỘC LẬP → concurrency 2 giảm
+// ~2x tổng thời gian mà không tạo burst request. Lỗi từng item để bên gọi tự gom
+// (Luật 10: không nuốt ngầm trong helper chung).
+async function pool(items, concurrency, fn) {
+  const out = new Array(items.length); let next = 0;
+  const n = Math.max(1, Math.min(concurrency, items.length || 1));
+  await Promise.all(Array.from({ length: n }, async () => {
+    for (;;) { const i = next++; if (i >= items.length) return; out[i] = await fn(items[i], i); }
+  }));
+  return out;
+}
+
+// ── CACHE (memory + đĩa), TTL 6h, key = mod:seed(:extra) ──
+// Sửa 3 điểm yếu cũ: (1) đĩa nạp 1 lần rồi giữ đồng bộ qua cacheSave, không đọc cả
+// file mỗi miss; (2) prune entry hết hạn + trần CACHE_MAX entry khi save — file
+// không phình vô hạn; (3) key nhận `extra` để kết quả khác tham số (vd count video
+// scorecard) không đè nhầm cache của nhau.
 const CACHE_TTL = 6 * 3600 * 1000;
+const CACHE_MAX = 200;
 const _mem = new Map();
+let _disk = null;                       // cache đĩa — nạp 1 lần, cacheSave giữ đồng bộ
 function cachePath() { const b = path.join(os.homedir(), '.nova'); try { fs.mkdirSync(b, { recursive: true }); } catch (_) {} return path.join(b, 'niche-cache.json'); }
-function cacheLoad() { try { return JSON.parse(fs.readFileSync(cachePath(), 'utf8')); } catch (_) { return {}; } }
-function cacheSave(obj) { try { fs.writeFileSync(cachePath(), JSON.stringify(obj)); } catch (_) {} }
+function cacheLoad() { if (_disk) return _disk; try { _disk = JSON.parse(fs.readFileSync(cachePath(), 'utf8')) || {}; } catch (_) { _disk = {}; } return _disk; }
+function cacheSave(obj) { _disk = obj; try { fs.writeFileSync(cachePath(), JSON.stringify(obj)); } catch (_) {} }
 function cacheGet(k) {
-  let e = _mem.get(k); if (!e) { const disk = cacheLoad(); e = disk[k]; }
+  let e = _mem.get(k); if (!e) e = cacheLoad()[k];
   if (e && (Date.now() - e.t) < CACHE_TTL) return e.v; return null;
 }
-function cachePut(k, v) { const e = { t: Date.now(), v }; _mem.set(k, e); const disk = cacheLoad(); disk[k] = e; cacheSave(disk); }
-async function cached(mod, seed, fresh, onProgress, producer) {
-  const k = mod + ':' + String(seed).toLowerCase().trim();
+function cachePut(k, v) {
+  const e = { t: Date.now(), v }; _mem.set(k, e);
+  const disk = cacheLoad();
+  const now = Date.now();
+  for (const key of Object.keys(disk)) if (!disk[key] || now - (disk[key].t || 0) >= CACHE_TTL) delete disk[key];
+  disk[k] = e;
+  const keys = Object.keys(disk);
+  if (keys.length > CACHE_MAX) keys.sort((a, b) => (disk[a].t || 0) - (disk[b].t || 0)).slice(0, keys.length - CACHE_MAX).forEach(x => delete disk[x]);
+  cacheSave(disk);
+}
+async function cached(mod, seed, fresh, onProgress, producer, extra) {
+  const k = mod + ':' + String(seed).toLowerCase().trim() + (extra != null ? ':' + String(extra) : '');
   if (!fresh) { const hit = cacheGet(k); if (hit) { onProgress(100, '(cache) Xong'); return { ...hit, fromCache: true }; } }
   const v = await producer();
   if (v && v.ok) cachePut(k, v);
@@ -192,12 +233,34 @@ async function cached(mod, seed, fresh, onProgress, producer) {
 }
 
 // Khám phá video theo từ khoá (yt-dlp FREE) → enrich (YT Data API nếu có key Nova).
-async function searchVideos(query, n = 20, onProgress = () => {}) {
-  onProgress(12, `Tìm "${query}" trên YouTube…`);
+// opts.sort === 'date' → sắp theo NGÀY ĐĂNG qua URL /results + sp=CAI%3D (yt-dlp đã
+// XOÁ prefix ytsearchdate từ 2024 — dùng filter sp của chính trang tìm kiếm YouTube);
+// mặc định giữ ytsearchN: (relevance) như cũ.
+async function searchVideos(query, n = 20, onProgress = () => {}, opts = {}) {
+  // nếu query rỗng → lấy trending thực sự từ YouTube
+  let target;
+  if (!query || !query.trim()) {
+    target = 'https://www.youtube.com/feed/trending';
+    // thêm tham số gl nếu có
+    if (opts.gl && typeof opts.gl === 'string' && opts.gl.trim()) {
+      target += (target.includes('?') ? '&' : '?') + 'gl=' + encodeURIComponent(opts.gl.trim());
+    }
+  } else {
+    target = opts.sort === 'date'
+      ? `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}&sp=CAI%3D`
+      : `ytsearch${n}:${query}`;
+    // thêm gl cho tìm kiếm nếu có
+    if (opts.gl && typeof opts.gl === 'string' && opts.gl.trim()) {
+      target += (target.includes('?') ? '&' : '?') + 'gl=' + encodeURIComponent(opts.gl.trim());
+    }
+  }
+  onProgress(12, `Tìm "${query || 'trending'}" trên YouTube…`);
   const ck = await cookies();
   // Lấy luôn channel_url + channel_follower_count: tên kênh có dấu cách KHÔNG ghép được thành @handle,
   // và có sub từ yt-dlp thì tính được VPS ngay cả khi máy chưa có key YouTube API.
-  const args = [`ytsearch${n}:${query}`, '--no-warnings', '--print', '%(view_count)s\t%(upload_date)s\t%(duration)s\t%(channel)s\t%(channel_url)s\t%(channel_follower_count)s\t%(id)s\t%(title)s'];
+  const args = opts.sort === 'date' && query && query.trim()
+    ? [target, '--playlist-end', String(n), '--no-warnings', '--print', '%(view_count)s\\t%(upload_date)s\\t%(duration)s\\t%(channel)s\\t%(channel_url)s\\t%(channel_follower_count)s\\t%(id)s\\t%(title)s']
+    : [target, '--no-warnings', '--print', '%(view_count)s\\t%(upload_date)s\\t%(duration)s\\t%(channel)s\\t%(channel_url)s\\t%(channel_follower_count)s\\t%(id)s\\t%(title)s'];
   if (ck) args.push('--cookies', ck);
   const out = await run(args);
   let vids = out.trim().split('\n').filter(Boolean).map(l => {
@@ -231,6 +294,7 @@ const median = (a) => { if (!a.length) return 0; const s = a.slice().sort((x, y)
 
 // Sinh 3 biến thể truy vấn quanh seed (Claude, 1 lần gọi rẻ). Hỏng thì dùng biến thể mặc định.
 async function sweepQueries(seed, onProgress = () => {}) {
+  if (!seed || !seed.trim()) return [''];
   onProgress(6, 'Nghĩ các góc quét…');
   try {
     const raw = await claude(
@@ -243,5 +307,5 @@ async function sweepQueries(seed, onProgress = () => {}) {
 }
 module.exports = {
   run, _KHO, _goiApi, claude, safeJson, cookies, daysSince, kfmt,
-  cached, searchVideos, median, sweepQueries,
+  cached, searchVideos, median, sweepQueries, pool,
 };

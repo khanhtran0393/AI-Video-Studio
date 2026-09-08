@@ -1,5 +1,7 @@
 'use strict';
 
+const { genVideoPool } = require('../../flow-native/gen');
+
 /**
  * §28 — IMAGE-TO-VIDEO. CHỈ dùng khi: cảnh quan trọng + motion thực sự cần +
  * static/parallax không đủ + user bật chế độ + có VideoProvider. Không mặc định
@@ -43,13 +45,22 @@ function createImageToVideoGate({ providers, costs, logger } = {}) {
         };
       });
     },
-    /** Thực thi qua provider; retry do job queue bên ngoài đảm nhiệm (§24). */
-    async generate(plan, { assetPath } = {}) {
+    /** Thực thi qua Flow-native; retry do job queue bên ngoài đảm nhiệm (§24). */
+    async generate(plan, { assetPath, refMediaId } = {}) {
       if (!plan || plan.status !== 'planned') throw new Error('imageToVideo plan must be planned');
       try {
-        const result = await providers.call('video', 'generate', { prompt: plan.prompt, duration: plan.duration, image: assetPath });
+        const result = await genVideoPool({
+          image: assetPath,
+          prompt: plan.prompt,
+          duration: plan.duration,
+          refMediaId: refMediaId || null,
+        });
         if (costs) costs.record('imageToVideoCalls');
-        return { status: 'complete', outputAsset: result && result.outputAsset || null, cost: result && result.cost || 0.3 };
+        return {
+          status: 'complete',
+          outputAsset: result && result.outputPath || null,
+          cost: result && result.cost || 0.3,
+        };
       } catch (error) {
         if (logger) logger(`image-to-video: generation failed (${error.message})`);
         return { status: 'failed', error: String(error && error.message || error) };

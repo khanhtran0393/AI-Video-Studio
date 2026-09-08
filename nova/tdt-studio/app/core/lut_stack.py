@@ -110,13 +110,13 @@ def lut3d_filter(path: Path) -> str:
 
 def _default_merged_lut_path(stack: Any) -> Path:
     import hashlib
-    key = hashlib.sha1(repr(lut_stack_fingerprint(stack)).encode('utf-8')).hexdigest()[:16]
+    key = hashlib.sha1(repr(lut_stack_fingerprint(stack, master=True)).encode('utf-8')).hexdigest()[:16]
     folder = PATHS.user_data / 'cache' / 'lut_merge'
     folder.mkdir(parents=True, exist_ok=True)
     return folder / f'{key}.cube'
 
 def write_merged_lut_cube(stack: Any, dest: Path) -> bool:
-    layers = active_lut_layers(stack)
+    layers = active_lut_layers(stack, master=True)
     if layers:
         root = lut_root()
         loaded = []
@@ -153,7 +153,7 @@ def write_merged_lut_cube(stack: Any, dest: Path) -> bool:
     return False
 
 def resolve_export_lut_cube(stack: Any, *, merged_cube_path: Path | None) -> Path | None:
-    layers = active_lut_layers(stack)
+    layers = active_lut_layers(stack, master=True)
     if layers:
         root = lut_root()
         if len(layers) == 1 and int(layers[0]['strength']) >= 100:
@@ -170,7 +170,7 @@ def resolve_export_lut_cube(stack: Any, *, merged_cube_path: Path | None) -> Pat
     else:
         return None
 
-def append_lut_stack_filters(graph: list[str], current: str, stack: Any, *, uid: str, merged_cube_path: Path | None) -> str:
+def append_lut_stack_filters(graph: list[str], current: str, stack: Any, *, uid: str, merged_cube_path: Path | None = None) -> str:
     cube = resolve_export_lut_cube(stack, merged_cube_path=merged_cube_path)
     if cube is None:
         return current
@@ -178,7 +178,7 @@ def append_lut_stack_filters(graph: list[str], current: str, stack: Any, *, uid:
     graph.append(f'[{current}]{lut3d_filter(cube)}[{out}]')
     return out
 
-def append_color_look_filters(graph: list[str], current: str, settings: Any, *, uid: str, merged_cube_path: Path | None) -> str:
+def append_color_look_filters(graph: list[str], current: str, settings: Any, *, uid: str, merged_cube_path: Path | None = None) -> str:
     from core.video_look import color_filter_ffmpeg
     label = current
     builtin = color_filter_ffmpeg(str(getattr(settings, 'color_filter', 'none') or 'none'), int(getattr(settings, 'color_filter_strength', 70) or 70))
@@ -228,7 +228,7 @@ def load_lut_table(path: Path):
     return table
 
 def apply_lut_stack_qimage(image, stack: Any):
-    layers = active_lut_layers(stack)
+    layers = active_lut_layers(stack, master=True)
     if not layers or image is None or image.isNull():
         return image
     try:

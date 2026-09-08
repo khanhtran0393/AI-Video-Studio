@@ -11,7 +11,7 @@ def _as_bool(value: Any) -> bool:
 
 def _as_int_volume(value: Any) -> int:
     try:
-        pass
+        return max(0, min(100, int(value)))
     except (TypeError, ValueError):
         return 0
 

@@ -25,6 +25,7 @@ const { createAssetDatabase } = require('./pipeline/asset-database');
 const { createAssetMatcher } = require('./pipeline/asset-matching');
 const { createSegmenter } = require('./pipeline/segmentation');
 const { createImageToVideoGate } = require('./ai/image-to-video');
+const { uploadImage } = require('../flow-native/gen/image');
 const { applyOverrides } = require('./core/overrides');
 const { detectGraphics } = require('./pipeline/motion-graphics');
 const { buildAttention } = require('./pipeline/attention');
@@ -33,10 +34,12 @@ const { makeSceneSpecs } = require('./pipeline/scene-spec');
 const { runQa, autoFix } = require('./pipeline/qa');
 const { validateProject } = require('./core/schema');
 const path = require('path');
+const fs = require('fs');
 
 function createOrchestrator(options = {}) {
   const renderAdapter = options.render;
   const providers = options.providers || createProviderRegistry(options.providerConfig || {});
+  const flowAccounts = options.flowAccounts || [];
 
   async function run({ rootDir, projectId, input = {}, alignment, onProgress, onJobUpdate } = {}) {
     if (!rootDir || !projectId) throw new TypeError('rootDir and projectId are required');
@@ -189,6 +192,42 @@ async function runStages2(ctx) {
   project.timeline = { durationSec: Number(totalEnd.toFixed(3)), scenes: timelineScenes, tracks: [{ id: 'narration', type: 'audio', locked: true }, { id: 'visuals', type: 'visual' }] };
   versioning.commit(project, 'timeline');
   progress('timeline', 80);
+
+  // STAGE 10a — Image-to-video (chỉ beat quan trọng + motion nặng)
+  if (flowAccounts.length > 0 && project.timeline && project.timeline.scenes) {
+    const allBeats = project.timeline.scenes.flatMap(scene => scene.beats || []);
+    const gate = createImageToVideoGate({ providers, costs, logger });
+    const planned = gate.plan(allBeats, { enabled: true, minImportance: 'high' });
+    const plannedBeats = planned.filter(b => b.imageToVideo && b.imageToVideo.status === 'planned');
+    if (plannedBeats.length) {
+      progress('image-to-video', 75);
+      let videoGenerated = 0;
+      for (const beat of plannedBeats) {
+        const asset = project.assets.find(a => a.id === beat.assetId);
+        if (asset && asset.refMediaId) {
+          try {
+            const result = await gate.generate(beat.imageToVideo, {
+              assetPath: asset.path,
+              refMediaId: asset.refMediaId,
+            });
+            if (result.status === 'complete') {
+              beat.videoAsset = result.outputAsset;
+              beat.videoRefMediaId = result.refMediaId || null;
+              videoGenerated++;
+            } else {
+              logger(`[orchestrator] Beat ${beat.beatId} I2V failed: ${result.error}`);
+            }
+          } catch (e) {
+            logger(`[orchestrator] Beat ${beat.beatId} I2V error: ${e.message}`);
+          }
+        }
+      }
+      if (videoGenerated > 0) {
+        versioning.commit(project, 'image-to-video');
+      }
+      progress('image-to-video', 78);
+    }
+  }
 
   // STAGE 11 — render specs (beat-level để motion granular). Áp user override (§30) trước.
   applyOverrides(project);

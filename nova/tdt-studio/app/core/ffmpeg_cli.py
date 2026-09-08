@@ -24,7 +24,7 @@ def ffmpeg_version_major() -> int:
     match = re.search('ffmpeg version\\s+(\\d+)', text, re.IGNORECASE)
     if match:
         try:
-            pass
+            return int(match.group(1))
         except ValueError:
             return 0
     else:

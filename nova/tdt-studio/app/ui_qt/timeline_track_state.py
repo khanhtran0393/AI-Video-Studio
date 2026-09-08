@@ -52,14 +52,7 @@ def layer_kind_for_id(layer_id: str) -> str | None:
     if lid == 'layer-blur':
         return 'blur'
     if lid.startswith('layer-overlay-'):
-        try:
-            pass
-        except ValueError:
-            return 'media_overlay'
-    elif lid.startswith('layer-blend-'):
-        try:
-            pass
-        except ValueError:
-            return 'blend_layer'
-    else:
-        return None
+        return 'media_overlay'
+    if lid.startswith('layer-blend-'):
+        return 'blend_layer'
+    return None

@@ -31,18 +31,32 @@ function pickBackground(scene, manifest, used) {
   return pick;
 }
 
-function pickCharacters(scene, manifest) {
+function pickCharacters(scene, manifest, prevCharacters) {
   const want = new Set(scene.characters || []);
   const chars = manifest.assets.filter(a => a.type === 'character');
   if (!chars.length) return [];
-  const matched = chars.filter(a => want.has(a.characterId));
-  return (matched.length ? matched : chars).slice(0, 2); // tối đa 2 nhân vật/ cảnh (Phase 1)
+  // Declared characters win (nhân vật kịch bản chỉ đích danh).
+  if (want.size) {
+    const matched = chars.filter(a => want.has(a.characterId));
+    return (matched.length ? matched : chars).slice(0, 2); // tối đa 2 nhân vật/ cảnh (Phase 1)
+  }
+  // Continuity (học seedance-2.0 "continuity locks"): cảnh không khai báo nhân vật
+  // → tái dùng nhân vật cảnh trước thay vì chọn 2 asset đầu manifest (tránh đổi diện mạo).
+  if (prevCharacters && prevCharacters.length) {
+    const prevIds = new Set(prevCharacters);
+    const matched = chars.filter(a => prevIds.has(a.characterId));
+    if (matched.length) return matched.slice(0, 2);
+  }
+  return chars.slice(0, 2);
 }
 
-function visualsFor(scene, index, manifest, used, config) {
+function visualsFor(scene, index, manifest, used, config, ctx = {}) {
   const bg = pickBackground(scene, manifest, used);
-  const chars = pickCharacters(scene, manifest);
-  const camera = CAMERAS[index % CAMERAS.length];
+  const chars = pickCharacters(scene, manifest, ctx.prevCharacters);
+  // Directing carrier (học seedance-2.0): cameraBias từ mood carrier thắng cycle khi
+  // là preset hợp lệ — vẫn deterministic (nằm trong grammar), không sinh tự do (§16).
+  const bias = ctx.directing && ctx.directing.carriers && ctx.directing.carriers.cameraBias;
+  const camera = (bias && grammar.isCamera(bias)) ? bias : CAMERAS[index % CAMERAS.length];
   const actionAnim = (scene.actions || []).map(a => ACTIONS_ANIM[String(a).toLowerCase()]).find(Boolean);
   const transition = index === 0 ? 'cut' : (config && config.transitions && config.transitions[index - 1]) || TRANSITION_CYCLE[index % TRANSITION_CYCLE.length];
   return {
@@ -59,7 +73,12 @@ function visualsFor(scene, index, manifest, used, config) {
 
 async function buildVisualPlan(storyPlan, manifest, config = {}, options = {}) {
   const used = new Map();
-  let plans = storyPlan.scenes.map((s, i) => visualsFor(s, i, manifest, used, config));
+  const continuityItems = (storyPlan.continuity && storyPlan.continuity.items) || [];
+  let plans = storyPlan.scenes.map((s, i) => {
+    const prevItem = continuityItems[i - 1];
+    const prevCharacters = prevItem ? Object.keys(prevItem.locks.characters || {}) : null;
+    return visualsFor(s, i, manifest, used, config, { prevCharacters, directing: s.directing });
+  });
   if (typeof options.planVisual === 'function') {
     const assetContext = (manifest.assets || []).map(a => ({ assetId: a.assetId, type: a.type, tags: a.tags || [], characterId: a.characterId || null }));
     const refined = await Promise.all(plans.map(async (baseline) => {

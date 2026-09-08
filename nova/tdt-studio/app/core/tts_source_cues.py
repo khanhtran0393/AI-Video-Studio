@@ -72,8 +72,8 @@ def _document_from_plain_rows(rows: object, source_path: str='') -> SubtitleDocu
             else:
                 return None
         try:
-            pass
+            return SubtitleDocument(tuple(segs), source_path=str(source_path or ''))
         except ValueError:
-            pass
+            return None
     else:
         return None

@@ -6,14 +6,14 @@
    (vendored tại whiteboard-studio/srt-whiteboard-animation/,
    KHÔNG sửa nguồn repo):
    - prepare():  dựng .venv + deps (scripts/prepare_env.py)
-   - status():   repo / venv / deps / hand png / ffmpeg
+   - status():   repo / venv / deps / hand png / ffmpeg / whisper
    - parseSrt(): scripts/parse_srt.py → { cues, scenes }
    - previewAnnotation(): scripts/render_annotation_preview.py
      → ảnh sơ đồ vùng (kiểm tra vùng trước khi render)
    - exportVideo(): render từng cảnh bằng
      scripts/render_stream_whiteboard.py (annotation do UI tạo
      qua whiteboard-annotation.js — KHÔNG tự sinh dải ở đây),
-     merge bằng scripts/merge_scenes.py, ghép voice bằng ffmpeg
+     merge bằng scripts/merge_scenes.py, ghép voice-over + nhạc nền (tuỳ chọn)
      nội bộ. Mọi tiến trình con được theo dõi để cancel.
    ============================================================ */
 const fs = require('fs');
@@ -33,6 +33,10 @@ const PREPARE_SCRIPT = path.join(SCRIPTS_DIR, 'prepare_env.py');
 const PREVIEW_SCRIPT = path.join(SCRIPTS_DIR, 'render_annotation_preview.py');
 const HAND_PNG = path.join(REPO_DIR, 'assets', 'drawing-hand.png');
 const DEPS_CODE = 'import cv2, numpy, av, PIL';
+// voice → SRT local (faster-whisper) — script của Nova, KHÔNG thuộc repo vendored
+// (cùng pattern render-progress-bridge.py), luôn chạy bằng python của .venv.
+const WHISPER_SCRIPT = path.join(__dirname, 'voice_to_srt.py');
+const WHISPER_DEPS_CODE = 'import faster_whisper';
 
 const DEFAULTS = {
   inkPath: 'grid',          // grid | skeleton
@@ -42,6 +46,7 @@ const DEFAULTS = {
   capLongEdge: 1080,
   fps: null,                 // null = mặc định renderer
   pause: null,               // null = mặc định renderer (heavy)
+  musicVolume: 0.16,         // âm lượng nhạc nền khi mix với voice (0.01–1)
 };
 
 /* ── theo dõi tiến trình con để cancel ── */
@@ -178,20 +183,125 @@ async function status() {
     deps,
     hand: handReady(),
     ffmpeg: ffmpegAvailable(),
+    whisper: await whisperReady(),   // faster-whisper (tính năng voice → SRT local, có cache)
     scripts: {
       render: RENDER_SCRIPT, parseSrt: PARSE_SCRIPT, merge: MERGE_SCRIPT,
-      prepare: PREPARE_SCRIPT, preview: PREVIEW_SCRIPT,
+      prepare: PREPARE_SCRIPT, preview: PREVIEW_SCRIPT, voiceToSrt: WHISPER_SCRIPT,
     },
   };
 }
 
-/* ── dựng môi trường (lần đầu) ── */
+/* ── faster-whisper (voice → SRT tiếng Việt local) ──
+   Cache kết quả kiểm import để status() không spawn python liên tục;
+   prepareWhisper() invalidate cache bằng force=true sau khi cài. */
+let _whisperReady;   // undefined = chưa kiểm; true/false = đã cache
+async function whisperReady(force) {
+  if (typeof _whisperReady === 'boolean' && !force) return _whisperReady;
+  const py = venvReady() ? venvPythonPath() : null;
+  if (!py) { _whisperReady = false; return false; }
+  const r = await runCapture(py, ['-c', WHISPER_DEPS_CODE], { timeoutMs: 90000 });
+  _whisperReady = r.ok;
+  return _whisperReady;
+}
+
+/* cài faster-whisper vào .venv (lần đầu, vài phút) — KHÔNG đụng repo vendored */
+async function prepareWhisper(onLog) {
+  const py = venvReady() ? venvPythonPath() : null;
+  if (!py) {
+    return { ok: false, error: 'Venv chưa dựng — bấm "Chuẩn bị Python" (⚙) trước đã.' };
+  }
+  const r = await runCapture(py, ['-m', 'pip', 'install', '--upgrade', 'faster-whisper'], {
+    timeoutMs: 15 * 60 * 1000,
+    onStderr: onLog,
+    onStdout: onLog,
+  });
+  const ready = await whisperReady(true);
+  if (!ready) {
+    return { ok: false, error: 'Cài faster-whisper thất bại: ' + ((r.stderr || r.stdout || '').trim().slice(0, 300) || 'không rõ') };
+  }
+  return { ok: true };
+}
+
+/* chạy voice_to_srt.py trong .venv → file SRT tiếng Việt (nhận diện local) */
+async function transcribeVoice({ voicePath, outputPath, model, onLog } = {}) {
+  if (!voicePath || !fs.existsSync(voicePath)) {
+    return { ok: false, error: 'Không tìm thấy file voice: ' + voicePath };
+  }
+  if (!fs.existsSync(WHISPER_SCRIPT)) {
+    return { ok: false, error: 'Thiếu voice_to_srt.py: ' + WHISPER_SCRIPT };
+  }
+  const py = venvReady() ? venvPythonPath() : null;
+  if (!py) {
+    return { ok: false, error: 'Engine Python chưa sẵn sàng (thiếu .venv) — bấm "Chuẩn bị Python" trước.' };
+  }
+  if (!(await whisperReady())) {
+    return { ok: false, whisperMissing: true, error: 'Thiếu faster-whisper trong venv — bấm "Cài Whisper" trong panel trước.' };
+  }
+  const args = [WHISPER_SCRIPT, voicePath, outputPath, '--model', String(model || 'small')];
+  const r = await runCapture(py, args, { timeoutMs: 30 * 60 * 1000, onStderr: onLog, onStdout: onLog });
+  if (!r.ok || !fs.existsSync(outputPath)) {
+    return {
+      ok: false,
+      error: 'Tạo SRT lỗi: ' + (((r.stderr || r.stdout || '').trim().split('\n').slice(-4).join(' | ')) || 'không rõ'),
+    };
+  }
+  return { ok: true, path: outputPath };
+}
+
+/* ── dựng môi trường (lần đầu) ──
+   Python hệ thống chỉ cần khi phải DỰNG .venv từ đầu. Nếu .venv đã tồn tại
+   thì bỏ hẳn bước spawn python hệ thống (PATH của process Electron có thể
+   không thấy python.exe dù shell của user thấy — spawn ENOENT).
+   Khi phải dựng: dò interpreter theo thứ tự khai báo (env NOVA_WB_PYTHON
+   → python → py -3 → python3), log từng lần thử; không tìm thấy thì fail
+   lộ liễu kèm hướng dẫn (Luật 10 — không fallback ngầm). */
+const SYS_PY_CANDIDATES = [
+  { cmd: 'python', args: [] },
+  { cmd: 'py', args: ['-3'] },
+  { cmd: 'python3', args: [] },
+];
+let _sysPy;   // cache { cmd, args } đã xác minh spawn được
+async function resolveSysPython(onLog) {
+  if (process.env.NOVA_WB_PYTHON) {
+    if (onLog) { try { onLog('python hệ thống: NOVA_WB_PYTHON=' + process.env.NOVA_WB_PYTHON); } catch (_) {} }
+    return { cmd: process.env.NOVA_WB_PYTHON, args: [] };
+  }
+  if (_sysPy) return _sysPy;
+  for (const c of SYS_PY_CANDIDATES) {
+    const r = await runCapture(c.cmd, c.args.concat(['--version']), { timeoutMs: 20000 });
+    if (r.ok) {
+      _sysPy = c;
+      if (onLog) { try { onLog('python hệ thống: dùng "' + c.cmd + (c.args.length ? ' ' + c.args.join(' ') : '') + '" (' + String(r.stdout || r.stderr || '').trim() + ')'); } catch (_) {} }
+      return c;
+    }
+    if (onLog) { try { onLog('… không dùng được "' + c.cmd + '" (' + String(r.stderr || '').trim().slice(0, 120) + ') — thử phương án khác'); } catch (_) {} }
+  }
+  return null;
+}
+
 async function prepare(onLog) {
   if (!repoPresent()) {
     return { ok: false, error: 'Không tìm thấy repo srt-whiteboard-animation tại ' + REPO_DIR };
   }
-  const sysPy = process.env.NOVA_WB_PYTHON || 'python';
-  const r = await runCapture(sysPy, [PREPARE_SCRIPT], {
+  // fast path: .venv đã có → chạy prepare_env.py là thừa (nó cũng chỉ "复用现有虚拟环境"),
+  // và tránh phụ thuộc python hệ thống không chắc có trên PATH của process Electron.
+  if (venvReady()) {
+    if (onLog) { try { onLog('✓ .venv đã tồn tại — bỏ qua bước dựng venv, kiểm tra dependencies…'); } catch (_) {} }
+    const st0 = await status();
+    if (st0.ok) return { ok: true, envPy: st0.venvPy, status: st0 };
+    // venv có nhưng thiếu deps → vẫn cần python hệ thống để chạy prepare_env.py (nó sẽ
+    // tái dùng venv + pip install phần thiếu). Dò interpreter như thường.
+  }
+  const sys = await resolveSysPython(onLog);
+  if (!sys) {
+    return {
+      ok: false,
+      error: 'WB_PY_NOT_FOUND: không tìm thấy python hệ thống (đã thử: ' +
+        SYS_PY_CANDIDATES.map((c) => c.cmd).join(', ') + '). Cài Python 3.10+ và thêm vào PATH, ' +
+        'hoặc đặt biến môi trường NOVA_WB_PYTHON=<đường dẫn python.exe> rồi thử lại.',
+    };
+  }
+  const r = await runCapture(sys.cmd, sys.args.concat([PREPARE_SCRIPT]), {
     timeoutMs: 15 * 60 * 1000,
     onStderr: onLog,
   });
@@ -280,16 +390,44 @@ async function probeMediaDuration(mediaPath) {
   return isFinite(v) ? v : 0;
 }
 
-/* ── ghép voice vào video bằng ffmpeg nội bộ ── */
-async function muxAudio(videoPath, audioTrack, outPath, onLog) {
+/* ── ghép voice + nhạc nền (tuỳ chọn) vào video bằng ffmpeg nội bộ ──
+   - voice + music: amix (voice 1.0, music musicVolume mặc định 0.16),
+     nhạc lặp vô hạn (-stream_loop -1) tới hết video (duration=first);
+   - chỉ voice: giữ hành vi cũ (adelay nếu start_time > 0);
+   - chỉ music: lặp vô hạn, giảm âm lượng về musicVolume.
+   Luật 10: thiếu ffmpeg thì trả lỗi rõ ràng — caller tự quyết fallback. */
+async function muxAudio(videoPath, audioTrack, musicTrack, outPath, onLog, opts = {}) {
   if (!ffmpegAvailable()) {
     if (onLog) onLog('ffmpeg nội bộ không có — giữ video không tiếng.');
     return { ok: false, error: 'ffmpeg unavailable', path: videoPath };
   }
-  const args = ['-y', '-loglevel', 'error', '-i', videoPath, '-i', audioTrack.path];
-  const startMs = Math.max(0, Math.round((Number(audioTrack.start_time) || 0) * 1000));
-  if (startMs > 0) args.push('-af', 'adelay=' + startMs + '|' + startMs);
-  args.push('-map', '0:v:0', '-map', '1:a:0', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-shortest', outPath);
+  const voice = (audioTrack && audioTrack.path && fs.existsSync(audioTrack.path)) ? audioTrack : null;
+  const music = (musicTrack && musicTrack.path && fs.existsSync(musicTrack.path)) ? musicTrack : null;
+  if (!voice && !music) {
+    return { ok: false, error: 'no audio track (voice & music đều rỗng)', path: videoPath };
+  }
+  const musicVol = Math.max(0.01, Math.min(1, Number(opts.musicVolume) || 0.16)).toFixed(2);
+  const voiceStartMs = voice ? Math.max(0, Math.round((Number(voice.start_time) || 0) * 1000)) : 0;
+
+  const args = ['-y', '-loglevel', 'error', '-i', videoPath];
+  if (voice) args.push('-i', voice.path);
+  if (music) args.push('-stream_loop', '-1', '-i', music.path);   // lặp nhạc tới hết video
+
+  if (voice && music) {
+    const a1 = voiceStartMs > 0
+      ? '[1:a]adelay=' + voiceStartMs + '|' + voiceStartMs + '[a1]'
+      : '[1:a]anull[a1]';
+    args.push(
+      '-filter_complex', a1 + ';[2:a]volume=' + musicVol + '[a2];[a1][a2]amix=inputs=2:duration=first[aout]',
+      '-map', '0:v:0', '-map', '[aout]'
+    );
+  } else if (voice) {
+    args.push('-map', '0:v:0', '-map', '1:a:0');
+    if (voiceStartMs > 0) args.push('-af', 'adelay=' + voiceStartMs + '|' + voiceStartMs);
+  } else {
+    args.push('-map', '0:v:0', '-map', '1:a:0', '-af', 'volume=' + musicVol);
+  }
+  args.push('-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-shortest', outPath);
   const r = await runCapture(FFMPEG, args, { timeoutMs: 10 * 60 * 1000 });
   return { ok: r.ok, error: r.ok ? undefined : (r.stderr || '').trim().slice(0, 400), path: r.ok ? outPath : videoPath };
 }
@@ -298,7 +436,7 @@ async function muxAudio(videoPath, audioTrack, outPath, onLog) {
    scenes: [{ sceneId, image, durationMs, elements[] | annotation, canvas }]
    annotation: scene.annotation (đã hoàn chỉnh) hoặc do
    whiteboard-annotation.js toAnnotation(elements) dựng. */
-async function exportVideo({ scenes, outputPath, audioTracks, options, onProgress, onLog } = {}) {
+async function exportVideo({ scenes, outputPath, audioTracks, musicTrack, options, onProgress, onLog } = {}) {
   const opt = Object.assign({}, DEFAULTS, options || {});
   if (!Array.isArray(scenes) || !scenes.length) return { ok: false, error: 'Danh sách cảnh rỗng' };
   for (const s of scenes) {
@@ -520,15 +658,17 @@ async function exportVideo({ scenes, outputPath, audioTracks, options, onProgres
     }
 
     /* merge tất cả cảnh (merge_scenes.py) */
-    const hasAudio = !!(audioTracks && audioTracks.length && audioTracks[0] && audioTracks[0].path && fs.existsSync(audioTracks[0].path));
-    const mergedPath = hasAudio ? path.join(workDir, 'merged.mp4') : outputPath;
-    if (sceneFiles.length === 1 && !hasAudio) {
+    const hasVoice = !!(audioTracks && audioTracks.length && audioTracks[0] && audioTracks[0].path && fs.existsSync(audioTracks[0].path));
+    const music = (musicTrack && musicTrack.path && fs.existsSync(musicTrack.path)) ? musicTrack : null;
+    const hasAV = hasVoice || !!music;   // có voice hoặc nhạc nền → cần bước mux sau merge
+    const mergedPath = hasAV ? path.join(workDir, 'merged.mp4') : outputPath;
+    if (sceneFiles.length === 1 && !hasAV) {
       wroteOutput = true;                       // copy ghi thẳng vào đích người dùng
       fs.copyFileSync(sceneFiles[0], outputPath);
       report(92, 'sao chép video');
     } else {
       report(88, 'ghép ' + sceneFiles.length + ' cảnh');
-      if (!hasAudio) wroteOutput = true;        // mergedPath === outputPath — merge ghi thẳng đích
+      if (!hasAV) wroteOutput = true;        // mergedPath === outputPath — merge ghi thẳng đích
       const mArgs = [MERGE_SCRIPT, '--inputs'].concat(sceneFiles).concat(['--output', mergedPath]);
       const mr = await runCapture(py, mArgs, { timeoutMs: 10 * 60 * 1000, onStderr: say });
       if (!mr.ok || !fs.existsSync(mergedPath)) {
@@ -536,13 +676,13 @@ async function exportVideo({ scenes, outputPath, audioTracks, options, onProgres
       }
     }
 
-    /* ghép voice-over nếu có */
-    if (hasAudio) {
-      report(94, 'ghép voice-over');
+    /* ghép voice-over + nhạc nền (tuỳ chọn) nếu có */
+    if (hasAV) {
+      report(94, music ? (hasVoice ? 'ghép voice-over + nhạc nền' : 'ghép nhạc nền') : 'ghép voice-over');
       wroteOutput = true;                       // mux ghi thẳng vào outputPath
-      const ar = await muxAudio(mergedPath, audioTracks[0], outputPath, say);
+      const ar = await muxAudio(mergedPath, hasVoice ? audioTracks[0] : null, music, outputPath, say, { musicVolume: opt.musicVolume });
       if (!ar.ok) {
-        say('⚠ Không ghép được voice (' + (ar.error || '?') + ') — xuất video không tiếng.');
+        say('⚠ Không ghép được audio (' + (ar.error || '?') + ') — xuất video không tiếng.');
         fs.copyFileSync(mergedPath, outputPath);
       }
     }
@@ -560,5 +700,6 @@ async function exportVideo({ scenes, outputPath, audioTracks, options, onProgres
 module.exports = {
   status, prepare, parseSrt, cancelAll, exportVideo, previewAnnotation,
   probeImageSize, probeMediaDuration, repoDir: REPO_DIR, sweepStale,
+  whisperReady, prepareWhisper, transcribeVoice,
 };
 

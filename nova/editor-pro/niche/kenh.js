@@ -1,7 +1,7 @@
 /* ── Tách từ niche.js — phần KÊNH: thẻ điểm kênh (VPS/VPH/longform/ổn định/xu hướng)
      + tìm kênh giống. Module CommonJS: hứng hàm dùng chung từ ./loi qua require.
      Đường require cũ vẫn ổn nhờ niche.js (file gốc) re-export từ ./niche/index. ── */
-const { run, claude, cookies, daysSince, kfmt, cached, searchVideos, median } = require('./loi');
+const { run, claude, cookies, daysSince, kfmt, cached, searchVideos, median, pool } = require('./loi');
 
 // ══════════════════════════════════════════════════════════════════
 //  1c) THẺ ĐIỂM KÊNH — 5 chỉ số sức khoẻ + outlier + kênh giống.
@@ -58,8 +58,10 @@ function healthScore(m) {
 }
 
 async function channelScorecard(channelUrl, onProgress = () => {}, opts = {}) {
+  const count = Math.max(8, Math.min(30, Number(opts.count) || 20));
+  // Key cache gộp cả count + cờ analyze: soi 20 video rồi đổi sang 30 (hoặc gọi
+  // nội bộ không phân tích AI như similarChannels) không ăn nhầm cache của nhau.
   return cached('scorecard', channelUrl, opts.fresh, onProgress, async () => {
-    const count = Math.max(8, Math.min(30, Number(opts.count) || 20));
     onProgress(10, 'Lấy video kênh…');
     const ck = await cookies();
     const args = [normChannel(channelUrl), '--no-warnings', '--playlist-items', '1-' + count,
@@ -82,22 +84,22 @@ async function channelScorecard(channelUrl, onProgress = () => {}, opts = {}) {
     vids.forEach(x => x.ratio = +(x.views / med).toFixed(2));
     const outliers = vids.filter(x => x.ratio >= 1.5).sort((a, b) => b.ratio - a.ratio).slice(0, 8);
 
-    let analysis = '';
+    let analysis = ''; let analysisError = '';
     if (opts.analyze !== false && outliers.length) {
       onProgress(70, 'Claude đọc mô-típ…');
       try {
         analysis = await claude(
           'Bạn là chuyên gia nội dung YouTube, trả lời tiếng Việt, ngắn gọn.',
           `Kênh "${name}" (${kfmt(subs)} sub). Trung vị kênh ${kfmt(med)} view.\nChỉ số: VPS ${m.vps}× · longform ${Math.round(m.longform * 100)}% · độ ổn định (CV) ${m.cv} · xu hướng ${m.trend > 0 ? '+' : ''}${Math.round(m.trend * 100)}%/tháng.\n\nVIDEO VƯỢT TRỘI:\n${outliers.map(x => `x${x.ratio} · ${kfmt(x.views)} view · ${Math.round(x.dur / 60)}p · ${x.title}`).join('\n')}\n\nViết 3-5 câu: mô-típ nào đang ăn ở kênh này, và người mới chen vào bằng cách nào. Bám số liệu, không nói chung chung.`);
-      } catch (_) {}
+      } catch (err) { analysisError = String((err && err.message) || err).slice(0, 160); }   // lỗi lộ liễu ra UI, không nuốt (Luật 10)
     }
     onProgress(100, 'Xong');
     return {
       ok: true, channel: name, subs, subsFmt: kfmt(subs), videoCount: vids.length, median: Math.round(med),
-      metrics: m, health: healthScore(m), monetized: monetizedGuess(subs, m), analysis,
+      metrics: m, health: healthScore(m), monetized: monetizedGuess(subs, m), analysis, analysisError,
       outliers: outliers.map(x => ({ title: x.title, views: x.views, viewsFmt: kfmt(x.views), ratio: x.ratio, dur: x.dur, days: x.days, url: x.url, id: x.id })),
     };
-  });
+  }, 'n' + count + (opts.analyze === false ? '-noan' : ''));
 }
 
 // KÊNH GIỐNG — không có API key nên bỏ tín hiệu featuredChannels (YouTube đã gỡ tab này ở nhiều kênh),
@@ -114,42 +116,52 @@ async function similarChannels(channelUrl, onProgress = () => {}, opts = {}) {
     if (!queries.length) throw new Error('Kênh này không đủ dữ liệu để tìm kênh giống.');
 
     // Gom theo channel_url (khoá ổn định) chứ không theo TÊN — tên có dấu cách thì ghép @handle sẽ hỏng.
-    const score = new Map(), meta = new Map();
-    for (let i = 0; i < queries.length; i++) {
-      onProgress(15 + Math.round(i * 55 / queries.length), `Quét "${queries[i].slice(0, 34)}"…`);
-      try {
-        const { vids } = await searchVideos(queries[i], 15, () => {});
-        const perQuery = new Set();
-        vids.forEach(v => {
-          const key = v.channelUrl || (v.channel || '').trim();
-          if (!key || (v.channel || '').toLowerCase() === seedName.toLowerCase()) return;
-          if (!perQuery.has(key)) { perQuery.add(key); score.set(key, (score.get(key) || 0) + 7); }   // +7 mỗi truy vấn xuất hiện
-          const mm = meta.get(key) || { name: v.channel, views: 0, n: 0, subs: 0 };
-          mm.views += v.views; mm.n++; if (v.subs > mm.subs) mm.subs = v.subs; if (v.channel) mm.name = v.channel;
-          meta.set(key, mm);
-        });
-      } catch (_) {}
+    const score = new Map(), meta = new Map(); const failedQueries = []; let done = 0;
+    // Quét song song 2 luồng — các truy vấn độc lập, Map cập nhật đồng bộ sau mỗi kết quả.
+    const results = await pool(queries, 2, (q) => searchVideos(q, 15, () => {})
+      .then(r => ({ ok: true, q, vids: r.vids }))
+      .catch(err => ({ ok: false, q, error: String((err && err.message) || err).slice(0, 140) }))
+      .then(res => {
+        done++;
+        onProgress(15 + Math.round(done * 55 / queries.length), res.ok ? `Quét "${res.q.slice(0, 34)}"…` : `Truy vấn ${done} lỗi: ${res.error.slice(0, 60)}`);
+        return res;
+      }));
+    for (const res of results) {
+      if (!res.ok) { failedQueries.push({ q: res.q, error: res.error }); continue; }
+      const perQuery = new Set();
+      res.vids.forEach(v => {
+        const key = v.channelUrl || (v.channel || '').trim();
+        if (!key || (v.channel || '').toLowerCase() === seedName.toLowerCase()) return;
+        if (!perQuery.has(key)) { perQuery.add(key); score.set(key, (score.get(key) || 0) + 7); }   // +7 mỗi truy vấn xuất hiện
+        const mm = meta.get(key) || { name: v.channel, views: 0, n: 0, subs: 0 };
+        mm.views += v.views; mm.n++; if (v.subs > mm.subs) mm.subs = v.subs; if (v.channel) mm.name = v.channel;
+        meta.set(key, mm);
+      });
     }
     const ranked = [...score.entries()].sort((a, b) => b[1] - a[1]).slice(0, Math.max(3, Math.min(8, Number(opts.limit) || 6)));
-    if (!ranked.length) throw new Error('Không tìm được kênh nào cùng tệp.');
+    if (!ranked.length) {
+      const why = failedQueries.length ? ' — ' + failedQueries.map(f => f.error).join('; ').slice(0, 180) : '';
+      throw new Error('Không tìm được kênh nào cùng tệp' + why);
+    }
 
-    // Chấm chỉ số thật cho từng ứng viên (mỗi kênh 1 lần yt-dlp, 12 video).
-    const cards = [];
-    for (let i = 0; i < ranked.length; i++) {
-      const [key, pts] = ranked[i];
+    // Chấm chỉ số thật cho từng ứng viên (mỗi kênh 1 lần yt-dlp, 12 video) — song song 2 luồng.
+    let done2 = 0;
+    const cards = await pool(ranked, 2, async ([key, pts]) => {
       const mm = meta.get(key) || {};
       const label = mm.name || key;
-      onProgress(72 + Math.round(i * 26 / ranked.length), `Chấm "${String(label).slice(0, 26)}"…`);
       try {
         const c = await channelScorecard(key, () => {}, { count: 12, analyze: false });
-        cards.push({ channel: c.channel, url: key, subs: c.subs, subsFmt: c.subsFmt, metrics: c.metrics, health: c.health, points: pts, hits: Math.round(pts / 7) });
+        return { channel: c.channel, url: key, subs: c.subs, subsFmt: c.subsFmt, metrics: c.metrics, health: c.health, points: pts, hits: Math.round(pts / 7) };
       } catch (_) {
-        // Đọc kênh hỏng thì vẫn giữ lại với sub lấy được từ kết quả tìm kiếm, đánh dấu partial.
-        cards.push({ channel: label, url: key, subs: mm.subs || 0, subsFmt: kfmt(mm.subs || 0), metrics: null, health: 0, points: pts, hits: Math.round(pts / 7), partial: true });
+        // Đọc kênh hỏng thì vẫn giữ lại với sub lấy được từ kết quả tìm kiếm, đánh dấu partial + lý do.
+        return { channel: label, url: key, subs: mm.subs || 0, subsFmt: kfmt(mm.subs || 0), metrics: null, health: 0, points: pts, hits: Math.round(pts / 7), partial: true, partialError: 'không đọc được chỉ số' };
+      } finally {
+        done2++;
+        onProgress(72 + Math.round(done2 * 26 / ranked.length), `Chấm "${String(label).slice(0, 26)}"…`);
       }
-    }
+    });
     onProgress(100, 'Xong');
-    return { ok: true, seed: seedName, queries, cards: cards.sort((a, b) => (b.metrics?.vps || 0) - (a.metrics?.vps || 0)) };
+    return { ok: true, seed: seedName, queries, failedQueries, cards: cards.sort((a, b) => (b.metrics?.vps || 0) - (a.metrics?.vps || 0)) };
   });
 }
 module.exports = { channelScorecard, similarChannels };

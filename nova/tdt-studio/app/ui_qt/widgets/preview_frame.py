@@ -3892,7 +3892,7 @@ class PreviewFrameWidget(QWidget):
                 self.last_text_overlay_rect = QRectF(self._text_selected_rect)
                 return None
         else:
-            rect = self._draw_one_text_overlay_fields(painter, target, dict(values))
+            rect = self._draw_one_text_overlay_fields(painter, target, dict(values), is_selected=True)
             if bool(values.get('text_overlay_enabled')) and str(values.get('text_overlay_content') or '').strip() and (rect is not None) and (not rect.isNull()):
                 self.last_text_overlay_rect = rect
                 self._text_selected_rect = QRectF(rect)
@@ -4217,9 +4217,16 @@ class PreviewFrameWidget(QWidget):
     def _output_reference_size(self) -> tuple[int, int]:
         values = self.state.values
         try:
-            pass
+            aw_str, ah_str = str(values.get('aspect_ratio', '9:16') or '9:16').split(':', 1)
+            aw = int(aw_str)
+            ah = int(ah_str)
         except (KeyError, ValueError):
-            return (1080, 1920)
+            aw, ah = 9, 16
+        if aw <= 0 or ah <= 0:
+            aw, ah = 9, 16
+        if aw >= ah:
+            return (1920, max(2, round(1920 * ah / aw)))
+        return (1080, max(2, round(1080 * ah / aw)))
 
     def _subtitle_layout_context(self, target: QRectF) -> tuple[QRectF, int, int, float]:
         ref_w, ref_h = (self._output_reference_size()[0], self._output_reference_size()[1])
@@ -4627,7 +4634,7 @@ class PreviewFrameWidget(QWidget):
             result[name] = QRectF(sx - half_t, sy - h / 2.0, t, h)
         return result
 
-    def _hit_text_chrome_mode(self, point, layout: QRectF, rotation_degrees: float, *, corner_size: float) -> str | None:
+    def _hit_text_chrome_mode(self, point, layout: QRectF, rotation_degrees: float, *, corner_size: float = 14.0) -> str | None:
         if layout.isNull():
             return None
         for name, handle in self._chrome_corner_handles(layout, rotation_degrees, corner_size).items():

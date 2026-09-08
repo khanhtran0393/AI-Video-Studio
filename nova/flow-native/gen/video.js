@@ -98,7 +98,7 @@ function buildVideoBody({ prompt, projectId, aspect, modelKey, tier, imageMediaI
     requests: [{
       aspectRatio: aspect || 'VIDEO_ASPECT_RATIO_LANDSCAPE',
       textInput: { structuredPrompt: { parts: [{ text: prompt }] } },
-      videoModelKey: modelKey || 'abra_r2v_8s',
+      videoModelKey: modelKey || 'veo_3_1_r2v_lite',
       seed: (seed != null ? seed : ts % 100000),
       metadata: {},
       referenceImages: imageMediaId ? [{ mediaId: imageMediaId, imageUsageType: 'IMAGE_USAGE_TYPE_ASSET' }] : [],
@@ -118,8 +118,17 @@ function _bodyFromLearnedGen({ prompt, projectId, imageMediaId, capToken, modelK
   _deepSet(body, k => k === 'batchId', cryptoRandomUUID());
   _deepSet(body, k => k === 'sessionId', ';' + Date.now());
   // Đổi model nếu khách chọn (khớp đúng t2v/r2v theo có ảnh hay không); không chọn → giữ model mặc định của template.
-  if (modelKey) { const wantType = imageMediaId ? 'r2v' : 't2v'; const typed = _vResolveModelKey(modelKey).replace(/(^|_)(t2v|r2v|i2v)(?=_|$)/, '$1' + wantType); _deepSet(body, k => k === 'videoModelKey', typed); }
-  if (durationSecs) (function walk(o) { if (!o || typeof o !== 'object') return; for (const k of Object.keys(o)) { if (k === 'videoModelKey' && typeof o[k] === 'string') o[k] = o[k].replace(/_(\d+)s\b/, '_' + durationSecs + 's'); else if (o[k] && typeof o[k] === 'object') walk(o[k]); } })(body);
+  if (modelKey) {
+    const typed = _vResolveModelKey(modelKey);
+    if (imageMediaId) {
+      // r2v: Flow chỉ có bản lite — quality/fast phải lùi về lite, không sinh key không tồn tại (Luật 10).
+      const R2V_FALLBACK = { 'veo_3_1_t2v_fast': 'veo_3_1_r2v_lite', 'veo_3_1_t2v': 'veo_3_1_r2v_lite', 'veo_3_1_t2v_lite': 'veo_3_1_r2v_lite', 'abra_t2v_8s': 'abra_r2v_8s' };
+      _deepSet(body, k => k === 'videoModelKey', R2V_FALLBACK[typed] || typed);
+    } else {
+      _deepSet(body, k => k === 'videoModelKey', typed);
+    }
+  }
+  if (durationSecs) (function walk(o) { if (!o || typeof o !== 'object') return; for (const k of Object.keys(o)) { if (k === 'videoModelKey' && typeof o[k] === 'string' && !/^abra_/.test(o[k])) o[k] = o[k].replace(/_(\d+)s\b/, '_' + durationSecs + 's'); else if (o[k] && typeof o[k] === 'object') walk(o[k]); } })(body);
   _setVideoPrompt(body, prompt);
   if (imageMediaId) (function walk(o) {
     if (!o || typeof o !== 'object') return;
@@ -333,4 +342,7 @@ async function videoModels() {
   return { models: all, fromCapture: capKeys, fromPage: pageKeys.length };
 }
 
-module.exports = { submitVideo, pollVideo, resolveVideoData, upsampleVideoNative, _vResolveModelKey, hookVideoLearn, armVideoLearn, videoLearnStatus, videoLearnDump, videoModels };
+// Bản đồ model key mặc định — trả cho UI (VIDEO_MODEL_STATUS) để builtin mode khớp giao thức extension.
+function videoModelStatus() { return { modelKeys: DEFAULT_VIDEO.modelKeys }; }
+
+module.exports = { submitVideo, pollVideo, resolveVideoData, upsampleVideoNative, _vResolveModelKey, hookVideoLearn, armVideoLearn, videoLearnStatus, videoLearnDump, videoModels, videoModelStatus };

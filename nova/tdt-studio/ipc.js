@@ -73,6 +73,17 @@ function registerTdtStudioIpc(ipcMain, { getState } = {}) {
      process tree ở will-quit vì Electron không chờ callback bất đồng bộ. */
   try { app.on('before-quit', () => bridge.quitAll()); } catch (_) {}
   try { app.on('will-quit', () => bridge.killHard()); } catch (_) {}
+  // Preload Studio process after app startup for faster first open.
+  setTimeout(async () => {
+    try {
+      const st = getState && getState();
+      if (st && st.mainWindow && !st.mainWindow.isDestroyed()) {
+        await bridge.preload();
+        // preload-ready event will be emitted by bridge
+      }
+    } catch (_) {}
+  }, 3000);
+
   return true;
 }
 

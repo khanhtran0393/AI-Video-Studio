@@ -4334,7 +4334,7 @@ class CommandCenterWindow(QMainWindow):
             finally:
                 self._suppress_autosave = False
 
-    def _apply_loaded_project(self, status_message: str, *, keep_pipeline: bool) -> None:
+    def _apply_loaded_project(self, status_message: str, *, keep_pipeline: bool = False) -> None:
         healed = self._sanitize_project_timelines()
         self.preview_panel.playback.stop()
         if not keep_pipeline:
@@ -9566,8 +9566,12 @@ class CommandCenterWindow(QMainWindow):
             self.statusBar().showMessage(status_text(), 8000)
 
     def _ensure_licensed_or_warn(self, *, action: str) -> bool:
-        from core.license_client import check, is_licensed
-        from ui_qt.panels.license_panel import LicensePanel
+        try:
+            from core.license_client import check, is_licensed
+            from ui_qt.panels.license_panel import LicensePanel
+        except ImportError:
+            # Mô-đun bản quyền chưa có trong bản build — không chặn tác vụ.
+            return True
         try:
             if not bool(check(force_online=True).get('ok')):
                 dialog = LicensePanel(self, require_license=False)
@@ -9878,7 +9882,7 @@ def _format_ms(value: int) -> str:
 
 def _is_existing_export_file(path: Path) -> bool:
     try:
-        pass
+        return path.is_file() and path.stat().st_size > 0
     except OSError:
         return False
 
@@ -9890,7 +9894,7 @@ def _primary_batch_output_path(output_dir: Path, stem: str, *, naming: str, queu
 
 def _resolved_path_key(path: Path) -> str:
     try:
-        pass
+        return str(path.expanduser().resolve()).casefold()
     except OSError:
         return str(path)
 

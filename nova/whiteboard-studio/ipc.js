@@ -156,6 +156,56 @@ function registerWhiteboardIpc(ipcMain, { getState } = {}) {
     return { path: p, durationSec };
   });
 
+  /* ── bước 4b: nhạc nền — chọn file + đo thời lượng THẬT (ffprobe) ── */
+  handle('whiteboard:pickMusic', async () => {
+    const r = await dialog.showOpenDialog(ownerWin(), {
+      title: 'Chọn file nhạc nền',
+      properties: ['openFile'],
+      filters: [{ name: 'Audio', extensions: ['mp3', 'wav', 'm4a', 'aac', 'ogg', 'flac'] }],
+    });
+    if (r.canceled || !r.filePaths[0]) return { canceled: true };
+    const p = r.filePaths[0];
+    if (!AUD_EXT.test(p)) return { ok: false, error: 'Không phải file audio: ' + p };
+    const durationSec = await PyBackend.probeMediaDuration(p);
+    return { path: p, durationSec };
+  });
+
+  /* ── faster-whisper (Nova script): cài vào venv lần đầu ── */
+  handle('whiteboard:whisperPrepare', async () => {
+    try {
+      relayProgress({ percent: 2, status: 'cài faster-whisper vào venv (lần đầu, vài phút)…' });
+      const r = await PyBackend.prepareWhisper({ onLog: relayLog });
+      relayProgress({ percent: r.ok ? 100 : 0, status: r.ok ? 'done' : 'error: ' + (r.error || '') });
+      return r;
+    } catch (err) { return { ok: false, error: errOf(err) }; }
+  });
+
+  /* ── faster-whisper: voice → SRT tiếng Việt (local, không cloud) ──
+     Chọn nơi lưu SRT bằng dialog thật rồi chạy voice_to_srt.py trong venv.
+     Trả về cues để panel nạp thẳng vào luồng parseSrt hiện có. */
+  handle('whiteboard:generateSrt', async (_e, p = {}) => {
+    try {
+      const voice = String((p && p.voicePath) || '');
+      if (!voice || !fs.existsSync(voice)) return { ok: false, error: 'Không tìm thấy file voice: ' + voice };
+      const opts = {
+        title: 'Lưu SRT từ voice (nhận diện tiếng Việt local)',
+        defaultPath: path.basename(voice, path.extname(voice)) + '.vi.srt',
+        filters: [{ name: 'SRT', extensions: ['srt'] }],
+      };
+      const win = ownerWin();
+      const dr = win ? await dialog.showSaveDialog(win, opts) : await dialog.showSaveDialog(opts);
+      if (dr.canceled || !dr.filePath) return { canceled: true };
+      relayProgress({ percent: 2, status: 'đang nhận diện tiếng Việt local (faster-whisper)…' });
+      const r = await PyBackend.transcribeVoice({
+        voicePath: voice, outputPath: dr.filePath, model: p.model, onLog: relayLog,
+      });
+      if (!r.ok) { relayProgress({ status: 'error: ' + (r.error || 'không rõ') }); return r; }
+      const cues = Annotation.parseSrtCues(fs.readFileSync(r.path, 'utf8'));
+      relayProgress({ percent: 100, status: 'done' });
+      return { ok: true, path: r.path, cues, count: cues.length };
+    } catch (err) { return { ok: false, error: errOf(err) }; }
+  });
+
   /* ── chọn nơi lưu MP4 (dialog thật) ── */
   handle('whiteboard:pickOutput', async (_e, p = {}) => {
     try {
@@ -190,9 +240,15 @@ function registerWhiteboardIpc(ipcMain, { getState } = {}) {
         annotation: s.annotation || null,
       }));
       const audioTracks = (payload.audioTracks || []).filter((t) => t && t.path && fs.existsSync(t.path));
+      /* Luật 10: nhạc nền khai báo mà file không tồn tại → lỗi lộ liễu, không bỏ qua thầm */
+      const musicTrack = (payload.musicTrack && payload.musicTrack.path) ? payload.musicTrack : null;
+      if (musicTrack && !fs.existsSync(musicTrack.path)) {
+        return { ok: false, error: 'File nhạc nền không tồn tại: ' + musicTrack.path };
+      }
       const result = await PyBackend.exportVideo({
         scenes,
         audioTracks,
+        musicTrack,
         outputPath: payload.outputPath || null,
         options: payload.options || {},
         onProgress: relayProgress,

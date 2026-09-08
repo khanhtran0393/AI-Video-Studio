@@ -21,6 +21,7 @@ const { registerSystemIpc } = require('./system');
 const { registerImzicIpc } = require('./imzic');
 const { registerWhiteboardIpc } = require('../../whiteboard-studio/ipc');
 const { registerTdtStudioIpc } = require('../../tdt-studio/ipc');
+const { registerSrtTranslateIpc } = require('../../srt-translate/ipc');
 
 function registerAllIpc() {
   registerFlowIpc();
@@ -44,6 +45,12 @@ function registerAllIpc() {
   try {
     registerTdtStudioIpc(ipcMain, { getState: () => state });
   } catch (e) { console.warn('[tdt-studio]', e && e.message); }
+
+  // ── Dịch SRT — port hành vi "AI Translate Subtitles" của app tham chiếu,
+  //    AI qua API đã cấu hình (nova/editor-pro/niche), file SRT thật trên đĩa ──
+  try {
+    registerSrtTranslateIpc(ipcMain, { getState: () => state });
+  } catch (e) { console.warn('[srt-translate]', e && e.message); }
 
   // ── CLI bridge native: app tự chạy gói Claude/ChatGPT của user (localhost:8795/8796) ──
   try { cliBridge.startAll(); } catch (e) { console.warn('[cli-bridge]', e && e.message); }

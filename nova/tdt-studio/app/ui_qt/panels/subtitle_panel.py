@@ -1140,7 +1140,7 @@ def _language_combo(*, include_auto: bool) -> QComboBox:
     items = LANGUAGES if include_auto else tuple((item for item in LANGUAGES if item[1] != 'auto'))
     return _choice(items)
 
-def _set_control_value(control: QWidget, value: object, *, use_text: bool) -> None:
+def _set_control_value(control: QWidget, value: object, *, use_text: bool = False) -> None:
     if isinstance(control, QCheckBox):
         control.setChecked(bool(value))
         return None

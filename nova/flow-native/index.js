@@ -7,7 +7,7 @@ const fs = require('fs');
 const { accounts, storeFile } = require('./nen-tang');
 const { startAutoRefresh, withGen } = require('./token-captcha');
 const { primary, statusPayload, addAccount, addAccountByCookie, refreshOne, setEnabled, removeAccount, setProxy, scanAll } = require('./dang-nhap');
-const { createProject, uploadImage, genImage, poolReset, poolAccounts, poolGen, genVideoPool, armVideoLearn, videoLearnStatus, videoLearnDump, armUpscaleLearn, upscaleLearnStatus, upscaleLearnDump, videoModels } = require('./gen');
+const { createProject, uploadImage, genImage, poolReset, poolAccounts, poolGen, genVideoPool, armVideoLearn, videoLearnStatus, videoLearnDump, armUpscaleLearn, upscaleLearnStatus, upscaleLearnDump, videoModels, videoModelStatus } = require('./gen');
 const { ensureWindow } = require('./tien-trinh');
 
 function restore() {
@@ -61,6 +61,7 @@ async function handle(action, payload = {}) {
       case 'UPSCALE_LEARN_STATUS': return upscaleLearnStatus();
       case 'UPSCALE_LEARN_DUMP':   return upscaleLearnDump();
       case 'VIDEO_MODELS':       return await videoModels();
+      case 'VIDEO_MODEL_STATUS': return videoModelStatus();
       default:               return { error: 'UNKNOWN_MESSAGE' };
     }
   } catch (e) {

@@ -14,7 +14,7 @@ def effect_title(effect_id: str) -> str:
 
 def clamp_effect_strength(value: Any) -> int:
     try:
-        pass
+        return max(0, min(100, int(value)))
     except (TypeError, ValueError):
         return DEFAULT_EFFECT_STRENGTH
 

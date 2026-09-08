@@ -67,6 +67,28 @@
     font-size:11px; text-transform:uppercase; letter-spacing:1.2px;
     color:var(--accent-2); font-weight:600; margin-bottom:10px;
   }
+  /* ---- section gọn dạng dropdown (<details>/<summary>) — mọi section sidebar ---- */
+  details.section > summary.section-title{
+    list-style:none; cursor:pointer; user-select:none;
+    display:flex; align-items:center; justify-content:space-between; gap:8px;
+    margin-bottom:0; padding:8px 10px;
+    background:var(--panel); border:1px solid var(--border); border-radius:9px;
+    transition:border-color .15s, background .15s;
+  }
+  details.section > summary.section-title::-webkit-details-marker{display:none;}
+  details.section > summary.section-title:hover{border-color:var(--accent); background:var(--panel-2);}
+  details.section > summary.section-title .hgroup{display:flex; align-items:center; gap:8px; min-width:0;}
+  details.section > summary.section-title .hint2{
+    font-size:10.5px; color:var(--muted); font-weight:500;
+    text-transform:none; letter-spacing:0;
+    max-width:130px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  details.section > summary.section-title .cv{
+    font-size:12px; color:var(--accent-2); flex-shrink:0;
+    transition:transform .15s;
+  }
+  details.section[open] > summary.section-title .cv{transform:rotate(180deg);}
+  details.section > .section-body{padding-top:12px;}
 
   .upload-box{
     border:1.5px dashed var(--border);
@@ -129,14 +151,15 @@
     font-size:13px; font-family:inherit;
   }
 
-  .chip-group{display:flex; flex-wrap:wrap; gap:6px;}
-  .chip{
-    padding:7px 12px; border-radius:20px; border:1px solid var(--border);
-    background:var(--panel); font-size:12px; cursor:pointer; color:var(--muted);
-    transition:all .15s; user-select:none;
+  /* dropdown gọn GUI — thay chip-group (nhiều lựa chọn → 1 menu thả) */
+  select.sel{
+    width:100%; background:var(--panel); color:var(--text);
+    border:1px solid var(--border); border-radius:9px; padding:8px 10px;
+    font-size:12.5px; font-family:inherit; cursor:pointer; transition:border-color .15s;
   }
-  .chip:hover{border-color:var(--accent);}
-  .chip.active{background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600;}
+  select.sel:hover{border-color:var(--accent);}
+  select.sel:focus{outline:none; border-color:var(--accent);}
+  select.sel option{background:var(--panel); color:var(--text);}
 
   .row2{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
   .color-row{display:flex; align-items:center; gap:10px;}
@@ -231,8 +254,15 @@
     <div class="brand"><span class="dot"></span>Ảnh & Nhạc</div>
     <div class="subtitle">Ghép ảnh với nhạc, zoom nảy theo nhịp bass, thêm hiệu ứng bay trên nền — mọi thứ chỉnh được, xem trước ngay.</div>
 
-    <div class="section">
-      <div class="section-title">1. Tệp gốc</div>
+    <details class="section" id="secFiles">
+      <summary class="section-title">
+        <span>1. Tệp gốc</span>
+        <span class="hgroup">
+          <span class="hint2" id="secFilesHint">Chưa chọn</span>
+          <span class="cv">⌄</span>
+        </span>
+      </summary>
+      <div class="section-body">
       <label class="upload-box" style="margin-bottom:10px;">
         <div class="ic">🖼️</div>
         <div class="meta">
@@ -252,12 +282,20 @@
       <div style="font-size:11px;color:var(--muted);margin-top:8px;line-height:1.5;">
         Trên điện thoại không bấm chọn được file? Thường do đang mở trang này trong trình duyệt của app khác (Messenger, Zalo, TikTok, Facebook...) — hãy chọn "Mở bằng Chrome/Safari" rồi thử lại.
       </div>
-    </div>
+      </div>
+    </details>
 
     <hr class="sep">
 
-    <div class="section">
-      <div class="section-title">2. Zoom theo nhịp</div>
+    <details class="section" id="secZoom">
+      <summary class="section-title">
+        <span>2. Zoom theo nhịp</span>
+        <span class="hgroup">
+          <span class="hint2" id="secZoomHint">1.00–1.18x</span>
+          <span class="cv">⌄</span>
+        </span>
+      </summary>
+      <div class="section-body">
       <div class="field">
         <div class="field-row"><label>Zoom nhỏ nhất</label><span class="val" id="v-zmin">1.00x</span></div>
         <input type="range" id="zoomMin" min="0.9" max="1.3" step="0.01" value="1.00">
@@ -274,32 +312,41 @@
         <div class="field-row"><label>Độ mượt (làm dịu giật)</label><span class="val" id="v-smooth">55%</span></div>
         <input type="range" id="smoothness" min="10" max="95" step="5" value="55">
       </div>
-    </div>
+      </div>
+    </details>
 
     <hr class="sep">
 
-    <div class="section">
-      <div class="section-title">3. Hiệu ứng bay</div>
+    <details class="section" id="secEffect">
+      <summary class="section-title">
+        <span>3. Hiệu ứng bay</span>
+        <span class="hgroup">
+          <span class="hint2" id="secEffectHint">Không</span>
+          <span class="cv">⌄</span>
+        </span>
+      </summary>
+      <div class="section-body">
       <div class="field">
-        <div class="chip-group" id="effectChips">
-          <div class="chip active" data-v="none">Không</div>
-          <div class="chip" data-v="snow">❄ Tuyết bay</div>
-          <div class="chip" data-v="leaves">🍂 Lá rơi</div>
-          <div class="chip" data-v="stars">✦ Sao bay</div>
-          <div class="chip" data-v="rain">🌧 Mưa bay</div>
-        </div>
+        <div class="field-row"><label>Hiệu ứng bay</label></div>
+        <select class="sel" id="effectSel">
+          <option value="none">Không</option>
+          <option value="snow">❄ Tuyết bay</option>
+          <option value="leaves">🍂 Lá rơi</option>
+          <option value="stars">✦ Sao bay</option>
+          <option value="rain">🌧 Mưa bay</option>
+        </select>
       </div>
 
       <div class="field">
         <div class="field-row"><label>Hướng bay</label></div>
-        <div class="chip-group" id="dirChips">
-          <div class="chip active" data-v="random">Ngẫu nhiên</div>
-          <div class="chip" data-v="left">← Trái</div>
-          <div class="chip" data-v="right">Phải →</div>
-          <div class="chip" data-v="down">↓ Xuống</div>
-          <div class="chip" data-v="up">↑ Lên</div>
-          <div class="chip" data-v="center">◎ Toả từ tâm</div>
-        </div>
+        <select class="sel" id="dirSel">
+          <option value="random">Ngẫu nhiên</option>
+          <option value="left">← Trái</option>
+          <option value="right">Phải →</option>
+          <option value="down">↓ Xuống</option>
+          <option value="up">↑ Lên</option>
+          <option value="center">◎ Toả từ tâm</option>
+        </select>
       </div>
 
       <div class="row2">
@@ -336,37 +383,48 @@
           <span style="font-size:12px;color:var(--muted)" id="colorHint">Mặc định theo hiệu ứng — đổi màu để tự chỉnh</span>
         </div>
       </div>
-    </div>
+      </div>
+    </details>
 
     <hr class="sep">
 
-    <div class="section">
-      <div class="section-title">4. Sóng nhạc</div>
+    <!-- "Sóng nhạc" gọn thành dropdown: bấm tiêu đề để mở/đóng — gợi ý bên phải
+         cho biết sóng đang Tắt hay đang chạy kiểu nào (JS cập nhật theo select). -->
+    <details class="section" id="waveSection">
+      <summary class="section-title">
+        <span>4. Sóng nhạc</span>
+        <span class="hgroup">
+          <span class="hint2" id="waveSectionHint">Tắt</span>
+          <span class="cv">⌄</span>
+        </span>
+      </summary>
+      <div class="section-body">
       <div class="field">
-        <div class="chip-group" id="waveChips">
-          <div class="chip active" data-v="off">Tắt</div>
-          <div class="chip" data-v="on">〜 Bật sóng nhạc</div>
-        </div>
+        <div class="field-row"><label>Sóng nhạc</label></div>
+        <select class="sel" id="waveOnSel">
+          <option value="off">Tắt</option>
+          <option value="on">〜 Bật sóng nhạc</option>
+        </select>
       </div>
 
       <div class="field" id="waveStyleField">
         <div class="field-row"><label>Kiểu sóng</label></div>
-        <div class="chip-group" id="waveStyleChips">
-          <div class="chip active" data-v="line">〜 Dòng chảy</div>
-          <div class="chip" data-v="ribbon">◠ Dải ruy băng</div>
-          <div class="chip" data-v="bars">▮▮▮ Cột nhạc gương</div>
-          <div class="chip" data-v="circular">◎ Vòng tròn nhịp</div>
-          <div class="chip" data-v="dots">•• Chấm nhấp nháy</div>
-          <div class="chip" data-v="rainbow">🌈 Dải cầu vồng</div>
-          <div class="chip" data-v="bottombars">▁▃▅ Cột đáy</div>
-          <div class="chip" data-v="arc">⌒ Vòng cung</div>
-          <div class="chip" data-v="glow">✨ Hạt phát sáng</div>
-          <div class="chip" data-v="twin">⌇⌇ Sóng đôi</div>
-          <div class="chip" data-v="dashed">┄┄ Nét đứt</div>
-          <div class="chip" data-v="spiral">🌀 Xoắn ốc</div>
-          <div class="chip" data-v="circledots">●●● Cột hạt tròn</div>
-          <div class="chip" data-v="neon">💡 Neon đôi</div>
-        </div>
+        <select class="sel" id="waveStyleSel">
+          <option value="line">〜 Dòng chảy</option>
+          <option value="ribbon">◠ Dải ruy băng</option>
+          <option value="bars">▮▮▮ Cột nhạc gương</option>
+          <option value="circular">◎ Vòng tròn nhịp</option>
+          <option value="dots">•• Chấm nhấp nháy</option>
+          <option value="rainbow">🌈 Dải cầu vồng</option>
+          <option value="bottombars">▁▃▅ Cột đáy</option>
+          <option value="arc">⌒ Vòng cung</option>
+          <option value="glow">✨ Hạt phát sáng</option>
+          <option value="twin">⌇⌇ Sóng đôi</option>
+          <option value="dashed">┄┄ Nét đứt</option>
+          <option value="spiral">🌀 Xoắn ốc</option>
+          <option value="circledots">●●● Cột hạt tròn</option>
+          <option value="neon">💡 Neon đôi</option>
+        </select>
       </div>
 
       <div class="field">
@@ -397,27 +455,75 @@
           <input type="color" id="waveColor" value="#9b8bff">
         </div>
       </div>
-    </div>
+      </div>
+    </details>
 
     <hr class="sep">
 
-    <div class="section">
-      <div class="section-title">5. Đồng bộ sớm</div>
+    <details class="section" id="secLead">
+      <summary class="section-title">
+        <span>5. Đồng bộ sớm</span>
+        <span class="hgroup">
+          <span class="hint2" id="secLeadHint">300 ms</span>
+          <span class="cv">⌄</span>
+        </span>
+      </summary>
+      <div class="section-body">
       <div class="field">
         <div class="field-row"><label>Zoom & sóng nhạc phản ứng sớm trước nhạc</label><span class="val" id="v-lead">300 ms</span></div>
         <input type="range" id="leadMs" min="0" max="800" step="10" value="300">
         <div style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5;">Hình & sóng sẽ "đón đầu" nhịp, còn tiếng nhạc phát trễ lại đúng bằng số mili-giây này để khớp cảm giác — 0ms = tắt, phản ứng đúng lúc nhạc vang lên.</div>
       </div>
-    </div>
+      </div>
+    </details>
 
     <hr class="sep">
 
-    <div class="section">
-      <div class="section-title">6. Khung hình</div>
-      <div class="chip-group" id="ratioChips">
-        <div class="chip active" data-v="portrait">▯ Dọc • 9:16</div>
-        <div class="chip" data-v="landscape">▭ Ngang • 16:9</div>
+    <details class="section" id="secFx">
+      <summary class="section-title">
+        <span>6. Hiệu ứng FX toàn khung</span>
+        <span class="hgroup">
+          <span class="hint2" id="secFxHint">Tắt</span>
+          <span class="cv">⌄</span>
+        </span>
+      </summary>
+      <div class="section-body">
+      <div class="field">
+        <div class="field-row"><label>Hiệu ứng</label></div>
+        <select class="sel" id="fxSel">
+          <option value="none">Tắt</option>
+          <option value="glitch">⚡ Glitch nhảy</option>
+          <option value="vhs">📼 VHS mòn</option>
+          <option value="zoomblur">🔍 Zoom mờ</option>
+          <option value="motionblur">💨 Motion blur</option>
+          <option value="noise">🎞 Nhiễu hạt phim</option>
+          <option value="pulse">💓 Nhịp co giật</option>
+        </select>
+        <div style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5;">Glitch/VHS/Nhiễu chạy theo nhịp giả ngẫu nhiên cố định (render lại giống hệt), Nhịp co giật đấm theo bass thật của nhạc. FX phủ LÊN TRÊN ảnh + hạt + sóng + lời, nằm trong cả video xuất.</div>
       </div>
+
+      <div class="field">
+        <div class="field-row"><label>Cường độ</label><span class="val" id="v-fxlevel">60%</span></div>
+        <input type="range" id="fxLevel" min="10" max="100" step="5" value="60">
+      </div>
+      </div>
+    </details>
+
+    <hr class="sep">
+
+    <details class="section" id="secFrame">
+      <summary class="section-title">
+        <span>7. Khung hình</span>
+        <span class="hgroup">
+          <span class="hint2" id="secFrameHint">▯ Dọc • 9:16</span>
+          <span class="cv">⌄</span>
+        </span>
+      </summary>
+      <div class="section-body">
+      <select class="sel" id="ratioSel" style="width:100%; margin-bottom:4px;">
+        <option value="portrait">▯ Dọc • 9:16</option>
+        <option value="landscape">▭ Ngang • 16:9</option>
+      </select>
       <div class="field" id="customSizeField" style="display:none; margin-top:12px;">
         <div class="field-row"><label>Kích thước tuỳ chỉnh (khổ ngang)</label></div>
         <div class="row2">
@@ -433,12 +539,20 @@
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </details>
 
     <hr class="sep">
 
-    <div class="section">
-      <div class="section-title">7. Lời bài hát (.srt)</div>
+    <details class="section" id="secLyric">
+      <summary class="section-title">
+        <span>8. Lời bài hát (.srt)</span>
+        <span class="hgroup">
+          <span class="hint2" id="secLyricHint">Chưa có</span>
+          <span class="cv">⌄</span>
+        </span>
+      </summary>
+      <div class="section-body">
 
       <label class="upload-box" style="margin-bottom:10px;">
         <div class="ic">📝</div>
@@ -481,10 +595,10 @@
 
       <div class="field">
         <div class="field-row"><label>Đổ bóng chữ</label></div>
-        <div class="chip-group" id="lyricShadowChips">
-          <div class="chip active" data-v="on">Bật</div>
-          <div class="chip" data-v="off">Tắt</div>
-        </div>
+        <select class="sel" id="lyricShadowSel">
+          <option value="on">Bật</option>
+          <option value="off">Tắt</option>
+        </select>
       </div>
 
       <div class="row2">
@@ -497,7 +611,8 @@
           <input type="range" id="lyricPosY" min="5" max="95" step="1" value="88">
         </div>
       </div>
-    </div>
+      </div>
+    </details>
   </div>
 
   <!-- ============ MAIN ============ -->
@@ -558,6 +673,7 @@
     zoomMin:1.00, zoomMax:1.18, sensitivity:1.0, smoothness:0.55,
     density:70, pspeed:1.0, sizeMin:4, sizeMax:12, alpha:0.85, color:null,
     waveOn:false, waveStyle:'line', wavePos:100, waveSize:4, waveHeight:60, waveWidth:85, waveColor:'#9b8bff',
+    fx:'none', fxLevel:0.6,
     leadMs:300,
     orientation:'portrait',
     lyricsCues:[], lyricFont:"'Inter',system-ui,sans-serif", lyricColor:'#ffffff', lyricSize:32,
@@ -1093,6 +1209,8 @@
     lyricsVersion++; // #perf: hạ cache wrap lời khi nạp SRT mới
     $('srtName').textContent = sourceLabel + ` (${parsed.length} dòng)`;
     setStatus(`Đã tải ${parsed.length} dòng lời.`, false);
+    // hint "8. Lời bài hát" trên tiêu đề section (khai báo function hoisted bên dưới)
+    if(typeof refreshSectionHints === 'function') refreshSectionHints();
   }
 
   function wrapLyricText(text, maxWidth){
@@ -1298,6 +1416,136 @@
     return oc;
   }
 
+  // ---- FX toàn khung (vizzy-style: glitch / vhs / zoom mờ / motion blur / hạt / nhịp) ----
+  // Post-process vẽ LÊN canvas sau ảnh+hạt+sóng+lời → tự nằm trong video xuất
+  // (MediaRecorder ghi canvas). Deterministic (Luật 8): mọi "ngẫu nhiên" là
+  // sin-hash theo số khung — render lại ra đúng từng khung, không Math.random.
+  let fxFrame = 0;
+  function fxH01(n){ const x = Math.sin(n*127.1 + 311.7)*43758.5453; return x - Math.floor(x); }
+
+  // 4 tile nhiễu hạt 256×256 sinh 1 lần bằng mulberry32 (seed cố định)
+  const fxNoiseTiles = [];
+  (function buildFxNoiseTiles(){
+    let seed = 20260906;
+    const rnd = () => {
+      seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+    for(let k=0;k<4;k++){
+      const c = document.createElement('canvas'); c.width = 256; c.height = 256;
+      const cc = c.getContext('2d');
+      const d = cc.createImageData(256, 256);
+      for(let i=0;i<d.data.length;i+=4){
+        const v = 36 + Math.floor(rnd()*184);
+        d.data[i]=v; d.data[i+1]=v; d.data[i+2]=v; d.data[i+3]=255;
+      }
+      cc.putImageData(d, 0, 0);
+      fxNoiseTiles.push(c);
+    }
+  })();
+  let fxNoisePatterns = null; // pattern tạo từ ctx chính, cache sau lần đầu
+  // tile scanline VHS: 1×4 px (2 sáng / 2 tối) — lặp bằng createPattern
+  const fxScanTile = (function(){
+    const c = document.createElement('canvas'); c.width = 1; c.height = 4;
+    const cc = c.getContext('2d');
+    cc.fillStyle = 'rgba(0,0,0,0.55)'; cc.fillRect(0, 2, 1, 2);
+    return c;
+  })();
+
+  function applyFx(bassEnergy){
+    const f = state.fx;
+    if(!f || f === 'none') return;
+    fxFrame++;
+    const W = canvas.width, H = canvas.height;   // toạ độ VẬT LÝ
+    const k = W / logicW;                        // logic → vật lý (khi ghi xuất phóng 1.5×)
+    const L = state.fxLevel;                     // 0.1..1
+    const fr = fxFrame;
+    const prevAlpha = ctx.globalAlpha, prevComp = ctx.globalCompositeOperation;
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    try{
+      if(f === 'glitch'){
+        // 1) tách màu RGB mảnh nhẹ MỖI khung
+        const shift = (2 + 10*L) * k * (fxH01(fr*0.331)*2 - 1);
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = 0.07 + 0.09*L;
+        ctx.drawImage(canvas, -shift, 0, W, H);
+        ctx.drawImage(canvas,  shift, 0, W, H);
+        // 2) trượt dải ngang — chỉ nổ ra trên ~12% khung theo sin-hash
+        if(fxH01(fr*0.713) > 1 - 0.12*L){
+          ctx.globalCompositeOperation = 'source-over';
+          ctx.globalAlpha = 1;
+          const nStrips = 2 + Math.floor(fxH01(fr*1.917)*3);
+          for(let i=0;i<nStrips;i++){
+            const sy = fxH01(fr*7.31 + i*13.7) * H;
+            const sh = (6 + fxH01(fr*3.77 + i*5.1) * H*0.05) * k;
+            const off = (fxH01(fr*9.13 + i*3.3)*2 - 1) * W * 0.06 * L;
+            ctx.drawImage(canvas, 0, sy, W, sh, off, sy, W, sh);
+          }
+        }
+      } else if(f === 'vhs'){
+        // 1) lệch màu nhẹ (chroma bleed)
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = 0.05 + 0.07*L;
+        ctx.drawImage(canvas, (2 + 4*L)*k, 0, W, H);
+        // 2) dải sáng lăn chậm dọc khung
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = 1;
+        const bandY = (((fr*0.004) % 1.3) - 0.15) * H;
+        const bandH = H*0.12;
+        const bg = ctx.createLinearGradient(0, bandY, 0, bandY + bandH);
+        bg.addColorStop(0, 'rgba(255,255,255,0)');
+        bg.addColorStop(0.5, 'rgba(255,255,255,' + (0.08*L).toFixed(3) + ')');
+        bg.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, bandY, W, bandH);
+        // 3) scanline đè mờ
+        ctx.globalAlpha = 0.22 + 0.18*L;
+        const pat = ctx.createPattern(fxScanTile, 'repeat');
+        ctx.fillStyle = pat;
+        ctx.fillRect(0, 0, W, H);
+      } else if(f === 'zoomblur'){
+        // vẽ lại chính khung phóng nhẹ 2 nấc — quét tia từ tâm ra
+        ctx.globalCompositeOperation = 'source-over';
+        const s1 = 1 + 0.008 + 0.03*L, s2 = 1 + 0.016 + 0.06*L;
+        ctx.globalAlpha = 0.22*L;
+        ctx.drawImage(canvas, -(W*(s1-1))/2, -(H*(s1-1))/2, W*s1, H*s1);
+        ctx.globalAlpha = 0.13*L;
+        ctx.drawImage(canvas, -(W*(s2-1))/2, -(H*(s2-1))/2, W*s2, H*s2);
+      } else if(f === 'motionblur'){
+        // vẽ lại chính khung trượt ngang — vệt lia máy
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = 0.18*L;
+        ctx.drawImage(canvas, -(6 + 10*L)*k, 0, W, H);
+        ctx.globalAlpha = 0.11*L;
+        ctx.drawImage(canvas,  (12 + 16*L)*k, 0, W, H);
+      } else if(f === 'noise'){
+        // hạt phim: 4 tile quay vòng theo số khung, đè bằng blend 'overlay'
+        if(!fxNoisePatterns) fxNoisePatterns = fxNoiseTiles.map(t => ctx.createPattern(t, 'repeat'));
+        ctx.globalCompositeOperation = 'overlay';
+        ctx.globalAlpha = 0.05 + 0.09*L;
+        ctx.fillStyle = fxNoisePatterns[fr % fxNoisePatterns.length];
+        ctx.fillRect(0, 0, W, H);
+      } else if(f === 'pulse'){
+        // viền tối co giật theo bass THẬT của FFT (0..1) — music-reactive
+        const a = Math.min(0.85, (0.22 + 0.60*bassEnergy) * L);
+        const g = ctx.createRadialGradient(W/2, H/2, Math.min(W,H)*0.26, W/2, H/2, Math.max(W,H)*0.72);
+        g.addColorStop(0, 'rgba(0,0,0,0)');
+        g.addColorStop(1, 'rgba(0,0,0,' + a.toFixed(3) + ')');
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, W, H);
+      }
+    } finally {
+      ctx.restore();
+      ctx.globalAlpha = prevAlpha;
+      ctx.globalCompositeOperation = prevComp;
+    }
+  }
+
   // ---- render loop ----
   let rafId = null;
   let lastT = performance.now();
@@ -1362,6 +1610,7 @@
     drawWave(dt);
     drawParticles(dt, smoothedTreble); // #bands: hạt nhịp theo dải treble
     drawLyrics();
+    applyFx(smoothedEnergy); // FX toàn khung phủ trên cùng (như z:90 của Nova)
 
     glowRing.style.setProperty('--pulse', (0.10 + smoothedEnergy*0.55).toFixed(3));
 
@@ -1520,37 +1769,38 @@
   $('alpha').addEventListener('input', e=>{ state.alpha = (+e.target.value)/100; $('v-alpha').textContent = e.target.value+'%'; });
   $('pcolor').addEventListener('input', e=>{ state.color = e.target.value; $('colorHint').textContent = 'Màu tuỳ chỉnh đang dùng'; });
 
-  function setupChips(groupId, key, after){
-    const chips = document.querySelectorAll('#'+groupId+' .chip');
-    chips.forEach(c=>{
-      c.addEventListener('click', ()=>{
-        chips.forEach(x=>x.classList.remove('active'));
-        c.classList.add('active');
-        state[key] = c.dataset.v;
-        if(after) after();
-      });
+  // chip-group đã gom thành dropdown (select) — hợp đồng state[key] giữ nguyên
+  function setupSel(selId, key, after){
+    const el = $(selId);
+    if(!el) return;
+    el.addEventListener('change', ()=>{
+      state[key] = el.value;
+      if(after) after();
     });
   }
-  // programmatically select a chip (and update state) without a user click
-  function setChipValue(groupId, key, value){
-    document.querySelectorAll('#'+groupId+' .chip').forEach(c=>{
-      c.classList.toggle('active', c.dataset.v === value);
-    });
+  // đặt giá trị dropdown (kèm cập nhật state) mà KHÔNG bắn change — tránh đệ quy
+  function setSelValue(selId, key, value){
+    const el = $(selId);
+    if(el) el.value = value;
     state[key] = value;
   }
-  setupChips('effectChips','effect', ()=>{
+  setupSel('effectSel','effect', ()=>{
     if(!state.colorTouched) $('pcolor').value = defaultColors[state.effect];
     if(state.effect==='rain' && !state.dirTouched){
-      setChipValue('dirChips','direction','down');
+      setSelValue('dirSel','direction','down');
     }
     rebuildParticles();
   });
-  setupChips('dirChips','direction', ()=>{ state.dirTouched = true; rebuildParticles(); });
+  setupSel('dirSel','direction', ()=>{ state.dirTouched = true; rebuildParticles(); });
   $('pcolor').addEventListener('change', ()=>{ state.colorTouched = true; });
 
   // ---- audio wave controls ----
-  setupChips('waveChips','waveOnRaw', ()=>{ state.waveOn = (state.waveOnRaw === 'on'); });
-  setupChips('waveStyleChips','waveStyle');
+  setupSel('waveOnSel','waveOnRaw', ()=>{ state.waveOn = (state.waveOnRaw === 'on'); });
+  setupSel('waveStyleSel','waveStyle');
+
+  // ---- FX toàn khung ----
+  $('fxSel').addEventListener('change', e=>{ state.fx = e.target.value; });
+  $('fxLevel').addEventListener('input', e=>{ state.fxLevel = (+e.target.value)/100; $('v-fxlevel').textContent = e.target.value+'%'; });
   $('wavePos').addEventListener('input', e=>{ state.wavePos = +e.target.value; $('v-wpos').textContent = e.target.value+'%'; });
   $('waveSize').addEventListener('input', e=>{ state.waveSize = +e.target.value; $('v-wsize').textContent = e.target.value+'px'; });
   $('waveHeight').addEventListener('input', e=>{ state.waveHeight = +e.target.value; $('v-wamp').textContent = e.target.value+'px'; });
@@ -1592,9 +1842,9 @@
   }
   function setOrientation(o){
     if(isExporting){
-      // chip click đã ghi state.orientation = o — hoàn tác về khổ đang áp dụng
+      // đổi select đã ghi state.orientation = o — hoàn tác về khổ đang áp dụng
       state.orientation = appliedOrientation;
-      setChipValue('ratioChips','orientation', appliedOrientation);
+      setSelValue('ratioSel','orientation', appliedOrientation);
       setStatus('Đang ghi video — không đổi khổ dọc/ngang giữa chừng (bản ghi sẽ hỏng).', true);
       return;
     }
@@ -1610,7 +1860,7 @@
       rebuildParticles();
     }
   }
-  setupChips('ratioChips','orientation', ()=> setOrientation(state.orientation));
+  setupSel('ratioSel','orientation', ()=> setOrientation(state.orientation));
   $('customW').addEventListener('change', applyLandscapeCustomSize);
   $('customH').addEventListener('change', applyLandscapeCustomSize);
 
@@ -1637,7 +1887,7 @@
   $('lyricFont').addEventListener('change', e=>{ state.lyricFont = e.target.value; });
   $('lyricSize').addEventListener('input', e=>{ state.lyricSize = +e.target.value; $('v-lsize').textContent = e.target.value+'px'; });
   $('lyricColor').addEventListener('input', e=>{ state.lyricColor = e.target.value; });
-  setupChips('lyricShadowChips','lyricShadowRaw', ()=>{ state.lyricShadow = (state.lyricShadowRaw === 'on'); });
+  setupSel('lyricShadowSel','lyricShadowRaw', ()=>{ state.lyricShadow = (state.lyricShadowRaw === 'on'); });
   $('lyricPosX').addEventListener('input', e=>{ state.lyricPosX = +e.target.value; $('v-lposx').textContent = e.target.value+'%'; });
   $('lyricPosY').addEventListener('input', e=>{ state.lyricPosY = +e.target.value; $('v-lposy').textContent = e.target.value+'%'; });
 
@@ -1647,11 +1897,12 @@
   // Khôi phục bằng cách set giá trị rồi dispatch lại event — listener sẵn có
   // sẽ tự cập nhật state + nhãn + rebuild, nên không phải nhân bản logic.
   const SETTINGS_KEY = 'imzic:settings:v1';
-  const SETTINGS_RANGE_IDS = ['zoomMin','zoomMax','sensitivity','smoothness','density','pspeed','sizeMin','sizeMax','alpha','wavePos','waveSize','waveHeight','waveWidth','leadMs','lyricSize','lyricPosX','lyricPosY'];
+  const SETTINGS_RANGE_IDS = ['zoomMin','zoomMax','sensitivity','smoothness','density','pspeed','sizeMin','sizeMax','alpha','wavePos','waveSize','waveHeight','waveWidth','leadMs','fxLevel','lyricSize','lyricPosX','lyricPosY'];
   const SETTINGS_COLOR_IDS = ['pcolor','waveColor','lyricColor'];
-  const SETTINGS_SELECT_IDS = ['lyricFont'];
+  const SETTINGS_SELECT_IDS = ['lyricFont','effectSel','dirSel','waveOnSel','waveStyleSel','ratioSel','lyricShadowSel','fxSel'];
   const SETTINGS_NUMBER_IDS = ['customW','customH'];
-  const SETTINGS_CHIP_GROUPS = ['ratioChips','effectChips','dirChips','waveChips','waveStyleChips','lyricShadowChips'];
+  // chip-group đã gom thành dropdown — bản lưu cũ có {chips:{}} được đổi tên ở loadSettings
+  const LEGACY_CHIP_TO_SEL = { effectChips:'effectSel', dirChips:'dirSel', waveChips:'waveOnSel', waveStyleChips:'waveStyleSel', ratioChips:'ratioSel', lyricShadowChips:'lyricShadowSel' };
 
   function saveSettings(){
     try{
@@ -1660,12 +1911,7 @@
         const el = $(id); if(el) inputs[id] = el.value;
       });
       const srtBox = $('srtPaste'); if(srtBox) inputs.srtPaste = srtBox.value.slice(0, 20000);
-      const chips = {};
-      SETTINGS_CHIP_GROUPS.forEach(gid=>{
-        const act = document.querySelector('#'+gid+' .chip.active');
-        if(act) chips[gid] = act.dataset.v;
-      });
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify({v:1, inputs, chips}));
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify({v:1, inputs}));
     }catch(e){
       // tiện ích best-effort: localStorage có thể bị khoá theo origin — không để chết tool
       console.warn('[I-MZic] Không lưu được cài đặt:', e && e.message);
@@ -1682,15 +1928,17 @@
     if(!data || data.v !== 1 || !data.inputs) return;
     try{
       const inp = data.inputs;
-      // 1) giá trị số phải vào TRƯỚC — chip khổ ngang được click sẽ đọc customW/H ngay
+      // 1) giá trị số phải vào TRƯỚC — select khổ ngang đổi sẽ đọc customW/H ngay
       SETTINGS_NUMBER_IDS.forEach(id=>{ if(inp[id] !== undefined && $(id)) $(id).value = inp[id]; });
-      // 2) chips — click() chạy đúng callback (đổi khổ, đặt màu mặc định hiệu ứng…)
-      SETTINGS_CHIP_GROUPS.forEach(gid=>{
-        const v = data.chips && data.chips[gid];
-        if(!v) return;
-        const chip = document.querySelector('#'+gid+' .chip[data-v="'+v+'"]');
-        if(chip && !chip.classList.contains('active')) chip.click();
-      });
+      // 2) chips bản cũ (trước khi gom dropdown) — đổi tên sang select rồi dispatch
+      //    change để listener sẵn có tự chạy callback (đổi khổ, màu mặc định…)
+      if(data.chips){
+        Object.keys(LEGACY_CHIP_TO_SEL).forEach(gid=>{
+          const v = data.chips[gid];
+          const el = v !== undefined ? $(LEGACY_CHIP_TO_SEL[gid]) : null;
+          if(el && el.value !== String(v)){ el.value = String(v); el.dispatchEvent(new Event('change')); }
+        });
+      }
       // 3) khổ ngang: áp kích thước tuỳ chỉnh đã lưu
       if(state.orientation === 'landscape'){
         ['customW','customH'].forEach(id=>{ if(inp[id] !== undefined && $(id)) $(id).dispatchEvent(new Event('change')); });
@@ -1711,9 +1959,6 @@
   });
   SETTINGS_SELECT_IDS.concat(SETTINGS_NUMBER_IDS).forEach(id=>{
     const el = $(id); if(el) el.addEventListener('change', saveSettingsSoon);
-  });
-  SETTINGS_CHIP_GROUPS.forEach(gid=>{
-    const g = $(gid); if(g) g.addEventListener('click', saveSettingsSoon);
   });
   const srtBox = $('srtPaste'); if(srtBox) srtBox.addEventListener('input', saveSettingsSoon);
   // loadSettings() được gọi SAU khi `let isExporting` được khai báo (bên dưới):
@@ -1748,6 +1993,73 @@
   }
   // giờ mới an toàn để khôi phục cài đặt: mọi listener đã đăng ký + isExporting đã khởi tạo
   loadSettings();
+
+  // ---- Sidebar gọn: MỌI section là dropdown (<details>) — gợi ý + nhớ mở/đóng ----
+  // Gợi ý trên tiêu đề luôn phản chiếu control thật (kể cả giá trị khôi phục từ
+  // localStorage), nên đặt sau loadSettings() — không nhân bản logic state.
+  const SECTIONS_OPEN_KEY = 'imzic:sectionsOpen:v1';
+  const WAVE_SECTION_OPEN_KEY_LEGACY = 'imzic:waveSectionOpen:v1'; // bản trước: chỉ section sóng
+  function selOptionText(id){
+    const s = $(id);
+    const o = s && s.selectedOptions && s.selectedOptions[0];
+    return o ? o.textContent.trim() : '';
+  }
+  const SECTION_HINTS = {
+    secFiles(){ return (state.imgFile ? 'Ảnh ✓' : 'Ảnh ✗') + ' · ' + (state.audioFile ? 'Nhạc ✓' : 'Nhạc ✗'); },
+    secZoom(){ return state.zoomMin.toFixed(2) + '–' + state.zoomMax.toFixed(2) + 'x'; },
+    secEffect(){ return state.effect === 'none' ? 'Không' : (selOptionText('effectSel') || 'Có'); },
+    waveSection(){ if(!state.waveOn) return 'Tắt'; return selOptionText('waveStyleSel') || 'Bật'; },
+    secLead(){ const v = $('v-lead'); return v ? v.textContent.trim() : ''; },
+    secFx(){ return state.fx === 'none' ? 'Tắt' : (selOptionText('fxSel') || 'Bật'); },
+    secFrame(){ return selOptionText('ratioSel'); },
+    secLyric(){ return (state.lyricsCues && state.lyricsCues.length) ? (state.lyricsCues.length + ' dòng') : 'Chưa có'; },
+  };
+  function refreshSectionHints(){
+    Object.keys(SECTION_HINTS).forEach(id=>{
+      const el = $(id + 'Hint');
+      if(el) el.textContent = SECTION_HINTS[id]();
+    });
+  }
+  // nguồn nhãn: chính control người dùng bấm — listener CỘNG THÊM, không đụng listener cũ
+  const SECTION_HINT_SOURCES = {
+    secFiles:    ['imgInput','audInput'],
+    secZoom:     ['zoomMin','zoomMax'],
+    secEffect:   ['effectSel'],
+    waveSection: ['waveOnSel','waveStyleSel'],
+    secLead:     ['leadMs'],
+    secFx:       ['fxSel'],
+    secFrame:    ['ratioSel'],
+  };
+  Object.keys(SECTION_HINT_SOURCES).forEach(id=>{
+    SECTION_HINT_SOURCES[id].forEach(src=>{
+      const el = $(src); if(!el) return;
+      el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', refreshSectionHints);
+    });
+  });
+  // lời bài hát không có event riêng → loadLyricsFromText() gọi refreshSectionHints() trực tiếp
+  refreshSectionHints();
+  // nhớ trạng thái mở/đóng từng section (best-effort như saveSettings; mặc định đóng cho gọn)
+  (function(){
+    let saved = null;
+    try{ saved = JSON.parse(localStorage.getItem(SECTIONS_OPEN_KEY) || 'null'); }catch(e){}
+    if(!saved || typeof saved !== 'object') saved = {};
+    Object.keys(SECTION_HINTS).forEach(id=>{
+      const el = $(id); if(!el) return;
+      let open = (saved[id] === true);
+      if(id === 'waveSection' && saved[id] === undefined){
+        // chuyển tiếp từ key cũ (chỉ lưu section sóng) để không mất lựa chọn của người dùng
+        try{ open = localStorage.getItem(WAVE_SECTION_OPEN_KEY_LEGACY) === '1'; }catch(e){}
+      }
+      el.open = open;
+      el.addEventListener('toggle', ()=>{
+        try{
+          const cur = JSON.parse(localStorage.getItem(SECTIONS_OPEN_KEY) || '{}');
+          cur[id] = el.open;
+          localStorage.setItem(SECTIONS_OPEN_KEY, JSON.stringify(cur));
+        }catch(e){}
+      });
+    });
+  })();
 
   // ---- #3: nút huỷ ghi giữa chừng ----
   $('cancelExportBtn').addEventListener('click', ()=>{

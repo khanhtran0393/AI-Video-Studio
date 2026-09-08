@@ -28,6 +28,7 @@ module.exports = {
   videoLearnStatus: video.videoLearnStatus,
   videoLearnDump: video.videoLearnDump,
   videoModels: video.videoModels,
+  videoModelStatus: video.videoModelStatus,
   // learn
   armUpscaleLearn: learn.armUpscaleLearn,
   upscaleLearnStatus: learn.upscaleLearnStatus,

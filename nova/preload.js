@@ -50,13 +50,21 @@ contextBridge.exposeInMainWorld('native', {
   thumbOutliers: (payload) => ipcRenderer.invoke('nova:thumbOutliers', payload),
   thumbFromUrl: (payload) => ipcRenderer.invoke('nova:thumbFromUrl', payload),
   onThumbOutliersProgress: (cb) => ipcRenderer.on('nova:thumbOutliersProgress', (_e, s) => cb(s)),
-  // Tìm Ngách (Niche Finder) — 6 module.
+  // Tìm Ngách (Niche Finder) — 7 module.
   niche: {
     attention: (p) => ipcRenderer.invoke('nova:niche:attention', p),
     hot: (p) => ipcRenderer.invoke('nova:niche:hot', p),
     scorecard: (p) => ipcRenderer.invoke('nova:niche:scorecard', p),
     similar: (p) => ipcRenderer.invoke('nova:niche:similar', p),
     bw: (p) => ipcRenderer.invoke('nova:niche:bw', p),
+    spike: (p) => ipcRenderer.invoke('nova:niche:spike', p),
+    comments: (p) => ipcRenderer.invoke('nova:niche:comments', p),
+    watchlist: (p) => ipcRenderer.invoke('nova:niche:watchlist', p),
+    compare: (p) => ipcRenderer.invoke('nova:niche:compare', p),
+    pain: (p) => ipcRenderer.invoke('nova:niche:pain', p),
+    forecast: (p) => ipcRenderer.invoke('nova:niche:forecast', p),
+    keywords: (p) => ipcRenderer.invoke('nova:niche:keywords', p),
+    breakdown: (p) => ipcRenderer.invoke('nova:niche:breakdown', p),
   },
   onNicheProgress: (cb) => ipcRenderer.on('nova:nicheProgress', (_e, s) => cb(s)),
   // Cầu nối Tool 2 → Editor Pro (đưa ảnh cảnh + thoại sang timeline).
@@ -135,6 +143,7 @@ contextBridge.exposeInMainWorld('native', {
     // dialogs media thật (main process) — không nhận đường dẫn hard-code từ GUI
     pickSrt: () => ipcRenderer.invoke('whiteboard:pickSrt'),
     pickAudio: () => ipcRenderer.invoke('whiteboard:pickAudio'),
+    pickMusic: () => ipcRenderer.invoke('whiteboard:pickMusic'),
     pickImage: () => ipcRenderer.invoke('whiteboard:pickImage'),
     pickImages: () => ipcRenderer.invoke('whiteboard:pickImages'),
     pickImagesDir: () => ipcRenderer.invoke('whiteboard:pickImagesDir'),
@@ -142,6 +151,9 @@ contextBridge.exposeInMainWorld('native', {
     // engine stream-ink (srt-whiteboard-animation, Python vendored)
     pyStatus: () => ipcRenderer.invoke('whiteboard:pyStatus'),
     pyPrepare: () => ipcRenderer.invoke('whiteboard:pyPrepare'),
+    // voice → SRT tiếng Việt (faster-whisper local, script của Nova)
+    whisperPrepare: () => ipcRenderer.invoke('whiteboard:whisperPrepare'),
+    generateSrt: (voicePath, model) => ipcRenderer.invoke('whiteboard:generateSrt', { voicePath, model }),
     parseSrt: (srtPath, opts) => ipcRenderer.invoke('whiteboard:parseSrt', { srtPath, opts }),
     probeImage: (path) => ipcRenderer.invoke('whiteboard:probeImage', { path }),
     annotationPreview: (image, annotation) => ipcRenderer.invoke('whiteboard:annotationPreview', { image, annotation }),
@@ -152,6 +164,13 @@ contextBridge.exposeInMainWorld('native', {
       ipcRenderer.on('whiteboard:exportProgress', listener);
       return () => ipcRenderer.removeListener('whiteboard:exportProgress', listener);
     },
+  },
+  // Dịch SRT — port hành vi "AI Translate Subtitles" (dialog media thật,
+  // AI qua API đã cấu hình; KHÔNG nhận đường dẫn repo ngoài từ GUI).
+  srtTranslate: {
+    pickSrt: () => ipcRenderer.invoke('srt-translate:pickSrt'),
+    pickOutput: (defaultName) => ipcRenderer.invoke('srt-translate:pickOutput', { defaultName }),
+    translate: (payload) => ipcRenderer.invoke('srt-translate:translate', payload),
   },
   // TDT Studio ("Studio") — app PyQt TDTStudio nhúng: process bridge
   // ở main (nova/tdt-studio/), runtime Python nội bộ, KHÔNG nhận

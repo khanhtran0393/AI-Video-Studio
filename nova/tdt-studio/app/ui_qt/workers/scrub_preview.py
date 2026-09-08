@@ -209,7 +209,7 @@ class ScrubPreviewDecoder(QObject):
             if start_proxy:
                 threading.Thread(target=self._build_proxy, args=(path,), name='vtp-scrub-proxy', daemon=True).start()
 
-    def request_frame(self, path: str, position_ms: int, *, precise: bool, show_atlas: bool) -> None:
+    def request_frame(self, path: str, position_ms: int, *, precise: bool = True, show_atlas: bool = False) -> None:
         with self._lock:
             if self._resource_save:
                 return None

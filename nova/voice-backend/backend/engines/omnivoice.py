@@ -55,6 +55,18 @@ class OmniVoiceEngine(TTSEngine):
 
         kwargs = {"text": req.text, "speed": float(req.speed)}
 
+        # Tham số nâng cao (nếu được cung cấp)
+        if req.top_p is not None:
+            kwargs["top_p"] = req.top_p
+        if req.top_k is not None:
+            kwargs["top_k"] = req.top_k
+        if req.repetition_penalty is not None:
+            kwargs["repetition_penalty"] = req.repetition_penalty
+        if req.generation_speed is not None:
+            kwargs["generation_speed"] = req.generation_speed
+        if req.diffusion_steps is not None:
+            kwargs["nfe_step"] = req.diffusion_steps  # OmniVoice dùng nfe_step cho diffusion steps
+
         # Chuẩn hoá số (tiếng Việt dùng num2words) nếu bật.
         if req.attributes.get("normalize_text"):
             kwargs["normalize_text"] = True

@@ -14,7 +14,7 @@ from pathlib import Path
 from queue import Queue
 from typing import Optional
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import Body, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -63,6 +63,10 @@ def _worker() -> None:
         if not task:
             continue
         task["status"] = "running"
+        task.setdefault("timings", {})
+        task["timings"]["queue_wait_ms"] = round(
+            (time.time() - task.get("created_at", time.time())) * 1000, 2,
+        )
         try:
             with _MODEL_LOCK:
                 if task["kind"] == "tts":
@@ -132,6 +136,9 @@ def _chunk_sentences(sentences: list[str], max_chars: int = 240) -> list[str]:
 def _run_tts(task: dict) -> None:
     from engines import TTSRequest
 
+    t_start = time.time()
+    task.setdefault("timings", {})
+
     p = task["payload"]
     sentences = split_sentences(p["text"])
     if not sentences:
@@ -176,6 +183,7 @@ def _run_tts(task: dict) -> None:
     ):
         task["total"] = 1
         wav = job_dir / "line_000.wav"
+        t_synth = time.time()
         engine.synthesize(
             TTSRequest(
                 text=p["text"].strip(), language=lang, ref_audio=ref_audio,
@@ -184,6 +192,7 @@ def _run_tts(task: dict) -> None:
             ),
             wav,
         )
+        task["timings"]["synth_total_ms"] = round((time.time() - t_synth) * 1000, 2)
         if abs(pitch) >= 1e-6:
             pitch_shift_wav(wav, pitch)
         merged_wav = job_dir / "output.wav"
@@ -204,13 +213,16 @@ def _run_tts(task: dict) -> None:
                        "duration": round(wav_duration(merged_wav), 2)}],
             "mode": "vieneu-gpu-batch",
         }
+        task["timings"]["total_ms"] = round((time.time() - t_start) * 1000, 2)
         return
 
     # ── Đường tổng quát (OmniVoice/XTTS, VieNeu CPU, chunk_chars=0) ────────
     # TĂNG TỐC: gộp câu thành khối ~240 ký tự (2-4 câu) → giảm số lần gọi model.
     max_chars = cc
     if max_chars > 0:
+        t_chunk = time.time()
         sentences = _chunk_sentences(sentences, max_chars)
+        task["timings"]["chunking_ms"] = round((time.time() - t_chunk) * 1000, 2)
     task["total"] = len(sentences)
 
     from concurrent.futures import ThreadPoolExecutor
@@ -226,6 +238,7 @@ def _run_tts(task: dict) -> None:
 
     with ThreadPoolExecutor(max_workers=2) as post:
         futs = []
+        t_synth = time.time()
         for i, sent in enumerate(sentences):
             wav = job_dir / f"line_{i:03d}.wav"
             engine.synthesize(
@@ -242,6 +255,7 @@ def _run_tts(task: dict) -> None:
             )
             futs.append((sent, wav, post.submit(_post, wav, pitch)))
             task["progress"] = i + 1
+        task["timings"]["synth_total_ms"] = round((time.time() - t_synth) * 1000, 2)
         for sent, wav, fut in futs:
             dur = fut.result()
             parts.append(wav)
@@ -265,6 +279,7 @@ def _run_tts(task: dict) -> None:
         "srt": f"/api/files/{task['id']}/output.srt",
         "lines": line_files,
     }
+    task["timings"]["total_ms"] = round((time.time() - t_start) * 1000, 2)
 
 
 def _run_asr(task: dict) -> None:
@@ -307,6 +322,12 @@ class TTSBody(BaseModel):
     # 0 = tắt gộp, đọc từng câu. Frontend gửi 400 cho kịch bản dài → nhanh hơn.
     chunk_chars: Optional[int] = 240
     attributes: dict = {}
+    # Các tham số nâng cao cho sampling/generation (dành riêng cho OmniVoice và các engine hỗ trợ)
+    top_p: Optional[float] = None          # 0.0-1.0, nucleus sampling (sáng tạo/ổn định)
+    top_k: Optional[int] = None            # số token top-k để lọc
+    repetition_penalty: Optional[float] = None  # >1.0 để giảm lặp (VieNeu/OmniVoice)
+    generation_speed: Optional[float] = None   # tốc độ generation riêng (OmniVoice)
+    diffusion_steps: Optional[int] = None      # số bước diffusion (cho engine hỗ trợ)
 
 
 class SaveVoiceBody(BaseModel):
@@ -399,6 +420,20 @@ def health():
     }
 
 
+@app.post("/api/prewarm")
+def api_prewarm(body: dict = Body(default=None)):
+    """Nạp sẵn engine TTS để lần đọc đầu không mất thời gian tải model."""
+    engine_name = (body or {}).get("engine")
+    if not engine_name:
+        engine_name = config.TTS_ENGINE or "mock"
+    try:
+        _, engine = _resolve_tts_engine({"engine": engine_name})
+        engine.load()
+        return {"status": "prewarmed", "engine": engine_name}
+    except Exception as e:
+        raise HTTPException(400, f"Không thể nạp engine {engine_name}: {str(e)}")
+
+
 @app.get("/api/voices")
 def api_voices():
     vs = voicebank.list_voices()
@@ -471,6 +506,7 @@ def api_status(tid: str):
         "id": t["id"], "kind": t["kind"], "status": t["status"],
         "progress": t["progress"], "total": t["total"],
         "results": t["results"], "error": t["error"],
+        "timings": t.get("timings"),
     }
 
 

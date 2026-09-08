@@ -1,4 +1,4 @@
-// IPC cho Tìm Ngách (Niche Finder) — 6 module. Progress qua 'nova:nicheProgress'.
+// IPC cho Tìm Ngách (Niche Finder) — 7 module. Progress qua 'nova:nicheProgress'.
 const N = require('./niche');
 function registerEditorProNiche(ipcMain, opts = {}) {
   const chans = [];
@@ -10,13 +10,56 @@ function registerEditorProNiche(ipcMain, opts = {}) {
   };
   const seedOf = (p) => String((p && (p.seed || p.query || p.channel)) || '').trim();
 
-  const opt = (p) => ({ fresh: !!p.fresh });
-  H('nova:niche:attention', wrap((e, p) => { if (!seedOf(p)) return { ok: false, error: 'Nhập từ khoá ngách' }; return N.attentionMarkets(seedOf(p), on(e), opt(p)); }));
+  const opt = (p) => ({ fresh: !!p.fresh, gl: p.gl || '' });
+  H('nova:niche:attention', wrap((e, p) => { const seed = seedOf(p) || ''; return N.attentionMarkets(seed, on(e), opt(p)); }));
   // ── 4 ô mới của tab Nghiên cứu Ngách ──
-  H('nova:niche:hot', wrap((e, p) => { if (!seedOf(p)) return { ok: false, error: 'Nhập từ khoá ngách' }; return N.hotTopics(seedOf(p), on(e), opt(p)); }));
+  H('nova:niche:hot', wrap((e, p) => { const seed = seedOf(p) || ''; return N.hotTopics(seed, on(e), opt(p)); }));
   H('nova:niche:scorecard', wrap((e, p) => { const u = String(p.channel || p.url || '').trim(); if (!u) return { ok: false, error: 'Nhập kênh đối thủ' }; return N.channelScorecard(u, on(e), { ...opt(p), count: p.count }); }));
   H('nova:niche:similar', wrap((e, p) => { const u = String(p.channel || p.url || '').trim(); if (!u) return { ok: false, error: 'Nhập kênh gốc' }; return N.similarChannels(u, on(e), { ...opt(p), limit: p.limit }); }));
   H('nova:niche:bw', wrap((e, p) => N.bwScore(p, on(e))));
+  // ⚡ Đột phá view — đo bằng 2 ảnh chụp (không cache, mỗi lần bấm là phép đo mới).
+  H('nova:niche:spike', wrap((e, p) => { const seed = seedOf(p) || ''; return N.viewSpikes(seed, on(e), { analyze: p.analyze }); }));
+  // ── Bình luận, theo dõi, so sánh ──
+  H('nova:niche:comments', wrap((e, p) => { if (!seedOf(p)) return { ok: false, error: 'Nhập từ khoá ngách' }; return N.commentMining(seedOf(p), on(e), opt(p)); }));
+  H('nova:niche:watchlist', wrap((e, p) => {
+    const action = String(p.action || 'tick').toLowerCase();
+    if (action === 'list') return { ok: true, list: N.watchlistList() };
+    if (action === 'add') {
+      if (!seedOf(p)) return { ok: false, error: 'Nhập từ khoá để thêm' };
+      return { ok: true, list: N.watchlistAdd(seedOf(p)) };
+    }
+    if (action === 'remove') {
+      if (!seedOf(p)) return { ok: false, error: 'Nhập từ khoá để xoá' };
+      return { ok: true, list: N.watchlistRemove(seedOf(p)) };
+    }
+    // mặc định: tick toàn bộ danh sách
+    return N.watchlistTick(on(e));
+  }));
+  H('nova:niche:compare', wrap((e, p) => {
+    const channels = p.channels || [];
+    if (!Array.isArray(channels) || !channels.length) return { ok: false, error: 'Cần danh sách kênh (mảng)' };
+    return N.compareChannels(channels, on(e), { ...opt(p), count: p.count });
+  }));
+  // Pain mining
+  H('nova:niche:pain', wrap((e, p) => {
+    const seed = seedOf(p) || '';
+    return N.painMining(seed, on(e), opt(p));
+  }));
+  // Trend forecast
+  H('nova:niche:forecast', wrap((e, p) => {
+    const seed = seedOf(p) || '';
+    return N.trendForecast(seed, on(e), opt(p));
+  }));
+  // Keyword clusters
+  H('nova:niche:keywords', wrap((e, p) => {
+    const seed = seedOf(p) || '';
+    return N.keywordClusters(seed, on(e), opt(p));
+  }));
+  // Top video breakdown
+  H('nova:niche:breakdown', wrap((e, p) => {
+    const seed = seedOf(p) || '';
+    return N.topVideoBreakdown(seed, on(e), opt(p));
+  }));
   return chans;
 }
 module.exports = { registerEditorProNiche };

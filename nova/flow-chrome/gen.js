@@ -112,8 +112,16 @@ function _vBodyFromLearned({ prompt, projectId, imageMediaId, capToken, modelKey
   _vDeepSet(body, (k) => k === 'projectId', String(projectId));
   _vDeepSet(body, (k) => k === 'seed', Math.floor(Date.now() % 100000));
   _vDeepSet(body, (k) => k === 'sessionId', ';' + Date.now());
-  if (modelKey) { const wantType = imageMediaId ? 'r2v' : 't2v'; const typed = _vResolveModelKey(modelKey).replace(/(^|_)(t2v|r2v|i2v)(?=_|$)/, '$1' + wantType); _vDeepSet(body, (k) => k === 'videoModelKey', typed); }
-  if (durationSecs) _vDeepSet2(body, (k) => k === 'videoModelKey', (cur) => (typeof cur === 'string' ? cur.replace(/_(\d+)s\b/, '_' + durationSecs + 's') : cur));
+  if (modelKey) {
+    const typed = _vResolveModelKey(modelKey);
+    if (imageMediaId) {
+      const R2V_FALLBACK = { 'veo_3_1_t2v_fast': 'veo_3_1_r2v_lite', 'veo_3_1_t2v': 'veo_3_1_r2v_lite', 'veo_3_1_t2v_lite': 'veo_3_1_r2v_lite', 'abra_t2v_8s': 'abra_r2v_8s' };
+      _vDeepSet(body, (k) => k === 'videoModelKey', R2V_FALLBACK[typed] || typed);
+    } else {
+      _vDeepSet(body, (k) => k === 'videoModelKey', typed);
+    }
+  }
+  if (durationSecs) _vDeepSet2(body, (k) => k === 'videoModelKey', (cur) => (typeof cur === 'string' && !/^abra_/.test(cur) ? cur.replace(/_(\d+)s\b/, '_' + durationSecs + 's') : cur));
   if (prompt) _vSetPrompt(body, prompt);
   if (imageMediaId) (function w(o) { if (!o || typeof o !== 'object') return; if (Array.isArray(o.referenceImages)) o.referenceImages.forEach((ri) => { if (ri && typeof ri === 'object' && 'mediaId' in ri) ri.mediaId = imageMediaId; }); for (const k of Object.keys(o)) if (o[k] && typeof o[k] === 'object') w(o[k]); })(body);
   return body;

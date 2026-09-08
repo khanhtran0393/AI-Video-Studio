@@ -9,12 +9,20 @@
 
    Hai chế độ (tab đầu panel):
    • 🚀 Dễ (mặc định) — 4 bước:
-       Bước 1 · Viết lời thoại (mỗi đoạn cách dòng trống = 1 cảnh)
+       Bước 1 · Nhận nguyên liệu (kịch bản + giọng đọc + ảnh từ tool phía trên)
+         + cụm "📥 Nhận dữ liệu từ tool khác trong app": kịch bản /
+           phân cảnh / tiêu đề (Tạo Kịch Bản · Phân Cảnh · YouTube
+           SEO), giọng đọc trong phiên (tool Giọng nói), ảnh nhân vật
+           (tool Prompt Nhân vật & Bối cảnh).
        Bước 2 · Thêm ảnh (không bắt buộc — thiếu vẫn chạy được)
-       Bước 3 · Tạo video (Agent dựng timeline → render MP4)
+       Bước 3 · Tạo video — 2 luồng:
+         - mặc định: window.native.documentary (create/runFull/
+           render — giữ nguyên payload cũ);
+         - tick "pipeline đầy đủ": gom dữ liệu đã nhận thành thư mục
+           dự án chuẩn §4 (script/ tts/ images/ + config.json — ghi
+           qua native.saveFile, KHÔNG thêm IPC mới) rồi chạy 17 bước
+           window.native.videoAgent (§26).
        Bước 4 · Video của bạn (xem trước / mở video / QA)
-     Bridge: window.native.documentary (create/runFull/render/…)
-     — giữ nguyên payload như panel cũ đã chạy được.
    • 📁 Nâng cao — pipeline Video Agent §25 đầy đủ (17 stage,
      states.js §26) trên thư mục dự án chuẩn (script/ tts/
      images/ music/ sfx/): chọn thư mục → checklist → chạy →
@@ -31,6 +39,20 @@
   const doc = () => (window.native && window.native.documentary) || null;
   const va25 = () => (window.native && window.native.videoAgent) || null;
   const sys = () => window.native || null;
+
+  /* ── dữ liệu từ tool khác trong app (binding toàn cục index.html) ──
+     Panel nạp sau các script inline nên let/const top-level đã khởi tạo.
+     `state` của app bị che tên bởi `state` nội bộ của panel → đọc qua
+     eval gián tiếp (chạy ở global scope). _giongSu / t9State không bị
+     che — truy cập trực tiếp, kèm typeof guard (tool chưa dùng thì
+     binding vắng → trả rỗng, UI hiện "chưa có", KHÔNG giả dữ liệu). */
+  function appGlobals() {
+    const out = { state: null, voices: [], seo: null };
+    try { out.state = (0, eval)('state') || null; } catch (_) { out.state = null; }
+    try { if (typeof _giongSu !== 'undefined' && Array.isArray(_giongSu)) out.voices = _giongSu; } catch (_) { out.voices = []; }
+    try { if (typeof t9State !== 'undefined' && t9State) out.seo = t9State; } catch (_) { out.seo = null; }
+    return out;
+  }
 
   /* ── DOM helpers ── */
   function el(tag, attrs = {}, ...children) {
@@ -106,17 +128,21 @@
     advProject: null,    // { projectDir, project, job } — chế độ Nâng cao
     advJobId: null,
     advRunning: false,
+    importedVoice: null, // { blob, ten, giay, khi, ext } — nhận từ tool Giọng nói
+    importedImages: [],  // [{ name, base64, mediaType, fileName }] — ảnh nhân vật đã nhận
+    easyPipeline: false, // Bước 3 (Dễ) đang chạy luồng videoAgent §25
   };
   /* ── tham chiếu UI (được build() tạo) ── */
   const ui = {
     root: null, notice: null,
     tabEasy: null, tabAdv: null, easyBox: null, advBox: null,
     // Dễ — Bước 1
-    titleInput: null, narrationArea: null, projectSelect: null, step1: null,
+    narrationArea: null, projectSelect: null, step1: null,
+    importBox: null, importBody: null, importSumBadge: null, importReady: null, pasteWrap: null,
     // Dễ — Bước 2
     chipsBox: null, step2: null,
     // Dễ — Bước 3
-    autoRenderChk: null, runBtn: null, easyProgFill: null, easyProgLabel: null, easyLog: null, step3: null,
+    autoRenderChk: null, fullPipelineChk: null, runBtn: null, easyProgFill: null, easyProgLabel: null, easyLog: null, step3: null,
     // Dễ — Bước 4
     step4: null, resultBox: null,
     // Nâng cao
@@ -156,6 +182,19 @@
     box.card.classList.remove('active', 'done');
     if (st) box.card.classList.add(st);
     if (box.numBox) box.numBox.textContent = st === 'done' ? '✓' : String(box.num);
+    /* đồng bộ nút tương ứng trên thanh tiến trình 4 bước (va-rail) */
+    const rn = ui.rail && ui.rail[box.num - 1];
+    if (rn && rn.node) {
+      rn.node.classList.remove('active', 'done');
+      if (st) rn.node.classList.add(st);
+      rn.dot.textContent = st === 'done' ? '✓' : String(box.num);
+    }
+  }
+
+  /** Đồng bộ highlight 2 thẻ luồng (Bước 3) theo trạng thái checkbox pipeline. */
+  function syncFlowCards() {
+    if (ui.flowFast && ui.fullPipelineChk) ui.flowFast.classList.toggle('on', !ui.fullPipelineChk.checked);
+    if (ui.flowFull && ui.fullPipelineChk) ui.flowFull.classList.toggle('on', !!ui.fullPipelineChk.checked);
   }
 
   /* ════════ DỰNG GIAO DIỆN ════════ */
@@ -195,55 +234,311 @@
     'Dưới lớp băng dày hàng kilomet là những hồ nước cổ đã cô lập hàng triệu năm.',
     'Chính vì vậy, các nhà khoa học đến đây để tìm hiểu lịch sử khí hậu của Trái Đất.',
   ].join('\n\n');
+  /* Tiêu đề dự án — KHÔNG có ô nhập riêng ở Bước 1: chỉ nhận qua thẻ nguồn
+     "Tiêu đề (tool YouTube SEO)" hoặc mở dự án đã lưu; chưa có thì tự đặt
+     từ dòng đầu kịch bản (nguyên liệu sẵn có) khi chạy. */
+  let easyTitle = '';
+  /* ✍️ Dán tay: mở/đóng ô textarea kịch bản thủ công (wrap ẩn mặc định). */
+  let easyPasteOpen = false;
+  /* ════════ NHẬN DỮ LIỆU TỪ TOOL KHÁC TRONG APP ════════
+     Đọc (không ghi) các binding toàn cục của index.html:
+     state.script / state.scenes (Tạo Kịch Bản · Phân Cảnh),
+     t9State.result.titles (YouTube SEO), _giongSu (Giọng nói —
+     bản trong phiên), state.characterImages (Prompt Nhân vật &
+     Bối cảnh), state.sceneImages (ảnh cảnh đã tạo từ prompt). */
+  function buildImportBox() {
+    /* Checklist nguyên liệu LUÔN MỞ (không còn <details>): mỗi dòng 1 nút
+       "Nhận", dấu ✓ khi đã nhận vào Agent, badge x/5 + dòng đủ/thiếu. */
+    ui.importBox = el('div', { class: 'va-import' });
+    ui.importSumBadge = el('span', { class: 'va-import-badge' }, '0/5');
+    ui.importReady = el('div', { class: 'va-import-ready' }, '');
+    ui.importBox.append(
+      el('div', { class: 'va-import-sum' },
+        el('span', { class: 'va-import-sum-ic' }, '🧺'),
+        el('span', { class: 'va-import-sum-t' },
+          el('b', {}, 'Checklist nguyên liệu'),
+          el('span', { class: 'va-import-sum-s' }, 'Kịch bản · Giọng đọc · Ảnh nhân vật · Ảnh cảnh · Tiêu đề')),
+        ui.importSumBadge),
+      ui.importReady);
+    ui.importBody = el('div', { class: 'va-src-grid' });
+    ui.importBox.append(ui.importBody);
+    return ui.importBox;
+  }
+
+  /** Vẽ lại danh sách nguồn: chỉ hiện nút "Dùng" khi tool gốc có dữ liệu. */
+  function renderImportBox() {
+    if (!ui.importBody) return;
+    ui.importBody.innerHTML = '';
+    const g = appGlobals();
+    const st = g.state || {};
+
+    const scriptText = String(st.script || '').trim();
+    const sceneTexts = (Array.isArray(st.scenes) ? st.scenes : [])
+      .map((s) => s && s.text).filter(Boolean);
+    const narr = String((ui.narrationArea && ui.narrationArea.value) || '').trim();
+    const srcReady = scriptText ? 'sẵn: kịch bản từ tool Tạo Kịch Bản'
+      : sceneTexts.length ? 'sẵn: ' + sceneTexts.length + ' cảnh từ tool Phân Cảnh' : '';
+    const scriptRow = importRow('📝', 'Kịch bản (Tạo Kịch Bản · Phân Cảnh) — BẮT BUỘC',
+      narr ? 'đã nhận — ' + narr.length + ' ký tự · mỗi đoạn cách dòng = 1 cảnh'
+        : (srcReady || 'chưa có — mở tool Tạo Kịch Bản / Phân Cảnh'),
+      (scriptText || sceneTexts.length) ? () => {
+        ui.narrationArea.value = scriptText || sceneTexts.join('\n\n');
+        syncEasyReady();
+        renderImportBox();
+        notice('Đã nhận kịch bản — Agent sẽ chia cảnh theo từng đoạn (TTS làm đồng hồ).', 'ok');
+      } : null, !!narr);
+    /* ✍️ Dán tay: fallback cho ai chưa chạy tool phía trên */
+    const pasteBtn = el('button', { class: 'va-btn ghost va-src-btn', title: 'Mở ô dán kịch bản thủ công' }, '✍️ Dán tay');
+    pasteBtn.addEventListener('click', () => {
+      easyPasteOpen = !easyPasteOpen;
+      if (ui.pasteWrap) ui.pasteWrap.classList.toggle('va-hide', !easyPasteOpen);
+    });
+    scriptRow.append(pasteBtn);
+    ui.importBody.append(scriptRow);
+
+    let seoTitle = '';
+    try {
+      seoTitle = String(((g.seo && g.seo.result && g.seo.result.titles) || [])[0] || '').trim();
+    } catch (_) { seoTitle = ''; }
+    if (!seoTitle) {
+      const t9 = document.getElementById('t9Title');
+      if (t9) seoTitle = String(t9.value || '').trim();
+    }
+    ui.importBody.append(importRow('🏷', 'Tiêu đề (tool YouTube SEO)',
+      seoTitle ? seoTitle : 'chưa có — mở tool YouTube SEO trước',
+      seoTitle ? () => {
+        easyTitle = seoTitle;
+        notice('Đã nhận tiêu đề phim từ tool YouTube SEO — sẽ dùng đặt tên video khi chạy.', 'ok');
+      } : null));
+
+    appendVoiceImport(g.voices);
+
+    const charImgs = [];
+    const ci = st.characterImages || {};
+    for (const name of Object.keys(ci)) {
+      const img = ci[name];
+      if (img && img.base64) {
+        charImgs.push({ name, base64: img.base64, mediaType: img.mediaType || 'image/png', fileName: img.fileName });
+      }
+    }
+    ui.importBody.append(importRow('🖼', 'Ảnh nhân vật (tool Prompt Nhân vật & Bối cảnh)',
+      charImgs.length ? charImgs.length + ' ảnh' : 'chưa có — mở tool Prompt Nhân vật & Bối cảnh trước',
+      charImgs.length ? () => {
+        state.importedImages = charImgs.map((c) => ({ ...c }));
+        notice('Đã nhận ' + charImgs.length + ' ảnh nhân vật — sẽ ghi vào images/ khi chạy pipeline đầy đủ (Bước 3).', 'ok');
+        renderImportBox();
+      } : null));
+
+    /* Ảnh cảnh đã tạo từ prompt (tool Phân Cảnh) — Agent chỉ nhận ảnh
+       sẵn có, không tự sinh: ghép vào images/ rồi tự xếp theo timeline. */
+    const sceneImgs = [];
+    const si = st.sceneImages || {};
+    for (const sid of Object.keys(si)) {
+      const img = si[sid];
+      if (img && img.base64) {
+        sceneImgs.push({ name: 'canh-' + sid, base64: img.base64, mediaType: img.mediaType || 'image/png', fileName: img.fileName || ('canh-' + sid + '.png') });
+      }
+    }
+    ui.importBody.append(importRow('🖼', 'Ảnh cảnh đã tạo (tool Phân Cảnh · Prompt ảnh)',
+      sceneImgs.length ? sceneImgs.length + ' ảnh' : 'chưa có — tạo ảnh ở tab Prompt ảnh trước',
+      sceneImgs.length ? () => {
+        state.importedImages = state.importedImages.concat(sceneImgs.map((c) => ({ ...c })));
+        notice('Đã nhận ' + sceneImgs.length + ' ảnh cảnh — Agent sẽ ghi vào images/ và tự xếp đúng timeline giọng đọc.', 'ok');
+        renderImportBox();
+      } : null));
+
+    /* chip giọng đọc / ảnh nhân vật panel đang giữ */
+    if (state.importedVoice) {
+      ui.importBody.append(el('div', { class: 'va-chips' },
+        el('span', { class: 'va-chip', title: state.importedVoice.ten },
+          '🎧 ' + state.importedVoice.ten + ' · ' + fmt(state.importedVoice.giay) + ' giây',
+          el('button', { onclick: () => { state.importedVoice = null; renderImportBox(); }, title: 'Bỏ giọng đọc này' }, '✕'))));
+    }
+    if (state.importedImages.length) {
+      const chips = el('div', { class: 'va-chips' });
+      state.importedImages.forEach((img, i) => {
+        chips.append(el('span', { class: 'va-chip', title: img.fileName || img.name },
+          '🖼 ' + img.name,
+          el('button', { onclick: () => { state.importedImages.splice(i, 1); renderImportBox(); }, title: 'Bỏ ảnh này' }, '✕')));
+      });
+      ui.importBody.append(chips);
+    }
+
+    /* badge trên summary: số nguồn sẵn sàng nhận ngay */
+    if (ui.importSumBadge && ui.importBody) {
+      const kids = Array.prototype.slice.call(ui.importBody.children || []);
+      const ok = kids.filter((c) => String(c.className || '').split(' ').indexOf('ok') >= 0).length;
+      ui.importSumBadge.textContent = String(ok);
+    }
+    ui.importBody.append(el('div', { class: 'va-hint' },
+      '💡 Dữ liệu chỉ được đọc từ tool gốc — không thay đổi gì ở tool đó. Giọng đọc & ảnh nhân vật chỉ được dùng ở luồng "Pipeline đầy đủ" (Bước 3).'));
+  }
+
+  /** 1 thẻ nguồn dữ liệu (card): icon · tên · tình trạng · nút "Nhận"/"Dùng".
+      done=true → đã nhận vào Agent (icon ✓, class ok); onUse → nút nhận;
+      không có dữ liệu cũng chưa nhận → class .bad. */
+  function importRow(icon, label, desc, onUse, done) {
+    const card = el('div', { class: 'va-src' + (done || onUse ? ' ok' : ' bad') });
+    card.append(
+      el('span', { class: 'va-src-ic' }, done ? '✓' : icon),
+      el('div', { class: 'va-src-info' },
+        el('div', { class: 'va-src-name' }, label),
+        el('div', { class: 'va-src-desc' }, desc)),
+    );
+    if (onUse) {
+      const btn = el('button', { class: 'va-btn va-src-btn' }, done ? 'Nhận lại' : 'Nhận');
+      btn.addEventListener('click', onUse);
+      card.append(btn);
+    } else if (done) {
+      card.append(el('span', { class: 'va-src-check' }, '✓'));
+    }
+    return card;
+  }
+
+  /** Giọng đọc: thẻ nguồn riêng (wide) — select các bản trong phiên + nút "Nhận". */
+  function appendVoiceImport(voices) {
+    const list = Array.isArray(voices) ? voices : [];
+    const done = !!state.importedVoice;
+    if (!list.length) {
+      ui.importBody.append(importRow('🎧', 'Giọng đọc đã tạo (tool Giọng nói)',
+        done ? 'đã nhận: ' + state.importedVoice.ten + ' · ' + fmt(state.importedVoice.giay) + ' giây'
+          : 'chưa có bản nào trong phiên này',
+        null, done));
+      return;
+    }
+    const sel = el('select', { class: 'va-field', style: 'width:auto;min-width:0;flex:1' });
+    list.forEach((h, i) => {
+      sel.append(el('option', { value: String(i) }, (h.ten || 'bản ghi') + ' · ' + fmt(h.giay) + ' giây'));
+    });
+    const useBtn = el('button', { class: 'va-btn va-src-btn', style: 'padding:6px 16px' }, done ? 'Nhận lại' : 'Nhận');
+    useBtn.addEventListener('click', () => {
+      const h = list[Number(sel.value)] || list[0];
+      if (!h || !h.blob) { notice('Bản giọng đọc này thiếu dữ liệu audio — hãy tạo lại ở tool Giọng nói.'); return; }
+      state.importedVoice = {
+        blob: h.blob,
+        ten: h.ten || 'bản giọng đọc',
+        giay: h.giay || 0,
+        khi: h.khi || Date.now(),
+        ext: /(mpeg|mp3)/.test(String(h.blob.type || '')) ? 'mp3' : 'wav',
+      };
+      /* nhận được giọng đọc → bật pipeline đầy đủ (người dùng bấm thẻ Nhanh để bỏ) */
+      if (ui.fullPipelineChk) ui.fullPipelineChk.checked = true;
+      if (ui.autoRenderChk) ui.autoRenderChk.disabled = true;
+      syncFlowCards();
+      renderImportBox();
+      notice('Đã nhận giọng đọc — đã chuyển sang luồng "Pipeline đầy đủ" ở Bước 3 (bấm thẻ Nhanh nếu muốn luồng nhẹ).', 'ok');
+    });
+    const card = el('div', { class: 'va-src' + (done ? ' ok' : ' bad') + ' wide' });
+    card.append(
+      el('span', { class: 'va-src-ic' }, done ? '✓' : '🎧'),
+      el('div', { class: 'va-src-info' },
+        el('div', { class: 'va-src-name' }, 'Giọng đọc đã tạo (tool Giọng nói)'),
+        el('div', { class: 'va-voice-pick' }, sel, useBtn)));
+    if (done) card.append(el('span', { class: 'va-src-check' }, '✓'));
+    ui.importBody.append(card);
+  }
+
   /* ════════ CHẾ ĐỘ DỄ ════════ */
+  const RAIL_LABELS = ['Nguyên liệu', 'Ảnh', 'Tạo video', 'Xem video'];
   function buildEasy(box) {
+    /* ── banner chế độ Dễ + thanh tiến trình 4 bước (va-rail) ── */
+    const hero = el('div', { class: 'va-hero' },
+      el('div', { class: 'va-hero-in' },
+        el('span', { class: 'va-hero-badge' }, '🎬 NOVA VIDEO AGENT'),
+        el('h2', { class: 'va-hero-title' }, 'Lắp ráp video faceless trong 4 bước'),
+        el('p', { class: 'va-hero-sub' },
+          'Nhận kịch bản, giọng đọc (TTS), ảnh nhân vật & ảnh đã tạo từ prompt ở các tool phía trên — Agent tự chia cảnh theo timeline giọng đọc, xếp ảnh đúng từng câu, rồi render MP4.'),
+        el('div', { class: 'va-hero-chips' },
+          el('span', { class: 'va-hero-chip' }, '📝 Kịch bản đã có'),
+          el('span', { class: 'va-hero-chip' }, '🎙 Giọng đọc TTS làm đồng hồ'),
+          el('span', { class: 'va-hero-chip' }, '🖼 Ảnh đã tạo từ prompt'),
+          el('span', { class: 'va-hero-chip' }, '⚙ Pipeline 17 bước (tuỳ chọn)'))));
+    const rail = el('div', { class: 'va-rail' });
+    ui.rail = RAIL_LABELS.map((lbl, i) => {
+      const dot = el('span', { class: 'va-rail-dot' }, String(i + 1));
+      const node = el('div', { class: 'va-rail-node' }, dot, el('span', { class: 'va-rail-lbl' }, lbl));
+      rail.append(node);
+      return { node, dot };
+    });
     const steps = el('div', { class: 'va-steps' });
 
-    /* ── BƯỚC 1 · Viết lời thoại ── */
-    const s1 = stepCard(1, 'Viết lời thoại', 'Mỗi đoạn cách nhau bằng một dòng trống sẽ thành 1 cảnh phim.');
+    /* ── BƯỚC 1 · Nhận nguyên liệu từ các tool phía trên ── */
+    const s1 = stepCard(1, 'Nhận nguyên liệu', 'Nhận kịch bản, giọng đọc, ảnh từ các tool phía trên — hoặc dán kịch bản bên dưới. Mỗi đoạn cách nhau bằng một dòng trống sẽ thành 1 cảnh phim.');
     ui.step1 = s1;
-    ui.titleInput = el('input', { class: 'va-field', id: 'vaTitle', placeholder: 'Tiêu đề phim (vd: Kỳ quan Nam Cực)' });
-    ui.narrationArea = el('textarea', { class: 'va-field', id: 'vaNarration', placeholder: 'Viết hoặc dán lời thoại tại đây…\n\nĐoạn 1 sẽ là cảnh mở màn.\n\nĐoạn 2 là cảnh tiếp theo.' });
+    ui.narrationArea = el('textarea', { class: 'va-field', id: 'vaNarration', placeholder: 'Dán kịch bản (narration) tại đây nếu chưa nhận từ tool phía trên…\n\nĐoạn 1 sẽ là cảnh mở màn.\n\nĐoạn 2 là cảnh tiếp theo.' });
     ui.narrationArea.addEventListener('input', syncEasyReady);
     const sampleBtn = el('button', { class: 'va-btn ghost', onclick: fillSample }, '✨ Điền ví dụ mẫu');
     ui.projectSelect = el('select', { class: 'va-field', id: 'vaProjectSelect' });
     ui.projectSelect.append(el('option', { value: '' }, '— Mở dự án đã có (nếu có) —'));
     ui.projectSelect.addEventListener('change', () => { if (ui.projectSelect.value) openEasyProject(ui.projectSelect.value); });
     s1.body.append(
-      el('div', {}, el('div', { class: 'va-lbl' }, 'Tiêu đề'), ui.titleInput),
-      el('div', {}, el('div', { class: 'va-lbl' }, 'Lời thoại (narration)'), ui.narrationArea),
+      el('div', {}, el('div', { class: 'va-lbl' }, 'Kịch bản / lời thoại (narration)'), ui.narrationArea),
       el('div', { class: 'va-row' }, sampleBtn),
-      el('div', { class: 'va-hint' }, '💡 Mẹo: 1 đoạn ngắn 1–2 câu = 1 cảnh đẹp. Agent tự chia giọng đọc theo từng cảnh.'),
+      el('div', { class: 'va-hint' }, '💡 Mẹo: 1 đoạn ngắn 1–2 câu = 1 cảnh đẹp. Agent chia timeline theo từng câu của giọng đọc (TTS là master clock).'),
       el('div', { class: 'va-hint' }, '📂 Dự án đã lưu trước đó:'),
       ui.projectSelect,
+      buildImportBox(),
     );
 
     /* ── BƯỚC 2 · Thêm ảnh ── */
-    const s2 = stepCard(2, 'Thêm ảnh cho video', 'Không bắt buộc — bỏ qua nếu bạn muốn video dạng chữ + nền.');
+    const s2 = stepCard(2, 'Thêm ảnh cho video', 'Tuỳ chọn — ảnh nhân vật & ảnh cảnh nhận ở Bước 1 là đủ; chọn thêm ảnh từ máy nếu muốn.');
     ui.step2 = s2;
     const pickBtn = el('button', { class: 'va-btn', onclick: pickAsset }, '📁 Chọn ảnh…');
     ui.chipsBox = el('div', { class: 'va-chips', id: 'vaChips' });
     s2.body.append(
       el('div', { class: 'va-row' }, pickBtn),
       ui.chipsBox,
-      el('div', { class: 'va-hint' }, '💡 Agent sẽ tự ghép mỗi ảnh vào cảnh phù hợp với nội dung. Có thể chọn nhiều lần.'),
+      el('div', { class: 'va-hint' }, '💡 Agent sẽ tự ghép mỗi ảnh vào cảnh khớp nội dung theo timeline giọng đọc. Có thể chọn nhiều lần.'),
     );
 
     /* ── BƯỚC 3 · Tạo video ── */
-    const s3 = stepCard(3, 'Tạo video', 'Agent dựng timeline theo giọng đọc rồi render MP4 — chỉ cần bấm 1 nút.');
+    const s3 = stepCard(3, 'Tạo video', 'Agent chia cảnh theo timeline giọng đọc, xếp ảnh từng câu, rồi render MP4 — chỉ cần bấm 1 nút.');
     ui.step3 = s3;
     ui.autoRenderChk = el('input', { type: 'checkbox', checked: 'checked' });
-    ui.runBtn = el('button', { class: 'va-btn primary big', id: 'vaRunBtn', onclick: runEasy }, '🎬 Tạo video của tôi');
+    ui.fullPipelineChk = el('input', { type: 'checkbox' });
+    ui.fullPipelineChk.addEventListener('change', () => {
+      /* pipeline §25 luôn render MP4 hoàn chỉnh → khoá tuỳ chọn render riêng */
+      if (ui.autoRenderChk) ui.autoRenderChk.disabled = !!(ui.fullPipelineChk && ui.fullPipelineChk.checked);
+      syncFlowCards();
+    });
+    ui.runBtn = el('button', { class: 'va-btn primary big va-cta', id: 'vaRunBtn', onclick: runEasy }, '🎬 Tạo video của tôi');
     ui.easyProgFill = el('div', { class: 'va-prog-fill', id: 'vaProgressFill' });
     ui.easyProgLabel = el('span', { class: 'va-hint', id: 'vaProgressLabel' }, 'Chưa chạy.');
     ui.easyLog = el('div', { class: 'va-log', id: 'vaLog', style: 'display:none' });
+    /* 2 thẻ luồng: thẻ Pipeline là label ô checkbox (bấm là tick), thẻ Nhanh
+       là div tự tắt pipeline. Trạng thái .on chỉ để CSS highlight. */
+    const selectFastFlow = () => {
+      if (ui.fullPipelineChk && ui.fullPipelineChk.checked) {
+        ui.fullPipelineChk.checked = false;
+        if (ui.autoRenderChk) ui.autoRenderChk.disabled = false;
+        syncFlowCards();
+      }
+    };
+    ui.flowFull = el('label', { class: 'va-flow' }, ui.fullPipelineChk,
+      el('div', { class: 'va-flow-ic' }, '⚙'),
+      el('div', { class: 'va-flow-t' },
+        el('b', {}, 'Pipeline đầy đủ 17 bước'),
+        el('span', {}, 'Dùng giọng đọc & ảnh nhân vật đã nhận — render MP4 hoàn chỉnh, QA từng cảnh.')),
+      el('span', { class: 'va-flow-check' }, '✓'));
+    ui.flowFast = el('div', { class: 'va-flow on', role: 'button', tabindex: '0',
+      onclick: selectFastFlow,
+      onkeydown: (ev) => { if (ev && (ev.key === 'Enter' || ev.key === ' ')) selectFastFlow(); } },
+      el('div', { class: 'va-flow-ic' }, '⚡'),
+      el('div', { class: 'va-flow-t' },
+        el('b', {}, 'Nhanh (mặc định)'),
+        el('span', {}, 'Engine documentary dựng ngay — không cần giọng đọc hay thư mục dự án.')),
+      el('span', { class: 'va-flow-check' }, '✓'));
     s3.body.append(
-      el('label', { class: 'va-opt' }, ui.autoRenderChk, el('span', {}, 'Tự render MP4 sau khi dựng xong (khuyến nghị)')),
+      el('div', { class: 'va-lbl' }, 'Chọn luồng tạo video'),
+      el('div', { class: 'va-flow-grp' }, ui.flowFast, ui.flowFull),
+      el('div', { class: 'va-hint' }, '💡 Nhận giọng đọc ở Bước 1 sẽ tự chuyển sang luồng Pipeline đầy đủ.'),
+      el('label', { class: 'va-opt' }, ui.autoRenderChk, el('span', {}, 'Tự render MP4 sau khi dựng xong (khuyến nghị — chỉ luồng Nhanh)')),
       el('div', { class: 'va-row' }, ui.runBtn),
       el('div', { class: 'va-prog' }, ui.easyProgFill),
       ui.easyProgLabel,
       ui.easyLog,
     );
+    syncFlowCards();
 
     /* ── BƯỚC 4 · Video của bạn ── */
     const s4 = stepCard(4, 'Video của bạn', 'Sẽ hiện ở đây sau khi Agent chạy xong.');
@@ -252,7 +547,7 @@
     s4.body.append(ui.resultBox);
 
     steps.append(s1.card, s2.card, s3.card, s4.card);
-    box.append(steps);
+    box.append(hero, rail, steps);
     setStepState(ui.step1, 'active');
     renderChips();
   }
@@ -336,9 +631,17 @@
     });
   }
   /* ════════ CHẾ ĐỘ DỄ — LOGIC ════════ */
+  /** Tiêu đề dự án: ưu tiên tiêu đề nhận từ tool YouTube SEO / dự án đã mở;
+      chưa có thì tự đặt từ dòng đầu kịch bản; cùng lắm fallback "Video". */
+  function easyProjectTitle() {
+    if (easyTitle) return easyTitle;
+    const firstLine = String((ui.narrationArea && ui.narrationArea.value) || '')
+      .split('\n').map((l) => l.trim()).filter(Boolean)[0] || '';
+    return firstLine ? firstLine.slice(0, 60) : 'Video';
+  }
   function fillSample() {
-    if (!ui.titleInput || !ui.narrationArea) return;
-    ui.titleInput.value = SAMPLE_TITLE;
+    if (!ui.narrationArea) return;
+    easyTitle = SAMPLE_TITLE;
     ui.narrationArea.value = SAMPLE_NARRATION;
     syncEasyReady();
     notice('Đã điền ví dụ mẫu — bấm "🎬 Tạo video của tôi" ở Bước 3 để thử.', 'info');
@@ -378,15 +681,17 @@
   }
 
   async function runEasy() {
-    const bridge = doc();
-    if (!bridge) { notice('Chưa có native bridge. Hãy mở tab này từ app Electron.'); return; }
     if (state.running) return;
     const narration = ui.narrationArea.value.trim();
     if (!narration) {
-      notice('Bạn hãy viết lời thoại ở Bước 1 trước nhé (hoặc bấm "Điền ví dụ mẫu").');
+      notice('Bạn hãy dán kịch bản ở Bước 1 trước (hoặc bấm "Điền ví dụ mẫu").');
       if (ui.step1 && ui.step1.card) ui.step1.card.scrollIntoView({ behavior: 'smooth' });
       return;
     }
+    if (ui.fullPipelineChk && ui.fullPipelineChk.checked) { await runEasyPipeline(); return; }
+
+    const bridge = doc();
+    if (!bridge) { notice('Chưa có native bridge. Hãy mở tab này từ app Electron.'); return; }
 
     state.running = true;
     state.outputPath = null;
@@ -403,11 +708,12 @@
     try {
       const projectId = `video_${Date.now().toString(36)}`;
       state.projectId = projectId;
-      logLine(ui.easyLog, `Tạo dự án "${ui.titleInput.value.trim() || 'Không tên'}" (${projectId})…`);
+      const projTitle = easyProjectTitle();
+      logLine(ui.easyLog, `Tạo dự án "${projTitle}" (${projectId})…`);
       await bridge.create({
         projectId,
         overwrite: true,
-        title: ui.titleInput.value.trim() || 'Không tên',
+        title: projTitle,
         narration,
         assets: state.assets,
       });
@@ -450,6 +756,226 @@
       syncEasyReady();
     }
   }
+  /* ════════ CHẾ ĐỘ DỄ — LUỒNG PIPELINE ĐẦY ĐỦ (videoAgent §25) ════════
+     Gom dữ liệu wizard (lời thoại + giọng đọc/ảnh đã nhận) thành thư mục
+     dự án chuẩn §4 (script/ tts/ images/ + config.json) rồi chạy 17 bước.
+     Ghi file qua native.saveFile / readFileB64 có sẵn — KHÔNG thêm kênh
+     IPC mới (Luật 1). */
+  function b64FromText(str) {
+    const bytes = new TextEncoder().encode(String(str));
+    let bin = '';
+    for (const b of bytes) bin += String.fromCharCode(b);
+    return btoa(bin);
+  }
+
+  async function b64FromBlob(blob) {
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    let bin = '';
+    const CHUNK = 0x8000;
+    for (let i = 0; i < bytes.length; i += CHUNK) {
+      bin += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+    }
+    return btoa(bin);
+  }
+
+  /** saveFile qua bridge — lỗi trả về lỗi thật (Luật 10, không nuốt). */
+  async function saveViaBridge(s, payload) {
+    const r = await s.saveFile(payload);
+    if (!r || r.error || r.ok !== true) throw new Error(String((r && r.error) || 'GHI_FILE_THAT_BAI'));
+    return r.path;
+  }
+
+  async function runEasyPipeline() {
+    const s = sys();
+    const bridge = va25();
+    if (!s || typeof s.saveFile !== 'function' || typeof s.pickFolder !== 'function') {
+      notice('Thiếu bridge native (saveFile / pickFolder) — hãy chạy trong app Electron mới nhất.');
+      return;
+    }
+    if (!bridge || typeof bridge.run !== 'function') {
+      notice('Thiếu bridge videoAgent — hãy chạy trong app Electron mới nhất.');
+      return;
+    }
+
+    state.running = true;
+    state.easyPipeline = true;
+    state.outputPath = null;
+    if (ui.runBtn) ui.runBtn.disabled = true;
+    notice(null);
+    setStepState(ui.step3, 'active');
+    setStepState(ui.step4, '');
+    if (ui.resultBox) ui.resultBox.innerHTML = '';
+    if (ui.easyLog) { ui.easyLog.innerHTML = ''; ui.easyLog.style.display = 'block'; }
+    setEasyProgress('Chọn nơi lưu dự án…', 2);
+    logLine(ui.easyLog, 'Chạy pipeline đầy đủ 17 bước (Video Agent §25)…');
+
+    try {
+      const fr = await s.pickFolder();
+      if (!fr || fr.canceled || !fr.path) {
+        logLine(ui.easyLog, 'Đã huỷ — chưa chọn thư mục lưu dự án.');
+        setEasyProgress('Đã huỷ', 0);
+        return;
+      }
+      const dir = fr.path;
+      logLine(ui.easyLog, 'Thư mục dự án: ' + dir);
+
+      /* script/script.md — bắt buộc theo §4 (discover VA_SCRIPT_MISSING) */
+      const title = easyProjectTitle();
+      setEasyProgress('Đang ghi kịch bản…', 5);
+      await saveViaBridge(s, {
+        dir, subdir: 'script', name: 'script.md',
+        base64: b64FromText('# ' + title + '\n\n' + ui.narrationArea.value.trim() + '\n'),
+      });
+      logLine(ui.easyLog, 'Đã ghi script/script.md');
+
+      /* tts/voice.<ext> — chỉ khi đã nhận giọng đọc từ tool Giọng nói */
+      if (state.importedVoice && state.importedVoice.blob) {
+        setEasyProgress('Đang ghi giọng đọc…', 8);
+        await saveViaBridge(s, {
+          dir, subdir: 'tts', name: 'voice.' + state.importedVoice.ext,
+          base64: await b64FromBlob(state.importedVoice.blob),
+        });
+        logLine(ui.easyLog, 'Đã ghi tts/voice.' + state.importedVoice.ext + ' (' + state.importedVoice.ten + ')');
+      } else {
+        logLine(ui.easyLog, 'Chưa nhận giọng đọc — Agent dựng timeline theo thời lượng ước tính.');
+      }
+
+      /* images/ — ảnh nhân vật đã nhận + ảnh đã chọn ở Bước 2 (chép qua readFileB64) */
+      setEasyProgress('Đang ghi ảnh…', 10);
+      let nImg = 0;
+      for (const img of state.importedImages) {
+        const name = String(img.fileName || (img.name + '.png')).replace(/[/\\:*?"<>|]+/g, '_');
+        const b64 = String(img.base64 || '').replace(/^data:[^;]+;base64,/, '');
+        if (!b64) { logLine(ui.easyLog, 'Bỏ qua ảnh "' + img.name + '" (không có dữ liệu).'); continue; }
+        await saveViaBridge(s, { dir, subdir: 'images', name, base64: b64 });
+        nImg++;
+      }
+      for (const a of state.assets) {
+        if (!a.path || a.type !== 'image') continue;
+        try {
+          const r = await s.readFileB64(a.path);
+          if (!r || r.error || !r.dataUrl) throw new Error(String((r && r.error) || 'Không đọc được file ảnh.'));
+          await saveViaBridge(s, { dir, subdir: 'images', name: fileName(a.path), base64: r.dataUrl });
+          nImg++;
+        } catch (e) {
+          logLine(ui.easyLog, 'Bỏ qua ảnh ' + fileName(a.path) + ': ' + errText(e));
+        }
+      }
+      logLine(ui.easyLog, 'Đã ghi ' + nImg + ' ảnh vào images/.');
+
+      /* config.json — tiêu đề cho pipeline (discover.loadConfig) */
+      await saveViaBridge(s, { dir, name: 'config.json', base64: b64FromText(JSON.stringify({ title }, null, 2)) });
+      logLine(ui.easyLog, 'Đã ghi config.json');
+
+      setEasyProgress('Agent đang chạy 17 bước — theo dõi nhật ký bên dưới…', 15);
+      // Tạo inputData từ dữ liệu nhập (ưu tiên dùng dữ liệu trực tiếp thay vì file)
+      const inputData = {
+        script: ui.narrationArea.value.trim(),
+        title: easyProjectTitle(),
+        rootDir: dir,
+        config: { title: easyProjectTitle() },
+        tts: null,
+        images: [],
+        assets: state.assets,
+      };
+      // Nếu có giọng đọc
+      if (state.importedVoice && state.importedVoice.blob) {
+        const audioBase64 = await b64FromBlob(state.importedVoice.blob);
+        inputData.tts = {
+          audio: audioBase64,
+          filename: 'voice.' + state.importedVoice.ext,
+          // Nếu có timestamps, có thể thêm sau
+        };
+      }
+      // Ảnh từ importedImages
+      for (const img of state.importedImages) {
+        if (img.base64) {
+          inputData.images.push({
+            name: img.fileName || img.name + '.png',
+            data: img.base64.replace(/^data:[^;]+;base64,/, ''),
+            type: 'scene',
+            fileName: img.fileName || img.name + '.png',
+          });
+        }
+      }
+      // Ảnh từ state.assets (nếu có dữ liệu base64)
+      for (const a of state.assets) {
+        if (a.path && a.type === 'image') {
+          try {
+            const r = await s.readFileB64(a.path);
+            if (r && r.dataUrl) {
+              inputData.images.push({
+                name: fileName(a.path),
+                data: r.dataUrl.replace(/^data:[^;]+;base64,/, ''),
+                type: a.tags && a.tags.includes('character') ? 'character' : 'scene',
+                fileName: fileName(a.path),
+              });
+            }
+          } catch (_) {}
+        }
+      }
+      // Gọi bridge.run với inputData
+      const r = await bridge.run({ inputData, options: { skipPreview: false } });
+      if (!r || r.ok === false) throw (r && (r.error || r)) || new Error('Video Agent chạy thất bại.');
+
+      state.outputPath = r.output || r.outputPath || (r.job && (r.job.output || r.job.outputPath)) || null;
+      setEasyProgress('Hoàn tất 🎉', 100);
+      showEasyPipelineResult(r, dir);
+      setStepState(ui.step3, 'done');
+      setStepState(ui.step4, 'active');
+      if (ui.step4 && ui.step4.card) ui.step4.card.scrollIntoView({ behavior: 'smooth' });
+      notice('Pipeline đầy đủ đã chạy xong — xem video ở Bước 4! 🎉', 'ok');
+    } catch (error) {
+      setEasyProgress('Lỗi', 0);
+      notice(errText(error, 'Chạy pipeline đầy đủ'));
+      logLine(ui.easyLog, 'Lỗi: ' + errText(error));
+    } finally {
+      state.running = false;
+      state.easyPipeline = false;
+      syncEasyReady();
+    }
+  }
+
+  /** Bước 4 — kết quả luồng pipeline §25 (dạng rút gọn của showAdvResult). */
+  function showEasyPipelineResult(r, dir) {
+    if (!ui.resultBox) return;
+    ui.resultBox.innerHTML = '';
+    const out = state.outputPath;
+    const scenes = (r.timeline && r.timeline.scenes)
+      || (r.job && r.job.timeline && r.job.timeline.scenes) || [];
+    const qa = r.qa || (r.job && r.job.qa) || {};
+    ui.resultBox.append(el('div', { class: 'va-kv' },
+      el('span', { class: 'k' }, 'Trạng thái'), el('span', {}, r.status ? String(r.status) : (r.ok ? 'xong' : '—')),
+      el('span', { class: 'k' }, 'Số cảnh'), el('span', {}, String(scenes.length)),
+      el('span', { class: 'k' }, 'Chất lượng (QA)'), el('span', {}, qaSummary(qa)),
+      el('span', { class: 'k' }, 'File video'), el('span', {}, out ? esc(out) : '— xem output/ trong thư mục dự án —'),
+      el('span', { class: 'k' }, 'Thư mục dự án'), el('span', {}, esc(dir))));
+    const row = el('div', { class: 'va-row' });
+    if (out) row.append(
+      el('button', { class: 'va-btn primary', onclick: () => openSys(out) }, '▶ Mở video'),
+      el('button', { class: 'va-btn ghost', onclick: () => previewVideo(out) }, '👁 Xem trước trong app'));
+    row.append(el('button', { class: 'va-btn ghost', onclick: () => openSys(dir) }, '📂 Mở thư mục dự án'));
+    ui.resultBox.append(row, el('div', { id: 'va-video-holder' }));
+  }
+
+  /** videoAgent:event khi §25 chạy từ chế độ Dễ — log + thanh tiến trình Bước 3. */
+  function onEasyVaEvent(ev) {
+    if (!ev || !ev.type) return;
+    if (ev.type === 'log') {
+      logLine(ui.easyLog, ev.message || '');
+      if (ui.easyLog) ui.easyLog.style.display = 'block';
+      return;
+    }
+    if (ev.type === 'progress' || ev.type === 'stage' || ev.type === 'state') {
+      const stage = ev.stage || ev.state || (ev.data && (ev.data.stage || ev.data.state)) || '';
+      const pct = ev.percent != null ? ev.percent : (ev.progress != null ? ev.progress : (ev.data && (ev.data.percent || ev.data.progress)));
+      const vi = STAGE_VI[stage] || (ev.message || '');
+      setEasyProgress(vi ? vi + (pct != null ? ' — ' + pct + '%' : '') : (ev.message || ''),
+        pct != null ? Math.max(15, Number(pct) || 0) : null);
+      if (ev.message || vi) logLine(ui.easyLog, ev.message || vi);
+    }
+  }
+
   /** Bước 4 — kết quả thân thiện + xem trước + mở file. */
   function showEasyResult(result, renderResult) {
     if (!ui.resultBox) return;
@@ -530,7 +1056,7 @@
          tiếng Việt thay vì để TypeError "reading 'title'". */
       if (!project) throw new Error('Không tìm thấy dự án "' + projectId + '" — có thể file dự án đã bị xoá hoặc di chỗ.');
       state.projectId = projectId;
-      if (ui.titleInput && project.title) ui.titleInput.value = project.title;
+      if (project.title) easyTitle = String(project.title);
       if (ui.narrationArea && project.narration) ui.narrationArea.value = project.narration;
       state.assets = Array.isArray(project.assets) ? project.assets.map((a) => ({ ...a })) : [];
       renderChips();
@@ -787,15 +1313,17 @@
     initialized = true;
     build(host);
 
-    /* gắn listener tiến trình realtime của pipeline §25 */
+    /* gắn listener tiến trình realtime của pipeline §25 — 1 listener,
+       tùy luồng đang chạy mà đẩy về UI Nâng cao hay UI Dễ
+       (state.easyPipeline bật khi Bước 3 Dễ chạy pipeline đầy đủ). */
     const bridge = va25();
     if (bridge && typeof bridge.onEvent === 'function') {
-      try { bridge.onEvent(onAdvEvent); } catch (_) { /* ngoài Electron */ }
+      try { bridge.onEvent((ev) => (state.easyPipeline ? onEasyVaEvent(ev) : onAdvEvent(ev))); } catch (_) { /* ngoài Electron */ }
     }
 
     syncEasyReady();
     refreshProjects();
-    notice('👋 Chào bạn! Chỉ cần viết lời thoại ở Bước 1 rồi bấm "🎬 Tạo video của tôi" — Agent lo phần còn lại.', 'info');
+    notice('👋 Chào bạn! Nhận kịch bản/giọng đọc/ảnh từ các tool phía trên ở Bước 1 (hoặc dán kịch bản) rồi bấm "🎬 Tạo video của tôi" — Agent lo phần còn lại.', 'info');
   }
 
   /* Public API — index.html gọi videoAgentPanel.init() khi mở tab.

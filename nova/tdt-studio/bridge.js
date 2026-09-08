@@ -44,6 +44,8 @@ const S = {
   ready: false,
   pid: 0,
   embed: true,
+  autoShow: true,
+  quitting: false,
   hostHwnd: 0,
   exitCode: null,
   relRect: null,          // {relX, relY, width, height, dpr} — CSS px, tương đối trang
@@ -54,6 +56,9 @@ const S = {
   logs: [],
   LOG_LIMIT: 800,
   startedAt: 0,
+  preloadReady: false,
+  preloadResolve: null,
+  preloadReject: null,
 };
 let eventSink = null;      // (event) => void — do ipc.js gắn vào
 function onEvent(fn) { eventSink = typeof fn === 'function' ? fn : null; }
@@ -214,6 +219,8 @@ function launch(opts) {
   if (!fs.existsSync(HOST_SCRIPT)) return { ok: false, error: 'Không thấy nova_host.py: ' + HOST_SCRIPT };
   // Studio launched through Electron is always embedded. Keep HWND as decimal
   // text so pointer-sized values never lose precision in JavaScript Number.
+  // autoShow: preload dùng false để giữ cửa sổ Qt ẩn cho tới khi người dùng mở tool.
+  S.autoShow = (o.autoShow === false) ? false : true;
   S.embed = true;
   const hwndText = String(o.hostHwnd == null ? '' : o.hostHwnd).trim();
   S.hostHwnd = /^\d+$/.test(hwndText) && hwndText !== '0' ? hwndText : '';
@@ -264,7 +271,20 @@ function launch(opts) {
       if (msg.event === 'ready') {
         S.ready = true;
         emit({ type: 'ready', pid: S.pid });
-        if (S.embed) { S.lastPush = 0; showWindow(); }
+        if (S.embed) {
+          S.lastPush = 0;
+          if (S.autoShow === true) {
+            showWindow();
+          } else {
+            // preload mode: resolve promise and emit preload-ready
+            if (S.preloadResolve) {
+              S.preloadResolve({ ok: true, ready: true, pid: S.pid });
+              S.preloadResolve = null;
+              S.preloadReject = null;
+            }
+            emit({ type: 'preload-ready', pid: S.pid });
+          }
+        }
       } else if (msg.event === 'log') {
         appendLog(msg.line, msg.level || 'info');
       } else if (msg.event === 'exit') {
@@ -299,11 +319,17 @@ function launch(opts) {
     appendLog('[tdt-studio] spawn error: ' + (err && err.message), 'error');
     emit({ type: 'exit', code: -1, reason: 'spawn-error' });
     S.child = null; S.ready = false; S.pid = 0;
+    if (S.preloadReject) { S.preloadReject(new Error('spawn-error')); S.preloadResolve = null; S.preloadReject = null; }
   });
   child.on('close', (code) => {
     appendLog('[tdt-studio] tiến trình đã dừng (code=' + code + ')', 'info');
     S.child = null; S.ready = false; S.pid = 0; S.exitCode = code;
     emit({ type: 'exit', code: code });
+    if (S.preloadReject) { S.preloadReject(new Error('exit-code-' + code)); S.preloadResolve = null; S.preloadReject = null; }
+    if (S.autoShow === false && S.exitCode !== 0 && !S.quitting) {
+      appendLog('[tdt-studio] preloaded process died, restarting...', 'warn');
+      setTimeout(() => { S.quitting = false; launch({ autoShow: false, hostHwnd: S.hostHwnd }); }, 2000);
+    }
   });
   return { ok: true, launching: true, pid: S.pid, embed: S.embed };
 }
@@ -337,9 +363,35 @@ function quitAll() {
   if (timer && typeof timer.unref === 'function') timer.unref();
 }
 
+function preload(opts) {
+  // Launch the Qt process with autoShow: false to preload the UI in the background.
+  // It will stay ready to be embedded when the tool opens.
+  if (S.child && S.ready) {
+    return Promise.resolve({ ok: true, ready: true, pid: S.pid });
+  }
+  if (S.child && !S.ready) {
+    // Đang chờ ready, trả về promise mới hoặc reuse
+    return new Promise((resolve, reject) => {
+      S.preloadResolve = resolve;
+      S.preloadReject = reject;
+      // launch đã được gọi từ trước, chỉ chờ ready
+    });
+  }
+  // Launch mới
+  const result = launch({ autoShow: false, embed: true, hostHwnd: 0, ...(opts || {}) });
+  return new Promise((resolve, reject) => {
+    if (result && result.ok) {
+      S.preloadResolve = resolve;
+      S.preloadReject = reject;
+    } else {
+      reject(new Error('Launch failed'));
+    }
+  });
+}
+
 module.exports = {
   status, launch, quit, quitAll, killHard,
   setRect, showWindow, hideWindow, focusWindow,
-  attachWindow, onEvent, pushBounds,
+  attachWindow, onEvent, pushBounds, preload,
   paths: { ROOT_DIR, APP_DIR, RUNTIME_DIR, VENV_DIR, PYTHON_BASE, PYTHON, SITE_PACKAGES, HOST_SCRIPT },
 };

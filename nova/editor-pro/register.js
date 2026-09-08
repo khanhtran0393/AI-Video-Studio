@@ -35,7 +35,27 @@ function registerEditorPro(ipcMain, opts = {}) {
   mark(registerSfxLibrary(ipcMain));            // thư viện SFX dựng sẵn
   mark(registerNguonWeb(ipcMain));              // 50 nguồn web: tìm + đọc thông tin + tải clip (yt-dlp)
   mark(registerKhopLoi(ipcMain));               // khớp lời: tìm đúng giây trong video nguồn
-  mark(registerDocumentaryIpc(ipcMain, { userDataDir: opts.userDataDir, render: opts.documentaryRender, openWindow: opts.documentaryOpenWindow || require('../documentary/window').openDocumentaryWindow }));
+  // Xây dựng providerConfig từ settings nếu chưa có
+  let providerConfig = opts.providerConfig;
+  if (!providerConfig) {
+    try {
+      const settingsPath = path.join(opts.userDataDir || '', 'nova-settings.json');
+      let settings = {};
+      if (fs.existsSync(settingsPath)) {
+        settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+      }
+      const flowKeys = settings.api_key_flow || [];
+      const firstKey = (Array.isArray(flowKeys) ? flowKeys : [String(flowKeys)]).map(s => String(s).trim()).filter(Boolean)[0];
+      if (firstKey) {
+        providerConfig = {
+          vision: { provider: 'gemini', apiKey: firstKey }
+        };
+      }
+    } catch (e) {
+      // ignore – vision sẽ dùng fallback heuristic
+    }
+  }
+  mark(registerDocumentaryIpc(ipcMain, { userDataDir: opts.userDataDir, render: opts.documentaryRender, openWindow: opts.documentaryOpenWindow || require('../documentary/window').openDocumentaryWindow, providerConfig }));
   mark(registerVideoAgentIpc(ipcMain, { adapters: opts.videoAgentAdapters, userDataDir: opts.userDataDir }));   // Nova Video Agent — story → video (§25)
 
   // Phủ default cho mọi kênh còn lại (các tool khác, ít dùng trong editor)

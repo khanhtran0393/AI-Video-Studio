@@ -1158,6 +1158,7 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
 .wb-field-label{ font-size:11px;color:var(--text-muted); }
 .wb-tpl{ grid-column:1 / -1; }
 .wb-tpl-input{ width:100%;resize:vertical;font-family:inherit;font-size:12px;line-height:1.5; }
+.wb-script-in{ width:100%;resize:vertical;font-family:inherit;font-size:12px;line-height:1.55; }
 .wb-media-row{ display:flex;align-items:center;gap:10px;flex-wrap:wrap; }
 .wb-media-label{ font-size:11.5px;color:var(--text-muted);word-break:break-all; }
 .wb-canvas{ width:100%;max-width:640px;background:#fff;border:1px solid var(--border);border-radius:8px;display:block; }
@@ -1217,6 +1218,67 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
 .wb-el-table .wb-act{ white-space:nowrap; }
 .wb-label-in{ width:100%;font-family:inherit;font-size:12px; }
 .wb-num-in{ width:70px;font-family:inherit;font-size:12px; }
+  /* ═══════ WHITEBOARD STUDIO v2 — identity "bảng vẽ": hero tối + 5 bước = 5 màu bút ═══════ */
+  .wb-root-v2{ --wb-s1:#3b82f6; --wb-s2:#0d9488; --wb-s3:#d97706; --wb-s4:#db2777; --wb-s5:#7c3aed; gap:16px; }
+  .wb-root-v2 .wb-hero{ display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+    background:linear-gradient(120deg,#161228 0%,#251b41 55%,#31215a 100%);
+    border:1px solid #3d2f6b;border-radius:14px;padding:14px 18px;
+    box-shadow:0 10px 26px rgba(30,20,64,.16); }
+  .wb-root-v2 .wb-hero-mark{ flex:0 0 auto;width:46px;height:46px;display:flex;align-items:center;justify-content:center;
+    font-size:23px;background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.2);border-radius:12px; }
+  .wb-root-v2 .wb-hero-text{ flex:1 1 280px;min-width:0; }
+  .wb-root-v2 .wb-hero-title{ font-size:17px;font-weight:800;color:#fff;letter-spacing:.2px; }
+  .wb-root-v2 .wb-hero-sub{ font-size:11.5px;color:#c5baea;margin-top:2px; }
+  .wb-root-v2 .wb-chips{ display:flex;gap:6px;flex-wrap:wrap;margin-top:9px; }
+  .wb-root-v2 .wb-chip{ font-size:10.5px;font-weight:600;padding:2px 9px;border-radius:999px;
+    border:1px solid rgba(255,255,255,.22);color:#e7e1f8;background:rgba(255,255,255,.07);white-space:nowrap; }
+  .wb-root-v2 .wb-chip.ok{ color:#a4f3c6;border-color:rgba(164,243,198,.4);background:rgba(22,163,74,.2); }
+  .wb-root-v2 .wb-chip.bad{ color:#ffb1b1;border-color:rgba(255,177,177,.4);background:rgba(220,38,38,.22); }
+  .wb-root-v2 .wb-hero button{ background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.3);
+    color:#fff;border-radius:9px;flex:0 0 auto; }
+  .wb-root-v2 .wb-hero button:hover:not(:disabled){ border-color:#fff;background:rgba(255,255,255,.18); }
+  .wb-root-v2 .wb-step{ border-left:3px solid var(--step,#7c3aed); }
+  .wb-root-v2 .wb-step-1{ --step:var(--wb-s1); }
+  .wb-root-v2 .wb-step-2{ --step:var(--wb-s2); }
+  .wb-root-v2 .wb-step-3{ --step:var(--wb-s3); }
+  .wb-root-v2 .wb-step-4{ --step:var(--wb-s4); }
+  .wb-root-v2 .wb-step-5{ --step:var(--wb-s5); }
+  .wb-root-v2 .wb-step-log{ border-left:3px solid var(--border); }
+  .wb-root-v2 .wb-step-num{ flex:0 0 auto;width:22px;height:22px;border-radius:50%;
+    display:inline-flex;align-items:center;justify-content:center;font-size:11.5px;font-weight:700;
+    color:#fff;background:var(--step);box-shadow:0 2px 6px rgba(0,0,0,.15); }
+  .wb-root-v2 .wb-group-title{ display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+    font-size:12.5px;font-weight:700;color:var(--text);text-transform:none;letter-spacing:.2px; }
+  .wb-root-v2 .wb-step-hint{ font-size:10.5px;font-weight:500;color:var(--text-muted); }
+  .wb-root-v2 .wb-media-row{ margin-top:2px; }
+  .wb-root-v2 .wb-script-in{ border-style:dashed;border-radius:9px; }
+  .wb-root-v2 .wb-script-in:focus{ border-style:solid; }
+  .wb-root-v2 .wb-item{ border-left:3px solid var(--wb-s2);border-radius:9px;
+    transition:transform .12s,border-color .15s,background .15s; }
+  .wb-root-v2 .wb-item:hover{ transform:translateX(3px); }
+  .wb-root-v2 .wb-item.selected{ border-color:var(--wb-s2);background:rgba(13,148,136,.08); }
+  .wb-root-v2 .wb-el-table tr:hover td{ background:rgba(217,119,6,.06); }
+  .wb-root-v2 .wb-el-table .wb-seq{ color:var(--wb-s3); }
+  .wb-root-v2 .wb-export-bar .wb-btn-primary{
+    background:linear-gradient(135deg,var(--wb-s5),#a855f7);border:none;color:#fff;
+    font-size:13px;padding:8px 20px;border-radius:10px;
+    box-shadow:0 5px 16px rgba(124,58,237,.32); }
+  .wb-root-v2 .wb-export-bar .wb-btn-primary:hover:not(:disabled){
+    background:linear-gradient(135deg,var(--wb-s5),#a855f7);filter:brightness(1.1); }
+  .wb-root-v2 .wb-prog{ height:10px;border-radius:6px; }
+  .wb-root-v2 .wb-prog-fill{
+    background:repeating-linear-gradient(45deg,#7c3aed 0 9px,#a855f7 9px 18px);
+    animation:wb-ink-move 1.1s linear infinite; }
+  @keyframes wb-ink-move{ from{ background-position:0 0; } to{ background-position:25.5px 0; } }
+  .wb-root-v2 .wb-logs{ font-family:ui-monospace,Consolas,monospace;font-size:11.5px;line-height:1.6;
+    background:#14121f;border-color:#2c2745;color:#cdc7e4;border-radius:9px;max-height:220px; }
+  .wb-root-v2 .wb-log{ color:#a49dd0; }
+  .wb-root-v2 .wb-log.ok{ color:#4ade80; }
+  .wb-root-v2 .wb-log.err{ color:#f87171; }
+  .wb-root-v2 .wb-log.warn{ color:#fbbf24; }
+  .wb-root-v2 .wb-canvas{ border-radius:10px;box-shadow:0 6px 18px rgba(0,0,0,.12); }
+  .wb-items-empty{ padding:14px 12px;border:1px dashed var(--border);border-radius:9px;
+    font-size:11.5px;color:var(--text-muted);line-height:1.6; }
 </style>
 </head>
 <body>
@@ -1528,6 +1590,9 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
         <div class="nav-item" data-tool="toolstudio" onclick="switchTool('toolstudio')" title="TDTStudio PyQt nhúng: kho media, ghép video, stem Demucs, LUT, OCR, TTS… — chạy bằng runtime Python nội bộ">
           <span class="num"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M2 8h20"/><path d="M6 21h12"/><path d="M12 17v4"/></svg></span><span>Studio</span>
         </div>
+        <div class="nav-item" data-tool="toolsrttranslate" onclick="switchTool('toolsrttranslate')">
+          <span class="num"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7l3-3 3 3M7 4v9M20 17l-3 3-3-3M17 20v-9"/></svg></span><span>Dịch SRT</span>
+        </div>
         <div class="nav-group">Cài đặt</div>
         <div class="nav-item" data-tool="toolsettings" onclick="switchTool('toolsettings')">
           <span class="num"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="3.5" cy="6" r="1.5"/><circle cx="3.5" cy="12" r="1.5"/><circle cx="3.5" cy="18" r="1.5"/></svg></span><span>API &amp; Tài khoản</span>
@@ -1718,6 +1783,93 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
           text-transform:uppercase;letter-spacing:.5px;padding:4px 6px;border-bottom:1px solid var(--border); }
         #tool-toolvideoagent .va-table td{ padding:4px 6px;border-bottom:1px solid var(--border);vertical-align:top; }
         @media(max-width:760px){ #tool-toolvideoagent .va-root{ max-width:100%; } }
+        #tool-toolvideoagent details.va-import{ margin-top:14px;border:1.5px dashed color-mix(in srgb,var(--accent) 45%,var(--border));
+          border-radius:12px;padding:10px 12px;background:color-mix(in srgb,var(--accent) 5%,var(--surface)); }
+        #tool-toolvideoagent details.va-import>summary{ display:flex;align-items:center;gap:10px;cursor:pointer;list-style:none; }
+        #tool-toolvideoagent details.va-import>summary::-webkit-details-marker{ display:none; }
+        #tool-toolvideoagent .va-import-sum-ic{ font-size:18px; }
+        #tool-toolvideoagent .va-import-sum-t{ display:flex;flex-direction:column;gap:1px;min-width:0;flex:1; }
+        #tool-toolvideoagent .va-import-sum-t b{ font-size:13px; }
+        #tool-toolvideoagent .va-import-sum-s{ font-size:11px;color:var(--text-muted); }
+        #tool-toolvideoagent .va-import-badge{ min-width:20px;height:20px;border-radius:999px;display:inline-flex;align-items:center;
+          justify-content:center;font-size:11px;font-weight:700;padding:0 7px;flex:none;
+          background:color-mix(in srgb,var(--green) 18%,transparent);border:1px solid color-mix(in srgb,var(--green) 45%,transparent);color:var(--green); }
+        #tool-toolvideoagent .va-src-grid{ display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px;margin-top:10px; }
+        #tool-toolvideoagent .va-src{ display:flex;align-items:center;gap:10px;background:var(--surface);
+          border:1px solid var(--border);border-radius:11px;padding:10px 12px; }
+        #tool-toolvideoagent .va-src.wide{ grid-column:1/-1; }
+        #tool-toolvideoagent .va-src-ic{ width:34px;height:34px;border-radius:9px;display:inline-flex;align-items:center;
+          justify-content:center;font-size:16px;flex:none;background:var(--surface-2);border:1px solid var(--border); }
+        #tool-toolvideoagent .va-src.ok{ border-color:color-mix(in srgb,var(--green) 35%,var(--border)); }
+        #tool-toolvideoagent .va-src.ok .va-src-ic{ background:color-mix(in srgb,var(--accent) 16%,var(--surface-2));
+          border-color:color-mix(in srgb,var(--accent) 40%,var(--border)); }
+        #tool-toolvideoagent .va-src-info{ min-width:0;flex:1; }
+        #tool-toolvideoagent .va-src-name{ font-size:12.5px;font-weight:700;line-height:1.35; }
+        #tool-toolvideoagent .va-src-desc{ font-size:11.5px;color:var(--text-muted);line-height:1.45;margin-top:2px;
+          overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+        #tool-toolvideoagent .va-src.ok .va-src-desc{ color:var(--green); }
+        #tool-toolvideoagent .va-src-btn{ flex:none;padding:5px 14px;font-size:12px; }
+        #tool-toolvideoagent .va-voice-pick{ display:flex;gap:8px;align-items:center;margin-top:8px; }
+        #tool-toolvideoagent .va-voice-pick select{ flex:1;min-width:0;width:auto; }
+        #tool-toolvideoagent .va-flow-grp{ display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;margin-top:8px; }
+        #tool-toolvideoagent .va-flow{ position:relative;display:flex;gap:10px;align-items:flex-start;background:var(--surface);
+          border:1.5px solid var(--border);border-radius:12px;padding:12px 36px 12px 12px;cursor:pointer;transition:all .15s; }
+        #tool-toolvideoagent .va-flow:hover{ border-color:color-mix(in srgb,var(--accent) 55%,var(--border)); }
+        #tool-toolvideoagent .va-flow.on{ border-color:var(--accent);background:color-mix(in srgb,var(--accent) 9%,var(--surface));
+          box-shadow:0 10px 26px -16px color-mix(in srgb,var(--accent) 60%,transparent); }
+        #tool-toolvideoagent .va-flow-ic{ width:36px;height:36px;border-radius:10px;display:inline-flex;align-items:center;
+          justify-content:center;font-size:17px;flex:none;background:var(--surface-2);border:1px solid var(--border); }
+        #tool-toolvideoagent .va-flow.on .va-flow-ic{ background:var(--accent);border-color:var(--accent);color:var(--on-accent); }
+        #tool-toolvideoagent .va-flow-t{ min-width:0; }
+        #tool-toolvideoagent .va-flow-t b{ display:block;font-size:13px; }
+        #tool-toolvideoagent .va-flow-t span{ display:block;font-size:11.5px;color:var(--text-muted);line-height:1.5;margin-top:2px; }
+        #tool-toolvideoagent .va-flow-check{ position:absolute;top:8px;right:10px;font-size:13px;font-weight:800;color:var(--border); }
+        #tool-toolvideoagent .va-flow.on .va-flow-check{ color:var(--accent); }
+        #tool-toolvideoagent .va-flow input[type=checkbox]{ position:absolute;opacity:0;width:1px;height:1px; }
+        #tool-toolvideoagent .va-btn.va-cta{ width:100%;padding:14px 24px;font-size:15px;border-radius:12px;
+          background:linear-gradient(120deg,var(--accent),var(--accent-2));border:none;color:var(--on-accent);
+          box-shadow:0 12px 30px -12px color-mix(in srgb,var(--accent) 70%,transparent); }
+        #tool-toolvideoagent .va-btn.va-cta:hover:not(:disabled){ filter:brightness(1.08);transform:translateY(-1px); }
+        @media(max-width:760px){ #tool-toolvideoagent .va-rail-lbl{ display:none; }
+          #tool-toolvideoagent .va-src-grid{ grid-template-columns:1fr; } }
+        /* ── REFRESH 2026-09-06: hero + rail + thẻ nguồn + thẻ luồng (chế độ Dễ) ── */
+        #tool-toolvideoagent .va-tabs{ display:inline-flex;background:var(--surface);border:1px solid var(--border);
+          border-radius:12px;padding:4px;gap:4px;margin-bottom:16px; }
+        #tool-toolvideoagent .va-tab{ border:1px solid transparent;background:transparent;border-radius:9px; }
+        #tool-toolvideoagent .va-tab.active{ background:var(--accent);color:var(--on-accent); }
+        #tool-toolvideoagent .va-hero{ position:relative;overflow:hidden;border-radius:16px;padding:22px 24px;margin-bottom:14px;
+          background:linear-gradient(120deg,color-mix(in srgb,var(--accent) 26%,#101322) 0%,#181030 55%,color-mix(in srgb,var(--accent) 20%,#0d1020) 100%);
+          border:1px solid color-mix(in srgb,var(--accent) 38%,var(--border)); }
+        #tool-toolvideoagent .va-hero::after{ content:'';position:absolute;inset:0;pointer-events:none;
+          background:radial-gradient(620px 200px at 88% -30%,color-mix(in srgb,var(--accent) 30%,transparent),transparent 70%); }
+        #tool-toolvideoagent .va-hero-in{ position:relative;z-index:1;max-width:660px; }
+        #tool-toolvideoagent .va-hero-badge{ display:inline-block;font-size:10.5px;font-weight:800;letter-spacing:1.2px;
+          color:var(--accent);text-transform:uppercase;background:color-mix(in srgb,var(--accent) 15%,transparent);
+          border:1px solid color-mix(in srgb,var(--accent) 42%,transparent);border-radius:999px;padding:3px 10px;margin-bottom:10px; }
+        #tool-toolvideoagent .va-hero-title{ margin:0 0 6px;font-size:22px;line-height:1.25;font-weight:800;color:#fff; }
+        #tool-toolvideoagent .va-hero-sub{ margin:0;font-size:12.5px;line-height:1.6;color:rgba(255,255,255,.82); }
+        #tool-toolvideoagent .va-hero-chips{ display:flex;gap:6px;flex-wrap:wrap;margin-top:12px; }
+        #tool-toolvideoagent .va-hero-chip{ font-size:11.5px;color:#fff;background:rgba(255,255,255,.09);
+          border:1px solid rgba(255,255,255,.18);border-radius:999px;padding:3px 10px; }
+        #tool-toolvideoagent .va-rail{ position:relative;display:grid;grid-template-columns:repeat(4,1fr);gap:8px;
+          margin:0 0 16px;padding:14px 12px 10px;background:var(--surface);border:1px solid var(--border);border-radius:14px; }
+        #tool-toolvideoagent .va-rail::before{ content:'';position:absolute;top:26px;left:12.5%;right:12.5%;height:2px;
+          background:var(--border); }
+        #tool-toolvideoagent .va-rail-node{ position:relative;display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0; }
+        #tool-toolvideoagent .va-rail-dot{ width:26px;height:26px;border-radius:50%;display:inline-flex;align-items:center;
+          justify-content:center;font-size:11.5px;font-weight:700;background:var(--surface-2);border:2px solid var(--border);
+          color:var(--text-muted);z-index:1;transition:all .2s; }
+        #tool-toolvideoagent .va-rail-node.active .va-rail-dot{ background:var(--accent);border-color:var(--accent);
+          color:var(--on-accent);box-shadow:0 0 0 5px color-mix(in srgb,var(--accent) 18%,transparent); }
+        #tool-toolvideoagent .va-rail-node.done .va-rail-dot{ background:var(--green);border-color:var(--green);color:#fff; }
+        #tool-toolvideoagent .va-rail-lbl{ font-size:11.5px;color:var(--text-muted);font-weight:600;text-align:center; }
+        #tool-toolvideoagent .va-rail-node.active .va-rail-lbl{ color:var(--text); }
+        #tool-toolvideoagent .va-step{ position:relative;border-radius:16px;padding:18px 20px;
+          transition:border-color .2s,box-shadow .2s; }
+        #tool-toolvideoagent .va-step.active{ border-color:var(--accent);
+          box-shadow:0 12px 34px -22px color-mix(in srgb,var(--accent) 55%,transparent); }
+        #tool-toolvideoagent .va-step-num{ width:32px;height:32px;font-size:13.5px; }
+        #tool-toolvideoagent .va-step.active .va-step-num{ background:linear-gradient(135deg,var(--accent),var(--accent-2)); }
       </style>
       <div id="videoAgentRoot"></div>
     </div>
@@ -1752,6 +1904,15 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
         <div class="tool-subtitle">Toàn bộ app TDTStudio (PyQt) chạy nhúng trong khung này — 13 module: kho media (ảnh/video/LUT), ghép &amp; xuất video, tách stem Demucs, OCR phụ đề, TTS, CapCut… Cửa sổ Studio tự bám theo vùng nội dung khi kéo/thay đổi kích thước.</div>
       </div>
       <div id="tdtStudioRoot"></div>
+    </div>
+
+    <!-- DỊCH SRT TOOL (port "AI Translate Subtitles": SRT thật → AI dịch → ghi SRT giữ timestamp) -->
+    <div class="tool" id="tool-toolsrttranslate">
+      <div class="tool-head">
+        <div class="tool-title">🌐 Dịch SRT</div>
+        <div class="tool-subtitle">Dịch phụ đề SRT sang ngôn ngữ khác bằng AI — chọn file SRT thật trên đĩa, dịch qua API AI đã cấu hình ở Cài đặt, xem trước rồi lưu file SRT mới (giữ nguyên timestamp).</div>
+      </div>
+      <div id="srtTranslateRoot"></div>
     </div>
 
     <!-- TOOL 1: PROFILE KÊNH -->
@@ -2076,13 +2237,206 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
           <div class="ts-card" style="margin-top:16px;padding:12px 16px;">
             <label class="ts-lbl" style="margin-bottom:10px;font-weight:700;letter-spacing:0.5px">PHONG CÁCH KỊCH BẢN</label>
             <select id="tsTone" class="ts-field" style="padding:8px 12px;margin-bottom:12px">
-              <option value="Kịch bản chuyên sâu">KỊCH BẢN CHUYÊN SÂU (Audio dài: ~130 WPM, beat ~7s, không cold-open, thực tế)</option>
-              <option value="Sảng văn">SẢNG VĂN - DOPAMINE HIT (Recap dồn: ~155 WPM, beat ~4.5s, cold-open vả mặt)</option>
-              <option value="Short / Manhua">SHORT / MANHUA (Shorts/Reels: ~170 WPM, beat ~3.5s, cold-open bắt buộc, 1200 từ/tập)</option>
-              <option value="Kể chuyện cuốn hút">Kể chuyện cuốn hút (Mặc định AI Video Studio)</option>
-              <option value="Trang trọng tư liệu">Trang trọng tư liệu</option>
-              <option value="Gần gũi vlog">Gần gũi vlog</option>
-              <option value="Kịch tính">Kịch tính</option>
+              <option value="Hài hước và kể chuyện">Hài hước và kể chuyện</option>
+              <option value="Hài hước và phân tích">Hài hước và phân tích</option>
+              <option value="Hài hước và phỏng vấn">Hài hước và phỏng vấn</option>
+              <option value="Hài hước và báo cáo">Hài hước và báo cáo</option>
+              <option value="Hài hước và tâm tình">Hài hước và tâm tình</option>
+              <option value="Hài hước và đối thoại">Hài hước và đối thoại</option>
+              <option value="Hài hước và tường thuật">Hài hước và tường thuật</option>
+              <option value="Hài hước và tranh luận">Hài hước và tranh luận</option>
+              <option value="Hài hước và hướng dẫn">Hài hước và hướng dẫn</option>
+              <option value="Hài hước và chiêm nghiệm">Hài hước và chiêm nghiệm</option>
+              <option value="Hài hước và châm biếm">Hài hước và châm biếm</option>
+              <option value="Hài hước và diễn giảng">Hài hước và diễn giảng</option>
+              <option value="Hài hước và hùng biện">Hài hước và hùng biện</option>
+              <option value="Hài hước và trò chuyện">Hài hước và trò chuyện</option>
+              <option value="Hài hước và tự sự">Hài hước và tự sự</option>
+              <option value="Hài hước và đúc kết">Hài hước và đúc kết</option>
+              <option value="Hài hước và bình luận">Hài hước và bình luận</option>
+              <option value="Hài hước và trần thuật">Hài hước và trần thuật</option>
+              <option value="Hài hước và gợi mở">Hài hước và gợi mở</option>
+              <option value="Hài hước và tóm tắt">Hài hước và tóm tắt</option>
+              <option value="Kịch tính và kể chuyện">Kịch tính và kể chuyện</option>
+              <option value="Kịch tính và phân tích">Kịch tính và phân tích</option>
+              <option value="Kịch tính và phỏng vấn">Kịch tính và phỏng vấn</option>
+              <option value="Kịch tính và báo cáo">Kịch tính và báo cáo</option>
+              <option value="Kịch tính và tâm tình">Kịch tính và tâm tình</option>
+              <option value="Kịch tính và đối thoại">Kịch tính và đối thoại</option>
+              <option value="Kịch tính và tường thuật">Kịch tính và tường thuật</option>
+              <option value="Kịch tính và tranh luận">Kịch tính và tranh luận</option>
+              <option value="Kịch tính và hướng dẫn">Kịch tính và hướng dẫn</option>
+              <option value="Kịch tính và chiêm nghiệm">Kịch tính và chiêm nghiệm</option>
+              <option value="Kịch tính và châm biếm">Kịch tính và châm biếm</option>
+              <option value="Kịch tính và diễn giảng">Kịch tính và diễn giảng</option>
+              <option value="Kịch tính và hùng biện">Kịch tính và hùng biện</option>
+              <option value="Kịch tính và trò chuyện">Kịch tính và trò chuyện</option>
+              <option value="Kịch tính và tự sự">Kịch tính và tự sự</option>
+              <option value="Kịch tính và đúc kết">Kịch tính và đúc kết</option>
+              <option value="Kịch tính và bình luận">Kịch tính và bình luận</option>
+              <option value="Kịch tính và trần thuật">Kịch tính và trần thuật</option>
+              <option value="Kịch tính và gợi mở">Kịch tính và gợi mở</option>
+              <option value="Kịch tính và tóm tắt">Kịch tính và tóm tắt</option>
+              <option value="Bí ẩn và kể chuyện">Bí ẩn và kể chuyện</option>
+              <option value="Bí ẩn và phân tích">Bí ẩn và phân tích</option>
+              <option value="Bí ẩn và phỏng vấn">Bí ẩn và phỏng vấn</option>
+              <option value="Bí ẩn và báo cáo">Bí ẩn và báo cáo</option>
+              <option value="Bí ẩn và tâm tình">Bí ẩn và tâm tình</option>
+              <option value="Bí ẩn và đối thoại">Bí ẩn và đối thoại</option>
+              <option value="Bí ẩn và tường thuật">Bí ẩn và tường thuật</option>
+              <option value="Bí ẩn và tranh luận">Bí ẩn và tranh luận</option>
+              <option value="Bí ẩn và hướng dẫn">Bí ẩn và hướng dẫn</option>
+              <option value="Bí ẩn và chiêm nghiệm">Bí ẩn và chiêm nghiệm</option>
+              <option value="Bí ẩn và châm biếm">Bí ẩn và châm biếm</option>
+              <option value="Bí ẩn và diễn giảng">Bí ẩn và diễn giảng</option>
+              <option value="Bí ẩn và hùng biện">Bí ẩn và hùng biện</option>
+              <option value="Bí ẩn và trò chuyện">Bí ẩn và trò chuyện</option>
+              <option value="Bí ẩn và tự sự">Bí ẩn và tự sự</option>
+              <option value="Bí ẩn và đúc kết">Bí ẩn và đúc kết</option>
+              <option value="Bí ẩn và bình luận">Bí ẩn và bình luận</option>
+              <option value="Bí ẩn và trần thuật">Bí ẩn và trần thuật</option>
+              <option value="Bí ẩn và gợi mở">Bí ẩn và gợi mở</option>
+              <option value="Bí ẩn và tóm tắt">Bí ẩn và tóm tắt</option>
+              <option value="Nhẹ nhàng và kể chuyện">Nhẹ nhàng và kể chuyện</option>
+              <option value="Nhẹ nhàng và phân tích">Nhẹ nhàng và phân tích</option>
+              <option value="Nhẹ nhàng và phỏng vấn">Nhẹ nhàng và phỏng vấn</option>
+              <option value="Nhẹ nhàng và báo cáo">Nhẹ nhàng và báo cáo</option>
+              <option value="Nhẹ nhàng và tâm tình">Nhẹ nhàng và tâm tình</option>
+              <option value="Nhẹ nhàng và đối thoại">Nhẹ nhàng và đối thoại</option>
+              <option value="Nhẹ nhàng và tường thuật">Nhẹ nhàng và tường thuật</option>
+              <option value="Nhẹ nhàng và tranh luận">Nhẹ nhàng và tranh luận</option>
+              <option value="Nhẹ nhàng và hướng dẫn">Nhẹ nhàng và hướng dẫn</option>
+              <option value="Nhẹ nhàng và chiêm nghiệm">Nhẹ nhàng và chiêm nghiệm</option>
+              <option value="Nhẹ nhàng và châm biếm">Nhẹ nhàng và châm biếm</option>
+              <option value="Nhẹ nhàng và diễn giảng">Nhẹ nhàng và diễn giảng</option>
+              <option value="Nhẹ nhàng và hùng biện">Nhẹ nhàng và hùng biện</option>
+              <option value="Nhẹ nhàng và trò chuyện">Nhẹ nhàng và trò chuyện</option>
+              <option value="Nhẹ nhàng và tự sự">Nhẹ nhàng và tự sự</option>
+              <option value="Nhẹ nhàng và đúc kết">Nhẹ nhàng và đúc kết</option>
+              <option value="Nhẹ nhàng và bình luận">Nhẹ nhàng và bình luận</option>
+              <option value="Nhẹ nhàng và trần thuật">Nhẹ nhàng và trần thuật</option>
+              <option value="Nhẹ nhàng và gợi mở">Nhẹ nhàng và gợi mở</option>
+              <option value="Nhẹ nhàng và tóm tắt">Nhẹ nhàng và tóm tắt</option>
+              <option value="Chuyên sâu và kể chuyện">Chuyên sâu và kể chuyện</option>
+              <option value="Chuyên sâu và phân tích">Chuyên sâu và phân tích</option>
+              <option value="Chuyên sâu và phỏng vấn">Chuyên sâu và phỏng vấn</option>
+              <option value="Chuyên sâu và báo cáo">Chuyên sâu và báo cáo</option>
+              <option value="Chuyên sâu và tâm tình">Chuyên sâu và tâm tình</option>
+              <option value="Chuyên sâu và đối thoại">Chuyên sâu và đối thoại</option>
+              <option value="Chuyên sâu và tường thuật">Chuyên sâu và tường thuật</option>
+              <option value="Chuyên sâu và tranh luận">Chuyên sâu và tranh luận</option>
+              <option value="Chuyên sâu và hướng dẫn">Chuyên sâu và hướng dẫn</option>
+              <option value="Chuyên sâu và chiêm nghiệm">Chuyên sâu và chiêm nghiệm</option>
+              <option value="Chuyên sâu và châm biếm">Chuyên sâu và châm biếm</option>
+              <option value="Chuyên sâu và diễn giảng">Chuyên sâu và diễn giảng</option>
+              <option value="Chuyên sâu và hùng biện">Chuyên sâu và hùng biện</option>
+              <option value="Chuyên sâu và trò chuyện">Chuyên sâu và trò chuyện</option>
+              <option value="Chuyên sâu và tự sự">Chuyên sâu và tự sự</option>
+              <option value="Chuyên sâu và đúc kết">Chuyên sâu và đúc kết</option>
+              <option value="Chuyên sâu và bình luận">Chuyên sâu và bình luận</option>
+              <option value="Chuyên sâu và trần thuật">Chuyên sâu và trần thuật</option>
+              <option value="Chuyên sâu và gợi mở">Chuyên sâu và gợi mở</option>
+              <option value="Chuyên sâu và tóm tắt">Chuyên sâu và tóm tắt</option>
+              <option value="Trào phúng và kể chuyện">Trào phúng và kể chuyện</option>
+              <option value="Trào phúng và phân tích">Trào phúng và phân tích</option>
+              <option value="Trào phúng và phỏng vấn">Trào phúng và phỏng vấn</option>
+              <option value="Trào phúng và báo cáo">Trào phúng và báo cáo</option>
+              <option value="Trào phúng và tâm tình">Trào phúng và tâm tình</option>
+              <option value="Trào phúng và đối thoại">Trào phúng và đối thoại</option>
+              <option value="Trào phúng và tường thuật">Trào phúng và tường thuật</option>
+              <option value="Trào phúng và tranh luận">Trào phúng và tranh luận</option>
+              <option value="Trào phúng và hướng dẫn">Trào phúng và hướng dẫn</option>
+              <option value="Trào phúng và chiêm nghiệm">Trào phúng và chiêm nghiệm</option>
+              <option value="Trào phúng và châm biếm">Trào phúng và châm biếm</option>
+              <option value="Trào phúng và diễn giảng">Trào phúng và diễn giảng</option>
+              <option value="Trào phúng và hùng biện">Trào phúng và hùng biện</option>
+              <option value="Trào phúng và trò chuyện">Trào phúng và trò chuyện</option>
+              <option value="Trào phúng và tự sự">Trào phúng và tự sự</option>
+              <option value="Trào phúng và đúc kết">Trào phúng và đúc kết</option>
+              <option value="Trào phúng và bình luận">Trào phúng và bình luận</option>
+              <option value="Trào phúng và trần thuật">Trào phúng và trần thuật</option>
+              <option value="Trào phúng và gợi mở">Trào phúng và gợi mở</option>
+              <option value="Trào phúng và tóm tắt">Trào phúng và tóm tắt</option>
+              <option value="Truyền cảm và kể chuyện">Truyền cảm và kể chuyện</option>
+              <option value="Truyền cảm và phân tích">Truyền cảm và phân tích</option>
+              <option value="Truyền cảm và phỏng vấn">Truyền cảm và phỏng vấn</option>
+              <option value="Truyền cảm và báo cáo">Truyền cảm và báo cáo</option>
+              <option value="Truyền cảm và tâm tình">Truyền cảm và tâm tình</option>
+              <option value="Truyền cảm và đối thoại">Truyền cảm và đối thoại</option>
+              <option value="Truyền cảm và tường thuật">Truyền cảm và tường thuật</option>
+              <option value="Truyền cảm và tranh luận">Truyền cảm và tranh luận</option>
+              <option value="Truyền cảm và hướng dẫn">Truyền cảm và hướng dẫn</option>
+              <option value="Truyền cảm và chiêm nghiệm">Truyền cảm và chiêm nghiệm</option>
+              <option value="Truyền cảm và châm biếm">Truyền cảm và châm biếm</option>
+              <option value="Truyền cảm và diễn giảng">Truyền cảm và diễn giảng</option>
+              <option value="Truyền cảm và hùng biện">Truyền cảm và hùng biện</option>
+              <option value="Truyền cảm và trò chuyện">Truyền cảm và trò chuyện</option>
+              <option value="Truyền cảm và tự sự">Truyền cảm và tự sự</option>
+              <option value="Truyền cảm và đúc kết">Truyền cảm và đúc kết</option>
+              <option value="Truyền cảm và bình luận">Truyền cảm và bình luận</option>
+              <option value="Truyền cảm và trần thuật">Truyền cảm và trần thuật</option>
+              <option value="Truyền cảm và gợi mở">Truyền cảm và gợi mở</option>
+              <option value="Truyền cảm và tóm tắt">Truyền cảm và tóm tắt</option>
+              <option value="Căng thẳng và kể chuyện">Căng thẳng và kể chuyện</option>
+              <option value="Căng thẳng và phân tích">Căng thẳng và phân tích</option>
+              <option value="Căng thẳng và phỏng vấn">Căng thẳng và phỏng vấn</option>
+              <option value="Căng thẳng và báo cáo">Căng thẳng và báo cáo</option>
+              <option value="Căng thẳng và tâm tình">Căng thẳng và tâm tình</option>
+              <option value="Căng thẳng và đối thoại">Căng thẳng và đối thoại</option>
+              <option value="Căng thẳng và tường thuật">Căng thẳng và tường thuật</option>
+              <option value="Căng thẳng và tranh luận">Căng thẳng và tranh luận</option>
+              <option value="Căng thẳng và hướng dẫn">Căng thẳng và hướng dẫn</option>
+              <option value="Căng thẳng và chiêm nghiệm">Căng thẳng và chiêm nghiệm</option>
+              <option value="Căng thẳng và châm biếm">Căng thẳng và châm biếm</option>
+              <option value="Căng thẳng và diễn giảng">Căng thẳng và diễn giảng</option>
+              <option value="Căng thẳng và hùng biện">Căng thẳng và hùng biện</option>
+              <option value="Căng thẳng và trò chuyện">Căng thẳng và trò chuyện</option>
+              <option value="Căng thẳng và tự sự">Căng thẳng và tự sự</option>
+              <option value="Căng thẳng và đúc kết">Căng thẳng và đúc kết</option>
+              <option value="Căng thẳng và bình luận">Căng thẳng và bình luận</option>
+              <option value="Căng thẳng và trần thuật">Căng thẳng và trần thuật</option>
+              <option value="Căng thẳng và gợi mở">Căng thẳng và gợi mở</option>
+              <option value="Căng thẳng và tóm tắt">Căng thẳng và tóm tắt</option>
+              <option value="U ám và kể chuyện">U ám và kể chuyện</option>
+              <option value="U ám và phân tích">U ám và phân tích</option>
+              <option value="U ám và phỏng vấn">U ám và phỏng vấn</option>
+              <option value="U ám và báo cáo">U ám và báo cáo</option>
+              <option value="U ám và tâm tình">U ám và tâm tình</option>
+              <option value="U ám và đối thoại">U ám và đối thoại</option>
+              <option value="U ám và tường thuật">U ám và tường thuật</option>
+              <option value="U ám và tranh luận">U ám và tranh luận</option>
+              <option value="U ám và hướng dẫn">U ám và hướng dẫn</option>
+              <option value="U ám và chiêm nghiệm">U ám và chiêm nghiệm</option>
+              <option value="U ám và châm biếm">U ám và châm biếm</option>
+              <option value="U ám và diễn giảng">U ám và diễn giảng</option>
+              <option value="U ám và hùng biện">U ám và hùng biện</option>
+              <option value="U ám và trò chuyện">U ám và trò chuyện</option>
+              <option value="U ám và tự sự">U ám và tự sự</option>
+              <option value="U ám và đúc kết">U ám và đúc kết</option>
+              <option value="U ám và bình luận">U ám và bình luận</option>
+              <option value="U ám và trần thuật">U ám và trần thuật</option>
+              <option value="U ám và gợi mở">U ám và gợi mở</option>
+              <option value="U ám và tóm tắt">U ám và tóm tắt</option>
+              <option value="Mộc mạc và kể chuyện">Mộc mạc và kể chuyện</option>
+              <option value="Mộc mạc và phân tích">Mộc mạc và phân tích</option>
+              <option value="Mộc mạc và phỏng vấn">Mộc mạc và phỏng vấn</option>
+              <option value="Mộc mạc và báo cáo">Mộc mạc và báo cáo</option>
+              <option value="Mộc mạc và tâm tình">Mộc mạc và tâm tình</option>
+              <option value="Mộc mạc và đối thoại">Mộc mạc và đối thoại</option>
+              <option value="Mộc mạc và tường thuật">Mộc mạc và tường thuật</option>
+              <option value="Mộc mạc và tranh luận">Mộc mạc và tranh luận</option>
+              <option value="Mộc mạc và hướng dẫn">Mộc mạc và hướng dẫn</option>
+              <option value="Mộc mạc và chiêm nghiệm">Mộc mạc và chiêm nghiệm</option>
+              <option value="Mộc mạc và châm biếm">Mộc mạc và châm biếm</option>
+              <option value="Mộc mạc và diễn giảng">Mộc mạc và diễn giảng</option>
+              <option value="Mộc mạc và hùng biện">Mộc mạc và hùng biện</option>
+              <option value="Mộc mạc và trò chuyện">Mộc mạc và trò chuyện</option>
+              <option value="Mộc mạc và tự sự">Mộc mạc và tự sự</option>
+              <option value="Mộc mạc và đúc kết">Mộc mạc và đúc kết</option>
+              <option value="Mộc mạc và bình luận">Mộc mạc và bình luận</option>
+              <option value="Mộc mạc và trần thuật">Mộc mạc và trần thuật</option>
+              <option value="Mộc mạc và gợi mở">Mộc mạc và gợi mở</option>
+              <option value="Mộc mạc và tóm tắt">Mộc mạc và tóm tắt</option>
             </select>
             
             <label class="ts-lbl" style="margin-top:0">📋 Prompt kịch bản (từ Profile) <span id="tsProfName" style="color:var(--accent)"></span></label>
@@ -2835,9 +3189,9 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
           <div style="flex:1;min-width:140px"><span class="label">Luồng song song</span>
             <select id="mvVidConc"><option value="0" selected>Auto (theo số TK)</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="8">8</option><option value="10">10</option></select>
           </div>
-          <div style="flex:1;min-width:150px"><span class="label">Model</span>
+          <div style="flex:1;min-width:150px"><span class="label">Model <span style="cursor:pointer;color:var(--accent);margin-left:4px" onclick="tvRefreshModels()" title="Quét lại model từ Flow">↻</span></span>
             <select id="mvVidModel" onchange="tvOnModelChange()">
-              <option value="omni-flash" selected>Omni Flash</option>
+              <option value="omni-flash" selected>Omni Flash (FREE)</option>
               <option value="veo31-lite">Veo 3.1 - Lite</option>
               <option value="veo31-fast">Veo 3.1 - Fast</option>
               <option value="veo31-quality">Veo 3.1 - Quality</option>
@@ -3721,14 +4075,6 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
               </div>
             </div>
           </div>
-          <div style="display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 0 2px;flex-wrap:wrap">
-            <button class="t7-mini" onclick="t7SplitAtPlayhead()" title="Tách clip tại vạch phát (S)">✂ Tách</button>
-            <button class="t7-mini" id="t7SubPrevBtn" onclick="t7ToggleSubPreview()" title="Phụ đề lấy từ lời thoại từng cảnh — bật/tắt xem trên hình">🅣 Phụ đề</button>
-            <button class="t7-mini" onclick="document.getElementById('t7OverlayInput').click()" title="Ảnh đè phủ toàn khung, nằm trên mọi lớp">🖼 Ảnh đè</button>
-            <button class="t7-mini" onclick="t7SfxLibOpen()" title="Chèn hiệu ứng âm thanh tại vạch phát">🔊 SFX</button>
-            <button class="t7-mini" onclick="t7Undo()" title="Hoàn tác (⌘Z)">↶</button>
-            <button class="t7-mini" onclick="t7Fullscreen()" title="Xem toàn màn hình">⛶ Toàn màn</button>
-          </div>
           <div id="t7StatusLean" style="min-height:17px;padding:2px 14px 8px;font-size:12px;color:var(--text-muted);text-align:center"></div>
           <div id="t7PreviewCap" class="t7-pcap" style="display:none"></div>
         </section>
@@ -3992,8 +4338,8 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
         #tool-toolniche .pole{background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:9px 12px;font-size:12.5px;color:var(--text)}
         #tool-toolniche .pole b{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted);margin-bottom:3px}
         #tool-toolniche .alt{font-size:12.8px;padding:7px 11px;border-radius:6px;background:var(--surface-2);margin-bottom:6px;display:flex;gap:10px;align-items:center;justify-content:space-between;color:var(--text)}
-        #tool-toolniche .nf-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:16px 0 8px}
-        @media (max-width:1100px){#tool-toolniche .nf-grid{grid-template-columns:repeat(2,1fr)}}
+        #tool-toolniche .nf-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin:16px 0 8px}
+        @media (max-width:1100px){#tool-toolniche .nf-grid{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}}
         #tool-toolniche .nf-tile{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px 18px;cursor:pointer;transition:.15s;text-align:center;position:relative}
         #tool-toolniche .nf-tile:hover{border-color:var(--accent);transform:translateY(-2px)}
         #tool-toolniche .nf-tile.active{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
@@ -4043,6 +4389,38 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
             </style>
       <div class="tool-head">
         <h1>🔎 Nghiên cứu Ngách <span style="font-size:13px;color:var(--text-muted,#a29a90);font-weight:400">— dữ liệu YouTube thật + Claude · gộp cả phân tích đối thủ</span></h1>
+        <div style="margin-top:8px;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-muted)">
+          <span>🌐 Khu vực (trending/tìm kiếm):</span>
+          <select id="nfGl" style="max-width:210px;padding:5px 8px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:inherit">
+            <option value="">Tất cả (theo vị trí hiện tại)</option>
+            <option value="US">🇺🇸 Hoa Kỳ</option>
+            <option value="GB">🇬🇧 Anh</option>
+            <option value="CA">🇨🇦 Canada</option>
+            <option value="AU">🇦🇺 Úc</option>
+            <option value="DE">🇩🇪 Đức</option>
+            <option value="FR">🇫🇷 Pháp</option>
+            <option value="ES">🇪🇸 Tây Ban Nha</option>
+            <option value="IT">🇮🇹 Ý</option>
+            <option value="JP">🇯🇵 Nhật Bản</option>
+            <option value="KR">🇰🇷 Hàn Quốc</option>
+            <option value="BR">🇧🇷 Brazil</option>
+            <option value="IN">🇮🇳 Ấn Độ</option>
+            <option value="MX">🇲🇽 Mexico</option>
+            <option value="ID">🇮🇩 Indonesia</option>
+            <option value="VN">🇻🇳 Việt Nam</option>
+            <option value="TH">🇹🇭 Thái Lan</option>
+            <option value="PH">🇵🇭 Philippines</option>
+            <option value="SG">🇸🇬 Singapore</option>
+            <option value="RU">🇷🇺 Nga</option>
+            <option value="NL">🇳🇱 Hà Lan</option>
+            <option value="PL">🇵🇱 Ba Lan</option>
+            <option value="TR">🇹🇷 Thổ Nhĩ Kỳ</option>
+            <option value="SA">🇸🇦 Ả Rập Xê Út</option>
+            <option value="EG">🇪🇬 Ai Cập</option>
+            <option value="ZA">🇿🇦 Nam Phi</option>
+            <option value="NG">🇳🇬 Nigeria</option>
+          </select>
+        </div>
       </div>
       <div class="nf-wrap">
         <div class="nf-grid">
@@ -4054,6 +4432,10 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
             <svg class="nf-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V5M9 19v-7M14 19V9M19 19v-4"/></svg>
             <h4>Thẻ điểm kênh</h4><p>5 chỉ số sức khoẻ + outlier + kênh giống</p>
           </div>
+          <div class="nf-tile" id="nf-tile-similar" onclick="nfOpen('similar')">
+            <svg class="nf-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2M9 7a4 4 0 100 8 4 4 0 000-8zM22 21v-2a4 4 0 00-3-3.9M16 3.1a4 4 0 010 7.8"/></svg>
+            <h4>Kênh giống</h4><p>Tìm kênh khác cùng tệp khán giả (VPS, xu hướng)</p>
+          </div>
           <div class="nf-tile" id="nf-tile-attention" onclick="nfOpen('attention')">
             <svg class="nf-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 21s-7-4.3-9.5-8.5C.8 9.4 2.4 6 5.5 6 7.6 6 9 7.5 12 10c3-2.5 4.4-4 6.5-4 3.1 0 4.7 3.4 3 6.5C19 16.7 12 21 12 21z"/></svg>
             <h4>Thị trường Chú ý</h4><p>Nhóm khán giả nhu cầu cao "Người xem…"</p>
@@ -4062,11 +4444,31 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
             <svg class="nf-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v18M4 7h16M6 7l-3 7h6zM18 7l3 7h-6z"/></svg>
             <h4>Chấm ý tưởng B&amp;W</h4><p>Tiêu đề có cặp đối lập đủ bắt mắt chưa</p>
           </div>
+          <div class="nf-tile" id="nf-tile-spike" onclick="nfOpen('spike')">
+            <svg class="nf-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"/></svg>
+            <h4>Đột phá view</h4><p>Video/kênh nào đang nhảy view nhanh nhất trong ngách</p>
+          </div>
+          <div class="nf-tile" id="nf-tile-pain" onclick="nfOpen('pain')">
+            <svg class="nf-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2v4M8 12h8M12 22v-4M4 8l2.5 2.5M20 8l-2.5 2.5M4 16l2.5-2.5M20 16l-2.5-2.5"/></svg>
+            <h4>Pain Point</h4><p>Phân tích bình luận tìm nhu cầu &amp; khoảng trống</p>
+          </div>
+          <div class="nf-tile" id="nf-tile-forecast" onclick="nfOpen('forecast')">
+            <svg class="nf-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12h4l3-6 4 12 3-6h4"/></svg>
+            <h4>Dự báo xu hướng</h4><p>Đánh giá tăng trưởng &amp; thời điểm vào ngách</p>
+          </div>
+          <div class="nf-tile" id="nf-tile-keywords" onclick="nfOpen('keywords')">
+            <svg class="nf-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.66 0 3-4.03 3-9s-1.34-9-3-9m0 18c-1.66 0-3-4.03-3-9s1.34-9 3-9"/></svg>
+            <h4>Từ khoá SEO</h4><p>Phân cụm từ khoá &amp; đánh giá cạnh tranh</p>
+          </div>
+          <div class="nf-tile" id="nf-tile-breakdown" onclick="nfOpen('breakdown')">
+            <svg class="nf-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 00-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0020 4.77 5.07 5.07 0 0019.91 1S18.73.65 16 2.48a13.38 13.38 0 00-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 005 4.77 5.44 5.44 0 003.5 8.52c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 009 18.13V22"/></svg>
+            <h4>Phân tích video</h4><p>Tách lẻ video hiệu suất cao nhất trong ngách</p>
+          </div>
 </div>
 
         <!-- 🔥 Chủ đề Hot — quét nhiều góc, chấm theo bội số trung vị, tách 2 cửa sổ thời gian -->
         <div class="nf-panel" id="nf-panel-hot">
-          <div class="nf-row"><input type="text" id="nfHotSeed" placeholder="Ngách/từ khoá (VD: kể chuyện lịch sử, AI tools, nấu ăn eat clean)"><button class="nf-btn" id="nfHotBtn" onclick="nfRun('hot')">🔥 Tìm chủ đề đang lên</button><button class="nf-btn ghost" onclick="nfRun('hot',true)" title="Bỏ cache, quét mới">↻</button></div>
+          <div class="nf-row"><input type="text" id="nfHotSeed" placeholder="Ngách/từ khoá (VD: kể chuyện lịch sử, AI tools, nấu ăn eat clean)"><button class="nf-btn" id="nfHotBtn" onclick="nfRun('hot')">🔥 Tìm chủ đề đang lên</button><button class="nf-btn ghost" onclick="nfRun('hot',true)" title="Bỏ cache, quét mới">↻</button><button class="nf-btn ghost" onclick="nfCopy('hot')" title="Copy toàn bộ kết quả ra clipboard (Markdown)">📋</button></div>
           <div class="nf-state" id="nfHotState"></div>
           <div id="nfHotOut"></div>
         </div>
@@ -4077,29 +4479,67 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
             <input type="text" id="nfScSeed" placeholder="Kênh đối thủ: @tenkenh hoặc https://youtube.com/@tenkenh">
             <button class="nf-btn" id="nfScBtn" onclick="nfRun('scorecard')">🩺 Soi kênh</button>
             <button class="nf-btn ghost" onclick="nfRun('scorecard',true)" title="Bỏ cache, quét mới">↻</button>
+            <button class="nf-btn ghost" onclick="nfCopy('scorecard')" title="Copy toàn bộ kết quả ra clipboard (Markdown)">📋</button>
           </div>
           <div class="nf-state" id="nfScState"></div>
           <div id="nfScOut"></div>
-          <div class="nf-row" id="nfSimRow" style="display:none;margin-top:14px">
-            <button class="nf-btn ghost" id="nfSimBtn" onclick="nfRunSimilar()">👥 Tìm kênh giống (cùng tệp khán giả)</button>
-            <span class="nf-state" id="nfSimState" style="margin:0"></span>
-          </div>
+        </div>
+
+        <!-- 👥 Kênh giống — từng là hàng ẩn trong panel Soi kênh, giờ là ô độc lập (cùng tệp khán giả) -->
+        <div class="nf-panel" id="nf-panel-similar">
+          <div class="nf-row"><input type="text" id="nfSimSeed" placeholder="Kênh gốc: @tenkenh hoặc https://youtube.com/@tenkenh"><button class="nf-btn" id="nfSimBtn" onclick="nfRun('similar')">👥 Tìm kênh giống</button><button class="nf-btn ghost" onclick="nfRun('similar',true)" title="Bỏ cache, quét mới">↻</button><button class="nf-btn ghost" onclick="nfCopy('similar')" title="Copy danh sách kênh ra clipboard (Markdown)">📋</button></div>
+          <div class="nf-state" id="nfSimState">Chậm (mỗi ứng viên 1 lần yt-dlp, ~1-2 phút) · so kênh xong ở ô Thẻ điểm sẽ tự điền kênh vào đây.</div>
           <div id="nfSimOut"></div>
         </div>
 
         <!-- ⚖️ Chấm ý tưởng theo thang đen–trắng -->
         <div class="nf-panel" id="nf-panel-bw">
-          <div class="nf-row"><input type="text" id="nfBwTitle" placeholder="Dán tiêu đề video của bạn vào đây"><button class="nf-btn" id="nfBwBtn" onclick="nfRun('bw')">⚖️ Chấm tiêu đề</button></div>
+          <div class="nf-row"><input type="text" id="nfBwTitle" placeholder="Dán tiêu đề video của bạn vào đây"><button class="nf-btn" id="nfBwBtn" onclick="nfRun('bw')">⚖️ Chấm tiêu đề</button><button class="nf-btn ghost" onclick="nfCopy('bw')" title="Copy kết quả chấm ra clipboard (Markdown)">📋</button></div>
           <div class="nf-row" style="margin-top:-4px"><input type="text" id="nfBwNiche" placeholder="Ngách (tuỳ chọn — giúp AI viết lại sát chủ đề hơn)"></div>
           <div class="nf-state" id="nfBwState"></div>
           <div id="nfBwOut"></div>
         </div>
 
+        <!-- 🧠 Pain Point Mining — phân tích bình luận tìm nhu cầu, khoảng trống -->
+        <div class="nf-panel" id="nf-panel-pain">
+          <div class="nf-row"><input type="text" id="nfPainSeed" placeholder="Ngách/từ khoá (VD: luyện thi IELTS, làm chủ TikTok, đầu tư crypto)"><button class="nf-btn" id="nfPainBtn" onclick="nfRun('pain')">🧠 Tìm pain point</button><button class="nf-btn ghost" onclick="nfRun('pain',true)" title="Bỏ cache, quét mới">↻</button><button class="nf-btn ghost" onclick="nfCopy('pain')" title="Copy kết quả ra clipboard (Markdown)">📋</button></div>
+          <div class="nf-state" id="nfPainState">Quét 10 video + 200 bình luận gần nhất · phân tích AI.</div>
+          <div id="nfPainOut"></div>
+        </div>
+
+        <!-- 📈 Dự báo xu hướng — đánh giá tăng trưởng ngách -->
+        <div class="nf-panel" id="nf-panel-forecast">
+          <div class="nf-row"><input type="text" id="nfForecastSeed" placeholder="Ngách cần dự báo (VD: trí tuệ nhân tạo, faceless shorts)"><button class="nf-btn" id="nfForecastBtn" onclick="nfRun('forecast')">📈 Dự báo xu hướng</button><button class="nf-btn ghost" onclick="nfRun('forecast',true)" title="Bỏ cache, quét mới">↻</button><button class="nf-btn ghost" onclick="nfCopy('forecast')" title="Copy kết quả ra clipboard (Markdown)">📋</button></div>
+          <div class="nf-state" id="nfForecastState"></div>
+          <div id="nfForecastOut"></div>
+        </div>
+
+        <!-- 🔑 Từ khoá SEO — phân cụm + đánh giá cạnh tranh -->
+        <div class="nf-panel" id="nf-panel-keywords">
+          <div class="nf-row"><input type="text" id="nfKeywordsSeed" placeholder="Ngách/từ khoá gốc (VD: keto diet, minimalist living)"><button class="nf-btn" id="nfKeywordsBtn" onclick="nfRun('keywords')">🔑 Phân cụm từ khoá</button><button class="nf-btn ghost" onclick="nfRun('keywords',true)" title="Bỏ cache, quét mới">↻</button><button class="nf-btn ghost" onclick="nfCopy('keywords')" title="Copy kết quả ra clipboard (Markdown)">📋</button></div>
+          <div class="nf-state" id="nfKeywordsState"></div>
+          <div id="nfKeywordsOut"></div>
+        </div>
+
+        <!-- 🎬 Phân tích video hiệu suất cao -->
+        <div class="nf-panel" id="nf-panel-breakdown">
+          <div class="nf-row"><input type="text" id="nfBreakdownSeed" placeholder="Ngách để phân tích video vượt trội (VD: thiết kế nội thất, digital painting)"><button class="nf-btn" id="nfBreakdownBtn" onclick="nfRun('breakdown')">🎬 Tách lẻ video</button><button class="nf-btn ghost" onclick="nfRun('breakdown',true)" title="Bỏ cache, quét mới">↻</button><button class="nf-btn ghost" onclick="nfCopy('breakdown')" title="Copy kết quả ra clipboard (Markdown)">📋</button></div>
+          <div class="nf-state" id="nfBreakdownState"></div>
+          <div id="nfBreakdownOut"></div>
+        </div>
+
         <!-- Thị trường chú ý -->
         <div class="nf-panel" id="nf-panel-attention">
-          <div class="nf-row"><input type="text" id="nfAttSeed" placeholder="Ngách/từ khoá để dò nhu cầu khán giả"><button class="nf-btn" id="nfAttBtn" onclick="nfRun('attention')">❤️ Dò thị trường chú ý</button><button class="nf-btn ghost" onclick="nfRun('attention',true)" title="Bỏ cache, quét mới">↻</button></div>
+          <div class="nf-row"><input type="text" id="nfAttSeed" placeholder="Ngách/từ khoá để dò nhu cầu khán giả"><button class="nf-btn" id="nfAttBtn" onclick="nfRun('attention')">❤️ Dò thị trường chú ý</button><button class="nf-btn ghost" onclick="nfRun('attention',true)" title="Bỏ cache, quét mới">↻</button><button class="nf-btn ghost" onclick="nfCopy('attention')" title="Copy toàn bộ kết quả ra clipboard (Markdown)">📋</button></div>
           <div class="nf-state" id="nfAttState"></div>
           <div id="nfAttOut"></div>
+        </div>
+
+        <!-- ⚡ Đột phá view — so 2 ảnh chụp: video/kênh nào nhảy view mạnh nhất giữa 2 lần quét + video vừa lên sóng -->
+        <div class="nf-panel" id="nf-panel-spike">
+          <div class="nf-row"><input type="text" id="nfSpSeed" placeholder="Ngách cần theo dõi view (VD: truyện ma, review điện thoại, kết hôn trớt quớt)"><button class="nf-btn" id="nfSpBtn" onclick="nfRun('spike')">⚡ Đột phá view</button><button class="nf-btn ghost" onclick="nfCopy('spike')" title="Copy kết quả ra clipboard (Markdown)">📋</button></div>
+          <div class="nf-state" id="nfSpState">Bức tốc theo ngày đăng (mốc YouTube) có ngay lần đầu · mỗi lần bấm = 1 phép đo (không cache) · quét lại sau ≥1 giờ để so thêm mốc riêng của app.</div>
+          <div id="nfSpOut"></div>
         </div>
       </div>
     </div>
@@ -4141,6 +4581,18 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
         </div>
         <div class="panel-body">
           <div id="tfConn" style="font-size:13px;line-height:1.7">Đang kiểm tra extension…</div>
+          <!-- API key cho Flow dùng trong các trường hợp khác -->
+          <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+            <label style="display:block;font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.3px;margin:0 0 4px">
+              API Key Flow (dùng chung)
+              <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="float:right;font-size:11px;color:var(--accent);font-weight:600;text-decoration:none;text-transform:none">Lấy Key ↗</a>
+            </label>
+            <div style="display:flex;gap:8px">
+              <textarea id="flowApiKey" rows="4" placeholder="Mỗi key một dòng…" style="flex:1;resize:vertical;min-height:64px"></textarea>
+              <button class="btn ghost sm" onclick="saveFlowApiKey()" style="white-space:nowrap">💾 Lưu</button>
+            </div>
+            <div id="flowApiKeyStatus" style="margin-top:6px;font-size:11.5px;color:var(--text-muted)"></div>
+          </div>
           <!-- Thêm tài khoản mới (1 danh sách gọn, kiểu tool tham chiếu) -->
           <div style="margin-top:12px;padding:12px 13px;border:1px solid var(--border);border-radius:10px">
             <div style="font-weight:600;margin-bottom:9px">➕ Thêm tài khoản mới</div>
@@ -4193,6 +4645,7 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
 
       <!-- ② CẤU HÌNH -->
       <div class="fc">
+        <div class="fc-step"><span class="n">2</span> Cấu hình</div>
         <div id="genCfgBlock">
         <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;align-items:end">
           <div><label class="label">Model</label><select id="tfModel" style="width:100%"><option value="GEM_PIX_2" selected>Nano Banana Pro</option><option value="NARWHAL">Nano Banana 2</option></select></div>
@@ -4651,6 +5104,43 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
                 oninput="document.getElementById('vGapVal').textContent=this.value+' ms'">
             </div>
           </div>
+
+          <!-- Cài đặt nâng cao (gập lại) -->
+          <details style="margin-top:18px;border-top:1px solid var(--border);padding-top:14px">
+            <summary style="cursor:pointer;font-weight:600;font-size:13.5px;color:var(--text-muted);user-select:none">⚙️ Cài đặt nâng cao</summary>
+            <div style="margin-top:12px;display:flex;flex-direction:column;gap:12px">
+              <div class="sl">
+                <div class="slh"><b>Top P (sáng tạo / ổn định)</b><span id="vTopPVal">0.85</span></div>
+                <input type="range" id="voiceTopP" min="0" max="1" step="0.01" value="0.85"
+                  oninput="document.getElementById('vTopPVal').textContent=(+this.value).toFixed(2)">
+                <div class="why">Giảm để giọng đọc ngẫu hứng, có hồn hơn (giống ElevenLabs). Tăng để ổn định.</div>
+              </div>
+              <div class="sl">
+                <div class="slh"><b>Top K</b><span id="vTopKVal">50</span></div>
+                <input type="range" id="voiceTopK" min="1" max="100" step="1" value="50"
+                  oninput="document.getElementById('vTopKVal').textContent=this.value">
+                <div class="why">Độ đa dạng của âm thanh. Giá trị cao hơn cho giọng tự nhiên hơn.</div>
+              </div>
+              <div class="sl">
+                <div class="slh"><b>Repetition Penalty (độ mượt)</b><span id="vRepPenVal">2.0</span></div>
+                <input type="range" id="voiceRepPen" min="1.0" max="3.0" step="0.1" value="2.0"
+                  oninput="document.getElementById('vRepPenVal').textContent=(+this.value).toFixed(1)">
+                <div class="why">Tăng để tránh AI bị lắp bắp hoặc lặp chữ (dành cho VieNeu).</div>
+              </div>
+              <div class="sl" id="slGenSpeed">
+                <div class="slh"><b>Tốc độ generation (OmniVoice)</b><span id="vGenSpeedVal">0.9×</span></div>
+                <input type="range" id="voiceGenSpeed" min="0.5" max="1.5" step="0.05" value="0.9"
+                  oninput="document.getElementById('vGenSpeedVal').textContent=(+this.value).toFixed(2)+'×'">
+                <div class="why">Dành riêng cho OmniVoice. Điều chỉnh tốc độ sinh âm thanh.</div>
+              </div>
+              <div class="sl" id="slDiffSteps">
+                <div class="slh"><b>Diffusion Steps (độ sắc nét)</b><span id="vDiffStepsVal">16</span></div>
+                <input type="range" id="voiceDiffSteps" min="4" max="32" step="2" value="16"
+                  oninput="document.getElementById('vDiffStepsVal').textContent=this.value">
+                <div class="why">Dành cho OmniVoice. Số càng cao âm thanh càng trong nhưng tạo chậm hơn.</div>
+              </div>
+            </div>
+          </details>
         </div>
       </div>
 
@@ -4783,36 +5273,40 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
 
           <div class="settings-h" style="margin-top:22px">🔎 Phân tích đối thủ (YouTube)</div>
           <div style="background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:16px 18px">
-            <label style="display:block;font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.3px;margin:0 0 4px">YouTube Data API v3</label>
+            <label style="display:block;font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.3px;margin:0 0 4px">YouTube Data API v3
+              <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener" style="float:right;font-size:11px;color:var(--accent);font-weight:600;text-decoration:none;text-transform:none">Lấy Key ↗</a></label>
             <div style="display:flex;gap:8px"><input type="password" id="t11YtKey" placeholder="Paste key…" style="flex:1"><button class="btn ghost sm" onclick="t11SaveKeys()" style="white-space:nowrap">💾 Lưu</button></div>
-            <div style="font-size:11px;color:var(--text-dim);margin-top:7px">Phần tổng hợp / đẻ tiêu đề dùng luôn <b>AI provider chính</b> (ở mục trên) — không cần key riêng.</div>
+            <div style="font-size:11px;color:var(--text-dim);margin-top:7px">Bước 1: bấm <a href="https://console.cloud.google.com/apis/library/youtube.googleapis.com" target="_blank" rel="noopener" style="color:var(--accent);font-weight:600;text-decoration:none">Enable YouTube Data API v3 ↗</a> (bắt buộc, không enable thì key báo lỗi) · Bước 2: <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener" style="color:var(--accent);font-weight:600;text-decoration:none">Create Credentials → API key ↗</a> rồi dán vào ô trên. Phần tổng hợp / đẻ tiêu đề dùng luôn <b>AI provider chính</b> (ở mục trên) — không cần key riêng.</div>
             <div id="t11KeyState" style="margin-top:9px;font-size:11.5px"></div>
           </div>
 
           <div class="settings-h" style="margin-top:22px">🎤 Whisper (căn timing giọng đọc)</div>
           <div style="background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:16px 18px">
-            <label style="display:block;font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.3px;margin:0 0 4px">Groq Whisper API key <span style="text-transform:none;color:var(--accent)">(khuyên dùng — free 2.000/ngày, console.groq.com)</span></label>
+            <label style="display:block;font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.3px;margin:0 0 4px">Groq Whisper API key <span style="text-transform:none;color:var(--accent)">(khuyên dùng — free 2.000/ngày)</span>
+              <a href="https://console.groq.com/keys" target="_blank" rel="noopener" style="float:right;font-size:11px;color:var(--accent);font-weight:600;text-decoration:none;text-transform:none">Lấy Key ↗</a></label>
             <div style="display:flex;gap:8px"><input type="password" id="setWhisperKey" placeholder="gsk_… (tuỳ chọn)" style="flex:1"><button class="btn ghost sm" onclick="saveWhisperKey()" style="white-space:nowrap">💾 Lưu</button></div>
-            <label style="display:block;font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.3px;margin:14px 0 4px">OpenAI Whisper API key <span style="text-transform:none;color:var(--text-dim)">(tuỳ chọn, trả phí)</span></label>
+            <label style="display:block;font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.3px;margin:14px 0 4px">OpenAI Whisper API key <span style="text-transform:none;color:var(--text-dim)">(tuỳ chọn, trả phí)</span>
+              <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener" style="float:right;font-size:11px;color:var(--accent);font-weight:600;text-decoration:none;text-transform:none">Lấy Key ↗</a></label>
             <div style="display:flex;gap:8px"><input type="password" id="setWhisperKeyOpenai" placeholder="sk-… (tuỳ chọn)" style="flex:1"><button class="btn ghost sm" onclick="saveWhisperKeyOpenai()" style="white-space:nowrap">💾 Lưu</button></div>
             <div id="setWhisperState" style="margin-top:9px;font-size:11.5px"></div>
           </div>
 
           <div class="settings-h" style="margin-top:22px">🎞 Nguồn ảnh/video stock (Xen video stock)</div>
           <div style="background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:16px 18px">
-            <label style="display:block;font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.3px;margin:0 0 4px">Pexels API key <span style="text-transform:none;color:var(--accent)">(miễn phí — pexels.com/api)</span></label>
+            <label style="display:block;font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.3px;margin:0 0 4px">Pexels API key <span style="text-transform:none;color:var(--accent)">(miễn phí)</span>
+              <a href="https://www.pexels.com/api/" target="_blank" rel="noopener" style="float:right;font-size:11px;color:var(--accent);font-weight:600;text-decoration:none;text-transform:none">Lấy Key ↗</a></label>
             <div style="display:flex;gap:8px"><input type="password" id="pexelsKey" placeholder="Paste Pexels API key…" style="flex:1"><button class="btn ghost sm" onclick="savePexelsKey()" style="white-space:nowrap">💾 Lưu</button><button class="btn ghost sm" onclick="t2TestStockAll()" style="white-space:nowrap" title="Thử cả ba nguồn">⚡ Thử</button></div>
-            <label style="display:block;font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.3px;margin:14px 0 4px">Pixabay API key <span style="text-transform:none;color:var(--text-dim)">(miễn phí, tuỳ chọn)</span></label>
+            <label style="display:block;font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.3px;margin:14px 0 4px">Pixabay API key <span style="text-transform:none;color:var(--text-dim)">(miễn phí, tuỳ chọn)</span>
+              <a href="https://pixabay.com/api/docs/" target="_blank" rel="noopener" style="float:right;font-size:11px;color:var(--accent);font-weight:600;text-decoration:none;text-transform:none">Lấy Key ↗</a></label>
             <div style="display:flex;gap:8px"><input type="password" id="pixabayKey" placeholder="Paste Pixabay API key…" style="flex:1"><button class="btn ghost sm" onclick="savePixabayKey()" style="white-space:nowrap">💾 Lưu</button><button class="btn ghost sm" onclick="t2TestStockKey('pixabay')" style="white-space:nowrap">⚡ Thử</button></div>
-            <label style="display:block;font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.3px;margin:14px 0 4px">Unsplash access key <span style="text-transform:none;color:var(--text-dim)">(ảnh, tuỳ chọn)</span></label>
+            <label style="display:block;font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.3px;margin:14px 0 4px">Unsplash access key <span style="text-transform:none;color:var(--text-dim)">(ảnh, tuỳ chọn)</span>
+              <a href="https://unsplash.com/developers" target="_blank" rel="noopener" style="float:right;font-size:11px;color:var(--accent);font-weight:600;text-decoration:none;text-transform:none">Lấy Key ↗</a></label>
             <div style="display:flex;gap:8px"><input type="password" id="unsplashKey" placeholder="Paste Unsplash Access Key…" style="flex:1"><button class="btn ghost sm" onclick="saveUnsplashKey()" style="white-space:nowrap">💾 Lưu</button><button class="btn ghost sm" onclick="t2TestStockKey('unsplash')" style="white-space:nowrap">⚡ Thử</button></div>
             <div id="t2StockRows" style="font-size:11px;color:var(--text-dim);margin-top:8px"></div>
           </div>
         </section>
         <section class="settings-col">
-          <div class="settings-h">🖼 Cấu hình tạo ảnh (Model · Luồng)</div>
-          <div id="settingsGenCfgSlot" style="background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:16px 18px"></div>
-          <div class="settings-h" style="margin-top:22px">🎬 Tài khoản Google Flow (tạo ảnh + video)</div>
+          <div class="settings-h">🎬 Tài khoản Google Flow (tạo ảnh + video)</div>
           <div id="settingsFlowSlot"></div>
         </section>
       </div>
@@ -6106,9 +6600,6 @@ function _relocateSettings(){
       api.style.display = '';
       apiSlot.appendChild(api);
     }
-    const cfgSlot = document.getElementById('settingsGenCfgSlot');
-    const cfg = document.getElementById('genCfgBlock');
-    if (cfg && cfgSlot && cfg.parentElement !== cfgSlot){ cfgSlot.appendChild(cfg); }   // đưa Model/Luồng… sang Cài đặt
     const flowSlot = document.getElementById('settingsFlowSlot');
     const flow = document.getElementById('flowAuthBlock');
     if (flow && flowSlot && flow.parentElement !== flowSlot){
@@ -6152,12 +6643,20 @@ document.addEventListener('click', (e) => {
 });
 let _updState = null, _appVer = '', _updDismissed = false;
 
-// ── Chính sách "MỌI THỨ TRONG APP" ────────────────────────────────────────────
-// App KHÔNG mở cửa sổ/trình duyệt ngoài — main process đã deny mọi window.open
-// trừ popup ĐĂNG NHẬP bên thứ 3 (Google/Firebase). Ở renderer:
-// - Liên kết ngoài → sao chép vào clipboard + toast (người dùng tự dán khi cần).
+// ── Chính sách "MỞ CÓ KIỂM SOÁT" ─────────────────────────────────────────────
+// Renderer KHÔNG tự mở cửa sổ ngoài — mọi việc mở do MAIN quyết định qua
+// setWindowOpenHandler: (1) host "Lấy Key ↗" (NOVA_GET_KEY_LINK_HOSTS) →
+// shell.openExternal mở trình duyệt MẶC ĐỊNH; (2) host ĐĂNG NHẬP bên thứ 3
+// (NOVA_AUTH_LINK_HOSTS) → popup trong app. Ở renderer:
+// - Liên kết ngoài khác → sao chép vào clipboard + toast (người dùng tự dán khi cần).
 // - File media kết quả → tải thẳng về máy ngay trong app (fetch → blob → download).
 const NOVA_AUTH_LINK_HOSTS = /(^|\.)(accounts\.google\.com|google\.com|firebaseapp\.com|novastudio\.com)$/i;
+// Host "Lấy Key ↗" (trang Cài đặt + link getKeyLink AI provider) — PHẢI khớp
+// EXTERNAL_LINK_HOSTS trong nova/main/state.js. Kiểm TRƯỚC NOVA_AUTH_LINK_HOSTS:
+// console.cloud.google.com / aistudio.google.com là subdomain google.com — để
+// host này đi qua nhánh auth thì main vẫn mở đúng trình duyệt ngoài (main cũng
+// kiểm EXTERNAL trước AUTH), nhưng nhãn comment sẽ sai; giữ cùng thứ tự cho dễ đọc.
+const NOVA_GET_KEY_LINK_HOSTS = /(^|\.)(console\.anthropic\.com|platform\.openai\.com|aistudio\.google\.com|console\.cloud\.google\.com|platform\.deepseek\.com|openrouter\.ai|console\.groq\.com|console\.mistral\.ai|dashboard\.cohere\.com|docs\.perplexity\.ai|api\.together\.xyz|fireworks\.ai|pexels\.com|pixabay\.com|unsplash\.com)$/i;
 function novaToast(msg){
   try {
     let t = document.getElementById('novaToast');
@@ -6199,12 +6698,17 @@ async function novaDownloadUrl(url, name){
     novaCopyLink(url, 'Không tải trực tiếp được — đã sao chép liên kết:');
   }
 }
-// Chặn mọi <a target="_blank"> mở tab/cửa sổ ngoài (trừ host đăng nhập bên thứ 3).
+// Chặn mọi <a target="_blank"> mở tab/cửa sổ ngoài — TRỪ: (1) host "Lấy Key ↗"
+// (NOVA_GET_KEY_LINK_HOSTS): cho đi qua → main (setWindowOpenHandler) mở bằng
+// trình duyệt MẶC ĐỊNH của hệ thống qua shell.openExternal; (2) host đăng nhập
+// bên thứ 3 (NOVA_AUTH_LINK_HOSTS): main mở popup trong app. Mọi host khác vẫn
+// bị chặn ở đây (copy link) — đúng hành vi cũ.
 document.addEventListener('click', (e) => {
   const a = e.target && e.target.closest ? e.target.closest('a[target="_blank"]') : null;
   if (!a || !a.href) return;
   let host = '';
   try { host = new URL(a.href).hostname; } catch(_){}
+  if (host && NOVA_GET_KEY_LINK_HOSTS.test(host)) return;   // Lấy Key ↗ → main mở trình duyệt ngoài
   if (host && NOVA_AUTH_LINK_HOSTS.test(host)) return;   // đăng nhập bên thứ 3 → main mở popup
   e.preventDefault();
   e.stopPropagation();
@@ -6380,6 +6884,7 @@ function renderDashboard(){
         ${qa("switchTool('toolhanddraw')", '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/>', 'Vẽ Tay Ảnh', 'Ảnh tĩnh → video vẽ tay')}
         ${qa("switchTool('toolimzic')", '<path d="M3 12h18M3 4h18M3 20h18"/><path d="M6 4v16"/>', 'I-MZic', 'Ảnh + nhạc, hiệu ứng theo nhịp')}
         ${qa("switchTool('toolstudio')", '<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M2 8h20"/><path d="M6 21h12"/><path d="M12 17v4"/>', 'Studio', 'Kho media, ghép video, stem…')}
+        ${qa("switchTool('toolsrttranslate')", '<path d="M4 7l3-3 3 3M7 4v9M20 17l-3 3-3-3M17 20v-9"/>', 'Dịch SRT', 'AI dịch phụ đề SRT')}
       </div>
     </div>
     <div class="dsec">
@@ -6637,12 +7142,20 @@ function renderDashboard(){
           </select>
         </div>
         <input id="dashTopic" class="dsh-field" placeholder="Hoặc tự nhập: Bí ẩn sự sụp đổ của Đế chế La Mã" oninput="_autoTopic=this.value">
-        <div id="dashWordsWrap" style="display:flex;align-items:flex-end;gap:12px;margin-top:12px">
+        <div id="dashWordsWrap" style="display:flex;align-items:flex-end;gap:12px;margin-top:12px;flex-wrap:wrap">
           <div>
-            <label class="dsh-lbl">Số lượng từ</label>
-            <input id="dashWords" class="dsh-field" type="number" min="100" step="100" value="800" oninput="dashWordEst()" style="width:120px">
+            <label class="dsh-lbl">Chương</label>
+            <input id="dashChapters" class="dsh-field" type="number" min="1" step="1" value="1" oninput="dashWordEst()" style="width:90px">
           </div>
-          <span id="dashWordEst" style="font-size:12px;color:var(--text-dim);white-space:nowrap;padding-bottom:11px">≈ 5.3 phút đọc</span>
+          <div>
+            <label class="dsh-lbl">Từ / chương</label>
+            <input id="dashWordsPerChapter" class="dsh-field" type="number" min="100" step="100" value="1200" oninput="dashWordEst()" style="width:110px">
+          </div>
+          <div style="flex:1;min-width:150px">
+            <label class="dsh-lbl">Ngôn ngữ</label>
+            <select id="dashLang" class="dsh-field" style="padding:7px 10px"></select>
+          </div>
+          <span id="dashWordEst" style="font-size:12px;color:var(--text-dim);white-space:nowrap;padding-bottom:11px">Tổng dự tính: ~9 phút · ≈ 9 phút/chương</span>
         </div>
       </div>
       <div id="dashPrepared" style="display:none;margin-bottom:14px;padding:12px 14px;border:1px solid var(--border);border-radius:10px;background:var(--surface-2)">
@@ -6696,6 +7209,15 @@ function renderDashboard(){
     dashSaveMode(_autoSaveMode);
     const sf = document.getElementById('dashSaveFolder'); if (sf) { const base = _autoOutDir || _autoDefaultDir; if (base) sf.value = base; }
     const ss = document.getElementById('dashStart'); if (ss) ss.value = _autoStartFrom;
+    // QUY MÔ: mirror giá trị tab Tạo Kịch Bản (chương × từ/chương × ngôn ngữ); danh sách ngôn ngữ
+    // clone từ tsLang — không nhân đôi 27 option giữa 2 nơi (một nguồn, một hợp đồng).
+    const dl = document.getElementById('dashLang');
+    if (dl) { const sl = document.getElementById('tsLang'); if (sl) { dl.innerHTML = sl.innerHTML; dl.value = sl.value || 'Tiếng Việt'; } }
+    const dch = document.getElementById('dashChapters'), dwpc = document.getElementById('dashWordsPerChapter');
+    const tch = document.getElementById('tsChapters'), twpc = document.getElementById('tsWordsPerChapter');
+    if (dch && tch) dch.value = tch.value;
+    if (dwpc && twpc) dwpc.value = twpc.value;
+    if (typeof dashWordEst === 'function') dashWordEst();
     dashToggleStart();
     const vn = document.getElementById('dashVoiceName'); if (vn && _autoVoiceFile) vn.textContent = '✓ ' + _autoVoiceFile.name;
     if (_autoLastLog) _autoLog(_autoLastLog.msg, _autoLastLog.type);
@@ -6838,17 +7360,23 @@ function dashToggleStart(){
   const sel = document.getElementById('dashStart'); const v = sel ? sel.value : 'script';
   _autoStartFrom = v;
   const box = document.getElementById('dashPrepared'); if (box) box.style.display = v === 'scenes' ? 'block' : 'none';
-  // Khối Chủ đề + số từ chỉ hiện khi làm từ đầu; từ Prompt cảnh → ẩn cả khối (tiêu đề suy từ kịch bản/SEO).
+  // Khối Chủ đề + QUY MÔ chỉ hiện khi làm từ đầu (viết kịch bản); từ Prompt cảnh → ẩn cả khối.
   const trow = document.getElementById('dashTopicRow'); if (trow) trow.style.display = v === 'scenes' ? 'none' : '';
+  const wrow = document.getElementById('dashWordsWrap'); if (wrow) wrow.style.display = v === 'scenes' ? 'none' : 'flex';
 }
 function dashPickVoice(files){
   const f = files && files[0]; _autoVoiceFile = f || null;
   const nm = document.getElementById('dashVoiceName'); if (nm) nm.textContent = f ? ('✓ ' + f.name) : '';
 }
 function dashWordEst(){
-  const w = parseInt(document.getElementById('dashWords')?.value) || 0;
+  // Cùng công thức ước lượng như khối QUY MÔ tab Tạo Kịch Bản (140 từ/phút).
+  const ch = parseInt(document.getElementById('dashChapters')?.value) || 1;
+  const wpc = parseInt(document.getElementById('dashWordsPerChapter')?.value) || 0;
   const el = document.getElementById('dashWordEst');
-  if (el) el.textContent = w ? ('≈ ' + (w / 150).toFixed(1) + ' phút đọc') : '';
+  if (!el) return;
+  if (!wpc) { el.textContent = ''; return; }
+  const total = ch * wpc, speed = 140;
+  el.textContent = 'Tổng dự tính: ~' + Math.max(1, Math.round(total / speed)) + ' phút · ≈ ' + Math.max(1, Math.round(wpc / speed)) + ' phút/chương';
 }
 async function dashLoadScriptFile(files){
   const f = files && files[0]; if (!f) return;
@@ -6999,7 +7527,11 @@ function queueAdd(){
   const startFrom = document.getElementById('dashStart')?.value || 'script';
   const topic = (document.getElementById('dashTopic')?.value || '').trim();
   let script = (_autoScriptText || '').trim();
-  const words = parseInt(document.getElementById('dashWords')?.value) || 800;
+  // Quy mô theo khối QUY MÔ tab Tạo Kịch Bản: chương × từ/chương (không còn ô "số từ" riêng lẻ).
+  const chapters = Math.max(1, parseInt(document.getElementById('dashChapters')?.value) || 1);
+  const wpc = Math.max(100, parseInt(document.getElementById('dashWordsPerChapter')?.value) || 1200);
+  const words = chapters * wpc;
+  const lang = document.getElementById('dashLang')?.value || 'Tiếng Việt';
   if (startFrom === 'script') { if (!topic) return _autoLog('Nhập chủ đề video trước khi thêm.', 'error'); }
   else { if (!script) script = (state.script || document.getElementById('tsOutput')?.value || '').trim(); if (!script) return _autoLog('Chưa có kịch bản — chọn file .txt, hoặc viết ở tab Tạo Kịch Bản.', 'error'); }
   const title = topic || ('Video ' + (_prodQueue.length + 1) + ' — chờ SEO đặt tên');
@@ -7008,6 +7540,7 @@ function queueAdd(){
   const pname = (p.tenKenh || '').trim() || ('Profile ' + (state.currentProfileIdx + 1));
   const job = {
     id, title, topic, startFrom, script: startFrom === 'scenes' ? script : '', words,
+    chapters, wpc, lang,   // QUY MÔ lúc bấm Thêm — pipeline set đúng vào tab Tạo Kịch Bản
     profileIdx: state.currentProfileIdx, profileName: pname, status: 'queued', detail: 'chờ tới lượt',
     // Ghi nhớ nơi lưu RIÊNG cho video này (theo cài đặt lúc bấm Thêm)
     saveMode: _autoSaveMode, saveName: (_autoSaveName || '').trim(), saveDir: (_autoOutDir || _autoDefaultDir || ''),
@@ -7141,7 +7674,18 @@ async function _runPipeline(job){
         state.script = scr; const si = document.getElementById('scriptInput'); if (si) si.value = scr; return { sub: scr.length + ' ký tự (có sẵn)' };
       }
       const tt = document.getElementById('tsTopic'); if (tt) tt.value = topic;
-      const tw = document.getElementById('tsWords'); if (tw && job.words) tw.value = job.words;
+      // Đồng bộ QUY MÔ đúng như tab: chương × từ/chương × ngôn ngữ → tsUpdateScale() tự ghi
+      // tsWords = chương × từ/chương VÀ tự bật Chế độ Novel khi ≥ 2 chương (đúng hành vi
+      // người dùng chỉnh tay trên tab — pipeline không lệch quy mô với tab nữa).
+      // Job cũ (chỉ có words, hàng đợi lưu trước bản này) → giữ đường cũ: ghi thẳng tổng từ.
+      if (job.chapters != null) {
+        const ch = document.getElementById('tsChapters'); if (ch) ch.value = job.chapters;
+        const wp = document.getElementById('tsWordsPerChapter'); if (wp) wp.value = job.wpc || 1200;
+        const lg = document.getElementById('tsLang'); if (lg && job.lang) lg.value = job.lang;
+        if (typeof tsUpdateScale === 'function') tsUpdateScale();
+      } else {
+        const tw = document.getElementById('tsWords'); if (tw && job.words) tw.value = job.words;
+      }
       await tsGenerate(false);
       const scr = (document.getElementById('tsOutput')?.value || '').trim();
       if (!scr) throw new Error('AI chưa tạo được kịch bản (kiểm tra AI provider / CLI bridge).');
@@ -8246,6 +8790,13 @@ function switchTool(name){
       catch (e) { console.error('[handdraw] init lỗi:', e); }
     }
   }
+  if (name === 'toolsrttranslate') {
+    const _stC = document.getElementById('srtTranslateRoot');
+    if (_stC && window.SrtTranslatePanel && typeof window.SrtTranslatePanel.init === 'function') {
+      try { window.SrtTranslatePanel.init(_stC); }
+      catch (e) { console.error('[srt-translate] init lỗi:', e); }
+    }
+  }
   if (name === 'toolimzic') {
     const frame = document.getElementById('imzicFrame');
     const isLoaded = frame && (frame.getAttribute('data-loaded') === '1');
@@ -8989,6 +9540,20 @@ async function voiceHWNap(){
       voiceBackendVe(); try { giongVe(); giongVeThanh(); } catch (_){}
     }
   } catch (_){}   // backend cũ chưa có /api/hardware → dùng mặc định 400/400
+  voicePrewarm();   // nạp sẵn model engine đang chọn → lần đọc đầu không phải chờ tải model
+}
+
+// Nạp sẵn model của engine đang chọn (chạy ngầm, không chặn UI).
+// Backend tự bỏ qua khi model đã nạp rồi; lỗi cũng không được để hỏng luồng.
+async function voicePrewarm(){
+  try {
+    const eng = _TTS_BACKEND_ID[_voiceBackend] || 'omnivoice';
+    await _giongFetchJson(VOICE_URL + '/api/prewarm', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ engine: eng }),
+    });
+  } catch (_){}
 }
 
 // Panel hướng dẫn khách tự tải + cài backend giọng nói (thay cho dòng lỗi đỏ)
@@ -9343,11 +9908,18 @@ async function _giongPhatThu(key){
 
 function giongDocTuyChon(){
   const s = id => parseFloat((document.getElementById(id) || {}).value);
+  const int = id => parseInt((document.getElementById(id) || {}).value, 10);
   return {
     tocDo: isFinite(s('voiceSpeed')) ? s('voiceSpeed') : 1,
     caoDo: isFinite(s('voicePitch')) ? s('voicePitch') : 0,
     gap: isFinite(s('voiceGap')) ? s('voiceGap') : 300,
     lang: (document.getElementById('voiceLang') || {}).value || 'vi',
+    // Tham số nâng cao
+    top_p: isFinite(s('voiceTopP')) ? s('voiceTopP') : 0.85,
+    top_k: isFinite(int('voiceTopK')) ? int('voiceTopK') : 50,
+    repetition_penalty: isFinite(s('voiceRepPen')) ? s('voiceRepPen') : 2.0,
+    generation_speed: isFinite(s('voiceGenSpeed')) ? s('voiceGenSpeed') : 0.9,
+    diffusion_steps: isFinite(int('voiceDiffSteps')) ? int('voiceDiffSteps') : 16,
   };
 }
 
@@ -9361,7 +9933,23 @@ async function _ttsLocal(eng, v, text, o, onTien){
   if (!v || !v.id) throw new Error('Chưa chọn giọng.');
   // chunk_chars theo phần cứng backend dò được (/api/hardware): GPU VRAM rộng → khối
   // to (600, giảm số lần gọi model); máy yếu CPU → khối nhỏ (200, ra audio sớm). Mặc định 400.
-  const body = { text, language: o.lang, speed: o.tocDo, pitch: o.caoDo || 0, gap_ms: Math.round(o.gap), chunk_chars: (_voiceHW && _voiceHW.recommended && _voiceHW.recommended.chunk_chars) || 400, attributes: {}, preset_id: v.id, engine: _TTS_BACKEND_ID[eng] || 'omnivoice' };
+  const body = {
+    text,
+    language: o.lang,
+    speed: o.tocDo,
+    pitch: o.caoDo || 0,
+    gap_ms: Math.round(o.gap),
+    chunk_chars: (_voiceHW && _voiceHW.recommended && _voiceHW.recommended.chunk_chars) || 400,
+    attributes: {},
+    preset_id: v.id,
+    engine: _TTS_BACKEND_ID[eng] || 'omnivoice',
+    // Tham số nâng cao (chỉ gửi nếu engine là omnivoice hoặc engine hỗ trợ)
+    top_p: o.top_p,
+    top_k: o.top_k,
+    repetition_penalty: o.repetition_penalty,
+    generation_speed: o.generation_speed,
+    diffusion_steps: o.diffusion_steps,
+  };
   const sub = await _giongFetchJson(VOICE_URL + '/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   const tid = sub.task_id;
   if (!tid) throw new Error('Backend không nhận việc.');
@@ -10394,9 +10982,19 @@ async function _videoAppResolve(r, opts){
     return { ...r, ok: false, error: (rv && rv.error) || 'Không lấy được file video (app resolve)' };
   } catch(e){ return { ...r, ok: false, error: 'App resolve lỗi: ' + (e.message || e) }; }
 }
-async function tvLoadModelKeys(){ try { const r = await flowBridge.call('VIDEO_MODEL_STATUS'); tvModelKeys = (r && r.modelKeys) || {}; } catch (e){} }
+async function tvLoadModelKeys(){ try { const r = await flowBridge.call('VIDEO_MODEL_STATUS'); tvModelKeys = (r && r.modelKeys) || {}; } catch (e){} tvRenderModelOptions(); }
+async function tvRefreshModels(){ const sb = (typeof setStatusBar === 'function'); if (sb) setStatusBar('statusMvVid', 'Đang quét model từ Flow…', 'working'); await tvLoadModelKeys(); if (sb) setStatusBar('statusMvVid', 'Đã cập nhật danh sách model.', 'ok'); }
+function tvRenderModelOptions(){
+  const sel = document.getElementById('mvVidModel'); if (!sel) return;
+  const cur = sel.value;
+  const merged = Object.assign({}, TV_BUILTIN_MODEL_KEYS, tvModelKeys || {});
+  const labels = Object.assign({}, TV_MODEL_LABEL, { 'omni-flash': 'Omni Flash (FREE)' });
+  let html = '';
+  for (const slug of Object.keys(merged)) { const v = merged[slug]; const key = (v && typeof v === 'object') ? (v.image || v.text) : v; if (typeof key !== 'string' || !key) continue; html += '<option value="' + slug + '"' + (slug === cur ? ' selected' : '') + '>' + (labels[slug] || slug) + '</option>'; }
+  if (html) { sel.innerHTML = html; if (typeof tvOnModelChange === 'function') tvOnModelChange(); }
+}
 // Veo 3.1 cố định độ dài (Flow không nhận đổi) → ẩn ô Độ dài khi chọn Veo; Omni Flash thì hiện.
-function tvOnModelChange(){ const m = document.getElementById('mvVidModel')?.value || ''; const w = document.getElementById('tvDurWrap'); if (w) w.style.display = /^veo/.test(m) ? 'none' : ''; }
+function tvOnModelChange(){ const m = document.getElementById('mvVidModel')?.value || ''; const w = document.getElementById('tvDurWrap'); if (w) w.style.display = (/^veo/.test(m) || m === 'omni-flash') ? 'none' : ''; }
 function tvOnResChange(){ const r = document.getElementById('mvVidRes')?.value || '720p'; if (r === '1080p') tvRefreshUpsStatus(); else { const row = document.getElementById('tvUpsRow'); if (row) row.style.display = 'none'; } }
 async function tvRefreshUpsStatus(){
   const row = document.getElementById('tvUpsRow'); const el = document.getElementById('tvUpsStatus');
@@ -26454,15 +27052,24 @@ const _uploadsOf = channelId => 'UU' + String(channelId).slice(2);
 function _t11oNum(n){ n = Number(n)||0; return n>=1e6 ? (n/1e6).toFixed(1)+'M' : n>=1e3 ? (n/1e3).toFixed(1)+'K' : String(n); }
 
 // ════════════════════════════════════════════════════════════
-//  TÌM NGÁCH (Niche Finder) — 6 module, gọi window.native.niche.*
+//  TÌM NGÁCH (Niche Finder) — 11 module, gọi window.native.niche.*
 // ════════════════════════════════════════════════════════════
 const NF_MAP = {
   hot:       { fn: 'hot',       state: 'nfHotState',   out: 'nfHotOut',   btn: 'nfHotBtn',   seed: 'nfHotSeed',   render: nfRenderHot },
   scorecard: { fn: 'scorecard', state: 'nfScState',    out: 'nfScOut',    btn: 'nfScBtn',    seed: 'nfScSeed',    render: nfRenderScorecard, key: 'channel' },
   bw:        { fn: 'bw',        state: 'nfBwState',    out: 'nfBwOut',    btn: 'nfBwBtn',    render: nfRenderBw },
   attention: { fn: 'attention', state: 'nfAttState',    out: 'nfAttOut',    btn: 'nfAttBtn',    seed: 'nfAttSeed',    render: nfRenderAttention },
+  similar:   { fn: 'similar',   state: 'nfSimState',    out: 'nfSimOut',    btn: 'nfSimBtn',    seed: 'nfSimSeed',    render: nfRenderSimilar, key: 'channel' },
+  spike:     { fn: 'spike',     state: 'nfSpState',    out: 'nfSpOut',    btn: 'nfSpBtn',    seed: 'nfSpSeed',    render: nfRenderSpike },
+  pain:      { fn: 'pain',      state: 'nfPainState',  out: 'nfPainOut',  btn: 'nfPainBtn',  seed: 'nfPainSeed',  render: nfRenderPain },
+  forecast:  { fn: 'forecast',  state: 'nfForecastState', out: 'nfForecastOut', btn: 'nfForecastBtn', seed: 'nfForecastSeed', render: nfRenderForecast },
+  keywords:  { fn: 'keywords',  state: 'nfKeywordsState', out: 'nfKeywordsOut', btn: 'nfKeywordsBtn', seed: 'nfKeywordsSeed', render: nfRenderKeywords },
+  breakdown: { fn: 'breakdown', state: 'nfBreakdownState', out: 'nfBreakdownOut', btn: 'nfBreakdownBtn', seed: 'nfBreakdownSeed', render: nfRenderBreakdown },
 };
 let _nfWired = false, _nfActive = 'hot';
+// Kết quả gần nhất mỗi ô (để nút 📋 copy Markdown) + registry ý tưởng cho nút "🎬 Làm video này".
+const _nfLast = { hot: null, scorecard: null, attention: null, bw: null, similar: null, spike: null, pain: null, forecast: null, keywords: null, breakdown: null };
+const _nfIdeas = [];
 function _nfEsc(s){ return String(s==null?'':s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
 function _nfSet(id, html){ const el = document.getElementById(id); if (el) el.innerHTML = html; }
 function _nfBadge(level){ const v = String(level||'').toLowerCase(); if (/cao|high/.test(v)) return '<span class="nf-badge nf-hi">'+_nfEsc(level)+'</span>'; if (/thấp|low/.test(v)) return '<span class="nf-badge nf-lo">'+_nfEsc(level)+'</span>'; return '<span class="nf-badge nf-mid">'+_nfEsc(level||'')+'</span>'; }
@@ -26485,6 +27092,8 @@ async function nfRun(mod, fresh){
   const m = NF_MAP[mod]; if (!m) return;
   if (!window.native || !window.native.niche){ document.getElementById(m.state).textContent = '⚠️ Chỉ chạy trong app Nova (desktop).'; return; }
   let payload = { fresh: !!fresh };
+  const _gl = (document.getElementById('nfGl')?.value || '').trim();
+  if (_gl) payload.gl = _gl;
   if (mod === 'bw'){
     payload.title = (document.getElementById('nfBwTitle')?.value || '').trim();
     payload.niche = (document.getElementById('nfBwNiche')?.value || '').trim();
@@ -26495,8 +27104,7 @@ async function nfRun(mod, fresh){
     payload[m.key] = v;
   } else {
     const seed = (document.getElementById(m.seed)?.value || '').trim();
-    if (!seed){ document.getElementById(m.state).textContent = '⚠️ Nhập từ khoá ngách.'; return; }
-    payload.seed = seed;
+    payload.seed = seed;  // cho phép rỗng, backend sẽ dùng seed mặc định
   }
   const btn = document.getElementById(m.btn); if (btn) btn.disabled = true;
   document.getElementById(m.state).textContent = '⏳ Đang chạy…'; _nfSet(m.out, '');
@@ -26504,6 +27112,7 @@ async function nfRun(mod, fresh){
     const r = await window.native.niche[m.fn](payload);
     if (!r || !r.ok){ document.getElementById(m.state).textContent = '❌ ' + ((r&&r.error)||'Lỗi'); return; }
     m.render(r);
+    _nfLast[mod] = r;                    // giữ lại kết quả gần nhất cho nút 📋 copy
   } catch(e){ document.getElementById(m.state).textContent = '❌ ' + String(e).slice(0,150); }
   finally { if (btn) btn.disabled = false; }
 }
@@ -26511,6 +27120,7 @@ async function nfRun(mod, fresh){
 // ═══════ render: 🔥 Chủ đề Hot (quét nhiều góc · bội số trung vị · 2 cửa sổ) ═══════
 function _nfHotCard(t){
   const ratio = Number(t.ratio) || 0, n = Number(t.count) || 0;
+  const _i = _nfRegIdea({ topic: t.title || t.topic, angle: t.angle || '', src: 'Chủ đề Hot' });
   return `<div class="nf-card">
     <h5><span>🔥 ${_nfEsc(t.topic)}</span>${_nfBadge(t.heat)}</h5>
     <div class="tmet">
@@ -26520,11 +27130,14 @@ function _nfHotCard(t){
     <div class="nf-line"><b>Vì sao ăn:</b> ${_nfEsc(t.why)}</div>
     <div class="nf-line"><b>Góc làm:</b> ${_nfEsc(t.angle)}</div>
     ${t.title ? `<div class="nf-title-ex">🎬 ${_nfEsc(t.title)}</div>` : ''}
+    <div style="margin-top:9px"><button class="nf-btn ghost" onclick="nfMakeVideo(${_i})">🎬 Làm video này</button></div>
   </div>`;
 }
 function nfRenderHot(r){
+  const fq = r.failedQueries || [];      // góc quét lỗi (trước đây bị nuốt ngầm)
   document.getElementById('nfHotState').textContent =
-    `✅ Quét ${(r.queries||[]).length} góc · ${r.scanned||0} video · trung vị ngách ${_t11oNum(r.median||0)} view` + _nfMeta(r);
+    `✅ Quét ${(r.queries||[]).length} góc · ${r.scanned||0} video · trung vị ngách ${_t11oNum(r.median||0)} view` + _nfMeta(r)
+    + (fq.length ? ` · ⚠️ ${fq.length}/${(r.queries||[]).length} góc lỗi` : '');
   const items = r.items || [];
   const rising = items.filter(x => String(x.window||'').toLowerCase() === 'rising');
   const proven = items.filter(x => String(x.window||'').toLowerCase() !== 'rising');
@@ -26575,7 +27188,7 @@ function nfRenderScorecard(r){
       <div style="text-align:right"><div style="font-size:26px;font-weight:800;color:var(--accent);line-height:1">${r.health}</div><div style="font-size:11px;color:var(--text-muted)">điểm sức khoẻ</div></div>
     </div>
     ${_nfMetricRows(m)}
-    ${r.analysis ? `<div class="nf-title-ex" style="margin-top:12px;white-space:pre-wrap">${_nfEsc(r.analysis)}</div>` : ''}
+    ${r.analysis ? `<div class="nf-title-ex" style="margin-top:12px;white-space:pre-wrap">${_nfEsc(r.analysis)}</div>` : (r.analysisError ? `<div class="nf-state" style="margin-top:12px">⚠️ Phân tích AI lỗi: ${_nfEsc(r.analysisError)}</div>` : '')}
   </div>`;
   if ((r.outliers||[]).length){
     h += `<div class="nf-card" style="padding:8px 12px"><table class="nf-tbl">
@@ -26589,36 +27202,28 @@ function nfRenderScorecard(r){
     </table></div>`;
   }
   _nfSet('nfScOut', h);
-  const row = document.getElementById('nfSimRow'); if (row) row.style.display = 'flex';
   _nfSet('nfSimOut', '');
+  // Soi xong → tự điền kênh vừa so vào ô "Kênh giống" để chạy tiếp (không đè nếu người dùng đang nhập kênh khác).
+  const simIn = document.getElementById('nfSimSeed');
+  if (simIn && _nfScChannel && !(simIn.value || '').trim()) simIn.value = _nfScChannel;
 }
-// Kênh giống chạy riêng vì tốn thời gian (mỗi ứng viên 1 lần yt-dlp) — không nhét chung vào Soi kênh.
-async function nfRunSimilar(){
-  const st = document.getElementById('nfSimState'), btn = document.getElementById('nfSimBtn');
-  const ch = (document.getElementById('nfScSeed')?.value || _nfScChannel || '').trim();
-  if (!ch){ if (st) st.textContent = '⚠️ Soi một kênh trước đã.'; return; }
-  if (!window.native || !window.native.niche){ if (st) st.textContent = '⚠️ Chỉ chạy trong app Nova.'; return; }
-  if (btn) btn.disabled = true; if (st) st.textContent = '⏳ Đang quét (mất 1-2 phút)…';
-  _nfActive = 'similar';
-  try {
-    const r = await window.native.niche.similar({ channel: ch });
-    if (!r || !r.ok){ if (st) st.textContent = '❌ ' + ((r&&r.error)||'Lỗi'); return; }
-    if (st) st.textContent = `✅ ${r.cards.length} kênh cùng tệp` + (r.fromCache?' · ⚡cache':'');
-    _nfSet('nfSimOut', `<div class="sim-grid" style="margin-top:10px">` + r.cards.map(c => {
-      const m = c.metrics;
-      const verdict = !m ? '' : (m.vps >= 2 ? '<b style="color:#5fbf7f">ngách vàng</b> — nhỏ mà kéo view ngoài tệp sub'
-        : m.vps >= 1 ? 'còn chỗ, VPS trên ngưỡng'
-        : '<b style="color:#e08a8a">tệp đã bão hoà</b> — né hướng này');
-      const nm = c.url ? `<a href="${_nfEsc(c.url)}" target="_blank" style="color:inherit;text-decoration:none">${_nfEsc(c.channel)}</a>` : _nfEsc(c.channel);
-      return `<div class="nf-card" style="margin:0">
-        <div style="font-size:13px;font-weight:700">${nm}</div>
-        <div class="nf-state" style="margin:2px 0 7px">${_nfEsc(c.subsFmt)} sub · trùng ${c.hits} truy vấn</div>
-        ${m ? `<div><span class="chip">VPS ${m.vps}×</span><span class="chip">${Math.round(m.longform*100)}% dài</span><span class="chip">${m.trend>0?'▲ lên':'▼ xuống'}</span></div>
-        <div class="nf-state" style="margin-top:6px">${verdict}</div>` : '<div class="nf-state">⚠️ Không đọc được chỉ số (kênh riêng tư hoặc bị chặn).</div>'}
-      </div>`;
-    }).join('') + '</div>');
-  } catch(e){ if (st) st.textContent = '❌ ' + String(e).slice(0,150); }
-  finally { if (btn) btn.disabled = false; }
+// Kênh giống giờ là ô riêng (nfRun('similar')) — render card từng kênh: VPS/longform/xu hướng.
+function nfRenderSimilar(r){
+  const fqS = r.failedQueries || [];
+  document.getElementById('nfSimState').textContent = `✅ ${r.cards.length} kênh cùng tệp` + (fqS.length ? ` · ⚠️ ${fqS.length}/${(r.queries||[]).length} truy vấn lỗi` : '') + (r.fromCache ? ' · ⚡cache' : '');
+  _nfSet('nfSimOut', `<div class="sim-grid" style="margin-top:10px">` + r.cards.map(c => {
+    const m = c.metrics;
+    const verdict = !m ? '' : (m.vps >= 2 ? '<b style="color:#5fbf7f">ngách vàng</b> — nhỏ mà kéo view ngoài tệp sub'
+      : m.vps >= 1 ? 'còn chỗ, VPS trên ngưỡng'
+      : '<b style="color:#e08a8a">tệp đã bão hoà</b> — né hướng này');
+    const nm = c.url ? `<a href="${_nfEsc(c.url)}" target="_blank" style="color:inherit;text-decoration:none">${_nfEsc(c.channel)}</a>` : _nfEsc(c.channel);
+    return `<div class="nf-card" style="margin:0">
+      <div style="font-size:13px;font-weight:700">${nm}</div>
+      <div class="nf-state" style="margin:2px 0 7px">${_nfEsc(c.subsFmt)} sub · trùng ${c.hits} truy vấn</div>
+      ${m ? `<div><span class="chip">VPS ${m.vps}×</span><span class="chip">${Math.round(m.longform*100)}% dài</span><span class="chip">${m.trend>0?'▲ lên':'▼ xuống'}</span></div>
+      <div class="nf-state" style="margin-top:6px">${verdict}</div>` : '<div class="nf-state">⚠️ Không đọc được chỉ số (kênh riêng tư hoặc bị chặn).</div>'}
+    </div>`;
+  }).join('') + '</div>');
 }
 
 // ═══════ render: ⚖️ Chấm ý tưởng theo thang đen–trắng ═══════
@@ -26637,8 +27242,12 @@ function nfRenderBw(r){
     const on = sc >= lo && sc <= hi;
     return `<div class="rung${on?' on':''}"><span class="rg">${lo}–${hi}</span><span class="rl"></span><span>${txt}${on?' ← <b>bạn ở đây</b>':''}</span></div>`;
   }).join('');
-  const alts = (d.alts||[]).map(a => `<div class="alt"><span>${_nfEsc(a.title)}<div style="font-size:10.5px;color:var(--text-muted);margin-top:2px">${_nfEsc(a.why||'')}</div></span>
-    <span class="nf-badge ${(Number(a.score)||0)>=71?'nf-hi':'nf-mid'}">${Number(a.score)||0}</span></div>`).join('');
+  const alts = (d.alts||[]).map(a => {
+    const _i = _nfRegIdea({ topic: a.title, src: 'Chấm B&W' });
+    return `<div class="alt"><span>${_nfEsc(a.title)}<div style="font-size:10.5px;color:var(--text-muted);margin-top:2px">${_nfEsc(a.why||'')}</div></span>
+    <span class="nf-badge ${(Number(a.score)||0)>=71?'nf-hi':'nf-mid'}">${Number(a.score)||0}</span>
+    <button class="nf-btn ghost" style="padding:4px 10px;font-size:11px" onclick="nfMakeVideo(${_i})" title="Dùng tiêu đề này làm chủ đề cho video mới">🎬</button></div>`;
+  }).join('');
   _nfSet('nfBwOut', `<div class="nf-card">
       <div class="bw-gauge">
         <div class="bw-ring" style="background:conic-gradient(${col} 0 ${sc}%,rgba(255,255,255,.07) ${sc}% 100%)"><b>${sc}</b><small>B&amp;W</small></div>
@@ -26658,6 +27267,7 @@ function nfRenderAttention(r){
     `✅ Xong — ${r.scanned||0} video, ${r.outliers||0} vượt trội · trung vị ngách ${_t11oNum(r.median||0)} view` + _nfMeta(r);
   const cards = (r.items||[]).map(t => {
     const bw = Number(t.bw)||0;
+    const _i = _nfRegIdea({ topic: t.idea, angle: t.need || '', src: 'Thị trường Chú ý' });
     return `<div class="nf-card">
       <h5><span>🎯 ${_nfEsc(t.segment)}</span><span style="font-size:11.5px;font-weight:700;color:var(--accent);white-space:nowrap">🔥 ${t.fire||0} outlier</span></h5>
       <div class="nf-state" style="margin:0 0 5px">Nhu cầu: ${_nfEsc(t.demand||'')}${t.avgViews?` · view TB tệp ${_t11oNum(t.avgViews)}`:''}</div>
@@ -26665,9 +27275,232 @@ function nfRenderAttention(r){
       <div class="nf-title-ex">💡 ${_nfEsc(t.idea)} ${bw?`<span class="nf-badge ${bw>=71?'nf-hi':'nf-mid'}">B&amp;W ${bw}</span>`:''}
         ${t.poles?`<div style="font-size:10.5px;color:var(--text-muted);margin-top:4px">Cặp đối lập: ${_nfEsc(t.poles)}</div>`:''}</div>
       ${(t.samples||[]).length?`<div class="nf-state" style="margin-top:7px">Dựa trên: ${t.samples.map(s=>`<a href="${_nfEsc(s.url)}" target="_blank" style="color:var(--text-muted)">${_nfEsc(String(s.title).slice(0,44))} (${_nfEsc(s.viewsFmt)}, ${s.ratio}×)</a>`).join(' · ')}</div>`:''}
+      <div style="margin-top:9px"><button class="nf-btn ghost" onclick="nfMakeVideo(${_i})">🎬 Làm video này</button></div>
     </div>`;
   }).join('');
   _nfSet('nfAttOut', cards || '<div class="nf-state">Không dựng được tệp khán giả nào.</div>');
+}
+
+// ═════════════════ render: ⚡ Đột phá view (so 2 ảnh chụp + video vừa lên sóng) ═════════════════
+function nfRenderSpike(r){
+  const fq = r.failedQueries || [];
+  let head;
+  if (r.firstRun) head = `✅ Quét ${r.scanned || 0} video · đã lưu MỐC ĐẦU TIÊN (mốc riêng của app để so sau) — bức tốc bên dưới tính theo NGÀY ĐĂNG (mốc của YouTube)`;
+  else head = `✅ So ${r.overlap || 0}/${r.scanned || 0} video với mốc cách đây ${r.windowHours}h` + (r.baselineKept ? ' (mốc cũ được giữ vì 2 lần quét quá sát)' : '');
+  document.getElementById('nfSpState').textContent = head + (fq.length ? ` · ⚠️ ${fq.length} góc lỗi` : '') + (r.enriched ? ' · 📊 có like/comment/sub' : ' · chỉ view');
+  let h = '';
+  if (!r.firstRun && (r.videos || []).length){
+    h += `<div class="win"><i class="r">NHẢY VIEW CAO NHẤT</i><em>view tăng thêm giữa 2 lần quét — đang được YouTube đẩy</em><s></s></div>`
+      + `<div class="nf-card" style="padding:8px 12px"><table class="nf-tbl"><tr><th>Video</th><th class="n">Nhảy</th><th class="n">%</th><th class="n">View</th><th class="n">Tuổi</th><th></th></tr>`
+      + r.videos.map(v => {
+          const _i = _nfRegIdea({ topic: v.title, src: 'Đột phá view' });
+          return `<tr>
+            <td><a href="${_nfEsc(v.url)}" target="_blank" style="color:inherit;text-decoration:none">${_nfEsc(v.title)}</a><div style="font-size:10.5px;color:var(--text-muted)">${_nfEsc(v.channel)}</div></td>
+            <td class="n" style="color:var(--green);font-weight:800">${_nfEsc(v.deltaFmt)}</td>
+            <td class="n" style="color:var(--text-muted)">${v.deltaPct != null ? ('+' + v.deltaPct + '%') : '—'}</td>
+            <td class="n">${_nfEsc(v.viewsFmt)}</td>
+            <td class="n" style="color:var(--text-muted)">${v.days != null ? v.days + 'n' : '?'}</td>
+            <td class="n"><button class="nf-btn ghost" style="padding:3px 8px;font-size:11px" onclick="nfMakeVideo(${_i})" title="Làm video cùng mô-típ">🎬</button></td></tr>`;
+        }).join('') + `</table></div>`;
+  }
+  if (!r.firstRun && (r.channels || []).length){
+    h += `<div class="win" style="margin-top:12px"><i class="p">KÊNH ĐANG BÙNG</i><em>tổng view các video của kênh tăng giữa 2 lần quét</em><s></s></div><div class="sim-grid" style="margin-top:10px">`
+      + r.channels.map(c => `<div class="nf-card" style="margin:0">
+          <div style="font-size:13px;font-weight:700">${c.channelUrl ? `<a href="${_nfEsc(c.channelUrl)}" target="_blank" style="color:inherit;text-decoration:none">${_nfEsc(c.channel)}</a>` : _nfEsc(c.channel)}</div>
+          <div class="nf-state" style="margin:2px 0 5px"><b style="color:var(--green)">${_nfEsc(c.gainedFmt)}</b> view · ${c.videos} video đang chạy</div>
+          ${c.sample ? `<div class="nf-title-ex" style="font-size:11.5px">🔥 ${_nfEsc(c.sample.title)} (${_nfEsc(c.sample.deltaFmt)})</div>` : ''}
+        </div>`).join('') + `</div>`;
+  }
+  if ((r.rockets || []).length){
+    h += `<div class="win" style="margin-top:12px"><i class="r">🚀 BỨC TỐC THEO MỐC YOUTUBE</i><em>view/ngày tính từ NGÀY ĐĂNG — video ≤ 7 ngày đang bùng ngay bây giờ${r.medVel ? ` · trung vị video cũ: ${_t11oNum(r.medVel)}/ngày` : ''}</em><s></s></div>`
+      + `<div class="nf-card" style="padding:8px 12px"><table class="nf-tbl"><tr><th>Video</th><th class="n">Bức tốc</th><th class="n">xN</th><th class="n">View</th><th class="n">Tuổi</th><th></th></tr>`
+      + r.rockets.map(v => {
+          const _i = _nfRegIdea({ topic: v.title, src: 'Đột phá view' });
+          return `<tr>
+            <td><a href="${_nfEsc(v.url)}" target="_blank" style="color:inherit;text-decoration:none">${_nfEsc(v.title)}</a><div style="font-size:10.5px;color:var(--text-muted)">${_nfEsc(v.channel)}</div></td>
+            <td class="n" style="color:var(--green);font-weight:800">${_nfEsc(v.velFmt)}</td>
+            <td class="n" style="color:var(--accent);font-weight:700">${v.xVel != null ? 'x' + v.xVel : '—'}</td>
+            <td class="n">${_nfEsc(v.viewsFmt)}</td>
+            <td class="n" style="color:var(--text-muted)">${v.days}n</td>
+            <td class="n"><button class="nf-btn ghost" style="padding:3px 8px;font-size:11px" onclick="nfMakeVideo(${_i})" title="Làm video cùng mô-típ">🎬</button></td></tr>`;
+        }).join('') + `</table></div>`;
+  }
+  if ((r.newVideos || []).length){
+    h += `<div class="win" style="margin-top:12px"><i class="r">VỪA LÊN SÓNG</i><em>đăng ≤ 2 ngày — chưa có mốc để so, view là toàn bộ từ lúc đăng</em><s></s></div>`
+      + r.newVideos.map(v => {
+          const _i = _nfRegIdea({ topic: v.title, src: 'Đột phá view' });
+          return `<div class="nf-card"><h5><span>🆕 ${_nfEsc(v.title)}</span><span class="chip" style="font-weight:700;color:var(--accent)">${_nfEsc(v.viewsFmt)} view</span></h5>
+          <div class="nf-state" style="margin:0 0 5px">${_nfEsc(v.channel)} · ${v.days === 0 ? 'đăng hôm nay' : 'đăng hôm qua'}</div>
+          <div style="margin-top:7px"><button class="nf-btn ghost" onclick="nfMakeVideo(${_i})">🎬 Làm video này</button></div></div>`;
+        }).join('');
+  }
+  if (r.analysis) h += `<div class="nf-card" style="margin-top:12px"><div class="nf-title-ex" style="white-space:pre-wrap">${_nfEsc(r.analysis)}</div></div>`;
+  else if (r.analysisError) h += `<div class="nf-card" style="margin-top:12px"><div class="nf-state">⚠️ Phân tích AI lỗi: ${_nfEsc(r.analysisError)}</div></div>`;
+  if (!h) h = '<div class="nf-state">Chưa có gì nổi bật — hãy quét lại sau vài giờ, hoặc thử ngách rộng hơn.</div>';
+  _nfSet('nfSpOut', h);
+}
+
+// ═══════ render: 🧠 Pain Point Mining ═══════
+function nfRenderPain(r){
+  document.getElementById('nfPainState').textContent =
+    `✅ ${r.commentCount || 0} bình luận · quét ${r.videosScanned || 0} video` + (r.fromCache ? ' · ⚡cache' : '') + (r.failed && r.failed.length ? ` · ⚠️ ${r.failed.length} video lỗi` : '');
+  const res = r.result || {};
+  const needs = res.needs || [];
+  const gaps = res.gaps || [];
+  const ideas = res.ideas || [];
+  let h = '';
+  if (needs.length) h += `<div class="win"><i class="p">NHU CẦU HÀNG ĐẦU</i><em>khán giả đang tìm kiếm</em><s></s></div><div class="nf-card" style="padding:8px 12px"><ul class="nf-list">${needs.map(n => `<li>${_nfEsc(n)}</li>`).join('')}</ul></div>`;
+  if (gaps.length) h += `<div class="win" style="margin-top:12px"><i class="r">KHOẢNG TRỐNG NỘI DUNG</i><em>chưa ai làm đủ</em><s></s></div><div class="nf-card" style="padding:8px 12px"><ul class="nf-list">${gaps.map(g => `<li>${_nfEsc(g)}</li>`).join('')}</ul></div>`;
+  if (ideas.length) h += `<div class="win" style="margin-top:12px"><i class="r">💡 Ý TƯỞNG VIDEO MỚI</i><em>đáp ứng nhu cầu trên</em><s></s></div><div class="sim-grid">${ideas.map((idea, idx) => {
+    const _i = _nfRegIdea({ topic: idea.title, src: 'Pain Point' });
+    return `<div class="nf-card"><h5>${idx+1}. ${_nfEsc(idea.title)}</h5><div class="nf-state" style="margin:4px 0 0">${_nfEsc(idea.description)}</div><div style="margin-top:8px"><button class="nf-btn ghost" onclick="nfMakeVideo(${_i})">🎬 Làm video này</button></div></div>`;
+  }).join('')}</div>`;
+  if (!h) h = '<div class="nf-state">Không tìm thấy pain point rõ ràng — thử ngách khác hoặc quét thêm bình luận.</div>';
+  _nfSet('nfPainOut', h);
+}
+
+// ═══════ render: 📈 Dự báo xu hướng ═══════
+function nfRenderForecast(r){
+  document.getElementById('nfForecastState').textContent =
+    `✅ ${r.rocketsCount || 0} video bứt tốc · ${r.moversCount || 0} video chuyển động` + (r.fromCache ? ' · ⚡cache' : '');
+  const status = r.status || 'chưa xác định';
+  const rec = r.recommendation || '';
+  const forecast = r.forecast || '';
+  const medVel = r.medVel || 0;
+  const avgVel = r.avgRocketVel || 0;
+  let h = `<div class="nf-card"><div style="font-size:18px;font-weight:800;color:${status === 'tăng trưởng mạnh' ? 'var(--green)' : status === 'đang tăng' ? 'var(--accent)' : status === 'ổn định' ? '#f0c040' : '#e08a8a'}">📊 ${status}</div>
+    <div class="nf-state" style="margin:4px 0 8px">${_nfEsc(rec)}</div>
+    <div class="nf-title-ex" style="white-space:pre-wrap">${_nfEsc(forecast)}</div>
+    <div style="display:flex;gap:20px;margin-top:10px;font-size:12px;color:var(--text-muted)">
+      <span>Bức tốc TB: ${_t11oNum(avgVel)}/ngày</span>
+      <span>Trung vị video cũ: ${_t11oNum(medVel)}/ngày</span>
+    </div></div>`;
+  _nfSet('nfForecastOut', h);
+}
+
+// ═══════ render: 🔑 Từ khoá SEO ═══════
+function nfRenderKeywords(r){
+  const clusters = r.clusters || [];
+  const total = r.totalVideos || 0;
+  const fq = r.failedQueries || [];
+  document.getElementById('nfKeywordsState').textContent =
+    `✅ ${clusters.length} cụm · ${total} video` + (fq.length ? ` · ⚠️ ${fq.length} góc lỗi` : '') + (r.fromCache ? ' · ⚡cache' : '');
+  if (!clusters.length) { _nfSet('nfKeywordsOut', '<div class="nf-state">Không tìm thấy cụm từ khoá.</div>'); return; }
+  let h = `<div class="sim-grid">` + clusters.map(c => {
+    const comp = c.competition || 'Trung bình';
+    const col = comp === 'Cao' ? '#e08a8a' : comp === 'Thấp' ? '#5fbf7f' : '#f0c040';
+    return `<div class="nf-card"><h5>📌 ${_nfEsc(c.cluster_name)}</h5>
+      <div><span class="chip">${_nfEsc(c.keywords ? c.keywords.join(', ') : '')}</span></div>
+      <div class="nf-state" style="margin:4px 0"><b style="color:${col}">${comp}</b> · từ khoá chính: <b>${_nfEsc(c.suggested_main || '')}</b></div>
+    </div>`;
+  }).join('') + `</div>`;
+  _nfSet('nfKeywordsOut', h);
+}
+
+// ═══════ render: 🎬 Phân tích video hiệu suất cao ═══════
+function nfRenderBreakdown(r){
+  const outliers = r.outliers || [];
+  const res = r.result || {};
+  document.getElementById('nfBreakdownState').textContent =
+    `✅ ${outliers.length} video vượt trội` + (r.fromCache ? ' · ⚡cache' : '');
+  if (!outliers.length) { _nfSet('nfBreakdownOut', '<div class="nf-state">Không có video nào vượt trội đáng kể.</div>'); return; }
+  let h = `<div class="nf-card" style="padding:8px 12px"><table class="nf-tbl"><tr><th>Tiêu đề</th><th class="n">View</th><th class="n">Tuổi</th><th class="n">Kênh</th></tr>`
+    + outliers.map(v => `<tr><td><a href="${_nfEsc(v.url)}" target="_blank" style="color:inherit;text-decoration:none">${_nfEsc(v.title)}</a></td>
+        <td class="n" style="color:var(--accent);font-weight:700">${_nfEsc(v.viewsFmt)}</td>
+        <td class="n" style="color:var(--text-muted)">${v.days != null ? v.days + 'n' : '?'}</td>
+        <td class="n">${_nfEsc(v.channel)}</td></tr>`).join('') + `</table></div>`;
+  const lessons = res.lessons || [];
+  if (lessons.length) h += `<div class="nf-card" style="margin-top:12px"><h5>📝 Bài học cho faceless</h5><ul class="nf-list">${lessons.map(l => `<li>${_nfEsc(l)}</li>`).join('')}</ul></div>`;
+  if (res.common_title_pattern) h += `<div class="nf-card" style="margin-top:8px"><b>Cấu trúc tiêu đề:</b> ${_nfEsc(res.common_title_pattern)}</div>`;
+  if (res.common_duration) h += `<div class="nf-card" style="margin-top:4px"><b>Độ dài phổ biến:</b> ${_nfEsc(res.common_duration)}</div>`;
+  if (res.common_opening) h += `<div class="nf-card" style="margin-top:4px"><b>Góc mở đầu:</b> ${_nfEsc(res.common_opening)}</div>`;
+  _nfSet('nfBreakdownOut', h);
+}
+
+function _nfRegIdea(idea){ _nfIdeas.push(idea); return _nfIdeas.length - 1; }
+function nfMakeVideo(i){
+  const it = _nfIdeas[i]; if (!it) return;
+  const el = document.getElementById('tsTopic'); if (!el) return;
+  el.value = it.topic || '';
+  switchTool('toolscript');
+  const st = document.getElementById('statusScript');
+  if (st){ st.className = 'status-bar ok'; st.textContent = `✅ Đã chuyển chủ đề từ Nghiên cứu Ngách (${it.src || ''}) — chỉnh số từ rồi bấm Viết Kịch Bản.`; }
+}
+
+// ── Copy kết quả nghiên cứu gần nhất ra clipboard (Markdown) — không thêm kênh IPC ──
+function _nfMd(mod){
+  const r = _nfLast[mod]; if (!r) return '';
+  const L = [];
+  if (mod === 'hot'){
+    L.push(`# 🔥 Chủ đề Hot — ngách "${r.seed || ''}"`, `Trung vị ngách ${r.median || 0} view · quét ${r.scanned || 0} video · ${(r.queries || []).length} góc${(r.failedQueries || []).length ? ` · ${r.failedQueries.length} góc lỗi` : ''}`, '');
+    (r.items || []).forEach(t => L.push(`- **${t.topic}** (${t.window === 'rising' ? 'đang lên' : 'đã ăn'} · ${t.heat}) — x${t.ratio} · ${t.count} video. Vì sao: ${t.why}. Góc làm: ${t.angle}. Tiêu đề mẫu: ${t.title}`));
+  } else if (mod === 'scorecard'){
+    L.push(`# 🩺 Thẻ điểm kênh — ${r.channel || ''}`, `${r.subsFmt || 0} sub · trung vị ${r.median || 0} view · sức khoẻ ${r.health ?? '?'}/100${r.monetized ? ' · đã bật kiếm tiền' : ''}`, '');
+    if (r.analysis) L.push(r.analysis, '');
+    else if (r.analysisError) L.push(`(Phân tích AI lỗi: ${r.analysisError})`, '');
+    (r.outliers || []).forEach(o => L.push(`- x${o.ratio} · ${o.viewsFmt} view · ${Math.round((o.dur || 0) / 60)}p · ${o.url} — ${o.title}`));
+  } else if (mod === 'attention'){
+    L.push(`# ❤️ Thị trường chú ý — ngách "${r.seed || ''}"`, `Trung vị ${r.median || 0} view · ${r.outliers || 0} outlier vượt trội`, '');
+    (r.items || []).forEach(t => L.push(`- **${t.segment}** (🔥 ${t.fire} outlier · nhu cầu ${t.demand}) — đang muốn: ${t.need}. Ý tưởng: ${t.idea} (B&W ${t.bw})`));
+  } else if (mod === 'bw'){
+    const d = r.result || {};
+    L.push(`# ⚖️ Chấm B&W — "${r.title || ''}"`, `Điểm ${d.score ?? '?'}/100${d.layered ? ' · ý nhiều tầng' : ''} — ${d.verdict || ''}`, '');
+    (d.alts || []).forEach(a => L.push(`- ${a.score}/100 — ${a.title} (${a.why || ''})`));
+  } else if (mod === 'similar'){
+    L.push(`# 👥 Kênh giống — ${r.seed || ''}`, '');
+    (r.cards || []).forEach(c => L.push(`- ${c.channel} · ${c.subsFmt} sub · VPS ${c.metrics ? c.metrics.vps + '×' : '?'} · trùng ${c.hits} truy vấn — ${c.url}`));
+  } else if (mod === 'spike'){
+    L.push(`# ⚡ Đột phá view — ngách "${r.seed || ''}"`,
+      r.firstRun ? 'Lần đầu quét — mốc đã lưu, quét lại sau ≥1 giờ để so' : `So với mốc cách đây ${r.windowHours}h · ${r.overlap || 0}/${r.scanned || 0} video trùng`, '');
+    (r.videos || []).forEach(v => L.push(`- ${v.deltaFmt} view (${v.deltaPct != null ? '+' + v.deltaPct + '%' : '?'}) · ${v.viewsFmt} view · ${v.title} — ${v.channel} · ${v.url}`));
+    (r.rockets || []).forEach(v => L.push(`- 🚀 ${v.velFmt}${v.xVel ? ` (x${v.xVel} trung vị)` : ''} · ${v.viewsFmt} view · ${v.days} ngày tuổi · ${v.title} — ${v.channel} · ${v.url}`));
+    (r.channels || []).forEach(c => L.push(`- Kênh **${c.channel}**: ${c.gainedFmt} view qua ${c.videos} video${c.sample ? ' · dẫn đầu: ' + c.sample.title : ''}`));
+    (r.newVideos || []).forEach(v => L.push(`- Mới: ${v.viewsFmt} view · ${v.title} — ${v.channel} · ${v.url}`));
+    if (r.analysis) L.push('', r.analysis);
+    else if (r.analysisError) L.push('', `(Phân tích AI lỗi: ${r.analysisError})`);
+  } else if (mod === 'pain'){
+    const res = r.result || {};
+    L.push(`# 🧠 Pain Point — ngách "${r.seed || ''}"`, `Quét ${r.videosScanned || 0} video · ${r.commentCount || 0} bình luận`, '');
+    if (res.needs && res.needs.length) L.push('## Nhu cầu hàng đầu', ...res.needs.map(n => `- ${n}`), '');
+    if (res.gaps && res.gaps.length) L.push('## Khoảng trống nội dung', ...res.gaps.map(g => `- ${g}`), '');
+    if (res.ideas && res.ideas.length) L.push('## Ý tưởng video mới', ...res.ideas.map(i => `- **${i.title}**: ${i.description}`), '');
+  } else if (mod === 'forecast'){
+    L.push(`# 📈 Dự báo xu hướng — "${r.seed || ''}"`, `Trạng thái: **${r.status || 'chưa xác định'}**`, '');
+    if (r.recommendation) L.push(`Khuyến nghị: ${r.recommendation}`, '');
+    if (r.forecast) L.push(r.forecast, '');
+    L.push(`Bức tốc TB: ${r.avgRocketVel || 0}/ngày · Trung vị video cũ: ${r.medVel || 0}/ngày`);
+  } else if (mod === 'keywords'){
+    const clusters = r.clusters || [];
+    L.push(`# 🔑 Từ khoá SEO — "${r.seed || ''}"`, `Phân cụm ${clusters.length} nhóm từ khoá`, '');
+    clusters.forEach(c => {
+      L.push(`## ${c.name} (Cạnh tranh: ${c.competition || '?'})`);
+      if (c.keywords && c.keywords.length) L.push(...c.keywords.map(k => `- ${k}`));
+      L.push('');
+    });
+  } else if (mod === 'breakdown'){
+    const outliers = r.outliers || [];
+    const res = r.result || {};
+    L.push(`# 🎬 Phân tích video — "${r.seed || ''}"`, `${outliers.length} video vượt trội`, '');
+    outliers.forEach(v => L.push(`- **${v.title}** (${v.viewsFmt} view · ${v.days != null ? v.days + ' ngày' : '?'}) — ${v.channel} · ${v.url}`));
+    if (res.lessons && res.lessons.length) L.push('', '## Bài học cho faceless', ...res.lessons.map(l => `- ${l}`));
+    if (res.common_title_pattern) L.push('', `**Cấu trúc tiêu đề:** ${res.common_title_pattern}`);
+    if (res.common_duration) L.push(`**Độ dài phổ biến:** ${res.common_duration}`);
+    if (res.common_opening) L.push(`**Góc mở đầu:** ${res.common_opening}`);
+  }
+  return L.join('\n');
+}
+function _nfCopyFallback(md, done){
+  const ta = document.createElement('textarea'); ta.value = md; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select();
+  try { document.execCommand('copy'); done(); } finally { ta.remove(); }
+}
+function nfCopy(mod){
+  const md = _nfMd(mod);
+  const st = document.getElementById((NF_MAP[mod] && NF_MAP[mod].state) || (mod === 'similar' ? 'nfSimState' : ''));
+  if (!md){ if (st) st.textContent = '⚠️ Chưa có kết quả để copy — chạy nghiên cứu trước.'; return; }
+  const done = () => { if (st){ const old = st.textContent; st.textContent = `📋 Đã copy ${md.length} ký tự ra clipboard`; setTimeout(() => { st.textContent = old; }, 2500); } };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(md).then(done, () => _nfCopyFallback(md, done));
+  else _nfCopyFallback(md, done);
 }
 // ---- Idea Browser LIVE: webview YouTube thật + quét feed ----
 let _nfWv = null;
@@ -27175,6 +28008,8 @@ function toggleApiSection(){
   <script src="handdraw-studio-panel.js?v=hdlasso6"></script>
   <!-- Studio (TDTStudio PyQt nhúng): panel điều khiển + đồng bộ vùng dock với IPC tdt-studio:* -->
   <script src="tdt-studio-panel.js?v=tdtst2"></script>
+  <!-- Dịch SRT: panel UI (IPC srt-translate:* qua window.native.srtTranslate) -->
+  <script src="srt-translate-panel.js?v=srtt1"></script>
 
 <script>
 /* ============================================================================
@@ -27394,5 +28229,61 @@ const veoUI = { mode:"script", shots:[], busy:false, stop:false };
           </div>
         </div>
       </div>
+<script>
+// Flow API Key management
+(function() {
+  function loadFlowApiKey() {
+    const input = document.getElementById('flowApiKey');
+    const status = document.getElementById('flowApiKeyStatus');
+    if (!input) return;
+    var val = null;
+    try {
+      if (window.novaStore && window.novaStore.seed && typeof window.novaStore.seed['api_key_flow'] === 'string') {
+        val = window.novaStore.seed['api_key_flow'];
+      }
+    } catch (e) {}
+    if (val == null) {
+      try { val = localStorage.getItem('flowApiKey'); } catch (e) {}
+    }
+    if (val) {
+      input.value = val;
+      var count = val.split(/\r?\n/).filter(function (s) { return s.trim().length > 0; }).length;
+      if (status) status.textContent = '✅ Đã tải ' + count + ' key';
+    } else if (status) {
+      status.textContent = '';
+    }
+  }
+
+  window.saveFlowApiKey = function() {
+    const input = document.getElementById('flowApiKey');
+    const status = document.getElementById('flowApiKeyStatus');
+    if (!input) return;
+    const lines = input.value.split(/\r?\n/).map(function (s) { return s.trim(); }).filter(function (s) { return s.length > 0; });
+    if (!lines.length) {
+      if (status) status.textContent = '⚠️ Vui lòng nhập ít nhất một API key';
+      return;
+    }
+    const key = lines.join('\n');
+    var saved = false;
+    try {
+      if (window.novaStore && typeof window.novaStore.set === 'function') {
+        saved = window.novaStore.set('api_key_flow', key) === true;
+      }
+    } catch (e) { saved = false; }
+    if (saved) {
+      input.value = key;
+      if (status) status.textContent = '✅ Đã lưu ' + lines.length + ' key';
+    } else {
+      if (status) status.textContent = '❌ Lưu thất bại (kho cài đặt không khả dụng)';
+    }
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', loadFlowApiKey);
+  } else {
+    loadFlowApiKey();
+  }
+})();
+</script>
 </body>
 </html>

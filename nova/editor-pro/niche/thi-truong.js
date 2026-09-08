@@ -1,23 +1,34 @@
 /* ── Tách từ niche.js — phần BÁO CÁO: hotTopics (chủ đề bùng), bwScore (chấm ý tưởng
      đen–trắng), attentionMarkets (tệp khán giả động). Module CommonJS: hứng hàm dùng
      chung từ ./loi qua require. Đường require cũ vẫn ổn nhờ niche.js re-export. ── */
-const { claude, safeJson, kfmt, cached, searchVideos, median, sweepQueries } = require('./loi');
+const { claude, safeJson, kfmt, cached, searchVideos, median, sweepQueries, pool } = require('./loi');
 
 
 async function hotTopics(seed, onProgress = () => {}, opts = {}) {
   return cached('hot', seed, opts.fresh, onProgress, async () => {
     const queries = await sweepQueries(seed, onProgress);
-    // Quét từng góc, gộp lại, khử trùng theo id video.
-    const seen = new Set(); const all = []; let enriched = false;
-    for (let i = 0; i < queries.length; i++) {
-      onProgress(10 + Math.round(i * 40 / queries.length), `Quét góc ${i + 1}/${queries.length}: "${queries[i].slice(0, 40)}"…`);
-      try {
-        const r = await searchVideos(queries[i], 20, () => {});
-        enriched = enriched || r.enriched;
-        r.vids.forEach(v => { if (v.id && !seen.has(v.id)) { seen.add(v.id); v.q = queries[i]; all.push(v); } });
-      } catch (_) {}
+    // Quét SONG SONG 2 luồng (pool) thay vì tuần tự — 4 góc yt-dlp độc lập nên nhanh ~2x.
+    // Lỗi từng góc KHÔNG bị nuốt (Luật 10): gom vào failedQueries, báo rõ ra UI.
+    const seen = new Set(); const all = []; const failedQueries = []; let enriched = false; let done = 0;
+    const results = await pool(queries, 2, (q) => searchVideos(q, 20, () => {})
+      .then(r => ({ ok: true, q, r }))
+      .catch(err => ({ ok: false, q, error: String((err && err.message) || err).slice(0, 140) }))
+      .then(res => {
+        done++;
+        onProgress(10 + Math.round(done * 40 / queries.length), res.ok
+          ? `Quét góc ${done}/${queries.length}: "${res.q.slice(0, 40)}"…`
+          : `Góc ${done}/${queries.length} lỗi: ${res.error.slice(0, 60)}`);
+        return res;
+      }));
+    for (const res of results) {
+      if (!res.ok) { failedQueries.push({ q: res.q, error: res.error }); continue; }
+      enriched = enriched || res.r.enriched;
+      res.r.vids.forEach(v => { if (v.id && !seen.has(v.id)) { seen.add(v.id); v.q = res.q; all.push(v); } });
     }
-    if (!all.length) throw new Error('Không tìm được video cho từ khoá này.');
+    if (!all.length) {
+      const why = failedQueries.length ? ' — ' + failedQueries.map(f => f.error).join('; ').slice(0, 180) : '';
+      throw new Error('Không tìm được video cho từ khoá này' + why);
+    }
 
     // Trung vị ngách: chịu nhiễu tốt hơn trung bình khi có 1-2 video triệu view.
     const med = median(all.map(x => x.views).filter(v => v > 0)) || 1;
@@ -46,6 +57,7 @@ async function hotTopics(seed, onProgress = () => {}, opts = {}) {
     const pick = (x) => ({ title: x.title, channel: x.channel, views: x.views, viewsFmt: kfmt(x.views), ratio: x.ratio, vps: x.vps, subs: x.subs, days: x.days, url: x.url, id: x.id });
     return {
       ok: true, seed, enriched, queries, median: Math.round(med), scanned: all.length,
+      failedQueries,                                          // góc quét lỗi — UI báo "x/y góc lỗi"
       items: safeJson(raw, []),
       rising: rising.map(pick), proven: proven.map(pick),
     };

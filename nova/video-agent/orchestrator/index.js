@@ -2,7 +2,7 @@
 // §26 Job State Machine — orchestrator. Render/Upload là adapter inject được (§28).
 const path = require('path');
 const fs = require('fs');
-const { runAnalysis } = require('./analyze');
+const { runAnalysis, runAnalysisFromData } = require('./analyze');
 const { buildTimeline } = require('../timeline/engine');
 const { renderPreview } = require('../preview/render');
 const { runQA } = require('../qa/qa');
@@ -88,7 +88,14 @@ function createVideoJob({ projectDir, adapters = {}, options = {} }) {
           const e = new Error('Không đủ dung lượng trống để render (cần tối thiểu ' + minFreeBytes + ' byte).'); e.code = 'VA_DISK_SPACE'; throw e;
         }
       }
-      const A = await runAnalysis(projectDir, { step, adapters, options, signal: abortController.signal });
+
+      // Kiểm tra nếu có inputData (import từ tool) thì dùng runAnalysisFromData
+      let A;
+      if (options.inputData) {
+        A = await step('DISCOVERING', () => runAnalysisFromData(options.inputData, { step, adapters, options, signal: abortController.signal }));
+      } else {
+        A = await step('DISCOVERING', () => runAnalysis(projectDir, { step, adapters, options, signal: abortController.signal }));
+      }
       const { project, tts, manifest, versions, validate } = A;
       out.chapterId = project.chapterId;
       timeline = await step('BUILDING_TIMELINE', () => buildTimeline(A.spec));

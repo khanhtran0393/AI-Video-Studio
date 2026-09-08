@@ -164,6 +164,7 @@ const { evolvePath } = __webpack_require__(6293);
 const { layerStyleAt, charStyleAt } = __webpack_require__(3807);
 const { expandLayers } = __webpack_require__(591);
 const { CharLayer } = __webpack_require__(8865);
+const { fxOverlay } = __webpack_require__(8870);
 const h = React.createElement;
 const num = (v, d) => Number.isFinite(Number(v)) ? Number(v) : d;
 function boxStyle(box) {
@@ -387,7 +388,14 @@ function BitLayer({ L }) {
   if (L.text != null && props.children === void 0) props.children = String(L.text);
   return h(def.component, props);
 }
-const RENDERERS = { text: TextLayer, shape: ShapeLayer, image: ImageLayer, video: VideoLayer, backdrop: BackdropLayer, bit: BitLayer, svg: SvgLayer, char: CharLayer };
+function FxLayer({ L }) {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const pieces = fxOverlay(L.fx, frame / fps, fps, L.style || {});
+  if (!pieces.length) return null;
+  return h(React.Fragment, null, pieces.map((s, i) => h("div", { key: "fxp" + i, style: s })));
+}
+const RENDERERS = { text: TextLayer, shape: ShapeLayer, image: ImageLayer, video: VideoLayer, backdrop: BackdropLayer, bit: BitLayer, svg: SvgLayer, char: CharLayer, fx: FxLayer };
 function NovaScene({ spec }) {
   const frame = useCurrentFrame();
   const { fps, durationInFrames } = useVideoConfig();
@@ -407,7 +415,7 @@ function NovaScene({ spec }) {
       if (!anim) return null;
       const Renderer = RENDERERS[L.type] || TextLayer;
       const isBackdrop = L.type === "backdrop";
-      const wrapStyle = isBackdrop ? { position: "absolute", inset: 0 } : boxStyle(L.box);
+      const wrapStyle = isBackdrop || L.type === "fx" ? { position: "absolute", inset: 0 } : boxStyle(L.box);
       const man = manualTf(L);
       return h("div", {
         key: L.id || "L" + i,
@@ -538,6 +546,229 @@ function layerStyleAt(L, t, total, fps) {
   };
 }
 module.exports = { IN, OUT, HOLD, CHAR, layerStyleAt, charStyleAt, clamp01, mix, interpolate };
+
+
+/***/ },
+
+/***/ 8870
+(module) {
+
+"use strict";
+
+const num = (v, d) => Number.isFinite(Number(v)) ? Number(v) : d;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const fx = (v, d) => clamp(num(v, d), 0.2, 2);
+function h01(n) {
+  const x = Math.sin(n * 127.1 + 311.7) * 43758.5453;
+  return x - Math.floor(x);
+}
+const GRAIN_URL = `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/></filter><rect width='120' height='120' filter='url(%23n)' opacity='0.5'/></svg>")`;
+const FX = {
+  // ── GLITCH: tách màu RGB + lát khung trượt theo "burst" 3-frame ──────────────
+  glitch: {
+    label: "Glitch \u2014 nhi\u1EC5u s\u1ED1 t\xE1ch m\xE0u",
+    params: { intensity: 1, seed: 1 },
+    pieces: (t, f, o) => {
+      const amp = fx(o.intensity, 1);
+      const sd = num(o.seed, 1);
+      const seg = Math.floor(f / 3);
+      const on = h01(seg + sd * 7.3);
+      const burst = on > 0.62 ? (on - 0.62) / 0.38 : 0;
+      const out = [];
+      const dx = (1.2 + burst * 3.5) * amp;
+      out.push({
+        mixBlendMode: "screen",
+        opacity: clamp(0.3 * amp + burst * 0.3, 0, 0.9).toFixed(3),
+        background: "linear-gradient(90deg, rgba(255,0,80,.5), transparent 35%, transparent 65%, rgba(0,255,255,.5))",
+        transform: `translateX(${(-dx).toFixed(2)}%)`
+      });
+      out.push({
+        mixBlendMode: "screen",
+        opacity: clamp(0.3 * amp + burst * 0.3, 0, 0.9).toFixed(3),
+        background: "linear-gradient(90deg, rgba(0,255,255,.5), transparent 35%, transparent 65%, rgba(255,0,80,.5))",
+        transform: `translateX(${dx.toFixed(2)}%)`
+      });
+      if (burst > 0) {
+        for (let i = 0; i < 3; i++) {
+          const y = 12 + h01(seg * 3.1 + i * 17.7 + sd) * 70;
+          const hh = 3 + h01(seg * 5.7 + i * 9.1 + sd) * 9;
+          const off = (h01(seg * 2.3 + i * 31.7 + sd) - 0.5) * 14 * amp;
+          out.push({
+            top: y.toFixed(1) + "%",
+            height: hh.toFixed(1) + "%",
+            background: "rgba(255,255,255," + clamp(0.05 + burst * 0.08, 0, 1).toFixed(3) + ")",
+            transform: `translateX(${off.toFixed(1)}%)`,
+            filter: "blur(1px)"
+          });
+        }
+      }
+      out.push({
+        top: (h01(Math.floor(f / 6) + sd) * 96).toFixed(1) + "%",
+        height: "1.5%",
+        background: "repeating-linear-gradient(90deg, rgba(255,255,255,.14) 0 2px, transparent 2px 9px)",
+        opacity: clamp(0.5 + burst, 0, 1).toFixed(3)
+      });
+      return out;
+    }
+  },
+  // ── VHS: vân quét + lệch màu mép + dải tracking trượt + ánh vàng ────────────
+  vhs: {
+    label: "VHS \u2014 b\u0103ng t\u1EEB c\u0169",
+    params: { intensity: 1 },
+    pieces: (t, f, o) => {
+      const amp = fx(o.intensity, 1);
+      const out = [];
+      out.push({
+        opacity: clamp(0.55 * amp, 0, 1).toFixed(3),
+        background: "repeating-linear-gradient(0deg, rgba(0,0,0,.22) 0 2px, transparent 2px 5px)"
+      });
+      out.push({
+        mixBlendMode: "screen",
+        opacity: clamp(0.5 * amp, 0, 1).toFixed(3),
+        background: "linear-gradient(90deg, rgba(255,0,60,.12), transparent 14%, transparent 86%, rgba(0,200,255,.12))"
+      });
+      out.push({
+        top: (t * 9 % 118 - 9).toFixed(1) + "%",
+        height: "7%",
+        backgroundImage: GRAIN_URL,
+        backgroundSize: "40px 40px",
+        opacity: clamp(0.35 * amp, 0, 1).toFixed(3),
+        filter: "blur(1px)"
+      });
+      out.push({
+        mixBlendMode: "overlay",
+        opacity: clamp(0.25 * amp, 0, 1).toFixed(3),
+        background: "linear-gradient(180deg, rgba(80,60,20,.5), rgba(20,10,40,.5))"
+      });
+      out.push({
+        background: "#fff",
+        mixBlendMode: "overlay",
+        opacity: clamp(0.02 + 0.03 * h01(f), 0, 1).toFixed(3)
+      });
+      return out;
+    }
+  },
+  // ── ZOOM BLUR: vệt phóng toả từ tâm + vignette (cảm giác tốc độ) ─────────────
+  "zoom-blur": {
+    label: "Zoom blur \u2014 v\u1EC7t ph\xF3ng",
+    params: { intensity: 1, vignette: 0.5 },
+    pieces: (t, f, o) => {
+      const amp = fx(o.intensity, 1);
+      const breathe = 0.7 + 0.3 * Math.sin(t * 2.2);
+      const out = [];
+      out.push({
+        background: "repeating-radial-gradient(circle at 50% 50%, transparent 0 26px, rgba(10,5,2,.28) 26px 34px)",
+        maskImage: "radial-gradient(circle at 50% 50%, transparent 34%, #000 82%)",
+        WebkitMaskImage: "radial-gradient(circle at 50% 50%, transparent 34%, #000 82%)",
+        opacity: clamp(0.5 * amp * breathe, 0, 1).toFixed(3)
+      });
+      out.push({
+        background: "radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0," + clamp(0.55 * num(o.vignette, 0.5) * amp, 0, 1).toFixed(3) + ") 100%)"
+      });
+      return out;
+    }
+  },
+  // ── MOTION BLUR: vệt quét ngang/dọc trôi + tối hai mép ──────────────────────
+  "motion-blur": {
+    label: "Motion blur \u2014 v\u1EC7t qu\xE9t",
+    params: { intensity: 1, dir: "x" },
+    pieces: (t, f, o) => {
+      const amp = fx(o.intensity, 1);
+      const isX = String(o.dir || "x") !== "y";
+      const grad = isX ? "repeating-linear-gradient(90deg, rgba(255,255,255,.10) 0 3px, transparent 3px 22px)" : "repeating-linear-gradient(0deg, rgba(255,255,255,.10) 0 3px, transparent 3px 22px)";
+      const drift = t * 40 % 44;
+      const out = [];
+      out.push({
+        background: grad,
+        backgroundPosition: isX ? "-" + drift.toFixed(0) + "px 0" : "0 -" + drift.toFixed(0) + "px",
+        opacity: clamp(0.6 * amp, 0, 1).toFixed(3),
+        filter: "blur(1.2px)"
+      });
+      out.push({
+        background: isX ? "linear-gradient(90deg, rgba(0,0,0,.35), transparent 30%, transparent 70%, rgba(0,0,0,.35))" : "linear-gradient(180deg, rgba(0,0,0,.35), transparent 30%, transparent 70%, rgba(0,0,0,.35))",
+        opacity: clamp(0.7 * amp, 0, 1).toFixed(3)
+      });
+      return out;
+    }
+  },
+  // ── NOISE: hạt nhiễu phim trôi + nháy sáng (không phải overlay tĩnh) ────────
+  noise: {
+    label: "Noise \u2014 h\u1EA1t nhi\u1EC5u phim",
+    params: { intensity: 1, flicker: 1 },
+    pieces: (t, f, o) => {
+      const amp = fx(o.intensity, 1);
+      const fl = clamp(num(o.flicker, 1), 0, 1);
+      const out = [];
+      out.push({
+        backgroundImage: GRAIN_URL,
+        backgroundSize: "120px 120px",
+        backgroundRepeat: "repeat",
+        backgroundPosition: (h01(f) * 120).toFixed(0) + "px " + (h01(f + 91) * 120).toFixed(0) + "px",
+        opacity: clamp(0.5 * amp, 0, 1).toFixed(3)
+      });
+      out.push({
+        background: "#fff",
+        mixBlendMode: "overlay",
+        opacity: clamp(fl * (0.015 + 0.045 * h01(f + 3)), 0, 1).toFixed(3)
+      });
+      return out;
+    }
+  },
+  // ── BEAT PULSE: "music-reactive" deterministic — đập theo BPM khai báo, ─────
+  // không cần phân tích FFT thật → giữ Luật 8 (cùng render ra cùng kết quả).
+  // Muốn khớp nhạc thật: đặt bpm trùng nhịp bản nhạc nền của video.
+  pulse: {
+    label: "Beat pulse \u2014 nh\u1ECBp theo BPM",
+    params: { bpm: 120, intensity: 1, color: "#ffffff" },
+    pieces: (t, f, o) => {
+      const bpm = clamp(num(o.bpm, 120), 30, 240);
+      const amp = fx(o.intensity, 1);
+      const col = o.color || "#ffffff";
+      const b = t * bpm / 60 % 1;
+      const kick = Math.pow(1 - b, 3);
+      const out = [];
+      out.push({ background: col, mixBlendMode: "overlay", opacity: clamp(0.22 * amp * kick, 0, 1).toFixed(3) });
+      out.push({
+        left: "50%",
+        top: "50%",
+        width: "36%",
+        height: "auto",
+        aspectRatio: "1",
+        border: "2px solid " + col,
+        borderRadius: "50%",
+        transform: `translate(-50%,-50%) scale(${(1 + b * 1.4).toFixed(3)})`,
+        opacity: clamp(0.4 * amp * (1 - b), 0, 1).toFixed(3)
+      });
+      out.push({
+        top: "auto",
+        bottom: "0",
+        height: "12%",
+        background: "repeating-linear-gradient(90deg, " + col + "33 0 4px, transparent 4px 12px)",
+        maskImage: "linear-gradient(180deg, transparent, #000)",
+        WebkitMaskImage: "linear-gradient(180deg, transparent, #000)",
+        opacity: clamp(0.25 * amp * (0.5 + 0.5 * kick), 0, 1).toFixed(3)
+      });
+      return out;
+    }
+  }
+};
+function fxOverlay(name, t, fps, opts) {
+  const def = FX[name];
+  if (!def) return [];
+  const frame = Math.max(0, Math.round((Number(t) || 0) * (Number(fps) || 30)));
+  const base = { position: "absolute", left: 0, top: 0, width: "100%", height: "100%", pointerEvents: "none" };
+  let pieces = [];
+  try {
+    pieces = def.pieces(Math.max(0, Number(t) || 0), frame, opts || {}) || [];
+  } catch (_) {
+    return [];
+  }
+  return pieces.map((s) => Object.assign({}, base, s));
+}
+function fxCatalog() {
+  return Object.keys(FX).map((k) => ({ fx: k, label: FX[k].label, params: FX[k].params }));
+}
+module.exports = { FX, fxOverlay, fxCatalog, h01 };
 
 
 /***/ },
@@ -1130,6 +1361,83 @@ const TEMPLATES = {
       });
       return L;
     }
+  },
+  /* ══ GÓI "FX-" — hiệu ứng PHỦ TOÀN KHUNG (vizzy-style: glitch, VHS, blur, ────
+     noise, beat-pulse). Mỗi mẫu bung đúng 1 lớp {type:'fx'} trỏ vào bảng FX
+     của effects.js — người dùng/AI chỉ chọn TÊN + cường độ, mọi phép tính nằm
+     trong engine (một nguồn: NovaScene và preview cùng đọc effects.js).
+     z:90 → đè lên chữ (z≤12) nhưng vẫn dưới ảnh đè/full-frame overlay.        */
+  "fx-glitch": {
+    label: "FX \xB7 Glitch nhi\u1EC5u s\u1ED1",
+    params: { intensity: 1, seed: 1 },
+    build: (p) => [{
+      type: "fx",
+      fx: "glitch",
+      box: { x: 0, y: 0, w: 100, h: 100 },
+      at: 0,
+      z: 90,
+      style: { intensity: numOr(p.intensity, 1), seed: numOr(p.seed, 1) }
+    }]
+  },
+  "fx-vhs": {
+    label: "FX \xB7 VHS b\u0103ng t\u1EEB c\u0169",
+    params: { intensity: 1 },
+    build: (p) => [{
+      type: "fx",
+      fx: "vhs",
+      box: { x: 0, y: 0, w: 100, h: 100 },
+      at: 0,
+      z: 90,
+      style: { intensity: numOr(p.intensity, 1) }
+    }]
+  },
+  "fx-zoom-blur": {
+    label: "FX \xB7 Zoom blur v\u1EC7t ph\xF3ng",
+    params: { intensity: 1, vignette: 0.5 },
+    build: (p) => [{
+      type: "fx",
+      fx: "zoom-blur",
+      box: { x: 0, y: 0, w: 100, h: 100 },
+      at: 0,
+      z: 90,
+      style: { intensity: numOr(p.intensity, 1), vignette: numOr(p.vignette, 0.5) }
+    }]
+  },
+  "fx-motion-blur": {
+    label: "FX \xB7 Motion blur v\u1EC7t qu\xE9t",
+    params: { intensity: 1, dir: "x" },
+    build: (p) => [{
+      type: "fx",
+      fx: "motion-blur",
+      box: { x: 0, y: 0, w: 100, h: 100 },
+      at: 0,
+      z: 90,
+      style: { intensity: numOr(p.intensity, 1), dir: nz(p.dir, "x") }
+    }]
+  },
+  "fx-noise": {
+    label: "FX \xB7 Noise h\u1EA1t phim",
+    params: { intensity: 1, flicker: 1 },
+    build: (p) => [{
+      type: "fx",
+      fx: "noise",
+      box: { x: 0, y: 0, w: 100, h: 100 },
+      at: 0,
+      z: 90,
+      style: { intensity: numOr(p.intensity, 1), flicker: numOr(p.flicker, 1) }
+    }]
+  },
+  "fx-pulse": {
+    label: "FX \xB7 Beat pulse theo BPM",
+    params: { bpm: 120, intensity: 1, color: "#ffffff" },
+    build: (p) => [{
+      type: "fx",
+      fx: "pulse",
+      box: { x: 0, y: 0, w: 100, h: 100 },
+      at: 0,
+      z: 90,
+      style: { bpm: numOr(p.bpm, 120), intensity: numOr(p.intensity, 1), color: nz(p.color, "#ffffff") }
+    }]
   }
 };
 function expandOne(L, sceneDur) {

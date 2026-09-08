@@ -67,7 +67,7 @@ def new_clip_id() -> str:
 
 def _clamp_int(value: object, lo: int, hi: int, default: int) -> int:
     try:
-        pass
+        return max(lo, min(hi, int(value)))
     except (TypeError, ValueError):
         return default
 
@@ -77,7 +77,8 @@ def clip_from_dict(raw: object) -> TimelineClip | None:
             source_in = max(0, int(raw.get('source_in_ms', 0) or 0))
             source_out = max(source_in + 1, int(raw.get('source_out_ms', source_in + 1) or 0))
         except (TypeError, ValueError):
-            pass
+            source_in = 0
+            source_out = 1
         clip_id = str(raw.get('id') or '').strip() or new_clip_id()
         timeline_start = _clamp_int(raw.get('timeline_start_ms', 0), 0, 86400000, 0)
         track_index = _clamp_int(raw.get('track_index', 0), 0, MAX_VIDEO_TRACKS - 1, 0)
@@ -143,7 +144,7 @@ def clips_from_values(values: dict[str, Any]) -> list[TimelineClip]:
         return layout_clips(clips)
     return []
 
-def write_clips(values: dict[str, Any], clips: list[TimelineClip], *, source_duration_ms: int | None) -> list[TimelineClip]:
+def write_clips(values: dict[str, Any], clips: list[TimelineClip], *, source_duration_ms: int | None=None) -> list[TimelineClip]:
     laid = layout_clips(list(clips))
     values[TIMELINE_CLIPS_KEY] = [clip.to_dict() for clip in laid]
     ids = {clip.id for clip in laid}
@@ -210,7 +211,7 @@ def has_custom_scene_timeline(values_or_clips: dict[str, Any] | list[Any], *, so
         return bool(other)
     return False
 
-def sanitize_excessive_timeline_clips(values: dict[str, Any], *, source_duration_ms: int, source_path: str, max_clips: int) -> int:
+def sanitize_excessive_timeline_clips(values: dict[str, Any], *, source_duration_ms: int, source_path: str, max_clips: int = MAX_SAFE_TIMELINE_CLIPS) -> int:
     clips = clips_from_values(values)
     track0 = [c for c in clips if clamp_track_index(c.track_index) == 0]
     limit = max(8, int(max_clips))
@@ -292,7 +293,7 @@ def persist_values_transform_to_selected_clip(values: dict[str, Any]) -> list[Ti
             return []
     return []
 
-def ensure_timeline_clips(values: dict[str, Any], *, source_duration_ms: int, source_path: str, duration_by_path: dict[str, int] | None) -> list[TimelineClip]:
+def ensure_timeline_clips(values: dict[str, Any], *, source_duration_ms: int, source_path: str, duration_by_path: dict[str, int] | None = None) -> list[TimelineClip]:
     source_dur = max(1, int(source_duration_ms or 1))
     existing = clips_from_values(values)
     xform = transform_from_values(values)

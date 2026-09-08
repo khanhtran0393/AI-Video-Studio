@@ -70,7 +70,7 @@ def _prebake_encoder_args(*, prefer_nvenc: bool) -> tuple[str, list[str]]:
     if prefer_nvenc:
         try:
             from core.encoder_probe import nvenc_available
-            if nvenc_available():
+            if nvenc_available(force=False):
                 pass
         except Exception:
             pass

@@ -58,7 +58,14 @@ function buildStoryPlan(scriptAnalysis, tts) {
         intent: String(sen.text || ''), start: ROUND3(sen.start), end: ROUND3(sen.end) })),
     });
   });
-  return { chapterId: scriptAnalysis.chapterId, audioDuration, scenes: plan };
+  // Enrich metadata (học hỏi seedance-2.0): Directing Read + Continuity Ledger.
+  // Chỉ thêm field mới — giữ nguyên mọi field cũ, không phá vỡ consumer (§1 hợp đồng).
+  // Lazy-require tránh vòng require (§5) khi story/plan được nạp từ nhiều nơi.
+  const { directingRead } = require('../script/directing-read');
+  const { buildContinuityLedger } = require('./continuity');
+  const enriched = plan.map((p) => Object.assign({}, p, { directing: directingRead(p) }));
+  return { chapterId: scriptAnalysis.chapterId, audioDuration, scenes: enriched,
+    continuity: buildContinuityLedger({ scenes: enriched }) };
 }
 
 module.exports = { buildStoryPlan, assignSentences };

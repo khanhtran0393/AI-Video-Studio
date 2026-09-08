@@ -54,6 +54,20 @@ function registerVideoAgentIpc(ipcMain, { adapters = {}, openWindow, maxConcurre
 
   handle('videoAgent:run', async (e, payload = {}) => {
     try {
+      // Nếu có inputData, không cần inspect project (dùng dữ liệu trực tiếp)
+      if (payload.inputData) {
+        const inputData = payload.inputData;
+        // Nếu không có rootDir, tạo thư mục tạm
+        if (!inputData.rootDir) {
+          const tmpDir = require('path').join(require('os').tmpdir(), 'va-import-' + Date.now().toString(36));
+          try { require('fs').mkdirSync(tmpDir, { recursive: true }); } catch (_) {}
+          inputData.rootDir = tmpDir;
+        }
+        const meta = { projectDir: inputData.rootDir, options: { ...(payload.options || {}), inputData } };
+        const job = createVideoJob({ projectDir: meta.projectDir, adapters: mergeAdapters(adapters, payload), options: meta.options });
+        return await runCreatedJob(e, job, meta);
+      }
+      // Fallback: xử lý projectDir như cũ
       const inspected = inspectProject(payload.projectDir);
       if (!inspected.ok) return inspected;
       const meta = { projectDir: inspected.project.root, options: payload.options || {} };
