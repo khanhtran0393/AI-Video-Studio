@@ -90,6 +90,28 @@ class VieNeuEngine(TTSEngine):
             kwargs["voice"] = attrs["voice"]
         # else: giọng mặc định của model
 
+        # Tham số nâng cao từ frontend (chỉ áp dụng cho v3turbo — engine mặc định
+        # của VieNeu). Các engine khác (standard/fast/turbo) hardcode sampling
+        # params, nên truyền vào cũng vô hại: hoặc dùng (v3turbo), hoặc bỏ qua
+        # im lặng → giữ nguyên hành vi cũ cho máy đang chạy mode khác.
+        #   - top_p, top_k, repetition_penalty: 3 tham số LM-sampling chính.
+        #   - diffusion_steps, generation_speed: KHÔNG áp dụng cho VieNeu (LM-based,
+        #     không phải diffusion). Bỏ qua lộ liễu, KHÔNG map sang field khác
+        #     (Luật 10 — không fallback ngầm).
+        # Pattern đồng bộ với voice-studio/backend/engines/vieneu.py (drift đã bị
+        # bắt bởi voice-contract-test scan).
+        for k, conv in (
+            ("top_p", float),
+            ("top_k", int),
+            ("repetition_penalty", float),
+        ):
+            v = attrs.get(k)
+            if v is not None:
+                try:
+                    kwargs[k] = conv(v)
+                except (TypeError, ValueError):
+                    pass
+
         audio = self._model.infer(**kwargs)
         # VieNeu trả np.float32 @ 48 kHz. Ghi PCM 16-bit để khớp pipeline WAV.
         arr = np.asarray(audio)

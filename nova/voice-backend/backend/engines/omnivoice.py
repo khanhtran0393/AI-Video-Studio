@@ -52,24 +52,48 @@ class OmniVoiceEngine(TTSEngine):
     def synthesize(self, req: TTSRequest, out_path: Path) -> Path:
         self.load()
         import soundfile as sf
+        from omnivoice.models.omnivoice import OmniVoiceGenerationConfig
 
         kwargs = {"text": req.text, "speed": float(req.speed)}
-
-        # Tham số nâng cao (nếu được cung cấp)
-        if req.top_p is not None:
-            kwargs["top_p"] = req.top_p
-        if req.top_k is not None:
-            kwargs["top_k"] = req.top_k
-        if req.repetition_penalty is not None:
-            kwargs["repetition_penalty"] = req.repetition_penalty
-        if req.generation_speed is not None:
-            kwargs["generation_speed"] = req.generation_speed
-        if req.diffusion_steps is not None:
-            kwargs["nfe_step"] = req.diffusion_steps  # OmniVoice dùng nfe_step cho diffusion steps
 
         # Chuẩn hoá số (tiếng Việt dùng num2words) nếu bật.
         if req.attributes.get("normalize_text"):
             kwargs["normalize_text"] = True
+
+        # Tham số nâng cao từ frontend (đọc từ attributes — _run_tts đã merge top-level
+        # field vào đây, xem app.py:148 block _ADVANCED_KEYS):
+        #   - diffusion_steps   → num_step (OmniVoiceGenerationConfig)
+        #   - generation_speed  → guidance_scale (đảo nghịch: slider thấp = guidance thấp
+        #                        = sinh nhanh hơn nhưng kém chất lượng; slider cao = ngược lại)
+        #   - top_p / top_k / repetition_penalty: OmniVoice diffusion KHÔNG có các tham số
+        #     LLM-sampling này → bỏ qua, KHÔNG fallback ngầm sang num_step/guidance_scale
+        #     (Luật 10). Nếu sau này model bổ sung, sẽ map thẳng tên field.
+        # Pattern đồng bộ với voice-studio/backend/engines/omnivoice.py — trước đây file
+        # này đọc `req.top_p`/etc. trực tiếp nhưng TTSRequest không có những field đó →
+        # AttributeError tại runtime. Drift đã được voice-contract-test scan bắt.
+        gen_cfg_overrides: dict = {}
+        raw_diff_steps = req.attributes.get("diffusion_steps")
+        if raw_diff_steps is not None:
+            try:
+                n = int(raw_diff_steps)
+                if n > 0:
+                    gen_cfg_overrides["num_step"] = n
+            except (TypeError, ValueError):
+                pass
+
+        raw_gen_speed = req.attributes.get("generation_speed")
+        if raw_gen_speed is not None:
+            try:
+                # Slider generation_speed ∈ [0.5, 1.5] (1.0 = mặc định).
+                # Map sang guidance_scale ∈ [1.0, 4.0] theo: gs = 1.0 + 3.0 * speed
+                # (speed < 1.0 → gs < 4.0, nhanh hơn; speed > 1.0 → gs > 4.0, chậm/chất hơn).
+                speed_norm = max(0.1, min(2.0, float(raw_gen_speed)))
+                gen_cfg_overrides["guidance_scale"] = 1.0 + 3.0 * speed_norm
+            except (TypeError, ValueError):
+                pass
+
+        if gen_cfg_overrides:
+            kwargs["generation_config"] = OmniVoiceGenerationConfig.from_dict(gen_cfg_overrides)
 
         instruct = req.attributes.get("instruct")
         if req.ref_audio:

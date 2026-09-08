@@ -5109,35 +5109,35 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
           <details style="margin-top:18px;border-top:1px solid var(--border);padding-top:14px">
             <summary style="cursor:pointer;font-weight:600;font-size:13.5px;color:var(--text-muted);user-select:none">⚙️ Cài đặt nâng cao</summary>
             <div style="margin-top:12px;display:flex;flex-direction:column;gap:12px">
-              <div class="sl">
-                <div class="slh"><b>Top P (sáng tạo / ổn định)</b><span id="vTopPVal">0.85</span></div>
+              <div class="sl" id="slTopP" data-engines="vieneu">
+                <div class="slh"><b>Top P (sáng tạo / ổn định) — VieNeu</b><span id="vTopPVal">0.85</span></div>
                 <input type="range" id="voiceTopP" min="0" max="1" step="0.01" value="0.85"
                   oninput="document.getElementById('vTopPVal').textContent=(+this.value).toFixed(2)">
-                <div class="why">Giảm để giọng đọc ngẫu hứng, có hồn hơn (giống ElevenLabs). Tăng để ổn định.</div>
+                <div class="why">Dành cho VieNeu (LM-based). Giảm để giọng đọc ngẫu hứng, có hồn hơn (giống ElevenLabs). Tăng để ổn định.</div>
               </div>
-              <div class="sl">
-                <div class="slh"><b>Top K</b><span id="vTopKVal">50</span></div>
+              <div class="sl" id="slTopK" data-engines="vieneu">
+                <div class="slh"><b>Top K — VieNeu</b><span id="vTopKVal">50</span></div>
                 <input type="range" id="voiceTopK" min="1" max="100" step="1" value="50"
                   oninput="document.getElementById('vTopKVal').textContent=this.value">
-                <div class="why">Độ đa dạng của âm thanh. Giá trị cao hơn cho giọng tự nhiên hơn.</div>
+                <div class="why">Dành cho VieNeu (LM-based). Độ đa dạng của âm thanh. Giá trị cao hơn cho giọng tự nhiên hơn.</div>
               </div>
-              <div class="sl">
-                <div class="slh"><b>Repetition Penalty (độ mượt)</b><span id="vRepPenVal">2.0</span></div>
+              <div class="sl" id="slRepPen" data-engines="vieneu">
+                <div class="slh"><b>Repetition Penalty (độ mượt) — VieNeu</b><span id="vRepPenVal">2.0</span></div>
                 <input type="range" id="voiceRepPen" min="1.0" max="3.0" step="0.1" value="2.0"
                   oninput="document.getElementById('vRepPenVal').textContent=(+this.value).toFixed(1)">
-                <div class="why">Tăng để tránh AI bị lắp bắp hoặc lặp chữ (dành cho VieNeu).</div>
+                <div class="why">Dành cho VieNeu. Tăng để tránh AI bị lắp bắp hoặc lặp chữ.</div>
               </div>
-              <div class="sl" id="slGenSpeed">
-                <div class="slh"><b>Tốc độ generation (OmniVoice)</b><span id="vGenSpeedVal">0.9×</span></div>
+              <div class="sl" id="slGenSpeed" data-engines="omni">
+                <div class="slh"><b>Tốc độ generation — OmniVoice</b><span id="vGenSpeedVal">0.9×</span></div>
                 <input type="range" id="voiceGenSpeed" min="0.5" max="1.5" step="0.05" value="0.9"
                   oninput="document.getElementById('vGenSpeedVal').textContent=(+this.value).toFixed(2)+'×'">
-                <div class="why">Dành riêng cho OmniVoice. Điều chỉnh tốc độ sinh âm thanh.</div>
+                <div class="why">Dành cho OmniVoice (diffusion-based). Điều chỉnh tốc độ sinh âm thanh (ảnh hưởng guidance_scale).</div>
               </div>
-              <div class="sl" id="slDiffSteps">
-                <div class="slh"><b>Diffusion Steps (độ sắc nét)</b><span id="vDiffStepsVal">16</span></div>
+              <div class="sl" id="slDiffSteps" data-engines="omni">
+                <div class="slh"><b>Diffusion Steps (độ sắc nét) — OmniVoice</b><span id="vDiffStepsVal">16</span></div>
                 <input type="range" id="voiceDiffSteps" min="4" max="32" step="2" value="16"
                   oninput="document.getElementById('vDiffStepsVal').textContent=this.value">
-                <div class="why">Dành cho OmniVoice. Số càng cao âm thanh càng trong nhưng tạo chậm hơn.</div>
+                <div class="why">Dành cho OmniVoice. Số càng cao âm thanh càng trong nhưng tạo chậm hơn (ảnh hưởng num_step).</div>
               </div>
             </div>
           </details>
@@ -8146,7 +8146,13 @@ async function _withRetry(fn){
       const isDup = /\bAPI 409\b/.test(msg);   // request trùng đang được server xử lý → đợi LÂU hơn cho request gốc xong
       // 409 duplicate: request gốc (model reasoning) có thể còn xử lý 2-3 phút → chờ tăng dần 15/30/60s.
       // Trước đây chỉ chờ ~12s mỗi lần → cả 4 lần thử đều dính 409 và lỗi lộ thẳng ra UI.
-      const wait = isDup ? [15000, 30000, 60000, 60000][Math.min(attempt - 1, 3)] : Math.min(delay + Math.random() * 400, 10000);
+      // D8: full jitter exponential backoff (AWS pattern) - random(0, min(cap, base*2^attempt))
+      // Truoc day: delay + random(0, 400ms) -> client fail cung nhip dong bo -> don tai.
+      const _baseBackoff = isDup ? 15000 * Math.pow(2, attempt - 1) : 800 * Math.pow(2, attempt - 1);
+      const _capBackoff = isDup ? 60000 : 10000;
+      const wait = Math.min(_capBackoff, _baseBackoff) * (0.5 + Math.random() * 0.5);
+      // jitter 50-100% pha dong bo retry
+      await new Promise(r => setTimeout(r, wait));   // 409: cho cua so dedup khep; khac: exp + full jitter
       await new Promise(r => setTimeout(r, wait));   // 409: chờ cửa sổ dedup của server khép; còn lại trần 10s giữa các lần
       delay *= 2;
     }
@@ -8669,9 +8675,20 @@ function safeParseJSON(text, validate){
 ============================================================ */
 // ── Nhật ký (log per-account như đối thủ) ──
 let _novaLog = [];
+// B5: filter API key truoc khi ghi log (Groq/OpenAI/Anthropic key thuong bi lot vao stack trace khi fetch fail).
+// Mask thanh 'sk-...abcd' de van debug duoc ma khong lo secret.
+function _novaLogFilter(msg){
+  let s = String(msg || ''); if (!s) return s;
+  s = s.replace(/\b(gsk_[A-Za-z0-9_-]{20,})\b/g, (_m, k) => k.slice(0, 6) + '...' + k.slice(-4));
+  s = s.replace(/\b(sk-(?:proj-)?[A-Za-z0-9_-]{20,})\b/g, (_m, k) => k.slice(0, 6) + '...' + k.slice(-4));
+  s = s.replace(/\b(sk-ant-[A-Za-z0-9_-]{20,})\b/g, (_m, k) => k.slice(0, 8) + '...' + k.slice(-4));
+  s = s.replace(/\b(AIza[A-Za-z0-9_-]{20,})\b/g, (_m, k) => k.slice(0, 6) + '...' + k.slice(-4));
+  s = s.replace(/Bearer\s+[A-Za-z0-9._\-+/=]{16,}/gi, 'Bearer [redacted]');
+  return s;
+}
 function novaLog(msg, type){
   let t = ''; try { t = new Date().toLocaleTimeString('vi-VN'); } catch(e){}
-  _novaLog.push({ t, msg: String(msg), type: type || '' });
+  _novaLog.push({ t, msg: _novaLogFilter(msg), type: type || '' });
   if (_novaLog.length > 800) _novaLog.shift();
   if (state.tool === 'toollog') novaLogRender();
 }
@@ -10841,6 +10858,28 @@ async function mvVideoGenerate(){
         state.sceneVideos[s.id] = { url: r.videoUrl || null, account: r.account || null, credits: (r.credits ?? null), hasBlob: !!(r.video?.b64) };
         if (r.credits != null) lastCredit = r.credits;
         okc++;
+
+        // D4: auto-fallback model. Neu model goc la veo-3.1 (dat) va loi quota/credit, retry 1 lan voi veo-3.1-fast.
+        const _errText = String((r && (r.error || r.raw)) || '');
+        const _isQuota = /QUOTA|EXHAUSTED|h\u1EBFt gi\u1EDBi h\u1EA1n|INSUFFICIENT|CREDIT|PAYGATE|LIMIT|429|503/i.test(_errText);
+        const _isExpensive = /veo-?3\.1(?!\-fast)/i.test(String(modelName || '')) || /veo-?3(?:\.0)?(?!\-fast)/i.test(String(modelName || ''));
+        if (_isQuota && _isExpensive && !s._fallbackTried){
+          s._fallbackTried = true;
+          try { if (typeof novaLog === 'function') novaLog('Canh ' + s.id + ': doi veo-3.1-fast (fallback) sau quota/credit', 'warn'); } catch(_){}
+          try {
+            const r2 = await flow('POOL_GEN_VIDEO', { prompt: mp[s.id], aspect, durationSecs, modelName: 'veo-3.1-fast', sceneId: s.id, image: { base64: s.img.base64, mime: s.img.mediaType || 'image/png' }, withData: true });
+            if (r2 && r2.ok && (r2.video?.b64 || r2.videoUrl)){
+              r = r2;   // promote len success path
+              mvVideoBlobs[s.id] = { b64: r2.video.b64, mime: r2.video.mime || 'video/mp4' };
+              try { autoSaveMedia(_mvVidName(s.id), r2.video.b64, 'video'); } catch(_){}
+              state.sceneVideos[s.id] = { url: r2.videoUrl || null, account: r2.account || null, credits: (r2.credits ?? null), hasBlob: !!(r2.video?.b64), fallback: 'veo-3.1-fast' };
+              if (r2.credits != null) lastCredit = r2.credits;
+              okc++;
+              try { if (typeof novaLog === 'function') novaLog('Canh ' + s.id + ': fallback veo-3.1-fast THANH CONG', 'ok'); } catch(_){}
+              // bo qua set error o duoi -> can sua flow
+            }
+          } catch (eFb) { try { if (typeof novaLog === 'function') novaLog('Fallback err: ' + eFb.message, 'warn'); } catch(_){} }
+        }
       } else {
         state.sceneVideos[s.id] = { error: (r && (r.error || r.raw)) || 'Không rõ lỗi', account: r && r.account || null };
       }
@@ -10923,6 +10962,16 @@ async function tvGenerate(retryOnly){
     novaLog('🎬 ' + it.name + ' · gửi prompt: "' + _logClip(it.prompt) + '" → Veo đang dựng…', 'acc');
     const tick = setInterval(() => { if (row.status === 'gen'){ row.pct = Math.min(90, row.pct + Math.random() * 6); tvRenderVideos(); } }, 2500);
     try {
+      // C5: cache Veo theo (prompt+model+dur). Cung prompt tao 2 lan -> tra cache, khong ton credit.
+      const _cacheHit = _t6VeoCacheGet(it.prompt, modelKey, durationSecs, '');
+      if (_cacheHit && _cacheHit.b64){
+        try { if (typeof novaLog === 'function') novaLog('Veo cache HIT (' + it.name + ') - tiet kiem credit', 'ok'); } catch(_){}
+        clearInterval(tick);
+        row.status = 'done'; row.pct = 100; row.b64 = _cacheHit.b64; row.mime = _cacheHit.mime || 'video/mp4';
+        done++;
+        tvRenderVideos();
+        return;
+      }
       let r = await flowBridge.call('POOL_GEN_VIDEO', { prompt: it.prompt, aspect, durationSecs, modelKey, resolution: tvRes, sceneId: it.sceneId || it.id, image: it.image || undefined, withData: true });
       r = await _videoAppResolve(r, { resolution: tvRes, aspect });   // extension farm mode → app resolve (+ nâng 1080p nếu chọn)
       clearInterval(tick);
@@ -10930,6 +10979,8 @@ async function tvGenerate(retryOnly){
       if (r && r.ok && (r.video?.b64 || r.videoUrl)){
         row.status = 'done'; row.pct = 100; row.videoUrl = r.videoUrl || null;
         if (r.video?.b64){ row.b64 = r.video.b64; row.mime = r.video.mime || 'video/mp4'; try { const sv = await autoSaveMedia(it.name + '.mp4', r.video.b64, 'video'); if (sv && sv.path) savedPath = sv.path; } catch (e2) { /* */ } }
+        // C5: put cache for next time
+        try { if (r.video && r.video.b64) _t6VeoCachePut(it.prompt, modelKey, durationSecs, '', { b64: r.video.b64, mime: r.video.mime || 'video/mp4' }); } catch(_){}
         done++;
       } else { row.status = 'err'; row.err = _bulkFriendlyErr(String((r && (r.error || r.raw)) || 'Không rõ lỗi')); err++; }
       // Nhật ký per-video + xoay tài khoản
@@ -11698,6 +11749,19 @@ window.addEventListener('beforeunload', () => {
     clearTimeout(_saveTimer);
     // Can't await async in beforeunload, but trigger save anyway
     saveCloudState(true);
+  }
+});
+
+// A6: chuyển tab/cửa sổ ẩn trong khi timer save chưa nổ -> flush ngay để khỏi mất dữ liệu
+// (trước đây: chuyển tab -> timer bị DOM thrash -> save không chạy -> F5 mất thay đổi).
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && _saveTimer){
+    try {
+      clearTimeout(_saveTimer);
+      _saveTimer = null;
+      // saveCloudState(true) là async, nhưng chạy ngay vẫn tốt hơn bỏ qua.
+      saveCloudState(true);
+    } catch (_) {}
   }
 });
 
@@ -14260,6 +14324,12 @@ function splitLong(s, max){
   return f;
 }
 
+// C3: danh dau promptSeed cho moi scene (dung cho D2 diff detection). Neu scene.text thay doi -> seed khac -> regen prompt.
+function _t2StampSeed(s){
+  s.promptSeed = (s.text || '').slice(0, 80);
+  s.seedAt = Date.now();
+}
+
 function splitScenesFast(text, min, max){
   const sents = splitIntoSentences(text);
   const scenes = [];
@@ -14794,7 +14864,11 @@ function _t2Coverage(script, scenes){
 }
 // #6 — Cảnh báo chất lượng cho TỪNG cảnh (học web đối thủ: badge đỏ ngay trên scene).
 function _t2SceneWarns(s, idx, scenes){
-  const w = [];
+  const w = [];  // A5: canh trong (khong co gi het) -> chip warning nhung
+  if (!txt && !pr.trim() && !String(s.character || '').trim() && !String(s.background || '').trim()){
+    w.push('canh trong - can nhap text hoac generate prompt');
+  }
+
   const txt = String(s.text || '').trim();
   const pr  = (state.scenePrompts || {})[s.id] || '';
   if (!pr.trim()) w.push('chưa có prompt ảnh');
@@ -14820,6 +14894,23 @@ function _t2SceneWarns(s, idx, scenes){
   }
   return w;
 }
+// B6: validate input cho kich ban + prompt. Phat hien som (truoc khi goi AI ton tien):
+//   - Empty / qua ngan (<10 ky tu) / qua dai (>50.000 ky tu)
+//   - Placeholder con sot ({{ten}}, [INSERT], TODO, XXX) - AI se tu dien sai
+//   - Qua it chu cai/so -> co phai dinh dang sai?
+// Tra ve { ok, msg }. ok=false => reject; ok=true => cho qua, kem canh bao neu co.
+function _t2ValidateScript(text){
+  const raw = String(text || ''); const s = raw.trim();
+  if (!s) return { ok: false, msg: 'Chua co kich ban.' };
+  if (s.length < 10) return { ok: false, msg: 'Kich ban qua ngan (< 10 ky tu). Hay nhap it nhat 1 cau.' };
+  if (s.length > 50000) return { ok: false, msg: 'Kich ban qua dai (' + s.length + ' ky tu, tran 50.000). Hay chia thanh nhieu phan.' };
+  const ph = s.match(/\u007B\u007B[^\u007D]+\u007D\u007D|\[INSERT[^\]]*\]|\bTODO\b|\bXXX\b|\bplaceholder\b/gi);
+  if (ph) return { ok: true, msg: 'Phat hien placeholder chua thay (' + ph.slice(0, 3).join(', ') + '...). AI co the tu dien sai - nen thay truoc.' };
+  const letters = (s.match(/[a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF]/g) || []).length;
+  if (letters < s.length * 0.3) return { ok: false, msg: 'Kich ban chua qua it chu cai / chu so. Co phai dinh dang sai?' };
+  return { ok: true };
+}
+
 function _t2WarnCount(){
   const sc = state.scenes || [];
   return sc.reduce((n, s, i) => n + (_t2SceneWarns(s, i, sc).length ? 1 : 0), 0);
@@ -14854,6 +14945,283 @@ const _t2Gist = (t, n) => String(t || '').replace(/\s+/g, ' ').trim().slice(0, n
    bắn quá nhiều yêu cầu vào cùng một trang là ăn chặn IP. 3 luồng là mức
    an toàn; phanh nhịp DuckDuckGo/Bing vẫn nối đuôi riêng ở nguon-web.js.  */
 const _T2_LUONG_MAC_DINH = 3;
+/* A7: drag drop reorder scene rows. Truoc day: phai dung nut mui ten hoac sua ID thu cong. Gio: keo tha hang trong bang.*/
+let _t2DragSrc = -1;
+/* C4: snapshot / restore / compare state.scenes. Dung cho 'undo truoc khi AI sua' hoac 'so sanh 2 phien ban'.*/
+const _t2Snapshots = [];   // LRU 5 snapshot
+const _T2_SNAP_MAX = 5;
+/* C6: ghi chu / annotation cho moi scene. Luu state.scenes[i].notes (string). Hien thi badge neu co notes.*/
+/* D7: smart crop anh theo aspect ratio (16:9, 9:16, 1:1). Dung canvas, center crop. Tra ve Blob (image/png) hoac null.*/
+/* Bonus 1: phim tat J/K di chuyen giua cac canh. J = next, K = prev. Tranh conflict voi input/textarea.*/
+/* Bonus 2: drag/drop import file .txt/.md vao script editor.*/
+/* Bonus 3: bulk action - chon nhieu canh (checkbox trong tr), gan cung nhan vat / boi canh / camera.*/
+/* Bonus 4: export / import scene JSON cho backup va collaboration.*/
+/* Bonus 5: preview 1 canh (single-scene) - mo modal nho voi anh, text, prompt.*/
+function _t2PreviewScene(idx){
+  const s = state.scenes && state.scenes[idx];
+  if (!s) return;
+  const img = state.sceneImages && state.sceneImages[s.id];
+  const pr = (state.scenePrompts || {})[s.id] || '';
+  const imgSrc = img ? (img.url || ('data:image/png;base64,' + img.b64)) : '';
+  const imgHtml = imgSrc ? ('<img src=' + " + imgSrc + " + ' style=' + " + 'max-width:100%;max-height:45vh;border-radius:8px' + " + '/>') : '<div style=' + " + 'padding:40px;color:var(--text-muted)' + " + '>Chua co anh</div>';
+  const html = '<div id=' + " + 't2PreviewModal' + " + ' style=' + " + 'position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px' + " + '>' +
+    '<div style=' + " + 'background:var(--surface);border-radius:12px;padding:20px;max-width:760px;width:100%;max-height:90vh;overflow:auto' + " + '>' +
+    '<div style=' + " + 'display:flex;justify-content:space-between;align-items:center;margin-bottom:12px' + " + '><h3 style=' + " + 'margin:0' + " + '>Canh ' + s.id + '</h3>' +
+    '<button class=' + " + 'btn ghost sm' + " + ' onclick=' + " + 'document.getElementById(' + " + 't2PreviewModal' + " + ').remove()' + " + '>Dong (Esc)</button></div>' +
+    '<div style=' + " + 'margin-bottom:12px' + " + '>' + imgHtml + '</div>' +
+    '<div style=' + " + 'background:var(--surface-2);padding:8px 12px;border-radius:6px;margin-bottom:8px' + " + '><b>Loi doc:</b> ' + escapeHtml(s.text || '') + '</div>' +
+    '<div style=' + " + 'background:var(--surface-2);padding:8px 12px;border-radius:6px;margin-bottom:8px' + " + '><b>Nhan vat:</b> ' + escapeHtml(s.character || '(chua)') + ' &middot; <b>Boi canh:</b> ' + escapeHtml(s.background || '(chua)') + ' &middot; <b>Camera:</b> ' + escapeHtml(s.camera || 'medium') + ' &middot; <b>' + (s.duration || 0) + 's</b></div>' +
+    '<details style=' + " + 'background:var(--surface-2);padding:8px 12px;border-radius:6px' + " + '><summary><b>Prompt AI</b></summary><pre style=' + " + 'white-space:pre-wrap;margin:6px 0 0;font-size:11.5px' + " + '>' + escapeHtml(pr) + '</pre></details>' +
+    (s.notes ? ('<div style=' + " + 'margin-top:8px;background:var(--surface-2);padding:6px 10px;border-radius:5px;font-size:11.5px' + " + '><b>Ghi chu:</b> ' + escapeHtml(s.notes) + '</div>') : '') +
+    '</div></div>';
+  const wrap = document.createElement('div');
+  wrap.innerHTML = html;
+  const modal = wrap.firstChild;
+  document.body.appendChild(modal);
+  const onKey = (e) => { if (e.key === 'Escape') { modal.remove(); document.removeEventListener('keydown', onKey); } };
+  setTimeout(() => document.addEventListener('keydown', onKey), 50);
+}
+function _t2ExportJson(){
+  try {
+    const data = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      script: state.script || '',
+      scenes: (state.scenes || []).map(s => (
+        s.id, s.text, s.character, s.background, s.camera, s.duration, s.notes, s.promptSeed
+      }))
+    };
+    const json = JSON.stringify(data, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'scenes-' + new Date().toISOString().slice(0, 10) + '.json';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    try { if (typeof novaLog === 'function') novaLog('Export ' + data.scenes.length + ' canh thanh cong', 'ok'); } catch(_){}
+  } catch (e) { try { if (typeof novaLog === 'function') novaLog('Export err: ' + e.message, 'err'); } catch(_){} }
+}
+function _t2ImportJson(file){
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024){ try { if (typeof novaLog === 'function') novaLog('File > 5MB qua lon', 'err'); } catch(_){} return; }
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const data = JSON.parse(String(reader.result || '{}'));
+      if (!data || !Array.isArray(data.scenes)) throw new Error('JSON khong co truong scenes[]');
+      if (!confirm('Import ' + data.scenes.length + ' canh? Hien tai se bi thay the.')) return;
+      state.scenes = data.scenes.map((s, i) => Object.assign({ id: String(i+1).padStart(3,'0'), userEdited: true, seedAt: Date.now() }, s));
+      if (data.script && typeof state.script === 'string') state.script = data.script;
+      try { renderAllT2(); } catch(_){}
+      try { saveState(); } catch(_){}
+      try { if (typeof novaLog === 'function') novaLog('Import ' + data.scenes.length + ' canh OK', 'ok'); } catch(_){}
+    } catch (e) { try { if (typeof novaLog === 'function') novaLog('Import JSON err: ' + e.message, 'err'); } catch(_){} }
+  };
+  reader.readAsText(file);
+}
+const _t2Sel = new Set();
+function _t2SelToggle(id, on){
+  if (on) _t2Sel.add(id); else _t2Sel.delete(id);
+  const bar = document.getElementById('t2BulkBar');
+  if (bar) bar.style.display = _t2Sel.size ? 'flex' : 'none';
+  const cnt = document.getElementById('t2BulkCount');
+  if (cnt) cnt.textContent = String(_t2Sel.size);
+}
+function _t2SelClear(){
+  _t2Sel.clear();
+  document.querySelectorAll('#sceneBody input.t2-sel-cb').forEach(cb => cb.checked = false);
+  const bar = document.getElementById('t2BulkBar');
+  if (bar) bar.style.display = 'none';
+}
+function _t2SelApply(field, value){
+  if (!_t2Sel.size) return;
+  let n = 0;
+  state.scenes.forEach(s => {
+    if (_t2Sel.has(s.id)){
+      s[field] = value;
+      s.userEdited = true;
+      n++;
+    }
+  });
+  try { if (typeof novaLog === 'function') novaLog('Bulk gan ' + field + ' cho ' + n + ' canh', 'ok'); } catch(_){}
+  try { renderAllT2(); } catch(_){}
+  try { saveState(); } catch(_){}
+  _t2SelClear();
+}
+function _t2ImportScriptFile(file){
+  if (!file) return;
+  const allowed = ['text/plain', 'text/markdown', ''];
+  const name = (file.name || '').toLowerCase();
+  if (!/\.(txt|md|markdown|story|srt)$/.test(name) && !allowed.includes(file.type)){
+    try { if (typeof novaLog === 'function') novaLog('Chi ho tro .txt/.md/.srt', 'warn'); } catch(_){}
+    return;
+  }
+  if (file.size > 2 * 1024 * 1024){
+    try { if (typeof novaLog === 'function') novaLog('File > 2MB qua lon, hay chia nho', 'err'); } catch(_){}
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const text = String(reader.result || '');
+      const ta = document.getElementById('scriptBox') || document.getElementById('script') || document.getElementById('t2script');
+      if (ta) { ta.value = text; if (typeof syncTool2 === 'function') syncTool2(); }
+      else if (typeof state !== 'undefined') { state.script = text; }
+      try { if (typeof novaLog === 'function') novaLog('Import file thanh cong: ' + file.name + ' (' + file.size + ' bytes)', 'ok'); } catch(_){}
+    } catch (e) { try { if (typeof novaLog === 'function') novaLog('Import err: ' + e.message, 'err'); } catch(_){} }
+  };
+  reader.readAsText(file, 'utf-8');
+}
+function _t2JumpScene(dir){
+  if (!state.scenes || !state.scenes.length) return;
+  const cur = state.activeSceneIdx || 0;
+  let nxt = cur + dir;
+  if (nxt < 0) nxt = 0;
+  if (nxt >= state.scenes.length) nxt = state.scenes.length - 1;
+  if (nxt === cur) return;
+  state.activeSceneIdx = nxt;
+  const row = document.querySelector('#sceneBody tr[data-sid=\u0022' + state.scenes[nxt].id + '\u0022]');
+  if (row) row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  try { if (typeof novaLog === 'function') novaLog('J/K -> canh ' + state.scenes[nxt].id, 'ok'); } catch(_){}
+}
+try {
+  document.addEventListener('keydown', (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const tag = (e.target && e.target.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || (e.target && e.target.isContentEditable)) return;
+    if (!state.scenes || !state.scenes.length) return;
+    if (e.key === 'j' || e.key === 'J') { e.preventDefault(); _t2JumpScene(+1); }
+    else if (e.key === 'k' || e.key === 'K') { e.preventDefault(); _t2JumpScene(-1); }
+  });
+} catch(_) {}
+function _t6SmartCrop(b64, mime, targetAspect){
+  return new Promise(async (resolve) => {
+    try {
+      if (!b64 || !targetAspect) return resolve(null);
+      const img = new Image();
+      const dataUrl = 'data:' + (mime || 'image/png') + ';base64,' + b64;
+      img.onload = () => {
+        try {
+          const w = img.naturalWidth, h = img.naturalHeight;
+          if (!w || !h) return resolve(null);
+          const curAspect = w / h;
+          const tgt = targetAspect === '9:16' ? 9/16 : targetAspect === '1:1' ? 1 : 16/9;
+          if (Math.abs(curAspect - tgt) < 0.01) return resolve(null);   // da khop, bo qua
+          let cropW = w, cropH = h, cropX = 0, cropY = 0;
+          if (curAspect > tgt) { cropW = Math.round(h * tgt); cropX = Math.round((w - cropW) / 2); }
+          else { cropH = Math.round(w / tgt); cropY = Math.round((h - cropH) / 2); }
+          const canvas = document.createElement('canvas');
+          canvas.width = cropW; canvas.height = cropH;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return resolve(null);
+          ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+          canvas.toBlob((blob) => {
+            if (!blob) return resolve(null);
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              const data = String(reader.result || '');
+              const m = data.match(/^data:([^;]+);base64,(.*)$/);
+              if (m) resolve({ b64: m[2], mime: m[1], w: cropW, h: cropH });
+              else resolve(null);
+            };
+            reader.readAsDataURL(blob);
+          }, 'image/png', 0.92);
+        } catch (e) { try { if (typeof novaLog === 'function') novaLog('Smart crop err: ' + e.message, 'warn'); } catch(_){} resolve(null); }
+      };
+      img.onerror = () => resolve(null);
+      img.src = dataUrl;
+    } catch (e) { resolve(null); }
+  });
+}
+function _t2GetNote(idx){
+  const s = state.scenes && state.scenes[idx];
+  return s ? String(s.notes || ''
+) : '';
+}
+function _t2SetNote(idx, txt){
+  const s = state.scenes && state.scenes[idx];
+  if (!s) return false;
+  s.notes = String(txt || '').slice(0, 500);
+  try { saveState(true); } catch(_){}
+  try { renderAllT2(); } catch(_){}
+  return true;
+}
+function _t2OpenNoteEditor(idx){
+  const cur = _t2GetNote(idx);
+  const s = state.scenes && state.scenes[idx];
+  if (!s) return;
+  const v = prompt('Ghi chu cho canh ' + s.id + ' (toi da 500 ky tu):', cur);
+  if (v === null) return;
+  _t2SetNote(idx, v);
+  try { if (typeof novaLog === 'function') novaLog(v.trim() ? ('Da ghi chu cho canh ' + s.id) : ('Da xoa ghi chu canh ' + s.id), 'ok'); } catch(_){}
+}function _t2Snapshot(tag){
+  try {
+    const data = JSON.parse(JSON.stringify({ scenes: state.scenes, scenePrompts: state.scenePrompts, veoPrompts: state.veoPrompts, t: Date.now(), tag: String(tag || 'auto') }));
+    _t2Snapshots.push(data);
+    if (_t2Snapshots.length > _T2_SNAP_MAX) _t2Snapshots.shift();
+    try { if (typeof novaLog === 'function') novaLog('Snapshot luu (' + _t2Snapshots.length + '/' + _T2_SNAP_MAX + '): ' + (tag || 'auto'), 'ok'); } catch(_){}
+    return data;
+  } catch (e) { try { if (typeof novaLog === 'function') novaLog('Snapshot err: ' + e.message, 'err'); } catch(_){} return null; }
+}
+function _t2RestoreSnap(idx){
+  const snap = _t2Snapshots[idx];
+  if (!snap) return false;
+  try {
+    state.scenes = JSON.parse(JSON.stringify(snap.scenes || []));
+    state.scenePrompts = JSON.parse(JSON.stringify(snap.scenePrompts || {}));
+    state.veoPrompts = JSON.parse(JSON.stringify(snap.veoPrompts || {}));
+    state.scenes.forEach((s, i) => { s.id = String(i + 1).padStart(3, '0'); });
+    try { renderAllT2(); } catch(_){}
+    try { saveState(); } catch(_){}
+    try { if (typeof novaLog === 'function') novaLog('Restore snapshot [' + (snap.tag || '?') + ']', 'ok'); } catch(_){}
+    return true;
+  } catch (e) { try { if (typeof novaLog === 'function') novaLog('Restore err: ' + e.message, 'err'); } catch(_){} return false; }
+}
+function _t2SnapList(){
+  return _t2Snapshots.map((s, i) => ({ idx: i, t: s.t, tag: s.tag, count: (s.scenes || []).length }));
+}
+function _t2DragStart(e, i){
+  _t2DragSrc = parseInt(i, 10);
+  if (e.dataTransfer) {
+    e.dataTransfer.effectAllowed = 'move';
+    try { e.dataTransfer.setData('text/plain', String(i)); } catch(_) {}
+  }
+  const tr = e.target.closest('tr'); if (tr) tr.style.opacity = '0.4';
+}
+function _t2DragOver(e){
+  e.preventDefault(); if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+  const tr = e.target.closest('tr');
+  if (tr) tr.style.borderTop = '2px solid var(--accent)';
+}
+function _t2DragLeave(e){
+  const tr = e.target.closest('tr');
+  if (tr) tr.style.borderTop = '';
+}
+function _t2Drop(e, i){
+  e.preventDefault(); e.stopPropagation();
+  const target = parseInt(i, 10);
+  const tr = e.target.closest('tr'); if (tr) tr.style.borderTop = '';
+  if (_t2DragSrc < 0 || _t2DragSrc === target || isNaN(target)) return;
+  if (!state.scenes || _t2DragSrc >= state.scenes.length) return;
+  const arr = state.scenes.slice();
+  const [moved] = arr.splice(_t2DragSrc, 1);
+  arr.splice(target, 0, moved);
+  state.scenes = arr;
+  state.scenes.forEach((s, idx) => { s.id = String(idx + 1).padStart(3, '0'); });
+  if (state.editingSceneIdx != null) state.editingSceneIdx = null;
+  try { if (typeof novaLog === 'function') novaLog('Keo tha: chuyen canh ' + (_t2DragSrc + 1) + ' -> ' + (target + 1), 'ok'); } catch(_) {}
+  try { renderAllT2(); } catch(_) {}
+  try { saveState(); } catch(_) {}
+  _t2DragSrc = -1;
+  return false;
+}
+function _t2DragEnd(e){
+  const tr = e.target.closest && e.target.closest('tr');
+  if (tr) tr.style.opacity = '';
+  document.querySelectorAll('#sceneBody tr').forEach(r => r.style.borderTop = '');
+  _t2DragSrc = -1;
+}
+
 function _t2SoLuong(){
   const v = Number(state.t2SoLuong);
   return (Number.isFinite(v) && v >= 1 && v <= 6) ? Math.round(v) : _T2_LUONG_MAC_DINH;
@@ -15752,7 +16120,10 @@ async function doSplit(){
       character: '',
       background: '',
       camera: 'medium',
-      duration: calcDur(s)
+      duration: calcDur(s),
+      userEdited: false,
+      promptSeed: s.slice(0, 80),
+      seedAt: Date.now()
     }));
     // Cap số cảnh theo tier
     const maxScenes = getMaxScenes();
@@ -16900,6 +17271,35 @@ function _t2ResetTimingAudio(){
   if (typeof t2RenderTimingWarn === 'function') t2RenderTimingWarn();
 }
 
+// C5: cache Veo theo (prompt + model + dur). Veo ton tien, cung prompt + model 2 lan -> tra cache (Blob) -> khong ton credit.
+const _t6VeoCache = new Map();
+const _T6_VEO_MAX = 16;     // 16 video cache (trung binh 8MB moi cai, ~128MB RAM)
+function _t6VeoKey(prompt, model, dur, seed){
+  const norm = String(prompt || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  return [norm.slice(0, 200), String(model || 'veo31-fast'), String(dur || 8), String(seed || '')].join('|');
+}
+function _t6VeoCacheGet(prompt, model, dur, seed){
+  const k = _t6VeoKey(prompt, model, dur, seed);
+  if (!k) return null;
+  const hit = _t6VeoCache.get(k);
+  if (hit) {
+    hit.hits = (hit.hits || 0) + 1;
+    try { if (typeof novaLog === 'function') novaLog('Veo cache HIT (lan ' + hit.hits + ')', 'ok'); } catch (_) {}
+    return hit.blob;
+  }
+  return null;
+}
+function _t6VeoCachePut(prompt, model, dur, seed, blob){
+  const k = _t6VeoKey(prompt, model, dur, seed);
+  if (!k || !blob) return;
+  _t6VeoCache.set(k, { blob, hits: 0, t: Date.now() });
+  if (_t6VeoCache.size > _T6_VEO_MAX){
+    const first = _t6VeoCache.keys().next().value;
+    _t6VeoCache.delete(first);
+  }
+}
+function _t6VeoCacheStats(){ return { size: _t6VeoCache.size, max: _T6_VEO_MAX }; }
+
 // Căn độ dài tất cả cảnh theo MP3 (Whisper từ Tool 8). Transcribe 1 lần rồi cache. Trả về số cảnh đã căn, hoặc null nếu không có audio.
 // Có key Whisper (Groq/OpenAI) → dùng API; không có key → chạy Local.
 function _whisperProviderAuto(){
@@ -17917,7 +18317,7 @@ function renderTable(){
     const start = _starts[i], end = start + (parseFloat(s.duration) || 0);
     const pr = state.scenePrompts?.[s.id] || '';
     const prHtml = pr ? escapeHtml(pr).replace(/\[([^\]]+)\]/g, '<b style="color:var(--accent)">[$1]</b>') : '';
-    return `<tr data-sid="${s.id}">
+    return `<tr data-sid="${s.id}" draggable="true" ondragstart="_t2DragStart(event,'${i}')" ondragover="_t2DragOver(event)" ondragleave="_t2DragLeave(event)" ondrop="_t2Drop(event,'${i}')" ondragend="_t2DragEnd(event)" style="cursor:grab">
       <td class="id">${s.id}</td>
       <td style="font-family:ui-monospace,monospace;font-size:11px;color:var(--text-muted);white-space:nowrap;line-height:1.35">${_fmt(start)}<br>${_fmt(end)}</td>
       <td class="dur" style="white-space:nowrap">${s.duration || 0}s${(state.scenePrompts2 && state.scenePrompts2[s.id] && String(state.scenePrompts2[s.id]).trim()) ? `<br><span style="font-size:9px;color:var(--accent);font-weight:700">2 ảnh · ${(((parseFloat(s.duration) || 0) / 2)).toFixed(1)}s/ảnh</span>` : ''}</td>
@@ -17969,6 +18369,37 @@ function _t2UpdateGenSceneMiss(){
   const btn = document.getElementById('t2GenSceneBtn');
   if (btn){ btn.style.opacity = n ? '1' : '.55'; btn.title = n ? ('Tạo ' + n + ' ảnh cảnh CÒN THIẾU qua Flow (cảnh đã có ảnh A/B được bỏ qua, tự thử lại lỗi)') : 'Mọi cảnh đã có ảnh — không còn thiếu'; }
 }
+
+/* C2: lang nghe event tu video agent de cap nhat scene.status khi render/final QA xong.*/
+function _t2ApplyVideoAgentEvent(evt){
+  if (!evt || !state.scenes || !state.scenes.length) return;
+  // Map: id scene tu Tool 7 -> id scene Tool 2. Hien tai gia dinh cung id format '001'..
+  // Neu tool 7 gui sceneId rieng, uu tien dung no.
+  const sid = String(evt.sceneId || evt.sid || '').padStart(3, '0');
+  const sc = state.scenes.find(s => s.id === sid);
+  if (!sc) return;
+  if (!sc.agentStatus) sc.agentStatus = {};
+  // phase: discover/analyze/build/render/final/upload; status: ok/error/progress
+  if (evt.phase) sc.agentStatus.phase = evt.phase;
+  if (evt.status) sc.agentStatus.status = evt.status;
+  if (evt.pct != null) sc.agentStatus.pct = Math.max(0, Math.min(100, +evt.pct || 0));
+  if (evt.message) sc.agentStatus.message = String(evt.message).slice(0, 200);
+  if (evt.error) sc.agentStatus.error = String(evt.error).slice(0, 500);
+  try { renderAllT2(); } catch(_){}
+}
+// Lang nghe event tu main process neu bridge co san. Tranh crash neu khong co bridge.
+try {
+  if (typeof window !== 'undefined' && window.native && typeof window.native.on === 'function'){
+    window.native.on('videoAgent:event', (payload) => {
+      try { _t2ApplyVideoAgentEvent(payload || {}); } catch(e) { try { if (typeof novaLog === 'function') novaLog('videoAgent event err: ' + e.message, 'warn'); } catch(_){} }
+    });
+  }
+  if (typeof flowBridge !== 'undefined' && flowBridge && typeof flowBridge.on === 'function'){
+    flowBridge.on('videoAgent:event', (payload) => {
+      try { _t2ApplyVideoAgentEvent(payload || {}); } catch(e) { try { if (typeof novaLog === 'function') novaLog('videoAgent event err: ' + e.message, 'warn'); } catch(_){} }
+    });
+  }
+} catch(_) { /* IPC chua san, bo qua */ }
 
 /* ----------------- SCENE MANAGEMENT ----------------- */
 
@@ -18045,6 +18476,17 @@ function saveEditScene(idx){
   s.background = document.getElementById('edt_bg_' + idx).value.trim();
   s.camera = document.getElementById('edt_cam_' + idx).value.trim() || 'medium';
   s.duration = parseInt(document.getElementById('edt_dur_' + idx).value) || 3;
+  // D2: danh dau user da chinh sua thu cong -> AI khong tu ghi de
+  s.userEdited = true;
+  if (s.userEditedAt == null) s.userEditedAt = Date.now();
+  // Neu text thay doi so voi prompt cu, xoa scenePrompts[id] de regen
+  const _oldPrompt = state.scenePrompts && state.scenePrompts[s.id];
+  if (_oldPrompt && s.promptSeed && _oldPrompt.indexOf(s.promptSeed.slice(0, 30)) < 0){
+    // prompt cu khong con lien quan den text moi -> xoa
+    try { if (typeof novaLog === 'function') novaLog('Phat hien prompt cu khong khop text moi -> can regen', 'warn'); } catch(_){}
+    if (state.scenePrompts) delete state.scenePrompts[s.id];
+    if (state.veoPrompts) delete state.veoPrompts[s.id];
+  }
   state.editingSceneIdx = -1;
   renderTable(); renderPreview(); renderPromptsV();
   if (typeof renderVeoPrompts === 'function') renderVeoPrompts();
@@ -26439,7 +26881,9 @@ async function t8TranscribeAPI(prov, file){
 
 // Local Whisper qua transformers.js (best-effort)
 async function t8TranscribeLocal(file){
-  setStatus8('Đang tải Whisper model (lần đầu ~150MB)...', 'working');
+  const t0 = performance.now();
+  // D5: log từng bước (transformers.js -> model -> decode -> transcribe) để user biết kẹt ở đâu khi than 'tai mai'.
+  setStatus8('Whisper local: đang nạp transformers.js... (1/4)', 'working');
   let transformers;
   try {
     transformers = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2');
@@ -26449,13 +26893,17 @@ async function t8TranscribeLocal(file){
   const { pipeline } = transformers;
   const lang = document.getElementById('t8Language')?.value ?? 'en';
   const localModel = t8PickModel('local', lang);
-  setStatus8(`Đang tải model ${localModel}...`, 'working');
+  setStatus8(`Whisper local: đang tải model {localModel} (2/4)... lần đầu ~150MB, lần sau cache.`, 'working');
   const transcriber = await pipeline('automatic-speech-recognition', localModel);
+  const _t2 = ((performance.now() - t0) / 1000).toFixed(1);
+  setStatus8(`Whisper local: model xong sau {_t2}s. Đang giải mã audio (3/4)...`, 'working');
   // Decode audio → Float32Array 16kHz mono
   const arrayBuf = await file.arrayBuffer();
   const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
   const decoded = await audioCtx.decodeAudioData(arrayBuf);
   const raw = decoded.getChannelData(0);
+  const _t3 = ((performance.now() - t0) / 1000).toFixed(1);
+  setStatus8(`Whisper local: giải mã xong ({raw.length} mẫu, {_t3}s). Bắt đầu transcribe (4/4)...`, 'working');
   audioCtx.close();
   // ⚡ CHỐNG ĐƠ UI: xử lý theo TỪNG KHÚC 30s + NHẢ LUỒNG giữa các khúc (thay vì nuốt cả file 1 lần).
   const SR = 16000, CHUNK = 30 * SR;             // khúc 30 giây
@@ -28215,75 +28663,4 @@ const veoUI = { mode:"script", shots:[], busy:false, stop:false };
                 <label class="t7-mlab" style="display:block;margin-bottom:7px">Kiểu phụ đề</label>
                 <div id="t7SubStyleChips" style="display:flex;gap:7px;flex-wrap:wrap"></div>
               </div>
-              <label id="t7ExpGpuRow" class="t7-mlab" style="display:none;align-items:center;gap:9px;margin-top:10px;cursor:pointer">
-                <input type="checkbox" id="t7ExpGpu" checked style="accent-color:var(--accent);width:16px;height:16px"> <span id="t7ExpGpuLab">⚡ Tăng tốc GPU</span>
-              </label>
-            </div>
-          </div>
-          <div class="t7-modal-foot">
-            <div id="t7ExpEstimate" style="font-size:12.5px;color:var(--text-muted)">—</div>
-            <div style="display:flex;gap:10px">
-              <button class="btn ghost" onclick="t7CloseExport()">Hủy</button>
-              <button class="btn primary" id="t7ExpGo" onclick="t7DoExport()">⬆ Xuất</button>
-            </div>
-          </div>
-        </div>
-      </div>
-<script>
-// Flow API Key management
-(function() {
-  function loadFlowApiKey() {
-    const input = document.getElementById('flowApiKey');
-    const status = document.getElementById('flowApiKeyStatus');
-    if (!input) return;
-    var val = null;
-    try {
-      if (window.novaStore && window.novaStore.seed && typeof window.novaStore.seed['api_key_flow'] === 'string') {
-        val = window.novaStore.seed['api_key_flow'];
-      }
-    } catch (e) {}
-    if (val == null) {
-      try { val = localStorage.getItem('flowApiKey'); } catch (e) {}
-    }
-    if (val) {
-      input.value = val;
-      var count = val.split(/\r?\n/).filter(function (s) { return s.trim().length > 0; }).length;
-      if (status) status.textContent = '✅ Đã tải ' + count + ' key';
-    } else if (status) {
-      status.textContent = '';
-    }
-  }
-
-  window.saveFlowApiKey = function() {
-    const input = document.getElementById('flowApiKey');
-    const status = document.getElementById('flowApiKeyStatus');
-    if (!input) return;
-    const lines = input.value.split(/\r?\n/).map(function (s) { return s.trim(); }).filter(function (s) { return s.length > 0; });
-    if (!lines.length) {
-      if (status) status.textContent = '⚠️ Vui lòng nhập ít nhất một API key';
-      return;
-    }
-    const key = lines.join('\n');
-    var saved = false;
-    try {
-      if (window.novaStore && typeof window.novaStore.set === 'function') {
-        saved = window.novaStore.set('api_key_flow', key) === true;
-      }
-    } catch (e) { saved = false; }
-    if (saved) {
-      input.value = key;
-      if (status) status.textContent = '✅ Đã lưu ' + lines.length + ' key';
-    } else {
-      if (status) status.textContent = '❌ Lưu thất bại (kho cài đặt không khả dụng)';
-    }
-  };
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', loadFlowApiKey);
-  } else {
-    loadFlowApiKey();
-  }
-})();
-</script>
-</body>
-</html>
+       

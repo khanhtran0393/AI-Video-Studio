@@ -35,13 +35,20 @@ const BRIDGE_PORTS = [8793, 8794, 8795, 8796];
 const APP_DATA_DIR_NAME = 'AI Video Studio Independent';
 const ID_RE = /^[A-Za-z0-9_-]{43}$/; // 32 bytes → base64url 43 ký tự
 // Dấu vết đọc danh tính phần cứng / khóa license trong source runtime của app.
+// Lưu ý: `requestSingleInstanceLock` là API Electron chuẩn để chống trùng instance
+// (chỉ MỘT tiến trình chạy) — KHÔNG liên quan license gate. Tách riêng pattern này
+// với nhãn benign để khỏi cảnh báo sai khi scan `nova/main/single-instance.js`.
 const HWID_PATTERNS = [
   [/MachineGuid/i, 'MachineGuid'],
   [/\bwmic\b/i, 'wmic'],
   [/csproduct/i, 'csproduct'],
   [/\bcpuid\b/i, 'cpuid'],
   [/HKEY_LOCAL_MACHINE/i, 'registry HKLM'],
-  [/requestSingleInstanceLock|license|activation|subscription/i, 'license/activation gate'],
+  [/license|activation|subscription/i, 'license/activation gate'],
+];
+// Pattern benign (KHÔNG tính là HWID/license gate) — log ra để audit nhưng pass test.
+const BENIGN_PATTERNS = [
+  [/requestSingleInstanceLock/i, 'single-instance API (Electron chuẩn, benign)'],
 ];
 const RUNTIME_SCAN_DIRS = [
   path.join(ROOT, 'nova', 'main'),
@@ -80,18 +87,23 @@ function listFiles(dir, out) {
 }
 
 // Static: app runtime không được đọc HWID / chặn theo license.
+// Pattern benign (vd Electron API chuẩn) KHÔNG tính vào hits nhưng vẫn log để audit.
 function scanRuntimeSources() {
   const files = [...RUNTIME_SCAN_FILES];
   for (const dir of RUNTIME_SCAN_DIRS) listFiles(dir, files);
   const hits = [];
+  const benign = [];
   for (const file of files) {
     const code = readTextSafe(file);
     if (!code) continue;
     for (const [pattern, label] of HWID_PATTERNS) {
       if (pattern.test(code)) hits.push(`${path.relative(ROOT, file)}: ${label}`);
     }
+    for (const [pattern, label] of BENIGN_PATTERNS) {
+      if (pattern.test(code)) benign.push(`${path.relative(ROOT, file)}: ${label}`);
+    }
   }
-  return { scanned: files.length, hits };
+  return { scanned: files.length, hits, benign };
 }
 
 function readMachineGuid() {
@@ -250,7 +262,12 @@ async function main() {
 
     // ── 1. Static check: không HWID, không license gate ───────────────────────
     const scan = scanRuntimeSources();
-    report.checks.noHwidOrLicenseGate = { ok: scan.hits.length === 0, scanned: scan.scanned, hits: scan.hits };
+    report.checks.noHwidOrLicenseGate = {
+      ok: scan.hits.length === 0,
+      scanned: scan.scanned,
+      hits: scan.hits,
+      benign: scan.benign, // audit info — KHÔNG tính là fail (vd Electron API chuẩn)
+    };
     if (scan.hits.length) throw new Error(`Source runtime có vết đọc HWID/license: ${scan.hits.join('; ')}`);
 
     // ── 2. Lượt 1: "người dùng khác" (APPDATA sạch) ───────────────────────────

@@ -145,6 +145,18 @@ def _run_tts(task: dict) -> None:
         raise ValueError("Văn bản trống")
 
     ref_audio, ref_text, attributes = _resolve_voice(p)
+    # Merge tham số nâng cao từ top-level body vào attributes (ưu tiên body vì
+    # user vừa chỉnh slider; preset.attributes chỉ là default). Pattern đồng bộ
+    # với voice-studio/backend/app.py — drift giữa 2 bản đã bị bắt bởi
+    # `voice-contract-test.js:146` (assert `_ADVANCED_KEYS`).
+    _ADVANCED_KEYS = ("top_p", "top_k", "repetition_penalty", "diffusion_steps", "generation_speed")
+    for _k in _ADVANCED_KEYS:
+        _v = p.get(_k)
+        if _v is not None:
+            try:
+                attributes[_k] = float(_v) if _k not in ("top_k", "diffusion_steps") else int(_v)
+            except (TypeError, ValueError):
+                pass  # giá trị không parse được → engine dùng mặc định
     engine_name, engine = _resolve_tts_engine(p)
     lang = p.get("language", "vi")
     speed = float(p.get("speed", 1.0))

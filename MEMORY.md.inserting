@@ -1,0 +1,19 @@
+﻿
+- [2026-09-08] **Fix AttributeError tại runtime: voice-backend/engines/omnivoice.py đọc req.top_p/etc.**:
+  - **Triệu chứng**: `voice-backend/backend/engines/omnivoice.py` synthesize() truy cập `req.top_p`, `req.top_k`, `req.repetition_penalty`, `req.generation_speed`, `req.diffusion_steps` — nhưng dataclass `TTSRequest` ở `voice-backend/backend/engines/base.py` CHỈ có 7 field (text, language, ref_audio, ref_text, device_preference, speed, attributes) → AttributeError ngay khi user chỉnh slider và gọi synthesize với engine omnivoice trên bản voice-backend/ (canonical, đóng gói).
+  - **Fix**: mirror pattern từ `voice-studio/backend/engines/omnivoice.py` — đọc qua `req.attributes.get("diffusion_steps")` / `req.attributes.get("generation_speed")` (vì `_run_tts` đã merge top-level field vào attributes). Map `diffusion_steps` → `num_step` (OmniVoiceGenerationConfig), `generation_speed` → `guidance_scale` (đảo nghịch: `gs = 1.0 + 3.0 * speed_norm`). Bỏ qua `top_p`/`top_k`/`repetition_penalty` (OmniVoice diffusion không có — Luật 10).
+  - **Test lock-in** (`voice-contract-test.js` §11 mở rộng): assert 5 pattern `req.<field>` KHÔNG xuất hiện trong `synthesize()` (sau khi strip comment) + assert `req.attributes.get` được dùng. Ngăn chặn tái xuất hiện bug.
+  - **Verify runtime**: import `OmniVoiceGenerationConfig` OK (`omnivoice.models.omnivoice`), `importlib` load engine module OK, AST syntax OK, `req.top_p` AttributeError đã được sửa.
+  - Bài học: khi engine dùng Pydantic/dataclass request, PHẢI kiểm tra schema field thật trước khi truy cập `req.<key>`. Có 2 cách an toàn: (a) thêm field vào schema + pass qua, hoặc (b) đọc qua dict phụ (`req.attributes`). Cách (b) đỡ phải đụng dataclass, nhưng dễ silent-drop nếu `_run_tts` quên merge — phải test cả 2 phía.
+  - Validate: `npm run check:syntax` PASS, `node nova/scripts/voice-contract-test.js` PASS (exit 0, với §11 mở rộng 5+1 assertion mới), `node nova/scripts/shared-names-check.js` PASS.
+- [2026-09-08] **Tích hợp 3 audit Python script vào test:voice:integration**:
+  - Trước: 3 script `voice-studio/backend/tmp_*.py` (smoke_imports / test_advanced_params / test_engine_wiring) chỉ chạy thủ công, không có CI guard.
+  - Tạo `nova/scripts/voice-integration-test.js` (Node runner) gọi 3 script trên qua `voice-backend/.venv-omni\Scripts\python.exe` — dùng `spawnSync` + parse marker `ALL ... PASSED` hoặc `SMOKE OK`. Tự bỏ qua có kiểm soát nếu venv chưa sẵn sàng (exit ENOENT → SKIP, không fail CI).
+  - Wire vào package.json: `test:voice:integration` + `test:voice:all` (chain `test:voice && test:voice:integration`).
+  - Bổ trợ cho contract test (Node, scan source) — đây là runtime test thật:
+    - smoke: TTSBody nhận 5 advanced field
+    - advanced params: schema + merge logic 4 sub-test
+    - engine wiring: omni dùng num_step+guidance_scale đúng, vieneu dùng top_p/top_k/rep_pen, KHÔNG leak ngược param, empty attrs = hành vi cũ
+  - **Quyết định giữ scripts ở `voice-studio/backend/tmp_*.py`**: không move, không đổi tên. Runner tham chiếu đường dẫn tương đối từ NOVA, mọi cập nhật sau vẫn chỉ sửa 1 chỗ.
+  - **Cảnh báo**: nếu user move/đổi tên scripts, runner cần update. Hiện không có test lock-in tên file (Node chỉ assert exit+marker).
+  - Validate: `npm run test:voice:integration` PASS (3/3), `npm run test:voice:all` PASS (contract + integration), `npm run check` PASS (syntax+ipc+parity+shared).

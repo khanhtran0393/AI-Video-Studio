@@ -2,7 +2,6 @@
 const fs = require('fs');
 const path = require('path');
 const { registerEditorProIpc } = require('./ipc-handlers');
-const { registerEditorProMedia } = require('./ipc-media');
 const { registerEditorProAI } = require('./ipc-ai');
 const { registerEditorProRender } = require('./ipc-render');
 const { registerEditorProRemotion } = require('./ipc-remotion-render');
@@ -23,7 +22,6 @@ function registerEditorPro(ipcMain, opts = {}) {
   const mark = (arr) => (arr || []).forEach(c => done.add(c));
 
   mark(registerEditorProIpc(ipcMain, opts));   // boot + settings + library
-  mark(registerEditorProMedia(ipcMain));        // file dialogs + ffprobe/ffmpeg
   mark(registerEditorProAI(ipcMain, opts));     // AI đấu về bridge Nova / stub
   mark(registerEditorProRemotion(ipcMain));     // XUẤT Remotion đầy đủ
   mark(registerEditorProClips(ipcMain));        // tìm/tải clip bằng yt-dlp

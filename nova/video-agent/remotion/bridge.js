@@ -64,8 +64,19 @@ function createRendererAdapter() {
         error: 'renderNovaScenes không nạp được trong môi trường này: ' + (fn.__error || '—') };
       const { scenes, globals, audio } = specToNovaScenes(spec, manifest);
       const fs = require('fs');
-      const toB64 = (p) => { if (!p) return null; try { return 'data:audio/mp3;base64,' + fs.readFileSync(p).toString('base64'); } catch (_) { return null; } };
-      return fn({ scenes, globals, outputPath, voiceB64: toB64(voicePath || audio.voice), musicB64: toB64(musicPath), musicVolume: musicVolume != null ? musicVolume : 0.22, onProgress, registerCancel, signal });
+      // toB64: khi p là null/undefined → trả null (luồng audio optional, không bắt buộc).
+      // Khi p có giá trị nhưng đọc file lỗi → NÉM LỖI để caller biết thiếu audio. Trước
+      // đây catch nuốt lỗi → silent drop audio khi file lock/antivirus/race → MP4 render
+      // thành công nhưng KHÔNG có âm thanh, user phát hiện muộn. (Luật 10 — không fallback ngầm)
+      const toB64 = (p, label) => {
+        if (!p) return null;
+        try {
+          return 'data:audio/mp3;base64,' + fs.readFileSync(p).toString('base64');
+        } catch (e) {
+          throw new Error(`Không đọc được file ${label || 'audio'} (${p}): ${e.message || e}`);
+        }
+      };
+      return fn({ scenes, globals, outputPath, voiceB64: toB64(voicePath || audio.voice, 'voice'), musicB64: toB64(musicPath, 'music'), musicVolume: musicVolume != null ? musicVolume : 0.22, onProgress, registerCancel, signal });
     },
   };
 }

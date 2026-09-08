@@ -35,7 +35,15 @@
       '    <button class="btn sm ghost danger" id="tsStopBtn" title="Dừng Studio">⏹</button>',
       '  </div>',
       '</div>',
-      '<div class="ts-native-dock" id="tsNativeDock" aria-label="Vùng Studio nhúng"></div>',
+      '<div class="ts-native-dock" id="tsNativeDock" aria-label="Vùng Studio nhúng">',
+      '  <div class="ts-skeleton" id="tsSkeleton" aria-hidden="true">',
+      '    <div class="ts-skel-logo"></div>',
+      '    <div class="ts-skel-bar w70"></div>',
+      '    <div class="ts-skel-bar w40"></div>',
+      '    <div class="ts-skel-bar w85"></div>',
+      '    <div class="ts-skel-hint" id="tsSkelHint">Đang nạp Studio lần đầu — lần sau sẽ tức thì…</div>',
+      '  </div>',
+      '</div>',
       '<div class="ts-error" id="tsError" role="alert" hidden></div>',
     ].join('');
     const style = document.createElement('style');
@@ -53,10 +61,34 @@
       '.ts-actions .btn{font-size:16px;padding:4px 10px;line-height:1.4;}',
       '.ts-actions .btn.danger:hover{border-color:var(--red);color:var(--red);}',
       '.ts-native-dock{flex:1;min-height:280px;background:var(--bg);overflow:hidden;position:relative;}',
+      /* Skeleton chờ Qt ready — tránh cảm giác "đơ" khi lần đầu khởi động */
+      '.ts-skeleton{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px;background:linear-gradient(180deg,var(--bg) 0%,var(--surface) 100%);animation:ts-fade-in .25s ease;}',
+      '.ts-skeleton.hidden{display:none;}',
+      '.ts-skel-logo{width:64px;height:64px;border-radius:14px;background:linear-gradient(135deg,var(--accent) 0%,color-mix(in srgb,var(--accent) 50%,var(--bg)) 100%);opacity:.55;animation:pulse-dot 1.6s ease-in-out infinite;box-shadow:0 4px 18px color-mix(in srgb,var(--accent) 25%,transparent);}',
+      '.ts-skel-bar{height:10px;border-radius:5px;background:linear-gradient(90deg,var(--surface) 0%,color-mix(in srgb,var(--text-dim) 30%,var(--surface)) 50%,var(--surface) 100%);background-size:200% 100%;animation:ts-skel-shimmer 1.4s ease-in-out infinite;}',
+      '.ts-skel-bar.w40{width:40%;}',
+      '.ts-skel-bar.w70{width:70%;}',
+      '.ts-skel-bar.w85{width:85%;}',
+      '.ts-skel-hint{font-size:12px;color:var(--text-muted);margin-top:8px;max-width:320px;text-align:center;line-height:1.5;}',
+      '@keyframes ts-skel-shimmer{0%{background-position:200% 0;}100%{background-position:-200% 0;}}',
+      '@keyframes ts-fade-in{from{opacity:0;}to{opacity:1;}}',
       '.ts-error{position:absolute;z-index:2;left:16px;right:16px;top:16px;padding:10px 14px;border:1px solid var(--red);border-radius:8px;background:color-mix(in srgb,var(--red) 12%,var(--surface));color:var(--red);font-size:13px;font-weight:500;box-shadow:0 4px 12px rgba(0,0,0,.3);}',
     ].join('');
     container.appendChild(wrap);
     container.appendChild(style);
+  }
+
+  function hideSkeleton() {
+    const sk = document.getElementById('tsSkeleton');
+    if (sk) sk.classList.add('hidden');
+  }
+  function setSkeletonHint(msg) {
+    const el = document.getElementById('tsSkelHint');
+    if (el) el.textContent = String(msg || '');
+  }
+  function showSkeleton() {
+    const sk = document.getElementById('tsSkeleton');
+    if (sk) sk.classList.remove('hidden');
   }
 
   function showError(message) {
@@ -76,18 +108,27 @@
     if (running && ready) {
       dot.className = 'ts-dot running';
       label.textContent = 'Đang chạy';
+      // Qt đã sẵn sàng — ẩn skeleton để lộ vùng dock
+      hideSkeleton();
+      clearSlowHint();
     } else if (running && !ready) {
       dot.className = 'ts-dot starting';
       label.textContent = 'Đang khởi động...';
+      setSkeletonHint('Đang nạp giao diện Studio (lần đầu khoảng vài giây, lần sau tức thì)…');
     } else if (exitCode !== null && exitCode !== 0) {
       dot.className = 'ts-dot stopped';
       label.textContent = 'Đã dừng (lỗi ' + exitCode + ')';
+      setSkeletonHint('Studio đã dừng — bấm 🔄 để khởi động lại.');
+      clearSlowHint();
     } else if (exitCode === 0) {
       dot.className = 'ts-dot stopped';
       label.textContent = 'Đã dừng';
+      setSkeletonHint('Studio đã dừng — bấm 🔄 để khởi động lại.');
+      clearSlowHint();
     } else {
       dot.className = 'ts-dot';
       label.textContent = 'Chưa khởi động';
+      setSkeletonHint('Studio chưa chạy — đang chuẩn bị môi trường…');
     }
   }
 
@@ -177,8 +218,13 @@
       }
       window.addEventListener('resize', () => { if (TS.rectTimer) sendRect(); });
     }
+    /* Nếu tab Studio đã từng ẩn Qt (leave) trước đó, khi user quay lại tab mà
+       Qt chưa ready hoặc process đã thoát → bật lại skeleton để biết đang chờ.
+       Nếu Qt đã sẵn sàng (preload thành công) thì chỉ cần show() là gần tức thì. */
+    showSkeleton();
     refreshStatus();
     startRectSync();
+    armSlowHint();
     if (!TS.autoLaunched) {
       TS.autoLaunched = true;
       const nat = NATIVE();
@@ -207,16 +253,51 @@
         });
       }
     } else {
+      /* Quay lại tab Studio sau leave: nếu Qt vẫn đang chạy → show ngay
+         (gần tức thì, <100ms); nếu đã thoát thì launch lại. */
       const nat = NATIVE();
       if (nat) nat.status().then((st) => {
-        if (st && st.running) { sendRect(); nat.show().catch(() => {}); }
-        refreshStatus();
+        if (st && st.ready) {
+          // Qt còn sẵn sàng → chỉ cần show, gần như tức thì.
+          sendRect();
+          nat.show().catch(() => {});
+          refreshStatus();
+        } else if (st && st.running) {
+          // Đang khởi động (do preload chẳng hạn) — chờ event ready.
+          refreshStatus();
+        } else {
+          // Process đã thoát khi user ở tab khác → bật skeleton + launch lại.
+          showSkeleton();
+          setSkeletonHint('Studio đã dừng lúc bạn ở tab khác — đang khởi động lại…');
+          TS.autoLaunched = true; // đánh dấu để status polling tái sử dụng
+          nat.launch()
+            .then((r) => { if (r && r.error) showError(r.error); refreshStatus(); setTimeout(sendRect, 1500); })
+            .catch((e) => showError((e && e.message) || 'Không thể mở Studio.'));
+        }
       }).catch(() => {});
     }
   }
 
+  /* Sau 8 giây chờ mà Qt vẫn chưa ready, đổi hint sang "chậm hơn bình thường"
+     để user biết tiến trình vẫn đang chạy, không phải treo. Reset khi ready/exit. */
+  let _slowHintTimer = 0;
+  function armSlowHint() {
+    if (_slowHintTimer) clearTimeout(_slowHintTimer);
+    _slowHintTimer = setTimeout(() => {
+      const dot = document.getElementById('tsDot');
+      // chỉ escalate khi vẫn đang 'starting' (chưa ready/stopped)
+      if (dot && dot.className.indexOf('starting') !== -1) {
+        setSkeletonHint('Lần đầu nạp nặng hơn bình thường — đang nạp xong, vui lòng đợi thêm…');
+      }
+    }, 8000);
+  }
+  function clearSlowHint() {
+    if (_slowHintTimer) { clearTimeout(_slowHintTimer); _slowHintTimer = 0; }
+  }
+
   function leave() {
     TS.active = false;
+    clearSlowHint();
     stopRectSync();
     const nat = NATIVE();
     if (nat) nat.hide().catch(() => {});

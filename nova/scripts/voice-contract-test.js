@@ -121,4 +121,84 @@ assert(read('voice-backend/backend/audio_utils.py').includes('def pitch_shift_wa
 assert(novaWeb.includes('id="voicePitch"'), 'UI phải có slider cao độ (voicePitch)');
 assert(novaWeb.includes('pitch: o.caoDo || 0'), 'UI phải gửi pitch trong POST /api/tts');
 
+// 11. Tham số nâng cao (5 sliders) — schema TTSBody + engine wiring + UI đồng bộ.
+// Phân bổ engine theo bản chất tham số (xem AGENTS.md Luật 10 — không fallback ngầm):
+//   - top_p, top_k, repetition_penalty  → LM-sampling (VieNeu dùng)
+//   - diffusion_steps, generation_speed → diffusion params (OmniVoice dùng)
+//   - XTTS không hỗ trợ 5 tham số này (engine diffusion/encoder tách biệt) → test chỉ
+//     chặn rằng schema + UI + ít nhất 1 engine đọc.
+//
+// Lưu ý: dự án có HAI bản backend — `voice-backend/` (canonical, đóng gói) và
+// `voice-studio/` (runtime frontend gọi tới cổng 8771). Schema + _run_tts merge
+// phải đồng bộ ở CẢ HAI để cùng hợp đồng; engine wiring kiểm ở `voice-studio/`
+// (cái chạy thật).
+const ADVANCED_KEYS = ['top_p', 'top_k', 'repetition_penalty', 'diffusion_steps', 'generation_speed'];
+for (const k of ADVANCED_KEYS) {
+  assert(appSrc.includes(`${k}: Optional[`),
+    `TTSBody canonical (voice-backend) phải nhận field Optional[${k}]`);
+}
+const studioAppSrc = read('voice-studio/backend/app.py');
+for (const k of ADVANCED_KEYS) {
+  assert(studioAppSrc.includes(`${k}: Optional[`),
+    `TTSBody runtime (voice-studio) phải nhận field Optional[${k}]`);
+}
+// _run_tts ở cả 2 backend phải forward top-level field vào attributes
+assert(appSrc.includes('_ADVANCED_KEYS'),
+  'voice-backend _run_tts phải merge field nâng cao vào attributes (khóa _ADVANCED_KEYS)');
+assert(studioAppSrc.includes('_ADVANCED_KEYS'),
+  'voice-studio _run_tts phải merge field nâng cao vào attributes (khóa _ADVANCED_KEYS)');
+// Engine wiring (runtime voice-studio — engine thật frontend gọi tới)
+const studioOmniSrc = read('voice-studio/backend/engines/omnivoice.py');
+const studioVieneuSrc = read('voice-studio/backend/engines/vieneu.py');
+assert(studioVieneuSrc.includes('"top_p"') || studioVieneuSrc.includes("'top_p'"),
+  'engine LM-based runtime (voice-studio/vieneu) phải tham chiếu top_p trong synthesize()');
+assert(studioOmniSrc.includes('"diffusion_steps"') || studioOmniSrc.includes("'diffusion_steps'"),
+  'engine diffusion runtime (voice-studio/omnivoice) phải tham chiếu diffusion_steps trong synthesize()');
+// Engine wiring (canonical voice-backend — engine đóng gói trong packaged app).
+// Bug đã chặn ở session 4: voice-backend/engines/vieneu.py thiếu block forward
+// advanced keys → nếu packaged app dùng voice-backend/ thì slider bị engine bỏ
+// qua. Test phải đảm bảo canonical engine cũng tham chiếu đúng.
+// Lưu ý: canonical engine đọc field từ req (Pydantic model) trực tiếp
+// (vd `req.diffusion_steps`), không qua `attrs.get(...)` như runtime variant.
+// Pattern check: tham chiếu tên field dạng `req.<key>` hoặc `attrs.get("<key>")`.
+const canonVieneuSrc = read('voice-backend/backend/engines/vieneu.py');
+const canonOmniSrc = read('voice-backend/backend/engines/omnivoice.py');
+// VieNeu LM-based: top_p / top_k / repetition_penalty (diffusion_steps, generation_speed
+// không áp dụng cho LM — bỏ lộ liễu theo Luật 10).
+const canonVieneuHasLm =
+  (canonVieneuSrc.includes('"top_p"') || canonVieneuSrc.includes("'top_p'") || canonVieneuSrc.includes('req.top_p'))
+  && (canonVieneuSrc.includes('"top_k"') || canonVieneuSrc.includes("'top_k'") || canonVieneuSrc.includes('req.top_k'))
+  && (canonVieneuSrc.includes('"repetition_penalty"') || canonVieneuSrc.includes("'repetition_penalty'") || canonVieneuSrc.includes('req.repetition_penalty'));
+assert(canonVieneuHasLm,
+  'engine LM-based canonical (voice-backend/vieneu) phải tham chiếu top_p + top_k + repetition_penalty');
+// Omnivoice diffusion: diffusion_steps + generation_speed (top_p/top_k/repetition_penalty
+// không phải diffusion params — không bắt buộc nhưng engine này cũng đọc).
+const canonOmniHasDiff =
+  (canonOmniSrc.includes('"diffusion_steps"') || canonOmniSrc.includes("'diffusion_steps'") || canonOmniSrc.includes('req.diffusion_steps'))
+  && (canonOmniSrc.includes('"generation_speed"') || canonOmniSrc.includes("'generation_speed'") || canonOmniSrc.includes('req.generation_speed'));
+assert(canonOmniHasDiff,
+  'engine diffusion canonical (voice-backend/omnivoice) phải tham chiếu diffusion_steps + generation_speed');
+// Chống tái xuất hiện bug AttributeError: synthesize() KHÔNG được reference trực tiếp
+// `req.top_p` / `req.top_k` / `req.repetition_penalty` / `req.diffusion_steps` /
+// `req.generation_speed` — TTSRequest chỉ có 7 field (text, language, ref_audio, ref_text,
+// device_preference, speed, attributes). Mọi advanced param phải đi qua attributes.
+// Strip comment trước khi check (comment có thể nhắc tên field cũ).
+const canonOmniCode = canonOmniSrc.replace(/#[^\n]*/g, '');
+const forbiddenRefs = ['req.top_p', 'req.top_k', 'req.repetition_penalty',
+  'req.diffusion_steps', 'req.generation_speed'];
+for (const r of forbiddenRefs) {
+  assert(!canonOmniCode.includes(r),
+    `voice-backend/engines/omnivoice.py KHÔNG được reference ${r} trực tiếp — đọc qua req.attributes.get()`);
+}
+assert(canonOmniCode.includes('req.attributes.get'),
+  'voice-backend/engines/omnivoice.py phải đọc advanced params qua req.attributes.get(...)');
+// UI: cả 5 slider tồn tại và được gửi trong body POST /api/tts
+const ADVANCED_SLIDERS = ['voiceTopP', 'voiceTopK', 'voiceRepPen', 'voiceDiffSteps', 'voiceGenSpeed'];
+for (const s of ADVANCED_SLIDERS) {
+  assert(novaWeb.includes(`id="${s}"`), `UI phải có slider ${s}`);
+}
+for (const k of ['top_p', 'top_k', 'repetition_penalty', 'generation_speed', 'diffusion_steps']) {
+  assert(novaWeb.includes(`${k}:`), `UI phải gửi field ${k} trong POST /api/tts`);
+}
+
 console.log('voice contract tests: passed');

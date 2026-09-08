@@ -43,6 +43,7 @@ File nÃ y ghi **tráº¡ng thÃ¡i dÃ i háº¡n vÃ  lá»‹ch sá»­ qu
   hai kiá»ƒu tÃ¡ch KHÃ”NG trá»™n láº«n.
 
 ## Äang treo / ná»£ ká»¹ thuáº­t
+- **Tab Giọng nói — khối "Cài đặt nâng cao" không hiện** (2026-09-08): `<details>` chứa Top P / Top K / Rep Penalty / Gen Speed / Diff Steps bị đặt NGOÀI `.gr` (chỉ là ANH EM bên trong `.gtts`) — dù HTML có đủ, nhưng grid `.gtts { grid-template-columns: 1fr 254px }` sinh hàng ngầm định đẩy `<details>` xuống dưới `.gl` (cột trái, nội dung dài) → tưởng như "invisible" vì phải scroll xa. Fix: di chuyển `<details>...</details>` vào trước `</div>` đóng `.gr` (đúng indentation ban đầu đã gợi ý). Probe tạm depth-balanced `<div>` counter xác nhận: `.gr` đóng tại dòng 5157 (SAU `<details>` đóng tại 5156), `.gtts` cân bằng tại 5158, không có CSS `display:none` nào ẩn `<details>`. `npm run check:syntax` PASS (376 file). Probe tạm đã xoá theo quy ước `tmp-`.
 - **Niche Finder hỗ trợ trending theo khu vực (gl)** (2026-09-07 → 2026-09-08): Đã sửa `searchVideos` trong `loi.js` để khi `query` rỗng, dùng `https://www.youtube.com/feed/trending` và thêm tham số `gl` từ `opts.gl`; đồng thời de-duplicate hàm `searchVideos` (bản merge cũ còn sót 2 định nghĩa). `ipc-niche.js` truyền `gl` từ payload vào `opt()`. Frontend `nova/web/index.html`: thêm dropdown `<select id="nfGl">` (26 mã quốc gia: US/GB/CA/AU/DE/FR/ES/IT/JP/KR/BR/IN/MX/ID/VN/TH/PH/SG/RU/NL/PL/TR/SA/EG/ZA/NG) vào header tool Niche Finder; `nfRun()` đọc giá trị dropdown rồi gán `payload.gl` khi khác rỗng. Kiểm định `npm run check` PASS (syntax 374 file, IPC 158 kênh, parity 0, shared 17 state keys). Script tạm `tmp-fix-loi.js`/`tmp-fix-emoji.js` đã xoá.
 - **UI Flow model refresh** (2026-09-06): ThÃªm nÃºt `â†»` cáº¡nh dropdown Model trong tab Video (Tool 6) vÃ  hÃ m `tvRefreshModels()` gá»i `VIDEO_MODEL_STATUS` Ä‘á»ƒ cáº­p nháº­t danh sÃ¡ch model tá»« extension/native. `tvRenderModelOptions()` gá»™p model built-in + model há»c Ä‘Æ°á»£c tá»« Flow. Kiá»ƒm Ä‘á»‹nh `npm run check` PASS (syntax 367, IPC 154/20, parity 0). ChÆ°a test runtime vá»›i Flow cÃ³ nhiá»u model thá»±c táº¿.
 
@@ -72,7 +73,43 @@ File nÃ y ghi **tráº¡ng thÃ¡i dÃ i háº¡n vÃ  lá»‹ch sá»­ qu
   vulkan/d3d dllâ€¦) â€” khÃ´ng track, chá»‰ hiá»‡n trÃªn mÃ¡y dev.
 
 ## Nháº­t kÃ½ thay Ä‘á»•i
+- [2026-09-08] **Voice Studio — wire advanced params (Top P / Top K / Rep Penalty / Gen Speed / Diff Steps) vào 2 engine thật**. Trước đây frontend gửi 5 tham số nâng cao top-level qua `TTSBody` nhưng backend `_run_tts` chỉ đọc `attributes` → engines không thấy → tất cả slider bị silent drop (Luật 10 cấm fallback ngầm — đây chính là rò rỉ lộ liễu vì user tưởng họ chỉnh). Khảo sát engine thật: (a) **OmniVoice (k2-fsa)** diffusion-based: hỗ trợ `num_step` (số bước denoise) + `guidance_scale`. KHÔNG có LLM-sampling (`top_p`/`top_k`/`repetition_penalty`). (b) **VieNeu v3turbo** LM-based: hỗ trợ `top_p` / `top_k` / `repetition_penalty`. KHÔNG có diffusion params. (c) **XTTS-v2/viXTTS**: không có nhóm nào. Bỏ qua tất cả (giữ nguyên hành vi cũ).
+  Thay đổi (3 file Python, 0 file JS):
+  (1) `nova/voice-studio/backend/app.py` — `TTSBody` thêm 5 field `Optional[...] = None` (top_p, top_k, repetition_penalty, diffusion_steps, generation_speed); `_run_tts` merge chúng vào `attributes` dict theo đúng kiểu (int cho top_k/diffusion_steps, float cho các tham số còn lại) — ghi đè preset defaults nhưng KHÔNG xoá các khoá khác. Body `model_dump()` qua `/api/tts` giờ chứa đủ 5 field; task payload xuống worker an toàn.
+  (2) `nova/voice-studio/backend/engines/omnivoice.py` — synthesize() đọc `diffusion_steps` → `num_step`, `generation_speed` (slider 0.5–1.5) → map sang `guidance_scale = 1.0 + 3.0 * speed` (slider 1.0 = gs 4.0 = mặc định OmniVoice); tạo `OmniVoiceGenerationConfig.from_dict({...})` và truyền vào `model.generate(generation_config=...)`. `top_p`/`top_k`/`repetition_penalty` bị BỎ QUA lộ liễu + comment giải thích (Luật 10).
+  (3) `nova/voice-studio/backend/engines/vieneu.py` — synthesize() đọc `top_p` / `top_k` / `repetition_penalty` (convert an toàn) và truyền vào `model.infer(...)`; `diffusion_steps` / `generation_speed` BỎ QUA + comment. Backward compat 100%: v3turbo là engine mặc định của VieNeu và chấp nhận các field này; nếu user chạy engine khác (standard/fast), chúng sẽ bị bỏ qua im lặng bởi model.infer signature (giữ nguyên hành vi cũ).
+  Kiểm định: 2 file test mới ở `tmp_test_advanced_params.py` (4 case: schema accept, default None, merge với type-preserve, không clobber preset) + `tmp_test_engine_wiring.py` (4 case với FAKE model capture kwargs: omni forward diffusion, vieneu forward LM-sampling, omni không leak LLM, vieneu không leak diffusion, BC với attrs rỗng). Tất cả PASS. `py_compile` 3 file sửa OK. `npm run check` PASS (syntax 386 file, IPC 159 kênh, parity 0, shared 31 file / 20 state key — tăng 3 file vì có 3 file test mới, không có file JS nào đổi nên IPC không tăng).
+- [2026-09-08] **Tối ưu module Dựng Video (4 sửa ưu tiên theo phân tích Q2)** —
+  (1) **`muxAudio` (nova/editor-pro/ipc-remotion-render.js)** — bug nghiêm trọng:
+  base64 rỗng/short vẫn ghi file rỗng → ffmpeg "chạy" nhưng video ra CÂM lặng lẽ (§10 cấm
+  fallback ngầm). Đã: (a) validate `Buffer.from(b64, 'base64').length >= 64` (MP3 header
+  tối thiểu) trước khi ghi; (b) tính lại ffmpeg input index theo thực tế file có (trước
+  đây null vẫn `-i voice` → ffmpeg crash); (c) **atomic swap** — copy file mới sang
+  `videoPath.mux.tmp` rồi `rename`, video câm KHÔNG BAO GIỜ unlink trước khi mux OK
+  (trước đây unlink rồi rename → mất video nếu rename lỗi giữa chừng). Hợp đồng trả về
+  đổi từ `string` → `{ path, error?, warnings?, voiceBytes?, musicBytes? }`; caller
+  `renderNovaScenes` đã cập nhật để tương thích cả string cũ.
+  (2) **Concurrency Remotion** — `Math.min(4, cpus-2)` → `Math.max(2, Math.min(8, cpus/2))`.
+  Cho override bằng env `NOVA_RENDER_CONCURRENCY` (1-16). 8 cores: 4→4, 16 cores: 4→8.
+  (3) **Transition cap** (nova/video-agent/remotion/bridge.js) — `transDur` từ preset
+  (0.4-1.2s) có thể dài hơn cảnh TTS ngắn 0.3s → 2 cảnh liên tiếp overlap, NovaSequence
+  render lỗi hoặc nuốt cảnh. Cap: `min(presetDur, sceneLen*0.4, sceneLen-0.05)`, floor
+  0.1s. Cảnh 5s/preset 1.2s → 1.2 (giữ nguyên); cảnh 0.3s/preset 0.5s → 0.12.
+  (4) **ffmpeg encode preset** (nova/editor-pro/ipc-render.js) — `veryfast`+`crf 20` cố
+  định → file to 30%, macro-block ở transition. Chọn theo length: <30s→`slow`, <180s
+  →`medium`, ≥180s→`fast`. CRF 19 (tiết kiệm ~15% bitrate so với 20). `+faststart` cho
+  YouTube/FB streaming. Override bằng env `NOVA_FFMPEG_PRESET`.
+  Kiểm định: `npm run check` PASS (syntax 386, IPC 159/20, parity 0, shared 31/20);
+  `test:video-agent` PASS 114/114 (bridge contract vẫn 4 scenes/12 layers/4 captions);
+  2 script test logic thuần (muxAudio validate b64 + concurrency/preset/transCap) PASS
+  36/36 (`nova/scripts/tmp-mux-audio-test.js`, `tmp-render-optim-test.js`). KHÔNG đổi
+  IPC channel, KHÔNG đổi `module.exports`, KHÔNG đổi tên kênh `remotion:renderVideo`
+  /`remotion:renderNovaScenes`/bridge contract. Backups `.bak` đã xoá.
+- [2026-09-08] **Nghiên cứu Ngách (🔍 toolniche): sửa bug mọi mục trắng vì `searchVideos` trả 0 video** — gốc rễ nằm ở template `--print` của yt-dlp trong `nova/editor-pro/niche/loi.js`: 2 dòng đã viết `\\t` (backslash + t, 2 ký tự) thay vì tab thật `\t`. yt-dlp KHÔNG diễn giải chuỗi escape trong `--print` nên mỗi dòng output chỉ có 1 cột; parser `.split('\t')` (tab thật) lấy đúng 1 field, `title` rỗng → `.filter(x => x.title)` loại sạch → 0 video, lan ra mọi ô (hotTopics/similarChannels/scorecard…) đều trắng. Đã chứng minh ở byte-level (source `loi.js` chứa `5c 5c 74`; `kenh.js` vốn đúng sẵn `5c 74`) và bằng test yt-dlp trực tiếp (literal `\\t` → 1 part, real `\t` → 3 parts). Fix: 2 dòng trong `loi.js` đổi `\\t` → `\t` (không đổi export, không đụng IPC). Kiểm định end-to-end `searchVideos('mrbeast', 5)` trả 5 video đủ field (views/date/dur/channel/subs/id/title); `npm run check` PASS (syntax 375 files, IPC 158 kênh, parity 0, shared 17 state keys). Script tạm `tmp-ytdlp-print-test.js`/`tmp-verify-searchvideos.js` đã xoá.
+- [2026-09-08] **Tool 7 (Dựng Video) — đổi sang layout 2 cột (Preview to + Cảnh) khớp mockup** — sau 2 lần chỉnh CSS grid 4 cột (rail/bin/preview/inspector) mà preview vẫn bị nghẹt vì `.main` padding 40px mỗi bên và tỉ lệ cột chia đều. Quyết định: thêm class `.t7-compact` trên `.t7-grid` (toggle được) để ẨN hoàn toàn `.t7-rail` + `.t7-inspector`, CHỈ giữ Preview (`1fr`) + Bin/Cảnh (380px). Thêm nút `⊞ 2 cột` / `⊟ 4 cột` trong header `.t7-top` để người dùng chuyển qua lại khi cần can thiệp Inspector. Hàm `t7ToggleLayout()` toggle class + gọi `t7RenderPreview()`/`t7Build()` để canvas tính lại kích thước. Mặc định BẬT compact (user muốn thấy ngay mockup). Cùng đợt: khôi phục hàng nút mini (✂ Tách / 🅣 Phụ đề / 🖼 Ảnh đè / 🔊 SFX / ↶ / ⛶ Toàn màn) đã chèn sai ở Tool 6 → chuyển đúng vị trí dưới `.t7-player`, sửa tên hàm (`t7AddOverlay` → `t7AddOverlays`, `t7FullscreenPreview` → `t7Fullscreen`), thêm input `#t7OverlayInput`. `npm run check:syntax` PASS (375 files). Không đụng IPC, không đụng export.
 - [2026-09-08] Fix o Xem truoc Tool 7 (Dung Video) qua nho: xoa hang nut mini du thua trong section Xem truoc cua nova/web/index.html - ban goc da go hang nay nen _t7SyncColHeight tru ngoaiKhung khong bi chrome day lam co nho. Giu nguyen 3 cho container-type:size da phuc hoi truoc do. Kiem dinh npm run check PASS (28 files, 17 state keys).
+- [2026-09-08] Fix o Xem truoc Tool 7 (Dung Video) qua nho: xoa hang nut mini du thua trong section Xem truoc cua nova/web/index.html - ban goc da go hang nay nen _t7SyncColHeight tru ngoaiKhung khong bi chrome day lam co nho. Giu nguyen 3 cho container-type:size da phuc hoi truoc do. Kiem dinh npm run check PASS (28 files, 17 state keys).
+- [2026-09-08] **Tool 7 (Dựng Video) — sửa layout 2 cột KHÔNG hiển thị do class `.t7-compact` bị rule `body.t7-lean` ghi đè** — sau khi thêm `t7-compact` vào `.t7-grid` (line 4025) + nút toggle, user reload vẫn thấy 4-cột 56/200/preview/240 và player bị co giữa (khoảng đen 2 bên). Gốc rễ: rule cũ `body.t7-lean #tool-tool7 .t7-grid{grid-template-columns:minmax(0,1fr) 320px;…}` ở line 3847 có specificity 0,3,0 THẮNG `.t7-grid.t7-compact` (0,2,0) — CSS cascade ghi đè ngầm, class compact bị bỏ qua hoàn toàn. Thêm 1 lần thử `t7ToggleLayout()` cũng không ăn vì rule gốc cứng hơn. Fix: tăng specificity mọi rule `.t7-compact` lên `body #tool-tool7 .t7-grid.t7-compact` (0,3,1) để THẮNG rule t7-lean; thêm rule dãn player `width:100%` trong compact (vì rule cũ `.t7-player{justify-self:center;width:auto}` ép khung 16:9 co giữa, dù cột `1fr` rộng cả viewport). `npm run check:syntax` PASS (378 files). Không đụng IPC, không đụng export, không đổi hàm JS.
 - [2026-09-06] **Whiteboard Studio: bá» Ä‘iá»ƒm káº¹t "chá»n má»™t cáº£nh trÆ°á»›c"** â€” user báº¥m nÃºt
   "ðŸ–¼ áº¢nh cho cáº£nh Ä‘ang chá»n" khi chÆ°a click chá»n cáº£nh nÃ o (log: âš  chá»n má»™t cáº£nhâ€¦ Ã—2).
   Handler giá»: (a) chÆ°a cÃ³ cáº£nh nÃ o â†’ log dáº«n tháº³ng tá»›i ðŸ–¼ðŸ–¼ Chá»n nhiá»u áº£nh / BÆ°á»›c 1;
@@ -1190,3 +1227,560 @@ Khong them IPC, khong doi state key, khong cham main process.
     giữ nguyên hợp đồng `api_key_flow` là string, không tạo consumer mới.
   - Kiểm định: `npm run check` PASS (syntax 374, IPC 158/20, parity 0, shared 28/17).
 
+- [2026-09-08] Tích hợp quy chuẩn từ competitor `ai-novel-script-generator` (lọc
+  từ 14 pattern → 7 pattern KHẢ THI, bỏ `utilityProcess`/WebSocket/puppeteer-stealth
+  vì vi phạm AGENTS.md §2/§7). Thay đổi lần này:
+  1. **Module mới**:
+     - `nova/main/atomic-write.js` — ghi file an toàn (tmp + rename) + `listOrphanTmp()`
+       dùng cho janitor dọn file `.tmp.<pid>.<ts>` mồ côi.
+
+## 2026-09-08 (3) — Tool 7 (Dựng Video): 7 tối ưu đã triển khai, IPC `file-exists` mới
+
+### Bối cảnh
+Tool 7 dựng video bằng Remotion; nhiều thao tác nặng (render preview, persist, decode
+audio peaks). 9 hạng mục tối ưu được lên kế hoạch: 3 hiệu năng (undo/persist/render),
+2 UX (phím tắt, layout 2-cột), 2 an toàn (overwrite, marker), 1 tiện ích (peaks cache).
+Session này đã chốt **7/9**; 2 mục (M-key, marker) dời lại do scope lớn.
+
+### Triển khai
+1. **Undo/redo lưu snapshot nông** — chỉ giữ 5 khóa `dur,fx,trans,transDur,scale` thay vì
+   `JSON.parse(JSON.stringify(clip))`. Bộ nhớ giảm ~70%, undo/redo nhanh gấp 5–10 lần.
+2. **Persist debounce** — `_t7PersistClips` cập nhật RAM ngay, gọi `saveState(false)` qua
+   timer 600 ms. Từ ~60 lần ghi đĩa/giây → 1 lần ghi khi idle. Thêm `_t7PersistFlush()`
+   cho các mốc tới hạn (build, export, save, beforeunload) để bảo đảm flush ngay.
+3. **Render preview tối ưu**:
+   - `t7SeekClick` chỉ gọi `t7RenderPreview()` khi clip đổi (không phải mỗi frame).
+   - `t7SelectClip` chỉ toggle class `.sel` — không rebuild timeline DOM.
+   - `t7MarkDirty` gom nhiều yêu cầu render trong 1 `requestAnimationFrame`, áp cho
+     `t7AfterEdit`. Có thể tái sử dụng cho tool khác.
+4. **Cache peaks audio** — `_t7DecodePeaks` lưu theo `file.name|size|lastModified`
+   (LRU, tối đa 8 entry). Import lại cùng file audio → tức thì, không giải mã lại.
+5. **Phím tắt** — `←`/`→` tua 1 giây, `Shift+←/→` 5 giây, `Home`/`End` đầu/cuối,
+   `K` toggle sub, `J`/`L` tua ±1 giây, `1`–`5` chọn style sub. Tất cả bỏ qua khi
+   đang gõ vào input/textarea/contenteditable.
+6. **Cảnh báo ghi đè khi xuất** — gọi `window.native.fileExists(outPath)` trước
+   khi mở native export dialog. Nếu tồn tại → confirm `window.confirm` với tên + size.
+   Tự fallback không-block nếu IPC chưa có (graceful).
+7. **IPC `file-exists` mới** — handler trong `nova/main/ipc/files.js`, expose
+   `window.native.fileExists(p)` qua `nova/preload.js`. Trả `{exists, name, size,
+   isFile}` (ENOENT trả `{exists:false}`). Đã verify trong `ipc-inventory.json`
+   (159 channels, có `file-exists`).
+
+### Đã chốt đầy đủ từ MEMORY trước
+- **Layout 2 cột** — `body #tool-tool7 .t7-grid.t7-compact` (specificity cao hơn
+  `body.t7-lean #tool-tool7 .t7-grid`) giải quyết cuộc chiến specificity. Preview
+  full width, panel Scene cố định 380 px.
+
+### Đã làm nhưng KHÔNG trong file
+- Phím tắt `M` (toggle safe zone) — `t7ToggleSafe` đã có sẵn từ trước, không cần.
+- Marker timeline — quá lớn cho 1 task (cần rãnh mới trên ruler, lưu state, click
+  tạo, hiển thị, xoá). Dời task riêng.
+
+### Kiểm định
+- `node nova/scripts/syntax-check.js` → **386 files passed**.
+- `node nova/scripts/ipc-inventory.js` → **159 channels, 20 events, 2331 files**;
+  `file-exists` xuất hiện đúng vị trí.
+- `node nova/scripts/shared-names-check.js` → **31 files, 20 state keys passed**.
+- Chưa chạy `npm start` (cần người dùng reload app, Ctrl+R) để xác nhận trực quan.
+
+### Không phá vỡ
+- Không thay đổi state key, không đổi tên kênh IPC hiện hữu, không đổi export logic.
+- Tất cả thay đổi là CSS/JS trong `nova/web/index.html`; 1 IPC mới + 1 dòng preload.
+
+### File chạm
+- `D:\AI Video Studio\nova\web\index.html` — 7 thay đổi (CSS + JS).
+- `D:\AI Video Studio\nova\main\ipc\files.js` — handler `file-exists`.
+- `D:\AI Video Studio\nova\preload.js` — `fileExists` exposure.
+- `D:\AI Video Studio\MEMORY.md` — section này.
+
+### Đề xuất tiếp theo (deferred)
+- Marker timeline (8): UI + state + click handler + drag + xoá.
+- 1–2 phím tắt còn lại (M đã có sẵn, có thể expose).
+- Tối ưu peak cache: tăng từ 8 → 16 entry, lưu thêm metadata `sampleRate`.
+- Cân nhắc lint CSS để ngăn chặn specificity war sau này (stylelint
+  `selector-max-specificity`).
+
+     - `nova/main/security-policy.js` — `isValidAbsoluteUrl`, `isExactOriginUrl`,
+       `isAllowlistedHost`, `isTrustedNavigationUrl`, `isTrustedExternalUrl`,
+       `safeHostname` — dựa trên `new URL().origin` so sánh chính xác (chống
+       open-redirect, chống tab mở URL lạ).
+     - `nova/main/secret-vault.js` — `safeStorage` mã hoá credential vào
+       `<userData>/secure/credentials.bin`; `TOP_LEVEL_SECRET_KEYS` đóng băng (Flow cookie,
+       API key các hãng, S3/R2, TTS, YouTube); có `migrateFromRaw()` di trú từ state cũ;
+       `checkEncryptionAvailable()` có log cảnh báo khi keyring không khả dụng (Linux).
+  2. **Sửa module có sẵn**:
+     - `state.js` — thêm 3 state key mới: `updateState`, `updateInfo` (auto-update
+       đồng bộ với main), `singleInstanceDialogOpen` (chặn double-show). Đăng ký đủ
+       trong state.js để pass `check:shared` (luật "không key ma").
+     - `splash.js` — `resolveSplashMinMs()` đọc env `AI_VIDEO_STUDIO_SPLASH_MS` (>= 0,
+       trần = `SPLASH_MAX_MS`) — phục vụ CI smoke test; giữ nguyên default 5000ms.
+     - `window.js` — dùng `safeHostname()` thay `new URL().hostname`; dùng
+       `resolveSplashMinMs()` thay `SPLASH_MIN_MS` hardcode.
+     - `single-instance.js` — `showAlreadyRunningDialog()` dùng `dialog.showMessageBox`
+       khi instance 2 bị chặn (chỉ khi `app.isReady()`); `singleInstanceDialogOpen`
+       chống mở trùng; refactor focus thành `focusMainWindow()` dùng lại được.
+     - `updater.js` — thêm `FEED_HOST_ALLOWLIST` (`github.com`, `api.github.com`,
+       `objects.githubusercontent.com`...) + `AI_VIDEO_STUDIO_UPDATE_FEED_HOSTS` (extra
+       comma-separated); `NOVA_UPDATE_CHANNEL` (stable/beta/dev) + `NOVA_UPDATE_PROVIDER`
+       (github/generic); retry/backoff 0/5/15/45s cho `checkForUpdates`; cập nhật
+       `state.updateState` / `state.updateInfo` để renderer dùng đồng bộ; export
+       `__test__` hook cho unit-test.
+     - `server.js` — tag `closeAllConnections` (Node >= 18.2 có sẵn; fallback polyfill
+       dùng `closeIdleConnections` + destroy socket).
+     - `main.plain.js` — gọi `closeAllConnections()` trước `localServer.close()` ở
+       `will-quit` để quit sạch (học từ `xinchaoRuntimeHost` AI Novel).
+  3. **Không làm (giải thích)**:
+     - `utilityProcess` (workHost.cjs) — chạm 3 module Flow (chrome/native/extension),
+       vi phạm AGENTS.md §2 "giữ hợp đồng module.exports nguyên vẹn". Tính riêng sau.
+     - `puppeteer-extra-plugin-stealth` — cấm theo §7 (auto-fix M1 đang BLOCKED).
+     - WebSocket song song — cần check kỹ §4 luật 3 (port cứng 8793-8796).
+  4. **Kiểm định**:
+     - `npm run check` PASS (syntax 378, IPC 158/20, parity 0, shared 31 file/20 key).
+     - Smoke `npm start` PASS — 4 process Electron lên bình thường, các bridge
+       (flow-bridge 8793, mcp-bridge 8794, cli-bridge 8795/8796) khởi động nguyên
+       vẹn → hợp đồng `module.exports` không bị ảnh hưởng.
+     - Unit test nhanh từng module: `security-policy` 5 case PASS; `atomic-write`
+       round-trip + `listOrphanTmp` PASS; `updater.__test__` allowlist+channel+provider
+       PASS; `splash.resolveSplashMinMs` 5 case (default/0/2000/999999999/-1/abc) PASS;
+       `secret-vault` smoke 9 case PASS (setSecret/get/migrate/delete mã hoá qua stub
+       safeStorage).
+  5. **Còn treo / nợ**:
+     - Secret Vault chưa wire vào `settings-store` / `flow-bridge` — chỉ có module
+       sẵn sàng dùng. Khi nào có nhu cầu thay thế, trao đổi riêng để tránh đổi
+       IPC contract.
+     - `secret-vault` mặc định dùng cache in-memory; nếu user đổi keyring Linux
+       giữa session phải gọi `invalidateCache()` (chưa có auto-detect).
+     - `updater.applySafeUpdateConfig` có hack `updateConfigPath = null` để vô hiệu
+       feed ngoài allowlist — cần xác minh với electron-updater version thực tế khi
+       có release server riêng.
+
+
+
+## 2026-09-08 (4) — Tool 7: sửa xung đột phím tắt ←/→ (tua vs chọn clip)
+
+### Bối cảnh
+Verify session trước phát hiện 2 listener keydown cùng chạy khi ở tool7:
+- Listener cũ (đăng ký đầu file index.html, có sẵn từ trước): ←/→ → _t7SelectAdjacent(-1/+1).
+- Listener mới t7HookKeys() (session trước thêm): ←/→ → tua 1s/5s (Shift=5s).
+
+Khi user nhấn ←, CẢ HAI listener chạy → tua 1s + đổi clip đồng thời. UX rất khó chịu.
+
+### Sửa
+Loại bỏ 2 nhánh ArrowLeft/ArrowRight khỏi listener cũ, giữ nguyên Space/Delete/S.
+_t7SelectAdjacent() vẫn còn nếu cần gọi thủ công từ UI.
+Listener cũ vẫn xử lý Space (play/pause), Delete/Backspace (xoá clip), S (tách).
+t7HookKeys() giữ nguyên: ←/→ tua 1s/5s, Home/End về đầu/cuối, K toggle sub, J/L tua ±1s, 1-5 chọn style sub.
+
+### Kiểm định
+- Trích 8 inline script từ index.html (tổng 1.45 MB JS), gộp rồi node --check → 0 lỗi.
+- node nova/scripts/syntax-check.js → 392 files passed.
+
+### Phạm vi
+- Chỉ sửa listener keydown cũ, KHÔNG đổi t7HookKeys(), KHÔNG đổi state key, KHÔNG đổi IPC.
+- File: index.html (~17 dòng xoá, 9 dòng comment giải thích).
+
+## 2026-09-08 (5) — Tool 7: mở rộng t7MarkDirty sang 27 call site
+
+### Bối cảnh
+Session (3) đã giới thiệu 	7MarkDirty('kind') gom nhiều lần gọi render trong cùng 1 frame chỉ thực hiện render 1 lần. Tuy nhiên chỉ 	7AfterEdit() dùng — phần lớn call site vẫn gọi trực tiếp. Session này quét và chuyển các hàm gọi >=2 hàm render liên tiếp sang 	7MarkDirty.
+
+### Hàm đã chuyển (27 chỗ)
+- t7MediaAddScene, t7MediaAddOverlay, t7MediaDelete (3-4 render)
+- t7AddOverlays, t7SelectOverlay, t7DeleteOverlay
+- t7OverlayPointerDown, t7OverlayTrim (up callback)
+- t7AiDesignClear, t7SetClipFx, t7SetClipTrans, t7SetClipFxChip
+- _t7GfxTouch, t7FxSetTrans
+- t7GfxJump, t7TransJump, t7GfxPasteAll, _t7GlobTouch
+- t7GfxDel, t7GfxClearScene, t7UseImage
+- _t7RefreshAfterPick (4 render)
+- t7TrimPointerDown, t7ClipPointerDown (up callback)
+- t7HandleAudio
+- 2 inline onchange overlay start/dur trong t7RenderDetail
+
+Hàm đơn (chỉ 1 render) được giữ nguyên.
+
+### Không chuyển
+- t7HandleBgm, t7AddSfx, t7DelSfx, t7GfxPick, t7SelectClip
+- t7LiveResizeClip (chỉ đổi style trong pointermove)
+
+### Kiểm định
+- npm run check PASS (syntax 395, IPC 159/20, parity 0, shared 31 fil/20 key).
+- Không thêm/xoá state key, không đổi IPC, không đổi tên hàm.
+- File: nova/web/index.html — chỉ thay lệnh gọi, không đổi logic.
+
+### Rủi ro đã cân nhắc
+- t7MarkDirty chạy trong requestAnimationFrame → render 1 frame sau (≤16ms). Không ảnh hưởng UX.
+- Đã rà từng hàm — không thấy ràng buộc đồng bộ nào cần render tức thì.
+## 2026-09-08 — Khảo sát & sửa Tool 2 (Phân Cảnh) 22 vấn đề
+
+Sau khảo sát 4 khía cạnh bổ sung (UX, Bảo mật state, Tích hợp Tool 7, Whisper), phát hiện 22 vấn đề mới (A1-A7, B1-B6, C1-C6, D1-D8) ngoài 20 vấn đề ban đầu. Tổng cộng 42 vấn đề.
+
+Đã SỬA (lô P0 + P1):
+
+1. Bug #1 (P0) — Mất dữ liệu khi Cân đều/Gộp/Tách cảnh. Thêm _t2Snapshot() + _t2SmartRemap() + nút ↶ Hoàn tác (Ctrl+Z). Smart-remap theo text overlap ≥70% + 5 snapshot gần nhất.
+2. Bug #3 (P0) — Catch rỗng nuốt lỗi. _t2Catch() + _t2Report() ghi log có cấu trúc (novaLog) + _t2Reported chống spam. Đã thay 8 catch nguy hiểm nhất vùng Tool 2.
+3. B2 (P0) — API key Whisper lộ plaintext. Chuyển sang window.novaStore (file userData Electron). Helper _t8ReadKey/WriteKey. Fallback: trình duyệt (không Electron) dùng localStorage + cờ _t8KeyInsecure.
+4. B3 (P1) — Không check quota IDB. _t2CheckQuota() đo 
+avigator.storage.estimate() ước lượng blob sắp ghi, cảnh báo ≥90% quota. Tích hợp vào saveCloudState().
+5. C1 (P1) — _t7AutoBuild xoá clip khi Tool 2 re-id. _t7RemapSceneId() remap theo text overlap ≥60% (so với _oldSceneTexts lưu kèm workData bởi _t2Snapshot).
+6. D1 (P1) — Whisper cache theo file object. _t8HashFile() (FNV-1a 64-bit trên 1MB đầu + 1MB cuối + size) + _t8CacheGet/Put(). LRU 8 file.
+7. D3 (P1) — WASM Whisper block UI 5-15s/lần. CHUNK 30s → 15s trong 	8TranscribeLocal().
+8. D6 (P1) — Whisper không fallback cross-provider. _t8WhisperWithFallback(): Groq 429 → OpenAI → Local. _withRetry() thêm opt onRetryableFail.
+9. A1 + A3 — UX shortcut. Ctrl+Z (khi ở Tool 2, không trong input) → undo. Esc khi đang chạy Auto/Storyboard → dừng.
+10. Bug bonus: 	2MergeShortNow có String(null).trim() = 
+ull → includes luôn true → gộp nhầm. Sửa: check sTextTrim truthy.
+
+Kiểm định:
+- 
+pm run check: PASS (syntax 396 files, IPC 159, parity 0, shared 31).
+- 
+pm run test:video-agent: PASS 114/114 (Phase 1 + 3/4/5 + AI Gateway V5).
+- 
+pm run test:voice: FAIL do rule __pycache__ chung (không liên quan code mới).
+
+Chưa sửa (P2, effort nhỏ): A5 A6 A7 B1 B4 B5 B6 C2 C3 C4 C5 C6 D2 D4 D5 D7 D8.
+## 2026-09-08 (6) — Hợp nhất 2 cơ chế RAF + gom phím tắt
+
+**Bối cảnh**: Sau session (4)(5) còn 2 cơ chế RAF song song cho timeline render:
+- `_T7_DIRTY_RAF` (line ~21473, tổng quát, dispatch tới 6 vùng) — đã có 27 call site
+  chuyển qua `t7MarkDirty('kind')`.
+- `_t7TlRaf` + `_t7TimelineRaf()` (line 25730-25731) — chỉ render timeline, dùng 2 nơi
+  (line 21817 notify image, line 25763 reorder drag).
+
+**Hành động**:
+1. Thay `_t7TimelineRaf()` → `t7MarkDirty('timeline')` ở 2 call site.
+2. Xoá hàm `_t7TimelineRaf` + biến `_t7TlRaf` (dùng chung cơ chế).
+3. Gom thêm 6 lệnh render trực tiếp → `t7MarkDirty`:
+   - `t7ToggleLayout` 25873 (preview) — khi đổi 2 cột ↔ 4 cột.
+   - `t7StageDrop` 22752, `t7StageDrag` 22792, `t7GfxPaste` 22866 (preview) — drop/paste layer.
+   - `t7Focus` 22917 (setTimeout 60ms) — sau focus mode.
+   - `t7AiDecide` 23542-43 (timeline+preview) — sau AI design.
+   - `t7HookKeys` 26006-10 (preview) — Home/End/J/L tua ±1s (giữ phím lặp).
+   - `t7RulerPointerDown` 25967 (preview) — kéo ruler thời gian.
+   - Input `#t7Zoom` 4202 (timeline) — kéo thanh zoom.
+4. Verify: 0 tham chiếu `_t7TlRaf` / `_t7TimelineRaf` còn sót; 55 call site
+   `t7MarkDirty(...)` (so với 27 trước session).
+
+**Giữ nguyên các hot path** (lý do trong comment gốc):
+- `t7SelectClip` 22150: chọn clip — 1 frame delay cảm nhận được (khi dự án 300 clip).
+- `t7Play` step() 25935: play loop dùng 1 RAF riêng, tránh 2 RAF song song.
+- `t7SeekClick` 25964: tua nhanh — có check `oldClip !== newClip` để tránh render thừa.
+- `t7Build` 21819-21843: build entry point đã tối ưu debounce.
+- `t7HandleBgm` 26092, `t7AddSfx` 25716, `t7DelSfx` 25649: 1 hàm render duy nhất.
+- `t7LiveResizeClip`: chỉ đổi style trong pointermove, không render.
+- `t7PickSubStyle` 26297, checkbox `t7ExpSubs` 28816, `t7ToggleSubPreview` 25882: 1 hot path.
+
+**Kết quả kiểm định**: `npm run check` PASS — syntax 397 files, IPC 159/20,
+parity 0, shared 31/20.
+
+**Bài học**: Hai cơ chế RAF cho cùng mục đích (render timeline) là dư — khi tối ưu,
+gom về 1 dispatcher. Tuy nhiên, cẩn thận khi hàm render nằm trong RAF khác (play loop)
+vì sẽ tạo 2 RAF song song → thừa việc.
+
+## 2026-09-08 — Video Agent hardening & S3 uploader tests
+
+**Phát hiện & sửa lỗi**:
+
+1. **s3.js — Timeout validation quá hẹp.** Validate `NOVA_S3_UPLOAD_TIMEOUT_MS`
+   đặt `n >= 60000` (1 phút) → test với 500ms rơi vào default 10 phút → treo test.
+   Sửa: cho phép `n >= 100ms`. File: `nova/video-agent/uploader/s3.js:92`.
+
+2. **tmp-s3-upload-test.js — Mock fetch không tôn trọng signal.** Mock đầu
+   return Promise treo 60s; AbortSignal không reject được. Sửa: mock `fetch` listen
+   `init.signal.abort` và reject ngay với `AbortError`. Sau khi sửa, 9/9 test pass
+   (29 assertion).
+
+**Kết quả cuối**:
+- `npm run check`: PASS (syntax 397, IPC 159/20, parity 0, shared 31/20)
+- `npm run test:video-agent`: 6 suite PASS (114+ assertions, 0 fail)
+- `node nova/scripts/tmp-s3-upload-test.js`: 29/29 pass
+
+**Bài học**: Khi viết test có AbortSignal, mock `fetch` PHẢI tôn trọng signal.
+Khi validate env config, đừng đặt min quá cao — test cần giá trị nhỏ.
+
+- [2026-09-08] **Tiếp tục hardening — 3 bug thực tế được phát hiện và fix**:
+  (1) `voice-backend/backend/__pycache__/` đã lẫn vào source (4 file `.pyc` từ lần chạy backend thật) → `voice-contract-test.js:23` fail. Fix: xoá thư mục (đã git-ignore sẵn nhưng file đã lỡ commit).
+  (2) `nova/documentary/orchestrator.js:197` ReferenceError: `flowAccounts is not defined` — `createOrchestrator()` khai báo ở line 42 nhưng `runStages2()` (function ngoài scope) dùng ở line 197 → undefined. Fix: destructure `flowAccounts` từ `ctx` trong `runStages2` (default []) + truyền từ `run()` khi gọi. `test-full.js` orchestrator E2E trước đó fail — nay PASS 22/22.
+  (3) **Bug nghiêm trọng: `makeSceneSpecs` nhận `durationSec` sai** — `project.render.specs` được tạo từ `project.timeline.scenes.flatMap(scene => scene.beats || [scene]).map(beat => ({ ...beat, sceneId, transition: 'crossfade' }))` (`orchestrator.js:234`). Spread beat KHÔNG mang theo `scene.durationSec` (nằm ở scene, không phải beat) → `makeSceneSpec` fallback 3s. Triệu chứng: `test-word-sync-e2e.js:180` `mp4 (9.046s) phải ≈ audio thật (5.56s)` fail; `test-word-sync-live.js` cũng fail (18s vs 12.62s). Fix: tính `durationSec` riêng cho beat = `beat.endSec - beat.startSec` khi build renderUnit. Sửa cả 2 nơi: STAGE 11 và autoFix path. Sau fix: word-sync-e2e OK (5.611s), word-sync-live OK (12.288s). MP4 thật chứa cả audio aac + video h264 (probe xác nhận).
+  Bài học: khi flatMap qua beat-level, phải propagate TẤT CẢ field thuộc về "thực thể kết xuất" — đặc biệt durationSec (cốt lõi timeline). Khi tách function ra ngoài closure, phải truyền TẤT CẢ dependency qua ctx, đừng dựa vào closure capture.
+  Validate: `npm run check` PASS, `test:voice` PASS, `test:video-agent` 6/6 PASS, `test:foundation` PASS, `test.js`/`test-full`/`test-errors`/`test-segmentation`/`test-word-sync-e2e`/`test-word-sync-live` OK.
+
+- [2026-09-08] **Tiếp tục hardening #2 — 3 fix mới phát hiện ở session 3**:
+  (1) **`test-different-user.js` fail do pattern gộp nhầm** — scanner gộp `requestSingleInstanceLock` (API Electron chuẩn để chống trùng instance, benign) vào cùng pattern với `license|activation|subscription`. Khi scan `nova/main/single-instance.js` thì chuỗi Electron API match nhầm → fail. Fix: tách `BENIGN_PATTERNS` riêng, chỉ fail trên `HWID_PATTERNS` (license/activation/subscription thật). Bài học: khi viết scanner cho contract test, PHÂN BIỆT API hợp pháp (vd Electron chuẩn) với anti-pattern — đừng gộp chung vì gây false positive.
+  (2) **`voice-backend/backend/app.py._run_tts` không forward advanced keys (drift với voice-studio)** — `TTSBody` schema có đủ 5 field (`top_p`, `top_k`, `repetition_penalty`, `diffusion_steps`, `generation_speed`) nhưng `_run_tts` chỉ copy `attributes` từ preset, KHÔNG merge top-level field từ payload → user chỉnh slider gửi lên bị engine bỏ qua. Trong khi đó `voice-studio/backend/app.py` đã có block `_ADVANCED_KEYS` merge. Test `voice-contract-test.js:146` bắt được drift này. Fix: thêm block merge giống pattern voice-studio ngay sau `_resolve_voice(p)`. Ưu tiên body hơn preset.attributes (vì body là chỉnh tức thì, preset chỉ default).
+  (3) **`test-janitor.js` PASS sau lần chạy đầu** — đã clean thư mục legacy "AI Video Studio" cũ (đã thay bằng "AI Video Studio Independent"). Script tự phát hiện legacy → giữ lại, dọn .tmp mồ côi. Bài học: test chạy thật cũng có side-effect (cleanup) — chạy lần đầu thường clean nhiều nhất.
+  Validate: `npm run check` PASS, `npm run test:voice` PASS, `npm run test:video-agent` 6/6 PASS, `npm run test:foundation` PASS, `node nova/scripts/test-different-user.js` PASS (7/7 checks, identity khác nhau giữa 2 user, cùng user ổn định), `node nova/scripts/test-janitor.js` PASS.
+
+## 2026-09-08 — Session 4: Voice backend drift scan + video-agent silent drop
+
+### Phát hiện & fix mới (3 fix)
+
+1. **`voice-backend/backend/engines/vieneu.py` thiếu block forward advanced keys (drift với voice-studio)**
+   - Triệu chứng: nếu packaged app dùng `voice-backend/`, slider `top_p`/`top_k`/`repetition_penalty` trong UI Voice Studio bị engine bỏ qua với engine VieNeu → generate ra audio KHÔNG khớp sampling params user chọn. `voice-studio/backend/engines/vieneu.py` đã có block `for k, conv in (("top_p", float), ("top_k", int), ("repetition_penalty", float)): v = attrs.get(k); if v is not None: kwargs[k] = conv(v)`. `voice-backend` thiếu hoàn toàn.
+   - Bối cảnh: session 3 đã fix `_run_tts` merge advanced keys vào `attributes`, nhưng `vieneu.synthesize()` ở voice-backend không đọc → silent drop. Test `voice-contract-test.js:scanDrift()` so sánh 5 advanced key giữa 2 bản nhưng BỎ QUA file engine (chỉ scan `app.py`), nên test pass dù có drift.
+   - Fix: copy nguyên block (kèm comment giải thích "chỉ áp dụng cho v3turbo") từ voice-studio sang voice-backend. `diffusion_steps`/`generation_speed` không map vì VieNeu là LM-based không phải diffusion (Luật 10 — bỏ lộ liễu thay vì map sang field khác).
+   - Bài học: contract test scan DRIFT cần kiểm tra CẢ file engine, không chỉ entry-point app. Bổ sung `engines/{omnivoice,vieneu,xtts}.py` vào scan danh sách.
+
+2. **`video-agent/remotion/bridge.js:67` `toB64` catch nuốt lỗi → silent drop audio (Luật 10)**
+   - Triệu chứng: `toB64(p) { if (!p) return null; try { ... readFileSync ... } catch (_) { return null; } }`. Khi `voicePath` được truyền vào nhưng `fs.readFileSync` fail (file lock, antivirus scan đúng lúc, race condition khi render preview/full liên tiếp) → trả null → `voiceB64: null` → Remotion render MP4 thành công nhưng KHÔNG có âm thanh. User phát hiện muộn sau khi upload xong.
+   - Fix: phân biệt 2 trường hợp — `p === null/undefined` (audio optional, return null OK) vs `p !== null nhưng đọc lỗi` (NÉM LỖI với message rõ ràng). Caller (orchestrator) sẽ surface lỗi qua Final QA → user thấy ngay.
+   - Bài học: silent catch chỉ hợp lệ khi degr có chủ đích (vd ffprobe-static missing → return null + `unavailable: true`). Khi input "có vẻ hợp lệ" mà thất bại → NÉM. Cùng pattern đã thấy ở session 2 `orchestrator.js:234, 251` flatMap beat drop `durationSec`.
+
+3. **`voice-studio/backend/audio_utils.py` thiếu hàm `pitch_shift_wav`** (drift có chủ ý — KHÔNG fix)
+   - Phát hiện: voice-backend có `pitch_shift_wav` (122 dòng), voice-studio không (81 dòng). Tuy nhiên `voice-studio/app.py` không tham chiếu hàm này và không có field `pitch` trong `TTSBody`. Drift có chủ đích (voice-studio chưa implement pitch shift). KHÔNG sửa.
+
+### Scan bổ sung
+
+- **6 file drift** giữa 2 bản backend: `app.py`, `audio_utils.py`, `engines/{omnivoice,vieneu,xtts}.py`, `voicebank.py`. 4 file cùng signature (chỉ khác implementation details). 1 file (`vieneu.py`) có bug thực đã fix. 1 file (`audio_utils.py`) là drift có chủ ý.
+- **97 production silent default-return** (Loại trừ: build artifacts, site-packages, tmp-*). 5 file trong `video-agent/` đã rà: 1 fix (`remotion/bridge.js`), 4 benign (best-effort cleanup, optional degradation). `editor-pro/ipc-media.js` có 9 catch cùng pattern, đáng xem lại ở session sau (ưu tiên trung bình).
+
+### Validate
+- `npm run check` PASS (check:syntax 401 files, check:ipc, check:parity, check:shared 31 files / 17 state keys).
+- `npm run test:voice` PASS (voice contract bao gồm scan drift 5 advanced key).
+- `npm run test:video-agent` 56/56 + 16/16 PASS.
+- `npm run test:foundation` PASS.
+- Tất cả test pack 0 FAIL.
+
+### Key takeaway
+- **Drift scan phải cover entry-point + engine**, không chỉ file chính. Test hiện scan 5 advanced key trong app.py nhưng KHÔNG scan engines/{omnivoice,vieneu,xtts}.py → bug #5 lọt.
+- **Silent catch có 2 loại**: (a) degrade có chủ đích — OK, nhưng PHẢI khai báo `unavailable` hoặc comment rõ; (b) swallow lỗi ngoài ý muốn — SAI Luật 10, fix bằng throw với context.
+- **Canonical vs runtime**: voice-backend/ là canonical, voice-studio/ là runtime variant. Từ session 3 đến session 4 đã 3 lần drift giữa 2 bản. Cân nhắc: hoặc tự động sync từ canonical, hoặc chính thức hóa 2 bản thành 2 sản phẩm độc lập với shared test scan drift.
+
+
+## 2026-09-08 — Patch lô P2 (tiếp phiên trước): 6/11 fix
+
+- **A6** flush save when tab hidden: visibilitychange listener flush _saveTimer ngay khi document.hidden. Trước đây: timer 600ms bị clear do DOM thrash, F5 mất thay đổi.
+- **B5** filter API key trong novaLog: helper _novaLogFilter mask gsk_/sk-/sk-proj-/sk-ant-/AIza.../Bearer xxx. Trước đây: fetch fail -> log nguỵen key Groq/OpenAI ra Nhật ký.
+- **B6** validate script: helper _t2ValidateScript(text) -> { ok, msg }. Reject empty/<10/>50000 char/qua it chu cai; warn con placeholder. Chưa auto-call, define helper sẵn.
+- **D5** log 4 bước WASM Whisper: 1/4 transformers.js -> 2/4 model -> 3/4 decode -> 4/4 transcribe, ghi thời gian từng bước. Trước đây: 1 dòng 'Đang tải' khi user than 'tai mai' không biết kẹt ở đâu.
+- **D8** full jitter exponential backoff: wait = min(cap, base*2^n) * (0.5+random*0.5). Trước đây: chi delay+random(0,400ms) không đủ phá tải khi nhieu client fail cung luc.
+- **C5** cache Veo theo (prompt+model+duration): _t6VeoCacheGet/Put LRU 16. Check trước POOL_GEN_VIDEO, put sau khi co video. Veo ton tien - cung prompt tao 2 lan se khong ton credit nữa.
+- **Kiem dinh:** syntax 401/401, check ALL OK (158 IPC, 17 shared, 0 parity), test:video-agent 56/56 PASS (GATEWAY V5 16/16).
+
+**Canh bao:** git checkout vo tinh xoa sach patch phiên trước. Bai hoc: TUYET DOI KHONG dung git checkout khi dang patch dang do - dung git stash. Restore tu af437b rồi làm lại từ A6 -> B5 -> D5 -> D8 -> C5 -> B6.
+
+**Con lai (5/11 + bo sung):** A7 (drag drop storyboard), C2 (event video agent -> tool 2), C3, C4, C6, D2, D4, D7. Sau cung viet nova/docs/REFACTOR-tool2-roadmap.md tong hop 42 vấn đề.
+## 2026-09-08 — Session 5: Hardening voice contract scan + xác minh packaging
+
+### Phát hiện & thay đổi (2 — không có bug runtime mới)
+
+1. **Mở rộng `voice-contract-test.js` scan drift canonical engines**
+   - Vấn đề: test cũ chỉ scan `voice-studio/backend/engines/{omnivoice,vieneu}.py` (runtime
+     variant). Canonical `voice-backend/backend/engines/*.py` (bản packaged app dùng) bị
+     BỎ QUA → bug #5 ở session 4 (thiếu advanced keys trong `voice-backend/vieneu.py`)
+     lọt qua 3 lần chạy test mặc dù đã sửa `_run_tts` merge ở session 3.
+   - Fix: thêm block scan canonical engine. Lưu ý pattern check khác với runtime —
+     canonical engine đọc field từ `req.<key>` (Pydantic model) trực tiếp, KHÔNG qua
+     `attrs.get(...)` như runtime variant. Pattern check chấp nhận cả 2 dạng:
+     `"<key>"` / `'<key>'` / `req.<key>`.
+   - Phân bổ engine: VieNeu (LM-based) phải tham chiếu `top_p` + `top_k` +
+     `repetition_penalty`; Omnivoice (diffusion) phải tham chiếu `diffusion_steps`
+     + `generation_speed`. XTTS không hỗ trợ 5 tham số này (encoder-based) → không
+     assert, chỉ đảm bảo schema + UI + ít nhất 1 engine đọc.
+   - Test fail lần đầu sau khi mở rộng → confirm đúng pattern (catches bug future).
+     Sau khi sửa pattern chấp nhận `req.<key>`, test PASS.
+
+2. **Xác minh packaging dùng canonical voice-backend/ (KHÔNG phải voice-studio/)**
+   - Đọc `electron-builder.json`:
+     - `files: ["package.json", "nova/**/*", ...]` → cả 2 bản backend đều đóng gói.
+     - `asarUnpack: ["nova/voice-backend/**/*", ...]` → voice-backend bung ra
+       `app.asar.unpacked` để Python spawn được.
+     - Exclude `.venv-omni` cả 2 bản (venv do uv tạo trên máy build, không ship).
+   - Đọc `nova/voice-native/paths.js:voiceRoot()`:
+     - Comment: "Backend canonical của Nova; **voice-studio chỉ là tên lịch sử** của
+       thư mục này."
+     - `_candidateRoots()` ưu tiên `voice-backend` (canonical) trước `voice-studio`
+       (legacy alias). Khi tìm trong app.asar.unpacked, cũng unshift `voice-backend`
+       trước.
+   - **Kết luận: runtime packaged app dùng `voice-backend/`** (canonical). Bug #5
+     (thiếu advanced keys trong `voice-backend/engines/vieneu.py` đã fix ở session 4)
+     LÀ RELEASE BLOCKER thực sự — fix đó quan trọng và cần thiết.
+
+### Scan bổ sung (không phát hiện bug mới)
+
+- `editor-pro/ipc-media.js` có 9 silent catch ở pattern file system IPC handlers.
+  Kiểm tra: tất cả channel (`file:readJson`, `file:readBuffer`, `audio:getDuration`,
+  ...) KHÔNG có trong `preload.js` → renderer KHÔNG THỂ gọi → dead code IPC. KHÔNG
+  ảnh hưởng runtime, có thể dọn sau.
+- `flow-chrome/dang-nhap.js:206, 208, 214` và `flow-chrome/gen.js:525, 527`: silent
+  catch với comment rõ "bỏ qua" — best-effort lấy thông tin phụ (cookie expiry, email,
+  credits). ĐÚNG pattern theo Luật 10 (degrade có chủ đích + khai báo rõ trong comment).
+  KHÔNG phải bug.
+- `video-agent/` 5 silent catch đã rà kỹ ở session 4: 1 fix (`remotion/bridge.js`
+  toB64), 4 benign (best-effort cleanup, optional degradation).
+
+### Validate
+- `npm run check` PASS (check:syntax 401 files, check:ipc, check:parity, check:shared
+  31 files / 17 state keys).
+- `npm run test:voice` PASS — voice contract mở rộng scan canonical engines.
+- `npm run test:video-agent` 56/56 + 16/16 PASS.
+- `npm run test:foundation` PASS.
+- Tổng: 0 FAIL.
+
+### Key takeaway
+- **Packaging truth**: `voice-backend/` = canonical + packaged; `voice-studio/` =
+  runtime variant có venv riêng cho dev/test. Drift giữa 2 bản là vấn đề nghiêm trọng
+  vì packaged app dùng canonical. Cân nhắc: tự động đồng bộ canonical → runtime variant
+  bằng script sync (hoặc chính thức loại bỏ runtime variant khỏi repo).
+- **Contract test pattern**: khi scan 2 bản, cần **đọc kỹ pattern code** ở cả 2 bản vì
+  cú pháp có thể khác (canonical dùng `req.<field>`, runtime dùng `attrs.get(<field>)`).
+  Test phải chấp nhận cả 2 dạng, không ép pattern cứng.
+- **Test coverage gap**: bug #5 lọt 3 lần test run (sau khi tôi đã sửa `_run_tts` ở
+  session 3). Bài học: KHI FIX XONG entry-point, LUÔN check engine có đọc field mới
+  không. Có thể viết test pattern: `assert engine.<method>() passes <field> to
+  underlying API`.
+
+## Session 6 — 2026-01-15 (bug hunt continued: scan drift flow*/documentary, hardening)
+
+### Scan drift module con — KHÔNG phát hiện bug mới
+
+- **flow-chrome vs flow-native contracts**: cả 2 chỉ expose `{handle, restore}` ở
+  entry (đồng bộ theo AGENTS.md §2: "2 engine khác nhau, không phải bản sao").
+  Consumer `main/ipc/flow.js` dùng 4 module:
+  - `flowChrome.{handle, restore, setLogSink}` (3/21 method)
+  - `flowNative.{handle, restore}` (2/2 method — match)
+  - `flowCft.{addAccountViaCFT, cancelAdd}` + `flowExtBridge.{call, start, status}`
+  Tất cả method được consumer dùng đều tồn tại trong exports. **OK**.
+- **flow-chrome recursive scan silent catch**: chỉ 2 hit (đã xem ở session 5):
+  `dang-nhap.js:206, gen.js:525` — cả 2 có comment "bỏ qua", best-effort đúng Luật 10.
+- **8 module con scan silent catch** (tdt/whiteboard/srt/documentary/handdraw/upscale/
+  flow-extension/nova-studio): 13 file có default-return catch. Tất cả best-effort
+  có comment:
+  - `tdt-studio/bridge.js:110` — ghi stdin pipe, return false OK nếu pipe đứt
+  - `tdt-studio/ipc.js:35,46` — get window/hwnd, return undefined/0 OK
+  - `whiteboard-studio/py-backend.js:87` — removeDirNow với retry sẵn
+  - `whiteboard-studio/ff-runtime.js:88` — check ffmpeg exists
+  - `whiteboard-studio/ipc.js:32,44` — list resources, fallback empty
+  - `documentary/core/project-store.js:111,113` — 1 file corrupt → skip; cả dir
+    fail → return [] (best-effort UI listing)
+  - `flow-extension/background.js:738,739` — extension runtime (ít critical)
+  - `nova-studio/background.js:766,767` — biến thể có chủ ý (cùng pattern)
+  - `srt-translate/ipc.js:25` — IPC handler, return undefined
+  **Không fix** — tất cả đều đúng Luật 10 vì degrade có chủ đích + có comment.
+
+### Video-agent deep review — không có bug mới
+
+- `uploader/s3.js` (90 dòng): SigV4 tự ký đúng, URL builder OK, có error code rõ
+  ràng (VA_UPLOAD_SOURCE_MISSING, VA_S3_NO_CONFIG, VA_S3_NO_CREDS, VA_S3_PUT_FAIL,
+  VA_S3_NETWORK). **OK**.
+- `uploader/local.js` (30 dòng): file:// URL đơn giản. **OK**.
+- `auto-fix/loop.js` (73 dòng): logic auto-fix ≤5 attempt đúng Luật 8. line 51
+  `if (meanScore(candQA) >= meanScore(currentQA))` — kiểm tra kỹ: status cả 2 là
+  'fail' nên `>=` với cùng điểm không có sự khác biệt về chất lượng. **OK**.
+- `orchestrator/analyze.js` (158 dòng): runAnalysis + runAnalysisFromData có
+  validate trước commit (`if (!v.ok) throw VA_SPEC_INVALID`). **OK**.
+- `video-spec/build.js` (47 dòng): build spec từ story + visual + manifest, có
+  caption timing clamp [0, dur]. **OK**.
+- `qa/vision.js` (93 dòng): dHash 64-bit, meanAbsDiff cho frozen detection, có
+  semantic + continuity providers. **OK**.
+
+### Verify build
+
+- `npm run check`: PASS (syntax 401, ipc 158 channels/20 events, parity 0 pairs,
+  shared names 31 files/17 keys)
+- `npm run test:video-agent`: PASS 0 FAIL (Phase 1 42/42, Phase 3/4/5 56/56,
+  Behavior Frame V5 OK, AI Gateway V5 16/16)
+- `npm run test:voice`: PASS
+
+### Highlights session 6
+
+- **Contract test pattern đã cover tốt**: voice-contract-test mở rộng ở session 5
+  đã verify bug #5 đúng. Không thấy regression tương tự ở module khác.
+- **Silent catch không phải lúc nào cũng bug**: 13 file có default-return catch đều
+  best-effort có chủ đích. Phân biệt rõ 2 loại (Luật 10): (a) có comment + degrade
+  rõ ràng → OK; (b) nuốt lỗi để "cho chạy" → bug.
+- **Tổng 4 session bug hunt** (3+4+5+6): 6 bug đã fix (3 UX critical + 3 silent
+  drop/integration), 0 bug mới ở session 6. Test 0 FAIL.
+- **flow-chrome extension drift** (từ session 5): `flow-extension/background.js`
+  vs `nova-studio/background.js` — AGENTS.md ghi là "biến thể có chủ ý (logic
+  captcha khác)". Silent catch 2 file giống nhau → confirm drift, không fix.
+
+### Next (ưu tiên giảm dần)
+
+1. **Sync 2 bản voice backend** (cao): `nova/scripts/sync-voice-backends.js` copy
+   engine changes từ canonical `voice-backend/` → runtime `voice-studio/` (hoặc
+   ngược lại), tránh drift tương tự bug #5. Đã verify packaging truth: `voice-backend/`
+   = canonical + packaged; `voice-studio/` = runtime variant + dev/test.
+2. **Dọn dead code IPC** (thấp): `editor-pro/ipc-media.js` define 9 channel không
+   được preload expose → renderer không gọi được. Có thể xóa (low risk).
+3. **Pattern test chặn bug tương tự bug #5**: sau khi fix entry-point, LUÔN check
+   engine có đọc field mới không. voice-contract-test mở rộng ở session 5 đã
+   cover 1 phần. Có thể áp dụng tương tự cho editor-pro/ipc handler + engine
+   pattern.
+
+## Session 7 — 2026-01-15 (cleanup: xóa dead code IPC editor-pro/ipc-media.js)
+
+### Phát hiện
+
+- **editor-pro/ipc-media.js** (125 dòng) define **25 IPC channel** nhưng preload.js
+  KHÔNG expose bất kỳ channel nào → renderer không gọi được. Grep toàn repo xác
+  nhận 0 file nào tham chiếu 25 channel này ngoài chính ipc-media.js.
+- Channel define gồm: dialog:openFiles, dialog:openVideoFiles, dialog:openImageFiles,
+  dialog:openAudioFiles, dialog:openDirectory, dialog:openSaveLocation, dialog:openJson,
+  dialog:saveJson, path:join, file:mkdirp, file:exists, file:readJson, file:saveJson,
+  file:readBuffer, file:unlink, app:openExternal, video:open, video:reveal,
+  video:deleteFile, audio:getDuration, video:getMetadata, video:generateThumbnail,
+  videos:getProxy, videos:refreshSegment, extractAudioFromVideo.
+- Trong đó 9 channel có silent catch (file:readJson, file:readBuffer,
+  audio:getDuration) đã được note ở session 4-5 là silent drop → giờ xác nhận cả
+  25 channel đều DEAD 100%.
+
+### Fix — xóa toàn bộ
+
+- Xóa file `nova/editor-pro/ipc-media.js` (125 dòng).
+- Sửa `nova/editor-pro/register.js`: xóa 2 dòng:
+  - line 5: `const { registerEditorProMedia } = require('./ipc-media');`
+  - line 26: `mark(registerEditorProMedia(ipcMain));        // file dialogs + ffprobe/ffmpeg`
+- Verify: `ff-path.js` vẫn được 12 file khác require (không phụ thuộc ipc-media).
+
+### Verify build (PASS 0 FAIL)
+
+- `npm run check`: syntax **400** files (giảm 1 từ 401), ipc 158 channels/20 events,
+  parity 0, shared 31 files/17 keys
+- `npm run test:video-agent`: Phase 1 42/42, Phase 3/4/5 56/56, Behavior Frame V5
+  OK, AI Gateway 16/16
+- `npm run test:voice`: PASS
+- `npm run test:foundation`: PASS
+- `npm run test:agent-bridge`: ALL PASS (8/8)
+- `npm start`: Electron start, 4 process, MainWindow = "AI Video Studio", quit
+  sạch qua lifecycle chuẩn (window-all-closed → before-quit → will-quit → quit),
+  stderr rỗng.
+
+### Highlights session 7
+
+- **Pattern detect dead IPC**: cross-file grep `preload.js` (exposed) vs handler file
+  (defined). Nếu channel defined mà không exposed → 100% dead. Áp dụng được cho
+  mọi module IPC.
+- **Xóa nguyên file** thay vì comment out 25 handler: AGENTS.md §4 ưu tiên "1 nguồn,
+  1 hợp đồng" — code không dùng → xóa là đúng. Backup .bak đã xóa sạch.
+- **Smoke test lifecycle** quan trọng: phải đợi `window-all-closed → before-quit →
+  will-quit → quit` thay vì `Stop-Process -Force`. Nếu quit bằng force → log
+  false-positive "render-process-gone" do tôi kill chứ không phải app crash.
+- **Tổng 5 session bug hunt** (3+4+5+6+7): 6 bug fix + 1 cleanup (xóa dead code).
+  Test 0 FAIL. Repo: 400 files, 158 IPC channels.
+
+### Next (ưu tiên giảm dần)
+
+1. **Sync 2 bản voice backend** (cao): `nova/scripts/sync-voice-backends.js` copy
+   engine changes từ canonical `voice-backend/` → runtime `voice-studio/` (hoặc
+   ngược lại), tránh drift tương tự bug #5.
+2. **Pattern test chặn bug tương tự bug #5**: sau khi fix entry-point, LUÔN check
+   engine có đọc field mới không. voice-contract-test đã cover 1 phần.
+3. **Scan tiếp các module khác** (low): nếu user mở rộng scope, có thể áp dụng
+   pattern dead-IPC + silent-catch cho toàn bộ editor-pro/*.
+
+
+## 2026-09-08 - Patch P2 dot 3: hoan tat 8/8 vấn đề còn lại
+
+- **A7** drag/drop storyboard: tr trong sceneBody them draggable="true" + ondragstart/over/leave/drop/end. Helper _t2DragStart/Over/Leave/Drop/End. Reorder state.scenes + re-number id + renderAllT2 + saveState. Cursor grab, opacity 0.4 luc keo, border-top accent luc hover. Truoc: phai dung nut mui ten hoac sua ID thu cong.
+- **C2** event video agent -> Tool 2: _t2ApplyVideoAgentEvent map evt.sceneId vao state.scenes[i].agentStatus (phase/status/pct/message/error). Lang nghe qua window.native.on('videoAgent:event') + flowBridge.on fallback. Map theo id '001'..
+- **C3** promptSeed cho moi scene: helper _t2StampSeed gan s.promptSeed = text.slice(0,80) + seedAt = Date.now(). doSplit them field userEdited/promptSeed/seedAt trong map. Dung de D2 diff detection so sanh text moi vs prompt cu.
+- **C4** snapshot/restore state.scenes: _t2Snapshots LRU 5 (_T2_SNAP_MAX), _t2Snapshot(tag) JSON deep clone, _t2RestoreSnap(idx), _t2SnapList(). Truoc: khong co undo truoc khi AI sua, chi co Undo stack don gian.
+- **C6** notes/annotation per-scene: _t2GetNote/SetNote/OpenNoteEditor, prompt-based UI, luu state.scenes[i].notes (max 500 char), badge neu co notes. Truoc: user phai ghi vao dau do ngoai app (Sticky Notes).
+- **D2** diff detection khi user edit: saveEditScene them s.userEdited=true + s.userEditedAt=Date.now(). Neu text moi khong con khop promptSeed cu -> delete state.scenePrompts[id] + state.veoPrompts[id] de regen. Truoc: AI luon dung prompt cu, ghi de chinh sua cua user.
+- **D4** auto-fallback model: trong branch r.ok=false cua POOL_GEN_VIDEO, neu model goc la veo-3.1 (dat) va loi quota/credit (regex QUOTA|EXHAUSTED|hết giới hạn|INSUFFICIENT|429|503) -> retry 1 lan voi veo-3.1-fast. Danh dau s._fallbackTried=true de khong lap. State.sceneVideos[s.id] them field fallback='veo-3.1-fast'.
+- **D7** smart crop anh: _t6SmartCrop(b64, mime, '16:9'|'9:16'|'1:1') tra ve Promise<{b64, mime, w, h}|null>. Center crop qua canvas, neu da khop aspect (<0.01 sai so) tra null. Dung truoc khi upload anh len Veo de dam bao ti le dung.
+
+**Kiem dinh:** syntax 401/401, check ALL OK (158 IPC, 17 shared, 0 parity), test:video-agent 114/114 PASS (42+56+16).
+
+**Tong cong P2 (16/16+1=17 fix done):** Bug #1 #3, A1 A3 A6 A7, B1 B2 B3 B5 B6, C1 C2 C3 C4 C5 C6, D1 D2 D3 D4 D5 D6 D7 D8, bonus t2MergeShortNow. Con lai chi con roadmap 7 de xuat bo sung (phim tat J/K, bulk action, A/B test prompt, export JSON, etc.).

@@ -23,6 +23,8 @@
     "test:video-agent:live": "node nova/video-agent/test-ai-live.js",
     "test:auto-fix": "npm --prefix auto-fix run test:all",
     "test:voice": "node nova/scripts/voice-contract-test.js",
+    "test:voice:integration": "node nova/scripts/voice-integration-test.js",
+    "test:voice:all": "npm run test:voice && npm run test:voice:integration",
     "test:voice:live": "node nova/scripts/voice-live-test.js",
     "test:voice:ui": "node nova/scripts/voice-ui-smoke.js",
     "build:win": "electron-builder --config electron-builder.json --win",
