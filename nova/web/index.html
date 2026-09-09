@@ -28663,4 +28663,75 @@ const veoUI = { mode:"script", shots:[], busy:false, stop:false };
                 <label class="t7-mlab" style="display:block;margin-bottom:7px">Kiểu phụ đề</label>
                 <div id="t7SubStyleChips" style="display:flex;gap:7px;flex-wrap:wrap"></div>
               </div>
-       
+                     <label id="t7ExpGpuRow" class="t7-mlab" style="display:none;align-items:center;gap:9px;margin-top:10px;cursor:pointer">
+                <input type="checkbox" id="t7ExpGpu" checked style="accent-color:var(--accent);width:16px;height:16px"> <span id="t7ExpGpuLab">⚡ Tăng tốc GPU</span>
+              </label>
+            </div>
+          </div>
+          <div class="t7-modal-foot">
+            <div id="t7ExpEstimate" style="font-size:12.5px;color:var(--text-muted)">—</div>
+            <div style="display:flex;gap:10px">
+              <button class="btn ghost" onclick="t7CloseExport()">Hủy</button>
+              <button class="btn primary" id="t7ExpGo" onclick="t7DoExport()">⬆ Xuất</button>
+            </div>
+          </div>
+        </div>
+      </div>
+<script>
+// Flow API Key management
+(function() {
+  function loadFlowApiKey() {
+    const input = document.getElementById('flowApiKey');
+    const status = document.getElementById('flowApiKeyStatus');
+    if (!input) return;
+    var val = null;
+    try {
+      if (window.novaStore && window.novaStore.seed && typeof window.novaStore.seed['api_key_flow'] === 'string') {
+        val = window.novaStore.seed['api_key_flow'];
+      }
+    } catch (e) {}
+    if (val == null) {
+      try { val = localStorage.getItem('flowApiKey'); } catch (e) {}
+    }
+    if (val) {
+      input.value = val;
+      var count = val.split(/\r?\n/).filter(function (s) { return s.trim().length > 0; }).length;
+      if (status) status.textContent = '✅ Đã tải ' + count + ' key';
+    } else if (status) {
+      status.textContent = '';
+    }
+  }
+
+  window.saveFlowApiKey = function() {
+    const input = document.getElementById('flowApiKey');
+    const status = document.getElementById('flowApiKeyStatus');
+    if (!input) return;
+    const lines = input.value.split(/\r?\n/).map(function (s) { return s.trim(); }).filter(function (s) { return s.length > 0; });
+    if (!lines.length) {
+      if (status) status.textContent = '⚠️ Vui lòng nhập ít nhất một API key';
+      return;
+    }
+    const key = lines.join('\n');
+    var saved = false;
+    try {
+      if (window.novaStore && typeof window.novaStore.set === 'function') {
+        saved = window.novaStore.set('api_key_flow', key) === true;
+      }
+    } catch (e) { saved = false; }
+    if (saved) {
+      input.value = key;
+      if (status) status.textContent = '✅ Đã lưu ' + lines.length + ' key';
+    } else {
+      if (status) status.textContent = '❌ Lưu thất bại (kho cài đặt không khả dụng)';
+    }
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', loadFlowApiKey);
+  } else {
+    loadFlowApiKey();
+  }
+})();
+</script>
+</body>
+</html>
