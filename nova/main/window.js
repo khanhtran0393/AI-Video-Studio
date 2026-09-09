@@ -56,6 +56,83 @@ function createWindow(startUrl) {
   state.mainWindow.webContents.on('did-fail-load', (_event, _code, _description, _validatedURL, isMainFrame) => {
     if (isMainFrame) reveal();
   });
+  // [DEBUG-TEMP] forward renderer console + errors to main stdout for E2E check
+  try {
+    state.mainWindow.webContents.on('console-message', (_e, level, message, line, sourceId) => {
+      const tag = ['DEBUG','INFO','WARN','ERROR'][level] || 'LOG';
+      process.stdout.write(`[renderer:${tag}] ${message}  (${sourceId}:${line})\n`);
+    });
+    state.mainWindow.webContents.on('render-process-gone', (_e, details) => {
+      process.stdout.write(`[renderer:CRASH] reason=${details.reason} exitCode=${details.exitCode}\n`);
+    });
+  } catch (_) {}
+  // [DEBUG-TEMP] Auto-run E2E panel test when loaded with NSE_E2E=1
+  if (process.env.NSE_E2E === '1') {
+    state.mainWindow.webContents.on('did-finish-load', () => {
+      setTimeout(async () => {
+        try {
+          const toolIds = ['tool1','tool2','tool3','tool4','tool5','tool6','tool7','tool8','tool9','voice','videoagent','dash','script','flow','upscale','niche','log','settings','imzic','whiteboard','handdraw','studio','srttranslate','anim','admin'];
+          const results = [];
+          // Init check
+          try {
+            const init = await state.mainWindow.webContents.executeJavaScript(`(() => {
+              const dash = document.getElementById('dashBody');
+              return JSON.stringify({
+                hasState: typeof state === 'object' && state !== null,
+                hasSwitchTool: typeof switchTool === 'function',
+                dashInnerLen: dash ? dash.innerHTML.length : 0,
+                toolPanelsCount: document.querySelectorAll('[id^="tool-"]').length,
+                hasLangVoice: typeof _LANG_VOICE !== 'undefined',
+                hasSceneTypes: typeof SCENE_TYPES_CORE !== 'undefined',
+                hasFlowBridge: typeof flowBridge !== 'undefined',
+                hasT7State: typeof t7State !== 'undefined',
+                hasNovaStore: typeof window.novaStore !== 'undefined',
+                hasT2Export: typeof _t2ExportJson === 'function',
+                hasGiongTaiDS: typeof giongTaiDS !== 'undefined',
+              });
+            })()`);
+            results.push('init: ' + init);
+          } catch (e) { results.push('init-ERR: ' + e.message); }
+          // Switch each tool
+          for (const t of toolIds) {
+            try {
+              const r = await state.mainWindow.webContents.executeJavaScript(`(async () => {
+                try { switchTool('${t}'); const el = document.getElementById('tool-${t}'); return el ? 'OK len=' + el.innerHTML.length : 'NOT_FOUND'; } catch (e) { return 'ERR: ' + e.message + ' @' + (e.stack||'').split('\\n').slice(0,2).join(' | '); }
+              })()`);
+              results.push('tool-' + t + ': ' + r);
+            } catch (e) { results.push('tool-' + t + '-ERR: ' + e.message); }
+            await new Promise(r => setTimeout(r, 150));
+          }
+          // Export/import round-trip
+          try {
+            const r = await state.mainWindow.webContents.executeJavaScript(`(async () => {
+              try {
+                state.scenes = [{ id: 's1', text: 'Canh 1', character: 'nv1', background: 'bg1', camera: 'cam1', duration: 5, notes: '', promptSeed: 'seed1' }];
+                const realCreate = URL.createObjectURL;
+                let captured = null;
+                URL.createObjectURL = function(blob) { const r = new FileReader(); r.onload = function() { captured = r.result; }; r.readAsText(blob); return 'blob:fake'; };
+                if (typeof _t2ExportJson !== 'function') return 'NO_EXPORT_FN';
+                _t2ExportJson();
+                URL.createObjectURL = realCreate;
+                await new Promise(r => setTimeout(r, 500));
+                if (!captured) return 'NO_CAPTURE';
+                const parsed = JSON.parse(captured);
+                if (!parsed.scenes || parsed.scenes.length !== 1) return 'BAD_PARSED: ' + JSON.stringify(parsed).slice(0, 100);
+                if (parsed.scenes[0].id !== 's1') return 'BAD_ID';
+                return 'EXPORT_IMPORT_OK';
+              } catch (e) { return 'ERR: ' + e.message; }
+            })()`);
+            results.push('export-import: ' + r);
+          } catch (e) { results.push('export-import-ERR: ' + e.message); }
+          process.stdout.write('\n========== E2E RESULTS ==========\n' + results.join('\n') + '\n================================\n');
+          app.quit();
+        } catch (e) {
+          process.stdout.write('[e2e] CRASH: ' + e.message + '\n' + (e.stack || '') + '\n');
+          app.exit(1);
+        }
+      }, 5000);
+    });
+  }
   setTimeout(reveal, SPLASH_MAX_MS);
   state.mainWindow.loadURL(startUrl).catch(() => reveal());
   state.mainWindow.webContents.setWindowOpenHandler(({ url }) => {

@@ -32,6 +32,7 @@ smoke-results/
 
 # Runtime data, logs and local secrets
 *.log
+logs/
 *.tmp
 *.cache
 .env
