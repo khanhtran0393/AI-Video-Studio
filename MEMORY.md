@@ -2119,3 +2119,12 @@ Khi validate env config, đừng đặt min quá cao — test cần giá trị n
 - 97 PEER_BIGGER = peer có bản dài hơn shared → app runtime dùng peer (load sau) → shared chỉ là stub/dead code. KHÔNG CẦN XOÁ vì zero-risk cho app. Nếu muốn dọn thêm, dùng `dedup-same-ast.js` (sẽ thấy 0 vì filter `>=` không match `peer > shared`) hoặc viết script mới `dedup-peer-bigger.js` xoá hàm shared < peer (cũng zero-risk vì shared chỉ là stub).
 - 97 hàm này phân bổ: cần xem chi tiết nếu muốn dọn tiếp. Tạm thời KHÔNG vội.
 
+### Wrap-up phiên 2026-09-10f (verify sau dedup + commit bd7e44e4)
+- **Refcheck PASS zero-risk**: `nova/scripts/dedup-refcheck.js` (permanent, thay tmp-check-toplevel-refs.js) parse shared-consts.js bằng acorn, quét top-level refs → 0 dangerous ref (13 top-level refs đều nằm trong shared/builtin), PEER_BIGGER xác nhận 97.
+- **Cleanup comment mồ côi**: xoá **1,063 block** `// === L?: ...` orphan (4,110 dòng) bằng one-shot `tmp-strip-orphan-markers.js`; **giữ 44 marker live** trên hàm PEER_BIGGER còn sống (applyChannelCfg, queueAdd, nhóm 97) vì cảnh báo vẫn đúng. shared-consts.js: **600,822 → 427,657 bytes**.
+- Xoá backup `.bak-tierb` + 2 script tmp (tmp-* git-ignored nên không lộ trong status).
+- **Kiểm định**: `npm run check` exit 0 — syntax 378 files, IPC 158 kênh/20 events, parity 0, shared 31/18 (đúng chuẩn).
+- Review diff: `ipc-inventory.json` chỉ regenerate manifest; `web-origin-qa.js` là fix test theo refactor 068263fe (extract `_t7FileUrl` từ utility.js thay vì index.html).
+- **Commit `bd7e44e4`** `refactor(toolbox): dedup 994 same-AST + 1063 orphan markers khoi shared-consts.js` — 9 files, +23,594/−39,975 (8 M + 1 A dedup-refcheck.js). Session trước đã commit riêng 10 file A (99ff114a) + 2 docs(MEMORY) (f26b0145).
+
+
