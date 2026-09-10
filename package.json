@@ -33,7 +33,7 @@
     "build:smoke": "npm run build:win && npm run smoke:packaged"
   },
   "dependencies": {
-    "@remotion/bundler": "4.0.518",
+    "@remotion/bundler": "4.0.521",
     "@remotion/renderer": "4.0.518",
     "@remotion/transitions": "4.0.518",
     "electron-updater": "^6.3.9",
