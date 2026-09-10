@@ -14852,3 +14852,7 @@ async function _t9CaptionsFromPattern(myTitle, n){
   } catch (e) { return []; }
 }
 
+
+/* === Stub functions (recovered from original index.html — v2 extractor would catch these) === */
+function _giongCloud(){ try { return JSON.parse(localStorage.getItem('_giongCloudCache') || '[]'); } catch(_){ return []; } }
+function _giongCloudLuu(ds){ try { localStorage.setItem('_giongCloudCache', JSON.stringify(ds || [])); } catch(_){} }

@@ -40,6 +40,27 @@ const result = {
   progressEvents: [...progress].sort(),
 };
 const output = path.join(ROOT, 'ipc-inventory.json');
-fs.writeFileSync(output, JSON.stringify(result, null, 2) + '\n', 'utf8');
+// Ghi qua file .tmp + rename để tránh Defender Realtime lock file output giữa chừng
+// (errno -4094 UNKNOWN từ Defender khi writeFileSync trúng giây scan). Retry tối đa
+// 5 lần với 1.5s backoff — đủ để qua được lock thoáng qua mà vẫn fail lộ liễu nếu
+// lock kéo dài thật.
+const tmp = output + '.tmp';
+const payload = JSON.stringify(result, null, 2) + '\n';
+let written = false;
+for (let attempt = 1; attempt <= 5; attempt++) {
+  try {
+    fs.writeFileSync(tmp, payload, 'utf8');
+    fs.renameSync(tmp, output);
+    written = true;
+    break;
+  } catch (e) {
+    if (attempt === 5) throw e;
+    const delay = 1500 * attempt;
+    process.stderr.write(`[ipc-inventory] write attempt ${attempt} failed (${e.code || e.message}), retry in ${delay}ms\n`);
+    const start = Date.now();
+    while (Date.now() - start < delay) {}   // sync sleep nhẹ, không cần thêm dep
+  }
+}
+if (!written) process.exit(1);
 console.log(`IPC inventory: ${result.channels.length} channels, ${result.progressEvents.length} events, ${scanned.length} files`);
 console.log(output);

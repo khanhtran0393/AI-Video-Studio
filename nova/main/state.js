@@ -41,4 +41,9 @@ module.exports = {
   unregisterErrorBridge: null,
   reporterShutdownPromise: null,
   reporterQuitReady: false,
+  // electron.app handle — dùng trong test runner (window.js e2e) làm fallback
+  // khi require('electron') không khả dụng (chạy ngoài Electron, vd CI script).
+  // Ở runtime thật require('electron') luôn thành công nên nhánh này chỉ chạy
+  // khi fallback path kích hoạt.
+  app: null,
 };

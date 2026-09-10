@@ -1786,3 +1786,83 @@ Khi validate env config, đừng đặt min quá cao — test cần giá trị n
 **Kiem dinh:** syntax 401/401, check ALL OK (158 IPC, 17 shared, 0 parity), test:video-agent 114/114 PASS (42+56+16).
 
 **Tong cong P2 (16/16+1=17 fix done):** Bug #1 #3, A1 A3 A6 A7, B1 B2 B3 B5 B6, C1 C2 C3 C4 C5 C6, D1 D2 D3 D4 D5 D6 D7 D8, bonus t2MergeShortNow. Con lai chi con roadmap 7 de xuat bo sung (phim tat J/K, bulk action, A/B test prompt, export JSON, etc.).
+## 2026-09-10 - Hotfix: shared-consts.js corruption + shared-names-check edge case
+
+- **Nguyen nhan**: commit `068263fe refactor(web): split inline toolbox JS block into per-tool files` da split file `nova/web/src/toolbox/shared-consts.js` bang regex marker `// === L\d+-\d+:` khong chinh xac. Ket qua:
+  - Function decls bi cut (mo `{` nhung thieu body) vi du `_withRetry`, `loadAutoAudio`, `_autoStepsAll`, `_t7AiLang`
+  - Const/let decls bi orphan (mo `{` nhung body thuoc ban khac) vi du `flowBridge`, `VEO_STYLE_PRESETS`
+  - File chi con 1640 dong (ban goc 21646 dong), mat ~20000 dong code
+  - Gay SyntaxError runtime -> GUI ben phai (màn hinh trang) trong AI Video Studio
+
+- **Khoi phuc**: thay vi patch ban hong, restore tu git checkpoint `81152816` (bản OK cuoi cung truoc `068263fe`). 21646 dong, `node --check` PASS, GUI load lai binh thuong.
+
+- **Fix `check:shared`** (2 loi):
+  1. `NSE_E2E` -> `NOVA_E2E` trong `nova/main/window.js` (theo prefix env quy uoc AGENTS.md §4.3)
+  2. Them `stripBacktickStrings()` trong `nova/scripts/shared-names-check.js` de skip noi dung template string (vd `executeJavaScript(\`...\`)`) — tranh false-positive tu code E2E trong renderer.
+
+- **Bonus fix tu session truoc** (van con trong working tree):
+  - `nova/main/state.js`: them `app: null` field cho test runner fallback
+  - `nova/web/index.html`: them boot script (initAppDirect, renderDashboard, switchTool) sau khi moi toolbox load
+  - `nova/scripts/ipc-inventory.js`: ghi qua `.tmp` + rename + retry 5 lan (1.5s backoff) de qua Defender realtime lock
+
+- **Kiem dinh**:
+  - `check:syntax`: 358/358 PASS
+  - `check:ipc`: 158 channels, 20 events, 2308 files (retry path chong Defender)
+  - `check:parity`: 0 pairs
+  - `check:shared`: 31 files, 17 state keys PASS
+  - `npm start`: app boot thanh cong, flow-bridge 8793, mcp-bridge 8794, cli-bridge 8795/8796 len dung, khong co SyntaxError
+
+- **Bai hoc**:
+  - Split block theo regex marker KHONG dang tin khi file co nhieu comment Tieng Viet da dong (marker de nham voi `// === L999-L999:` trong comment giai thich).
+  - Khi commit refactor lon, LUON luu checkpoint truoc de co the rollback nhanh.
+  - Background git processes (GitLens extension / VS Code auto-checkpoint) tu dong `git checkout` revert cac file dang mo. Can tat VS Code hoac dong file truoc khi edit, hoac commit ngay sau khi sua.
+  - Defender Realtime lock file lam `writeFileSync` fail ngau nhien. `.tmp` + `rename` + retry la pattern on.
+
+
+## 2026-09-09b — Hoàn tất khôi phục refactor 068263fe
+
+- **Context**: Session trước đã restore 19 file toolbox từ git checkpoint 81152816 (21646 dòng shared-consts.js gốc), giải quyết SyntaxError runtime. Session này tiếp tục vệ sinh: thêm fix check:shared còn thiếu, sửa voice-contract-test cho phù hợp với refactor, xóa rác tích tụ.
+
+- **Fix bổ sung**:
+  1. nova/main/state.js: thêm app: null — sửa 2 lỗi check:shared còn lại (state.app chưa khai báo trong window.js fallback test runner).
+  2. nova/scripts/ipc-inventory.js: thay writeFileSync trực tiếp bằng pattern .tmp + rename + retry 5x (1.5s backoff) — chống Defender Realtime lock file output (errno -4094 UNKNOWN).
+  3. nova/scripts/voice-contract-test.js: quét cả nova/web/src/toolbox/*.js (không chỉ index.html) — sau refactor 068263fe, code tách ra nên assertion cũ không còn tìm thấy let VOICE_URL, giongXoa, _giongFetchJson, gcard.has-del. Hợp đồng vẫn giữ nguyên — chỉ là nguồn đọc đã thay đổi.
+  4. nova/voice-backend/**/__pycache__: xóa ~1000 folder pycache do setup-omni sinh ra (nằm trong source, gây fail test:voice cũ).
+
+- **Final working tree (12 file modified)**: MEMORY.md, nova/ipc-inventory.json, nova/main/{state,window}.js, nova/scripts/{extract-index-html-toolbox,ipc-inventory,shared-names-check,voice-contract-test}.js, nova/web/index.html, nova/web/src/toolbox/{shared-consts,utility,tool-ts}.js
+
+- **Kết quả kiểm định (toàn bộ PASS)**: check:syntax 357/357, check:ipc 158/20/2307, check:parity 0 pairs, check:shared 31/18, test:voice passed, test:foundation passed, test:video-agent 114 PASS / 0 FAIL
+
+- **Bài học bổ sung**:
+  - Khi refactor lớn (split file), MỌI test script assert trên file gốc cũng phải cập nhật — đừng để test phản ánh trạng thái cũ, hợp đồng đổi nguồn đọc chứ không đổi semantics.
+  - __pycache__ do Python tooling sinh ra nhanh và nhiều — setup-omni phải respect .gitignore hoặc có bước dọn cuối.
+  - Background git processes (PIDs 31184/42004/96172) respawn liên tục trên Windows do GitLens + VS Code auto-checkpoint. Không tìm cách kill — sống chung với chúng, dùng git checkout -- file thay vì git reset --hard để tránh race với auto-checkpoint.
+  - PowerShell Out-File mặc định UTF-16; phải dùng -Encoding utf8. Tee-Object cũng vậy. Trên hệ thống này git show qua pipe cũng tạo UTF-16 output (tùy buffer).
+  - Working tree hiện khớp với HEAD 068263fe (commit lỗi) + 12 file sửa. Commit này chưa push origin/main (vẫn ở 6a22a42d) — có thể amend hoặc follow-up commit. Chưa quyết.
+
+
+
+
+## 2026-09-10b — Verify v2 extractor fix + thêm _BE_MO_TA stub
+
+- **Context**: session này xác nhận lại rằng commit `aaf50d7a` (fix(shared-consts): restore from pre-068263fe checkpoint) đã bao gồm:
+  - Restore `nova/web/src/toolbox/shared-consts.js` từ checkpoint 81152816 (21646 dòng, `node --check` PASS)
+  - Patch `nova/scripts/extract-index-html-toolbox.js` (v2): thu thập TẤT CẢ inline `<script>` blocks, bắt IIFE/window.X/state.X assignment, dedup TẤT CẢ loại decl, sanity check "used but not defined" ở cuối
+  - Sửa `check:shared` (NSE_E2E → NOVA_E2E, stripBacktickStrings)
+  - Stub `_giongCloud` / `_giongCloudLuu` trong utility.js
+  - Boot script (initAppDirect, renderDashboard, switchTool) ở cuối body index.html
+
+- **Thay đổi bổ sung session này**:
+  - `nova/web/src/toolbox/shared-consts.js`: thêm 1 dòng cuối `const _BE_MO_TA = { omni, vieneu, xtts }` (stub — chỉ được tham chiếu trong templates block L8242 của index.html, không có runtime impact ngoài đó).
+
+- **Verify**:
+  - `check:syntax` 357/357 PASS
+  - `check:ipc` 158 channels, 20 events, 2307 files
+  - `check:parity` 0 pairs
+  - `check:shared` 31 files, 18 state keys PASS
+  - E2E (`npm start` + NOVA_E2E=1): `init.hasState=true, hasSwitchTool=true, hasRenderDashboard=true, dashInnerLen=35585, toolPanelsCount=25`; `tool-tooldash: OK len=35623`; `export-import: EXPORT_IMPORT_OK`
+
+- **Bài học thêm**:
+  - V2 extractor đã catch được bug tương lai: khi chạy trên `logs/index-original-lf.html` (1.96MB pre-refactor), nó báo SyntaxError tại L9347 (comma operator bug: `scenes.map(s => (s.id, s.text, ...))` — fix cần `({id, text, ...})`). Đây là vấn đề trong `index.html` gốc, không phải extractor.
+  - Background git auto-checkpoint (VS Code GitLens) đôi lúc tự `git checkout` working tree. Nếu file đang bị lock bởi Electron process, `git checkout` fail silently và tool tưởng thành công. Cần `Stop-Process` trước khi `Remove-Item` + `git checkout`.
+  - `node --check` của shared-consts.js strict về duplicate `let`/`const` decl; nhưng Electron renderer (V8 in HTML page) KHÔNG strict → file có thể "chạy" trong browser nhưng fail `node --check`. Cẩn thận: đừng chỉ test E2E rồi assume syntax-check pass.

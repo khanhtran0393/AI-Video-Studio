@@ -58,6 +58,38 @@ function codeOnly(text) {
   return text.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
 }
 
+// Trả về code đã loại bỏ nội dung template string backtick (vd `executeJavaScript(\`...\`)`).
+// Lý do: code trong template string thường là JS cho renderer/E2E chạy ở nơi khác —
+// không phải main code, không nên bị quét bởi state-key/env-name check.
+// GIỮ NGUYÊN dấu nháy đơn/kép (vẫn cần để require(...) match).
+function stripBacktickStrings(text) {
+  let out = '';
+  let i = 0;
+  let inTpl = false;
+  let tplDepth = 0;
+  while (i < text.length) {
+    const ch = text[i], next = text[i + 1];
+    if (!inTpl) {
+      if (ch === '`') { inTpl = true; out += ' '; i++; continue; }
+      out += ch;
+      i++;
+      continue;
+    }
+    if (ch === '\\') { out += '  '; i += 2; continue; }
+    if (ch === '`') { inTpl = false; out += ' '; i++; continue; }
+    if (ch === '$' && next === '{') {
+      tplDepth++;
+      out += '  ';
+      i += 2;
+      continue;
+    }
+    if (ch === '}' && tplDepth > 0) { tplDepth--; out += ' '; i++; continue; }
+    out += (ch === '\n') ? ch : ' ';
+    i++;
+  }
+  return out;
+}
+
 const state = require(STATE_FILE);
 const stateKeys = Object.keys(state);
 // Hằng số (bất biến) của state.js — không được định nghĩa lại ở module khác.
@@ -69,7 +101,7 @@ const files = walk(MAIN_DIR).concat([MAIN_ENTRY]);
 
 for (const file of files) {
   const rel = path.relative(ROOT, file).replace(/\\/g, '/');
-  const code = codeOnly(fs.readFileSync(file, 'utf8'));
+  const code = stripBacktickStrings(codeOnly(fs.readFileSync(file, 'utf8')));
 
   for (const match of code.matchAll(STATE_KEY)) {
     usedKeys.add(match[1]);

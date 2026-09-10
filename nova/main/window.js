@@ -67,11 +67,11 @@ function createWindow(startUrl) {
     });
   } catch (_) {}
   // [DEBUG-TEMP] Auto-run E2E panel test when loaded with NSE_E2E=1
-  if (process.env.NSE_E2E === '1') {
+  if (process.env.NOVA_E2E === '1') {
     state.mainWindow.webContents.on('did-finish-load', () => {
       setTimeout(async () => {
         try {
-          const toolIds = ['tool1','tool2','tool3','tool4','tool5','tool6','tool7','tool8','tool9','voice','videoagent','dash','script','flow','upscale','niche','log','settings','imzic','whiteboard','handdraw','studio','srttranslate','anim','admin'];
+          const toolIds = ['tool1','tool2','tool3','tool4','tool5','tool6','tool7','tool8','tool9','toolvoice','toolvideoagent','tooldash','toolscript','toolflow','toolupscale','toolniche','toollog','toolsettings','toolimzic','toolwhiteboard','toolhanddraw','toolstudio','toolsrttranslate','tooladmin'];
           const results = [];
           // Init check
           try {
@@ -80,6 +80,7 @@ function createWindow(startUrl) {
               return JSON.stringify({
                 hasState: typeof state === 'object' && state !== null,
                 hasSwitchTool: typeof switchTool === 'function',
+                hasRenderDashboard: typeof renderDashboard === 'function',
                 dashInnerLen: dash ? dash.innerHTML.length : 0,
                 toolPanelsCount: document.querySelectorAll('[id^="tool-"]').length,
                 hasLangVoice: typeof _LANG_VOICE !== 'undefined',
@@ -125,10 +126,10 @@ function createWindow(startUrl) {
             results.push('export-import: ' + r);
           } catch (e) { results.push('export-import-ERR: ' + e.message); }
           process.stdout.write('\n========== E2E RESULTS ==========\n' + results.join('\n') + '\n================================\n');
-          app.quit();
+          try { require('electron').app.quit(); } catch (_) { try { state.app.quit(); } catch (_) {} }
         } catch (e) {
           process.stdout.write('[e2e] CRASH: ' + e.message + '\n' + (e.stack || '') + '\n');
-          app.exit(1);
+          try { require('electron').app.exit(1); } catch (_) { try { state.app.exit(1); } catch (_) {} }
         }
       }, 5000);
     });

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-09T16:22:37.297Z",
+  "generatedAt": "2026-09-10T03:21:30.746Z",
   "sourceFiles": [
     "chrome-extension/app.js",
     "chrome-extension/background.js",
@@ -2279,7 +2279,6 @@
     "web/nguon-web/ha-tang.js",
     "web/nguon-web/nen-tang.js",
     "web/nguon-web/tim-web.js",
-    "web/src/toolbox/_missing-consts.js",
     "web/src/toolbox/shared-consts.js",
     "web/src/toolbox/tool-auto.js",
     "web/src/toolbox/tool-cap.js",

@@ -37,10 +37,19 @@ assert(voiceNative.includes('return { ok: true, url: existing }'), 'start() ph�
 assert(voiceNative.includes('running: !!u, url: u || URL'), 'status() phải trả url thật');
 
 // 4. Renderer dùng URL động, gán từ main (không hard-code tuyệt đối).
+// Sau refactor 068263fe, toolbox block 3 (khoảng 5900+ dòng) được tách ra các file
+// riêng trong nova/web/src/toolbox/. Phần khai báo `let VOICE_URL = …` chuyển sang
+// shared-consts.js; phần gán từ main chuyển sang utility.js. Hợp đồng vẫn là
+// "renderer dùng URL động từ main" — chỉ là nguồn đọc đã thay đổi, nên test quét
+// cả index.html (boot glue) lẫn các file toolbox (runtime code thật).
 const indexHtml = read('web/index.html');
-assert(/let VOICE_URL\s*=/.test(indexHtml), 'renderer phải dùng let VOICE_URL');
-assert(indexHtml.includes('if (cur?.url) VOICE_URL = cur.url'), 'renderer lấy VOICE_URL từ voiceStatus()');
-assert(indexHtml.includes('if (r?.url) VOICE_URL = r.url'), 'renderer lấy VOICE_URL từ voiceStart()');
+const toolboxDir = path.join(NOVA, 'web', 'src', 'toolbox');
+const toolboxBundle = fs.readdirSync(toolboxDir).filter((f) => f.endsWith('.js'))
+  .map((f) => fs.readFileSync(path.join(toolboxDir, f), 'utf8')).join('\n');
+const rendererSources = indexHtml + '\n' + toolboxBundle;
+assert(/let VOICE_URL\s*=/.test(rendererSources), 'renderer phải khai báo let VOICE_URL (index.html hoặc toolbox)');
+assert(/if\s*\(\s*cur\?\.url\s*\)\s*VOICE_URL\s*=\s*cur\.url/.test(rendererSources), 'renderer lấy VOICE_URL từ voiceStatus()');
+assert(/if\s*\(\s*r\?\.url\s*\)\s*VOICE_URL\s*=\s*r\.url/.test(rendererSources), 'renderer lấy VOICE_URL từ voiceStart()');
 
 // 5. Cấu hình đóng gói: source voice-backend được đóng gói (không loại cả cây) và bung khỏi asar.
 // Được phép loại runtime: data/, .venv*, __pycache__ — không ship file sinh lúc chạy.
@@ -95,7 +104,7 @@ assert(editorChannels.includes("editor-pro:ttsGenerate'"),
   'Catalog Editor Pro phải chứa channel TTS riêng');
 assert(!editorChannels.includes("ai:ttsGenerate'"),
   'Catalog Editor Pro không được chứa channel TTS dùng chung cũ');
-const novaWeb = read('web/index.html');
+const novaWeb = rendererSources;   // gộp index.html + toolbox (xem mục 4)
 assert(!novaWeb.includes('ai:ttsGenerate'),
   'Voice Studio renderer không được gọi channel TTS của Editor Pro');
 
