@@ -82,10 +82,24 @@ for (const n of sharedAst.body) {
 }
 
 const peerDefs = new Set();
-for (const f of fs.readdirSync(TOOLBOX).filter(f => f.endsWith('.js') && f !== 'shared-consts.js')) {
-  let past; try { past = acorn.parse(fs.readFileSync(path.join(TOOLBOX, f), 'utf8'), OPTS); } catch (e) { continue; }
-  for (const d of topLevelDefs(past)) peerDefs.add(d);
-}
+let peerFileCount = 0;
+// Đệ quy TOÀN BỘ toolbox (gồm thư mục con như utility/) — mọi peer load SAU
+// shared trong index.html, nên def chỉ có ở peer vẫn là nguy cơ ReferenceError
+// khi shared chạy top-level ref tới nó. Parse lỗi phải fail lộ liễu (Luật 10).
+(function collectPeerDefs(dir) {
+  for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, ent.name);
+    if (ent.isDirectory()) { collectPeerDefs(full); continue; }
+    if (!ent.name.endsWith('.js') || full === SHARED) continue;
+    let past;
+    try { past = acorn.parse(fs.readFileSync(full, 'utf8'), OPTS); } catch (e) {
+      console.error('dedup-refcheck: KHÔNG parse được peer file: ' + full + ' — ' + e.message);
+      process.exit(1);
+    }
+    peerFileCount++;
+    for (const d of topLevelDefs(past)) peerDefs.add(d);
+  }
+})(TOOLBOX);
 
 const uniqRefs = [...new Set(refs)].sort();
 const danger = uniqRefs.filter(name => !sharedDefs.has(name) && !BUILTIN.has(name) && peerDefs.has(name));
@@ -93,7 +107,7 @@ const unknown = uniqRefs.filter(name => !sharedDefs.has(name) && !BUILTIN.has(na
 
 console.log('Shared top-level defs: ' + sharedDefs.size);
 console.log('Shared top-level refs (unique): ' + uniqRefs.length);
-console.log('Peer defs: ' + peerDefs.size);
+console.log('Peer defs: ' + peerDefs.size + ' (từ ' + peerFileCount + ' peer files, đệ quy cả thư mục con)');
 console.log('Refs ngoài shared+builtin nhưng CÓ ở peer: ' + danger.length);
 if (unknown.length) console.log('INFO — refs không rõ nguồn (có thể định nghĩa từ inline script trước shared trong index.html): ' + unknown.join(', '));
 
