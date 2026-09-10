@@ -1554,6 +1554,9 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
         <div class="nav-item" data-tool="tool9" onclick="switchTool('tool9')">
           <span class="num"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l9 4-9 4-9-4 9-4zM3 12l9 4 9-4M3 17l9 4 9-4"/></svg></span><span>YouTube SEO</span>
         </div>
+        <div class="nav-item" data-tool="tool10" onclick="switchTool('tool10')">
+          <span class="num"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5L5 21"/></svg></span><span>Tạo Thumbnail</span>
+        </div>
         <div class="nav-group">Công cụ AI</div>
         <div class="nav-item" data-tool="toolflow" onclick="switchTool('toolflow')">
           <span class="num"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.8"/><path d="M4 18l5-5 4 3 3-3 4 4"/></svg></span><span>Tạo Ảnh</span>
@@ -2995,67 +2998,88 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
           </div>
         </div>
         </div><!-- /t9-left -->
+        </div><!-- /t9-cols (thumbnail đã tách sang tool-tool10) -->
+      </div>
+    </div>
 
-        <div class="t9-right">
-        <!-- THUMBNAIL (gộp từ tab Thumbnail AI) -->
-        <div class="t9-card">
-          <div class="t9-h">🖼 Thumbnail</div>
-          <span id="t10StyleState" style="display:none"></span><!-- code còn ghi vào, giữ ô ẩn -->
-          <!-- Chưa mở bước 2 → chỉ một nút. Bấm là chốt tiêu đề rồi mở phần thumbnail. -->
-          <div id="t9Step2Gate">
-            <button class="btn primary" id="t9Step2Btn" onclick="t9OpenStep2()">🖼 Tạo Thumbnail</button>
-            <span id="t9Step2Hint" style="display:none"></span>
-          </div>
-          <div id="t9Step2Body" style="display:none">
+    <!-- TOOL 10: TẠO THUMBNAIL (tách từ Tool 9 ngày 2026-09-10) -->
+    <div class="tool" id="tool-tool10">
+      <div class="tool-head">
+        <div class="tool-title">Tạo Thumbnail</div>
+        <div class="tool-subtitle">Gen thumbnail bằng Flow theo style kênh (Profile). Dùng ảnh mẫu để AI học bố cục (không sao chép). Tự lấy tiêu đề từ tab YouTube SEO hoặc từ Tạo Kịch Bản.</div>
+      </div>
 
-          <!-- ── ẢNH MẪU THUMBNAIL: chọn 1 thumbnail đang ăn khách để AI làm theo phong cách ── -->
-          <div style="border:1px solid var(--border);border-radius:11px;padding:13px;margin:0 0 14px;background:var(--surface-2)">
-            <div style="display:flex;align-items:center;gap:9px;margin-bottom:10px">
-              <b style="font-size:12.5px">🖼 Ảnh mẫu thumbnail</b>
-              <span style="font-size:11.5px;color:var(--text-dim)">— chọn 1 mẫu để AI học bố cục (không sao chép)</span>
-              <button class="btn ghost sm" style="margin-left:auto" onclick="t9RefAutofill(true)" title="Tìm lại theo tiêu đề ở trên">↻ Tìm lại</button>
-              <button class="btn ghost sm" onclick="t9RefClear()">Bỏ mẫu</button>
-            </div>
-            <div style="display:flex;gap:6px;background:var(--surface-3);border-radius:9px;padding:4px;margin-bottom:11px;max-width:430px">
-              <button id="t9RefTab1" class="btn ghost sm" style="flex:1;background:var(--surface)" onclick="t9RefTab('topic')">📈 Outlier theo chủ đề</button>
-              <button id="t9RefTab2" class="btn ghost sm" style="flex:1" onclick="t9RefTab('url')">🔗 Dán URL video</button>
-            </div>
-            <div id="t9RefUrlRow" style="display:none;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
-              <input type="text" id="t9RefQuery" placeholder="Dán link video YouTube của đối thủ" style="flex:1;min-width:240px;margin:0">
-              <button class="btn primary sm" id="t9RefBtn" onclick="t9RefSearch()">Lấy ảnh</button>
-            </div>
-            <div id="t9RefStatus" style="font-size:11.5px;color:var(--text-dim);margin-bottom:9px"></div>
-            <div style="display:grid;grid-template-columns:1fr 240px;gap:14px;align-items:start">
-              <div id="t9RefGrid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px"></div>
-              <div>
-                <div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-dim);font-weight:700;margin-bottom:5px">👁 Mẫu đã chọn</div>
-                <div id="t9RefPreview" style="aspect-ratio:16/9;border:1px solid var(--border);border-radius:9px;background:var(--surface-3) center/cover no-repeat;display:flex;align-items:center;justify-content:center;font-size:11.5px;color:var(--text-dim)">chưa chọn</div>
-                <div id="t9RefMeta" style="font-size:11px;color:var(--text-dim);margin-top:6px;line-height:1.45"></div>
+      <style>
+        #tool-tool10 .t9-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px 18px;margin-bottom:14px}
+        #tool-tool10 .t9-h{font-size:12px;font-weight:700;color:var(--accent);margin:0 0 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;text-transform:uppercase;letter-spacing:.3px}
+        #tool-tool10 .t9-lbl{display:block;font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.3px;margin:0 0 4px}
+        #tool-tool10 .t9-hint{font-size:11px;color:var(--text-dim);margin-top:5px}
+        #tool-tool10 .t9-row{display:grid;grid-template-columns:210px 1fr;gap:12px;align-items:end;margin-bottom:12px}
+        @media(max-width:900px){#tool-tool10 .t9-row{grid-template-columns:1fr}}
+        #tool-tool10 .t9-actions{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
+      </style>
+
+              <!-- THUMBNAIL (gộp từ tab Thumbnail AI) -->
+              <div class="t9-card">
+                <div class="t9-h">🖼 Thumbnail</div>
+                <span id="t10StyleState" style="display:none"></span><!-- code còn ghi vào, giữ ô ẩn -->
+                <!-- Chưa mở bước 2 → chỉ một nút. Bấm là chốt tiêu đề rồi mở phần thumbnail. -->
+                <div id="t9Step2Gate">
+                  <button class="btn primary" id="t9Step2Btn" onclick="t9OpenStep2()">🖼 Tạo Thumbnail</button>
+                  <span id="t9Step2Hint" style="display:none"></span>
+                </div>
+                <div id="t9Step2Body" style="display:none">
+      
+                <!-- ── ẢNH MẪU THUMBNAIL: chọn 1 thumbnail đang ăn khách để AI làm theo phong cách ── -->
+                <div style="border:1px solid var(--border);border-radius:11px;padding:13px;margin:0 0 14px;background:var(--surface-2)">
+                  <div style="display:flex;align-items:center;gap:9px;margin-bottom:10px">
+                    <b style="font-size:12.5px">🖼 Ảnh mẫu thumbnail</b>
+                    <span style="font-size:11.5px;color:var(--text-dim)">— chọn 1 mẫu để AI học bố cục (không sao chép)</span>
+                    <button class="btn ghost sm" style="margin-left:auto" onclick="t9RefAutofill(true)" title="Tìm lại theo tiêu đề ở trên">↻ Tìm lại</button>
+                    <button class="btn ghost sm" onclick="t9RefClear()">Bỏ mẫu</button>
+                  </div>
+                  <div style="display:flex;gap:6px;background:var(--surface-3);border-radius:9px;padding:4px;margin-bottom:11px;max-width:430px">
+                    <button id="t9RefTab1" class="btn ghost sm" style="flex:1;background:var(--surface)" onclick="t9RefTab('topic')">📈 Outlier theo chủ đề</button>
+                    <button id="t9RefTab2" class="btn ghost sm" style="flex:1" onclick="t9RefTab('url')">🔗 Dán URL video</button>
+                  </div>
+                  <div id="t9RefUrlRow" style="display:none;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+                    <input type="text" id="t9RefQuery" placeholder="Dán link video YouTube của đối thủ" style="flex:1;min-width:240px;margin:0">
+                    <button class="btn primary sm" id="t9RefBtn" onclick="t9RefSearch()">Lấy ảnh</button>
+                  </div>
+                  <div id="t9RefStatus" style="font-size:11.5px;color:var(--text-dim);margin-bottom:9px"></div>
+                  <div style="display:grid;grid-template-columns:1fr 240px;gap:14px;align-items:start">
+                    <div id="t9RefGrid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px"></div>
+                    <div>
+                      <div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-dim);font-weight:700;margin-bottom:5px">👁 Mẫu đã chọn</div>
+                      <div id="t9RefPreview" style="aspect-ratio:16/9;border:1px solid var(--border);border-radius:9px;background:var(--surface-3) center/cover no-repeat;display:flex;align-items:center;justify-content:center;font-size:11.5px;color:var(--text-dim)">chưa chọn</div>
+                      <div id="t9RefMeta" style="font-size:11px;color:var(--text-dim);margin-top:6px;line-height:1.45"></div>
+                    </div>
+                  </div>
+                </div>
+      
+                <!-- Tiêu đề đã chốt ở bước 1 → ẩn ô này, giữ input để pipeline/lưu trữ vẫn đọc được -->
+                <input type="hidden" id="t10TitleInput">
+      
+                <!-- Chữ trên ảnh: AI tự quyết theo ảnh mẫu, mỗi phương án một câu khác nhau. Giữ ô ẩn cho code cũ. -->
+                <div style="display:none">
+                  <input type="checkbox" id="t10WithText" checked><input type="text" id="t10Text"><div id="t10TextWrap"></div>
+                </div>
+      
+                <div class="t9-actions" style="margin-top:16px">
+                  <span class="t9-lbl" style="margin:0">Số phương án</span>
+                  <select id="t10Count" style="width:60px"><option value="1">1</option><option value="2" selected>2</option><option value="3">3</option><option value="4">4</option><option value="6">6</option></select>
+                  <button class="btn primary" onclick="t10Generate()">✨ Gen Thumbnail</button>
+                  <button class="btn ghost sm" style="color:var(--red);margin-left:auto" onclick="t10Reset()">🗑 Xoá ảnh</button>
+                </div>
+                <div class="status-bar" id="status10" style="margin-top:12px">Sẵn sàng. Chỉ cần có tiêu đề → bấm Gen (bằng Flow).</div>
+                <div id="t10ResultPanel" style="display:none;margin-top:12px">
+                  <div id="t10Results" style="display:flex;gap:14px;flex-wrap:wrap"></div>
+                </div>
+                </div><!-- /t9Step2Body -->
               </div>
-            </div>
-          </div>
+              </div><!-- /t9-right -->
+    </div>
 
-          <!-- Tiêu đề đã chốt ở bước 1 → ẩn ô này, giữ input để pipeline/lưu trữ vẫn đọc được -->
-          <input type="hidden" id="t10TitleInput">
-
-          <!-- Chữ trên ảnh: AI tự quyết theo ảnh mẫu, mỗi phương án một câu khác nhau. Giữ ô ẩn cho code cũ. -->
-          <div style="display:none">
-            <input type="checkbox" id="t10WithText" checked><input type="text" id="t10Text"><div id="t10TextWrap"></div>
-          </div>
-
-          <div class="t9-actions" style="margin-top:16px">
-            <span class="t9-lbl" style="margin:0">Số phương án</span>
-            <select id="t10Count" style="width:60px"><option value="1">1</option><option value="2" selected>2</option><option value="3">3</option><option value="4">4</option><option value="6">6</option></select>
-            <button class="btn primary" onclick="t10Generate()">✨ Gen Thumbnail</button>
-            <button class="btn ghost sm" style="color:var(--red);margin-left:auto" onclick="t10Reset()">🗑 Xoá ảnh</button>
-          </div>
-          <div class="status-bar" id="status10" style="margin-top:12px">Sẵn sàng. Chỉ cần có tiêu đề → bấm Gen (bằng Flow).</div>
-          <div id="t10ResultPanel" style="display:none;margin-top:12px">
-            <div id="t10Results" style="display:flex;gap:14px;flex-wrap:wrap"></div>
-          </div>
-          </div><!-- /t9Step2Body -->
-        </div>
-        </div><!-- /t9-right -->
        </div><!-- /t9-cols -->
       </div>
     </div>
