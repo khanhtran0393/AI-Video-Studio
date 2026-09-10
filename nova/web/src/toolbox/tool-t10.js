@@ -1,5 +1,13 @@
 /* AUTO-EXTRACTED from index.html block 3 - prefix: t10 */
 
+/* AUTO-EXTRACTED wrapper: tool-t10 ẩn mọi t9* ra khỏi code. */
+// t9Ref/_t9RefDescribe/_t9RefConcepts/_t9CaptionsFromPattern/T9_REF_RULE ở shared-consts.js const top-level,
+// cùng realm nên vẫn thấy. Ở đây wrap thành t10* để tool-t10.js độc lập về ý nghĩa.
+const t10Ref = t9Ref;                          // state object (cùng reference)
+const t10RefDescribe = _t9RefDescribe;         // describe ảnh mẫu
+const t10RefConcepts = _t9RefConcepts;         // dựng N concept
+const t10RefCaptionsFromPattern = _t9CaptionsFromPattern;  // sinh N câu chữ
+const T10_REF_RULE = T9_REF_RULE;              // rule string
 function t10GetTitle(){
   return (document.getElementById('t10TitleInput')?.value || '').trim()
     || (document.getElementById('tsTopic')?.value || '').trim()
@@ -81,23 +89,23 @@ async function t10Generate(){
   const { withText, text } = t10TextSpec();
   const refs = t10State.refs.map((r, i) => ({ name: `mau_${i + 1}`, base64: r.base64, mime: r.mime }));
   // 🖼 Ảnh mẫu chọn ở khối "Ảnh mẫu thumbnail" → đưa lên ĐẦU danh sách ref + gắn luật bắt chước (ẩn).
-  const _hasRef = !!(typeof t9Ref === 'object' && t9Ref && t9Ref.base64);
-  if (_hasRef) refs.unshift({ name: 'bo_cuc_mau', base64: t9Ref.base64, mime: t9Ref.mime || 'image/jpeg' });
-  const _refItem = _hasRef ? (t9Ref.items || [])[t9Ref.sel] : null;
+  const _hasRef = !!(typeof t10Ref === 'object' && t10Ref && t10Ref.base64);
+  if (_hasRef) refs.unshift({ name: 'bo_cuc_mau', base64: t10Ref.base64, mime: t10Ref.mime || 'image/jpeg' });
+  const _refItem = _hasRef ? (t10Ref.items || [])[t10Ref.sel] : null;
 
   // 1) AI viết N ý tưởng prompt khác nhau
   let concepts = [], _refCaps = [];
   if (_hasRef) {
     // Có ảnh mẫu → đọc mẫu bằng vision rồi TÁI DỰNG đúng bố cục, chỉ đổi chủ thể/chữ cho khớp tiêu đề.
     setStatus10('👁 Đang đọc bố cục ảnh mẫu…', 'working');
-    const spec = await _t9RefDescribe();
+    const spec = await t10RefDescribe();
     // Mẫu có chữ → AI tự nghĩ N câu khác nhau (mỗi phương án một câu). Mẫu không chữ → không thêm chữ.
     if (spec && spec.caption) {
-      _refCaps = await _t9CaptionsFromPattern(title, count);
+      _refCaps = await t10RefCaptionsFromPattern(title, count);
       if (_refCaps.length) setStatus10(`✍️ Chữ trên ảnh: ${_refCaps.map(c => '"' + c + '"').join(' · ')}`, 'working');
     }
     if (spec) {
-      concepts = _t9RefConcepts(spec, title, count, _refCaps);
+      concepts = t10RefConcepts(spec, title, count, _refCaps);
       const bits = [spec.caption ? 'có chữ' : 'không chữ', spec.secondaryText.length ? spec.secondaryText.length + ' nhãn' : 'không nhãn'];
       setStatus10(`Đã đọc khuôn (${bits.join(' · ')}) — tạo ${count} ảnh bám mẫu…`, 'working');
     }
@@ -115,7 +123,7 @@ async function t10Generate(){
   // idx 0 khi có ảnh mẫu VÀ tạo ≥2 ảnh → giữ NGUYÊN chữ gốc của ảnh mẫu để so sánh.
   const buildFinal = (scene, idx) => {
     let pr = scene;
-    if (_hasRef) pr += ' ' + T9_REF_RULE;
+    if (_hasRef) pr += ' ' + T10_REF_RULE;
     if (_hasRef) {
       // Luật chữ/nhãn đã nằm trong concept (dựng từ spec của mẫu) → ở đây chỉ gắn vai trò ảnh tham chiếu.
       if (refs.length) pr += _refRoleNote(refs.map(r => r.name));
