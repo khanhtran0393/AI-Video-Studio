@@ -1,7 +1,9 @@
+/* promote-shared-to-peer: 1 hàm thay bằng bản đầy đủ từ shared-consts.js */
 /* AUTO-EXTRACTED from index.html block 3 - prefix: run */
 
 async function runQueue(){
   if (_queueRunning) return;
+  if (!canAutoRun()) { showGate('Sản xuất tự động (chạy hàng đợi) chỉ dành cho gói Sáng tạo trở lên. Nâng cấp để mở khoá.', { upgrade: true }); return; }
   _clearAutoRetry();   // chạy tay → huỷ hẹn tự thử lại
   // Form đang soạn còn nội dung → tự thêm thành 1 video trước khi chạy.
   if (_composeHasContent()) queueAdd();

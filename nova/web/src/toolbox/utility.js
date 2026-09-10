@@ -1,3 +1,4 @@
+/* promote-shared-to-peer: 4 hàm thay bằng bản đầy đủ từ shared-consts.js */
 /* AUTO-EXTRACTED utility functions */
 
 function _saveCurrentKeyFields(){
@@ -567,6 +568,9 @@ function _relocateSettings(){
       api.style.display = '';
       apiSlot.appendChild(api);
     }
+    const cfgSlot = document.getElementById('settingsGenCfgSlot');
+    const cfg = document.getElementById('genCfgBlock');
+    if (cfg && cfgSlot && cfg.parentElement !== cfgSlot){ cfgSlot.appendChild(cfg); }   // đưa Model/Luồng… sang Cài đặt
     const flowSlot = document.getElementById('settingsFlowSlot');
     const flow = document.getElementById('flowAuthBlock');
     if (flow && flowSlot && flow.parentElement !== flowSlot){
@@ -648,11 +652,11 @@ async function novaDownloadUrl(url, name){
   }
 }
 
-function openSupportZalo(){ novaCopyLink(SUPPORT_ZALO, 'Liên hệ hỗ trợ Zalo — đã sao chép:'); }
+function openSupportZalo(){ try { window.open(SUPPORT_ZALO); } catch(_){ location.href = SUPPORT_ZALO; } }
 
 function _isMac(){ return !!(window.native && window.native.platform === 'darwin'); }
 
-function macDownloadUpdate(){ novaCopyLink(MAC_DL_URL, 'Link tải bản Mac — đã sao chép:'); }
+function macDownloadUpdate(){ try { window.open(MAC_DL_URL); } catch(_){ location.href = MAC_DL_URL; } }
 
 function _showUpdate(info){
   _updState = info || {};
@@ -2274,7 +2278,7 @@ async function callLLMJson(prompt, opts = {}){
   const maxTokens = opts.maxTokens || 1500;
   const tries = opts.tries || 3;
   const baseMessages = opts.messages || null;
-  const STRICT = '\n\n⚠️ MANDATORY: output ONLY raw JSON (starting with [ or {). No reasoning, no markdown, no prose, no ```. No characters outside the JSON.';
+  const STRICT = '\n\n⚠️ BẮT BUỘC: CHỈ in JSON THUẦN (bắt đầu bằng [ hoặc {). KHÔNG suy luận, KHÔNG markdown, KHÔNG văn xuôi, KHÔNG ```. Không có ký tự nào ngoài JSON.';
   const baseOverride = { ...(opts._override || {}), thinking: false };
   let lastErr = null;
   const run = async (strict, override) => {
@@ -3036,6 +3040,7 @@ async function giongTaiDS(){
 
 function _giongHop(v){
   if (_giongLoc === '*') return true;
+  if (_giongLoc.startsWith('e:')) return v.engine === _giongLoc.slice(2);
   if (_giongLoc.startsWith('k:')) return v.kind === _giongLoc.slice(2);
   return (v.tags || []).includes(_giongLoc);
 }
@@ -3116,12 +3121,28 @@ function giongTheoBackend(v){
   }
 }
 
-async function giongBam(key){
-  const v = _giongDS.find(x => x.key === key);
-  if (!v) return;
-  _giongChon = key;
-  giongTheoBackend(v);
-  return _giongPhatThu(key);
+async function giongBam(key){
+  const v = _giongDS.find(x => x.key === key);
+  if (!v) return;
+  const doiGiong = _giongChon !== key;
+  _giongChon = key;
+  if (_giongPhat === key && _giongAudio && !_giongAudio.paused){ _giongAudio.pause(); _giongPhat = ''; giongVe(); return; }
+  giongVe();
+  try {
+    let url = _giongMau.get(key);
+    if (!url){
+      _giongPhat = key; giongVe();
+      const blob = await _ttsChay(v, _GIONG_THU, giongDocTuyChon(), null);
+      url = URL.createObjectURL(blob); _giongMau.set(key, url);
+    }
+    if (!_giongAudio) _giongAudio = new Audio();
+    _giongAudio.onended = () => { _giongPhat = ''; giongVe(); };
+    _giongAudio.src = url; _giongPhat = key; giongVe();
+    await _giongAudio.play();
+  } catch (err){
+    _giongPhat = ''; giongVe();
+    giongBao('Nghe thử lỗi: ' + (err.message || err), 'red');
+  }
 }
 
 async function giongThu(key){
@@ -3284,11 +3305,16 @@ async function _ttsLocal(eng, v, text, o, onTien){
   throw new Error('Quá lâu không xong.');
 }
 
-async function _ttsChay(eng, v, text, o, onTien){
-  if (!_TTS_TEN[eng]) throw new Error('Engine lạ: ' + eng);
-  const blob = await _ttsLocal(eng, v, text, o, onTien);
+async function _ttsChay(v, text, o, onTien){
+  let blob;
+  if (v.engine === 'omni') blob = await _ttsOmni(v, text, o, onTien);
+  else if (v.engine === 'elevenlabs') blob = await _ttsEleven(v, text, o);
+  else if (v.engine === 'openai') blob = await _ttsOpenAI(v, text, o);
+  else throw new Error('Engine lạ: ' + v.engine);
   // Đọc ra file là bằng chứng mạnh hơn mọi phép thăm dò — nâng chấm lên xanh.
-  if (_giongTT[eng] !== 'ok'){ _giongTT[eng] = 'ok'; try { giongKiemEngineVe(); } catch (_){} }
+  // Có key chỉ được quyền text_to_speech mà không được user_read, thăm dò sẽ
+  // báo vàng oan; lần đọc thật đầu tiên sửa lại cho đúng.
+  if (_giongTT[v.engine] !== 'ok'){ _giongTT[v.engine] = 'ok'; delete _giongTTLoi[v.engine]; try { giongKiemEngineVe(); } catch (_){} }
   return blob;
 }
 
@@ -3304,13 +3330,18 @@ function voiceLoadScript(){
   const ta = document.getElementById('voiceText'); if (ta){ ta.value = txt; giongDemChu(); }
 }
 
-function giongDemChu(){
-  const t = (document.getElementById('voiceText') || {}).value || '';
-  const tu = t.trim() ? t.trim().split(/\s+/).length : 0;
-  const giay = Math.round(tu / 2.5);
-  const el = document.getElementById('giongDemChu');
-  if (!el) return;
-  el.innerHTML = escapeHtml(tu + ' từ · ' + t.length + ' ký tự · ước ' + Math.floor(giay / 60) + ' phút ' + (giay % 60) + ' giây');
+function giongDemChu(){
+  const t = (document.getElementById('voiceText') || {}).value || '';
+  const tu = t.trim() ? t.trim().split(/\s+/).length : 0;
+  const giay = Math.round(tu / 2.5);
+  const el = document.getElementById('giongDemChu');
+  if (!el) return;
+  const cur = _giongDS.find(v => v.key === _giongChon);
+  // Gói miễn phí ElevenLabs 10.000 ký tự/THÁNG — kịch bản video dài vượt là chuyện
+  // thường, nên nhắc ngay lúc gõ chứ đừng để bấm Tạo giọng mới báo lỗi.
+  const canh = cur && cur.engine === 'elevenlabs' && t.length > 10000
+    ? ' <span style="color:var(--amber)">· vượt 10.000 ký tự — gói ElevenLabs miễn phí sẽ chặn, cân nhắc giọng OmniVoice</span>' : '';
+  el.innerHTML = escapeHtml(tu + ' từ · ' + t.length + ' ký tự · ước ' + Math.floor(giay / 60) + ' phút ' + (giay % 60) + ' giây') + canh;
 }
 
 function _giongDemTu(s){ const t = String(s || '').trim(); return t ? t.split(/\s+/).length : 0; }
@@ -3539,55 +3570,69 @@ async function giongSuGhep(){
   }
 }
 
-function giongThemBat(){ _giongThemMo = !_giongThemMo; const b = document.getElementById('giongThemBox'); if (b) b.style.display = _giongThemMo ? '' : 'none'; if (_giongThemMo) giongThemDoi(); }
+function giongThemBat(){ _giongThemMo = !_giongThemMo; _giongTenTay = false; _giongTra = {}; _giongTraId = ''; const b = document.getElementById('giongThemBox'); if (b) b.style.display = _giongThemMo ? '' : 'none'; if (_giongThemMo) giongThemDoi(); }
 
-function giongThemDoi(){
-  const c = (document.getElementById('giongThemCach') || {}).value || 'clone';
-  for (const [id, hop] of [['gtClone', c === 'clone'], ['gtDesign', c === 'design'], ['gtDesignInfo', c === 'design']]){
-    const el = document.getElementById(id); if (el) el.style.display = hop ? '' : 'none';
-  }
+function giongThemDoi(){
+  const c = (document.getElementById('giongThemCach') || {}).value || 'clone';
+  for (const [id, hop] of [['gtClone', c === 'clone'], ['gtDesign', c === 'design'],
+                           ['gtNhap', c === 'nhap' || c === 'nhanban'],
+                           ['gtKeyRow', c === 'nhap' || c === 'nhanban'],
+                           ['gtNhanBanNote', c === 'nhanban']]){
+    const el = document.getElementById(id); if (el) el.style.display = hop ? '' : 'none';
+  }
+  const es = document.getElementById('gtEngine');
+  const vs = document.getElementById('gtVoiceId'), vl = document.getElementById('gtVoiceSel');
+  if (es && vs && vl){
+    const eng = es.value;
+    vl.style.display = eng === 'openai' ? '' : 'none';
+    vs.style.display = eng === 'openai' ? 'none' : '';
+  }
+  giongVeKey();
+  const tt = document.getElementById('gtVoiceTT'); if (tt) tt.textContent = '';
+  _giongTra = {};
 }
 
 async function giongThemLuu(){
-  if (_giongBusy) return;
   const cach = (document.getElementById('giongThemCach') || {}).value || 'clone';
-  const ten = ((document.getElementById('gtTen') || {}).value || '').trim();
-  const nhan = [];   // nhãn lọc — backend tự gắn sau khi thêm
+  const ten = ((document.getElementById('gtTen') || {}).value || '').trim() || (_giongTra.name || '');
+  const nhan = (_giongTra.tags || []).slice(0, 3);   // nhãn lấy từ kết quả tra voice id, không nhập tay nữa
   if (!ten){ giongBao('Đặt tên cho giọng trước.', 'red'); return; }
-  if (cach === 'clone'){
-    const f = (document.getElementById('gtFile') || {}).files && document.getElementById('gtFile').files[0];
-    if (!f){ giongBao('Chọn file giọng mẫu.', 'red'); return; }
-  } else {
-    const ins = ((document.getElementById('gtMoTa') || {}).value || '').trim();
-    if (!ins){ giongBao('Nhập mô tả giọng.', 'red'); return; }
-  }
-  _giongBusy = true;
   try {
-    if (!_voiceReady){ await voiceInit(); if (!_voiceReady){ giongBao('Backend giọng nói chưa sẵn sàng.', 'red'); return; } }
-    const body = { name: ten, ref_text: '', attributes: {}, tags: nhan };
-    if (cach === 'clone'){
-      const f = document.getElementById('gtFile').files[0];
-      giongBao('Đang tải file mẫu…');
-      const fd = new FormData(); fd.append('file', f);
-      const up = await _giongFetchJson(VOICE_URL + '/api/upload', { method: 'POST', body: fd });
-      if (!up.path) throw new Error('Backend không nhận file mẫu.');
-      body.ref_audio = up.path;
+    if (cach === 'nhap' || cach === 'nhanban'){
+      const eng = (document.getElementById('gtEngine') || {}).value || 'elevenlabs';
+      const id = eng === 'openai'
+        ? ((document.getElementById('gtVoiceSel') || {}).value || '')
+        : ((document.getElementById('gtVoiceId') || {}).value || '').trim();
+      if (!id){ giongBao('Nhập voice id.', 'red'); return; }
+      const model = ((document.getElementById('gtModel') || {}).value || '').trim();
+      if (cach === 'nhanban'){ await _giongNhanBan(eng, id, model, ten, nhan); }
+      else {
+      const ds = _giongCloud();
+      if (ds.some(v => v.engine === eng && v.id === id)){ giongBao('Giọng này đã có trong thư viện.', 'red'); return; }
+      ds.push({ engine: eng, id, name: ten, tags: nhan, model });
+      _giongCloudLuu(ds);
+      }
     } else {
-      body.attributes.instruct = ((document.getElementById('gtMoTa') || {}).value || '').trim();
+      if (!_voiceReady){ await voiceInit(); if (!_voiceReady){ giongBao('Backend OmniVoice chưa sẵn sàng.', 'red'); return; } }
+      const body = { name: ten, ref_text: '', attributes: {}, tags: nhan };
+      if (cach === 'clone'){
+        const f = (document.getElementById('gtFile') || {}).files && document.getElementById('gtFile').files[0];
+        if (!f){ giongBao('Chọn file giọng mẫu.', 'red'); return; }
+        giongBao('Đang tải file mẫu…');
+        const fd = new FormData(); fd.append('file', f);
+        const up = await fetch(VOICE_URL + '/api/upload', { method: 'POST', body: fd }).then(r => r.json());
+        body.ref_audio = up.path;
+      } else {
+        const ins = ((document.getElementById('gtMoTa') || {}).value || '').trim();
+        if (!ins){ giongBao('Nhập mô tả giọng.', 'red'); return; }
+        body.attributes.instruct = ins;
+      }
+      await fetch(VOICE_URL + '/api/voices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.json());
     }
-    const saved = await _giongFetchJson(VOICE_URL + '/api/voices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    const gtTen = document.getElementById('gtTen'); if (gtTen) gtTen.value = '';
-    const gtFile = document.getElementById('gtFile'); if (gtFile) gtFile.value = '';
-    const gtMoTa = document.getElementById('gtMoTa'); if (gtMoTa) gtMoTa.value = '';
     giongThemBat();
     await giongTaiDS();
-    if (saved && saved.id){
-      const key = 'omni:' + saved.id;
-      if (_giongDS.some(x => x.key === key)){ _giongChon = key; giongVe(); }
-    }
     giongBao('✓ Đã thêm giọng "' + ten + '".', 'green');
   } catch (e){ giongBao('Thêm giọng lỗi: ' + (e.message || e), 'red'); }
-  finally { _giongBusy = false; }
 }
 
 async function giongXoa(key){
@@ -3611,45 +3656,56 @@ async function giongXoa(key){
   finally { _giongBusy = false; }
 }
 
-function giongKiemEngineVe(){
-    const el = document.getElementById('giongEngine');
-    if (el){
-      const cham = e => `<span class="gdot ${_giongTT[e] || 'no'}"></span>`;
-      el.innerHTML = ['omni', 'vieneu', 'xtts'].map(e =>
-        cham(e) + `<b>${_TTS_TEN[e]}</b> <span style="color:var(--text-dim)">máy</span>`
-      ).join('<span class="sep">·</span>');
-    }
-    const n = document.getElementById('giongEngineDem');
-    if (n) n.textContent = _giongTT[_voiceBackend] === 'ok' ? 'sẵn sàng' : 'chưa sẵn sàng';
-    voiceBackendVe();
+function giongKiemEngineVe(){
+    const el = document.getElementById('giongEngine');
+    if (!el) return;
+    const cham = e => `<span class="gdot ${_giongTT[e]}"></span>`;
+    const chua = ['elevenlabs','openai'].filter(e => _giongTT[e] === 'no');
+    const hong = ['elevenlabs','openai'].filter(e => _giongTT[e] === 'err' || _giongTT[e] === 'thieu');
+    el.innerHTML =
+      cham('omni') + '<b>OmniVoice</b> <span style="color:var(--text-dim)">máy</span>' +
+      '<span class="sep">·</span>' + cham('elevenlabs') + 'ElevenLabs' +
+      '<span class="sep">·</span>' + cham('openai') + 'OpenAI' +
+      (chua.length ? '<span class="sep">·</span><span style="color:var(--text-dim)">' + chua.map(e => _TTS_TEN[e]).join(', ') + ' chưa có key</span>' : '') +
+      '<button class="btn sm ghost" style="margin-left:auto" onclick="giongMoKey(\'elevenlabs\')">Sửa key</button>' +
+      hong.map(e => '<div style="flex-basis:100%;font-size:12px;color:var(--' + (_giongTT[e] === 'thieu' ? 'amber' : 'red') + ');margin-top:6px">'
+        + escapeHtml(_TTS_TEN[e]) + ': ' + escapeHtml(_giongTTLoi[e] || 'gọi thử không được')
+        + (_giongTT[e] === 'thieu' ? ' <span style="color:var(--text-dim)">— key HỢP LỆ, chỉ thiếu quyền cho phép Nova tự kiểm tra. Đọc vẫn có thể chạy bình thường: cứ bấm Tạo giọng, ra tiếng là chấm tự chuyển xanh. Muốn xanh ngay thì bật quyền đó ở elevenlabs.io → API Keys.</span>' : '')
+        + '</div>').join('');
+    const n = document.getElementById('giongEngineDem');
+    if (n) n.textContent = Object.values(_giongTT).filter(x => x === 'ok').length + '/3 sẵn sàng';
 }
 
 async function giongKiemEngine(){
-  giongKiemEngineVe();
-  // Backend lên là cả ba engine khả dụng (model nạp lười lần đọc đầu).
-  // Engine từng lỗi thật giữ chấm đỏ tới khi đọc được lại.
-  let chay = false;
-  try { const s = await window.native.voiceStatus(); chay = !!(s && s.running); } catch (e){ chay = false; }
-  for (const e of ['omni', 'vieneu', 'xtts']){
-    if (_giongTT[e] === 'err') continue;
-    _giongTT[e] = chay ? 'ok' : 'no';
-  }
-  // Người dùng CHƯA từng chọn engine → lấy engine backend đang chạy thật
-  // (health.tts_engine) làm mặc định. Máy chỉ cài VieNeu thì mặc định VieNeu
-  // luôn, khỏi kẹt OmniVoice cứng rồi nghe thử/TTS ăn lỗi thiếu model.
-  if (chay && _voiceBackendMacDinh){
+  const ve = giongKiemEngineVe;
+  ve();
+  const dat = (e, v) => { _giongTT[e] = v; ve(); };
+  try { const s = await window.native.voiceStatus(); dat('omni', s && s.running ? 'ok' : 'no'); } catch (e){ dat('omni', 'no'); }
+  for (const e of ['elevenlabs','openai']){
+    const k = _ttsKey(e);
+    if (!k){ dat(e, 'no'); continue; }
     try {
-      const r = await fetch(VOICE_URL + '/api/health');
-      const h = await r.json();
-      const e = { omnivoice:'omni', vieneu:'vieneu', xtts:'xtts', mock:'omni' }[h && h.tts_engine];
-      if (e && e !== _voiceBackend){
-        _voiceBackend = e; _giongMauXoa();
-        try { novaLog('🎙 engine mặc định theo backend đang chạy: ' + _TTS_TEN[e]); } catch (_){}
-        voiceBackendVe(); giongVe(); giongVeThanh();
-      }
-    } catch (_){}
+      const r = await window.native.llmFetch({
+        url: e === 'elevenlabs' ? 'https://api.elevenlabs.io/v1/user/subscription' : 'https://api.openai.com/v1/models',
+        method: 'GET',
+        headers: e === 'elevenlabs' ? { 'xi-api-key': k } : { 'Authorization': 'Bearer ' + k },
+        timeoutMs: 15000,
+      });
+      let tt = r && r.ok ? 'ok' : 'err', vi = '';
+      if (r && !r.ok){
+        try {
+          const j = JSON.parse(r.text || '{}');
+          const d = j.detail || j.error || {};
+          vi = d.message || j.message || '';
+          // ElevenLabs 401 kèm missing_permissions = key THẬT, chỉ thiếu quyền.
+          // Báo đỏ ở đây là oan, phải phân biệt.
+          if (d.status === 'missing_permissions' || /missing the permission/i.test(vi)) tt = 'thieu';
+        } catch (_){ vi = String(r.text || r.error || '').slice(0, 160); }
+      } else if (r && r.error) vi = r.error;
+      _giongTTLoi[e] = vi;
+      dat(e, tt);
+    } catch (err){ _giongTTLoi[e] = String(err.message || err); dat(e, 'err'); }
   }
-  giongKiemEngineVe();
 }
 
 function voiceBackendMo(e){
@@ -3814,7 +3870,7 @@ function _mvCfg(){
   return {
     clip: document.getElementById('mvVidDur')?.value || '8',
     extra: '',
-    intText: 'very subtle, minimal (safest for faces)',
+    intText: 'rất tinh tế, tối thiểu (an toàn nhất cho khuôn mặt)',
     camText: 'Very slow push-in',
   };
 }

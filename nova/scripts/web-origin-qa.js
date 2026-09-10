@@ -56,7 +56,12 @@ function extractFn(src, name) {
   const page = await get(port, '/index.html');
   check('GET /index.html 200 html', page.status === 200 && /text\/html/.test(page.headers['content-type'] || ''));
   const html = page.body.toString('utf8');
-  check('index.html co _t7FileUrl + /local-media', /function _t7FileUrl\s*\(/.test(html) && html.indexOf('/local-media') >= 0);
+  // Kể từ refactor 068263fe (split inline toolbox sang per-tool files), index.html
+  // chỉ LOAD utility.js qua <script src="src/toolbox/utility.js">. Hàm _t7FileUrl
+  // đã được tách sang file đó. Test phải verify cả index.html load utility.js
+  // lẫn utility.js thực sự định nghĩa _t7FileUrl (và utility.js phải tham chiếu
+  // route /local-media — đây mới là chỗ phát sinh URL từ file:///).
+  check('index.html load toolbox/utility.js', html.indexOf('src/toolbox/utility.js') >= 0);
 
   const panelPaths = ['/handdraw-studio-panel.js', '/whiteboard-studio-panel.js'];
   const panels = {};
@@ -69,9 +74,14 @@ function extractFn(src, name) {
     check(pp + ' khong con gan file:/// trong logic', logic.length === 0);
   }
 
-  // 2) Trích hàm từ nguồn ĐANG ĐƯỢC PHỤC VỤ và chạy test
-  const t7 = extractFn(html, '_t7FileUrl');
-  check('trich duoc _t7FileUrl tu trang', !!t7);
+  // 2) Trích hàm từ utility.js (file per-tool được tách ra sau refactor 068263fe)
+  const utilityRes = await get(port, '/src/toolbox/utility.js');
+  check('GET /src/toolbox/utility.js 200 js', utilityRes.status === 200 && /javascript/.test(utilityRes.headers['content-type'] || ''));
+  const utilitySrc = utilityRes.body.toString('utf8');
+  // utility.js phải tham chiếu route /local-media (helper _t7FileUrl gọi tới route này).
+  check('utility.js co /local-media', utilitySrc.indexOf('/local-media') >= 0);
+  const t7 = extractFn(utilitySrc, '_t7FileUrl');
+  check('trich duoc _t7FileUrl tu utility.js', !!t7);
   if (t7) {
     const f = new Function(t7 + ' return _t7FileUrl;')();
     check('_t7FileUrl: duong dan dia win + fragment #t=',

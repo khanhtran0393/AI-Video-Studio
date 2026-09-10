@@ -1,3 +1,4 @@
+/* promote-shared-to-peer: 1 hàm thay bằng bản đầy đủ từ shared-consts.js */
 /* AUTO-EXTRACTED from index.html block 3 - prefix: t7 */
 
 function t7Snapshot(){ t7State.past.push(_t7Clone()); if (t7State.past.length > 80) t7State.past.shift(); t7State.future = []; }
@@ -1893,7 +1894,7 @@ function t7SfxLibRender(){
 
 async function t7SfxLibPreview(id){
   const x = (_t7SfxCache || []).find(i => i.id === id); if (!x) return;
-  try { if (_t7SfxAudio){ _t7SfxAudio.pause(); } const d = await _t7SfxDoc(id); if (d){ _t7SfxAudio = new Audio(d); _t7SfxAudio.volume = 0.9; _t7SfxAudio.play().catch(() => {}); } } catch (_) {}
+  try { if (_t7SfxAudio){ _t7SfxAudio.pause(); } const b = await window.native.readFileB64(x.path); if (b && b.dataUrl){ _t7SfxAudio = new Audio(b.dataUrl); _t7SfxAudio.volume = 0.9; _t7SfxAudio.play().catch(() => {}); } } catch (_) {}
 }
 
 async function t7SfxLibAdd(id){
@@ -1982,9 +1983,12 @@ function t7SetRate(v){
   if (t7State.playing){ t7Pause(); t7Play(); }
 }
 
-function t7CycleRate(){
-  const i = _T7_RATES.indexOf(t7State.rate || 1);
-  t7SetRate(_T7_RATES[(i + 1) % _T7_RATES.length]);
+function t7CycleRate(){
+  const i = _T7_RATES.indexOf(t7State.rate || 1);
+  t7State.rate = _T7_RATES[(i + 1) % _T7_RATES.length];
+  const b = document.getElementById('t7Rate'); if (b) b.textContent = t7State.rate + 'x';
+  // Đang phát thì khởi động lại vòng phát để mốc thời gian tính theo tốc độ mới.
+  if (t7State.playing){ t7Pause(); t7Play(); }
 }
 
 function t7ToggleLoop(){
