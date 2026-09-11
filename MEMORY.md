@@ -2538,6 +2538,22 @@ Kiểm định: `npm run check` EXIT 0 (cảnh báo C2 shadow là nhiễu đã b
 - **Artifacts**: `output/gen-e2e/` (sản phẩm + results.json/log bước chạy); script tmp đã xoá toàn bộ (tmp-gen-e2e*, tmp-step, tmp-diag-*, tmp-sso-*, tmp-login, tmp-summarize, tmp-verify-videos, tmp-status, tmp-inspect-models, output/tmp-asar-learn). Kiểm định: `npm run check` EXIT 0.
 - **Next**: (1) retry native lite/quality khi Flow trả link lại; (2) cân nhắc port `linkVideoRedirect` (tRPC `media.getMediaUrlRedirect` — đo bản gốc 9/9: 307 + link ký theo mediaId) làm đường lấy link chính xác hơn projectInitialData; (3) SSO Labs nên chạy trong cửa sổ hiện (CO_KHUNG_DANG_NHAP) cho user bấm consent lần đầu ủy quyền.
 
+### 2026-09-11x — RETRY E2E 2 video native: MA TRẬN 12/12 HOÀN THIỆN + 2 phát hiện kỹ thuật
+
+- **Kết quả retry (chiều 2026-09-11, prompt "A tiny robot barista pouring latte art…", dùng link ký chứa mediaId làm hợp đồng verify):**
+  - `native/video/veo31-lite` ✓ — mediaId `53250d6d-61b2-434a-ac4d-14ead4fc4ea5`, project `e9c862f6-…`, link chứa ĐÚNG mediaId, file 1,675,751 bytes · **md5 `35072c4a`**, credits còn 466.
+  - `native/video/veo31-quality` ✓ — mediaId `11dfd559-e953-4274-b3fe-ed977f96f854`, project `e60de6eb-…`, file 2,772,309 bytes · **md5 `b9c69934`**. Flow VẪN lặp lỗi done-không-link trong vPoll (mỗi gen ~12 vòng poll) → link cứu qua `resolveVideoForApp` (projectInitialData, mediaId=null → video mới nhất của project riêng vừa tạo).
+  - Registry đã cập nhật §1 (native lite/quality ✓) + §2 (dòng retry) + credits lite.
+- **Fix code thật — bug từ fix 3 của 11v**: `fetchVideoData` (flow-chrome/gen.js:190) gọi `req.setTimeout` trên **Electron `net.request`** — KHÔNG tồn tại (chỉ http.ClientRequest có) → mọi lần tải bytes video in-app fail `{fetchError:"req.setTimeout is not a function"}`. Đã vá bằng watchdog `setTimeout` thủ công + `clearTimeout` trong `fin` (giữ mã lỗi `VID_TIMEOUT_180s`). `tien-trinh.js:164` không bị (dùng http Node).
+- **Vận hành E2E (bắt buộc ghi nhớ):**
+  - Electron v43 **không chạy script đơn qua argv** (`electron.exe script.js` bị bỏ qua → boot app từ CWD). Cách chạy đúng: **app thư mục** `tmp-e2e-app/` (package.json + main.js, mode `probe|step|sniff|resolve|resolve2`) + `cd /d "<dir>" && "<đường dẫn electron tuyệt đối, CÓ quote vì có dấu cách>" . <mode> <args>` — path không quote → electron fallback boot app từ CWD (đây là nguyên nhân probe treo hàng loạt lúc đầu).
+  - **App chính phải đóng** khi chạy probe/E2E (npm-start instance chiếm cổng bridge 8793-8796 + khoá Chrome CfT → `EVAL_TIMEOUT`, `CDP_TIMEOUT Network.enable`).
+  - **`CHROME_CRASHPAD_PIPE_NAME`** (env thừa hưởng từ terminal VS Code) làm Chrome CfT con crash lặp ("Network service crashed or was terminated") → `Remove-Item Env:CHROME_CRASHPAD_PIPE_NAME` trước khi chạy.
+  - Terminal PSReadLine có thể hỏng (SetCursorPosition ArgumentOutOfRangeException, replay lệnh cũ) → mọi output quan trọng phải ghi FILE, không tin console.
+- **Probe tRPC `media.getMediaUrlRedirect`** (14 shape thử trên 2 base): `labs.google/fx/api/trpc` CÒN SỐNG (proc lạ trả tRPC JSON 404 NOT_FOUND "No query-procedure on path"), nhưng `media.getMediaUrlRedirect` → HTTP 400 "Internal Error" plain-text ở MỌI shape (GET/POST, single/batch, json/v10/superjson, các biến tên field) và `flow.google.com[/fx]/api/trpc/...` → trả HTML SPA. **Chưa xác định được shape đúng** — đoán mù vi phạm Luật 10 → KHÔNG port mù. Đường `projectInitialData` (exact-match mediaId) đã đủ chính xác cho hợp đồng link-đúng-mediaId; hủy ý định port linkVideoRedirect cho đến khi bắt được request thật từ UI Flow (cần sniff khi user bấm tải video trong Flow).
+- **Artifacts**: `output/gen-e2e/results-retry.json` + `native-video-veo31-lite.mp4` + `native-video-veo31-quality.mp4` + step9-lite/step10-quality/probe-link/sniff-link/resolve2-link logs. tmp đã dọn (tmp-step.js, tmp-probe-link.js, tmp-t.js, e2e-runner.exe, tmp-e2e-app/). Kiểm định: `npm run check` EXIT 0.
+- **Next**: (1) SSO Labs trong cửa sổ hiện cho consent lần đầu; (2) nếu muốn linkVideoRedirect: sniff request thật khi bấm download trong Flow UI (không đoán shape); (3) VEO3 roadmap P1–P4.
+
   `results.merged` + `results.srt`, SRT là sản phẩm phụ thiếu không cản audio). Cổng đọc lại từ
   `voice-native.URL` (lazy-require, một nguồn — không hardcode 8771 thứ hai); env `VA_TTS_BACKEND_URL`.
 - `autoSynthesizeTts` hook vào `orchestrator/analyze.js` (CẢ `runAnalysis` lẫn `runAnalysisFromData`):
@@ -3049,6 +3065,9 @@ Kiểm định: `npm run check` EXIT 0 (cảnh báo C2 shadow là nhiễu đã b
   quy chuẩn sống duy nhất ở AGENTS.md.
 - Hành vi khoidong.bat (đối chiếu source, mtime 2026-09-09): check Node/npm → `npm install`
   khi thiếu node_modules/electron → đọc entry từ `package.json` "main" (fallback
+  `nova\main.plain.js`) → ping Agent Bridge 47280–47283: đang chạy thì focus cửa sổ
+  (không mở instance 2), chưa chạy thì `start electron .` tách console + chờ bridge ≤30s.
+  `--silent` = không pause khi lỗi; exit code ≠ 0 khi thất bại.
 - [2026-09-11d] **Chốt hạ P4.6 + smoke 3 lần**: (1) Sửa contract AR.thumbnailText — đọc
   `P.text || P.headline` và `P.highlight || P.dek` để khớp P() builder của fractal-antarctica-render
   (trước đó chỉ đọc P.text → qua đường scene chuẩn luôn rơi fallback 'THUMBNAIL'). (2) Thêm demo
@@ -3060,6 +3079,7 @@ Kiểm định: `npm run check` EXIT 0 (cảnh báo C2 shadow là nhiễu đã b
   renderer crashed exitCode=-1 (flaky GPU, ngay lúc load); lần 2 KHÔNG index.html → exit 0;
   lần 3 CÓ index.html đầy đủ → exit 0, 0 electron process còn lại. Crash không tái hiện với
   cùng code → kết luận môi trường, không phải do thay đổi. Lưu ý: editor tool từng nhân bản
+  khối update() của AR.thumbnailText khi edit (old_text khớp 1 phần) — luôn đọc lại vùng sửa.
 - [2026-09-11e] **Dọn dẹp + test app-state chuẩn (khép sổ VEO3)**: (1) tmp-* trong
   nova/scripts: 128 file, 0 file cũ hơn 48h — TOÀN BỘ là workspace đang hoạt động của
   tiến trình khác (flow-chrome/bx); KHÔNG dọn, ghi nhận để các session sau không xoá nhầm
@@ -3068,12 +3088,21 @@ Kiểm định: `npm run check` EXIT 0 (cảnh báo C2 shadow là nhiễu đã b
   lifecycle.log sau thời điểm launch SẠCH. Các crash trong ngày (10:39-13:06) là của phiên
   trước — đúng pattern (b) đã ghi trong AGENTS §6.5, là vấn đề nền tảng chưa xử lý (GPU/
   renderer chết cụm cùng giây), đề xuất task riêng điều tra. VEO3 chính thức khép sổ.
-
-  khối update() của AR.thumbnailText khi edit (old_text khớp 1 phần) — luôn đọc lại vùng sửa.
-
-  `nova\main.plain.js`) → ping Agent Bridge 47280–47283: đang chạy thì focus cửa sổ
-  (không mở instance 2), chưa chạy thì `start electron .` tách console + chờ bridge ≤30s.
-  `--silent` = không pause khi lỗi; exit code ≠ 0 khi thất bại.
+- [2026-09-11f] **Điều tra crash GPU/renderer + auto-recovery**: lifecycle.log 09-03→09-11
+  có 117 dòng crash, 3 pattern: (A) renderer+Network(+GPU) chết CÙNG GIÂY → cửa sổ trắng
+  vĩnh viễn — Nghiêm trọng; (B) Network Service chết một mình — vô hại (tự restart);
+  (C) reason=killed lúc đóng app — teardown. SỬA: (1) window.js — handler render-process-gone
+  của cửa sổ chính giờ TỰ RELOAD khi reason=crashed|oom (log render-recovery lộ liễu,
+  rate-limit 3 lần/60s → render-recovery-stopped); killed/clean-exit không reload.
+  (2) lifecycle-log.js — thêm exitCodeHex (giải mã -1 mơ hồ) + gpu-feature-status một dòng
+  lúc whenReady. (3) Hook test NOVA_CRASH_TEST=1 (pattern NOVA_E2E) — crash chủ động
+  forcefullyCrashRenderer() 5s sau mỗi load; đã xác minh THẬT: recovery 1/3→2/3→3/3→stopped,
+  mỗi reload trang sống lại. **PHÁT HIỆN then chốt**: gpu-feature-status = disabled_software
+  toàn bộ (gpu_compositing/2d_canvas/video_decode/webgl) — Chromium đã tự blocklist GPU
+  (app KHÔNG gọi disableHardwareAcceleration; chỉ tmp probe script flow-gen dùng --disable-gpu)
+  → crash renderer xảy ra khi SOFTWARE rendering → loại trừ driver GPU (582.66, 06/2026)
+  làm thủ phạm chính; nghi vấn AV injection hoặc OOM/bug renderer — bước tiếp theo khi cần:
+  bật crashReporter + crashDumpsDir để lấy dump renderer.
 - Ảnh hưởng: `npm run check` + các test suite KHÔNG thay thế khoidong.bat — kiểm tra
   trạng thái app sống (UI/runtime) luôn khởi động app bằng bat này; đã chạy được ngay
   trong phiên làm việc tiếp theo.
@@ -3244,4 +3273,23 @@ Kiểm định: `npm run check` EXIT 0 (cảnh báo C2 shadow là nhiễu đã b
   (5) `npm run check` PASS toàn bộ 7 sub-check (chỉ warning C2 có sẵn, không error); (6) template
   `chrome-accounts/flow-bx-template.json` xác nhận còn nguyên (13KB). Không xoá các tmp-* probe
   (giữ làm bộ sniff/điều tra chuẩn); capture %TEMP%\flow-gen-capture\ giữ nguyên làm bằng chứng.
+
+- [2026-09-11g] **Hoàn thiện hạ tầng root-cause crash (Crashpad + parser minidump)** — tiếp nối [2026-09-11f]:
+  (1) WER (Windows Event Log, Application Error) chỉ bắt được 1 sự kiện crash electron.exe trong 14 ngày: 09-03 08:50 local,
+  exception **0x80000003 STATUS_BREAKPOINT**, fault offset 0x33f3818 trong electron.exe → các crash thật trước đây là **CHECK()/assert
+  thất bại của Chromium** (breakpoint chủ động), KHÔNG phải access-violation/AV injection. ReportArchive WER không giữ folder nào.
+  (2) Tạo `nova/main/crash-diagnostics.js`: crashReporter.start (uploadToServer:false — dump chỉ ở máy), mkdir trước khi start
+  (thiếu là registration_protocol_win.cc fail âm thầm CreateFile 0x2 → không bao giờ có dump — đã gặp thật), `app.setPath('crashDumps')`
+  trước khi start để dẫn dump về `<userData>/crash-dumps/reports` (tùy chọn crashDumpsDir trong start() KHÔNG được Electron tôn
+  trọng trên Windows — dump vẫn rơi `<userData>/Crashpad/reports`), bật enable-logging + log-file → `crash-dumps/chrome-debug.log`
+  (FATAL, log-level 3): lần crash CHECK thật sau này sẽ có dòng "Check failed: ..." chỉ thẳng file:line thủ phạm. Lắp tại
+  main.plain.js ngay sau installLifecycleLogging.
+  (3) Hook test `NOVA_CRASH_TEST=main`: process.crash() 8s sau ready → dump 34.5MB ExceptionCode 0xC0000005 (write null — đúng
+  thiết kế process.crash). `NOVA_CRASH_TEST=1` (renderer test) → dump code 0x517A7ED. Lưu ý: crash exitCode=-1 kiểu GPU/Network
+  Utility bị broker kill (TerminateProcess) KHÔNG sinh dump. Mọi .dmp trước 21:01 09-11 là dump TEST, không phải crash thật.
+  (4) Parser thuần Node không dependency: `nova/scripts/tmp-minidump-parser.js` — đọc ExceptionCode/ExceptionAddress/faulting
+  module từ .dmp; chạy không tham số quét cả crash-dumps/reports lẫn Crashpad/reports. Đã verify trên 9 dump.
+  (5) Quy trình khi app crash thật lần tới: lấy .dmp mới nhất trong crash-dumps/reports + đọc chrome-debug.log tìm "Check failed"
+  + đối chiếu lifecycle.log exitCodeHex → chẩn đoán tận gốc. `npm run check` EXIT 0; khởi động sạch exit 0, lifecycle sạch,
+  5 electron procs. Chú ý: `M nova/main/ipc/index.js` + `?? nova/main/ipc/spy.js` là của tiến trình song song (bx) — không động tới.
 

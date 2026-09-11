@@ -29,9 +29,9 @@ reverse-update credits qua `/v1/credits`.
 | Slug | Model key (API) | Tên hiển thị | E2E 2 engine | Bằng chứng (mediaId) |
 |---|---|---|---|---|
 | `omni-flash` | `abra_t2v_8s` | Omni Flash (FREE) | chrome ✓ · native ✓ | chrome `f10a96e0` · native `c7c8dc1b` |
-| `veo31-lite` | `veo_3_1_t2v_lite` | Veo 3.1 — Lite | chrome ✓ · native ⏳ (Flow chưa trả link ×2) | chrome `8c3dc763` · native `1cf37604`/`4762c284` (timeout) |
+| `veo31-lite` | `veo_3_1_t2v_lite` | Veo 3.1 — Lite | chrome ✓ · native ✓ | chrome `8c3dc763` · native `53250d6d` (720p) |
 | `veo31-fast` | `veo_3_1_t2v_fast` | Veo 3.1 — Fast | chrome ✓ · native ✓ | chrome `9631e171` · native `c7888e72` (720p) |
-| `veo31-quality` | `veo_3_1_t2v` | Veo 3.1 — Quality | chrome ✓ · native ⏳ (done-không-link) | chrome `2136a581` · native `ee542195`→hủy |
+| `veo31-quality` | `veo_3_1_t2v` | Veo 3.1 — Quality | chrome ✓ · native ✓ | chrome `2136a581` · native `11dfd559` (720p) |
 
 Ghi chú:
 - R2V fallback đã đo: `veo_3_1_t2v_fast`/`veo_3_1_t2v`/`veo_3_1_t2v_lite` →
@@ -46,8 +46,9 @@ Ghi chú:
 |---|---|---|
 | `omni-flash` | FREE (nhãn UI) | nhãn "Omni Flash (FREE)" trong app |
 | `veo31-fast` | **40 credits / video 8s** (596 → 556 ngay sau 1 lần gen) | `step6.log` KET QUA |
-| `veo31-lite`, `veo31-quality`, ảnh | chưa đo được từng lượt (session trộn nhiều bước) | — |
-| Session | 1050 → ~556 credits sau ~12 lượt gen | `step4–6.log` |
+| `veo31-lite` | đo lần retry 2026-09-11 chiều: sau gen lite credits còn **466** (trong KET QUA mediaId `53250d6d`) | `results-retry.json` |
+| `veo31-quality`, ảnh | chưa đo được từng lượt (session trộn nhiều bước) | — |
+| Session | 1050 → ~556 → ~466 credits (retry 2026-09-11 chiều) | `results-retry.json` |
 
 ## 2. Trạng thái verify từng bước (ngày 2026-09-11)
 
@@ -61,6 +62,8 @@ Ghi chú:
 | step | native/video/veo31-fast | ✓ ok (556 credits) | `c7888e72` | `a4a6f943` |
 | step×2 | native/video/veo31-lite | ✗ TIMEOUT chờ video (Flow-side) | `1cf37604`/`4762c284` | — |
 | step | native/video/veo31-quality | ✗ done-mà-không-link (Flow-side) | `ee542195`→hủy | — |
+| **retry** | native/video/veo31-lite | ✓ ok (Flow vẫn done-không-link → cứu qua projectInitialData) | `53250d6d` | `35072c4a` |
+| **retry** | native/video/veo31-quality | ✓ ok (gen done + link cứu qua resolveVideoForApp) | `11dfd559` | `b9c69934` |
 | vòng 1 | chrome/image ×2 | ✓ ok | `fa750d87`/`d561e6fa` | `ddc13b21`/`1a28838a` |
 | vòng 1 | chrome/video/omni-flash | ✓ ok | `f10a96e0` | `b823776e` |
 | vòng 1 | native/video/omni-flash | ✓ ok | `c7c8dc1b` | `29a31274` |
@@ -71,6 +74,14 @@ chứa đúng `mediaId` của lần gen đó.
 
 Lỗi Flow-side (lite/quality native) là **chưa trả link lúc đó**, không phải lỗi
 engine — retry được; file nhiễm chéo vòng 1 đã xoá, không lưu sản phẩm sai.
+
+**Đã retry chiều 2026-09-11 (§2 dòng "retry"): 12/12 HOÀN THIỆN.** Flow vẫn
+lặp lỗi done-không-link trong `vPoll` (12/12 lần poll), link được cứu nhờ đường
+`projectInitialData` khớp mediaId chính xác (`_resolveVideo`) — ma trận không
+còn điểm ⏳ nào. Bài học vận hành: Flow phải dùng `e2e-runner.exe` (bản sao
+electron) và **app chính phải đóng** khi chạy probe/E2E (xung đột Chrome CfT +
+cổng bridge); env `CHROME_CRASHPAD_PIPE_NAME` thừa hưởng từ terminal VS Code
+làm Chrome CfT con crash ("Network service crashed") — xoá trước khi chạy.
 
 ## 3. Điểm khai báo model trong code (phải đồng bộ khi thêm model)
 

@@ -185,9 +185,11 @@ async function fetchVideoData(id, url) {
   let cookieHeader = '';
   try { const rec = running.get(id); if (rec && rec.cdp) { const cks = await readCookies(rec.cdp); cookieHeader = (cks || []).filter((c) => /google/.test(c.domain || '')).map((c) => c.name + '=' + c.value).join('; '); } } catch {}
   return new Promise((resolve, reject) => {
-    let done = false; const fin = (fn, v) => { if (!done) { done = true; fn(v); } };
+    let done = false; const fin = (fn, v) => { if (!done) { done = true; clearTimeout(_watchdog); fn(v); } };
     const req = net.request(url); if (cookieHeader) { try { req.setHeader('cookie', cookieHeader); } catch {} }
-    req.setTimeout(180000, () => { try { req.destroy(); } catch { /* */ } fin(reject, new Error('VID_TIMEOUT_180s')); });   // không treo vô hạn khi mạng stall
+    // Electron net.request KHÔNG có req.setTimeout (khác http.ClientRequest — lỗi thật E2E 2026-09-11:
+    // "req.setTimeout is not a function" làm tải bytes luôn fail) → dùng watchdog timer thủ công.
+    const _watchdog = setTimeout(() => { try { req.destroy(); } catch { /* */ } fin(reject, new Error('VID_TIMEOUT_180s')); }, 180000);   // không treo vô hạn khi mạng stall
     req.on('response', (res) => { if (res.statusCode >= 400) { fin(reject, new Error('VID_HTTP_' + res.statusCode)); return; } const chunks = []; res.on('data', (c) => chunks.push(c)); res.on('end', () => { const buf = Buffer.concat(chunks); let mime = res.headers['content-type'] || 'video/mp4'; if (Array.isArray(mime)) mime = mime[0]; fin(resolve, { b64: buf.toString('base64'), mime, size: buf.length }); }); res.on('error', (e) => fin(reject, new Error(e.message || 'VID_READ'))); });
     req.on('error', (e) => fin(reject, new Error(e.message || 'VID_FETCH_FAILED')));
     req.end();
