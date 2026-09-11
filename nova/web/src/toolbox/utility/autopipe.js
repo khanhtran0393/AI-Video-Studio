@@ -33,6 +33,42 @@ async function _persistJob(heavy){ try { if (typeof syncStateToCurrentProfile ==
 
 function _stepTO(res){ return _STEP_TO[res] || 45 * 60000; }
 
+// ── DAG pipeline (P3.2, học từ VEO3 workflow DAG): PROD_STEPS khai báo tuyến tính
+//    nhưng THỰC THI theo thứ tự topo từ map dependency. Không có cycle → giữ nguyên
+//    thứ tự khai báo (an toàn tuyệt đối so với hành vi cũ); có cycle → nối đuôi
+//    theo thứ tự khai báo thay vì chết im. Hàm thuần, test được.
+function _dagDeps(){
+  return {
+    script: [],
+    voice:  ['script'],
+    scenes: ['script'],
+    assets: ['scenes'],
+    seo:    ['script'],
+    images: ['scenes', 'assets'],
+    videos: ['images'],
+    thumb:  ['images'],
+    build:  ['videos', 'voice', 'thumb'],
+  };
+}
+
+function _dagOrder(deps){
+  deps = deps || _dagDeps();
+  const keys = PROD_STEPS.map(s => s.key);
+  const order = [], remaining = keys.slice();
+  let progressed = true;
+  while (remaining.length && progressed) {
+    progressed = false;
+    for (let i = 0; i < remaining.length; i++) {
+      const k = remaining[i];
+      const d = (deps[k] || []).filter(x => keys.includes(x));   // dep lạ (không có trong PROD_STEPS) → bỏ qua
+      if (d.every(x => order.includes(x))) { order.push(k); remaining.splice(i, 1); progressed = true; i--; }
+    }
+  }
+  if (remaining.length) order.push(...remaining);   // cycle → nối đuôi theo thứ tự khai báo
+  return order;
+}
+
+
 function _clearAutoRetry(){ if (_autoRetryTimer) { clearTimeout(_autoRetryTimer); _autoRetryTimer = null; } }
 
 function _histAdd(job, status, detail){
@@ -290,8 +326,26 @@ async function _runPipeline(job){
     },
   };
 
-  for (let i = job.step || 0; i < PROD_STEPS.length; i++) {
-    const s = PROD_STEPS[i];
+  // DAG (P3.2): thực thi theo thứ tự topo từ dependency map — thứ tự mặc định
+  // trùng khít PROD_STEPS tuyến tính cũ, job cũ resume vẫn đúng.
+  const _order = (typeof _dagOrder === 'function') ? _dagOrder() : PROD_STEPS.map(s => s.key);
+  try { job.stepOrder = _order; } catch (e) {}
+  for (let i = job.step || 0; i < _order.length; i++) {
+    const s = PROD_STEPS.find(x => x.key === _order[i]);
+    if (!s) continue;
+    // Bước bị tắt theo cấu hình job (job.disabledSteps) → đánh dấu skip, không chạy.
+    if (Array.isArray(job.disabledSteps) && job.disabledSteps.includes(s.key)) {
+      _autoSet(s.key, 'skip', 'tắt theo job'); job.step = i + 1; await _persistJob(false); queueRender(); continue;
+    }
+    // nickStrategy per step (P1.2): job.poolCfg { nickStrategy, fixedId, slots } áp vào pool trước bước ảnh Flow.
+    if (s.key === 'images' && job.poolCfg && typeof flowBridge !== 'undefined') {
+      try {
+        if (await flowBridge.waitReady(1500)) {
+          await flowBridge.call('SET_POOL_CONFIG', job.poolCfg);
+          _autoLog('Pool (per-job): ' + JSON.stringify(job.poolCfg));
+        }
+      } catch (e) { _autoLog('SET_POOL_CONFIG lỗi: ' + (e.message || e), 'error'); }
+    }
     if (_autoAbort) throw new Error('Đã dừng theo yêu cầu.');
     // Flow đã hết quota trong phiên này → tạm dừng ngay tại bước Flow, không gọi phí thêm.
     if (s.res === 'flow' && _flowExhausted) { _autoSet(s.key, 'run', 'chờ Flow (hết quota)'); await _persistJob(false); const e = new Error('Hết giới hạn Flow'); e.flowQuota = true; throw e; }

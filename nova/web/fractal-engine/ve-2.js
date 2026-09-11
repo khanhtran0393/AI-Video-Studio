@@ -300,3 +300,40 @@ AR.outro = {
   }
 };
 
+
+// ── AR.thumbnailText (P4.6, mục 17 roadmap): thumbnail chữ viền (outlined text)
+//    — renderer khung 1 cảnh, chữ đậm viền dày + từ nhấn nền accent, scale-in nhẹ.
+//    Không file mới ngoài fractal-engine (đúng phạm vi roadmap). ──
+AR.thumbnailText = {
+  build(st,P){
+    const bg = P.bg || '#0b1220', fg = P.fg || '#ffffff', accent = P.accent || '#ffcc00';
+    const stroke = P.stroke || '#000000', strokeW = P.strokeW || 10;
+    const wrap = el('div',`position:absolute;inset:0;display:grid;place-items:center;background:${bg};overflow:hidden`);
+    const box = el('div','display:flex;flex-direction:column;align-items:center;gap:14px;padding:0 6%;text-align:center');
+    const hl = String(P.highlight || P.dek || '').toLowerCase();
+    const words = String(P.text || P.headline || 'THUMBNAIL').split(/\s+/).slice(0, 8);
+    const line = el('div','display:flex;gap:14px;flex-wrap:wrap;justify-content:center;align-items:baseline');
+    const ws = words.map((w)=>{
+      const isHl = hl && w.toLowerCase().replace(/[^a-zà-ỹ0-9]/gi,'').includes(hl);
+      const n = el('div',`font-size:${P.fontSize||150}px;font-weight:900;letter-spacing:-3px;line-height:1.02;white-space:nowrap;`
+        + `color:${isHl ? accent : fg};-webkit-text-stroke:${strokeW}px ${stroke};paint-order:stroke fill;`
+        + `text-shadow:0 ${strokeW}px 0 ${stroke}`);
+      n.textContent = w; line.appendChild(n); return n;
+    });
+    const sub = P.sub ? el('div',`font-size:${P.subSize||44}px;font-weight:700;letter-spacing:2px;color:${fg}cc;text-transform:uppercase`) : null;
+    if (sub) sub.textContent = P.sub;
+    box.append(line); if (sub) box.appendChild(sub); wrap.appendChild(box); st.appendChild(wrap);
+    return { wrap, ws, sub, line };
+  },
+  update(N,t,P){
+    const E = P.ease, v = E(seg(t*P.dur, P.delay, P.delay + 0.45));
+    N.wrap.style.opacity = v;
+    N.wrap.style.transform = `scale(${0.86 + 0.14*v})`;
+    N.ws.forEach((w,i)=>{
+      const p = E(seg(t*P.dur, P.delay + 0.08 + i*P.stagger, P.delay + 0.5 + i*P.stagger));
+      w.style.opacity = p; w.style.transform = `translateY(${(1-p)*26}px)`;
+    });
+    if (N.sub) N.sub.style.opacity = E(seg(t*P.dur, P.delay+0.5, P.delay+1.0));
+  }
+};
+

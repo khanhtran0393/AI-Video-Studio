@@ -3293,3 +3293,37 @@ Kiểm định: `npm run check` EXIT 0 (cảnh báo C2 shadow là nhiễu đã b
   + đối chiếu lifecycle.log exitCodeHex → chẩn đoán tận gốc. `npm run check` EXIT 0; khởi động sạch exit 0, lifecycle sạch,
   5 electron procs. Chú ý: `M nova/main/ipc/index.js` + `?? nova/main/ipc/spy.js` là của tiến trình song song (bx) — không động tới.
 
+
+## 2026-09-11b — CẢI TIẾN QUY TRÌNH KIỂM CHỨNG: `check:exports` + `check:docs` thay dead-check parity, gate `check:all`, AGENTS.md §3 viết lại đầy đủ
+
+- **Bối cảnh**: rà soát quy trình kiểm chứng trong AGENTS.md phát hiện (1) §3 comment
+  `npm run check` thiếu `check:shadow` (doc drift so package.json); (2) `check:parity` là
+  dead check — `pairs` RETIRED rỗng, luôn pass "0 pairs"; (3) Luật 1 (hợp đồng
+  `module.exports`) chưa có kiểm định tự động nào; (4) CI chạy thiếu check:size/toplevel,
+  không đối chiếu ipc-inventory đã commit; (5) thiếu gate đầy đủ trước build/release.
+- **check:exports** (`nova/scripts/exports-contract-check.js`): parse TĨNH mọi
+  `module.exports` của shim `nova/*.js` + module `nova/main/*.js` (33 module), so baseline
+  `nova/exports-contract.json`. Hỗ trợ object literal đa dòng, spread, reexport-shim
+  (`module.exports = M` → resolve `require('...')`). Đổi hợp đồng có chủ đích:
+  `--update` + ghi MEMORY.md. ĐÃ TỰ-TEST âm tính: bắt thiếu export, bắt ĐỔI THỨ TỰ, pass
+  khi khôi phục. Thay thế parity trong chuỗi `check` + CI.
+- **check:docs** (`nova/scripts/docs-sync-check.js`): AGENTS.md ↔ package.json đồng bộ 2
+  chiều — mọi `npm run X` nhắc trong doc phải tồn tại, mọi script phải được nhắc (bỏ qua
+  dòng `--prefix`). ĐÃ TỰ-TEST 2 chiều (bắt mention ma + script không được nhắc).
+- **Xoá `nova/scripts/parity-check.js`** + bỏ `check:parity` khỏi package.json & CI;
+  `nova/ARCHITECTURE.md` (3 chỗ) cập nhật theo.
+- **CI m1-validation.yml**: thêm check:exports/size/toplevel/docs; bước mới đối chiếu
+  `nova/ipc-inventory.json` đã commit vs HEAD (bỏ qua `generatedAt`) — chặn kênh IPC đổi
+  mà inventory chưa commit.
+- **`npm run check:all`** = check + foundation + video-agent + voice + auto-fix — GATE
+  BẮT BUỘC trước build:win/build:smoke (trước đây build không qua test suite nào).
+- **AGENTS.md**: §3 viết lại thành bảng đầy đủ 31 npm script (4 mục: kiểm định tĩnh /
+  test & smoke / build & release / app thật); Luật 1 thêm "cưỡng chế bởi check:exports";
+  §6.4 thêm gate check:all; §8 nhấn tmp-* đã bị gitignore, muốn chính thức hoá phải đổi
+  tên + cập nhật §3. `npm run check` EXIT 0 (syntax 469 files, ipc 148 kênh, exports 33
+  module, shared 19 state keys, docs-sync 31 script).
+- **Còn treo (chưa làm)**: (1) fixture self-test chính thức hoá thành script/CI (nay mới
+  test tay trong sandbox); (2) chuẩn hoá đọc lifecycle.log thành script chính thức
+  (phân loại teardown-noise vs crash giữa phiên theo §6.5(b)); (3) dọn >100 file tmp-*
+  trong nova/scripts/ (đã ignore bởi git, chỉ còn là noise cục); (4) CI chưa chạy
+  `npm start` smoke trên Windows runner.

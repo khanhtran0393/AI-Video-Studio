@@ -29,6 +29,11 @@ function _detail(d) {
   for (const k of ['type', 'reason', 'exitCode', 'name']) {
     if (d && d[k] !== undefined && d[k] !== null) parts.push(k + '=' + d[k]);
   }
+  // exitCodeHex: exitCode thập phân kiểu -1 là mơ hồ (0xFFFFFFFF) — hex giúp đối
+  // chiếu mã NTSTATUS/Win32 khi điều tra crash GPU/Network+renderer chết cụm.
+  if (d && typeof d.exitCode === 'number') {
+    try { parts.push('exitCodeHex=0x' + (d.exitCode >>> 0).toString(16)); } catch (_) {}
+  }
   return parts.join(' ');
 }
 
@@ -50,6 +55,13 @@ function installLifecycleLogging(app) {
       win.webContents.on('render-process-gone', (_ev, details) => logLifecycle(app, 'window-render-process-gone', _detail(details)));
     } catch (_) {}
   });
+  // Trạng thái GPU lúc khởi động — một dòng duy nhất, phục vụ điều tra crash cụm
+  // (GPU+Network+renderer chết cùng giây): biết lúc crash GPU có bị block/disable không.
+  try {
+    app.whenReady().then(() => {
+      try { logLifecycle(app, 'gpu-feature-status', JSON.stringify(app.getGPUFeatureStatus())); } catch (_) {}
+    });
+  } catch (_) {}
 }
 
 module.exports = { installLifecycleLogging, logLifecycle };

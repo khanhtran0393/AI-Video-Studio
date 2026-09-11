@@ -35,36 +35,76 @@ dựng video (Remotion + FFmpeg) → đăng YouTube đa kênh.
 | `nova/chrome-extension/` | **OUTPUT runtime** do IPC `flow-ext-export` sinh | ❌ Không edit tay |
 | `nova/flow-chrome/`, `nova/flow-native/` | 2 engine Flow khác nhau (Chrome đa profile / BrowserWindow đa profile) — không phải bản sao nhau | ✅ Giữ hợp đồng `module.exports` nguyên vẹn |
 | `nova/voice-studio/`, `nova/voice-native*` | OmniVoice TTS | ✅ |
-| `nova/scripts/` | Script kiểm định: syntax-check, ipc-inventory, parity-check, shared-names-check… | ✅ |
+| `nova/scripts/` | Script kiểm định: syntax-check, ipc-inventory, exports-contract-check, shared-names-check, handler-shadow-check, size-budget-check, toplevel-check, docs-sync-check… (file `tmp-*` là script dùng một lần, không phải kiểm định chính thức) | ✅ |
 | `auto-fix/` | Hệ sinh thái self-healing độc lập (agent, reproduction-lab, regression-engine, rollback…) | ✅ Riêng — có rulebook riêng |
 | `build/`, `dist/`, `output/`, `node_modules/`, `*-bin/` | Build artifact / runtime binary tự tải | ❌ Không track, không sửa tay |
 
 ## 3. Lệnh chuẩn (chạy ở gốc repo, Windows/PowerShell)
 
+### 3.1 Kiểm định tĩnh — `npm run check` (chạy TRƯỚC khi kết thúc mọi task)
+
+Chuỗi tuần tự, bước nào FAIL thì dừng cả chuỗi:
+
+| Bước | Kiểm chứng gì |
+|---|---|
+| `npm run check:syntax` | `node --check` toàn bộ .js nguồn |
+| `npm run check:ipc` | sinh `nova/ipc-inventory.json` — mọi kênh IPC main + renderer |
+| `npm run check:exports` | **Luật 1**: tên/thứ tự `module.exports` của shim `nova/*.js` + module `nova/main/*.js` khớp baseline `nova/exports-contract.json`. Đổi hợp đồng CÓ CHỦ ĐÍCH: `npm run check:exports -- --update` + ghi MEMORY.md |
+| `npm run check:shared` | hợp đồng tên dùng chung (xem §4 Luật 3) |
+| `npm run check:shadow` | handler IPC không bị ghi đè lặng lẽ |
+| `npm run check:size` | ngân sách kích thước file |
+| `npm run check:toplevel` | xung đột khai báo top-level renderer theo thứ tự nạp index.html |
+| `npm run check:docs` | AGENTS.md ↔ package.json đồng bộ: mọi script được nhắc phải tồn tại, mọi script phải được nhắc ở đây (chống drift tài liệu) |
+
+`npm run dev` / `npm start` — chạy app qua Electron (kiểm thử thật vẫn PHẢI qua
+`khoidong.bat`, xem §6.5).
+
+### 3.2 Test & smoke
+
+| Lệnh | Nội dung |
+|---|---|
+| `npm run test:foundation` | foundation test |
+| `npm run test:video-agent` | 6 suite video-agent (unit + IPC + bridge + phases + gateway) |
+| `npm run test:video-agent:render` | render Remotion THẬT qua Electron (lần đầu tự tải Chrome) |
+| `npm run test:video-agent:live` | AI gateway live (cần tài khoản/credit thật) |
+| `npm run test:voice` | voice contract test |
+| `npm run test:voice:integration` | voice integration test |
+| `npm run test:voice:all` | `test:voice` + `test:voice:integration` |
+| `npm run test:voice:live` | voice live test |
+| `npm run test:voice:ui` | voice UI smoke |
+| `npm run test:agent-bridge` | Agent Bridge 47280–47283 |
+| `npm run test:local-media` | local media pipeline |
+| `npm run test:web-origin` | web origin QA |
+| `npm run test:maintenance` | nova/core maintenance |
+| `npm run test:auto-fix` | toàn bộ test auto-fix |
+| `npm run check:bundle` | Remotion bundle self-check |
+
+### 3.3 Build & release
+
+| Lệnh | Nội dung |
+|---|---|
+| `npm run build:win` | .exe NSIS + portable → dist/ |
+| `npm run build` | electron-builder theo `electron-builder.json` |
+| `npm run smoke:packaged` | smoke bản đóng gói |
+| `npm run build:smoke` | `build:win` xong chạy `smoke:packaged` |
+| `npm run check:all` | **GATE ĐẦY ĐỦ trước build/release**: `check` + foundation + video-agent + voice + auto-fix |
+
+### 3.4 App thật
+
 ```powershell
-npm run check            # syntax + ipc + parity + shared + size + toplevel (chạy TRƯỚC khi kết thúc task)
-npm run check:syntax     # node --check toàn bộ .js nguồn
-npm run check:ipc        # sinh ipc-inventory.json — mọi kênh IPC main + renderer
-npm run check:shared     # hợp đồng tên dùng chung (xem §4)
-npm run check:toplevel   # xung đột khai báo top-level renderer theo thứ tự nạp index.html
-npm start                # smoke: splash ≥5s → main window → IPC → quit sạch
-
-npm run test:video-agent          # 6 suite video-agent (unit + IPC + bridge + phases + gateway)
-npm run test:video-agent:render   # render Remotion THẬT qua Electron (lần đầu tự tải Chrome)
-npm run test:voice                # voice contract test
-npm run test:foundation           # foundation test
-npm run test:auto-fix             # toàn bộ test auto-fix
-
-npm run build:win         # .exe NSIS + portable → dist/
-npm run build:smoke       # build xong chạy packaged-smoke
+.\khoidong.bat           # MỞ APP THẬT để test trạng thái hiện tại (BẮT BUỘC — xem §6.5)
 ```
 
-CI: `.github/workflows/m1-validation.yml` (chạy `check:shared`), `windows-package.yml`.
+CI: `.github/workflows/m1-validation.yml` — check:syntax → check:ipc (+ đối chiếu
+inventory đã commit với HEAD) → check:exports → check:shared → check:shadow →
+check:size → check:toplevel → check:docs → test:foundation → auto-fix policy/test +
+readiness fail-closed + `npm audit`. `windows-package.yml` build package.
 
 ## 4. MƯỜI LUẬT CỨNG
 
 1. **Một nguồn, một hợp đồng.** Khi tách module, `module.exports` cũ phải giữ
-   nguyên tên & thứ tự (xem shim `flow-chrome.js`, `flow-native.js`). Không đổi
+   nguyên tên & thứ tự (xem shim `flow-chrome.js`, `flow-native.js`) — cưỡng chế
+   tự động bởi `check:exports` với baseline `nova/exports-contract.json`. Không đổi
    tên kênh IPC trừ khi cập nhật đồng thời `check:ipc` inventory và preload.
 2. **Composition root tối giản.** `main.plain.js` không chứa logic nghiệp vụ;
    logic vào `nova/main/`. `registerAllIpc()` phải được gọi **TRƯỚC** `app.whenReady()`.
@@ -124,7 +164,40 @@ COMPLETED | FAILED | CANCELLED`.
    npm run test:voice         # nếu chạm voice
    npm start                  # smoke giao diện
    ```
-5. **Ghi nhận**: cập nhật `MEMORY.md` (quyết định, phát hiện, vấn đề còn treo)
+   Trước build/release (build:win, build:smoke) phải chạy `npm run check:all` —
+   gate đầy đủ gồm cả 4 bộ test, không chỉ kiểm định tĩnh.
+5. **Test trạng thái app = LUÔN qua `khoidong.bat` (BẮT BUỘC)**: mỗi lần cần test /
+   kiểm tra trạng thái hiện tại của app, agent PHẢI chạy
+   `D:\AI Video Studio\khoidong.bat` (hoặc `.\khoidong.bat --silent` khi chạy không
+   tương tác) — KHÔNG tự tay spawn `electron .` / `npx electron` thay thế. Script này:
+   check Node/npm → tự `npm install` khi thiếu node_modules/electron → đọc entry từ
+   `package.json` "main" (fallback `nova\main.plain.js`) → ping Agent Bridge
+   47280–47283: app ĐANG chạy thì focus cửa sổ hiện có (không mở instance thứ 2);
+   CHƯA chạy thì khởi chạy electron tách console và chờ bridge lên tối đa 30s.
+   Exit code ≠ 0 khi lỗi — đọc output `[LOI]` để chẩn đoán, không đoán mò.
+   App lên xong (exit 0 + Agent Bridge OK) **chưa đủ để kết luận test OK** — PHẢI
+   đọc tiếp log runtime `%APPDATA%\AI Video Studio Independent\lifecycle.log`
+   (đọc phần cuối; file do `nova/main/lifecycle-log.js` ghi, tự cắt ở 512KB) để
+   kiểm tra lỗi thật: `render-process-gone`, `child-process-gone`,
+   `window-unresponsive`… Khi đọc, phân biệt 2 nhóm:
+   (a) noise teardown lúc ĐÓNG app — renderer/Network Service `crashed
+   exitCode=-1` rồi `window-all-closed → quit` ngay sau → vô hại;
+   (b) crash thật giữa phiên — GPU + Network Service + renderer chết CÙNG MỘT
+   GIÂY (đã gặp nhiều lần 2026-09-11) → cửa sổ trắng/treo, phải mở lại app.
+   Log sạch (hoặc chỉ có nhóm a) mới được kết luận test đạt.
+6. **Test bằng dữ liệu THẬT đã lưu trong app (BẮT BUỘC)**: mọi lần kiểm thử quy
+   trình (kịch bản → storyboard → gen ảnh/video → TTS → dựng video → upload…) phải
+   dùng dữ liệu app đã lưu từ quá trình làm việc thật — state tại
+   `%APPDATA%\AI Video Studio Independent`, `output/job.json`, tài khoản/cookie Flow
+   đã khôi phục, tài nguyên đã sinh trong `output/`… — và kết quả phải là sản phẩm
+   THẬT do chính app tạo ra. **CẤM tự ý sinh/bịa đầu vào hoặc đầu ra giả** (file
+   sample tự chế, giá trị mock "cho nhanh", fixture tự viết thay dữ liệu app) để
+   test hộ từng bước — đó là fallback ngầm, vi phạm Luật 10. Thiếu dữ liệu thật cho
+   một bước thì DỪNG và hỏi user, không tự tạo dữ liệu thay thế. Kết quả test phải
+   được kiểm chứng từ artifact do app ghi ra (file trong `output/`, `job.json`,
+   event/QA, `lifecycle.log`…), không chấp nhận log "thành công" mà không có
+   artifact thật tương ứng.
+7. **Ghi nhận**: cập nhật `MEMORY.md` (quyết định, phát hiện, vấn đề còn treo)
    trong cùng thay đổi. Không ghi log vào AGENTS.md — file này chỉ chứa quy chuẩn ổn định.
 
 ## 7. Ranh giới tự động hoá / Auto-Fix
@@ -143,7 +216,10 @@ COMPLETED | FAILED | CANCELLED`.
 - Tên mã/biến/hàm: tiếng Anh; kênh IPC theo namespace `videoAgent:`, `flow*`,
   `voice-*`, `wm-*`, `documentary:*`.
 - File script dùng một lần phải có tiền tố `tmp-` (như `nova/scripts/tmp-*.js`)
-  để phân biệt với script kiểm định chính thức.
+  để phân biệt với script kiểm định chính thức. Các file này đã bị `.gitignore`
+  (`tmp*`, `.tmp*`) — không commit, không để chúng thay thế script kiểm định
+  chính thức. Muốn "chính thức hoá" một script tmp: đổi tên bỏ tiền tố, mô tả
+  trong §3 (`check:docs` sẽ bắt nếu thiếu).
 
 ## 9. MỘT NGUỒN RULE CHO MỌI CÔNG CỤ AI
 

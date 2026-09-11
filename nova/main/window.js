@@ -10,7 +10,8 @@
  * - Menu chuột phải tiếng Việt cho ô nhập.
  */
 const path = require('path');
-const { BrowserWindow, Menu, shell } = require('electron');
+const { BrowserWindow, Menu, shell, app } = require('electron');
+const { logLifecycle } = require('./lifecycle-log');
 const state = require('./state');
 const {
   AUTH_HOST_NAMES, EXTERNAL_LINK_HOST_NAMES, SPLASH_MIN_MS, SPLASH_MAX_MS,
@@ -76,10 +77,44 @@ function createWindow(startUrl) {
       const tag = ['DEBUG','INFO','WARN','ERROR'][level] || 'LOG';
       process.stdout.write(`[renderer:${tag}] ${message}  (${sourceId}:${line})\n`);
     });
+    // Phục hồi renderer sau crash (pattern lifecycle.log 2026-09-03→09-11:
+    // GPU/Network Service + renderer chết CÙNG MỘT GIÂY → cửa sổ trắng vĩnh viễn).
+    // Chromium tự restart GPU/Network Service, nhưng renderer chết thì KHÔNG tự dậy —
+    // reload lộ liễu có khai báo qua lifecycle.log (không phải fallback ngầm).
+    // Giới hạn 3 lần/60s: nếu trang tự crash ngay sau khi tải thì dừng để không
+    // thành vòng reload — log RECOVERY_STOPPED để biết cần can thiệp thủ công.
+    let rendererReloadTimes = [];
     state.mainWindow.webContents.on('render-process-gone', (_e, details) => {
-      process.stdout.write(`[renderer:CRASH] reason=${details.reason} exitCode=${details.exitCode}\n`);
+      const hex = '0x' + ((details.exitCode >>> 0).toString(16));
+      process.stdout.write(`[renderer:CRASH] reason=${details.reason} exitCode=${details.exitCode} (${hex})\n`);
+      if (details.reason !== 'crashed' && details.reason !== 'oom') return;   // killed/clean-exit/normal-exit: teardown vô hại
+      const now = Date.now();
+      rendererReloadTimes = rendererReloadTimes.filter((t) => now - t < 60000);
+      if (rendererReloadTimes.length >= 3) {
+        logLifecycle(app, 'render-recovery-stopped', `reason=${details.reason} — reload 3 lần/60s không giữ được renderer, cần can thiệp thủ công`);
+        return;
+      }
+      rendererReloadTimes.push(now);
+      try {
+        if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+          logLifecycle(app, 'render-recovery', `auto-reload sau ${details.reason} exitCode=${details.exitCode} (lần ${rendererReloadTimes.length}/3 trong 60s)`);
+          state.mainWindow.webContents.reload();
+        }
+      } catch (e) {
+        logLifecycle(app, 'render-recovery-error', (e && e.message) || String(e));
+      }
     });
   } catch (_) {}
+  // [DEBUG-TEMP] Kiểm thử phục hồi crash: NOVA_CRASH_TEST=1 → crash renderer chủ
+  // động 5s sau mỗi lần tải trang để xác minh auto-reload + rate-limit 3 lần/60s
+  // (chỉ bật khi test có chủ đích — không bao giờ bật trong chạy thường).
+  if (process.env.NOVA_CRASH_TEST === '1') {
+    state.mainWindow.webContents.on('did-finish-load', () => {
+      setTimeout(() => {
+        try { state.mainWindow.webContents.forcefullyCrashRenderer(); } catch (_) {}
+      }, 5000);
+    });
+  }
   // [DEBUG-TEMP] Auto-run E2E panel test when loaded with NSE_E2E=1
   if (process.env.NOVA_E2E === '1') {
     state.mainWindow.webContents.on('did-finish-load', () => {

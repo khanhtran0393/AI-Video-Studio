@@ -54,6 +54,15 @@ installGlobalErrorHandlers();
 // ra userData/lifecycle.log — để chẩn đoán exit code khi test UI tự động.
 installLifecycleLogging(app);
 
+// Crashpad minidump + chromium logging ra file (userData/crash-dumps): crash
+// renderer/GPU/utility thật để lại .dmp + "Check failed: ..." trong chrome-debug.log
+// — nguồn root-cause cho pattern crash cụm đã thấy trong lifecycle.log.
+try {
+  require('./main/crash-diagnostics').installCrashDiagnostics(app);
+} catch (e) {
+  console.warn('[crash-diagnostics] không khởi động được:', (e && e.message) || e);
+}
+
 // ── Kho cài đặt (API key…) → FILE trong userData ────────────────────────────
 // localStorage của UI gắn vào origin "http://localhost:<port>". Port có thể đổi
 // (47280 bận → 47281/47282/… → ngẫu nhiên), và Chromium cũng có quyền dọn kho

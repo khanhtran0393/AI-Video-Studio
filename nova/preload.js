@@ -140,6 +140,12 @@ contextBridge.exposeInMainWorld('native', {
       return () => ipcRenderer.removeListener('schedule:fire', listener);
     },
   },
+  // Spy storyboard (P4.4): tải video YouTube qua yt-dlp → lưới frame storyboard.
+  spy: {
+    run: (payload) => ipcRenderer.invoke('spy:run', payload || {}),
+    cancel: (jobId) => ipcRenderer.invoke('spy:cancel', { jobId }),
+    list: () => ipcRenderer.invoke('spy:list'),
+  },
   // Whiteboard Studio (port TPL Studio Stories v1.0.2) — chọn media
   // thật, đo thời lượng thật (ffprobe nội bộ), export MP4 thật
   // (ffmpeg nội bộ). KHÔNG nhận đường dẫn repo ngoài từ GUI.

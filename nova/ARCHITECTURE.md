@@ -237,7 +237,8 @@ hợp đồng `module.exports { handle, restore }` giữ nguyên byte.
 
 Khác `flow-chrome`: `flow-native.js` từng thuộc TARGETS của `scripts/protect.js`/`unprotect.js`
 và có cặp `.plain.js` — khi tách xong phải (1) xoá khỏi cả 2 TARGETS kẻo build bảo vệ obfuscate
-lại từ `.plain.js` đè shim, (2) xoá khỏi `pairs` của `scripts/parity-check.js`, (3) xoá
+lại từ `.plain.js` đè shim, (2) xoá khỏi `pairs` của `scripts/parity-check.js`
+(script này đã xoá hẳn 2026-09-11, thay bằng `exports-contract-check.js`), (3) xoá
 `flow-native.plain.js` (nguồn đã rã thành thư mục, git history giữ bản gốc),
 (4) `scripts/foundation-test.js` đọc nguồn flow đổi sang 8 file split.
 
@@ -252,7 +253,10 @@ Sau đó chuỗi retire tiếp tục hoàn tất cho TẤT CẢ các cặp còn 
 obfuscated bằng nguồn readable trực tiếp), và `main` (bản obfuscated `main.js` xoá hẳn —
 entry của Electron luôn là `main.plain.js` ở cả dev lẫn build đóng gói). Kết quả:
 `scripts/protect.js`/`unprotect.js` đã xoá (dep `javascript-obfuscator` cũng không còn),
-`scripts/parity-check.js` giữ lại làm guard no-op (0 pairs) cho `npm run check:parity`/CI.
+`scripts/parity-check.js` (guard no-op 0 pairs) đã XOÁ hẳn (2026-09-11) — thay bằng
+`scripts/exports-contract-check.js` (`check:exports`): baseline `nova/exports-contract.json`
+cưỡng chế tên/thứ tự `module.exports` của shim `nova/*.js` + module `nova/main/*.js`
+(Luật 1 AGENTS.md).
 Từ đây mọi main-process source trong repo đều là JS readable duy nhất một nguồn.
 
 ## Kiểm tra
@@ -282,6 +286,7 @@ npm start              # smoke test: splash ≥5s → main window → IPC → qu
 - `process.env.<TÊN>` phải theo tiền tố `AI_VIDEO_STUDIO_` / `NOVA_` / `ELECTRON_` /
   `NODE_` — chặn typo tên biến môi trường.
 
-Lệnh gộp: `npm run check` = syntax + ipc + parity + shared. CI (`m1-validation.yml`)
-chạy `check:shared` ở bước "Run application checks".
+Lệnh gộp: `npm run check` = syntax + ipc + exports + shared + shadow + size +
+toplevel + docs. CI (`m1-validation.yml`) chạy toàn bộ chuỗi này + `test:foundation`
+ở bước "Run application checks".
 

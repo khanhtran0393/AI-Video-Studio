@@ -166,13 +166,13 @@ nếu chạm voice, `npm start` smoke) + cập nhật MEMORY.md.
 | P2.2 V2V edit | ✅ Scaffold | `video.js:submitVideoEdit` + action `GEN_VIDEO_EDIT` → `VA_V2V_TEMPLATE_UNAVAILABLE` (đợi VIDEO_LEARN bắt request thật) |
 | P2.3 Checkpoint Auto-Fix | ✅ XONG | `auto-fix/loop.js`: `perScene` + `worstSceneErrors` + `checkpoints`; orchestrator bật mặc định (`options.perSceneAutoFix !== false`) |
 | P3.1 Scheduler | ✅ XONG | `main/scheduler.js` + `main/ipc/schedule.js` (5 kênh `schedule:*` + event `schedule:fire`) + state key `schedules` + preload `window.native.schedule` + start ở window.js did-finish-load |
-| P3.2 DAG autopipe | ⏳ CHƯA LÀM | renderer `autopipe.js` — cần session riêng (file lớn, queue PROD_STEPS tuyến tính) |
+| P3.2 DAG autopipe | ✅ XONG | `web/src/toolbox/utility/autopipe.js`: `_dagDeps()`/`_dagOrder()` topo-sort (mặc định trùng thứ tự tuyến tính cũ, cycle nối đuôi); `job.disabledSteps` skip per step; `job.poolCfg` (nickStrategy/fixedId/slots) áp qua `SET_POOL_CONFIG` trước bước ảnh Flow |
 | P3.3 Output purge | ✅ XONG | `main/fs-utils.js:purgeDir` + janitor startup **opt-in** `nova-settings.json:autoPurgeOutput` (mặc định TẮT — không tự xoá video user) |
 | P4.1 Voice registry | ✅ XONG | `voice-native/engines.js` (omnivoice available; edge/piper khai báo `VOICE_ENGINE_NOT_INSTALLED`) + kênh `voice-engines` + preload |
 | P4.2 SRT assembly | ✅ XONG | `video-agent/tts/srt-assemble.js` (buildSrt/captionsFromSpec/buildAssembleArgs — hàm thuần, test được) |
-| P4.3 Smart-trim | ✅ XONG | `native-tools/ffmpeg.js:trimVideo` (-c copy, lỗi lộ liễu `VA_TRIM_*`); spy storyboard ⏳ chưa làm |
+| P4.3 Smart-trim + spy | ✅ XONG | trimVideo (`native-tools/ffmpeg.js`); spy storyboard `native-tools/spy.js` (yt-dlp whitelist YouTube → frame đều theo thời lượng → tile grid; `SPY_*` error codes; cancel + list) + IPC `spy:*` + preload `window.native.spy` + **UI tool page "🕵 Spy Storyboard"** (`web/spy-panel.js` tự mount `#spyToolRoot` + nav item `toolspy` trong index.html). E2E thật PASS: tải "Me at the zoo" 19s → 6 frame → storyboard.jpg trong ~6s |
 | P4.5 Encoder chain | ✅ CÓ SẴN | `native-tools/render.js` đã có GPU (NVENC/QSV/AMF/VideoToolbox) → CPU fallback |
-| P4.6 Thumbnail | ⏳ chưa làm | mục optional theo roadmap |
+| P4.6 Thumbnail | ✅ XONG | fractal-engine chưa phủ → thêm `AR.thumbnailText` (chữ viền + từ nhấn accent) cuối `web/fractal-engine/ve-2.js` — không file mới. Contract đúng `P()` builder (đọc `P.headline`/`P.dek`, không chỉ `P.text`); demo scene dùng `lay:{a:'thumbnailText'}` đã thêm vào `fractal-antarctica-render.html` để xem thử bằng mắt (registry lookup `AR[s.lay.a] \|\| AR.title` tự nhận renderer mới) |
 
 **Kiểm định**: `check:syntax` 447 files PASS; `check:shared` (19 state keys), `check:parity`,
 `check:ipc` (145 kênh + 18 events — đã sinh lại inventory), `check:size`, `check:toplevel` PASS.
@@ -183,6 +183,8 @@ nếu chạm voice, `npm start` smoke) + cập nhật MEMORY.md.
 
 **Cố ý không làm trong session này**: P3.2 DAG autopipe, spy storyboard, P4.6 thumbnail —
 mỗi mục cần scope riêng (renderer lớn / học template Flow thật / optional).
+→ **Đã làm tiếp trong session bổ sung (cùng ngày)**: cả 3 mục còn lại — DAG autopipe,
+spy storyboard, AR.thumbnailText (xem MEMORY entry 2026-09-11b).
 
 ## Cố tình KHÔNG học (ghi rõ để khỏi tranh luận lại)
 - Fullproxy signed relay + license server (khóa vào hạ tầng người khác).

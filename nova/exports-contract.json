@@ -1,0 +1,548 @@
+{
+  "_comment": "Baseline hợp đồng module.exports (Luật 1 AGENTS.md). Chỉ cập nhật bằng `npm run check:exports -- --update` khi đổi hợp đồng CÓ CHỦ ĐÍCH + ghi MEMORY.md.",
+  "contracts": {
+    "nova/cli-bridge-native.js": [
+      {
+        "kind": "reexport",
+        "source": "./cli-bridge-native/index.js"
+      }
+    ],
+    "nova/flow-bridge.js": [
+      {
+        "kind": "object",
+        "entries": [
+          {
+            "name": "start"
+          },
+          {
+            "name": "stop"
+          },
+          {
+            "name": "call"
+          },
+          {
+            "name": "status"
+          },
+          {
+            "name": "PORT"
+          }
+        ]
+      }
+    ],
+    "nova/flow-cft.js": [
+      {
+        "kind": "reexport",
+        "source": "./flow-cft/index.js"
+      }
+    ],
+    "nova/flow-chrome.js": [
+      {
+        "kind": "reexport",
+        "source": "./flow-chrome/index.js"
+      }
+    ],
+    "nova/flow-native.js": [
+      {
+        "kind": "reexport",
+        "source": "./flow-native/index.js"
+      }
+    ],
+    "nova/mcp-bridge-native.js": [
+      {
+        "kind": "object",
+        "entries": [
+          {
+            "name": "startAll"
+          },
+          {
+            "name": "stopAll"
+          },
+          {
+            "name": "PORT"
+          }
+        ]
+      }
+    ],
+    "nova/native-tools.js": [
+      {
+        "kind": "reexport",
+        "source": "./native-tools/index.js"
+      }
+    ],
+    "nova/parallax-native.js": [
+      {
+        "kind": "object",
+        "entries": [
+          {
+            "name": "renderParallax"
+          }
+        ]
+      }
+    ],
+    "nova/upscale-native.js": [
+      {
+        "kind": "object",
+        "entries": [
+          {
+            "name": "probe"
+          },
+          {
+            "name": "pickImages"
+          },
+          {
+            "name": "pickFolderImages"
+          },
+          {
+            "name": "pickOutputDir"
+          },
+          {
+            "name": "expandPaths"
+          },
+          {
+            "name": "runUpscale"
+          },
+          {
+            "name": "cancel"
+          },
+          {
+            "name": "inpaintBase64"
+          },
+          {
+            "name": "miganAvailable"
+          }
+        ]
+      }
+    ],
+    "nova/voice-native.js": [
+      {
+        "kind": "reexport",
+        "source": "./voice-native/index.js"
+      }
+    ],
+    "nova/watermark-native.js": [
+      {
+        "kind": "object",
+        "entries": [
+          {
+            "name": "probe"
+          },
+          {
+            "name": "setRoot"
+          },
+          {
+            "name": "onLog"
+          },
+          {
+            "name": "removeFile"
+          },
+          {
+            "name": "removeFolder"
+          },
+          {
+            "name": "preview"
+          },
+          {
+            "name": "cancel"
+          }
+        ]
+      }
+    ],
+    "nova/main/agent-bridge.js": [
+      {
+        "kind": "object",
+        "entries": [
+          {
+            "name": "handleAgentCommand"
+          },
+          {
+            "name": "AGENT_COMMAND_PATH"
+          }
+        ]
+      }
+    ],
+    "nova/main/atomic-write.js": [
+      {
+        "kind": "object",
+        "entries": [
+          {
+            "name": "atomicWriteFile"
+          },
+          {
+            "name": "atomicWriteBuffer"
+          },
+          {
+            "name": "listOrphanTmp"
+          }
+        ]
+      }
+    ],
+    "nova/main/brand.js": [
+      {
+        "kind": "object",
+        "entries": [
+          {
+            "name": "ensureBrandAsset"
+          },
+          {
+            "name": "brandIconPath"
+          }
+        ]
+      }
+    ],
+    "nova/main/crash-diagnostics.js": [
+      {
+        "kind": "object",
+        "entries": [
+          {
+            "name": "installCrashDiagnostics"
+          }
+        ]
+      }
+    ],
+    "nova/main/error-reporter.js": [
+      {
+        "kind": "object",
+        "entries": [
+          {
+            "name": "setupErrorReporter"
+          }
+        ]
+      }
+    ],
+    "nova/main/friendly-errors.js": [
+      {
+        "kind": "object",
+        "entries": [
+          {
+            "name": "friendlyMainError"
+          }
+        ]
+      }
+    ],
+    "nova/main/fs-utils.js": [
+      {
+        "kind": "object",
+        "entries": [
+          {
+            "name": "novaRoot"
+          },
+          {
+            "name": "unpackedNovaRoot"
+          },
+          {
+            "name": "canWriteDir"
+          },
+          {
+            "name": "purgeDir"
+          }
+        ]
+      }
+    ],
+    "nova/main/global-errors.js": [
+      {
+        "kind": "object",
+        "entries": [
+          {
+            "name": "installGlobalErrorHandlers"
+          }
+        ]
+      }
+    ],
+    "nova/main/identity.js": [
+      {
+        "kind": "object",
+        "entries": [
+          {
+            "name": "NOVA_APP_ID"
+          },
+          {
+            "name": "NOVA_PARTITION"
+          },
+          {
+            "name": "applyAppIdentity"
+          }
+        ]
+      }
+    ],
+    "nova/main/janitor.js": [
+      {
+        "kind": "object",
+        "entries": [
+          {
+            "name": "runStartupJanitor"
+          },
+          {
+            "name": "runQuitJanitor"
+          },
+          {
+            "name": "cleanUserDataTmp"
+          },
+          {
+            "name": "cleanLegacyUserData"
+          },
+          {
+            "name": "cleanDevJunk"
+          },
+          {
+            "name": "LEGACY_USER_DATA_NAMES"
+          },
+          {
+            "name": "LEGACY_GRACE_DAYS"
+          }
+        ]
+      }
+    ],
+    "nova/main/lifecycle-log.js": [
+      {
+        "kind": "object",
+        "entries": [
+          {
+            "name": "installLifecycleLogging"
+          },
+          {
+            "name": "logLifecycle"
+          }
+        ]
+      }
+    ],
+    "nova/main/lifecycle.js": [
+      {
+        "kind": "object",
+        "entries": [
+          {
+            "name": "shutdownOwnedResources"
+          }
+        ]
+      }
+    ],
+    "nova/main/menu.js": [
+      {
+        "kind": "object",
+        "entries": [
+          {
+            "name": "buildMenu"
+          }
+        ]
+      }
+    ],
+    "nova/main/scheduler.js": [
+      {
+        "kind": "object",
+        "entries": [
+          {
+            "name": "start"
+          },
+          {
+            "name": "stop"
+          },
+          {
+            "name": "list"
+          },
+          {
+            "name": "add"
+          },
+          {
+            "name": "remove"
+          },
+          {
+            "name": "setPaused"
+          },
+          {
+            "name": "runNow"
+          },
+          {
+            "name": "tick"
+          },
+          {
+            "name": "nextRunFor"
+          },
+          {
+            "name": "storeFile"
+          }
+        ]
+      }
+    ],
+    "nova/main/secret-vault.js": [
+      {
+        "kind": "object",
+        "entries": [
+          {
+            "name": "TOP_LEVEL_SECRET_KEYS"
+          },
+          {
+            "name": "getSecret"
+          },
+          {
+            "name": "setSecret"
+          },
+          {
+            "name": "deleteSecret"
+          },
+          {
+            "name": "listKeys"
+          },
+          {
+            "name": "getAllSecrets"
+          },
+          {
+            "name": "migrateFromRaw"
+          },
+          {
+            "name": "invalidateCache"
+          },
+          {
+            "name": "isKnownSecretKey"
+          }
+        ]
+      }
+    ],
+    "nova/main/security-policy.js": [
+      {
+        "kind": "object",
+        "entries": [
+          {
+            "name": "isValidAbsoluteUrl"
+          },
+          {
+            "name": "isExactOriginUrl"
+          },
+          {
+            "name": "isAllowlistedHost"
+          },
+          {
+            "name": "isTrustedNavigationUrl"
+          },
+          {
+            "name": "isTrustedExternalUrl"
+          },
+          {
+            "name": "safeHostname"
+          }
+        ]
+      }
+    ],
+    "nova/main/server.js": [
+      {
+        "kind": "object",
+        "entries": [
+          {
+            "name": "startLocalServer"
+          },
+          {
+            "name": "resolveStartUrl"
+          }
+        ]
+      }
+    ],
+    "nova/main/single-instance.js": [
+      {
+        "kind": "object",
+        "entries": [
+          {
+            "name": "ensureSingleInstance"
+          }
+        ]
+      }
+    ],
+    "nova/main/splash.js": [
+      {
+        "kind": "object",
+        "entries": [
+          {
+            "name": "createSplashWindow"
+          },
+          {
+            "name": "closeSplashWindow"
+          }
+        ]
+      }
+    ],
+    "nova/main/state.js": [
+      {
+        "kind": "object",
+        "entries": [
+          {
+            "name": "WEB_DIR"
+          },
+          {
+            "name": "NOVA_REMOTION_DIR"
+          },
+          {
+            "name": "AUTH_HOST_NAMES"
+          },
+          {
+            "name": "EXTERNAL_LINK_HOST_NAMES"
+          },
+          {
+            "name": "SPLASH_MIN_MS"
+          },
+          {
+            "name": "SPLASH_MAX_MS"
+          },
+          {
+            "name": "mainWindow"
+          },
+          {
+            "name": "splashWindow"
+          },
+          {
+            "name": "localServer"
+          },
+          {
+            "name": "serverPort"
+          },
+          {
+            "name": "isQuitting"
+          },
+          {
+            "name": "splashCloseTimer"
+          },
+          {
+            "name": "splashShownAt"
+          },
+          {
+            "name": "errorReporter"
+          },
+          {
+            "name": "unregisterErrorBridge"
+          },
+          {
+            "name": "reporterShutdownPromise"
+          },
+          {
+            "name": "reporterQuitReady"
+          },
+          {
+            "name": "schedules"
+          },
+          {
+            "name": "app"
+          }
+        ]
+      }
+    ],
+    "nova/main/updater.js": [
+      {
+        "kind": "object",
+        "entries": [
+          {
+            "name": "setupAutoUpdate"
+          }
+        ]
+      }
+    ],
+    "nova/main/window.js": [
+      {
+        "kind": "object",
+        "entries": [
+          {
+            "name": "createWindow"
+          },
+          {
+            "name": "attachContextMenu"
+          }
+        ]
+      }
+    ]
+  }
+}

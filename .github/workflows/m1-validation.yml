@@ -68,10 +68,28 @@ jobs:
         run: |
           npm run check:syntax
           npm run check:ipc
-          npm run check:parity
+          npm run check:exports
           npm run check:shared
           npm run check:shadow
+          npm run check:size
+          npm run check:toplevel
+          npm run check:docs
           npm run test:foundation
+
+      # check:ipc sinh lại ipc-inventory.json (generatedAt mới mỗi lần) — đối chiếu
+      # danh sách kênh/progress/sourceFiles với bản đã commit, bỏ qua generatedAt.
+      # Lệch ⇒ có kênh IPC đổi mà inventory chưa commit.
+      - name: Verify committed IPC inventory is in sync
+        shell: bash
+        run: |
+          git show HEAD:nova/ipc-inventory.json > "$RUNNER_TEMP/head-inventory.json"
+          node -e "
+            const norm = (p) => { const d = JSON.parse(require('fs').readFileSync(p, 'utf8')); return { channels: d.channels, progressEvents: d.progressEvents, sourceFiles: d.sourceFiles }; };
+            const a = norm(process.env.RUNNER_TEMP + '/head-inventory.json');
+            const b = norm('nova/ipc-inventory.json');
+            if (JSON.stringify(a) !== JSON.stringify(b)) { console.error('ipc-inventory.json lệch với code (channels/progressEvents/sourceFiles). Chạy npm run check:ipc và commit inventory mới.'); process.exit(1); }
+            console.log('ipc-inventory khớp với HEAD');
+          "
 
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high

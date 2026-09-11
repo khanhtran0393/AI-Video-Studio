@@ -384,6 +384,10 @@
         <div class="nav-item" data-tool="toolsrttranslate" onclick="switchTool('toolsrttranslate')">
           <span class="num"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7l3-3 3 3M7 4v9M20 17l-3 3-3-3M17 20v-9"/></svg></span><span>Dịch SRT</span>
         </div>
+        <!-- SPY STORYBOARD (P4.4 roadmap VEO3): soi storyboard đối thủ từ URL YouTube -->
+        <div class="nav-item" data-tool="toolspy" onclick="switchTool('toolspy')" title="Soi storyboard đối thủ: tải video YouTube ≤720p, trích frame đều theo thời lượng, ghép lưới storyboard">
+          <span class="num"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></span><span>Spy Storyboard</span>
+        </div>
         <div class="nav-group">Cài đặt</div>
         <div class="nav-item" data-tool="toolsettings" onclick="switchTool('toolsettings')">
           <span class="num"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="3.5" cy="6" r="1.5"/><circle cx="3.5" cy="12" r="1.5"/><circle cx="3.5" cy="18" r="1.5"/></svg></span><span>API &amp; Tài khoản</span>
@@ -527,6 +531,15 @@
         <div class="tool-subtitle">Dịch phụ đề SRT sang ngôn ngữ khác bằng AI — chọn file SRT thật trên đĩa, dịch qua API AI đã cấu hình ở Cài đặt, xem trước rồi lưu file SRT mới (giữ nguyên timestamp).</div>
       </div>
       <div id="srtTranslateRoot"></div>
+    </div>
+
+    <!-- SPY STORYBOARD TOOL (P4.4 roadmap VEO3): yt-dlp tải video YouTube → frame đều → tile grid storyboard.jpg -->
+    <div class="tool" id="tool-toolspy">
+      <div class="tool-head">
+        <div class="tool-title">🕵 Spy Storyboard</div>
+        <div class="tool-subtitle">Soi nhịp cảnh của video đối thủ trên YouTube — tải ≤720p bằng yt-dlp (bundled), trích N frame đều theo thời lượng, ghép lưới storyboard để tham khảo trước khi viết kịch bản.</div>
+      </div>
+      <div id="spyToolRoot"></div>
     </div>
 
     <!-- TOOL 1: PROFILE KÊNH -->
@@ -3276,6 +3289,7 @@ function toggleApiSection(){
   <script src="handdraw-studio-panel.js?v=hdlasso6"></script>
   <!-- Dịch SRT: panel UI (IPC srt-translate:* qua window.native.srtTranslate) -->
   <script src="srt-translate-panel.js?v=srtt1"></script>
+<script src="spy-panel.js?v=spy1"></script>
 
 <script>
 /* ============================================================================

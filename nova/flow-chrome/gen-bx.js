@@ -182,6 +182,49 @@ function parseOgiZ0b(payloadStr) {
   };
 }
 
+/* ── Credits (rpcid `nzlxg` = /VideoFxService.GetCredits) ─────────────────
+   Capture thật 11/9: f.req = [[["nzlxg","[]",null,"generic"]]] — payload rỗng "[]".
+   Response inner JSON = [remaining, ?, ?, ?, null, total] (đo: [576,1,2,2,null,576]).
+   Lỗi lộ liễu: BX_CREDITS_BAD_RESPONSE / BX_CREDITS_NO_DATA. */
+async function getCreditsBX(cdp, { projectId }) {
+  if (!projectId) throw new Error('BX_NO_PROJECT');
+  const freq = JSON.stringify([[['nzlxg', '[]', null, 'generic']]]);
+  const res = await bxFetch(cdp, { rpcid: 'nzlxg', freq, sourcePath: '/project/' + projectId });
+  const entries = parseBxResponse(res.text);
+  const own = entries.find((e) => e.rpcid === 'nzlxg');
+  if (!own) throw new Error('BX_CREDITS_BAD_RESPONSE: thiếu wrb.fr/nzlxg (len=' + (res.text || '').length + ')');
+  let inner; try { inner = JSON.parse(own.payload); } catch (e) { throw new Error('BX_CREDITS_BAD_RESPONSE: payload không parse được: ' + String(own.payload).slice(0, 120)); }
+  if (!Array.isArray(inner) || typeof inner[0] !== 'number') throw new Error('BX_CREDITS_NO_DATA: schema lạ — ' + JSON.stringify(inner).slice(0, 120));
+  return { ok: true, remaining: inner[0], total: typeof inner[5] === 'number' ? inner[5] : null, raw: inner };
+}
+
+/* Health-check trước khi gen hàng loạt: đọc bl/f.sid/at live từ page, so với
+   template đã thu hoạch, và check credits. bl/f.sid bxFetch TỰ ĐỌC live từ
+   WIZ_global_data nên server xoay version KHÔNG làm hỏng gen — template chỉ
+   đóng góp payload. Trả { bl, fSid, templateBl, blMatch, templateFresh, credits }. */
+async function healthCheckBX(cdp, { projectId, template }) {
+  const tpl = template || loadTemplate();
+  if (!tpl) throw new Error('BX_NO_TEMPLATE (chưa thu hoạch flow-bx-template.json)');
+  await ensureProjectPage(cdp, projectId);
+  const freq = JSON.stringify([[['nzlxg', '[]', null, 'generic']]]);
+  const res = await bxFetch(cdp, { rpcid: 'nzlxg', freq, sourcePath: '/project/' + projectId });
+  const bl = res.bl || null, fSid = res.sid || null;
+  const credits = await (async () => {
+    const entries = parseBxResponse(res.text);
+    const own = entries.find((e) => e.rpcid === 'nzlxg');
+    if (!own) return null;
+    try { const inner = JSON.parse(own.payload); return Array.isArray(inner) ? { remaining: inner[0], total: typeof inner[5] === 'number' ? inner[5] : null } : null; }
+    catch { return null; }
+  })();
+  return {
+    ok: true, bl, fSid,
+    templateBl: tpl.bl || null,
+    blMatch: !tpl.bl || !bl || tpl.bl === bl,
+    templateFresh: bl ? tpl.bl === bl : null,   // null = không đọc được bl live
+    credits,
+  };
+}
+
 /* Mint reCAPTCHA Enterprise token NGAY TRONG page project (đã đăng nhập —
    enterprise.js chỉ nạp ở /project/<id>, đo 11/9/2026 trong nen-tang). */
 const CAPTCHA_PAGE_FN = `
@@ -233,10 +276,18 @@ async function genImageBX(cdp, { prompt, projectId, template, captchaToken, site
   return { ok: true, ...parsed };
 }
 
-/* Gen N ảnh tuần tự (mỗi ảnh 1 request ogiZ0b — server đếm credit theo request). */
-async function genImagesBX(cdp, { prompt, projectId, count = 1, template, onEach }) {
+/* Gen N ảnh tuần tự (mỗi ảnh 1 request ogiZ0b — server đếm credit theo request).
+   PREFLIGHT: check credits (nzlxg) TRƯỚC khi batch — hết credit hoặc thiếu
+   credit cho count → nổ lộ liễu BX_NO_CREDITS, KHÔNG gen dở dang (Luật 10). */
+async function genImagesBX(cdp, { prompt, projectId, count = 1, template, onEach, skipCreditCheck }) {
+  const n = Math.max(1, Math.min(Number(count) || 1, 4));
+  if (!skipCreditCheck) {
+    const c = await getCreditsBX(cdp, { projectId });
+    if (!(c.remaining > 0)) throw new Error('BX_NO_CREDITS: còn ' + c.remaining + '/' + (c.total ?? '?') + ' credit — dừng trước khi gen (nzlxg)');
+    if (n > c.remaining) throw new Error('BX_NO_CREDITS: cần ' + n + ' credit, chỉ còn ' + c.remaining + '/' + (c.total ?? '?'));
+  }
   const out = [];
-  for (let i = 0; i < Math.max(1, Math.min(Number(count) || 1, 4)); i++) {
+  for (let i = 0; i < n; i++) {
     const r = await genImageBX(cdp, { prompt, projectId, template });
     out.push(r);
     if (onEach) try { onEach(r, i); } catch { /* sink lỗi người dùng */ }
@@ -244,6 +295,6 @@ async function genImagesBX(cdp, { prompt, projectId, count = 1, template, onEach
   return out;
 }
 
-module.exports = { genImageBX, genImagesBX, loadTemplate, saveTemplate, buildOgiZ0bPayload, parseBxResponse, parseOgiZ0b, ensureProjectPage, bxFetch, templateFile };
+module.exports = { genImageBX, genImagesBX, getCreditsBX, healthCheckBX, loadTemplate, saveTemplate, buildOgiZ0bPayload, parseBxResponse, parseOgiZ0b, ensureProjectPage, bxFetch, templateFile };
 
 
