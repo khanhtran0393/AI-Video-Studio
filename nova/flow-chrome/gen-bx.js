@@ -228,7 +228,7 @@ async function healthCheckBX(cdp, { projectId, template }) {
 /* Mint reCAPTCHA Enterprise token NGAY TRONG page project (đã đăng nhập —
    enterprise.js chỉ nạp ở /project/<id>, đo 11/9/2026 trong nen-tang). */
 const CAPTCHA_PAGE_FN = `
-  async (siteKey) => {
+  async (args) => {
     const s = Date.now();
     while (!(window.grecaptcha && window.grecaptcha.enterprise && window.grecaptcha.enterprise.execute)) {
       if (Date.now() - s > 15000) throw new Error('BX_NO_GRECAPTCHA');
@@ -236,7 +236,7 @@ const CAPTCHA_PAGE_FN = `
     }
     await new Promise((res) => { try { window.grecaptcha.enterprise.ready(res); } catch (e) { res(); } });
     return await Promise.race([
-      window.grecaptcha.enterprise.execute(siteKey, { action: 'IMAGE_GENERATION' }),
+      window.grecaptcha.enterprise.execute(args.siteKey, { action: args.action || 'IMAGE_GENERATION' }),
       new Promise((_, rej) => setTimeout(() => rej(new Error('BX_CAPTCHA_TIMEOUT')), 25000)),
     ]);
   }
@@ -253,7 +253,7 @@ async function genImageBX(cdp, { prompt, projectId, template, captchaToken, site
   // Mint captcha mới mỗi request (dùng-một-lần; bỏ qua nếu caller tự cấp)
   let cap = captchaToken || null;
   if (!cap) {
-    cap = await evalArrow(cdp, CAPTCHA_PAGE_FN, siteKey || SITE_KEY).catch((e) => { throw new Error('BX_CAPTCHA: ' + (e.message || e)); });
+    cap = await evalArrow(cdp, CAPTCHA_PAGE_FN, { siteKey: siteKey || SITE_KEY, action: 'VIDEO_GENERATION' }).catch((e) => { throw new Error('BX_CAPTCHA: ' + (e.message || e)); });
     if (!cap || String(cap).length < 100) throw new Error('BX_CAPTCHA_EMPTY');
   }
   const uuid = () => (require('crypto').randomUUID() || 'b-' + Date.now()).toUpperCase();
@@ -295,6 +295,105 @@ async function genImagesBX(cdp, { prompt, projectId, count = 1, template, onEach
   return out;
 }
 
-module.exports = { genImageBX, genImagesBX, getCreditsBX, healthCheckBX, loadTemplate, saveTemplate, buildOgiZ0bPayload, parseBxResponse, parseOgiZ0b, ensureProjectPage, bxFetch, templateFile };
+/* ── VIDEO gen (rpcid `YhhmEf`) — schema đo thật 11/9/2026 (UI capture ×3) ──
+   Trigger f.req payload (JSON string trong wrb.fr):
+     [0]  = [[[ [null,null,[[[PROMPT]]], MODEL, 2, null, [null,null,null,null,U1,U2] ]]]]
+     [1]  = [null,22,null,null,null,projectId,null,null,null,null,[CAPTCHA,1]]
+     [2]  = [U3, 2]
+   MODEL = "abra_t2v_8s" (text-to-video 8s; 360p/720p/aspect nằm ở slot "2").
+   Response: [null, <credits còn lại>, [[taskId,null,null,[title,ts,null,null,
+   mediaId,otherId,ts], projectId]], [[…]]] — SYNCHRONOUS (không cần poll trigger).
+   Poll kết quả: as29s với payload ["<mediaId>"] → record chứa status ([2]=đang
+   xử lý, [3]=xong) + URL https://flow-content.google/video/<mediaId>?…
+   Chi phí: 12 credits / video (x1, 720p, 8s — đo 11/9). */
+function buildYhhmEfPayload({ prompt, projectId, captchaToken, model }) {
+  if (!prompt) throw new Error('BX_NO_PROMPT');
+  if (!projectId) throw new Error('BX_NO_PROJECT');
+  if (!captchaToken) throw new Error('BX_NO_CAPTCHA');
+  const uuid = () => (typeof require('crypto').randomUUID === 'function' ? require('crypto').randomUUID() : 'b-' + Date.now()).toUpperCase();
+  /* Scene = [promptBlock, model, 2, null, uuids] — shape khớp capture thật (tmp-video-shape2.txt):
+     inner[0]=[scene] (A1) · scene=A5 · scene[0]=A3=[null,null,[[[PROMPT]]]] · inner[1]=ctx A11 · inner[2]=[U3,2]. */
+  const scene = [
+    [null, null, [[[String(prompt)]]]],
+    model || 'abra_t2v_8s',
+    2,
+    null,
+    [null, null, null, null, uuid(), uuid()],
+  ];
+  return [
+    [scene],
+    [null, 22, null, null, null, projectId, null, null, null, null, [captchaToken, 1]],
+    [uuid(), 2],
+  ];
+}
+
+/* Trích media/task từ response YhhmEf. Trả { taskId, mediaId, creditsAfter }. */
+function parseYhhmEf(payloadStr) {
+  let inner; try { inner = JSON.parse(payloadStr); } catch { return null; }
+  if (!Array.isArray(inner) || !Array.isArray(inner[2]) || !Array.isArray(inner[2][0])) return null;
+  const gen = inner[2][0];
+  const taskId = typeof gen[0] === 'string' ? gen[0] : null;
+  let mediaId = null;
+  if (Array.isArray(gen[3])) mediaId = gen[3][4] || null;
+  return { taskId, mediaId, creditsAfter: typeof inner[1] === 'number' ? inner[1] : null, raw: inner };
+}
+
+/* Trích kết quả as29s: { status, videoUrl, imageUrl, raw }. */
+function parseAs29s(payloadStr) {
+  let inner; try { inner = JSON.parse(payloadStr); } catch { return null; }
+  const deepFind = (pred, node, depth) => {
+    if (depth > 10 || node == null) return undefined;
+    if (pred(node)) return node;
+    if (Array.isArray(node)) { for (const c of node) { const f = deepFind(pred, c, depth + 1); if (f !== undefined) return f; } }
+    return undefined;
+  };
+  const videoUrl = deepFind((v) => typeof v === 'string' && v.startsWith('https://flow-content.google/video/'), inner, 0) || null;
+  const imageUrl = deepFind((v) => typeof v === 'string' && v.startsWith('https://flow-content.google/image/'), inner, 0) || null;
+  const mediaId = typeof inner[0] === 'string' ? inner[0] : null;
+  let status = null;
+  const statusArr = deepFind((v) => Array.isArray(v) && v.length === 1 && typeof v[0] === 'number', inner, 0);
+  if (statusArr) status = statusArr[0];
+  return { mediaId, status, videoUrl, imageUrl, raw: inner };
+}
+
+/* Gen 1 video qua YhhmEf + poll as29s đến khi có URL. Trả
+   { ok, mediaId, taskId, videoUrl, imageUrl, creditsAfter } hoặc NÉM lỗi có mã. */
+async function genVideoBX(cdp, { prompt, projectId, captchaToken, siteKey, model, pollMs = 15000, pollMax = 40 }) {
+  if (!prompt) throw new Error('BX_NO_PROMPT');
+  if (!projectId) throw new Error('BX_NO_PROJECT');
+  await ensureProjectPage(cdp, projectId);
+  let cap = captchaToken || null;
+  if (!cap) {
+    cap = await evalArrow(cdp, CAPTCHA_PAGE_FN, { siteKey: siteKey || SITE_KEY, action: 'IMAGE_GENERATION' }).catch((e) => { throw new Error('BX_CAPTCHA: ' + (e.message || e)); });
+    if (!cap || String(cap).length < 100) throw new Error('BX_CAPTCHA_EMPTY');
+  }
+  const payload = buildYhhmEfPayload({ prompt, projectId, captchaToken: cap, model });
+  const freq = JSON.stringify([[['YhhmEf', JSON.stringify(payload), null, 'generic']]]);
+  const res = await bxFetch(cdp, { rpcid: 'YhhmEf', freq, sourcePath: '/project/' + projectId });
+  const entries = parseBxResponse(res.text);
+  const own = entries.find((e) => e.rpcid === 'YhhmEf');
+  if (!own) throw new Error('BX_BAD_RESPONSE: thiếu wrb.fr/YhhmEf (len=' + (res.text || '').length + ') head=' + JSON.stringify(String(res.text || '').slice(0, 300)));
+  const parsed = parseYhhmEf(own.payload);
+  if (!parsed || !parsed.mediaId) {
+    const errInfo = String(own.payload || '').match(/([A-Z_]{6,})/);
+    throw new Error('BX_RPC_ERROR' + (errInfo ? '_' + errInfo[1] : '') + ': ' + String(own.payload).slice(0, 200));
+  }
+  /* Poll as29s — payload chỉ cần [mediaId]. [3] trong record = video URL khi xong. */
+  const pollFreq = () => JSON.stringify([[['as29s', JSON.stringify([parsed.mediaId]), null, 'generic']]]);
+  let last = null;
+  for (let i = 0; i < Math.max(1, pollMax); i++) {
+    await sleep(pollMs);
+    const pres = await bxFetch(cdp, { rpcid: 'as29s', freq: pollFreq(), sourcePath: '/project/' + projectId });
+    const pentries = parseBxResponse(pres.text);
+    const pown = pentries.find((e) => e.rpcid === 'as29s');
+    if (!pown) continue;   // mạng hiccups — vẫn tiếp tục poll, chỉ nổ khi hết pollMax
+    const st = parseAs29s(pown.payload);
+    if (st) last = st;
+    if (st && st.videoUrl) return { ok: true, mediaId: parsed.mediaId, taskId: parsed.taskId, creditsAfter: parsed.creditsAfter, ...st };
+  }
+  throw new Error('BX_VIDEO_TIMEOUT: mediaId=' + parsed.mediaId + ' status=' + (last && last.status) + ' sau ' + pollMax + ' lần poll');
+}
+
+module.exports = { genImageBX, genImagesBX, genVideoBX, getCreditsBX, healthCheckBX, buildYhhmEfPayload, parseYhhmEf, parseAs29s, loadTemplate, saveTemplate, buildOgiZ0bPayload, parseBxResponse, parseOgiZ0b, ensureProjectPage, bxFetch, templateFile };
 
 

@@ -2943,6 +2943,79 @@ Kiểm định: `npm run check` EXIT 0 (cảnh báo C2 shadow là nhiễu đã b
 ## 2026-09-11z — I-MZic: hoàn thiện 10+ cải tiến "làm tất cả" (slideshow, offline export MP4, karaoke, preset…)
 - **Hoàn thiện 2 khung dở của session trước** (UI có sẵn nhưng KHÔNG có logic): nút `exportOfflineBtn` "⚡ Xuất nhanh" và slideshow (`slidesInput/slideModeSel/slideSecs/slidesHint/slidesClearBtn` chỉ nằm trong HTML).
 - **Slideshow engine mới** trong `nova/web/img-to-vid.html`: nạp nhiều ảnh (`state.slides`, token chống race chọn file), lịch phát 2 mode — `time` (mỗi ảnh slideSecs giây, xoay vòng) / `cue` (đổi ảnh theo từng câu SRT, dùng `lyricsVersion` trong cache key). Mỗi ảnh chạy **Ken Burns deterministic** (`kenBurnsAt(idx, entry, p)` — sin-hash theo index + lần phát, Luật 8) cộng dồn với zoom bass. **Chuyển cảnh**: crossfade / chớp đen / đẩy ngang / cắt cứng (0.6s). **Fit-mode**: cover như cũ / nền blur từ chính ảnh (blur 1 lần vào offscreen `/24` rồi upscale — rẻ mà giống hệt) / contain viền đen (chỉ Ken Burns, không nhân zoom bass để viền không phập phồng). Raster per-slide cache Map tối đa 3 ảnh (~8MB/ảnh), zq nhân headroom 1.15 cho KB đỉnh.
+
+## [2026-09-11j] Điều tra GPU blocklist (hardening #2 task VEO3) — KẾT LUẬN
+
+- **Mục tiêu**: tìm lý do Chromium để mọi GPU feature `disabled_software` ngay từ whenReady
+  (GTX 1050 Ti + driver 582.66, Win10 Enterprise LTSC 2021 build 19044.7417, Electron 43.0.0 ≈ Chromium 149).
+- **Phương pháp**: probe tạm `nova/scripts/tmp-gpu-report.js` (userData tách biệt `%TEMP%\nova-gpu-probe-1`,
+  KHÔNG đụng app thật; `app.getGPUInfo('complete')` + `app.getGPUFeatureStatus()`; flags thử nghiệm qua
+  `NOVA_GPU_PROBE_FLAGS`) + `nova/scripts/tmp-d3d12-probe.ps1` (P/Invoke `D3D12CreateDevice`) + dxdiag.
+  Lưu ý: `chrome://gpu` trả trang RỖNG trong Electron — phải dùng `getGPUInfo()` API.
+- **Phát hiện**:
+  1. Phần cứng/driver HOÀN TOÀN BÌNH THƯỜNG: dxdiag "Feature Levels: 12_1,12_0,…", D3D12CreateDevice
+     OK tại FL 12_1/12_0/11_1 (P/Invoke), WDDM 2.7, DDI 12. ANGLE D3D11 init THÀNH CÔNG trong GPU
+     process Chromium (glRenderer = NVIDIA GTX 1050 Ti D3D11, initializationTime 280ms).
+  2. Chromium 149 TỰ QUYẾT full software: mọi feature `disabled_software`/`disabled_off` ngay từ đầu,
+     userData sạch, GPU process KHÔNG crash (stderr --v=1 sạch), không policy Chromium/Chrome nào
+     (registry check rỗng), không env ẩn (ELECTRON_EXTRA_LAUNCH_ARGS… không tồn tại).
+  3. `--ignore-gpu-blocklist` KHÔNG đổi gì → không phải blocklist rule. Chromium tự báo
+     `dx12FeatureLevel: "Not supported"`, `supportsDx12: false`, `supportsVulkan: false`, toàn bộ
+     overlayInfo SOFTWARE — TRÁI NGƯỢC bằng chứng OS. = lỗi/nhánh probe D3D12 nội bộ Chromium trên
+     cấu hình máy này (Pascal/R580 driver 582.66 + Win10 19044).
+  4. Bằng chứng chéo: CfT 149 (engine bx) crash GPU/Network khi bật GPU trên chính máy này →
+     bất tương thích MACHINE-WIDE giữa Chromium 149 GPU stack và hệ thống; Electron 43 kế thừa,
+     Chromium tự dẹp GPU → software rendering là trạng thái mặc định, ổn định của app.
+- **Hệ quả**: (a) app từ trước đến nay LUÔN chạy software rendering — không phải nguyên nhân đột biến;
+  (b) cấm thử force GPU (`--ignore-gpu-blocklist` vô hiệu; forcing sẽ đụng nhánh crash CfT đã chứng minh);
+  (c) tuỳ chọn khai báo: thêm `--disable-gpu` tường minh sẽ triệt tiêu GPU process + bớt noise
+  `child-process-gone` — để user quyết, chưa làm.
+
+## [2026-09-11l] Áp dụng --disable-gpu tường minh + đính chính + phát hiện mới
+
+- **Đã áp dụng** (user chốt): module mới `nova/main/gpu-policy.js` (`installGpuPolicy(app)`),
+  lắp vào `main.plain.js` ngay sau switch `log-level`, TRƯỚC `app.whenReady`. Khai báo lộ liễu
+  `console.log('[gpu-policy] ...')` lúc khởi động. Baseline exports cập nhật 33→34 module
+  (`npm run check:exports -- --update` — thay đổi hợp đồng có chủ đích, §3.1). `npm run check` EXIT 0.
+- **Xác minh live** (`khoidong.bat --silent`, app thật): EXIT 0, Agent Bridge OK 47280, log
+  `[gpu-policy] --disable-gpu: ...` hiện đúng lúc, gpu-feature-status giữ nguyên disabled_software
+
+## [2026-09-11m] Tinh chỉnh scan:lifecycle: cụm -1 câm cuối session → WARN (không còn REAL giả)
+
+- **Bằng chứng mới** (thí nghiệm kill main ngoài, entry [2026-09-11l]): Stop-Process main sinh
+  đúng signature "GPU + Network + renderer chết cùng giây, exitCode=-1" KÈM `render-recovery
+  auto-reload` phát trong cùng nhịp chết (+1ms) rồi log câm vĩnh viễn → classifier cũ xếp REAL
+  là FALSE POSITIVE với mọi lần kill/relaunch bằng khoidong.
+- **Sửa** `nova/scripts/lifecycle-log-scan.js`: bằng chứng "main còn sống" sau cụm crash phải là
+  sự kiện non-quit cách cụm ≥ `SURVIVE_EVIDENCE_MS` (10s, hằng số mới) — auto-reload trong nhịp
+  chết không đủ. Cụm all-(-1) cuối session không có bằng chứng sống → **WARN** ("kill main ngoài
+  hoặc crash treo — không phân biệt được"), không chặn CI. Các luật REAL khác giữ nguyên
+  (exitCode≠-1, render-recovery-stopped, window-unresponsive không hồi phục).
+- **Self-test 7/7 PASS** (fixture mới b* = cụm câm EOF → WARN; fixture b thêm recovery +15s để
+  giữ case REAL). Quét log thật: REAL 38 (exitCode=2 thật + cụm lịch sử có bằng chứng sống),
+  WARN 40 (gồm cụm kill 14:53:02.157Z giờ đúng loại), cụm kill KHÔNG còn trong REAL.
+  `npm run check` EXIT 0.
+- **Cần làm theo sau**: AGENTS.md §3.2 (dòng scan:lifecycle) và §6.5(b) cần cập nhật 1 dòng phản
+  ánh phân loại mới — CHƯA sửa vì AGENTS.md đang bị phiên song song bx giữ (do-not-touch).
+
+  (không đổi hành vi render), lifecycle.log sạch sau khi instance mới lên.
+- **ĐÍNH CHÍNH entry [2026-09-11j]**: `--disable-gpu` KHÔNG triệt tiêu GPU process — Chromium vẫn
+  chạy 1 gpu-process làm SwiftShader/raster software. Lợi ích thật: GPU process không bao giờ đụng
+  driver NVIDIA/D3D nữa → loại nhánh crash gắn driver (CfT 149 đã chứng minh crash khi bật GPU).
+  Hiệu năng không đổi vì hardware GPU đã bị Chromium tắt sẵn từ trước.
+- **PHÁT HIỆN chẩn đoán quan trọng (pattern a vs b)**: khi kill main process ngoài (Stop-Process),
+  lifecycle.log ghi CÙNG MỘT GIÂY: `Network Service crash exitCode=-1` + `GPU crash exitCode=-1` +
+  `render-process-gone crashed exitCode=-1` — tái tạo ĐÚNG pattern lịch sử "GPU + Network + renderer
+  chết cùng một giây". → Pattern này có thể là main process bị kill ngoài (shutdown/update/taskkill/
+  harness), KHÔNG phải crash thật trong renderer. Khi đọc log §6.5: nhóm "cùng giây, toàn exitCode=-1,
+  kèm sự kiện teardown" phải xếp vào nhóm (a) vô hại; còn `exitCode=2` (thấy 13:56:11, renderer crash
+  thật, recovery-stopped) mới là nhóm (b) cần crashpad dump.
+- **Không đụng**: instance electron thứ hai `"electron.exe" . 1 15` (parent `tmp-sniff-app\run.bat 1 15`)
+  là harness của phiên song song bx — để nguyên.
+
+- **Còn treo**: root cause CHECK-failure white window vẫn chờ crashpad bắt dump thật (pipeline đã nạp).
+  Probe scripts giữ lại làm công cụ: `tmp-gpu-report.js` (đa dụng, nhận flags), `tmp-d3d12-probe.ps1`.
+
 - **Offline export (MP4)**: renderer decode nhạc → FFT radix-2 tự viết (không thêm dep) trên mono 22kHz, 128 dải log 40Hz–11kHz + bass(≤690Hz)/treble(≥4.1kHz) envelope 30 mẫu/s → `offlineEnvAt()` nội suy tuyến tính; bins nội suy cấpframe cho sóng nhạc. Encode **WebCodecs VideoEncoder H.264 Annex B** (thử 5 profile khai báo, fail lộ rõ `IMZIC_NO_H264`), render từng khung theo đồng hồ logic (rAF nghỉ qua `offlineRendering`, khôi phục smoothedEnergy/fxFrame/freqData sau xuất) → IPC **`imzic-offline-export`** (MỚI: `nova/main/ipc/imzic.js` + `preload.js imzicOfflineExport` + inventory regen) → ffmpeg `-f h264 -r fps` + nhạc gốc (`-ss/-t` trim, `afade` fade; có filter → AAC 192k, không → `-c copy`) → dialog lưu `.mp4`. Cancel = không file nửa vời. FPS 24/30/60 + chất lượng 8/14/20 Mbps (realtime MediaRecorder dùng chung `QUALITY_BITRATE`).
 - **Karaoke tô chữ** (`lyricKaraokeSel='word'`): mốc `karaokeX` theo tổng width chữ trong câu, chữ đã hát tô `lyricAccent`; **kiểu chữ** outline (strokeText)/badge (roundRect nền từng dòng) — dùng `roundRectPath` có sẵn; **hiệu ứng dòng**: pop (scale quanh tâm khối)/trượt lên/fade. `drawLyrics(timeOverride)` nhận t truyền vào cho offline.
 - **Cắt & đổ dần nhạc** (section 6 mới, đánh số lại FX→7, Khung→8, Lời→9): trimStart/trimEnd/fadeIn/fadeOut; preview: `fadeGain` node SAU delayNode (loa + bản ghi, không đụng analyser) + render loop tự pause khi tới trimEnd (realtime record chốt qua `activeExportRecorder`); recordAndExport bắt đầu tại trimStart + watchdog theo cửa sổ trim; seek clamp vào vùng trim; offline export truyền trim/fade cho ffmpeg. Gain curve `fadeGainAt(t)` khớp công thức afade.
@@ -2958,6 +3031,16 @@ Kiểm định: `npm run check` EXIT 0 (cảnh báo C2 shadow là nhiễu đã b
   `npm start` exit 0 (single-instance guard — app đang mở). `npm run check` exit 1 chỉ còn
   C2 renderer-id warnings có sẵn từ trước.
 
+
+
+## [2026-09-11n] ĐÓNG item "Còn treo" của 2026-09-11t (Tool 7 flicker) — user xác nhận hết
+
+- **User xác nhận** (chọn option trong phiên Cline): flicker preview A/B Tool 7 đã hết trong app thật.
+- Xác minh fix còn nguyên: `_t7OvPend` token/discard tại `nova/web/src/toolbox/utility/t7.js`
+  (L1816–1844) + khai báo trong `nova/web/src/toolbox/shared-consts.js` (2 hits).
+- **Đã xoá** `nova/scripts/tmp/tmp-t7-flicker.js` (probe synthetic, đúng điều kiện "xoá khi user
+  xác nhận" của entry 2026-09-11t). Item (2) REAL-mode probe của entry đó: KHÔNG cần nữa
+  (synthetic probe đã đủ chứng minh 0 alternation + user xác nhận trên app thật) — đóng luôn.
 
 ## 2026-09-11aa — Session THAM CHIẾU chéo (bị juicy giữa các phiên): hạ tầng bắt gói tin gen bằng node thuần + bài học môi trường — RECON đã xong ở entry `2026-09-11y`, KHÔNG làm trùng
 
@@ -3337,3 +3420,167 @@ Kiểm định: `npm run check` EXIT 0 (cảnh báo C2 shadow là nhiễu đã b
   (phân loại teardown-noise vs crash giữa phiên theo §6.5(b)); (3) dọn >100 file tmp-*
   trong nova/scripts/ (đã ignore bởi git, chỉ còn là noise cục); (4) CI chưa chạy
   `npm start` smoke trên Windows runner.
+
+## 2026-09-11c — HOÀN TẤT 4 ITEM CÒN TREO CỦA 2026-09-11b (selftest + lifecycle scan + dọn tmp-* + CI Windows smoke)
+
+- **(1) `check:selftest`** (`nova/scripts/checker-fixture-test.js`, script chính thức,
+  npm `check:selftest`, nằm trong chuỗi `check` + CI): sandbox fixture trong %TEMP%
+  test exports-contract + docs-sync 2 chiều — 10/10 PASS. Fix trong lúc làm: phải tạo
+  dir đích `nova/scripts` trong sandbox; pin `{"type":"commonjs"}` trong sandbox
+  (package.json của máy ở %TEMP% có `"type":"module"` → script copy vào bị đọc như ESM).
+  Fixture timestamp phải sinh bằng ms-offset từ base epoch (bản đầu tạo ISO sai dạng bị
+  `Date.parse` lặng lẽ loại — tự phát hiện qua fixture thất bại âm tính).
+- **(2) `scan:lifecycle`** (`nova/scripts/lifecycle-log-scan.js`, npm `scan:lifecycle`):
+  parser thuần Node của lifecycle.log — chia session theo `gpu-feature-status`, cluster
+  crash (≤2s), dedupe `window-render-process-gone` trùng tín hiệu. 3 tầng: REAL (crash
+  cụm GPU+Network+renderer giữa phiên / exitCode≠-1 không phải killed /
+  render-recovery-stopped / window-unresponsive không hồi phục → exit 1), WARN (crash
+  đơn lẻ exitCode=-1, reason=killed 0x40010004/0xC000013A), NOISE (teardown có quit
+  trong ≤5s). Flag `--json` (CI), `--self-test` 6/6 PASS. Chạy trên log thật: bắt đúng
+  cụm REAL 13:56 + 14:53 ngày 11/09 → exit 1 như thiết kế.
+- **(3) Di dời 204 file `tmp-*`** từ `nova/scripts/` → `nova/scripts/tmp/` (script một
+  lần `tmp-move-fixups.js`, tự di chính nó vào tmp/ sau khi chạy). Sửa 46 file .js
+  (`require('../` → `require('../../`) + 12 file .cmd (đường cd/log). Verify:
+  `node --check` 0 lỗi; `require.resolve` từ depth mới OK; probe `tmp-test-parse-bx.js`
+  lỗi app.setPath chỉ vì chạy bằng node thường (cần electron như header ghi) — không
+  phải lỗi di dời. `.gitignore` rule `tmp*` bắt được cả thư mục `nova/scripts/tmp/`.
+  AGENTS.md §8 cập nhật quy ước vị trí mới.
+- **(4) CI `windows-smoke`** (job mới trong `m1-validation.yml`, chỉ chạy khi
+  `workflow_dispatch`): windows-latest → npm ci → `khoidong.bat --silent` →
+  `npm run scan:lifecycle -- --json`. Không bật Auto-Fix runtime, không nằm gate mỗi
+  push (electron trên runner VM chậm/flaky).
+- **Đồng bộ tài liệu**: AGENTS.md §3.1 thêm `check:selftest`, §3.2 thêm
+  `scan:lifecycle`, §3.4 thêm CI job + gates, §6.5 chuẩn hoá bước đọc lifecycle.log
+  bằng `npm run scan:lifecycle`, §8 cập nhật vị trí tmp-*.
+- **`npm run check` EXIT 0** (9 bước: syntax 480, ipc 148 kênh, exports 34 module —
+  baseline đã cập nhật `nova/main/gpu-policy.js` bởi tiến trình song song (bx),
+  shared 19 state keys, size 683 files, toplevel, docs-sync 33 script, selftest 10/10).
+- **Lưu ý**: `M nova/main.plain.js`, `?? nova/main/gpu-policy.js`, `M
+  nova/flow-chrome/gen-bx.js`, `M nova/exports-contract.json`, `M nova/main/ipc/*` là
+  của tiến trình song song (bx) — không động tới.
+
+## 2026-09-11e — Fix: tab Tạo Thumbnail (tool10) mất init sau lần tách Tool 9
+
+- **Báo cáo user**: "chức năng tạo thumbnail được tách ra dường như mất logic cũ".
+- **Chẩn đoán**: commit `de31dc4d` (tách Tool 9 → tool-tool9 SEO + tool-tool10 Thumbnail)
+  chỉ vá `switchTool` cho `tool9`. Bản `switchTool` SỐNG nằm ở `web/src/toolbox/utility/nav.js`
+  (bản trong shared-consts.js là chết, bị shadow — đã đánh dấu DEDUP-DUPLICATE) và
+  **không có case `name === 'tool10'`** → mở tab Tạo Thumbnail không bao giờ chạy
+  `t10Init()` cũng như `t9Step2Refresh()`. Hệ quả: `t10State.refs` rỗng (ảnh mẫu
+  Profile không nạp → gen mất style kênh), không prefill tiêu đề, không sync nhãn
+  `style kênh`, gate "🖼 Tạo Thumbnail" không refresh (t9Step2Btn không được enable/hint).
+  DOM + logic gen (`tool-t10.js` wrapper t10* → t9*, `_t9Ref*` ở shared-consts) nguyên vẹn —
+  KHÔNG mất logic, chỉ mất wiring init.
+- **Fix**: `nav.js` thêm block `if (name === 'tool10'){ t10Init(); setTimeout(t9Step2Refresh,200); }`
+  (pattern typeof-guard như các tool khác); sửa comment stale dòng tool9→t10Init.
+  Hook `t10OnProfileSwitch()` ở profiles.js:580 đã có sẵn, không đụng.
+- **Kiểm định**: `npm run check` PASS toàn chuỗi (exports 34 module, shared 19 keys,
+  shadow 0 lỗi, size, toplevel, docs-sync 33, selftest 10/10). Smoke qua
+  `khoidong.bat --silent`: app đang chạy → focus cửa sổ (instance cũ nạp renderer
+  trước fix — **cần restart app để fix có hiệu lực**). `scan:lifecycle` exit 1 do
+  crash cụm GPU+Network+renderer LỊCH SỬ (2026-09-10 → 14:53 hôm nay, trước giờ fix),
+  không có entry mới sau khi sửa — crash cluster này là vấn đề đã ghi nhận từ trước,
+  không liên quan fix renderer JS điều hướng.
+- **[2026-09-11f] Đối chiếu app cũ `D:\Nova Studio` (user yêu cầu)**: extract
+  `resources/app.asar` (bản đóng gói, KHÔNG chạy runtime — chỉ đọc để so sánh) ra
+  `%TEMP%\nova-studio-old`. Kết luận: (1) bản cũ là phiên bản NGUYÊN NHẤT
+  TRƯỚC-KHI-TÁCH — thumbnail là cột phải trong Tool 9 (`tool-tool9`, khối DOM
+  index.html 2358–2415), KHÔNG có nav-item `tool10` riêng; `switchTool('tool9')`
+  chạy đủ `t9Init` + `t10Init` + `t9Step2Refresh` → vào tab là sẵn sàng, luồng
+  một-panel: SEO bước 1 → chốt tiêu đề → `t9OpenStep2` → autofill ảnh mẫu → Gen.
+  (2) Logic gen bản cũ == bản hiện tại TỪNG CHỮ (cùng `_t9RefDescribe` vision
+  spec JSON, `_t9RefConcepts`, `_t9CaptionsFromPattern`, caption đỏ + mũi tên,
+  `runConcurrent` lanes) — **không có logic nào bị mất khi tách, chỉ đứt dây
+  init của tab mới**, đã nối lại ở fix `nav.js` trên. (3) 13/13 phụ thuộc của
+  luồng thumbnail hiện tại tồn tại đúng chỗ (flowBridge/T9_REF_RULE/setStatus10
+  ở shared-consts; `_t9ChosenTitle`/`_t9RefDescribe`/`_t9RefConcepts`/
+  `_t9CaptionsFromPattern` ở utility/niche.js SSOT; `_refRoleNote` ở utility/tf.js;
+  `runConcurrent` ở tool-run.js; `callLLMJson` ở utility/llm.js; `gateTool` ở
+  utility/tier.js; `getProfile` ở utility/profiles.js) — thứ tự nạp index.html
+  chuẩn: shared-consts(3203) → niche.js(3233) → tool-t10.js(3242) → tool-t9.js(3247).
+  Tóm lại: fix `nav.js` là ĐỦ để khôi phục đúng hành vi bản app cũ hay dùng.
+
+## 2026-09-11d — QUYẾT ĐỊNH: KHÔNG lập registry hàm riêng; AGENTS.md bổ sung §4.1 (registry tĩnh) + §8 (tiền tố renderer)
+
+- **Bối cảnh**: user hỏi "có cần 1 registry để quy chuẩn các hàm không" khi cải tiến
+  app mà vẫn giữ cây module. Quyết định: **KHÔNG** — granularity đúng là đường ranh
+  giới module (export/IPC/state), không phải từng hàm; registry hàm gây drift + noise
+  ở mọi rename mà không tăng an toàn. 3 registry tĩnh hiện có ĐỦ:
+  `nova/exports-contract.json` (check:exports), `nova/ipc-inventory.json`
+  (check:ipc), `nova/main/state.js` (check:shared); renderer không build step → ranh
+  giới = tiền tố tên theo feature + check:toplevel.
+- **AGENTS.md**: thêm **§4.1 "Registry tĩnh — hợp đồng được cưỡng chế bởi máy"** (bảng
+  3 registry + checker, quy tắc KHÔNG thêm registry hàm, quy tắc thêm module mới =
+  --update + MEMORY.md, ngưỡng check:size WARN 2000/ERROR 5000 = tín hiệu tách);
+  §8 thêm quy ước **tiền tố tên cấp đầu renderer** theo feature (`vaPanel*`, `docu*`,
+  `srt*`, `wb*`…); §2 dòng `nova/scripts/` cập nhật (2 script mới + vị trí `tmp/`).
+- Không viết lại toàn bộ AGENTS.md — file nguồn chân lý chỉ chứa quy chuẩn ổn định,
+  chỉ bổ sung phần thiếu (tránh churn + tránh rủi ro break check:docs).
+- **Kiểm định**: `npm run check` EXITCODE 0 (9/9 bước; syntax 482 files — tiến trình
+  song song bx vẫn đang thêm file; exports 34 module; docs-sync khớp; selftest 10/10).
+
+## 2026-09-11g — FIX: nháy màn hình xem trước Tool 7 khi Tách / ↻ Đồng bộ cảnh
+
+- **Triệu chứng**: bấm nút Tách (t7Split) hoặc ↻ Đồng bộ cảnh trong dựng video
+  (Tool 7) → màn hình xem trước nháy/nhấp nháy.
+- **Root cause** (t7RenderPreview, tool-t7.js): khoá invalidation của preview media
+  là **id clip (`data-cid`)**. Tách/Đồng bộ đều rebuild clips với id MỚI nhưng vẫn
+  CÙNG ảnh/video nguồn → mọi render lặp đều bị coi là "đổi cảnh":
+  (1) nhánh ảnh gán `el.src` + reset `wrap.style.animation` (`animation='none'` +
+  reflow) MỖI lần render → ảnh nạp lại, animation chuyển cảnh đang chạy bị đứt;
+  (2) nhánh video gán lại `vid.src` → reload video → khung đen/poster nháy; video
+  đang pause còn bị ghi `currentTime` mỗi render → decode lại khung.
+- **Fix** (chỉ `nova/web/src/toolbox/tool-t7.js`, ~43 dòng trong t7RenderPreview):
+  khoá invalidation đổi sang **nguồn media thật = URL resolve + mediaId**
+  (`data-src` + `data-mid` mới). Cụ thể: (a) chỉ gán `el.src`/`vid.src`+poster khi
+  ảnh/URL thực sự đổi; (b) chỉ reset animation wrap khi ảnh đổi (chuyển cảnh thật);
+  (c) video pause chỉ seek khi `|currentTime - target| > 0.05s`; (d) rời nhánh video
+  chỉ remove `data-cid`, GIỮ `data-src/data-mid` làm khoá cache để quay lại cùng
+  video không reload. Đổi clip khác/đổi media thật → URL hoặc mediaId đổi → vẫn nạp
+  lại đúng. Không phá hợp đồng export/IPC/state, không thêm dependency.
+- **Kiểm định**: `node --check` OK; `npm run check` **EXIT=0** (9/9 bước, selftest
+  10/10); smoke app thật qua `khoidong.bat --silent` — bridge 47280 OK, cửa sổ được
+  đưa lên; `lifecycle.log` đuôi (khởi động 15:10Z) không có crash mới sau fix (cụm
+  crash 13:56/14:53 là của phiên trước, đã ghi nhận lịch sử). Lưu ý: instance đang
+  chạy nạp renderer TRƯỚC fix — cần Ctrl+R/tải lại tab (hoặc đóng/mở app) để code
+  mới có hiệu lực.
+- **Ghi chú**: file tmp `nova/scripts/tmp-t7-flicker.js` (repro tự sinh, bỏ qua vì
+
+## 2026-09-11h — PORT: gen VIDEO flow.google.com (rpcid `YhhmEf`) vào `gen-bx.js` + check credit `nzlxg` + fix terminal
+- **Video gen protocol (đo thật, capture UI ×5, ~10 video burn credit có user chốt)**:
+  - Trigger = batchexecute **rpcid `YhhmEf`** (KHÔNG phải ogiZ0b — image-only). Payload (JSON string trong wrb.fr):
+    `[0]=[scene]` · scene=`[ [null,null,[[[PROMPT]]]], "abra_t2v_8s", 2, null, [null×4,U1,U2] ]` ·
+    `[1]=ctx=[null,22,null,null,null,projectId,null,null,null,null,[CAPTCHA,1]]` · `[2]=[U3,2]`.
+    Model string `abra_t2v_8s` = text-to-video 8s (slot "2" = 720p/16:9 đo cùng bộ settings UI).
+  - **Response SYNCHRONOUS**: `[null, <credits còn lại>, [[taskId,null,null,[title,ts,null,null,mediaId,otherId,ts], projectId]], …]`.
+  - Poll kết quả = **`as29s`** payload `["<mediaId>"]` → record có status (`[2]`=đang xử lý, `[3]`=xong) +
+    URL `https://flow-content.google/video/<mediaId>?Expires=…&KeyName=labs-flow-prod-cdn-key&Signature=…` (kèm ảnh preview `/image/`).
+  - **Chi phí: 12 credits/video** (x1, 720p, 8s; đo nhiều lần: 366→270→246).
+  - **Captcha action riêng**: video mint bằng `grecaptcha.enterprise.execute(siteKey, {action:'VIDEO_GENERATION'})` —
+    dùng action `IMAGE_GENERATION` (của ảnh) → server trả payload `null` (không tốn credit). Bắt được bằng
+    wrap `grecaptcha.enterprise.execute` trong page rồi drive UI gen 1 lần.
+- **Thêm vào `nova/flow-chrome/gen-bx.js`**: `buildYhhmEfPayload` + `parseYhhmEf` + `parseAs29s` + `genVideoBX`
+  (trigger → poll as29s → trả {mediaId, taskId, videoUrl, imageUrl, creditsAfter}); lỗi lộ liễu
+  `BX_NO_CAPTCHA/BX_VIDEO_TIMEOUT/…` (Luật 10). `CAPTCHA_PAGE_FN` nhận `{siteKey, action}` —
+  ảnh `IMAGE_GENERATION`, video `VIDEO_GENERATION`. Thêm `getCreditsBX` (rpcid `nzlxg`, payload `"[]"`,
+  inner `[remaining,?,?,?,null,total]`) + preflight `BX_NO_CREDITS` trong `genImagesBX` + `healthCheckBX`
+  (đọc bl/f.sid live + credits + so bl template).
+- **Phát hiện quan trọng**: `bxFetch` ĐỌC bl/f.sid/at LIVE từ `WIZ_global_data` → server xoay version KHÔNG phá gen;
+  template `flow-bx-template.json` chỉ đóng góp payload image → "harvest lại template khi bl/f.sid xoay" là KHÔNG cần.
+  bl template (20260909.10_p0) vẫn khớp live tới tối 11/9.
+- **E2E thật (genVideoBX)**: mediaId `9c6dc5f6-92e9-4e66-b166-d36c1a2c1491`, status=3, video URL nhận đủ,
+  credits 258→246. Hợp đồng `genImageBX` giữ nguyên (E2E ảnh sáng nay không bị ảnh hưởng).
+- **Fix terminal PowerShell (PSReadLine crash-loop)**: tạo `$PROFILE` (Microsoft.PowerShell_profile.ps1)
+  `Set-PSReadLineOption -PredictionSource None` (+InlineView/Windows/BellStyle, mọi option SilentlyContinue).
+  Crash = NullReferenceException trong `ReallyRender` khi prediction render — profile chỉ hiệu lực console MỚI.
+- **Bài học/hoạt động**: (a) CfT 149 vẫn tự chết ~2-20 phút DÙ có bộ cờ chống-crash — phải relaunch trong
+  phiên làm dài; (b) **hiện tượng lạ: các file `tmp-*` trong nova/scripts BỊ XOÁ tự động giữa phiên**
+  (mất cả tmp-launch-netlog.js, tmp-hook-src.js, tmp-harvest-hook.js của phiên trước — đã tái tạo launcher
+  thành tmp-launch-chrome.js) — nguyên nhân CHƯA RÕ, cần theo dõi; (c) PSReadLine crash gây nhiễu shell
+  agent — ưu tiên `node -e`/ghi file thay vì pipe dài trong PowerShell.
+- **Kiểm định**: `npm run check` **EXIT=0** (toàn bộ sub-checks PASS). Bằng chứng giữ tại
+  `%TEMP%\flow-gen-capture\` (netcap-jwpduf/*, netcap-YhhmEf-2.json, netcap-as29s-4.json,
+  VIDEO-trigger-freq-decoded.txt, bx-video-e2e-result.json).
+- **Còn treo**: genVideoBX mới hỗ trợ t2v 8s 720p 16:9 — biến thể (360p, 4/6/10s, i2v) cần capture thêm nếu dùng;
+  re-harvest template IMAGE chỉ cần khi schema ogiZ0b dịch (bl/f.sid đã tự đọc live).
+  không có dữ liệu app thật) không commit — `.gitignore` đã phủ `tmp*`.
