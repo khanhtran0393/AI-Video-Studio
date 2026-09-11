@@ -43,6 +43,12 @@ File nÃ y ghi **tráº¡ng thÃ¡i dÃ i háº¡n vÃ  lá»‹ch sá»­ qu
   hai kiá»ƒu tÃ¡ch KHÃ”NG trá»™n láº«n.
 
 ## Äang treo / ná»£ ká»¹ thuáº­t
+- **ACCOUNT image gen flow.google.com — reverse-engineer protocol** (2026-09-11, đang dở):
+  - Kết luận chắc chắn (netlog network-stack + hook fetch/XHR + CDP multi-target, 6 lần thử): trong cửa sổ Chrome for Testing acc-1, khi user bấm Generate KHÔNG hề có request mạng nào tới backend gen (aisandbox-pa/batchexecute) — chỉ thấy PAGE_VIEW telemetry rpcid `WuwhI` (POST batchexecute body ~2KB, auth = cookies + `at=AIQ-...` trong body, KHÔNG Bearer). → user gần như chắc chắn generate ở browser/window KHÁC; cần soi lại với user.
+  - Gotcha đã verify: process spawn từ probe electron (kể cả `cmd /c npx`) bị kill theo job object khi parent exit → chrome giữa chừng bị giết. Chỉ chrome khởi động qua **schtasks** mới sống độc lập (nhớ quote path có dấu cách trong cmd file!).
+  - Cách sniff bền vững đã chạy OK: launch chrome với `--log-net-log --net-log-capture-mode=IncludeSensitive --remote-debugging-port=0` qua schtasks; hook fetch/XHR cài bằng `Page.addScriptToEvaluateOnNewDocument` + `Page.reload` (app Angular bind fetch lúc init → hook cài sau bị bypass); thu hoạch localStorage `__flowGenLog` qua debug port (fallback dò port netstat vì DevToolsActivePort có khi stale); parse netlog bằng `tmp-parse-netlog.js` (map số→tên từ constants.logEventTypes; netlog KHÔNG chứa POST body). KHÔNG bật CDP Network.enable nặng — network service CfT 149 crash (exit_code=-1) khi generate.
+  - Tools còn lại `nova/scripts/`: tmp-launch-netlog.js, tmp-harvest-hook.js, tmp-live-monitor.js, tmp-parse-netlog.js, tmp-hook-src.js, tmp-flow-netlog2.json, tmp-flow-hooklog.json; tasks schtasks `sniffflow`/`snifflaunch`/`launchchrome` cần dọn.
+  - Next: (1) xác minh với user window thực sự chứa generation (đối chiếu ảnh mới với prompt độc nhất); (2) khi bắt được 1 lần generate thật (POST batchexecute khác boot + response), so f.req → port vào `flow-chrome/gen.js`, xoá cờ FLOW_MIGRATED; (3) dọn tmp-* + schtasks; (4) `npm run check`.
 - **Niche Finder hỗ trợ trending theo khu vực (gl)** (2026-09-07 → 2026-09-08): Đã sửa `searchVideos` trong `loi.js` để khi `query` rỗng, dùng `https://www.youtube.com/feed/trending` và thêm tham số `gl` từ `opts.gl`; đồng thời de-duplicate hàm `searchVideos` (bản merge cũ còn sót 2 định nghĩa). `ipc-niche.js` truyền `gl` từ payload vào `opt()`. Frontend `nova/web/index.html`: thêm dropdown `<select id="nfGl">` (26 mã quốc gia: US/GB/CA/AU/DE/FR/ES/IT/JP/KR/BR/IN/MX/ID/VN/TH/PH/SG/RU/NL/PL/TR/SA/EG/ZA/NG) vào header tool Niche Finder; `nfRun()` đọc giá trị dropdown rồi gán `payload.gl` khi khác rỗng. Kiểm định `npm run check` PASS (syntax 374 file, IPC 158 kênh, parity 0, shared 17 state keys). Script tạm `tmp-fix-loi.js`/`tmp-fix-emoji.js` đã xoá.
 - **UI Flow model refresh** (2026-09-06): ThÃªm nÃºt `â†»` cáº¡nh dropdown Model trong tab Video (Tool 6) vÃ  hÃ m `tvRefreshModels()` gá»i `VIDEO_MODEL_STATUS` Ä‘á»ƒ cáº­p nháº­t danh sÃ¡ch model tá»« extension/native. `tvRenderModelOptions()` gá»™p model built-in + model há»c Ä‘Æ°á»£c tá»« Flow. Kiá»ƒm Ä‘á»‹nh `npm run check` PASS (syntax 367, IPC 154/20, parity 0). ChÆ°a test runtime vá»›i Flow cÃ³ nhiá»u model thá»±c táº¿.
 - **`shared-consts.js` 21.648 dòng chứa ~21k dòng dead code + 28 hàm trùng y hệt với `utility.js`** (2026-09-10). File gốc là bản "khôi phục từ worktree" (commit revert ngầm hoặc worktree chưa strip sau lần tách 2026-09-09) → dẫn đến: (a) `utility.js` (load sau) ghi đè 28 hàm tier/CLI/api-key/upgrade của `shared-consts.js` — hành vi runtime chỉ đúng nếu 2 bản giống 100% (đã verify 28/28 giống hệt phần đầu 60 dòng, CHƯA verify toàn bộ), (b) `shared-consts.js` dòng 20472-21648 chứa code tool 8/9/10/11/niche, bị bản mới ở `tool-t8.js`/`tool-t9.js`/`tool-t10.js`/`tool-t11.js` (load sau) ghi đè tương tự, (c) `VEO_STYLE_PRESETS` tham chiếu ở `index.html:5725` không còn khai báo (theo MEMORY dòng 77 đã strip ở lần tách trước). **(2026-09-10 update)**: VEO_STYLE_PRESETS/VEO_SHOT_TYPES/VEO_ROTATIONS/VEO_ROTATION/veoUI đã KHÔI PHỤC vào shared-consts.js (offset 327023, dùng `var` vì const/let top-level KHÔNG vào globalThis trong renderer — q[BOOT] phía dưới). Probe xác nhận 5/5 tồn tại trong global scope. Verify cuối: file local binary size = 1.524.926 bytes = HEAD (git diff empty), nhưng `node -e` thấy `VEO_STYLE_PRESETS` ở byte offset 329285 của UTF-8 string. Cần làm theo thứ tự ưu tiên: (1) Diff toàn bộ 28 hàm trùng — xác nhận giống 100%, (2) Diff 17 hàm tool 8/9/10/11/niche trùng giữa `shared-consts.js` cuối file và `tool-t*.js`, (3) ~~Khôi phục VEO_*~~ ĐÃ XONG, (4) Sau khi xác nhận giống 100%, XÓA phần dead code khỏi `shared-consts.js` (chỉ giữ `const state = {...}` + const tables cần cho file khác dùng: `MODELS`, `KEY_URLS`, `BRIDGE_FILES`, `PRICING`, `PAYMENT_INFO`, `TIER_CONFIG`, `TOOL_LABELS`, `ALL_TOOLS`, `TOOL_MIN_TIER`, `VISION_PROVIDERS`), (5) Chạy `npm run check` + smoke. KHÔNG làm trong task refactor file lớn — tách thành task riêng "Điều tra & dọn dead code shared-consts.js".
@@ -2907,9 +2913,320 @@ Kiểm định: `npm run check` EXIT 0 (cảnh báo C2 shadow là nhiễu đã b
   preload `window.native.schedule` + state key `schedules` + purgeDir (`fs-utils.js`) gắn janitor
   OPT-IN `autoPurgeOutput` (mặc định TẮT). P4: voice engines registry (`voice-native/engines.js`
   + kênh `voice-engines`), SRT assembly thuần (`video-agent/tts/srt-assemble.js`), trimVideo
+
+## 2026-09-11z — I-MZic: hoàn thiện 10+ cải tiến "làm tất cả" (slideshow, offline export MP4, karaoke, preset…)
+- **Hoàn thiện 2 khung dở của session trước** (UI có sẵn nhưng KHÔNG có logic): nút `exportOfflineBtn` "⚡ Xuất nhanh" và slideshow (`slidesInput/slideModeSel/slideSecs/slidesHint/slidesClearBtn` chỉ nằm trong HTML).
+- **Slideshow engine mới** trong `nova/web/img-to-vid.html`: nạp nhiều ảnh (`state.slides`, token chống race chọn file), lịch phát 2 mode — `time` (mỗi ảnh slideSecs giây, xoay vòng) / `cue` (đổi ảnh theo từng câu SRT, dùng `lyricsVersion` trong cache key). Mỗi ảnh chạy **Ken Burns deterministic** (`kenBurnsAt(idx, entry, p)` — sin-hash theo index + lần phát, Luật 8) cộng dồn với zoom bass. **Chuyển cảnh**: crossfade / chớp đen / đẩy ngang / cắt cứng (0.6s). **Fit-mode**: cover như cũ / nền blur từ chính ảnh (blur 1 lần vào offscreen `/24` rồi upscale — rẻ mà giống hệt) / contain viền đen (chỉ Ken Burns, không nhân zoom bass để viền không phập phồng). Raster per-slide cache Map tối đa 3 ảnh (~8MB/ảnh), zq nhân headroom 1.15 cho KB đỉnh.
+- **Offline export (MP4)**: renderer decode nhạc → FFT radix-2 tự viết (không thêm dep) trên mono 22kHz, 128 dải log 40Hz–11kHz + bass(≤690Hz)/treble(≥4.1kHz) envelope 30 mẫu/s → `offlineEnvAt()` nội suy tuyến tính; bins nội suy cấpframe cho sóng nhạc. Encode **WebCodecs VideoEncoder H.264 Annex B** (thử 5 profile khai báo, fail lộ rõ `IMZIC_NO_H264`), render từng khung theo đồng hồ logic (rAF nghỉ qua `offlineRendering`, khôi phục smoothedEnergy/fxFrame/freqData sau xuất) → IPC **`imzic-offline-export`** (MỚI: `nova/main/ipc/imzic.js` + `preload.js imzicOfflineExport` + inventory regen) → ffmpeg `-f h264 -r fps` + nhạc gốc (`-ss/-t` trim, `afade` fade; có filter → AAC 192k, không → `-c copy`) → dialog lưu `.mp4`. Cancel = không file nửa vời. FPS 24/30/60 + chất lượng 8/14/20 Mbps (realtime MediaRecorder dùng chung `QUALITY_BITRATE`).
+- **Karaoke tô chữ** (`lyricKaraokeSel='word'`): mốc `karaokeX` theo tổng width chữ trong câu, chữ đã hát tô `lyricAccent`; **kiểu chữ** outline (strokeText)/badge (roundRect nền từng dòng) — dùng `roundRectPath` có sẵn; **hiệu ứng dòng**: pop (scale quanh tâm khối)/trượt lên/fade. `drawLyrics(timeOverride)` nhận t truyền vào cho offline.
+- **Cắt & đổ dần nhạc** (section 6 mới, đánh số lại FX→7, Khung→8, Lời→9): trimStart/trimEnd/fadeIn/fadeOut; preview: `fadeGain` node SAU delayNode (loa + bản ghi, không đụng analyser) + render loop tự pause khi tới trimEnd (realtime record chốt qua `activeExportRecorder`); recordAndExport bắt đầu tại trimStart + watchdog theo cửa sổ trim; seek clamp vào vùng trim; offline export truyền trim/fade cho ffmpeg. Gain curve `fadeGainAt(t)` khớp công thức afade.
+- **Preset** (`imzic:presets:v1`): lưu/nạp/xoá toàn bộ cài đặt — refactor `collectSettingsInputs()`/`applySettingsInputs(inp)` dùng chung cho saveSettings/loadSettings (một nguồn); legacy `{chips}` migrate xuống inputs trước khi apply. **Phím tắt**: Space phát/dừng, ←/→ ±5s, F fullscreen (guard input/textarea/select + isExporting).
+- **Marker nhịp trên seek bar**: `drawBeatMarkers()` — đỉnh envelope bass vượt trung bình trượt 1.35×, cách ≥0.28s, vẽ span absolute trên `#beatMarks` (analysis chạy nền ngay khi nạp nhạc, cache theo File ref).
+- **Kiểm định**: `npm run check` EXIT 0 (syntax 452 files, ipc 145 channels, parity/shared/size/toplevel/shadow 0 lỗi); `node --check` inline script img-to-vid PASS (tmp script đã xoá). Shadow check exit 1 lúc trước là stderr-noise + C2 warnings có sẵn của file khác (0 warn img-to-vid).
+- **Lưu ý**: offline analysis ~1 lần/file (decode + FFT, vài giây với bài 3 phút); slideshow chỉ 1 raster cache × 3 ảnh nên máy yếu vẫn ổn; nếu WebCodecs/IPC không có → lỗi lộ rõ kèm hướng dẫn dùng 2 nút realtime (Luật 10, không fallback ngầm).
+
   (`native-tools/ffmpeg.js`). Encoder chain đã có sẵn trong render.js (GPU→CPU).
   Chưa làm: DAG autopipe (P3.2), spy storyboard, thumbnail — cần scope riêng.
   Kiểm định: syntax 447 PASS, shared/parity/ipc/size/toplevel PASS, test:video-agent 6 suite
   PASS (0 fail), test:voice PASS (dọn `__pycache__` runtime artifact của tiến trình khác),
   `npm start` exit 0 (single-instance guard — app đang mở). `npm run check` exit 1 chỉ còn
   C2 renderer-id warnings có sẵn từ trước.
+
+
+## 2026-09-11aa — Session THAM CHIẾU chéo (bị juicy giữa các phiên): hạ tầng bắt gói tin gen bằng node thuần + bài học môi trường — RECON đã xong ở entry `2026-09-11y`, KHÔNG làm trùng
+
+- **Bối cảnh**: user bảo "tiếp tục" (mục 4 — port gen ACCOUNT). Session này CHẠY SONG SONG với một
+  phiên khác đang làm đúng recon gen (entry `2026-09-11y`) → xung đột tài nguyên suốt 2 giờ:
+  Chrome acc-1 bị kill/tái spawn liên tục, electron probe chết im lặng, capture nghe nhầm Chrome chết.
+  **Bài học điều phối: trước khi làm task động đến Chrome acc-1/app, PHẢI đọc MEMORY tail + hỏi user
+  xem có phiên song song nào cùng lĩnh vực không.**
+- **Xác nhận thêm từ phía session này (bổ sung cho 11y)**:
+  - Chrome CfT tự chết đúng như 11y ghi (2-8 phút, GPU crash) — xảy ra cả khi app ĐÓNG → không phải
+    do app; là đặc tính CfT 149 khi mở Flow. Các cờ `--disable-gpu...` của 11y nên đưa vào
+    `launchChrome` (tien-trinh.js) ở task implement.
+  - "Chỉ 1 client CDP/1 page ws" (11y) khớp quan sát: instance capture đầu attach 3-4 tab OK, các
+    instance sau cùng lúc attach được 0 tab (không lỗi, im lặng) → khi cần nhiều client phải tách
+    target session bằng `Target.attachToTarget` (flat) hoặc chạy đúng 1 capture duy nhất.
+  - kill lệnh run_commands bị cancel kéo theo tiến trình detached (Start-Process); WMI Create
+    an toàn hơn nhưng vẫn chết nếu quá trình khác kill theo tên. Node thuần sống lâu nhất
+    (1 instance sống 11+ phút, chỉ "chết" do nghe nhầm Chrome cũ). Task Scheduler chạy vào
+    session không tương tác — KHÔNG dùng cho thứ cần GUI, dùng được cho capture nền.
+- **Hạ tầng MỚI đã xây (GIỮ LẠI, dùng cho task implement — entry 11y phần Next)**:
+  - `nova/scripts/tmp-capture-node.js` — ★ Capture CDP bằng NODE THUẦN: đọc `DevToolsActivePort`
+    trong profile acc-1, gắn ws MỌI tab (poll /json 4s), dump TĂNG DẦN mỗi request khớp
+    (log/json theo PID: `%TEMP%\flow-gen-capture-<pid>.*`). Đã chứng minh attach 4 tab + bắt
+    batchexecute OK. Hạn chế cần vá: đọc port 1 lần lúc start (Chrome chết → nghe nhầm) — phải
+    re-read file mỗi vòng attachAll + kiểm mtime (11y).
+  - `tmp-launch-chrome.js` — spawn Chrome acc-1 + `--remote-debugging-port=0` bằng node thuần
+    (findChrome từ flow-cft chạy tốt không cần electron), chờ port sẵn rồi thoát.
+  - `tmp-drive-flow.js` — lái UI Flow one-shot: `state` (liệt kê nút/input) · `newproject` ·
+    `prompt <text>` (textarea setValue + input event / contenteditable execCommand) · `send`.
+    CHƯA TEST trên wire (Chrome chết trước khi kịp) — song song với `tmp-probe-gen-live5.js`
+    (11y, đã gen thành công 2 lần) → ưu tiên dùng live5, drive-flow chỉ là dự phòng.
+  - `tmp-shot-flow.js` (screenshot + state page), `tmp-check-port.js` (test /json one-shot),
+    `tmp-analyze-capture.js` (bóc rpcid từ dump). Đã xoá `tmp-capture-debug.js`.
+- **Dump cũ `%TEMP%\flow-gen-capture.json` chỉ còn 16 request page-load** (dump 57 request lúc
+  19:11 của probe v6 MẤT do probe chết không kịp save — nguyên nhân viết saveDump tăng dần ở
+  các bản sau). Không sao: capture chuẩn đã nằm ở `%TEMP%\flow-gen-capture\` của 11y
+  (rpc-ogiZ0b-req/res.json + ogiZ0b-freq-decoded.txt + journal đầy đủ).
+- **Trạng thái mục 4 (port gen ACCOUNT)**: RECON XONG (11y): gen = batchexecute `ogiZ0b`,
+  poll = `jwpduf`, kết quả qua `as29s`/flow-content. VIỆC TIẾP THEO = implement page-context
+  gen module (fetch batchexecute từ trang, tái dùng `at`/f.sid) → wire `gen.js` nhánh migrated
+  → vá chrome chết sau gen (cờ GPU) → `npm run check` + gen thật. Task lớn, cần session riêng,
+  môi trường sạch (app đóng, không phiên song song chạy t7/check).
+- **Dọn dẹp cuối phiên**: đã kill mọi capture/launcher node, xoá schtask `NovaFlowCap` (và
+  `NovaFlowGenCapture` trước đó), kill Chrome acc-1 (thô — lần mở sau nhớ `markCleanExit`), tắt
+  app AI Video Studio đang chạy lệch (pid 16432) sau khi user đồng ý. Probe tmp-* giữ lại làm
+  tài liệu công cụ.
+
+## 2026-09-11z — Implement gen BX (ogiZ0b) xong phần code; live test BLOCKED do mất session acc-1
+
+- **Schema ogiZ0b map XONG** (decode `rpc-ogiZ0b-req/res.json` bằng `tmp-decode-ogiz0b.js` — đã xoá):
+  - f.req payload: `[1][0][3]`=seedNum, `[1][0][4]`=3, `[1][0][5]`="NARWHAL", `[1][0][7]`=ctx
+    (null,22,null,null,null,projectId,null×4,**[captchaToken,1]**), `[1][0][8]`=`[[[prompt]]]`,
+    `[1][0][12]/[13]`=client UUID, `[2]`=1, `[3]`=ctx dup, `[4]`=[sceneUuid].
+  - Response SYNC (ảnh): `[0][0][0]`=mediaId, `[0][0][2]`=assetId, `[0][0][6][0][13]`=CDN URL
+    `flow-content.google/image/<mediaId>?Expires&KeyName&Signature`, `[0][0][6][2]`=[1376,768].
+    **KHÔNG cần poll jwpduf cho ảnh.**
+- **GIẢI MÃ ẩn số lớn nhất**: token `0cAFcWeA…` 2468 ký tự trong f.req CHÍNH LÀ token
+  **reCAPTCHA Enterprise** (`grecaptcha.enterprise.execute`, action IMAGE_GENERATION, sitekey
+  `6LdsFiUsAAAAAIjVDZcuLhaHiDn5nnHVXVRQGeMV`) — khớp độ dài ~2400 ký tự ghi trong nen-tang.
+  **Dùng-một-lần**: replay token cũ → server trả gRPC lỗi `PUBLIC_ERROR_UNUSUAL_ACTIVITY`
+  (không trừ credit). Hiện dự đoán đã có 1 lần test replay (bx-live3/4) xác nhận.
+- **Code mới (giữ hợp đồng, check PASS exit 0)**:
+  - `nova/flow-chrome/gen-bx.js` — module gen qua batchexecute chạy NGAY TRONG page
+    flow.google.com (same-origin fetch, tự mang cookie): `genImageBX(cdp,{prompt,projectId})`
+    tự mint captcha trong page (CAPTCHA_PAGE_FN), random seedNum/UUID mỗi request, thay
+    prompt+projectId 2 ctx slot; parse response rt=c (wrb.fr) → media/asset/URL/dims.
+    Lỗi lộ liễu: BX_NO_BL/BX_NO_AT/BX_NAVIGATE/BX_HTTP_x/BX_CAPTCHA*/BX_RPC_ERROR_x/BX_NO_MEDIA/BX_NO_TEMPLATE.
+  - `nova/flow-chrome/gen.js` — `genImageAccount` thay toàn bộ đường REST chết
+    (tRPC createProject + captcha + aisandbox batchGenerateImages) bằng `genImageBX`;
+    thêm fallback mở Chrome KHÔNG-token qua `openForOperation` khi `ensureLive` chết ở
+    captureToken (BX không cần token labs.google). Import `./gen-bx` ở dòng 11.
+  - Template f.req thu hoạch: `<profilesRoot>/flow-bx-template.json` (trích từ capture bằng
+    `tmp-extract-bx-template.js`, payload + projectId + bl + f.sid + notes slot).
+- **Đã học thêm khi probe**: CDP `Page.navigate` bị BỎ QUA im lặng trên tab Flow → phải
+  navigate bằng `window.location.href` trong page; `DevToolsActivePort` STALE liên tục
+  (Chrome nghe 57779 nhưng file ghi 55299) → đọc port mới nhất từ `%TEMP%\chrome-stderr.log`
+  (regex `DevTools listening on ws://127.0.0.1:(\d+)`) — đã vá trong probe; `killProfileChrome`
+  spawn powershell treo (161 process zombie = VS Code terminal shell, vô hại nhưng phải biết).
+  `npm run check` pipe qua `Select-Object` có thể báo exit 1 giả — kiểm `$LASTEXITCODE`.
+- **BLOCKER cuối phiên**: acc-1 bị Google ĐÁ ĐĂNG XUẤT (còn 3 cookies, mất SID/SAPISID —
+  đo `tmp-check-session.js`: /project redirect về /about kiểu guest, /about có WIZ nhưng
+  SNlM0e=null). Live test gen BX chưa chạy được. **NEXT**: user relogin acc-1 thủ công
+  (`tmp-relogin-acc1.js`) → chạy `tmp-test-bx.js` (1 credit) → nếu OK: harvest template mới,
+  test `npm start` GEN_TEST. Chrome CfT vẫn tự chết 2-8 phút (đặc tính 11y) — phải relaunch
+  nhanh trước khi test.
+- [2026-09-11b] **HOÀN TẤT roadmap VEO3 — 3 mục còn lại (P3.2 + spy + thumbnail)**:
+  (1) DAG autopipe trong `web/src/toolbox/utility/autopipe.js` — `_dagDeps()`/`_dagOrder()`
+  topo-sort nhẹ, thứ tự mặc định trùng khít PROD_STEPS tuyến tính cũ (job cũ resume đúng),
+  cycle nối đuôi theo thứ tự khai báo thay vì chết im; thêm `job.disabledSteps` (skip per step)
+  và `job.poolCfg` { nickStrategy, fixedId, slots } áp qua `SET_POOL_CONFIG` trước bước ảnh Flow
+  (nickStrategy per step dùng P1.2). (2) Spy storyboard `native-tools/spy.js` + IPC `spy:run`
+  /`spy:cancel`/`spy:list` (main/ipc/spy.js, đăng ký trong ipc/index.js) + preload
+  `window.native.spy` — yt-dlp TÁI DỤNG `editor-pro/ytdlp-path.js` (ytdlp-bin bundled), whitelist
+  hostname YouTube (chặn subdomain giả mạo `youtube.com.evil.com`), tải ≤720p về
+  `<userData>/output/spy/<jobId>/source.mp4`, trích N frame đều theo thời lượng (probeDur, giữa
+  mỗi khoảng tránh frame đen), ghép tile grid `storyboard.jpg` qua ffmpeg (frame chuẩn hoá bội số
+  cols để tile đủ ô); error codes `SPY_URL_NOT_YOUTUBE`/`SPY_DOWNLOAD_FAILED`/`SPY_CANCELLED`
+  ...; cancel kill tiến trình theo jobId; KHÔNG thêm dependency (Luật 9/10).
+  (3) P4.6: fractal-engine CHƯA phủ thumbnail → thêm renderer `AR.thumbnailText` cuối
+  `web/fractal-engine/ve-2.js` (chữ viền -webkit-text-stroke + từ nhấn nền accent, scale-in;
+  đúng registry build/update/el/seg của engine, không file mới). Bài học tool: editor
+  `insert_line` chèn GIỮA hàm nếu line-number lệch → phải đọc lại file sau insert (spy.js từng
+  bị cắt đôi _spawnTracked, đã sửa). Test headless `nova/scripts/tmp-spy-dag-test.js`: DAG order
+  (mặc định = linear, dep trước step, cycle không mất step) + spy whitelist/surface PASS.
+  Kiểm định: syntax 449 PASS, shared 19 keys PASS, ipc inventory sinh lại có `spy:*`, toplevel
+  PASS, test:video-agent 6/6 PASS, test:voice PASS. Roadmap VEO3: 17/17 mục ✅.
+
+## 2026-09-11ab — Quy chuẩn mới: test trạng thái app BẮT BUỘC qua khoidong.bat (yêu cầu user)
+
+- User chốt: **mỗi lần test/kiểm tra trạng thái hiện tại của app, agent phải mở
+  `D:\AI Video Studio\khoidong.bat`** — không tự spawn electron thay thế.
+- Đã cập nhật **AGENTS.md**: §3 thêm lệnh `.\khoidong.bat` vào danh sách lệnh chuẩn;
+  §6 thêm bước 5 (bắt buộc test trạng thái qua khoidong.bat, mô tả hành vi thật của
+  script), bước cũ 5 "Ghi nhận" thành bước 6. Không sửa pointer (.clinerules…) theo §9 —
+  quy chuẩn sống duy nhất ở AGENTS.md.
+- Hành vi khoidong.bat (đối chiếu source, mtime 2026-09-09): check Node/npm → `npm install`
+  khi thiếu node_modules/electron → đọc entry từ `package.json` "main" (fallback
+- [2026-09-11d] **Chốt hạ P4.6 + smoke 3 lần**: (1) Sửa contract AR.thumbnailText — đọc
+  `P.text || P.headline` và `P.highlight || P.dek` để khớp P() builder của fractal-antarctica-render
+  (trước đó chỉ đọc P.text → qua đường scene chuẩn luôn rơi fallback 'THUMBNAIL'). (2) Thêm demo
+  scene `lay:{a:'thumbnailText'}` vào SC[] của fractal-antarctica-render.html (trang demo độc lập,
+  không ai nhúng) — kiểm chứng bằng mắt được. Xác minh thumbnailText KHÔNG phải code chết:
+  renderer được chọn qua `AR[s.lay.a] || AR.title`, mọi renderer siblings cùng cấp tích hợp,
+  helpers el/seg/lerp/px đều có ở nen-tang.js (nạp trước ve-2), P.stagger mặc định 0.08.
+  (3) Đã xoá tmp-spy-dag-test.js theo quy ước tmp-. (4) Smoke npm start chạy 3 lần: lần 1
+  renderer crashed exitCode=-1 (flaky GPU, ngay lúc load); lần 2 KHÔNG index.html → exit 0;
+  lần 3 CÓ index.html đầy đủ → exit 0, 0 electron process còn lại. Crash không tái hiện với
+  cùng code → kết luận môi trường, không phải do thay đổi. Lưu ý: editor tool từng nhân bản
+- [2026-09-11e] **Dọn dẹp + test app-state chuẩn (khép sổ VEO3)**: (1) tmp-* trong
+  nova/scripts: 128 file, 0 file cũ hơn 48h — TOÀN BỘ là workspace đang hoạt động của
+  tiến trình khác (flow-chrome/bx); KHÔNG dọn, ghi nhận để các session sau không xoá nhầm
+  (tmp* đã gitignore nên không ảnh hưởng git). (2) khoidong.bat --silent: exit 0, app lên
+  đủ (flow-chrome khôi phục 2 account, bridge 8793/8794/8795/8796, Agent Bridge 47280);
+  lifecycle.log sau thời điểm launch SẠCH. Các crash trong ngày (10:39-13:06) là của phiên
+  trước — đúng pattern (b) đã ghi trong AGENTS §6.5, là vấn đề nền tảng chưa xử lý (GPU/
+  renderer chết cụm cùng giây), đề xuất task riêng điều tra. VEO3 chính thức khép sổ.
+
+  khối update() của AR.thumbnailText khi edit (old_text khớp 1 phần) — luôn đọc lại vùng sửa.
+
+  `nova\main.plain.js`) → ping Agent Bridge 47280–47283: đang chạy thì focus cửa sổ
+  (không mở instance 2), chưa chạy thì `start electron .` tách console + chờ bridge ≤30s.
+  `--silent` = không pause khi lỗi; exit code ≠ 0 khi thất bại.
+- Ảnh hưởng: `npm run check` + các test suite KHÔNG thay thế khoidong.bat — kiểm tra
+  trạng thái app sống (UI/runtime) luôn khởi động app bằng bat này; đã chạy được ngay
+  trong phiên làm việc tiếp theo.
+- **Bổ sung cùng ngày (user chốt "có nên đọc log để xem lỗi không → đưa vào AGENTS.md")**:
+  §6.5 nay thêm điều kiện kết thúc test = PHẢI đọc `%APPDATA%\AI Video Studio
+  Independent\lifecycle.log` (tail) sau khi app lên, vì exit 0 + bridge OK không phát
+  hiện được crash renderer/GPU giữa phiên. Căn cứ thực tế đã kiểm chứng: log có 2 nhóm
+  — (a) teardown noise lúc đóng app (vô hại), (b) crash chuỗi GPU + Network Service +
+  renderer cùng một giây (14:22/16:52/18:54 local ngày 11/09) — crash thật, cửa sổ
+  trắng/treo, và `window.js` hiện KHÔNG auto-reload renderer (chỉ in `[renderer:CRASH]`).
+  Vấn đề GPU-crash-chuỗi này còn TREO, chưa fix — nếu user báo "app trắng/treo" thì
+  kiểm tra lifecycle.log trước (Luật 10: không fix mù).
+- **Bổ sung thêm (user chốt "dùng dữ liệu đã lưu trong app, cho ra kết quả thật,
+  không tự sinh đầu vào/đầu ra để test")**: §6 nay có bước 6 mới — test quy trình
+  BẮT BUỘC dùng dữ liệu thật app đã lưu (state `%APPDATA%\AI Video Studio
+  Independent`, `output/job.json`, tài khoản Flow đã khôi phục, tài nguyên
+  `output/`) và kiểm chứng kết quả từ artifact app ghi ra; CẤM bịa mock/sample
+  đầu vào/đầu ra để test hộ (coi là fallback ngầm, Luật 10). Thiếu dữ liệu thật →
+  dừng hỏi user. Bước "Ghi nhận" dời thành §6.7.
+
+
+- [2026-09-11c] **Spy Storyboard UI + E2E thật PASS (bổ sung mục 15)**: tool page
+  "🕵 Spy Storyboard" — `nova/web/spy-panel.js` (IIFE tự mount vào `#spyToolRoot`, pattern
+  srt-translate-panel; guard `window.native.spy` cho web thuần) + nav item `data-tool="toolspy"`
+  + section `tool-toolspy` trong index.html + script tag sau srt-translate-panel. Khớp hợp đồng
+  preload: `spy.run(payload)` KHÔNG có progress event, `spy.cancel(jobId)` truyền string.
+  E2E thật (tmp-spy-e2e.js, đã xoá): `spyRun` tải "Me at the zoo" (youtu.be/jNQXAC9IVRw, 19s)
+  → 6 frame → storyboard.jpg ≥10KB trong 6.0s, `spyList` thấy job — output tạm đã dọn.
+  Lưu ý kiểm định: `npm run check` EXIT 0; lần đọc "exit 1" trước đó là artifact pipe
+  PowerShell (`2>&1 | Select-Object` với stderr) — đo exit code qua `cmd /c ... & echo %errorlevel%`.
+  C2 warnings của check:shadow (mvtv/profiles/autopipe "đã có guard") là warn, không fail.
+
+
+## 2026-09-11ac — MỤC 4 HOÀN THÀNH: gen BX (ogiZ0b) LIVE THÀNH CÔNG end-to-end + vá 2 bug parser gen-bx (regression offline PASS)
+
+- **Live gen THÀNH CÔNG thật sự** (response ogiZ0b thật 20:03 11/9, capture tại
+  `%TEMP%\flow-gen-capture\bx-bad-resp.txt` — tên file 'bad' là do parser cũ không hiểu, KHÔNG phải gen lỗi):
+  mediaId `fd08ef5c-2479-4657-9f5f-9f2a86b7d8cc` · assetId `0ee66560-dc07-47bc-8176-809c6d7b286b` ·
+  CDN URL `flow-content.google/image/<mediaId>?Expires&KeyName=labs-flow-prod-cdn-key&Signature=…`
+  **HTTP 200 image/jpeg 137.843 bytes** (verify bằng Invoke-WebRequest) · dims 1376×768 ·
+  prompt 'A serene mountain lake at dusk…' (đúng prompt tmp-test-bx.js). Session acc-1 đã sống lại
+  trước đó (không rõ user relogin ở đâu — session cookie hoạt động trở lại).
+- **Bug 1 — parseBxResponse mất hết entry**: batchexecute bọc response 2 LỚP `[[[entry,di,af.httprm]]]`;
+  code cũ duyệt `arr` trực tiếp → `entry` là mảng con, `entry[0]` là MẢNG (không phải chuỗi 'wrb.fr')
+  → 0 entry → dump raw + BX_BAD_RESPONSE. Vá: nếu `Array.isArray(arr[0][0])` thì xuống 1 cấp `arr[0]`
+  trước khi duyệt (giữ tương thích arr phẳng).
+- **Bug 2 — parseOgiZ0b sai schema**: map cũ `[0][0][6][0][13]=URL / [0][0][6][2]=dims` là schema
+  NESTED đoán từ capture page-load; response gen thật là schema PHẲNG: `[0][0][0]=mediaId · [2]=assetId ·
+  [7]=prompt · [13]=CDN URL · [19]=[w,h]` (item[6] là SỐ 1, không phải mảng). Vá: đọc phẳng trước +
+  giữ nested fallback + deepFind (≤8 tầng) chuỗi `flow-content.google/image/` và cặp số [w,h] để
+  chống schema dịch tiếp. Luật 10 vẫn giữ: parse fail → BX_NO_MEDIA/BX_BAD_RESPONSE lộ liễu.
+- **Regression OFFLINE PASS**: `nova/scripts/tmp-test-parse-bx.js` (GIỮ LẠI) chạy parseBxResponse +
+  parseOgiZ0b trên đúng file response thật — assert đủ mediaId/assetId/URL/dims/prompt → PASS.
+  Chạy: `npx electron nova/scripts/tmp-test-parse-bx.js` (không cần Chrome, không tốn credit).
+  Từ giờ chỉnh parser gen-bx PHẢI chạy test này.
+- **Vá Chrome CfT tự chết**: `launchChrome` (tien-trinh.js) thêm
+  `--disable-gpu --disable-software-rasterizer --disable-accelerated-video-decode` (11y). Chưa đo
+  lại khoảng sống sau cờ mới.
+- **tmp-relogin-acc1-v2.js** (GIỮ LẠI): relogin đúng cách — launch Chrome CÓ debug, poll cookie THẬT
+  (SID/SAPISID/1PSID qua CDP), KHÔNG tin `account_info` trong Preferences (metadata stale — bản cũ
+  kết luận nhầm 'đã đăng nhập' trong 3 giây). Fallback attach tab New Tab (chrome://newtab) khi mới mở.
+- **Kiểm định**: `npm run check` EXIT 0 (đầy đủ 8 bước, chạy qua `cmd /c ... & echo %errorlevel%` —
+  tránh artifact pipe PowerShell như 11c đã warn).
+- **Next**: (1) khi môi trường sạch + muốn xác nhận trọn gói: chạy lại `tmp-test-bx.js` live (1 credit)
+  để thấy `genImageBX` trả `{ok:true, mediaId, assetId, url, width, height}` trọn vẹn (wire + parse
+  đã chứng minh riêng lẻ); (2) theo dõi bl/f.sid trong template có bị server xoay (BX_NO_BL/BX_NO_AT
+  sẽ báo); (3) wire `gen.js`/app thật qua `npm start` GEN_TEST; (4) dọn các node tmp-watch-gen/
+  tmp-auto-gen của phiên song song khi phiên đó kết thúc.
+
+## 2026-09-11ad — gen BX LIVE PASS trọn vẹn (result JSON + HTTP 200 ảnh) + vá bug byte/char prefix parseBxResponse
+
+- **LIVE END-TO-END PASS** (`tmp-run-bx-live.js` GIỮ LẠI — 1 phát: `openForOperation(1)` → session
+  check → `genImageBX` → ghi result): exit 0, mediaId `195ce714-c9a9-47cc-9f98-9026295ea11a`,
+  assetId `343d21d3-c111-4e29-bae8-2b26bc22ee02`, dims 1376×768, result tại
+  `%TEMP%\flow-gen-capture\bx-live-result.json`. URL CDN verify **HTTP 200 image/jpeg 156.145
+  bytes**. 3 live gen ngày 11/9 (719af720→parser hỏng, fd08ef5c→parser hỏng, 195ce714→PASS);
+  tổng tiêu ~3 credit.
+- **Bug 3 của parseBxResponse (phiên ad vá, bổ sung cho 2 bug phiên ac): prefix độ dài batchexecute
+  đếm BYTE (UTF-8) còn JS string slice theo CHAR** — JSON có ≥1 ký tự multi-byte (dump thật:
+  1157 byte = 1156 char) → `slice(0, len)` lệch → chunk dính ký tự dòng sau → `JSON.parse` nổ
+  → `continue` → 0 entry → BX_BAD_RESPONSE dù gen server THÀNH CÔNG. Vá: bỏ hẳn slice theo
+  prefix, tách JSON theo `'\n'` (batchexecute luôn 1 dòng JSON; prefix chỉ còn vai trò nhận dạng
+  khối). Vẫn merge tốt với fix 2-lớp + deepFind của ac — CẢ HAI regression test PASS trên code
+  hợp nhất: `tmp-parser-test.js` (node thuần, parse dump bx-bad-resp.txt) và
+  `tmp-test-parse-bx.js` (electron, của phiên ac).
+- **SỬA HIỂU SAI QUAN TRỌNG về session check**: `hasSignIn` trong HTML home flow.google.com là
+  **FALSE POSITIVE** — trang đã login vẫn chứa chuỗi "Sign in" (probe trả status 200 +
+  hasSNlM0e=true khi ĐÃ đăng nhập, 9 auth cookies: SID/SAPISID/HSID/SSID/APISID/OSID/NID/1PSID/3PSID).
+  Quyết định guest CHỈ dựa vào cookies (`SID` + `SAPISID` cùng hiện = đã login). Đừng lặp lại
+  lỗi chặn gen nhầm (bx-live5: phân loại guest sai → killProfileChrome → WS_CLOSED oan).
+- **Gocha tiến trình**: (a) `process.exit()` giữa async IIFE trong electron main có thể KHÔNG
+  dừng ngay (bx-live5 in cả 2 nhánh rồi mới chết) → script tmp đặt exit code qua
+  `app.exit(process.exitCode)` ở MỘT điểm duy nhất cuối flow, rẽ nhánh bằng flag + return;
+  (b) `cmd /c "... & echo %ERRORLEVEL%"` expand SỚM (trước khi lệnh trước chạy xong) → luôn
+  ghi exit code bằng `cmd /v:on` + `!ERRORLEVEL!` — các lần đo exit code trước đây dùng
+  `%ERRORLEVEL%` đều nghi ngờ, bản này đo lại `npm run check` = 0 bằng delayed expansion;
+  (c) Chrome CfT có thể crash riêng **Network service** (log stderr: `Network service crashed
+  or was terminated, restarting service` + sandbox `Access is denied` lặp) → tab target WS đứt
+  (WS_CLOSED) dù Chrome sống — đặc tính hạ tầng, retry là đủ (bx-live7 fail → bx-live9 pass).
+- **Next** (kế thừa ac): test app thật qua `npm start` GEN_TEST; theo dõi bl/f.sid xoay;
+  dọn node tmp-watch-gen/tmp-auto-gen của phiên song song khi phiên đó kết thúc.
+- **GEN_TEST QUA PRODUCTION CONTRACT: PASS** (`tmp-gen-test-app.js` GIỮ LẠI — 1 phát:
+  `require('../flow-chrome')` (đúng module lifecycle.js nạp) → `restore()` →
+  `handle('GEN_TEST',{id:1})` → genTest → genImageAccount → ensureLive (token minted
+  qua **cookie→HTTP**, hết hạn 12/9, không cần OAuth Labs) → genImageBX ogiZ0b qua
+  page project b063ff43) → mediaId `9ba374bb-2148-48ff-8732-9266cb0d19a0`, exit 0,
+  HEAD URL = **HTTP 200 image/jpeg 169.418 bytes**. `npm run check` = 0 (exit code đo
+  bằng `cmd /v:on`). Tổng ~5 credit live gen ngày 11/9. LƯU Ý: lần chạy 1 không gọi
+  `restore()` → `NO_ACC` — script yêu cầu `flow-chrome.handle` phải restore account
+  store trước (app thật tự làm lúc boot).
+- **Crash electron -1 giữa OAuth Labs (chưa rõ gốc, theo dõi)**: lần GEN_TEST đầu
+  (20:21) vào nhánh `_taoPhienLabs` (không có cookie labs.google trong cache) → giữa
+  OAuth consent, Chrome CfT Network service crash (`Access is denied` sandbox) và
+  **electron main chết cứng exit -1** cùng giây, KHÔNG có log lỗi app (đã 2>&1) —
+  không phải fallback sạch kiểu `OAUTH_*` của `_taoPhienLabs`. Lần chạy sau
+  `ensureLive` mint token bằng cookie→HTTP nên không vào OAuth nữa → PASS. Giả thuyết
+  (chưa verify): crash Chrome con lúc navigate accounts.google.com kéo tanh electron
+  trên máy này; nếu lặp lại, cân nhắc navigate OAuth trong tab mới riêng hoặc bắt
+  `render-process-gone`/`child-process-gone` ở main để fail lộ liễu thay vì chết.
+
+## 2026-09-11ae — T7 preview nhấp nháy / ảnh-stale sau Tách–Nhân đôi–Playback–Sync Scenes: fix e8f0aecc ĐÃ VERIFIED, 0 mismatch, không cần sửa code thêm
+
+- Nhiệm vụ: verify fix `_t7DrawGfx` stale-response (commit `e8f0aecc`) và quy trình "Sync Scenes" (`t7Build()` → `_t7HookColSync()` — confirmed idempotent, chỉ hook 1 lần). Kết luận: **KHÔNG cần chỉnh source** — probe hiện trạng cho 0 mismatch trên 387 mẫu monitor.
+- Probe: `node nova/scripts/tmp-t7-flicker.js` (GIỮ LẠI, có guard env `T7PROBE_*` nên không self-launch khi ai khác chạy; mô phỏng renderer thật qua Electron, giả lập IPC `previewLayers`/`t7Snapshot`...). Phủ 4 scenario:
+  - **A — Tách + playback qua biên**: preview image luôn khớp clip tại playhead (hash red `35702` / blue `7210` / green `28569` khớp đúng variant qua từng bước chuyển).
+  - **B — Tách + Nhân đôi + `t7Build` rebuild + playback (loop)**: các lần rebuild không sinh ảnh chéo cảnh.
+  - **C — Tách + Nhân đôi có fx/trans + playback**: transform/fx theo đúng clip hiện tại.
+  - **D — đồ hoạ overlay `#t7GfxOv`**: chỉ được ghi bởi `_t7DrawGfx`; việc overlay rơi 571→0 sau Tách là HỢP LỆ — playhead đặt lại về đầu clip mới (`tIn≈0`) mà các layer text/backdrop có in-animation fade (at 0.2–0.5s) nên lúc t=0 chưa hiển thị; không phải stale render.
+- Kiểm định: `npm run check` EXIT 0 (syntax 459 files, shared 34 files/19 state keys, size 662 files 0 lỗi, parity 0, toplevel/shadow sạch). Lưu ý: pipe `npm run check` qua `Select-Object` vẫn có thể báo exit 1 giả như ghi ở 11z/11ad — luôn đo `$LASTEXITCODE` bằng delayed expansion.
+- Không đụng IPC, không đụng export, không sửa file nào của repo (session thuần chẩn đoán + verify).
+
+
+## 2026-09-11ad — MỤC 4 XÁC NHẬN LIVE TRỌN GÓI: `genImageBX` trả `{ok:true, mediaId, assetId, prompt, url, 1376×768}` — parser đã vá chạy THẬT, EXIT 0
+
+- **Live test end-to-end PASS** (21:10-21:15 11/9, 1 credit): `tmp-test-bx.js` →
+  `genImageBX` → response mới mediaId `12a9b8e6-cf3f-4786-8899-e31958f2a715` · assetId
+  `9bed6699-d764-4187-8c40-3adae952a345` · URL flow-content tải **HTTP 200 JPEG 163.366 bytes**
+  (lưu `%TEMP%\flow-gen-capture\bx-live-image.jpg`) · 1376×768 · `bx-live-result.json` GHI ĐÚNG.
+  Parser đã vá (11ac) chạy đúng trên response thật lần 2 liên tiếp.
+- **Bài học mới — electron wrapper kéo Chrome con chết**: `launchChrome` spawn `detached:false` —
+  electron wrapper (tmp-open-acc1) exit(0) → Job object của Electron KILL_ON_CLOSE giết Chrome con
+  (~45s sau). Fix quy trình test: mở acc-1 cho probe NGOÀI app phải dùng `tmp-launch-chrome.js`
+  (node thuần, `detached:true + unref` — Chrome sống độc lập); đã bổ sung đủ cờ engine cho nó
+  (stealth `AutomationControlled` + GPU-disable + không-ngủ + mute).
+- **Bài học mới — thứ tự ưu tiên port**: `tmp-test-bx.js` cũ ưu tiên `chrome-stderr.log` (stale,
+  engine launch không ghi vào đó) → ECONNREFUSED. Vá: `DevToolsActivePort` có mtime <60s GIÀNH
+  ưu tiên; stderr log chỉ là fallback (khớp lesson 11y/11z).
+- **Trạng thái mục 4 (port gen ACCOUNT) = XONG**: recon (11y) ✓ · schema ogiZ0b (11z) ✓ · code
+  gen-bx/gen.js (11z) ✓ · parser vá (11ac) ✓ · regression offline (11ac) ✓ · **live end-to-end ✓**.
+  Còn để theo dõi khi đưa vào sản xuất: (1) `bl`/`f.sid` trong template có thể bị server xoay →
+  lỗi lộ `BX_NO_BL`/`BX_NO_AT`, khi đó harvest lại template; (2) captcha token dùng-một-lần —
+  mỗi gen mint mới (đã làm); (3) video gen (NARWHAL video mode) chưa test — schema có thể khác
+  slot `[1][0][5]`; (4) quota/credit endpoint `nzlxg` nên check trước khi gen hàng loạt.
+- Kiểm định: `npm run check` EXIT 0 (sau khi sửa tmp-test-bx/tmp-launch-chrome + thêm tmp-open-acc1).
+  Dọn dẹp: Chrome acc-1 đã tắt sạch, log tmp ở gốc repo đã xoá; giữ tmp-open-acc1.js,
+  tmp-launch-chrome.js, tmp-test-bx.js, tmp-test-parse-bx.js làm bộ probe tiêu chuẩn cho gen BX.

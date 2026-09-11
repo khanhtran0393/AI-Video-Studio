@@ -5,18 +5,16 @@
      • Poll    : jwpduf chỉ là progress UI — gen ảnh KHÔNG cần poll (đã xác nhận qua
                  capture rpc-ogiZ0b-req/res: response wrb.fr chứa URL ngay).
    Chạy NGAY TRONG page flow.google.com (same-origin fetch) nên tự mang cookie
-   session + không cần Bearer/captcha như đường REST aisandbox cũ (đã chết).
-   f.req dựng từ TEMPLATE thu hoạch (chrome-accounts/flow-bx-template.json — sản
-   phẩm của capture gen thật); chỉ thay prompt. Trường chưa rõ nguồn (seed token
-   0cAFcWeA…, seedNum, sceneUuid) giữ nguyên từ template — server chấp nhận replay.
+   session. f.req dựng từ TEMPLATE thu hoạch (chrome-accounts/flow-bx-template.json,
+   sản phẩm của capture gen thật) + thay các trường NONCE mỗi request: prompt,
+   reCAPTCHA Enterprise token (mint trong page), seedNum, client UUID.
    LỖI lộ liễu theo Luật 10: BX_NO_BL / BX_NO_AT / BX_NAVIGATE / BX_HTTP_<code> /
    BX_BAD_RESPONSE / BX_RPC_ERROR_<code> / BX_NO_MEDIA / BX_NO_TEMPLATE. ── */
 const fs = require('fs');
 const path = require('path');
-const { LOG, evalInPage, profilesRoot, sleep } = require('./nen-tang');
+const { LOG, evalInPage, profilesRoot, sleep, SITE_KEY } = require('./nen-tang');
 
 const FLOW_ORIGIN = 'https://flow.google.com';
-const BX_PATH = '/_/AiSandboxAngularFrontend/data/batchexecute';
 
 /* ── Template f.req (thu hoạch từ gen thật) ─────────────────────────────── */
 const templateFile = () => path.join(profilesRoot(), 'flow-bx-template.json');
@@ -29,18 +27,28 @@ function saveTemplate(t) {
   fs.writeFileSync(templateFile(), JSON.stringify(t, null, 1), 'utf8');
 }
 
-/* Clone payload template + thay prompt ở slot [1][0][8] = [[["<prompt>"]]].
-   Template không có → dựng khung tối thiểu (server sẽ quyết định nhận hay không). */
-function buildOgiZ0bPayload({ prompt, projectId, template, seedNum }) {
+/* Clone payload template + thay các trường nonce:
+   • prompt  [1][0][8] = [[["<prompt>"]]]
+   • captcha [1][0][7][10] và [3][10] = [<reCAPTCHA Enterprise token ~2.4KB>, 1]
+     (token 0cAFcWeA… trong capture CHÍNH LÀ recaptcha token — dùng 1 lần;
+      replay token cũ → PUBLIC_ERROR_UNUSUAL_ACTIVITY — đo live 11/9/2026)
+   • seedNum [1][0][3] + client UUID [12]/[13] → random mỗi request
+   • projectId đồng bộ ở CẢ HAI ctx slot ([1][0][7] và [3]). */
+function buildOgiZ0bPayload({ prompt, projectId, template, captchaToken, seedNum }) {
   if (template && template.payload && template.rpcid === 'ogiZ0b') {
     const p = JSON.parse(JSON.stringify(template.payload));
     p[1][0][8] = [[[String(prompt)]]];
     if (!p[1][0][7]) p[1][0][7] = [null, 22, null, null, null, projectId, null, null, null, null, null];
-    // Đồng bộ projectId ở CẢ HAI ctx slot ([1][0][7] và [3]) — source-path phải khớp.
     if (projectId) {
       if (p[1][0][7].length > 5) p[1][0][7][5] = projectId;
       if (Array.isArray(p[3]) && p[3].length > 5) p[3][5] = projectId;
     }
+    if (captchaToken) {
+      const slot = [captchaToken, 1];
+      if (Array.isArray(p[1][0][7][10])) p[1][0][7][10] = slot;
+      if (Array.isArray(p[3]) && Array.isArray(p[3][10])) p[3][10] = [...slot];
+    }
+    if (seedNum) p[1][0][3] = seedNum;
     if (!p[3]) p[3] = JSON.parse(JSON.stringify(p[1][0][7]));
     return p;
   }
@@ -84,17 +92,27 @@ async function evalArrow(cdp, fnSrc, argJson) {
 
 /* Parse response rt=c: )]}’\n\n<len>\n<json>\n... → mảng các entry wrb.fr */
 function parseBxResponse(text) {
-  let rest = String(text || '').replace(/^\)\]\}'\s*\n/, '');
+  let rest = String(text || '').replace(/^\)\]\}'[^\n]*\n/, '').replace(/^\s+/, '');
   const out = [];
   while (rest.length) {
     const m = rest.match(/^(\d+)\s*\n/);
     if (!m) break;
-    const len = Number(m[1]);
+    // KHÔNG slice theo số prefix: prefix đếm BYTE (UTF-8) còn JS string đếm CHAR —
+    // JSON có ký tự multi-byte sẽ lệch (đo live 11/9: 1157 byte = 1156 char) →
+    // chunk dính rác dòng sau → JSON.parse nổ → mất entry. batchexecute luôn
+    // đặt JSON trên MỘT dòng → tách theo '\n' là đúng tuyệt đối.
     rest = rest.slice(m[0].length);
-    const chunk = rest.slice(0, len);
-    rest = rest.slice(len + 1);
+    const nl = rest.indexOf('\n');
+    const chunk = nl < 0 ? rest : rest.slice(0, nl);
+    rest = nl < 0 ? '' : rest.slice(nl + 1);
     let arr; try { arr = JSON.parse(chunk); } catch { continue; }
-    for (const entry of (arr || [])) {
+    /* batchexecute bọc 2 lớp: [[["wrb.fr",...],["di",...]]] — arr[0] mới là mảng entry.
+       Response đo thật 20:03 11/9: arr = [[wrb.fr-entry, di, af.httprm]] → duyệt arr trực tiếp
+       thì entry là MẢNG CON, entry[0] !== 'wrb.fr' → mất hết entry (bug bx-bad-resp.txt).
+       Nếu arr đã phẳng (mỗi phần tử là entry) thì giữ nguyên. */
+    let list = arr;
+    if (Array.isArray(list[0]) && Array.isArray(list[0][0])) list = list[0];
+    for (const entry of (list || [])) {
       if (Array.isArray(entry) && entry[0] === 'wrb.fr') out.push({ rpcid: entry[1], payload: entry[2], code: entry[4] !== undefined ? entry[4] : null, kind: entry[5] || entry[3] });
     }
   }
@@ -107,9 +125,12 @@ async function ensureProjectPage(cdp, projectId) {
   const u = await evalArrow(cdp,`async () => location.href`, '');
   if (String(u).includes('/project/' + projectId)) return { ok: true };
   await cdp.send('Page.enable', {}).catch(() => {});
-  await evalArrow(cdp,`async (u) => { window.location.href = u; return 'nav'; }`, FLOW_ORIGIN + '/project/' + projectId).catch((e) => { throw new Error('BX_NAVIGATE: ' + (e.message || e)); });
-  for (let i = 0; i < 20; i++) {
-    await sleep(1500);
+  const target = FLOW_ORIGIN + '/project/' + projectId;
+  for (let i = 0; i < 30; i++) {   // ~60s: gán lại location mỗi 3 vòng (tab mới mở hay bị redirect về /about)
+    if (i % 3 === 0) {
+      await evalArrow(cdp,`async (u) => { window.location.href = u; return 'nav'; }`, target).catch(() => 'ctx die (đang navigate)');
+    }
+    await sleep(2000);
     const u2 = await evalArrow(cdp,`async () => location.href`, '').catch(() => '');
     if (String(u2).includes('/project/' + projectId)) {
       for (let j = 0; j < 8; j++) {   // chờ WIZ_global_data sẵn sàng
@@ -129,43 +150,84 @@ async function bxFetch(cdp, { rpcid, freq, sourcePath }) {
   return out;
 }
 
-/* Trích media từ payload ogiZ0b (schema đo 11/9/2026):
-   [0][0][0]=mediaId  [0][0][2]=assetId  [0][0][6][0][13]=CDN URL  [0][0][6][2]=[w,h] */
+/* Trích media từ payload ogiZ0b. Schema ĐO THẬT (response 20:03 11/9, bx-bad-resp.txt):
+   item=[0]=mediaId · [2]=assetId · [7]=prompt · [13]=CDN URL · [19]=[w,h]
+   (schema đo trước đây theo nested item[6][0][13]/item[6][2] — giữ làm fallback; ngoài ra
+   tìm sâu bất kỳ chuỗi flow-content/hoặc cặp [w,h] để chống schema dịch tiếp). */
 function parseOgiZ0b(payloadStr) {
   let inner; try { inner = JSON.parse(payloadStr); } catch { return null; }
   const item = inner && inner[0] && inner[0][0];
   if (!item) return null;
-  const meta = item[6] && item[6][0];
-  const dims = item[6] && item[6][2];
+  const deepFind = (pred, node, depth) => {
+    if (depth > 8 || node == null) return undefined;
+    if (pred(node)) return node;
+    if (Array.isArray(node)) { for (const c of node) { const f = deepFind(pred, c, depth + 1); if (f !== undefined) return f; } }
+    return undefined;
+  };
+  const meta = item[6] && Array.isArray(item[6]) ? item[6][0] : null;
+  const dimsNested = item[6] && Array.isArray(item[6]) ? item[6][2] : null;
+  const url =
+    deepFind((v) => typeof v === 'string' && v.startsWith('https://flow-content.google/image/'), item, 0) ||
+    (meta && typeof meta[13] === 'string' && meta[13].startsWith('http') ? meta[13] : null) || null;
+  const dims = deepFind((v) => Array.isArray(v) && v.length === 2 && typeof v[0] === 'number' && typeof v[1] === 'number' && v[0] > 0 && v[1] > 0, item, 0) || dimsNested || null;
+  const prompt = (typeof item[7] === 'string' && item[7]) || (meta ? meta[7] : null) || null;
   return {
     mediaId: item[0] || null,
     assetId: item[2] || null,
-    prompt: meta ? meta[7] : null,
-    url: (meta && typeof meta[13] === 'string' && meta[13].startsWith('http')) ? meta[13] : null,
+    prompt,
+    url,
     width: dims ? dims[0] : null,
     height: dims ? dims[1] : null,
     raw: inner,
   };
 }
 
+/* Mint reCAPTCHA Enterprise token NGAY TRONG page project (đã đăng nhập —
+   enterprise.js chỉ nạp ở /project/<id>, đo 11/9/2026 trong nen-tang). */
+const CAPTCHA_PAGE_FN = `
+  async (siteKey) => {
+    const s = Date.now();
+    while (!(window.grecaptcha && window.grecaptcha.enterprise && window.grecaptcha.enterprise.execute)) {
+      if (Date.now() - s > 15000) throw new Error('BX_NO_GRECAPTCHA');
+      await new Promise((r) => setTimeout(r, 200));
+    }
+    await new Promise((res) => { try { window.grecaptcha.enterprise.ready(res); } catch (e) { res(); } });
+    return await Promise.race([
+      window.grecaptcha.enterprise.execute(siteKey, { action: 'IMAGE_GENERATION' }),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('BX_CAPTCHA_TIMEOUT')), 25000)),
+    ]);
+  }
+`;
+
 /* Gen 1 ảnh qua ogiZ0b. Trả { ok, mediaId, assetId, url, width, height }
    hoặc NÉM lỗi có mã (Luật 10 — không fallback ngầm). */
-async function genImageBX(cdp, { prompt, projectId, template }) {
+async function genImageBX(cdp, { prompt, projectId, template, captchaToken, siteKey }) {
   if (!prompt) throw new Error('BX_NO_PROMPT');
   if (!projectId) throw new Error('BX_NO_PROJECT');
   const tpl = template || loadTemplate();
   if (!tpl) throw new Error('BX_NO_TEMPLATE (chưa thu hoạch flow-bx-template.json — chạy capture gen thật trước)');
   await ensureProjectPage(cdp, projectId);
-  const payload = buildOgiZ0bPayload({ prompt, projectId, template: tpl });
+  // Mint captcha mới mỗi request (dùng-một-lần; bỏ qua nếu caller tự cấp)
+  let cap = captchaToken || null;
+  if (!cap) {
+    cap = await evalArrow(cdp, CAPTCHA_PAGE_FN, siteKey || SITE_KEY).catch((e) => { throw new Error('BX_CAPTCHA: ' + (e.message || e)); });
+    if (!cap || String(cap).length < 100) throw new Error('BX_CAPTCHA_EMPTY');
+  }
+  const uuid = () => (require('crypto').randomUUID() || 'b-' + Date.now()).toUpperCase();
+  const payload = buildOgiZ0bPayload({ prompt, projectId, template: tpl, captchaToken: cap, seedNum: Math.floor(Math.random() * 2000000000) });
+  if (Array.isArray(payload[1][0]) && payload[1][0].length > 12) { payload[1][0][12] = uuid(); payload[1][0][13] = uuid(); }
   const freq = JSON.stringify([[['ogiZ0b', JSON.stringify(payload), null, 'generic']]]);
   const res = await bxFetch(cdp, { rpcid: 'ogiZ0b', freq, sourcePath: '/project/' + projectId });
   const entries = parseBxResponse(res.text);
   const own = entries.find((e) => e.rpcid === 'ogiZ0b');
-  if (!own) throw new Error('BX_BAD_RESPONSE: thiếu wrb.fr/ogiZ0b (len=' + (res.text || '').length + ')');
-  let parsed = parseOgiZ0b(own.payload);
+  if (!own) {
+    try { fs.writeFileSync(path.join(require('os').tmpdir(), 'flow-gen-capture', 'bx-bad-resp.txt'), res.text || '', 'utf8'); } catch { /* sink */ }
+    throw new Error('BX_BAD_RESPONSE: thiếu wrb.fr/ogiZ0b (len=' + (res.text || '').length + ') head=' + JSON.stringify(String(res.text || '').slice(0, 400)));
+  }
+  const parsed = parseOgiZ0b(own.payload);
   if (!parsed) {
-    // server từ chối: payload có thể là lỗi dạng gRPC/code — lộ liễu cho caller
-    throw new Error('BX_RPC_ERROR: ' + String(own.payload).slice(0, 200));
+    const errInfo = String(own.payload || '').match(/([A-Z_]{6,})/);
+    throw new Error('BX_RPC_ERROR' + (errInfo ? '_' + errInfo[1] : '') + ': ' + String(own.payload).slice(0, 200));
   }
   if (!parsed.url) throw new Error('BX_NO_MEDIA: response không chứa link (mediaId=' + parsed.mediaId + ') — cần poll jwpduf?');
   return { ok: true, ...parsed };

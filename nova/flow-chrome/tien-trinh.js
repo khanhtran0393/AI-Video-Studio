@@ -24,6 +24,9 @@ function launchChrome(id, { debug }) {
     // Vì app TẮT CỨNG Chrome (để không còn tab dưới dock) → Chrome coi là "thoát không đúng cách".
     // Các cờ này ẩn bong bóng "Khôi phục trang" + KHÔNG khôi phục tab cũ (tránh tab dồn lại).
     '--hide-crash-restore-bubble', '--disable-session-crashed-bubble', '--no-restore-session-state',
+    // CfT 149 TỰ CHẾT 2-8 phút (GPU process exit_code=-1, "Network service crashed") — đặc biệt sau
+    // khi gen. Giảm độ sốc GPU (bài học 2026-09-11y): tắt accelerate video/GPU software fallback.
+    '--disable-gpu', '--disable-software-rasterizer', '--disable-accelerated-video-decode',
     ...CO_GIAU_TU_DONG,   // giấu navigator.webdriver — Google chặn "trình duyệt không an toàn" nếu thiếu
   ];
   // Proxy RIÊNG từng account (như đối thủ): mỗi account đi 1 IP, tránh Google liên kết cùng IP.
