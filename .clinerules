@@ -10,3 +10,10 @@ cứng, §6 quy trình an toàn). Cập nhật `MEMORY.md` sau mỗi thay đổi
 Lệnh kiểm định bắt buộc trước khi kết thúc task: `npm run check`
 (+ `npm run test:video-agent` / `npm run test:voice` / `npm start` nếu liên quan).
 
+## Skills ngoài (Gemini CLI)
+
+Thư mục skill dùng chung của user: `C:\Users\Khanh\.gemini\config\skills`
+(145 SKILL.md). Chỉ mục tên + mô tả + path nằm tại `.cline/skills-index.md`.
+Khi task khớp một skill trong chỉ mục → đọc nguyên văn `SKILL.md` tương ứng
+trước khi làm việc. Không nhân bản nội dung skill vào repo.
+

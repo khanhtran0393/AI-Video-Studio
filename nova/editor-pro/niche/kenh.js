@@ -164,4 +164,19 @@ async function similarChannels(channelUrl, onProgress = () => {}, opts = {}) {
     return { ok: true, seed: seedName, queries, failedQueries, cards: cards.sort((a, b) => (b.metrics?.vps || 0) - (a.metrics?.vps || 0)) };
   });
 }
-module.exports = { channelScorecard, similarChannels };
+
+async function channelScorecardAi(opts) {
+  const { channel, subs, median: med, metrics: m, outliers } = opts;
+  if (!outliers || !outliers.length) return { ok: true, analysis: '' };
+  try {
+    const { claude, kfmt } = require('./loi');
+    const analysis = await claude(
+      'Bạn là chuyên gia nội dung YouTube, trả lời tiếng Việt, ngắn gọn.',
+      `Kênh "${channel}" (${kfmt(subs)} sub). Trung vị kênh ${kfmt(med)} view.\nChỉ số: VPS ${m.vps}× · longform ${Math.round(m.longform * 100)}% · độ ổn định (CV) ${m.cv} · xu hướng ${m.trend > 0 ? '+' : ''}${Math.round(m.trend * 100)}%/tháng.\n\nVIDEO VƯỢT TRỘI:\n${outliers.map(x => `x${x.ratio} · ${kfmt(x.views)} view · ${Math.round(x.dur / 60)}p · ${x.title}`).join('\n')}\n\nViết 3-5 câu: mô-típ nào đang ăn ở kênh này, và người mới chen vào bằng cách nào. Bám số liệu, không nói chung chung.`);
+    return { ok: true, analysis };
+  } catch (err) {
+    return { ok: false, error: String((err && err.message) || err).slice(0, 160) };
+  }
+}
+
+module.exports = { channelScorecard, channelScorecardAi, similarChannels };

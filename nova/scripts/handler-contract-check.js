@@ -182,8 +182,17 @@ function collectCallIdentifiers(ast, calls) {
     for (const k in node) {
       if (k === 'loc' || k === 'start' || k === 'end' || k === 'range') continue;
       const v = node[k];
-      if (Array.isArray(v)) for (const x of v) if (x && typeof x === 'object') stack.push(x);
-      else if (v && typeof v === 'object' && typeof v.type === 'string') stack.push(v);
+      // BẮT BUỘC dùng khối {}. Bản 1 dòng cũ `if (Array.isArray(v)) for (...) if (...) x; else ...`
+      // bị dangling-else: `else` bám vào `if` TRONG for, nên mọi property object đơn
+      // (callee, expression, body, init, value…) không bao giờ được push
+      // → traversal chết ngay dưới tầng statement → call collection luôn rỗng.
+      if (Array.isArray(v)) {
+        for (const x of v) {
+          if (x && typeof x === 'object') stack.push(x);
+        }
+      } else if (v && typeof v === 'object' && typeof v.type === 'string') {
+        stack.push(v);
+      }
     }
   }
 }
@@ -193,9 +202,9 @@ function collectCallIdentifiers(ast, calls) {
  *   window.X = ...  /  globalThis.X = ...  /  self.X = ...  /  state.X = ...
  * Đệ quy vào mọi block — kể cả IIFE, onload handler, nested function.
  *
- * Lưu ý: dùng đệ quy thay vì stack lặp vì Node V8 tối ưu hoá for…in sai
- * khiến stack.pop()/push() không push children của node đầu tiên trong một
- * số pattern (xem tmp-isolate3.js vs tmp-isolate12.js).
+ * Lưu ý: dùng đệ quy + khối {} tường minh. Bản stack-lặp cũ từng chết âm thầm
+ * do lỗi dangling-else (else bám nhầm if bên trong for) — đã sửa ở
+ * collectCallIdentifiers; KHÔNG phải lỗi "V8 tối ưu hoá for…in" như chú thích cũ.
  */
 function collectGlobalAssignments(ast, names) {
   if (!ast || !ast.body) return;
@@ -366,7 +375,7 @@ for (const file of jsFiles) {
   const text = jsTextCache.get(file);
   if (text !== undefined) callsByFile.set(file, extractCallsFromCode(text));
 }
-const SCAN_DEAD_IN = /[\\/](?:src[\\/]toolbox[\\/][^\\/]+\.js|handdraw-studio-panel\.js|video-agent-panel\.js|whiteboard-studio-panel\.js|tdt-studio-panel\.js|srt-translate-panel\.js)$/i;
+const SCAN_DEAD_IN = /[\\/](?:src[\\/]toolbox[\\/][^\\/]+\.js|handdraw-studio-panel\.js|video-agent-panel\.js|whiteboard-studio-panel\.js|srt-translate-panel\.js)$/i;
 for (const file of jsFiles) {
   if (!SCAN_DEAD_IN.test(file)) continue;
   const text = jsTextCache.get(file);

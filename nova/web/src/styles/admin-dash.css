@@ -1,0 +1,29 @@
+
+        #admDash .adm-eye{font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin:22px 0 12px}
+        #admDash .adm-stats{display:grid;grid-template-columns:repeat(6,1fr);gap:12px}
+        #admDash .adm-stats.rev{grid-template-columns:repeat(4,1fr)}
+        #admDash .adm-card{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:14px 15px}
+        #admDash .adm-card .t{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+        #admDash .adm-card .ic{width:32px;height:32px;border-radius:9px;display:grid;place-items:center;font-size:15px}
+        #admDash .adm-card .num{font-size:24px;font-weight:850;letter-spacing:-.02em;line-height:1;font-variant-numeric:tabular-nums}
+        #admDash .adm-card .lbl{font-size:11px;color:var(--text-muted);margin-top:5px}
+        #admDash .adm-grid{display:grid;gap:14px}
+        #admDash .adm-panel{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px 18px}
+        #admDash .adm-panel h4{font-size:14px;font-weight:800;margin:0 0 2px}
+        #admDash .adm-panel .pd{font-size:11px;color:var(--text-dim);margin-bottom:14px}
+        #admDash .adm-donut-wrap{display:flex;align-items:center;gap:16px}
+        #admDash .adm-donut{position:relative;width:130px;height:130px;flex:0 0 auto}
+        #admDash .adm-donut svg{width:130px;height:130px}
+        #admDash .adm-donut-c{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+        #admDash .adm-donut-c .v{font-size:20px;font-weight:850;font-variant-numeric:tabular-nums}
+        #admDash .adm-donut-c .k{font-size:9px;font-weight:700;letter-spacing:.1em;color:var(--text-dim);text-transform:uppercase}
+        #admDash .adm-leg{display:flex;flex-direction:column;gap:8px;flex:1;min-width:0}
+        #admDash .adm-leg .r{display:flex;align-items:center;gap:8px;font-size:12px}
+        #admDash .adm-leg .d{width:8px;height:8px;border-radius:2px;flex:0 0 auto}
+        #admDash .adm-leg .n{margin-left:auto;font-weight:800;font-variant-numeric:tabular-nums}
+        #admDash .adm-otbl{width:100%;border-collapse:collapse;font-size:12.5px}
+        #admDash .adm-otbl th{text-align:left;padding:8px 12px;font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--text-dim);border-bottom:1px solid var(--border)}
+        #admDash .adm-otbl td{padding:9px 12px;border-bottom:1px solid var(--border)}
+        #admDash .adm-pill{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:999px}
+        @media(max-width:900px){#admDash .adm-stats,#admDash .adm-stats.rev{grid-template-columns:repeat(3,1fr)}}
+      

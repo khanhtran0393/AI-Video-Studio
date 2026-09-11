@@ -47,17 +47,6 @@ if (!ensureSingleInstance()) {
 // Tắt bớt log rác nội bộ của Chromium (vd "ffmpeg_common Unsupported pixel format") cho terminal sạch.
 // KHÔNG ảnh hưởng log console.log của app (Node) — vẫn thấy các dòng [flow].
 try { app.commandLine.appendSwitch('log-level', '3'); } catch (e) { /* */ }
-// Studio (TDTStudio PyQt nhúng) vẽ bằng GDI vào HWND con (WS_CHILD) của cửa sổ
-// app. Mặc định Chromium Windows render qua DirectComposition bằng child
-// window "Intermediate D3D Window" (WS_EX_LAYERED | WS_EX_NOREDIRECTIONBITMAP)
-// phủ kín client area → cửa sổ con GDI KHÔNG có bề mặt để vẽ → Studio chỉ thấy
-// nền trắng/trống. Tắt DirectComposition để Chromium quay lại đường present
-// cổ điển (swap chain + redirection surface): GPU vẫn tăng tốc, nhưng HWND con
-// GDI vẽ được bình thường. Bắt buộc đặt TRƯỚC app.whenReady().
-if (process.platform === 'win32') {
-  try { app.commandLine.appendSwitch('disable-direct-composition'); } catch (e) { /* */ }
-}
-
 // Bắt lỗi toàn cục (uncaughtException/unhandledRejection) → thông báo thân thiện, không văng app.
 installGlobalErrorHandlers();
 

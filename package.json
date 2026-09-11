@@ -13,7 +13,9 @@
     "check:ipc": "node nova/scripts/ipc-inventory.js",
     "check:parity": "node nova/scripts/parity-check.js",
     "check:shared": "node nova/scripts/shared-names-check.js",
-    "check": "npm run check:syntax && npm run check:ipc && npm run check:parity && npm run check:shared",
+    "check:size": "node nova/scripts/size-budget-check.js",
+    "check:toplevel": "node nova/scripts/toplevel-check.js",
+    "check": "npm run check:syntax && npm run check:ipc && npm run check:parity && npm run check:shared && npm run check:size && npm run check:toplevel && npm run check:shadow",
     "test:foundation": "node nova/scripts/foundation-test.js",
     "test:agent-bridge": "node nova/scripts/agent-bridge-test.js",
     "test:local-media": "node nova/scripts/local-media-test.js",
@@ -30,7 +32,8 @@
     "build:win": "electron-builder --config electron-builder.json --win",
     "build": "electron-builder --config electron-builder.json",
     "smoke:packaged": "node nova/scripts/packaged-smoke.js",
-    "build:smoke": "npm run build:win && npm run smoke:packaged"
+    "build:smoke": "npm run build:win && npm run smoke:packaged",
+    "check:shadow": "node nova/scripts/handler-shadow-check.js"
   },
   "dependencies": {
     "@remotion/bundler": "4.0.518",

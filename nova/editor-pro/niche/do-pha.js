@@ -122,4 +122,22 @@ async function viewSpikes(seed, onProgress = () => {}, opts = {}) {
   };
 }
 
-module.exports = { viewSpikes, snapLoad, snapSave, snapPath };
+async function viewSpikesAi(opts) {
+  const { seed, windowHours, movers, rockets, newVideos, medVel } = opts;
+  try {
+    const { claude, kfmt } = require('./loi');
+    const lines = [
+      movers.length ? `NHẢY VIEW (so ${windowHours}h trước):\n${movers.slice(0, 6).map(v => `+${kfmt(v.delta)} (${v.deltaPct != null ? v.deltaPct + '%' : '?'}) · ${v.viewsFmt} view · ${v.title}`).join('\n')}` : '',
+      rockets.length ? `BỨC TỐC THEO NGÀY ĐĂNG (view/ngày${medVel ? `, trung vị video cũ ${kfmt(medVel)}/ngày` : ''}):\n${rockets.slice(0, 6).map(v => `${v.velFmt}${v.xVel ? ` (x${v.xVel})` : ''} · ${v.viewsFmt} view · ${v.days} ngày tuổi · ${v.title}`).join('\n')}` : '',
+      newVideos.length ? `VỪA LÊN SÓNG (≤ 2 ngày):\n${newVideos.slice(0, 6).map(v => `${v.viewsFmt} view · ${v.title} — ${v.channel}`).join('\n')}` : '',
+    ].filter(Boolean).join('\n\n');
+    const analysis = await claude(
+      'Bạn là chuyên gia nội dung YouTube, trả lời tiếng Việt, ngắn gọn.',
+      `Ngách "${seed}". Dữ liệu đột phá view:\n\n${lines}\n\nViết 3-5 câu: nội dung/mô-típ gì đang bùng trong ngách này, và người làm faceless nên chen vào ngay bằng góc nào. Bám số liệu, không nói chung chung.`);
+    return { ok: true, analysis };
+  } catch (err) {
+    return { ok: false, error: String((err && err.message) || err).slice(0, 160) };
+  }
+}
+
+module.exports = { viewSpikes, viewSpikesAi, snapLoad, snapSave, snapPath };

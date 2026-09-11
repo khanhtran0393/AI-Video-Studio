@@ -42,10 +42,11 @@ dựng video (Remotion + FFmpeg) → đăng YouTube đa kênh.
 ## 3. Lệnh chuẩn (chạy ở gốc repo, Windows/PowerShell)
 
 ```powershell
-npm run check            # syntax + ipc + parity + shared (chạy TRƯỚC khi kết thúc task)
+npm run check            # syntax + ipc + parity + shared + size + toplevel (chạy TRƯỚC khi kết thúc task)
 npm run check:syntax     # node --check toàn bộ .js nguồn
 npm run check:ipc        # sinh ipc-inventory.json — mọi kênh IPC main + renderer
 npm run check:shared     # hợp đồng tên dùng chung (xem §4)
+npm run check:toplevel   # xung đột khai báo top-level renderer theo thứ tự nạp index.html
 npm start                # smoke: splash ≥5s → main window → IPC → quit sạch
 
 npm run test:video-agent          # 6 suite video-agent (unit + IPC + bridge + phases + gateway)

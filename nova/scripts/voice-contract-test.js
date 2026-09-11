@@ -38,15 +38,33 @@ assert(voiceNative.includes('running: !!u, url: u || URL'), 'status() phải tr�
 
 // 4. Renderer dùng URL động, gán từ main (không hard-code tuyệt đối).
 // Sau refactor 068263fe, toolbox block 3 (khoảng 5900+ dòng) được tách ra các file
-// riêng trong nova/web/src/toolbox/. Phần khai báo `let VOICE_URL = …` chuyển sang
-// shared-consts.js; phần gán từ main chuyển sang utility.js. Hợp đồng vẫn là
-// "renderer dùng URL động từ main" — chỉ là nguồn đọc đã thay đổi, nên test quét
-// cả index.html (boot glue) lẫn các file toolbox (runtime code thật).
+// riêng trong nova/web/src/toolbox/; từ 2026-09-10 god-file utility.js lại được tách
+// tiếp thành kernel + 27 file utility/*.js trong THƯ MỤC CON. Phần khai báo
+// `let VOICE_URL = …` ở shared-consts.js; phần gán từ main ở utility/voice.js.
+// Hợp đồng vẫn là "renderer dùng URL động từ main" — chỉ là nguồn đọc đã thay đổi,
+// nên test quét ĐỆ QUY cả index.html (boot glue) lẫn toàn bộ cây toolbox (.js,
+// runtime code thật) và — từ 2026-09-10k, khi 18 khối <style> được tách khỏi
+// index.html — cả cây web/src/styles/ (.css): stylesheet cũng là một phần renderer,
+// selector UI (vd .gcard.has-del) sống ở đó. Không đệ quy sẽ false-pass:
+// shared-consts.js còn bản sao hàm voice cũ (bị utility/voice.js override lúc
+// runtime) khiến pattern kiểm ở sai nguồn; bỏ sót styles sẽ hụt selector đã tách.
 const indexHtml = read('web/index.html');
-const toolboxDir = path.join(NOVA, 'web', 'src', 'toolbox');
-const toolboxBundle = fs.readdirSync(toolboxDir).filter((f) => f.endsWith('.js'))
-  .map((f) => fs.readFileSync(path.join(toolboxDir, f), 'utf8')).join('\n');
-const rendererSources = indexHtml + '\n' + toolboxBundle;
+const collectTree = (rootDir, ext) => {
+  const files = [];
+  (function walk(dir) {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (entry.isFile() && entry.name.endsWith(ext)) files.push(full);
+    }
+  })(rootDir);
+  return files;
+};
+const toolboxBundle = collectTree(path.join(NOVA, 'web', 'src', 'toolbox'), '.js')
+  .map((f) => fs.readFileSync(f, 'utf8')).join('\n');
+const stylesBundle = collectTree(path.join(NOVA, 'web', 'src', 'styles'), '.css')
+  .map((f) => fs.readFileSync(f, 'utf8')).join('\n');
+const rendererSources = indexHtml + '\n' + toolboxBundle + '\n' + stylesBundle;
 assert(/let VOICE_URL\s*=/.test(rendererSources), 'renderer phải khai báo let VOICE_URL (index.html hoặc toolbox)');
 assert(/if\s*\(\s*cur\?\.url\s*\)\s*VOICE_URL\s*=\s*cur\.url/.test(rendererSources), 'renderer lấy VOICE_URL từ voiceStatus()');
 assert(/if\s*\(\s*r\?\.url\s*\)\s*VOICE_URL\s*=\s*r\.url/.test(rendererSources), 'renderer lấy VOICE_URL từ voiceStart()');

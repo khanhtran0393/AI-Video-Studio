@@ -1,0 +1,13 @@
+
+      #tool-toolscript .ts-grid{display:grid;grid-template-columns:1fr 1.15fr;gap:16px;margin-top:16px}
+      @media(max-width:1100px){#tool-toolscript .ts-grid{grid-template-columns:1fr}}
+      #tool-toolscript .ts-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px}
+      #tool-toolscript .ts-lbl{font-size:12px;color:var(--text-muted);margin:14px 0 6px;display:block}
+      #tool-toolscript .ts-lbl:first-child{margin-top:0}
+      #tool-toolscript .ts-field{width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:10px 12px;font-size:13px;color:var(--text)}
+      #tool-toolscript .ts-chip{font-size:12px;background:var(--surface-2);border:1px solid var(--border);padding:6px 12px;border-radius:20px;color:var(--text);cursor:pointer}
+      #tool-toolscript .ts-chip.on{background:color-mix(in srgb,var(--accent) 18%,transparent);border-color:var(--accent);color:var(--accent)}
+      #tool-toolscript .ts-prof{background:var(--surface-2);border:1px dashed var(--border);border-radius:10px;padding:11px 13px;font-size:12px;color:var(--text-muted);line-height:1.6;white-space:pre-wrap;max-height:120px;overflow:auto}
+      #tool-toolscript .ts-out{width:100%;min-height:420px;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:14px;font-size:14px;line-height:1.8;color:var(--text);white-space:pre-wrap;resize:vertical;font-family:inherit}
+      #tool-toolscript .ts-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+    

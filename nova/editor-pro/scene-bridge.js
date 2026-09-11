@@ -1,5 +1,5 @@
-// Cầu nối Tool 2 → Editor Pro (editor.html): nhận ảnh cảnh (base64) + số giây + mp3
-// → xuất ảnh ra file tạm → dựng project schema editor.html (mỗi cảnh = 1 "Cảnh"/section).
+// Cầu nối Tool 2 → gói dựng cảnh theo schema "Cảnh"/section: nhận ảnh cảnh (base64) + số giây + mp3
+// (UI editor.html đã GỠ — trang mồ côi, chỉ còn schema + IPC; xem MEMORY 2026-09-10o).
 const fs = require('fs'); const path = require('path'); const os = require('os');
 
 let _pending = null;   // gói chờ editor kéo về
@@ -57,7 +57,7 @@ function registerSceneBridge(ipcMain) {
       return { ok: true, count: built.count, totalDuration: built.totalDuration };
     } catch (err) { return { ok: false, error: String(err && err.message || err).slice(0, 200) }; }
   });
-  // editor.html kéo gói về (rồi xoá)
+  // consumer kéo gói về (rồi xoá) — trước là editor.html (đã gỡ, MEMORY 2026-09-10o)
   H('nova:sceneBridge:pull', async () => {
     const p = _pending; _pending = null;
     return p ? { ok: true, ...p } : { ok: false };

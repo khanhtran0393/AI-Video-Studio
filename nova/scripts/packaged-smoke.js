@@ -188,38 +188,6 @@ async function runToolSweep(cdp, report) {
   return { tools: results, videoAgentWizard };
 }
 
-async function runTdtStudioCheck(cdp) {
-  await cdp.click('[data-tool="toolstudio"]');
-  await cdp.waitFor(`document.querySelector('#tool-toolstudio')?.classList.contains('active')`, 'Studio tool activation', 10000);
-  const panel = await cdp.waitFor(`(() => {
-    const dock = document.querySelector('#tsNativeDock');
-    if (!dock || !window.native?.tdtStudio) return null;
-    const rect = dock.getBoundingClientRect();
-    return rect.width >= 100 && rect.height >= 80 ? {
-      width: Math.round(rect.width), height: Math.round(rect.height), dpr: window.devicePixelRatio || 1,
-    } : null;
-  })()`, 'Studio dock layout', 10000);
-  const status = await cdp.waitFor(`(async () => {
-    const st = await window.native.tdtStudio.status();
-    return st?.running && st.ready ? st : null;
-  })()`, 'bundled Studio startup', 90000, 500);
-  const appDir = String(status.appDir || '');
-  if (!status.pythonExists || !status.pysideOk || !status.cv2Ok || !status.hostScriptExists || !status.appMainExists) {
-    throw new Error(`Studio bundled runtime is incomplete: ${JSON.stringify(status)}`);
-  }
-  if (!status.embed || !status.pid) throw new Error(`Studio did not enter embedded mode: ${JSON.stringify(status)}`);
-  if (/D:\\repo\\TDTStudio/i.test(appDir) || !/app\.asar\.unpacked[\\/]nova[\\/]tdt-studio[\\/]app$/i.test(appDir)) {
-    throw new Error(`Studio resolved an unexpected app directory: ${appDir}`);
-  }
-  const resize = await cdp.evaluate(`window.native.tdtStudio.setRect(${JSON.stringify({ relX: 240, relY: 180, width: 640, height: 360, dpr: 1 })})`);
-  if (!resize?.ok) throw new Error(`Studio rejected a dock resize command: ${JSON.stringify(resize)}`);
-  return {
-    ok: true, pid: status.pid, embed: status.embed, startup: 'ready',
-    runtime: { python: status.pythonExists, pyside: status.pysideOk, cv2: status.cv2Ok },
-    appDir, dock: panel, resize: { ok: true },
-  };
-}
-
 async function closeApp(cdp, child) {
   if (cdp) {
     try { await cdp.send('Browser.close', {}, 5000); } catch (_) {}
@@ -343,7 +311,6 @@ async function main() {
       throw new Error(`UI tool sweep surfaced renderer errors:\n${detail}`);
     }
     report.checks.toolSweep = { ok: true, tools: sweep.tools.map((entry) => entry.tool), videoAgentWizard: wizard };
-    report.checks.tdtStudio = await runTdtStudioCheck(cdp);
 
     await cdp.click('[data-tool="toolsettings"]');
     await cdp.waitFor(`getComputedStyle(document.querySelector('#apiSection')).display !== 'none'`, 'API settings visibility', 10000);

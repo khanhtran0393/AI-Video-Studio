@@ -39,7 +39,10 @@ main.plain.js  ──┬── main/identity.js      app.setName / setAppUserMod
 - `storage/settings-store.js` → `registerSettingsIpc` (kho API key, sendSync).
 - `auto-fix/client-error-reporter/electron-bridge.js` → `registerElectronErrorBridge`.
 - `editor-pro/register.js` → `registerEditorPro` (464 kênh `documentary:*`/`videoAgent:*`…,
-  gọi từ root tại `app.whenReady`, dùng userDataDir riêng tư).
+  gọi từ root tại `app.whenReady`, dùng userDataDir riêng tư). Lưu ý: UI cũ
+  `editor.html` + `style.css`/`editor.css`/`nova-theme.css` + `assets/cursors/`
+  đã **GỠ** (MEMORY 2026-09-10o — trang mồ côi: 254/257 tài nguyên tham chiếu
+  không tồn tại, không loader nào mở nó); register.js chỉ còn phục vụ IPC.
 
 ## Bridge cục bộ (khởi động trong `ipc/index.js`, dọn dẹp trong `lifecycle.js`)
 
@@ -88,6 +91,70 @@ build step nên không dùng import/export ở đây.
 Thứ tự nạp: nen-tang → ve-1 → ve-2 → chuyen. Trang render ghi đè `media` sau
 khi nạp (thay nền gradient bằng ảnh thật) — function declaration là global
 nên ghi đè xuyên file vẫn đúng, đừng đổi thành `const`.
+
+### `web/src/toolbox/utility/` (từ god-file `utility.js` 13.780 dòng / 889 hàm, nạp trong `index.html`)
+
+Tách verbatim theo dải dòng (không sửa thân hàm), kiểm chứng bằng partition
+1..N + multiset (tên hàm & dòng phi-rỗng **0 mất / 0 dư**, `node --check` 28/28,
+`scripts/web-origin-qa.js` PASS). Kernel giữ **16 hàm dùng chéo** tại chỗ vì hợp đồng
+`web-origin-qa.js` yêu cầu `_t7FileUrl` + `/local-media` nằm trong `utility.js`.
+
+| File | Nội dung chính |
+|---|---|
+| `utility.js` (kernel, 164 dòng/16 hàm) | `escapeHtml`, `copyText`, `parseSRT`, `_t7FileUrl`/`hdFileUrl`/`wbFileUrl`, debounce, fmt thời lượng… |
+| `utility/keys.js` | API key, provider switch, CLI login (`onProviderChange`, `renderKeyFields`…). |
+| `utility/tier.js` | Pro/Max gate (`isPro`, `gateTool`, upgrade modal) + admin dashboard (`adm*`). |
+| `utility/shell.js` | Theme, nav filter, sidebar/user box, toast, link hỗ trợ, cập nhật app. |
+| `utility/dashboard.js` | `renderDashboard` + thống kê + điều khiển auto-run nhanh. |
+| `utility/autopipe.js` | `_runPipeline`, lịch sử job (`_hist*`), cấu hình kênh (`applyChannelCfg`). |
+| `utility/llm.js` | Cài đặt API, `callLLM` + provider (Anthropic/OpenAI/Compat/Claude), usage. |
+| `utility/nav.js` | `switchTool` — điều hướng giữa các tool panel. |
+| `utility/upscale.js` | Hàng đợi upscale ảnh (`up*`). |
+| `utility/ts.js` | Tool kịch bản / novel architect (`_tsNovel*`). |
+| `utility/voice.js` | OmniVoice/TTS: `voice*`, `giong*` (nạp, vẽ, thử, ghép, backend). |
+| `utility/mvtv.js` | Motion vision (`_mv*`) + sinh video TV (`tvGenerate`, model keys). |
+| `utility/promptlib.js` | Sửa prompt tại chỗ, style tail, thư viện asset (`_getLib`). |
+| `utility/profiles.js` | Cloud state (`saveState`), profile CRUD, style preset & style images. |
+| `utility/tf.js` | Google Flow engine UI: `tf*`, `bulk*`, `fc*`, `tfGenScenes`/`tfGenAssets`. |
+| `utility/t2-split.js` | Nạp kịch bản, tách cảnh fast/smart/AI, `balanceScenes`. |
+| `utility/t2-scenes.js` | Kiểm soát cảnh, nguồn (`nguon`), tags canon, wardrobe. |
+| `utility/t2-prompts.js` | `doSplit`/`doPrescan`/`doAssign`, `buildSceneGenPrompt`, prompt B. |
+| `utility/t2-audio.js` | Auto audio, whisper keys, `syncTool2`, `renderSceneTimeline`. |
+| `utility/t2-cast.js` | Thu cast → assets (`_collectCastToAssets`), `renderT2Assets`, `renderPreview`. |
+| `utility/t2-regen.js` | Pool sinh lại cảnh (`_t2Regen*`), `renderTable`, videoAgent event bridge. |
+| `utility/t2-edit.js` | Renumber, sửa/gộp/thêm cảnh, SRT, `restoreUI`. |
+| `utility/t3-assets.js` | Prompt nhân vật/bối cảnh, dropzone, renamer, zip. |
+| `utility/stock.js` | Tìm media đa nguồn (Pexels/Pixabay/Unsplash/archives), web picker, CSV/SRT. |
+| `utility/veo.js` | Cache prompt Veo (`_t6Veo*`) + `genSingleVeoPrompt`, `renderVeoPrompts`. |
+| `utility/t7.js` | Nova timeline/editor: `_t7*` (clips, layers, AI edit, export, rails). |
+| `utility/transcribe.js` | `_t8TranscribeBlob`, wav 16k, `groupWordsIntoLines`, `_t9SnapChapters`, `_t11*` keys. |
+| `utility/niche.js` | Ngách (`nf*`), t9 ref topic, `_giongCloud`. |
+
+Thứ tự nạp trong `index.html`: `shared-consts.js` → kernel `utility.js` → 27 file
+`utility/*.js` → các `tool-*.js`. Cả 28 file đều chỉ chứa function declaration
+hoisted (0 lệnh chạy lúc nạp) nên thứ tự GIỮA chúng không quan trọng; ràng buộc
+duy nhất là nạp **sau `shared-consts.js`** — 74 hàm trùng tên peer trong đó vẫn
+được utility override đúng như thời god-file. EOL chuẩn hoá LF khi tách.
+
+### `web/src/styles/` (từ 18 khối `<style>` inline trong `index.html`, nạp ngay tại vị trí cũ)
+
+Rút verbatim từng khối (không sửa CSS), thay bằng `<link rel="stylesheet">`
+**tại đúng vị trí cũ** → thứ tự cascade bất biến. Verify: reverse-rebuild
+(replace ngược link → style) khớp gốc sau normalize LF + multiset dòng
+(0 mất / 0 dư). `index.html` **6.100 → 3.604 dòng** — rời warning `check:size`.
+
+| File | Nội dung |
+|---|---|
+| `styles/base.css` (1.215 dòng) | Design tokens `:root`, reset, layout khung, sidebar/nav/toast, dashboard nền. |
+| `styles/video-agent.css` | Wizard Video Agent từng bước (whiteboard studio). |
+| `styles/build-video.css` (605 dòng) | Màn Dựng video redesign: bin \| preview \| inspector + timeline. |
+| `styles/tool-{script,2,6,9,10,imzic,anim,niche,flow,upscale,voice}.css` | CSS riêng từng tool. |
+| `styles/admin-dash.css` | Bảng admin dashboard (`#admDash`). |
+| `styles/{upgrade,gate,update}-modal.css` | 3 modal hệ thống. |
+
+MIME `.css` phục vụ bởi `main/server.js` (text/css, no-cache, không CSP).
+2 `url(data:image/svg+xml…)` trong build-video/upscale là data:URI — không phụ
+thuộc base URL nên chuyển external an toàn.
 
 ## editor-pro/niche — tách module CommonJS (khác kiểu với web renderer)
 

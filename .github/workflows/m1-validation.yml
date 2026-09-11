@@ -70,6 +70,7 @@ jobs:
           npm run check:ipc
           npm run check:parity
           npm run check:shared
+          npm run check:shadow
           npm run test:foundation
 
       - name: Audit production dependencies

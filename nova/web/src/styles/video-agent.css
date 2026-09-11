@@ -1,0 +1,169 @@
+
+        /* VIDEO AGENT WIZARD — UI từng bước cho người mới (mô hình Whiteboard
+           Studio). Markup do web/video-agent-panel.js dựng động vào
+           #videoAgentRoot; toàn bộ class bắt đầu bằng va-. */
+        #tool-toolvideoagent .va-root{ max-width:900px; }
+        #tool-toolvideoagent .va-hide{ display:none; }
+        #tool-toolvideoagent .va-notice{ background:color-mix(in srgb,var(--amber) 10%,transparent);
+          border:1px solid color-mix(in srgb,var(--amber) 34%,transparent);border-radius:9px;
+          padding:10px 14px;font-size:12.5px;line-height:1.55;color:var(--text);margin-bottom:12px; }
+        #tool-toolvideoagent .va-tabs{ display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px; }
+        #tool-toolvideoagent .va-tab{ background:var(--surface);border:1px solid var(--border);color:var(--text-muted);
+          padding:8px 16px;border-radius:999px;font-family:inherit;font-size:12.5px;font-weight:600;
+          cursor:pointer;transition:all .12s; }
+        #tool-toolvideoagent .va-tab:hover{ border-color:var(--accent);color:var(--text); }
+        #tool-toolvideoagent .va-tab.active{ background:color-mix(in srgb,var(--accent) 16%,transparent);
+          border-color:var(--accent);color:var(--accent); }
+        #tool-toolvideoagent .va-steps{ display:flex;flex-direction:column;gap:14px; }
+        #tool-toolvideoagent .va-step{ background:var(--surface);border:1px solid var(--border);border-radius:14px;
+          padding:16px 18px;box-shadow:0 10px 26px -22px rgba(0,0,0,.35); }
+        #tool-toolvideoagent .va-step.active{ border-color:var(--accent); }
+        #tool-toolvideoagent .va-step.done{ border-color:color-mix(in srgb,var(--green) 45%,var(--border)); }
+        #tool-toolvideoagent .va-step-head{ display:flex;align-items:center;gap:10px;margin-bottom:12px; }
+        #tool-toolvideoagent .va-step-num{ width:26px;height:26px;border-radius:50%;display:inline-flex;
+          align-items:center;justify-content:center;font-weight:700;font-size:12px;flex:none;
+          background:var(--surface-2);border:1px solid var(--border);color:var(--text-muted); }
+        #tool-toolvideoagent .va-step.active .va-step-num{ background:var(--accent);border-color:var(--accent);color:var(--on-accent); }
+        #tool-toolvideoagent .va-step.done .va-step-num{ background:var(--green);border-color:var(--green);color:#fff; }
+        #tool-toolvideoagent .va-step-title{ font-size:14px;font-weight:700; }
+        #tool-toolvideoagent .va-step-sub{ font-size:12px;color:var(--text-muted);margin-top:2px; }
+        #tool-toolvideoagent .va-lbl{ font-size:11.5px;font-weight:600;color:var(--text-muted);
+          text-transform:uppercase;letter-spacing:.5px;margin:10px 0 5px; }
+        #tool-toolvideoagent .va-field{ width:100%;background:var(--surface-2);border:1px solid var(--border);
+          border-radius:9px;padding:10px 12px;font-size:13px;color:var(--text);font-family:inherit;
+          transition:border-color .12s; }
+        #tool-toolvideoagent .va-field:focus{ outline:none;border-color:var(--accent); }
+        #tool-toolvideoagent textarea.va-field{ min-height:150px;resize:vertical;line-height:1.7; }
+        #tool-toolvideoagent .va-row{ display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px; }
+        #tool-toolvideoagent .va-opt{ display:flex;align-items:center;gap:8px;font-size:12.5px;
+          color:var(--text);margin-top:10px;cursor:pointer; }
+        #tool-toolvideoagent .va-hint{ font-size:12px;color:var(--text-muted);line-height:1.6;margin-top:8px; }
+        #tool-toolvideoagent .va-btn{ background:var(--surface);border:1px solid var(--border);color:var(--text);
+          padding:8px 14px;border-radius:8px;font-family:inherit;font-size:12.5px;font-weight:600;
+          cursor:pointer;transition:all .12s; }
+        #tool-toolvideoagent .va-btn:hover:not(:disabled){ border-color:var(--accent);background:var(--surface-2); }
+        #tool-toolvideoagent .va-btn:focus-visible{ outline:none;border-color:var(--accent);
+          box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 15%,transparent); }
+        #tool-toolvideoagent .va-btn:disabled{ opacity:.5;cursor:not-allowed; }
+        #tool-toolvideoagent .va-btn.primary{ background:var(--accent);border-color:var(--accent);color:var(--on-accent); }
+        #tool-toolvideoagent .va-btn.primary:hover:not(:disabled){ background:var(--accent-2);border-color:var(--accent-2); }
+        #tool-toolvideoagent .va-btn.big{ padding:12px 24px;font-size:14px; }
+        #tool-toolvideoagent .va-btn.ghost{ background:transparent; }
+        #tool-toolvideoagent .va-chips{ display:flex;gap:6px;flex-wrap:wrap;margin-top:8px; }
+        #tool-toolvideoagent .va-chip{ display:inline-flex;align-items:center;gap:6px;background:var(--surface-2);
+          border:1px solid var(--border);border-radius:999px;padding:4px 10px;font-size:12px;
+          max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+        #tool-toolvideoagent .va-chip button{ background:none;border:none;color:var(--text-muted);cursor:pointer;
+          font-size:13px;line-height:1;padding:0;font-family:inherit; }
+        #tool-toolvideoagent .va-chip button:hover{ color:var(--red); }
+        #tool-toolvideoagent .va-prog{ height:10px;background:var(--surface-2);border:1px solid var(--border);
+          border-radius:6px;overflow:hidden;margin-top:12px; }
+        #tool-toolvideoagent .va-prog-fill{ height:100%;width:0;background:var(--accent);transition:width .25s; }
+        #tool-toolvideoagent .va-log{ background:#0d0f1a;color:#cdd6e4;font:11.5px/1.6 ui-monospace,Menlo,monospace;
+          padding:12px 14px;border-radius:10px;max-height:220px;overflow:auto;white-space:pre-wrap;
+          word-break:break-all;margin-top:10px; }
+        #tool-toolvideoagent .va-check{ display:flex;flex-direction:column;gap:4px;margin-top:10px; }
+        #tool-toolvideoagent .va-check-row{ display:flex;gap:8px;font-size:12.5px;color:var(--text-muted);
+          align-items:baseline; }
+        #tool-toolvideoagent .va-check-row.cur{ color:var(--text);font-weight:600; }
+        #tool-toolvideoagent .va-ic{ width:1.4em;flex:none; }
+        #tool-toolvideoagent .va-kv{ display:grid;grid-template-columns:auto 1fr;gap:5px 16px;
+          font-size:12.5px;line-height:1.6; }
+        #tool-toolvideoagent .va-kv .k{ color:var(--text-muted);white-space:nowrap; }
+        #tool-toolvideoagent .va-video{ width:100%;border-radius:12px;border:1px solid var(--border);
+          background:#000;margin-top:10px; }
+        #tool-toolvideoagent details.va-more{ margin-top:10px; }
+        #tool-toolvideoagent details.va-more summary{ cursor:pointer;font-size:12px;color:var(--text-muted); }
+        #tool-toolvideoagent .va-table{ width:100%;border-collapse:collapse;font-size:12px;margin-top:8px; }
+        #tool-toolvideoagent .va-table th{ text-align:left;font-size:11px;color:var(--text-muted);
+          text-transform:uppercase;letter-spacing:.5px;padding:4px 6px;border-bottom:1px solid var(--border); }
+        #tool-toolvideoagent .va-table td{ padding:4px 6px;border-bottom:1px solid var(--border);vertical-align:top; }
+        @media(max-width:760px){ #tool-toolvideoagent .va-root{ max-width:100%; } }
+        #tool-toolvideoagent details.va-import{ margin-top:14px;border:1.5px dashed color-mix(in srgb,var(--accent) 45%,var(--border));
+          border-radius:12px;padding:10px 12px;background:color-mix(in srgb,var(--accent) 5%,var(--surface)); }
+        #tool-toolvideoagent details.va-import>summary{ display:flex;align-items:center;gap:10px;cursor:pointer;list-style:none; }
+        #tool-toolvideoagent details.va-import>summary::-webkit-details-marker{ display:none; }
+        #tool-toolvideoagent .va-import-sum-ic{ font-size:18px; }
+        #tool-toolvideoagent .va-import-sum-t{ display:flex;flex-direction:column;gap:1px;min-width:0;flex:1; }
+        #tool-toolvideoagent .va-import-sum-t b{ font-size:13px; }
+        #tool-toolvideoagent .va-import-sum-s{ font-size:11px;color:var(--text-muted); }
+        #tool-toolvideoagent .va-import-badge{ min-width:20px;height:20px;border-radius:999px;display:inline-flex;align-items:center;
+          justify-content:center;font-size:11px;font-weight:700;padding:0 7px;flex:none;
+          background:color-mix(in srgb,var(--green) 18%,transparent);border:1px solid color-mix(in srgb,var(--green) 45%,transparent);color:var(--green); }
+        #tool-toolvideoagent .va-src-grid{ display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px;margin-top:10px; }
+        #tool-toolvideoagent .va-src{ display:flex;align-items:center;gap:10px;background:var(--surface);
+          border:1px solid var(--border);border-radius:11px;padding:10px 12px; }
+        #tool-toolvideoagent .va-src.wide{ grid-column:1/-1; }
+        #tool-toolvideoagent .va-src-ic{ width:34px;height:34px;border-radius:9px;display:inline-flex;align-items:center;
+          justify-content:center;font-size:16px;flex:none;background:var(--surface-2);border:1px solid var(--border); }
+        #tool-toolvideoagent .va-src.ok{ border-color:color-mix(in srgb,var(--green) 35%,var(--border)); }
+        #tool-toolvideoagent .va-src.ok .va-src-ic{ background:color-mix(in srgb,var(--accent) 16%,var(--surface-2));
+          border-color:color-mix(in srgb,var(--accent) 40%,var(--border)); }
+        #tool-toolvideoagent .va-src-info{ min-width:0;flex:1; }
+        #tool-toolvideoagent .va-src-name{ font-size:12.5px;font-weight:700;line-height:1.35; }
+        #tool-toolvideoagent .va-src-desc{ font-size:11.5px;color:var(--text-muted);line-height:1.45;margin-top:2px;
+          overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+        #tool-toolvideoagent .va-src.ok .va-src-desc{ color:var(--green); }
+        #tool-toolvideoagent .va-src-btn{ flex:none;padding:5px 14px;font-size:12px; }
+        #tool-toolvideoagent .va-voice-pick{ display:flex;gap:8px;align-items:center;margin-top:8px; }
+        #tool-toolvideoagent .va-voice-pick select{ flex:1;min-width:0;width:auto; }
+        #tool-toolvideoagent .va-flow-grp{ display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;margin-top:8px; }
+        #tool-toolvideoagent .va-flow{ position:relative;display:flex;gap:10px;align-items:flex-start;background:var(--surface);
+          border:1.5px solid var(--border);border-radius:12px;padding:12px 36px 12px 12px;cursor:pointer;transition:all .15s; }
+        #tool-toolvideoagent .va-flow:hover{ border-color:color-mix(in srgb,var(--accent) 55%,var(--border)); }
+        #tool-toolvideoagent .va-flow.on{ border-color:var(--accent);background:color-mix(in srgb,var(--accent) 9%,var(--surface));
+          box-shadow:0 10px 26px -16px color-mix(in srgb,var(--accent) 60%,transparent); }
+        #tool-toolvideoagent .va-flow-ic{ width:36px;height:36px;border-radius:10px;display:inline-flex;align-items:center;
+          justify-content:center;font-size:17px;flex:none;background:var(--surface-2);border:1px solid var(--border); }
+        #tool-toolvideoagent .va-flow.on .va-flow-ic{ background:var(--accent);border-color:var(--accent);color:var(--on-accent); }
+        #tool-toolvideoagent .va-flow-t{ min-width:0; }
+        #tool-toolvideoagent .va-flow-t b{ display:block;font-size:13px; }
+        #tool-toolvideoagent .va-flow-t span{ display:block;font-size:11.5px;color:var(--text-muted);line-height:1.5;margin-top:2px; }
+        #tool-toolvideoagent .va-flow-check{ position:absolute;top:8px;right:10px;font-size:13px;font-weight:800;color:var(--border); }
+        #tool-toolvideoagent .va-flow.on .va-flow-check{ color:var(--accent); }
+        #tool-toolvideoagent .va-flow input[type=checkbox]{ position:absolute;opacity:0;width:1px;height:1px; }
+        #tool-toolvideoagent .va-btn.va-cta{ width:100%;padding:14px 24px;font-size:15px;border-radius:12px;
+          background:linear-gradient(120deg,var(--accent),var(--accent-2));border:none;color:var(--on-accent);
+          box-shadow:0 12px 30px -12px color-mix(in srgb,var(--accent) 70%,transparent); }
+        #tool-toolvideoagent .va-btn.va-cta:hover:not(:disabled){ filter:brightness(1.08);transform:translateY(-1px); }
+        @media(max-width:760px){ #tool-toolvideoagent .va-rail-lbl{ display:none; }
+          #tool-toolvideoagent .va-src-grid{ grid-template-columns:1fr; } }
+        /* ── REFRESH 2026-09-06: hero + rail + thẻ nguồn + thẻ luồng (chế độ Dễ) ── */
+        #tool-toolvideoagent .va-tabs{ display:inline-flex;background:var(--surface);border:1px solid var(--border);
+          border-radius:12px;padding:4px;gap:4px;margin-bottom:16px; }
+        #tool-toolvideoagent .va-tab{ border:1px solid transparent;background:transparent;border-radius:9px; }
+        #tool-toolvideoagent .va-tab.active{ background:var(--accent);color:var(--on-accent); }
+        #tool-toolvideoagent .va-hero{ position:relative;overflow:hidden;border-radius:16px;padding:22px 24px;margin-bottom:14px;
+          background:linear-gradient(120deg,color-mix(in srgb,var(--accent) 26%,#101322) 0%,#181030 55%,color-mix(in srgb,var(--accent) 20%,#0d1020) 100%);
+          border:1px solid color-mix(in srgb,var(--accent) 38%,var(--border)); }
+        #tool-toolvideoagent .va-hero::after{ content:'';position:absolute;inset:0;pointer-events:none;
+          background:radial-gradient(620px 200px at 88% -30%,color-mix(in srgb,var(--accent) 30%,transparent),transparent 70%); }
+        #tool-toolvideoagent .va-hero-in{ position:relative;z-index:1;max-width:660px; }
+        #tool-toolvideoagent .va-hero-badge{ display:inline-block;font-size:10.5px;font-weight:800;letter-spacing:1.2px;
+          color:var(--accent);text-transform:uppercase;background:color-mix(in srgb,var(--accent) 15%,transparent);
+          border:1px solid color-mix(in srgb,var(--accent) 42%,transparent);border-radius:999px;padding:3px 10px;margin-bottom:10px; }
+        #tool-toolvideoagent .va-hero-title{ margin:0 0 6px;font-size:22px;line-height:1.25;font-weight:800;color:#fff; }
+        #tool-toolvideoagent .va-hero-sub{ margin:0;font-size:12.5px;line-height:1.6;color:rgba(255,255,255,.82); }
+        #tool-toolvideoagent .va-hero-chips{ display:flex;gap:6px;flex-wrap:wrap;margin-top:12px; }
+        #tool-toolvideoagent .va-hero-chip{ font-size:11.5px;color:#fff;background:rgba(255,255,255,.09);
+          border:1px solid rgba(255,255,255,.18);border-radius:999px;padding:3px 10px; }
+        #tool-toolvideoagent .va-rail{ position:relative;display:grid;grid-template-columns:repeat(4,1fr);gap:8px;
+          margin:0 0 16px;padding:14px 12px 10px;background:var(--surface);border:1px solid var(--border);border-radius:14px; }
+        #tool-toolvideoagent .va-rail::before{ content:'';position:absolute;top:26px;left:12.5%;right:12.5%;height:2px;
+          background:var(--border); }
+        #tool-toolvideoagent .va-rail-node{ position:relative;display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0; }
+        #tool-toolvideoagent .va-rail-dot{ width:26px;height:26px;border-radius:50%;display:inline-flex;align-items:center;
+          justify-content:center;font-size:11.5px;font-weight:700;background:var(--surface-2);border:2px solid var(--border);
+          color:var(--text-muted);z-index:1;transition:all .2s; }
+        #tool-toolvideoagent .va-rail-node.active .va-rail-dot{ background:var(--accent);border-color:var(--accent);
+          color:var(--on-accent);box-shadow:0 0 0 5px color-mix(in srgb,var(--accent) 18%,transparent); }
+        #tool-toolvideoagent .va-rail-node.done .va-rail-dot{ background:var(--green);border-color:var(--green);color:#fff; }
+        #tool-toolvideoagent .va-rail-lbl{ font-size:11.5px;color:var(--text-muted);font-weight:600;text-align:center; }
+        #tool-toolvideoagent .va-rail-node.active .va-rail-lbl{ color:var(--text); }
+        #tool-toolvideoagent .va-step{ position:relative;border-radius:16px;padding:18px 20px;
+          transition:border-color .2s,box-shadow .2s; }
+        #tool-toolvideoagent .va-step.active{ border-color:var(--accent);
+          box-shadow:0 12px 34px -22px color-mix(in srgb,var(--accent) 55%,transparent); }
+        #tool-toolvideoagent .va-step-num{ width:32px;height:32px;font-size:13.5px; }
+        #tool-toolvideoagent .va-step.active .va-step-num{ background:linear-gradient(135deg,var(--accent),var(--accent-2)); }
+      

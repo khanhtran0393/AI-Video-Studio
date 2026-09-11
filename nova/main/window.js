@@ -71,7 +71,7 @@ function createWindow(startUrl) {
     state.mainWindow.webContents.on('did-finish-load', () => {
       setTimeout(async () => {
         try {
-          const toolIds = ['tool1','tool2','tool3','tool4','tool5','tool6','tool7','tool8','tool9','toolvoice','toolvideoagent','tooldash','toolscript','toolflow','toolupscale','toolniche','toollog','toolsettings','toolimzic','toolwhiteboard','toolhanddraw','toolstudio','toolsrttranslate','tooladmin'];
+          const toolIds = ['tool1','tool2','tool3','tool4','tool5','tool6','tool7','tool8','tool9','toolvoice','toolvideoagent','tooldash','toolscript','toolflow','toolupscale','toolniche','toollog','toolsettings','toolimzic','toolwhiteboard','toolhanddraw','toolsrttranslate','tooladmin'];
           const results = [];
           // Init check
           try {

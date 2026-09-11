@@ -1,0 +1,7 @@
+
+        #tool-toolflow .fc{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px 18px;margin-bottom:14px}
+        #tool-toolflow .fc-step{display:flex;align-items:center;gap:9px;font-weight:800;font-size:12.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin-bottom:14px}
+        #tool-toolflow .fc-step .n{width:20px;height:20px;border-radius:6px;background:var(--accent);color:var(--on-accent);display:grid;place-items:center;font-size:11px;flex:none}
+        #tool-toolflow .fc-step .r{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;text-transform:none;letter-spacing:0;align-items:center}
+        #tool-toolflow .fc .label{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-dim);font-weight:600;display:block;margin:0 0 5px}
+      

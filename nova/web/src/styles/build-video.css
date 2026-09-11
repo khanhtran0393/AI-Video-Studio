@@ -1,0 +1,605 @@
+
+      /* ==== DỰNG VIDEO — redesign (mockup A: bin | preview | inspector + timeline) ==== */
+      #tool-tool7{ --t7-gut:26px; --t7-scene:var(--accent); --t7-sub:#e0715c; --t7-over:#7c9fe0; --t7-voice:var(--green); --t7-music:#6ea8dc; }
+      html.dark #tool-tool7{ --t7-music:#6ea8dc; --t7-over:#8fb0ea; }
+      #tool-tool7 .t7-ovtrk{min-height:52px}
+      .t7-addov{font-size:10.5px;font-weight:600;color:var(--t7-over);border:1px solid color-mix(in srgb,var(--t7-over) 45%,transparent);border-radius:7px;padding:3px 8px;cursor:pointer;background:color-mix(in srgb,var(--t7-over) 12%,transparent)}
+      .t7-addov:hover{background:color-mix(in srgb,var(--t7-over) 22%,transparent)}
+      .t7-ov{position:absolute;top:5px;bottom:5px;border-radius:7px;overflow:hidden;border:1px solid color-mix(in srgb,var(--t7-over) 60%,transparent);background-size:cover;background-position:center;cursor:grab;box-shadow:0 2px 6px -3px rgba(0,0,0,.5)}
+      .t7-ov.sel{outline:2px solid var(--t7-over);outline-offset:-1px;z-index:3}
+      .t7-ov .lab{position:absolute;left:4px;top:3px;right:4px;font-size:9px;font-weight:700;color:#fff;background:rgba(0,0,0,.5);padding:0 5px;border-radius:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .t7-ov .trim{position:absolute;right:0;top:0;bottom:0;width:9px;cursor:ew-resize;background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--t7-over) 60%,transparent))}
+      .t7-ovempty{color:var(--text-dim);font-size:11px;padding:0 10px;display:flex;align-items:center;height:100%}
+      #tool-tool7 .t7-top{display:flex;align-items:center;gap:12px;padding:12px 15px;background:var(--surface);border:1px solid var(--border);border-radius:14px;flex-wrap:wrap}
+      #tool-tool7 .t7-top .tool-title{margin:0}
+      #tool-tool7 .t7-top .tool-subtitle{margin-top:1px}
+      .t7-sp{flex:1}
+      .t7-proj{display:inline-flex;align-items:center;gap:7px;padding:5px 12px;background:var(--surface-2);border:1px solid var(--border);border-radius:999px;font-size:12px;font-weight:600;color:var(--text-muted)}
+      .t7-proj .pd{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 0 3px color-mix(in srgb,var(--green) 22%,transparent)}
+      .t7-seg{display:inline-flex;background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:3px}
+      .t7-seg button{border:0;background:transparent;color:var(--text-muted);font:inherit;font-size:12px;font-weight:600;padding:5px 11px;border-radius:6px;cursor:pointer}
+      .t7-seg button.on{background:var(--surface);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.14)}
+      .t7-actions{display:flex;gap:9px;flex-shrink:0}
+
+      .t7-grid{display:grid;grid-template-columns:62px 250px minmax(0,1fr) 330px;gap:12px;margin-top:12px;align-items:start}
+      @media(max-width:1240px){.t7-grid{grid-template-columns:62px 230px minmax(0,1fr)}.t7-inspector{grid-column:1 / -1}}
+      @media(max-width:900px){.t7-grid{grid-template-columns:62px minmax(0,1fr)}.t7-inspector{grid-column:1 / -1}}
+      /* Thanh biểu tượng dọc — mỗi nhóm một kho, thay cho 3 tab chữ chen nhau ở đầu cột. */
+      .t7-rail{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:6px 5px;display:flex;flex-direction:column;gap:3px;position:sticky;top:12px}
+      .t7-rail b{position:relative;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 2px 6px;border-radius:10px;cursor:pointer;font-weight:500;
+        font-size:8.5px;line-height:1.15;text-align:center;color:var(--text-muted);border:1px solid transparent;transition:background .12s,color .12s}
+      .t7-rail b:hover{background:var(--surface-2);color:var(--text)}
+      .t7-rail b.on{background:color-mix(in srgb,var(--accent) 14%,transparent);border-color:color-mix(in srgb,var(--accent) 45%,transparent);color:var(--accent)}
+      .t7-rail b i{font-style:normal;font-size:15px;line-height:1}
+      .t7-rail b u{position:absolute;top:2px;right:3px;text-decoration:none;background:var(--surface-2);border:1px solid var(--border);color:var(--text-dim);
+        font-size:7.5px;line-height:1;padding:1.5px 3px;border-radius:20px;min-width:12px;text-align:center}
+      .t7-rail b.on u{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+      .t7-rail hr{border:0;border-top:1px solid var(--border);margin:3px 4px}
+      .t7-panel{background:var(--surface);border:1px solid var(--border);border-radius:14px}
+      .t7-ph2{display:flex;align-items:center;gap:8px;padding:12px 14px 9px}
+      .t7-lbl{font-size:10.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text-dim);flex:1}
+      .t7-chip{font-size:10.5px;font-weight:700;padding:3px 8px;border-radius:999px;background:var(--surface-3);color:var(--text-muted)}
+      .t7-mini{border:1px solid var(--border);background:var(--surface-2);color:var(--text-muted);font:inherit;font-size:11px;font-weight:600;padding:4px 9px;border-radius:8px;cursor:pointer}
+      .t7-mini:hover{color:var(--text);border-color:var(--accent)}
+      .t7-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:15px}
+      .t7-plabel{font-size:10.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text-dim);margin-bottom:10px}
+
+      /* scene bin (cards) */
+      .t7-binlist{padding:2px 10px 12px;display:grid;grid-template-columns:1fr 1fr;gap:9px;max-height:600px;overflow:auto;align-content:start}
+      .t7-scardpic{position:relative;aspect-ratio:16/9;background:var(--surface-3);border-radius:8px 8px 0 0;overflow:hidden;display:grid;place-items:center;font-size:18px;color:var(--text-dim)}
+      .t7-scardpic img{width:100%;height:100%;object-fit:cover;display:block}
+      .t7-sdur{position:absolute;right:5px;bottom:5px;z-index:2;font-size:9.5px;font-weight:700;background:rgba(0,0,0,.6);color:#fff;padding:1px 6px;border-radius:20px}
+      .t7-scapt{font-size:11px;padding:5px 8px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:5px}
+      .t7-tabs{display:inline-flex;background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:3px}
+      .t7-tabs button{border:0;background:transparent;color:var(--text-muted);font:inherit;font-size:11.5px;font-weight:600;padding:4px 9px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;gap:5px}
+      .t7-tabs button.on{background:var(--surface);color:var(--text)}
+      .t7-tabs button .t7-chip{padding:1px 6px;font-size:9.5px}
+      .t7-mediagrid{padding:2px 10px 12px;display:grid;grid-template-columns:1fr 1fr;gap:8px;max-height:540px;overflow:auto}
+      .t7-mediaitem{border:1px solid var(--border);border-radius:10px;overflow:hidden;background:var(--surface-2);position:relative}
+      .t7-mediaitem:hover{border-color:var(--border-bright)}
+      .t7-mediaitem .th{aspect-ratio:16/9;background:var(--surface-3) center/cover no-repeat;display:grid;place-items:center;font-size:20px;color:var(--text-dim)}
+      .t7-mediaitem .kb{position:absolute;top:4px;left:4px;font-size:8.5px;font-weight:800;padding:1px 5px;border-radius:5px;color:#fff;background:rgba(0,0,0,.55)}
+      .t7-mediaitem .rm{position:absolute;top:3px;right:3px;width:18px;height:18px;border-radius:6px;background:rgba(0,0,0,.5);color:#fff;border:0;cursor:pointer;font-size:11px;display:grid;place-items:center;opacity:0}
+      .t7-mediaitem:hover .rm{opacity:1}
+      .t7-mediaitem .nm{font-size:10px;padding:4px 6px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text-muted)}
+      .t7-mediaitem .act{display:flex;gap:4px;padding:5px}
+      .t7-mediaitem .act button{flex:1;font-size:9.5px;font-weight:700;padding:3px 4px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--accent);cursor:pointer}
+      .t7-mediaitem .act button:hover{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+      .t7-mediaempty{grid-column:1/-1;padding:24px 12px;text-align:center;color:var(--text-dim);font-size:11.5px}
+      .t7-srow{display:flex;flex-direction:column;padding:0;border:1px solid var(--border);border-radius:9px;background:var(--surface-2);cursor:pointer;overflow:hidden;transition:border-color .12s,transform .12s;content-visibility:auto;contain-intrinsic-size:auto 108px}
+      .t7-srow:hover{border-color:var(--border-bright);transform:translateY(-2px)}
+      .t7-srow.sel{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 9%,var(--surface))}
+      .t7-snum{position:absolute;top:3px;left:4px;z-index:2;font-size:9px;font-weight:800;background:rgba(0,0,0,.5);color:#fff;padding:1px 5px;border-radius:5px}
+      .t7-scell{display:flex;align-items:center;gap:10px;min-width:0;flex:1}
+      .t7-thumb{width:54px;height:32px;border-radius:7px;flex-shrink:0;object-fit:cover;background:var(--surface-3);display:grid;place-items:center;font-size:14px;color:var(--text-dim)}
+      .t7-thumbwrap{position:relative;flex-shrink:0;width:54px;height:32px;border-radius:7px;overflow:visible}
+      .t7-vidbtn{position:absolute;right:-6px;bottom:-6px;width:20px;height:20px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text-muted);font-size:11px;cursor:pointer;display:grid;place-items:center;padding:0;line-height:1;z-index:2}
+      .t7-vidbtn:hover{border-color:var(--accent);color:var(--accent)}
+      .t7-vidbtn.on{background:var(--accent);color:#1c0f05;border-color:var(--accent)}
+      .t7-sname{font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .t7-sdesc{font-size:10.5px;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;display:flex;align-items:center;gap:5px}
+      .t7-durin{width:44px;flex-shrink:0;background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:5px 4px;font-size:11.5px;color:var(--text);text-align:center;box-sizing:border-box;-moz-appearance:textfield;appearance:textfield}
+      .t7-durin::-webkit-outer-spin-button,.t7-durin::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+      .t7-stat{display:inline-flex;align-items:center;gap:5px;font-size:10.5px}
+      .t7-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+      .t7-kebab{color:var(--text-dim);text-align:center;cursor:pointer;flex-shrink:0;padding:2px 4px;border-radius:6px}
+      .t7-kebab:hover{background:var(--surface-3);color:var(--red)}
+
+      /* inspector */
+      .t7-inspbody{padding:2px 14px 6px}
+      /* Cột phải TỰ CUỘN thay vì kéo dài vô tận — panel nhiều nhóm gập/mở nên dễ dài quá màn hình. */
+      #t7Detail{max-height:calc(100vh - 210px);overflow-y:auto;overscroll-behavior:contain}
+      #t7Detail::-webkit-scrollbar{width:9px}
+      #t7Detail::-webkit-scrollbar-thumb{background:var(--border-2);border-radius:20px}
+      #t7Detail::-webkit-scrollbar-track{background:transparent}
+      /* ── nhóm gập/mở trong Chi tiết ── */
+      #tool-tool7 .t7-sect{border:1px solid var(--border);border-radius:10px;margin-top:8px;background:var(--surface-2);overflow:hidden}
+      #tool-tool7 .t7-sect>summary{list-style:none;cursor:pointer;padding:9px 11px;display:flex;align-items:flex-start;gap:8px}
+      #tool-tool7 .t7-sect>summary::-webkit-details-marker{display:none}
+      #tool-tool7 .t7-sect>summary b{display:block;font-size:12.5px;font-weight:700;color:var(--text)}
+      #tool-tool7 .t7-sect>summary em{font-style:normal;font-size:10.5px;color:var(--text-muted);display:block;line-height:1.3;margin-top:1px}
+      #tool-tool7 .t7-sect>summary .cv{margin-left:auto;flex:0 0 auto;width:20px;height:20px;border-radius:50%;background:var(--surface-3);color:var(--text-dim);display:flex;align-items:center;justify-content:center;font-size:10px}
+      #tool-tool7 .t7-sect[open]>summary .cv{background:var(--accent);color:var(--on-accent)}
+      #tool-tool7 .t7-sect .bd2{padding:0 11px 11px}
+      #tool-tool7 .t7-sect.danger{border-color:color-mix(in srgb,var(--red) 35%,transparent);background:color-mix(in srgb,var(--red) 4%,transparent)}
+      #tool-tool7 .t7-sect.danger>summary b{color:var(--red)}
+      /* ── danh sách lớp đồ hoạ của cảnh ── */
+      #tool-tool7 .t7-gl{display:flex;align-items:center;gap:7px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:6px 9px;margin-bottom:5px;font-size:11.5px;cursor:pointer;color:var(--text)}
+      #tool-tool7 .t7-gl:hover{border-color:var(--accent)}
+      #tool-tool7 .t7-gl.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+      #tool-tool7 .t7-gl u{text-decoration:none;width:6px;height:6px;border-radius:50%;background:var(--violet,#7c3aed);flex:none}
+      #tool-tool7 .t7-gl u.man{background:var(--teal,#0d9488)}
+      #tool-tool7 .t7-gl s{text-decoration:none;margin-left:auto;color:var(--text-dim);font-size:10px}
+      #tool-tool7 .t7-gl b{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      #tool-tool7 .t7-cchip{font-size:10.5px;padding:3px 9px;border-radius:20px;border:1px solid var(--border);background:var(--surface-2);color:var(--text-muted);cursor:pointer;display:inline-block}
+      #tool-tool7 .t7-cchip.on{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent);font-weight:700}
+      /* ── thẻ kiểu chuyển động (đơn giản hoá: 1 thẻ = phối sẵn Vào/Giữ/Ra) ── */
+      #tool-tool7 .t7-stylecard{display:flex;gap:8px;align-items:flex-start;background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:7px 9px;cursor:pointer;color:var(--text)}
+      #tool-tool7 .t7-stylecard:hover{border-color:var(--accent)}
+      #tool-tool7 .t7-stylecard.on{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent);box-shadow:0 0 0 1px var(--accent)}
+      #tool-tool7 .t7-stylecard i{font-style:normal;font-size:16px;line-height:1.1;flex:none}
+      #tool-tool7 .t7-stylecard b{display:block;font-size:11.5px;font-weight:700}
+      #tool-tool7 .t7-stylecard.on b{color:var(--accent)}
+      #tool-tool7 .t7-stylecard s{text-decoration:none;display:block;font-size:9.5px;color:var(--text-muted);margin-top:1px;line-height:1.35}
+      #tool-tool7 .t7-sw{display:flex;align-items:center;gap:6px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:5px 8px;font-size:11px;font-family:var(--mono,monospace);color:var(--text)}
+      #tool-tool7 .t7-sw i{width:15px;height:15px;border-radius:4px;border:1px solid rgba(128,128,128,.35);flex:none}
+      /* ── rãnh Đồ hoạ ── đặt tuyệt đối vì nhiều lớp chồng thời gian nhau */
+      #tool-tool7 .t7-gclip{position:absolute;top:4px;bottom:4px;border-radius:5px;font-size:10px;padding:2px 6px;cursor:pointer;
+        background:color-mix(in srgb,var(--violet,#7c3aed) 16%,transparent);border:1px solid color-mix(in srgb,var(--violet,#7c3aed) 45%,transparent);
+        color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.6}
+      #tool-tool7 .t7-gclip:hover{border-color:var(--accent);filter:brightness(1.06)}
+      #tool-tool7 .t7-gclip.big{padding:4px 8px;line-height:1.2}
+      #tool-tool7 .t7-gclip.big b{display:block;font-size:10.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      #tool-tool7 .t7-gclip.big s{text-decoration:none;display:block;font-size:9px;opacity:.72;white-space:nowrap;overflow:hidden}
+      #tool-tool7 .t7-gclip{display:flex;flex-direction:column;justify-content:center}
+      #tool-tool7 .t7-gclip.sel{border-color:var(--accent);box-shadow:0 0 0 1.5px var(--accent);background:color-mix(in srgb,var(--accent) 16%,transparent);z-index:3}
+      /* Vạch mảnh khi zoom nhỏ — 199 lớp trên 192 cảnh thì khối to sẽ dính thành một dải đặc. */
+      #tool-tool7 .t7-gtick{position:absolute;height:9px;border-radius:3px;cursor:pointer}
+      #tool-tool7 .t7-gtick:hover{outline:1px solid var(--accent);outline-offset:1px}
+      #tool-tool7 .t7-gtick.sel{outline:1.5px solid var(--accent);outline-offset:1px;z-index:3}
+      /* Màu theo LOẠI lớp — nhìn dải màu là biết gì, khỏi đọc chữ. */
+      #tool-tool7 .k-tx{background:#8b5cf6}   /* chữ      */
+      #tool-tool7 .k-sh{background:#0ea5e9}   /* hình khối */
+      #tool-tool7 .k-ov{background:#94a3b8}   /* lớp phủ  */
+      #tool-tool7 .k-md{background:#e879a8}   /* mẫu motion */
+      #tool-tool7 .k-bit{background:#f59e0b}  /* bit      */
+      #tool-tool7 .k-man{background:#14b8a6}  /* tự thêm  */
+      #tool-tool7 .t7-gclip.k-tx{background:color-mix(in srgb,#8b5cf6 18%,transparent);border-color:color-mix(in srgb,#8b5cf6 50%,transparent)}
+      #tool-tool7 .t7-gclip.k-sh{background:color-mix(in srgb,#0ea5e9 18%,transparent);border-color:color-mix(in srgb,#0ea5e9 50%,transparent)}
+      #tool-tool7 .t7-gclip.k-ov{background:color-mix(in srgb,#94a3b8 22%,transparent);border-color:color-mix(in srgb,#94a3b8 55%,transparent)}
+      #tool-tool7 .t7-gclip.k-md{background:color-mix(in srgb,#e879a8 18%,transparent);border-color:color-mix(in srgb,#e879a8 50%,transparent)}
+      #tool-tool7 .t7-gclip.k-bit{background:color-mix(in srgb,#f59e0b 18%,transparent);border-color:color-mix(in srgb,#f59e0b 50%,transparent)}
+      #tool-tool7 .t7-gclip.k-man{background:color-mix(in srgb,#14b8a6 16%,transparent);border-color:color-mix(in srgb,#14b8a6 50%,transparent)}
+      /* ── rãnh Chuyển cảnh ── mỗi vạch là 1 mối nối giữa hai cảnh */
+      /* Chuyển cảnh: chip CAM ĐẶC, đọc được ngay như bàn dựng bên kia. Bản 20% mờ
+         trước đây trên nền tối gần như tàng hình. */
+      #tool-tool7 .t7-tclip{position:absolute;top:4px;bottom:4px;width:20px;border-radius:5px;cursor:pointer;display:flex;align-items:center;justify-content:center;
+        font-size:10px;color:var(--on-accent);background:var(--accent);border:1px solid rgba(255,255,255,.22);box-shadow:0 1px 4px rgba(0,0,0,.45);z-index:2}
+      #tool-tool7 .t7-tclip:hover{filter:brightness(1.18)}
+      #tool-tool7 .t7-tdot{position:absolute;top:50%;transform:translateY(-50%);width:4px;height:4px;border-radius:50%;
+        background:#4b5480;cursor:pointer;transition:.12s}
+      #tool-tool7 .t7-tdot:hover{background:var(--accent);width:9px;height:9px}
+      /* ── kho hiệu ứng ở cột trái ── */
+      #tool-tool7 .t7-fxi{display:flex;align-items:center;gap:8px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;
+        padding:7px 10px;margin-bottom:5px;cursor:pointer;font-size:12px;color:var(--text)}
+      #tool-tool7 .t7-fxi:hover{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 7%,transparent)}
+      #tool-tool7 .t7-fxi b{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      #tool-tool7 .t7-fxi s{text-decoration:none;margin-left:auto;color:var(--text-dim);font-size:10px;flex:none}
+      /* Thẻ có ẢNH XEM TRƯỚC — render sẵn 1 lần, không dựng preview sống như Composition Lab
+         (bên đó mỗi ô là 1 player Remotion, hỏng là thành hộp đen). */
+      /* ══ CHẾ ĐỘ TẬP TRUNG ══ Dựng Video chiếm trọn cửa sổ, giấu sidebar + thanh trên.
+         Không mở cửa sổ riêng: hai renderer cùng ghi workData (192 clip + ảnh base64) sẽ tranh nhau lưu. */
+      body.t7-focus .sidebar{display:none!important}
+      body.t7-focus .topbar{display:none!important}
+      body.t7-focus .main{max-width:none;padding:0}
+      body.t7-focus .tool:not(#tool-tool7){display:none!important}
+      body.t7-focus #tool-tool7 .tool-head{display:none}
+      body.t7-focus #tool-tool7{padding:0}
+      body.t7-focus .t7-grid{padding:0 12px}
+      /* thanh nổi để thoát + các nút chính, thay cho thanh trên đã giấu */
+      #t7FocusBar{display:none;position:sticky;top:0;z-index:40;align-items:center;gap:9px;
+        padding:9px 14px;background:var(--surface);border-bottom:1px solid var(--border)}
+      body.t7-focus #t7FocusBar{display:flex}
+      #t7FocusBar .nm{font-size:14px;font-weight:700}
+      #t7FocusBar .dr{font-size:9px;font-weight:800;letter-spacing:.4px;padding:2px 7px;border-radius:20px;
+        background:var(--surface-3);color:var(--text-muted)}
+      #tool-tool7 .t7-player.drop{outline:2px dashed var(--accent);outline-offset:-3px}
+      #tool-tool7 #t7TrkGfx.drop{outline:2px dashed var(--accent);outline-offset:-2px;background:color-mix(in srgb,var(--accent) 6%,transparent)}
+      #tool-tool7 .t7-fxc{cursor:grab}
+      #tool-tool7 .t7-fxc:active{cursor:grabbing}
+      #tool-tool7 .t7-fxgrid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+      #tool-tool7 .t7-fxc{border:1px solid var(--border);border-radius:9px;overflow:hidden;background:var(--surface-2);cursor:pointer}
+      #tool-tool7 .t7-fxc:hover{border-color:var(--accent)}
+      #tool-tool7 .t7-fxc .pv{aspect-ratio:16/9;background:#15141a;display:flex;align-items:center;justify-content:center;color:var(--text-dim);font-size:11px}
+      #tool-tool7 .t7-fxc .pv img{width:100%;height:100%;object-fit:cover;display:block}
+      #tool-tool7 .t7-fxc .nm{font-size:10.5px;padding:5px 7px;line-height:1.3;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      /* Panel Chi tiết cảnh — bản gọn: dòng trạng thái rỗng thì biến mất, khối "Nâng cao" gập lại */
+      .t7-dstatus{font-size:11px;color:var(--text-dim);line-height:1.45;background:var(--surface-2);border-left:2px solid var(--accent);border-radius:0 7px 7px 0;padding:6px 9px;margin:0 0 8px}
+      .t7-dstatus:empty{display:none}
+      .t7-more{border:1px solid var(--border);border-radius:9px;padding:0;margin:10px 0 6px;background:var(--surface-2)}
+      .t7-more>summary{cursor:pointer;list-style:none;padding:8px 11px;font-size:11.5px;font-weight:600;color:var(--text-muted);display:flex;align-items:center;gap:6px}
+      .t7-more>summary::-webkit-details-marker{display:none}
+      .t7-more>summary::before{content:'▸';color:var(--text-dim)}
+      .t7-more[open]>summary::before{content:'▾'}
+      .t7-more>.bd{padding:2px 11px 10px}
+      .t7-g2{display:grid;grid-template-columns:1fr 1fr;gap:8px 10px}
+      .t7-g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px 10px}
+      .t7-divider{height:1px;background:var(--border);margin:6px 14px}
+      .t7-aud{display:flex;align-items:center;gap:10px;padding:9px 10px;border:1px solid var(--border);border-radius:10px;background:var(--surface-2);margin-bottom:9px}
+      .t7-aud .ic{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;flex:none;font-size:14px}
+      .t7-aud .t{flex:1;min-width:0}
+      .t7-aud .t .n{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .t7-aud .t .s{font-size:10.5px;color:var(--text-muted)}
+
+      .t7-player{position:relative;border-radius:11px;overflow:hidden;background:#000;aspect-ratio:16/9;display:grid;place-items:center;margin:0 14px 14px}
+      #t7PreviewWrap{position:absolute;inset:0;will-change:opacity,transform,clip-path}
+      .t7-pcap{padding:12px 20px 2px;text-align:center}
+      .t7-pcap .vo{font-style:italic;font-size:14px;line-height:1.5;color:var(--text)}
+      .t7-pcap .vi{font-style:italic;font-size:13.5px;line-height:1.5;color:#6ea8dc;margin-top:5px}
+      .t7-player img,.t7-player video{width:100%;height:100%;object-fit:contain;transform-origin:center center;will-change:transform}
+      @keyframes t7fade{from{opacity:0}to{opacity:1}}
+      @keyframes t7slide{from{transform:translateX(100%)}to{transform:translateX(0)}}
+      @keyframes t7wipe{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0 0 0)}}
+      @keyframes t7circle{from{clip-path:circle(0% at 50% 50%)}to{clip-path:circle(75% at 50% 50%)}}
+      .t7-pbar{position:absolute;left:0;right:0;bottom:0;padding:8px 11px;background:linear-gradient(0deg,rgba(0,0,0,.75),transparent)}
+      .t7-ptrack{height:4px;background:rgba(255,255,255,.25);border-radius:3px;margin-bottom:8px;position:relative;cursor:pointer;touch-action:none}
+      /* vùng bắt chuột cao hơn hẳn vạch 4px — kéo không bị trượt tay */
+      .t7-ptrack::before{content:'';position:absolute;left:0;right:0;top:-7px;bottom:-7px}
+      .t7-ptrack i{position:absolute;left:0;top:0;bottom:0;background:var(--accent);border-radius:3px;width:0%}
+      .t7-ptrack i::after{content:'';position:absolute;right:-6px;top:50%;width:12px;height:12px;margin-top:-6px;border-radius:50%;background:var(--accent);opacity:0;transition:opacity .12s}
+      .t7-pbar:hover .t7-ptrack i::after,.t7-ptrack.drag i::after{opacity:1}
+      .t7-ptrack.drag{cursor:grabbing}
+      .t7-pctl{display:flex;align-items:center;gap:13px;color:#fff;font-size:14px}
+      .t7-pctl .b{cursor:pointer}.t7-pctl .tc{font-size:11.5px;color:#e5ded4}.t7-pctl .sp{flex:1}
+      .t7-drow{display:grid;grid-template-columns:auto 1fr;gap:9px 12px;align-items:center;margin-bottom:9px}
+      .t7-dlab{font-size:12px;color:var(--text-muted)}
+      .t7-dfield{width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:7px 9px;font-size:12.5px;color:var(--text)}
+      /* Bàn dựng LUÔN tối, không theo chủ đề app — giống mọi phần mềm dựng phim.
+         Nền sáng làm dải rãnh chìm hẳn vào trang, nhìn không ra đâu là rãnh nào. */
+      .t7-tl{--tlbg:#080c1a;--tllane:#161e3c;--tlline:#2b3560;--tltx:#e9ebf7;--tldim:#98a0c4;--tlmute:#7983ad;
+        margin-top:18px;background:var(--tlbg);border:1px solid var(--tlline);border-radius:14px;overflow:hidden;color:var(--tltx)}
+      .t7-tlbar{display:flex;align-items:center;gap:6px;padding:9px 13px;flex-wrap:wrap}
+      .t7-tlbar .zt{margin-left:auto;display:flex;align-items:center;gap:8px;color:var(--tlmute);font-size:11px}
+      .t7-tl .t7-dlab,.t7-tl .t7-dim{color:var(--tldim)}
+      .t7-tlbtn{height:26px;min-width:26px;padding:0 10px;border-radius:20px;display:inline-flex;align-items:center;justify-content:center;gap:5px;
+        color:var(--tldim);background:#171e3a;border:1px solid var(--tlline);font-size:11.5px;font-weight:600;cursor:pointer}
+      .t7-tlbtn:hover{border-color:var(--accent);color:#fff}
+      .t7-tlbar .lb{font-size:9.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--tlmute);margin-right:4px}
+      .t7-clip{cursor:grab}
+      .t7-clip.sel{outline:2px solid var(--accent);outline-offset:-1px;z-index:2}
+      /* Nhãn nằm TRONG khối, trên nền mờ để đọc được cả khi có thumbnail */
+      .t7-clipbox{position:absolute;left:0;right:0;top:0;bottom:0;padding:5px 8px;pointer-events:none;
+        background:linear-gradient(180deg,rgba(0,0,0,.62) 0%,rgba(0,0,0,.28) 55%,rgba(0,0,0,.5) 100%);line-height:1.25}
+      .t7-clipname{display:block;font-size:11px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+        text-shadow:0 1px 3px rgba(0,0,0,.7)}
+      .t7-cliplab{display:block;font-size:9.5px;color:rgba(255,255,255,.82);margin-top:1px;white-space:nowrap;overflow:hidden;
+        text-shadow:0 1px 3px rgba(0,0,0,.7)}
+      /* Mức nhỏ: chỉ còn số giây, dán góc dưới */
+      .t7-clip.tier-sm .t7-clipbox{padding:2px 4px;background:linear-gradient(180deg,transparent 45%,rgba(0,0,0,.6))}
+      .t7-clip.tier-sm .t7-clipname{display:none}
+      .t7-clip.tier-sm .t7-cliplab{position:absolute;left:4px;bottom:2px;font-size:9px;margin:0}
+      .t7-trim{position:absolute;right:0;top:3px;bottom:3px;width:7px;cursor:ew-resize;border-radius:0 5px 5px 0;background:rgba(255,255,255,.16);opacity:0;transition:.12s}
+      .t7-clip:hover .t7-trim{opacity:1}
+      .t7-xf{position:absolute;right:-8px;top:50%;transform:translateY(-50%);z-index:3;width:15px;height:15px;border-radius:50%;background:var(--surface);border:1px solid var(--accent);color:var(--accent);display:grid;place-items:center;font-size:9px;pointer-events:none}
+      .t7-modal{position:fixed;inset:0;z-index:900;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:20px}
+      .t7-modal-card{width:760px;max-width:100%;max-height:92vh;overflow:auto;background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:0 24px 70px rgba(0,0,0,.5)}
+      .t7-modal-head{display:flex;align-items:center;justify-content:space-between;padding:20px 24px 6px}
+      .t7-modal-x{width:34px;height:34px;border-radius:9px;border:1px solid var(--border);background:var(--surface-2);color:var(--text-muted);cursor:pointer;font-size:14px}
+      .t7-modal-x:hover{color:var(--text);border-color:var(--accent)}
+      .t7-modal-body{display:flex;gap:22px;padding:14px 24px 8px}
+      .t7-modal-thumb{width:230px;height:230px;flex-shrink:0;border-radius:12px;overflow:hidden;background:#000;display:grid;place-items:center}
+      .t7-modal-thumb img{width:100%;height:100%;object-fit:cover}
+      .t7-modal-fields{flex:1;min-width:0}
+      .t7-mlab{display:block;font-size:12.5px;color:var(--text-muted);margin:12px 0 5px}
+      .t7-mlabel-sec{font-size:11px;letter-spacing:.6px;color:var(--text-dim);margin:18px 0 2px}
+      .t7-mfield{width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:10px 12px;font-size:13.5px;color:var(--text)}
+      .t7-mgrid{display:grid;grid-template-columns:1fr 1fr;gap:2px 18px}
+      .t7-modal-foot{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:16px 24px 22px;border-top:1px solid var(--border);margin-top:10px}
+      @media(max-width:700px){.t7-modal-body{flex-direction:column}.t7-modal-thumb{width:100%;height:180px}}
+      .t7-clip:hover .t7-trim:hover{background:rgba(255,255,255,.4)}
+      .t7-tlscroll{overflow-x:auto}
+      .t7-tlinner{min-width:100%;position:relative}
+      /* ── Khung timeline theo kiểu bàn dựng: rãnh là DẢI RỜI bo góc, có tay nắm
+            chấm ⣿ bên trái, thước dính đầu, vạch phát có cờ. Rãnh trái vẫn 145px
+            để phép tính vị trí vạch phát bên JS không phải đổi. ── */
+      .t7-ruler{display:flex;padding-left:calc(var(--t7-gut) + 5px);color:var(--tlmute);font-size:10px;cursor:pointer;user-select:none;height:24px;align-items:stretch;
+        position:sticky;top:0;z-index:6;background:var(--tlbg);border-bottom:1px solid var(--tlline)}
+      .t7-ruler span{flex:1;min-width:60px;padding:4px 0 4px 5px;border-left:1px solid var(--tlline);
+        font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:9px;letter-spacing:.02em}
+      .t7-trk{display:flex;min-height:54px;margin:6px 0 0;align-items:stretch}
+      .t7-trk:last-child{margin-bottom:8px}
+      .t7-trk.subs{min-height:32px}
+      /* Tay nắm ⣿ — dấu hiệu rãnh kéo được, cùng ngôn ngữ với bàn dựng chuyên nghiệp */
+      /* Chỉ còn TAY NẮM ⣿ như bàn dựng bên kia — tên rãnh thành chữ chìm trong lòng
+         rãnh khi rãnh trống, còn khi có clip thì chính clip đã nói rãnh đó là gì. */
+      .t7-trkh{width:var(--t7-gut);flex-shrink:0;position:relative;overflow:hidden;cursor:grab;
+        font-size:0;color:transparent;background:transparent;border:0;padding:0}
+      .t7-trkh::before{content:'';position:absolute;left:9px;top:50%;transform:translateY(-50%);width:6px;height:16px;opacity:.45;
+        background-image:radial-gradient(var(--tlmute) 1px,transparent 1px);background-size:4px 4px}
+      .t7-trkh:hover::before{opacity:.85}
+      .t7-trkh .sp,.t7-trkh .tg,.t7-trkh .ci,.t7-trkh .t7-chip,.t7-trkh .t7-addov{display:none}
+      /* Chữ chìm: chỉ hiện khi rãnh chưa có gì, đúng kiểu "— chưa có nhạc nền —" */
+      .t7-trkbody[data-ghost]:empty::before{content:attr(data-ghost);position:absolute;left:11px;top:50%;
+        transform:translateY(-50%);font-size:11px;color:var(--tlmute);white-space:nowrap;pointer-events:none}
+      .t7-trkbody{flex:1;position:relative;display:flex;align-items:center;padding:5px 0;
+        background:var(--tllane);border-radius:6px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.045)}
+      .t7-trkbody.drop{background:color-mix(in srgb,var(--accent) 26%,var(--tllane));box-shadow:inset 0 0 0 1px var(--accent)}
+      /* Clip kiểu CapCut: bo góc, tên đậm + dòng phụ mờ, màu theo LOẠI NGUỒN.
+         Ba mức hiển thị theo bề rộng — xem _t7ClipTier() bên JS. */
+      .t7-clip{height:44px;border-radius:6px;overflow:hidden;position:relative;flex-shrink:0;
+        border:1px solid rgba(255,255,255,.09);background-size:cover;background-position:center;margin-right:2px;
+        box-shadow:0 1px 3px rgba(0,0,0,.28)}
+      .t7-clip.tier-lg{padding:5px 9px}
+      .t7-clip.tier-sm{padding:3px 5px}
+      .t7-clip.tier-xs{border-radius:4px;margin-right:1px}
+      .t7-clip:hover{filter:brightness(1.07)}
+      /* Màu nền khi clip KHÔNG có thumbnail (ảnh gắn lazy sẽ đè lên) */
+      .t7-clip.src-img{background-color:#155e63}
+      .t7-clip.src-vid{background-color:#3b3a8f}
+      .t7-clip.src-none{background-color:#6b5a2a}
+      .t7-sub{background:#3a4270;border:1px solid #4b5480;color:#e9ebf7;border-radius:6px;padding:5px 8px;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0;height:26px;line-height:16px}
+      .t7-wave{height:36px;border-radius:5px;display:flex;align-items:center;padding:0 11px;font-size:11px;overflow:hidden;flex:1;color:rgba(20,14,0,.75);font-weight:700}
+      .t7-ph{position:absolute;top:0;bottom:0;width:2px;background:var(--accent);z-index:6;pointer-events:none;left:calc(var(--t7-gut) + 5px)}
+      .t7-snap{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;border:1px solid var(--tlline);border-radius:20px;padding:3px 11px;cursor:pointer;color:var(--tldim);background:#171e3a;user-select:none}
+      .t7-snap.on{border-color:var(--accent);color:var(--accent);background:color-mix(in srgb,var(--accent) 8%,transparent);font-weight:700}
+      .t7-ph{background:#f0455e}
+      .t7-ph::before{content:'';position:absolute;top:0;left:-4px;width:10px;height:11px;border-radius:0 0 3px 3px;background:#f0455e}
+      /* ══ THẺ KHO KIỂU BÀN DỰNG ══════════════════════════════════════════════
+         Thẻ to, ảnh 16:9 dùng CHÍNH ẢNH CẢNH của dự án làm A/B, rê chuột là chạy
+         thật hiệu ứng đó. Trước chỉ có ảnh JPG dựng sẵn với nội dung chung chung —
+         nhìn không biết hiệu ứng chạy ra sao, phải gắn vào rồi mới biết. */
+      #tool-tool7 .t7-fxq{width:100%;background:var(--surface-2);border:1px solid var(--border);color:var(--text);
+        border-radius:9px;padding:7px 11px 7px 30px;font-size:12px;margin:2px 0 9px;
+        background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 16 16' fill='none' stroke='%23888' stroke-width='1.6'><circle cx='7' cy='7' r='4.5'/><path d='M10.5 10.5L14 14'/></svg>");
+        background-repeat:no-repeat;background-position:9px center}
+      #tool-tool7 .t7-fxfil{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:11px}
+      #tool-tool7 .t7-fxfil span{font-size:11.5px;font-weight:600;padding:4px 12px;border-radius:20px;cursor:pointer;
+        background:var(--surface-2);border:1px solid var(--border);color:var(--text-muted);white-space:nowrap}
+      #tool-tool7 .t7-fxfil span.on{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+      #tool-tool7 .t7-fxgrp{display:flex;align-items:center;gap:9px;font-size:9.5px;font-weight:700;letter-spacing:.12em;
+        text-transform:uppercase;color:var(--text-dim);margin:15px 0 8px}
+      #tool-tool7 .t7-fxgrp::after{content:'';flex:1;height:1px;background:var(--border)}
+      #tool-tool7 .t7-bigc{margin-bottom:13px;cursor:pointer}
+      #tool-tool7 .t7-bigp{position:relative;aspect-ratio:16/9;border-radius:9px;overflow:hidden;background:#0b1020;
+        border:1px solid var(--border)}
+      #tool-tool7 .t7-bigc:hover .t7-bigp{border-color:var(--accent)}
+      #tool-tool7 .t7-bigp img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+      #tool-tool7 .t7-bigp .ab{position:absolute;inset:0}
+      #tool-tool7 .t7-bigp .lv{position:absolute;right:6px;top:6px;z-index:5;background:rgba(0,0,0,.62);color:#fff;
+        font-size:9.5px;padding:2px 7px;border-radius:20px;pointer-events:none}
+      #tool-tool7 .t7-bigc:hover .lv{opacity:0}
+      #tool-tool7 .t7-bigm{display:flex;align-items:center;gap:8px;padding:7px 2px 0}
+      #tool-tool7 .t7-bigm .dt{width:7px;height:7px;border-radius:50%;background:var(--amber);flex:none}
+      #tool-tool7 .t7-bigm .tx{flex:1;min-width:0}
+      #tool-tool7 .t7-bigm b{display:block;font-size:12.5px;font-weight:700;color:var(--text);
+        white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      #tool-tool7 .t7-bigm i{display:block;font-style:normal;font-size:10.5px;color:var(--text-dim);margin-top:1px}
+      #tool-tool7 .t7-bigm .ad{width:26px;height:26px;border-radius:50%;flex:none;display:grid;place-items:center;
+        background:var(--surface-2);border:1px solid var(--border);color:var(--text-muted);font-size:13px}
+      #tool-tool7 .t7-bigm .ad:hover{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+
+      /* Lớp B chạy đè lên A — mỗi HỌ chuyển cảnh một kiểu, chạy khi rê chuột vào thẻ */
+      #tool-tool7 .t7-bigp .bb{position:absolute;inset:0;will-change:transform,opacity,clip-path,filter}
+      #tool-tool7 .t7-bigc:hover .bb{animation:t7ab 1.5s cubic-bezier(.4,0,.2,1) infinite}
+      @keyframes t7ab{0%,12%{opacity:0}45%,100%{opacity:1}}
+      #tool-tool7 .t7-bigc:hover .bb.f-wipe{animation:t7wipe 1.5s cubic-bezier(.4,0,.2,1) infinite}
+      @keyframes t7wipe{0%,12%{clip-path:inset(0 100% 0 0)}45%,100%{clip-path:inset(0 0 0 0)}}
+      #tool-tool7 .t7-bigc:hover .bb.f-push{animation:t7push 1.5s cubic-bezier(.4,0,.2,1) infinite}
+      @keyframes t7push{0%,12%{transform:translateX(100%)}45%,100%{transform:translateX(0)}}
+      #tool-tool7 .t7-bigc:hover .bb.f-whip{animation:t7whip 1.5s cubic-bezier(.7,0,.3,1) infinite}
+      @keyframes t7whip{0%,12%{transform:translateX(100%);filter:blur(9px)}45%,100%{transform:translateX(0);filter:blur(0)}}
+      #tool-tool7 .t7-bigc:hover .bb.f-zoom{animation:t7zoom 1.5s cubic-bezier(.4,0,.2,1) infinite}
+      @keyframes t7zoom{0%,12%{opacity:0;transform:scale(1.5)}45%,100%{opacity:1;transform:scale(1)}}
+      #tool-tool7 .t7-bigc:hover .bb.f-shape{animation:t7iris 1.5s cubic-bezier(.4,0,.2,1) infinite}
+      @keyframes t7iris{0%,12%{clip-path:circle(0% at 50% 50%)}45%,100%{clip-path:circle(75% at 50% 50%)}}
+      #tool-tool7 .t7-bigc:hover .bb.f-split{animation:t7split 1.5s cubic-bezier(.4,0,.2,1) infinite}
+      @keyframes t7split{0%,12%{clip-path:inset(50% 0 50% 0)}45%,100%{clip-path:inset(0 0 0 0)}}
+      #tool-tool7 .t7-bigc:hover .bb.f-glitch{animation:t7glitch 1.5s steps(6,end) infinite}
+      @keyframes t7glitch{0%,12%{opacity:0;transform:translateX(6%) skewX(6deg)}45%,100%{opacity:1;transform:none}}
+      #tool-tool7 .t7-bigc:hover .bb.f-compress{animation:t7sq 1.5s cubic-bezier(.4,0,.2,1) infinite}
+      @keyframes t7sq{0%,12%{opacity:0;transform:scaleX(.05)}45%,100%{opacity:1;transform:scaleX(1)}}
+      #tool-tool7 .t7-bigc:hover .bb.f-flip{animation:t7flip 1.5s cubic-bezier(.4,0,.2,1) infinite}
+      @keyframes t7flip{0%,12%{opacity:0;transform:perspective(600px) rotateY(90deg)}45%,100%{opacity:1;transform:none}}
+      #tool-tool7 .t7-bigc:hover .bb.f-sweep{animation:t7sweep 1.5s cubic-bezier(.4,0,.2,1) infinite}
+      @keyframes t7sweep{0%,12%{clip-path:inset(0 0 0 100%)}45%,100%{clip-path:inset(0 0 0 0)}}
+      /* Chớp sáng / chất phim / chồng ảnh: có TẤM MÀU chen giữa hai cảnh */
+      #tool-tool7 .t7-bigp .fl{position:absolute;inset:0;opacity:0;pointer-events:none;z-index:3}
+      #tool-tool7 .t7-bigc:hover .fl{animation:t7flash 1.5s ease-in-out infinite}
+      @keyframes t7flash{0%,10%{opacity:0}26%{opacity:1}48%,100%{opacity:0}}
+      .t7-candlist{display:flex;flex-direction:column;gap:5px}
+      .t7-cand{display:flex;align-items:center;gap:9px;padding:6px;border-radius:9px;cursor:pointer;
+        background:var(--surface-2);border:1px solid var(--border);text-align:left;width:100%;color:var(--text)}
+      .t7-cand:hover{border-color:var(--accent)}
+      .t7-cand.on{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent)}
+      .t7-cand .th{width:64px;height:36px;border-radius:5px;flex:none;background:#0b0f18 center/cover no-repeat}
+      .t7-cand .tx{flex:1;min-width:0}
+      .t7-cand .tx b{display:block;font-size:11.5px;font-weight:600;line-height:1.35;
+        display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+      .t7-cand .tx s{text-decoration:none;display:block;font-size:10px;color:var(--text-dim);margin-top:2px}
+      .t7-cand .ok{color:var(--accent);font-weight:700;flex:none}
+
+      /* ══ CHI TIẾT CẢNH MỞ NGAY TẠI DÒNG ════════════════════════════════════
+         Trước: bấm cảnh → ngăn trượt 400px đè lên khung xem, mắt phải nhảy sang
+         chỗ khác và mất luôn cảnh trước/sau. Giờ mở tại chỗ, cao ~150px.        */
+      .t7-lrow.on{background:var(--surface-2);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 42%,transparent)}
+      .t7-sbd{display:none;padding:2px 8px 9px}
+      .t7-sc.open .t7-sbd{display:block}
+      .t7-sc{border-radius:10px}
+      /* nguồn hình: 3 nút dính liền, số clip nằm trong nút */
+      .t7-seg{display:flex;background:var(--surface-3,var(--surface));border:1px solid var(--border);border-radius:8px;padding:2px;gap:2px}
+      .t7-seg button{flex:1;height:24px;border-radius:6px;font-size:11px;font-weight:600;color:var(--text-muted);
+        display:flex;align-items:center;justify-content:center;gap:5px;white-space:nowrap;background:none;border:0;cursor:pointer}
+      .t7-seg button:hover{color:var(--text)}
+      .t7-seg button.on{background:var(--accent);color:var(--on-accent)}
+      .t7-seg .cnt{font-family:ui-monospace,Menlo,monospace;font-size:9.5px;opacity:.75}
+      /* dải clip NGANG — bao nhiêu clip cũng chỉ tốn một hàng */
+      .t7-slb{display:flex;align-items:center;gap:7px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;
+        color:var(--text-dim);font-weight:700;margin:11px 0 6px}
+      .t7-slb::after{content:'';order:1;flex:1;height:1px;background:var(--border)}
+      .t7-slb button{order:2}   /* Tìm thêm nằm cuối hàng, sau gạch ngang */
+      /* Lưới 3 cột: so được nhiều clip cùng lúc. Cuộn ngang bắt phải kéo qua kéo lại
+         mới thấy hết, mà so sánh thì cần nhìn CẠNH NHAU. */
+      .t7-strip{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;max-height:260px;overflow-y:auto;padding-bottom:2px}
+      .t7-cd{cursor:pointer;background:none;border:0;padding:0;text-align:left;min-width:0}
+      /* .im là <span> (nội dung hợp lệ của <button> phải là phrasing content) — span
+         inline thì width/height KHÔNG ăn, ảnh co thành sợi mỏng. Phải ép block. */
+      .t7-cd .im{display:block;width:100%;aspect-ratio:16/9;border-radius:6px;background:#0b1020 center/cover no-repeat;
+        border:1.5px solid transparent;position:relative}
+      .t7-cd .im.loading::after{content:'';position:absolute;inset:0;border-radius:5px;
+        background:linear-gradient(90deg,transparent,rgba(255,255,255,.14),transparent);
+        animation:t7shim 1s linear infinite}
+      @keyframes t7shim{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+      .t7-cd:hover .im{box-shadow:0 4px 14px -4px rgba(0,0,0,.5)}
+      .t7-cd .im.noimg{background:var(--surface-2);display:grid;place-items:center}
+      .t7-cd .im.noimg::before{content:'▶';font-size:15px;color:var(--text-dim)}
+      .t7-cd:hover .im{border-color:var(--border-bright,var(--border))}
+      /* 24 thẻ mà chỉ đổi màu viền 1.5px thì tìm mỏi mắt — cho hẳn viền dày, quầng
+         sáng và nhãn "đang dùng" đè lên ảnh. */
+      .t7-cd.on .im{border-color:var(--accent);border-width:2.5px;
+        box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 28%,transparent),0 5px 16px -5px rgba(0,0,0,.55)}
+      .t7-cd.on .im em{position:absolute;left:0;right:0;bottom:0;font-style:normal;font-size:8px;font-weight:800;
+        letter-spacing:.5px;text-transform:uppercase;color:var(--on-accent);background:var(--accent);
+        text-align:center;padding:1.5px 0;border-radius:0 0 3.5px 3.5px}
+      .t7-cd.on .im s{bottom:14px}
+      .t7-cd .im s{position:absolute;right:3px;bottom:2px;text-decoration:none;font-size:8px;color:#fff;
+        font-family:ui-monospace,Menlo,monospace;background:rgba(0,0,0,.7);border-radius:3px;padding:0 3px}
+      .t7-cd .im u{position:absolute;left:4px;top:3px;text-decoration:none;font-size:9px;color:var(--on-accent);
+        background:var(--accent);border-radius:20px;width:14px;height:14px;display:grid;place-items:center}
+      .t7-cd i{display:block;font-style:normal;font-size:9.5px;color:var(--text-dim);margin-top:3px;line-height:1.3;
+        display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+      .t7-cd.on i{color:var(--text)}
+      .t7-sft{display:flex;align-items:center;gap:9px;margin-top:10px;padding-top:9px;border-top:1px solid var(--border);
+        font-size:11px;color:var(--text-muted)}
+      .t7-sft .k{font-family:ui-monospace,Menlo,monospace;color:var(--text)}
+      .t7-sft button{border:1px solid var(--border);border-radius:7px;padding:3px 9px;font-size:11px;
+        color:var(--text-muted);background:none;cursor:pointer}
+      .t7-sft button:hover{color:var(--text);border-color:var(--accent)}
+      .t7-sft .dg:hover{color:var(--red);border-color:var(--red)}
+      /* giờ là <button> chứ không còn <span> — phải tự dựng lại dáng, không thì
+         ăn style mặc định của nút (nền xám, viền, chữ đen). */
+      .t7-sft .gf{display:inline-flex;align-items:center;gap:5px;color:var(--green);
+        background:none;border:0;padding:2px 5px;border-radius:5px;font:inherit;cursor:pointer}
+      .t7-sft .gf:hover{background:color-mix(in srgb,var(--red,#e5484d) 14%,transparent);color:var(--red,#e5484d)}
+
+      /* ══ BỐ CỤC GỌN ════════════════════════════════════════════════════════
+         Chỉ còn KHUNG XEM + DANH SÁCH CẢNH. Kho hiệu ứng và bảng chi tiết chuyển
+         thành ngăn trượt — mở khi cần, không chiếm chỗ thường trực. Ai duyệt
+         hiệu ứng thì bấm Trợ lý.          */
+      /* Trong DOM, cột CẢNH đứng TRƯỚC khung xem. Mockup thì ngược lại — nên phải
+         chỉ định cột tường minh, không thì cảnh ăn hết 1fr còn khung xem còn 320px. */
+      body.t7-lean #tool-tool7 .t7-grid{grid-template-columns:minmax(0,1fr) 320px;align-items:stretch}
+      body.t7-lean #tool-tool7 .t7-rail{display:none}
+      body.t7-lean #tool-tool7 .t7-grid > section:nth-of-type(1){grid-column:2;grid-row:1}   /* danh sách cảnh */
+      body.t7-lean #tool-tool7 .t7-grid > section:nth-of-type(2){grid-column:1;grid-row:1}   /* khung xem */
+      /* Hết khoảng trắng: KHUNG XEM quyết định chiều cao hàng, cột cảnh giãn cho
+         bằng rồi tự cuộn bên trong. Không ép chiều cao theo 100vh — cách đó làm
+         khung xem rộng hơn vùng nhìn thấy, nuốt luôn nút bám mép phải. */
+      body.t7-lean #tool-tool7 .t7-grid > section:nth-of-type(1){display:flex;flex-direction:column;min-height:0;overflow:hidden;
+        /* Chiều cao THẬT do _t7SyncColHeight() gán bằng đúng cột xem trước. Biến này chỉ
+           là lưới an toàn cho lúc JS chưa chạy — không có nó, 192 hàng kéo dài cả trang,
+           cột xem trước trơ ra một khoảng trắng dài phía dưới. */
+        max-height:var(--t7-col-h, calc(100vh - 210px))}
+      body.t7-lean #tool-tool7 .t7-binlist{max-height:none;flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain}
+      /* Hàng cảnh trong hộp flex bị co lại còn vài pixel nếu không ghim — 192 hàng
+         nhồi vào khung cao cố định là mỗi hàng còn 4px, nhìn ra một cột sọc. */
+      body.t7-lean #tool-tool7 .t7-lrow{flex:0 0 auto;min-height:45px}
+      body.t7-lean #tool-tool7 .t7-inspector{
+        position:fixed;right:0;top:0;bottom:0;width:min(400px,94vw);z-index:880;margin:0;border-radius:0;
+        border-left:1px solid var(--border);box-shadow:-20px 0 60px rgba(0,0,0,.34);
+        transform:translateX(100%);transition:transform .2s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column}
+      body.t7-lean #tool-tool7 .t7-inspector.open{transform:none}
+      body.t7-lean #tool-tool7 .t7-inspbody{flex:1;overflow-y:auto}
+      @media(prefers-reduced-motion:reduce){body.t7-lean #tool-tool7 .t7-inspector{transition:none}}
+
+      /* khung xem — điều khiển ĐÈ lên hình, không thành hàng riêng */
+      /* Khung 9:16 / 1:1 cao hơn cả màn hình → cả trang bị kéo dài, dưới khung xem
+         thừa ra một mảng trắng dài. Chặn chiều cao theo vùng nhìn thấy, khung tự thu
+         bề ngang cho đúng tỉ lệ. Chỉ ảnh hưởng lúc XEM — kích thước xuất video do
+         _t7ExpDims() quyết định, không liên quan. */
+      body.t7-lean #tool-tool7 .t7-player{border-radius:12px;max-height:calc(100vh - 250px);
+        width:100%;max-width:100%;margin-inline:auto}
+
+      /* danh sách cảnh kiểu mockup: ảnh + tên + lời thoại + chấm trạng thái */
+      body.t7-lean #tool-tool7 .t7-binlist{display:flex;flex-direction:column;gap:4px;padding:0 8px 10px}
+      .t7-lrow{display:flex;align-items:center;gap:10px;padding:7px 6px;border-radius:9px;cursor:pointer;
+        text-align:left;width:100%;background:none;border:0;color:var(--text)}
+      .t7-lrow:hover{background:var(--surface-2)}
+      .t7-lrow.on{background:color-mix(in srgb,var(--accent) 14%,transparent);
+        box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 45%,transparent)}
+      .t7-lrow .th{width:54px;height:31px;border-radius:6px;flex:none;position:relative;overflow:hidden;
+        background:#11161f center/cover no-repeat}
+      .t7-lrow .th b{position:absolute;right:2px;bottom:1px;font-size:8px;background:rgba(0,0,0,.66);color:#fff;
+        border-radius:3px;padding:0 3px;font-family:ui-monospace,Menlo,monospace}
+      .t7-lrow .tx{flex:1;min-width:0}
+      .t7-lrow .tx b{display:block;font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .t7-lrow .tx s{text-decoration:none;display:block;font-size:10.5px;color:var(--text-dim);margin-top:1px;
+        white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .t7-lrow .dot{width:6px;height:6px;border-radius:50%;flex:none}
+
+      /* ══ TRỢ LÝ DỰNG — đề xuất kèm LÝ DO, duyệt từng cảnh ═══════════════════
+         Bản cũ gắn thẳng 149 lớp rồi im lặng: sai chỗ nào không ai biết, mà cái
+         khung vàng lạ hoắc giữa cảnh là hậu quả. Bắt AI nói lý do dựa trên CHÍNH
+         câu thoại thì sai lộ ra TRƯỚC khi gắn, không phải sau khi xuất 16 phút. */
+      #t7Ai{position:fixed;inset:0;z-index:910;background:rgba(4,7,14,.6);display:none}
+      #t7Ai.on{display:block}
+      #t7Ai .sheet{position:absolute;right:0;top:0;bottom:0;width:min(520px,94vw);background:var(--surface);
+        border-left:1px solid var(--border);display:flex;flex-direction:column;box-shadow:-20px 0 60px rgba(0,0,0,.4)}
+      #t7Ai .ph{display:flex;align-items:flex-start;gap:11px;padding:17px 18px 13px;border-bottom:1px solid var(--border)}
+      #t7Ai .ph b{font-size:15px;font-weight:700;display:block}
+      #t7Ai .ph s{text-decoration:none;font-size:11.5px;color:var(--text-muted);display:block;margin-top:3px;line-height:1.45}
+      #t7Ai .x{margin-left:auto;width:27px;height:27px;border-radius:7px;border:1px solid var(--border);
+        background:var(--surface-2);color:var(--text-muted);cursor:pointer;flex:none}
+      #t7Ai .x:hover{color:var(--text);border-color:var(--accent)}
+      #t7Ai .steps{padding:13px 18px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:8px}
+      #t7Ai .st{display:flex;align-items:center;gap:9px;font-size:12px;color:var(--text-muted)}
+      #t7Ai .st u{width:16px;height:16px;border-radius:50%;flex:none;text-decoration:none;display:grid;
+        place-items:center;font-size:9px;border:1px solid var(--border)}
+      #t7Ai .st.done{color:var(--text)} #t7Ai .st.done u{background:var(--green);border-color:var(--green);color:#04120d}
+      #t7Ai .st.now{color:var(--text)}  #t7Ai .st.now u{border-color:var(--accent);color:var(--accent)}
+      #t7Ai .props{flex:1;overflow-y:auto;padding:11px 14px 14px;display:flex;flex-direction:column;gap:8px}
+      /* .props là flex column → thẻ bị CO DẸP cho vừa khung, ô xem trước mất sạch
+         chiều cao và phần thân bị overflow:hidden cắt mất. Phải ghim như .t7-lrow. */
+      #t7Ai .pr{border:1px solid var(--border);border-radius:11px;background:var(--surface-2);
+        overflow:hidden;flex:0 0 auto}
+      #t7Ai .drow{flex:0 0 auto}
+      /* thẻ mối nối: viền trái nhấn, không ô xem trước */
+      #t7Ai .pr.trrow{border-left:3px solid color-mix(in srgb,var(--teal) 70%,transparent)}
+      #t7Ai .pr.trrow .tpl{color:var(--teal)}
+      #t7Ai .pra .edbtn.on{border-color:var(--accent);color:var(--accent);font-weight:700}
+      #t7Ai .edit{margin-top:9px;padding-top:9px;border-top:1px dashed var(--border-2);cursor:default}
+      #t7Ai .edg{margin-bottom:7px}
+      #t7Ai .edg > b{display:block;font-size:10px;font-weight:700;letter-spacing:.05em;
+        text-transform:uppercase;color:var(--text-dim);margin-bottom:5px}
+      /* nhãn hẹp, ô nhập chiếm phần còn lại — 7 tham số vẫn gọn trong ngăn kéo */
+      #t7Ai .edf{display:grid;grid-template-columns:62px minmax(0,1fr);gap:5px 8px;align-items:center}
+      #t7Ai .edf label{font-size:10.5px;color:var(--text-muted);text-align:right}
+      #t7Ai .edf input,#t7Ai .edf select{width:100%;background:var(--surface);border:1px solid var(--border);
+        color:var(--text);border-radius:7px;padding:4px 7px;font:inherit;font-size:11.5px;min-width:0}
+      #t7Ai .edf input[type=color]{padding:1px;height:24px;cursor:pointer}
+      #t7Ai .edreset{margin-top:4px;border:0;background:none;color:var(--accent);font:inherit;
+        font-size:10.5px;font-weight:600;cursor:pointer;padding:2px 0}
+      #t7Ai .prb{padding:10px 12px 11px}
+      /* Ô xem trước: container-type SIZE là bắt buộc — _t7LayerHtml đo bằng cqh,
+         thiếu nó là chữ về cỡ mặc định, xem trước sai bét so với lúc xuất. */
+      #t7Ai .prev{position:relative;aspect-ratio:16/9;background:#0b0d12 center/cover no-repeat;overflow:hidden;
+        container-type:size;cursor:pointer}
+      #t7Ai .prev .pv{position:absolute;inset:0}
+      #t7Ai .prev .nohint{position:absolute;inset:0;display:grid;place-items:center;
+        font-size:11px;color:rgba(255,255,255,.42)}
+      #t7Ai .prev .ab{position:absolute;left:7px;top:7px;z-index:3;display:flex;border-radius:7px;overflow:hidden;background:rgba(0,0,0,.55)}
+      #t7Ai .prev .ab button{border:0;background:none;color:rgba(255,255,255,.66);font:inherit;
+        font-size:9.5px;font-weight:700;padding:3px 8px;cursor:pointer}
+      #t7Ai .prev .ab button.on{background:#fff;color:#15130f}
+      #t7Ai .prev .play{position:absolute;right:7px;bottom:7px;z-index:3;border:0;border-radius:7px;
+        background:rgba(0,0,0,.55);color:#fff;font:inherit;font-size:9.5px;font-weight:700;padding:3px 8px;cursor:pointer}
+      #t7Ai .prev .play.on{background:var(--accent)}
+      #t7Ai .prev.sel{outline:2px solid var(--accent);outline-offset:-2px}
+      #t7Ai .drow{display:flex;align-items:center;gap:8px;border:1px solid var(--border);
+        border-radius:10px;padding:7px 11px;background:none}
+      #t7Ai .drow .sc{font-size:10.5px;color:var(--text-dim);font-family:ui-monospace,Menlo,monospace}
+      #t7Ai .drow .msg{font-size:11px;font-weight:600}
+      #t7Ai .drow.ap .msg{color:var(--green)}
+      #t7Ai .drow.sk{opacity:.55} #t7Ai .drow.sk .msg{color:var(--text-dim)}
+      #t7Ai .pr.ap{border-color:color-mix(in srgb,var(--green) 45%,transparent);
+        background:color-mix(in srgb,var(--green) 9%,var(--surface-2))}
+      #t7Ai .pr.sk{opacity:.45}
+      #t7Ai .prh{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+      #t7Ai .prh .mini{width:44px;height:25px;border-radius:5px;flex:none;
+        background:#11161f center/cover no-repeat;border:1px solid var(--border)}
+      #t7Ai .prh .sc{font-size:10.5px;color:var(--text-dim);font-family:ui-monospace,Menlo,monospace}
+      #t7Ai .prh .tpl{font-size:12.5px;font-weight:700;margin-left:auto;text-align:right}
+      #t7Ai .prq{font-size:11.5px;color:var(--text-muted);line-height:1.5;font-style:italic;
+        border-left:2px solid var(--border);padding-left:9px;margin:0 0 7px}
+      #t7Ai .why{font-size:11.5px;color:var(--text-muted);line-height:1.5;margin-bottom:9px}
+      #t7Ai .pra{display:flex;gap:6px}
+      #t7Ai .pra button{flex:1;border:1px solid var(--border);border-radius:8px;padding:6px;font-size:11.5px;
+        font-weight:600;color:var(--text-muted);background:var(--surface);cursor:pointer}
+      #t7Ai .pra .yes{border-color:var(--accent);color:var(--accent)}
+      #t7Ai .pra .yes:hover{background:var(--accent);color:var(--on-accent)}
+      #t7Ai .pra button:hover{color:var(--text)}
+      #t7Ai .state{font-size:11px;font-weight:700;padding:5px 0;text-align:center}
+      #t7Ai .state.a{color:var(--green)} #t7Ai .state.s{color:var(--text-dim)}
+      #t7Ai .pf{padding:12px 16px;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px}
+      #t7Ai .pf .cnt{font-size:11.5px;color:var(--text-muted);font-family:ui-monospace,Menlo,monospace}
+      .t7-empty{padding:40px 20px;text-align:center;color:var(--text-dim);font-size:13px}
+    

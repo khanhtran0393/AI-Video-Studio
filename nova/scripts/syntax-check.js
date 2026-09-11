@@ -8,7 +8,7 @@ const ROOT = path.resolve(__dirname, '..');
 // Check maintained JavaScript source only. Runtime environments, downloaded data,
 // generated bundles and package outputs are excluded by .gitignore/electron-builder
 // and can contain thousands of third-party files that are not app source.
-const IGNORE = /(?:node_modules|[\\/](?:bundle|dist|out|build-output|coverage|smoke-results)(?:[\\/]|$)|remotion-browser|app\.asar\.unpacked|[\\/](?:\.venv[^\\/]*|venv)(?:[\\/]|$)|[\\/]tdt-studio[\\/](?:app|runtime)(?:[\\/]|$)|[\\/]voice-studio[\\/](?:data|models?)(?:[\\/]|$))/i;
+const IGNORE = /(?:node_modules|[\\/](?:bundle|dist|out|build-output|coverage|smoke-results)(?:[\\/]|$)|remotion-browser|app\.asar\.unpacked|[\\/](?:\.venv[^\\/]*|venv)(?:[\\/]|$)|[\\/]voice-studio[\\/](?:data|models?)(?:[\\/]|$))/i;
 function walk(dir, out = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const file = path.join(dir, entry.name);

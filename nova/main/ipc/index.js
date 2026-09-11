@@ -20,7 +20,6 @@ const { registerWatermarkIpc } = require('./watermark');
 const { registerSystemIpc } = require('./system');
 const { registerImzicIpc } = require('./imzic');
 const { registerWhiteboardIpc } = require('../../whiteboard-studio/ipc');
-const { registerTdtStudioIpc } = require('../../tdt-studio/ipc');
 const { registerSrtTranslateIpc } = require('../../srt-translate/ipc');
 
 function registerAllIpc() {
@@ -39,12 +38,6 @@ function registerAllIpc() {
   try {
     registerWhiteboardIpc(ipcMain, { getState: () => state });
   } catch (e) { console.warn('[whiteboard-studio]', e && e.message); }
-
-  // ── TDT Studio ("Studio") — app PyQt TDTStudio vendored tại nova/tdt-studio/app,
-  //    runtime Python nội bộ (nova/tdt-studio/runtime), nhúng Qt window dock ──
-  try {
-    registerTdtStudioIpc(ipcMain, { getState: () => state });
-  } catch (e) { console.warn('[tdt-studio]', e && e.message); }
 
   // ── Dịch SRT — port hành vi "AI Translate Subtitles" của app tham chiếu,
   //    AI qua API đã cấu hình (nova/editor-pro/niche), file SRT thật trên đĩa ──

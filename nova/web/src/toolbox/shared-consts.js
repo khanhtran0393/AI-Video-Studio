@@ -72,162 +72,15 @@ const SUPPORT_YOUTUBE = 'https://www.youtube.com/@DinoFact200-1';
 
 // === L?: function _dashStats ===
 // ⚠️  DEDUP-DUPLICATE: hàm này cũng ở utility.js (peer=621c, shared=507c). Peer load SAU → ghi đè bản này. Sửa ở peer.
-function _dashStats(){
-  const profiles = (state.profiles || []).length;
-  let videos = 0; (state.profiles || []).forEach(p => { videos += Array.isArray(p.videos) ? p.videos.length : 1; });
-  const doneTotal = parseInt(localStorage.getItem('av_done_total') || '0') || 0;
-  const doneMonth = parseInt(localStorage.getItem('av_done_' + _ymKey()) || '0') || 0;
-  const producing = (typeof _autoBusy !== 'undefined' && _autoBusy) ? 1 : 0;
-  return { profiles, videos, doneTotal, doneMonth, producing };
-}
+// [P0a] fn chet da xoa (shadow boi ban song nap sau: utility/dashboard.js)
 
 // === L?: function _dashWorkflow ===
 // ⚠️  DEDUP-DUPLICATE: hàm này cũng ở utility.js (peer=1878c, shared=1314c). Peer load SAU → ghi đè bản này. Sửa ở peer.
-function _dashWorkflow(){
-  const p = (typeof getProfile === 'function') ? getProfile() : null;
-  const hasStyle = !!(p && (p.characterStyle || p.backgroundStyle || p.sceneStyle));
-  const hasScript = (state.script || '').trim().length > 0;
-  const nScenes = (state.scenes || []).length;
-  const nPrompts = Object.keys(state.scenePrompts || {}).filter(k => state.scenePrompts[k]).length;
-  const nImg = Object.keys(state.sceneImages || {}).filter(k => state.sceneImages[k]?.base64).length;
-  const sv = state.sceneVideos || {}; const nVid = Object.keys(sv).filter(k => sv[k] && !sv[k].error).length;
-  const steps = [
-    { nm: 'Profile', done: hasStyle, sb: hasStyle ? 'đã có style' : '—' },
-    { nm: 'Kịch bản', done: hasScript, sb: hasScript ? (state.script.length + ' ký tự') : '—' },
-    { nm: 'Phân cảnh', done: nScenes > 0, sb: nScenes ? (nScenes + ' cảnh') : '—' },
-    { nm: 'Prompt ảnh', done: nScenes > 0 && nPrompts >= nScenes, sb: nScenes ? (nPrompts + '/' + nScenes) : '—' },
-    { nm: 'Ảnh cảnh', done: nImg > 0, sb: nImg ? (nImg + ' ảnh') : '—' },
-    { nm: 'Video', done: nVid > 0, sb: nVid ? (nVid + ' clip') : '—' },
-    { nm: 'Dựng/Xuất', done: false, sb: '—' },
-  ];
-  let cur = steps.findIndex(s => !s.done); if (cur < 0) cur = steps.length - 1;
-  return { steps, cur };
-}
+// [P0a] fn chet da xoa (shadow boi ban song nap sau: utility/dashboard.js)
 
 // === L?: function renderDashboard ===
 // ⚠️  DEDUP-DUPLICATE: hàm này cũng ở utility.js (peer=32886c, shared=10786c). Peer load SAU → ghi đè bản này. Sửa ở peer.
-function renderDashboard(){
-  const box = document.getElementById('dashBody'); if (!box) return;
-  const name = (document.getElementById('userName')?.textContent || '').trim().replace(/^—$/, '') || 'bạn';
-  let dateStr = ''; try { dateStr = new Date().toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' }); } catch {}
-  const s = _dashStats();
-  const wf = _dashWorkflow();
-  const ic = {
-    prof: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/>',
-    vid: '<rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10l5-3v10l-5-3"/>',
-    scene: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 4v16"/>',
-    img: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M4 17l5-4 4 3 3-2 4 3"/>',
-    veo: '<path d="M13 2L4.5 13H11l-1 9 8.5-12H12l1-8z"/>',
-  };
-  const card = (cls, ico, lab, val) => `<div class="dcard"><span class="ico ${cls}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${ico}</svg></span><div><div class="lab">${lab}</div><div class="val">${val}</div></div></div>`;
-  const qa = (act, ico, t, d) => `<a onclick="${act}"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${ico}</svg></span><div><div class="qt">${t}</div><div class="qd">${d}</div></div></a>`;
-  const stepHtml = wf.steps.map((st, i) => `${i ? '<span class="arr"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></span>' : ''}<div class="st ${st.done ? 'done' : (i === wf.cur ? 'cur' : '')}"><div class="dot">${st.done ? '✓' : (i + 1)}</div><div class="nm">${st.nm}</div><div class="sb">${st.sb}</div></div>`).join('');
-  const projs = (state.profiles || []).slice(0, 6).map((p, i) => `<div class="dproj"><span class="th">🎬</span><div style="flex:1;min-width:0"><div class="pn">${escapeHtml(p.tenKenh || 'Profile ' + (i + 1))}</div><div class="pd">${(Array.isArray(p.videos) ? p.videos.length : 1)} video · ${escapeHtml(p.ngach || p.visualStyle || '')}</div></div><button class="btn ghost sm" onclick="switchProfile(${i});switchTool('tool1')">Mở</button></div>`).join('') || '<div class="empty-state">Chưa có profile. Bấm "Tạo Profile mới".</div>';
-
-  box.innerHTML = `
-    <div><h1 class="dash-hi">Xin chào, ${escapeHtml(name)} 👋</h1><p class="dash-sub">${dateStr ? dateStr[0].toUpperCase() + dateStr.slice(1) + ' · ' : ''}Chúc bạn một ngày làm việc hiệu quả!</p></div>
-    <div class="dash-stats">
-      ${card('di-green', '<path d="M20 6L9 17l-5-5"/>', 'Video hoàn thành', s.doneTotal)}
-      ${card('di-accent', '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>', 'Đang sản xuất', s.producing)}
-      ${card('di-blue', '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/>', 'Sản xuất tháng này', s.doneMonth)}
-      ${card('di-violet', ic.prof, 'Kênh (profile)', s.profiles)}
-      ${card('di-teal', ic.vid, 'Tổng video', s.videos)}
-    </div>
-    <div class="dsec dauto">
-      <div class="dsec-h" style="display:flex;align-items:center;justify-content:space-between">
-        <span>🚀 Sản xuất video tự động — 1 nút chạy cả quy trình</span>
-        <button class="btn ghost sm" onclick="queueAdd()" style="text-transform:none;font-weight:600;letter-spacing:0">＋ Thêm vào hàng đợi</button>
-      </div>
-      <style>@keyframes autopulse{0%,100%{opacity:1}50%{opacity:.3}}
-        .dsh-lbl{font-size:12px;color:var(--text-muted);margin:0 0 6px;display:block}
-        .dsh-field{width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:10px 12px;font-size:13px;color:var(--text);font-family:inherit}
-        .dsh-field:focus{outline:none;border-color:var(--accent)}
-      </style>
-      <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px;font-size:13px;padding:9px 11px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px">
-        <span style="color:var(--text-muted);white-space:nowrap">💾 Lưu về máy:</span>
-        <select id="dashSaveMode" onchange="dashSaveMode(this.value)" style="max-width:220px;width:auto">
-          <option value="perTask" selected>Tạo thư mục theo video</option>
-          <option value="flat">Lưu thẳng vào thư mục</option>
-        </select>
-        <input type="text" id="dashSaveName" placeholder="Tên thư mục (tuỳ chọn)" style="max-width:190px" oninput="_autoSaveName=this.value;try{localStorage.setItem('av_save_name',this.value)}catch(e){}">
-        <input type="text" id="dashSaveFolder" readonly placeholder="Chưa chọn thư mục lưu" style="flex:1;min-width:180px">
-        <button class="btn ghost sm" onclick="autoPickFolder()">📁 Chọn thư mục</button>
-      </div>
-      <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;display:flex;align-items:center;gap:8px">
-        <span>⚡ Tài khoản Flow (tạo ảnh):</span>
-        <span id="dashFlowAcc">đang kiểm tra…</span>
-        <button class="btn ghost sm" style="margin-left:auto" onclick="switchTool('toolflow')">Thêm / quản lý tài khoản</button>
-      </div>
-      <div style="display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin-bottom:14px;font-size:13px">
-        <label style="display:flex;gap:8px;align-items:center">Bắt đầu từ:
-          <select id="dashStart" style="width:auto" onchange="dashToggleStart()">
-            <option value="script" selected>Kịch bản (làm từ đầu)</option>
-            <option value="scenes">Prompt cảnh (đã có kịch bản + giọng)</option>
-          </select>
-        </label>
-      </div>
-      <div id="dashTopicRow" style="margin-bottom:14px">
-        <label class="dsh-lbl">Chủ đề / Tiêu đề video</label>
-        <input id="dashTopic" class="dsh-field" placeholder="VD: Bí ẩn sự sụp đổ của Đế chế La Mã" oninput="_autoTopic=this.value">
-        <div id="dashWordsWrap" style="display:flex;align-items:flex-end;gap:12px;margin-top:12px">
-          <div>
-            <label class="dsh-lbl">Số lượng từ</label>
-            <input id="dashWords" class="dsh-field" type="number" min="100" step="100" value="800" oninput="dashWordEst()" style="width:120px">
-          </div>
-          <span id="dashWordEst" style="font-size:12px;color:var(--text-dim);white-space:nowrap;padding-bottom:11px">≈ 5.3 phút đọc</span>
-        </div>
-      </div>
-      <div id="dashPrepared" style="display:none;margin-bottom:14px;padding:12px 14px;border:1px solid var(--border);border-radius:10px;background:var(--surface-2)">
-        <label style="display:block;font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px">📄 Kịch bản (file .txt)</label>
-        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:4px">
-          <input type="file" id="dashScriptFile" accept=".txt,text/plain" onchange="dashLoadScriptFile(this.files)">
-          <span id="dashScriptName" style="font-size:12px;color:var(--green)"></span>
-        </div>
-        <div style="font-size:11px;color:var(--text-dim);margin-bottom:12px">Để trống = tự lấy kịch bản từ tab Tạo Kịch Bản / Phân Cảnh.</div>
-        <label style="display:block;font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px">🎙 File giọng đọc <span style="text-transform:none">(tuỳ chọn)</span></label>
-        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-          <input type="file" id="dashVoiceFile" accept="audio/*" onchange="dashPickVoice(this.files)">
-          <span id="dashVoiceName" style="font-size:12px;color:var(--green)"></span>
-        </div>
-        <div style="font-size:11px;color:var(--text-dim);margin-top:6px">Để trống file giọng = video xuất không kèm tiếng (ghép sau ở Dựng Video).</div>
-      </div>
-      <div style="font-size:11.5px;color:var(--text-dim);margin-bottom:2px">Điền form rồi bấm <b>Chạy hàng đợi</b> (dưới). Luồng tự động chạy tới <b>Dựng video</b> rồi <b>dừng</b> (chưa xuất file) — bạn sang tab <b>Dựng Video</b> kiểm/tạo lại cảnh lỗi rồi tự bấm <b>Xuất</b>. Muốn làm nhiều: bấm <b>Thêm vào hàng đợi</b> từng cái rồi mới Chạy.</div>
-      <div id="autoLog" style="font-size:12.5px;color:var(--text-muted);margin-top:6px;min-height:18px"></div>
-    </div>
-    <div class="dsec">
-      <div class="dsec-h" style="display:flex;align-items:center;justify-content:space-between">
-        <span>Hàng đợi <span id="queueCount" style="color:var(--text-muted);font-weight:400;font-size:12px;text-transform:none;letter-spacing:0">0 mục</span></span>
-        <span style="display:flex;gap:8px">
-          <button class="btn primary sm" id="queueRunBtn" onclick="runQueue()" style="text-transform:none;letter-spacing:0">▶ Chạy hàng đợi</button>
-          <button class="btn sm" id="queueStopBtn" onclick="queueStop()" style="display:none;background:var(--red);color:#fff;text-transform:none;letter-spacing:0">■ Dừng</button>
-        </span>
-      </div>
-      <div id="queueList"></div>
-    </div>
-    <details class="dsec" style="margin-top:0">
-      <summary style="cursor:pointer;list-style:none;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted);display:flex;align-items:center;justify-content:space-between">
-        <span>🕘 Lịch sử chạy</span>
-        <span onclick="event.preventDefault();_histClear()" style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-dim);cursor:pointer">Xoá lịch sử</span>
-      </summary>
-      <div id="histList" style="margin-top:10px"></div>
-    </details>`;
-  try {
-    _histRender();
-    _dashFlowStatus();
-    _autoRender();
-    const tt = document.getElementById('dashTopic'); if (tt && _autoTopic) tt.value = _autoTopic;
-    const sm = document.getElementById('dashSaveMode'); if (sm) sm.value = _autoSaveMode;
-    const snm = document.getElementById('dashSaveName'); if (snm) snm.value = _autoSaveName || '';
-    dashSaveMode(_autoSaveMode);
-    const sf = document.getElementById('dashSaveFolder'); if (sf) { const base = _autoOutDir || _autoDefaultDir; if (base) sf.value = base; }
-    const ss = document.getElementById('dashStart'); if (ss) ss.value = _autoStartFrom;
-    dashToggleStart();
-    const vn = document.getElementById('dashVoiceName'); if (vn && _autoVoiceFile) vn.textContent = '✓ ' + _autoVoiceFile.name;
-    if (_autoLastLog) _autoLog(_autoLastLog.msg, _autoLastLog.type);
-    queueRender();
-    if (_queueRunning) { const r = document.getElementById('queueRunBtn'), st = document.getElementById('queueStopBtn'); if (r) r.style.display = 'none'; if (st) st.style.display = ''; }
-  } catch (e) {}
-}
+// [P0a] fn chet da xoa (shadow boi ban song nap sau: utility/dashboard.js)
 
 // === L?: const PROD_STEPS ===
 const PROD_STEPS = [
@@ -255,21 +108,11 @@ let _autoSaveMode = 'perTask', _autoSaveName = '';
 
 // === L?: function dashToggleStart ===
 // ⚠️  DEDUP-DUPLICATE: hàm này cũng ở utility.js (peer=602c, shared=492c). Peer load SAU → ghi đè bản này. Sửa ở peer.
-function dashToggleStart(){
-  const sel = document.getElementById('dashStart'); const v = sel ? sel.value : 'script';
-  _autoStartFrom = v;
-  const box = document.getElementById('dashPrepared'); if (box) box.style.display = v === 'scenes' ? 'block' : 'none';
-  // Khối Chủ đề + số từ chỉ hiện khi làm từ đầu; từ Prompt cảnh → ẩn cả khối (tiêu đề suy từ kịch bản/SEO).
-  const trow = document.getElementById('dashTopicRow'); if (trow) trow.style.display = v === 'scenes' ? 'none' : '';
-}
+// [P0a] fn chet da xoa (shadow boi ban song nap sau: utility/dashboard.js)
 
 // === L?: function dashWordEst ===
 // ⚠️  DEDUP-DUPLICATE: hàm này cũng ở utility.js (peer=578c, shared=235c). Peer load SAU → ghi đè bản này. Sửa ở peer.
-function dashWordEst(){
-  const w = parseInt(document.getElementById('dashWords')?.value) || 0;
-  const el = document.getElementById('dashWordEst');
-  if (el) el.textContent = w ? ('≈ ' + (w / 150).toFixed(1) + ' phút đọc') : '';
-}
+// [P0a] fn chet da xoa (shadow boi ban song nap sau: utility/dashboard.js)
 
 // === L?: let _autoLastLog ===
 let _autoLastLog = null;
@@ -294,60 +137,11 @@ const _VOICE_FIELDS = { voiceLang: 'v', voiceSpeed: 'v', voiceGap: 'v', voiceIns
 
 // === L?: function applyChannelCfg ===
 // ⚠️  DEDUP-DUPLICATE: hàm này cũng ở utility.js (peer=791c, shared=567c). Peer load SAU → ghi đè bản này. Sửa ở peer.
-function applyChannelCfg(p){
-  p = p || ((typeof getProfile === 'function') ? getProfile() : null); if (!p) return;
-  _appCfg(_T2_FIELDS, p.t2Cfg);
-  if (p.voiceCfg){
-    _appCfg(_VOICE_FIELDS, p.voiceCfg);
-    if (p.voiceCfg.voiceMode){ const r = document.querySelector('input[name="voiceMode"][value="' + p.voiceCfg.voiceMode + '"]'); if (r) r.checked = true; }
-    if ('preset' in p.voiceCfg){ try { _voicePreset = p.voiceCfg.preset || ''; } catch (e) {} const vs = document.getElementById('voiceSaved'); if (vs) vs.value = p.voiceCfg.preset || ''; }
-  }
-}
+// [P0a] fn chet da xoa (shadow boi ban song nap sau: utility/autopipe.js)
 
 // === L?: function queueAdd ===
 // ⚠️  DEDUP-DUPLICATE: hàm này cũng ở tool-queue.js (peer=3200c, shared=3156c). Peer load SAU → ghi đè bản này. Sửa ở peer.
-function queueAdd(){
-  const p = (typeof getProfile === 'function') ? getProfile() : null;
-  if (!p) return _autoLog('Chưa có Profile — tạo/chọn Profile trước.', 'error');
-  // Giới hạn hàng đợi tự động theo gói
-  if (!canAutoRun()) return showGate('Dashboard tự động (1 nút) & hàng đợi chỉ dành cho gói Sáng tạo trở lên. Nâng cấp để tự động hoá sản xuất.', { upgrade: true });
-  const qlim = getMaxQueue();
-  if (qlim !== Infinity && _prodQueue.length >= qlim) {
-    return showGate(`Gói ${tierPlanName(state.userTier)} chỉ xếp được ${qlim} video trong hàng đợi. Nâng cấp lên Studio để chạy không giới hạn.`, { upgrade: true });
-  }
-  const startFrom = document.getElementById('dashStart')?.value || 'script';
-  const topic = (document.getElementById('dashTopic')?.value || '').trim();
-  let script = (_autoScriptText || '').trim();
-  const words = parseInt(document.getElementById('dashWords')?.value) || 800;
-  if (startFrom === 'script') { if (!topic) return _autoLog('Nhập chủ đề video trước khi thêm.', 'error'); }
-  else { if (!script) script = (state.script || document.getElementById('tsOutput')?.value || '').trim(); if (!script) return _autoLog('Chưa có kịch bản — chọn file .txt, hoặc viết ở tab Tạo Kịch Bản.', 'error'); }
-  const title = topic || ('Video ' + (_prodQueue.length + 1) + ' — chờ SEO đặt tên');
-  const id = _qid();
-  captureChannelCfg();   // lưu cấu hình Tool 2 + giọng hiện tại vào kênh này
-  const pname = (p.tenKenh || '').trim() || ('Profile ' + (state.currentProfileIdx + 1));
-  const job = {
-    id, title, topic, startFrom, script: startFrom === 'scenes' ? script : '', words,
-    profileIdx: state.currentProfileIdx, profileName: pname, status: 'queued', detail: 'chờ tới lượt',
-    // Ghi nhớ nơi lưu RIÊNG cho video này (theo cài đặt lúc bấm Thêm)
-    saveMode: _autoSaveMode, saveName: (_autoSaveName || '').trim(), saveDir: (_autoOutDir || _autoDefaultDir || ''),
-  };
-  if (startFrom === 'scenes' && _autoVoiceFile) { _queueVoice[id] = _autoVoiceFile; job.voiceName = _autoVoiceFile.name; }
-  // Ghi mức xen video 🎞/🎬 LÚC bấm Thêm → pipeline dùng ĐÚNG lựa chọn của kênh (không bị newVideo đưa về mặc định).
-  { const b = state.nguonBat || {};
-    job.nguonBat = Object.assign({}, b);
-    job.webBat = Object.assign({}, state.webBat || {});
-    job.videoMix = b.veo ? 6 : 0; job.stockMix = b.stock ? 6 : 0; job.ytMix = b.yt ? 6 : 0;
-  }
-  if (job.script) { try { IDB.set('qs_' + id, job.script); } catch (e) {} }   // kịch bản → IndexedDB (giữ localStorage nhẹ)
-  _prodQueue.push(job); queueSave(); queueRender();
-  // Xoá form soạn để thêm cái kế
-  const tt = document.getElementById('dashTopic'); if (tt) tt.value = ''; _autoTopic = '';
-  _autoScriptText = ''; const sn = document.getElementById('dashScriptName'); if (sn) sn.textContent = '';
-  const sf = document.getElementById('dashScriptFile'); if (sf) sf.value = '';
-  _autoVoiceFile = null; const vn = document.getElementById('dashVoiceName'); if (vn) vn.textContent = '';
-  const vf = document.getElementById('dashVoiceFile'); if (vf) vf.value = '';
-  _autoLog('✓ Đã thêm "' + title + '" vào hàng đợi.', 'ok');
-}
+// [P0a] fn chet da xoa (shadow boi ban song nap sau: tool-queue.js)
 
 async function _runPipeline(job){
   const topic = job.topic || ''; const startFrom = job.startFrom || 'script';
@@ -720,58 +514,14 @@ let _novaLog = [];
 
 // === L?: function novaLog ===
 // ⚠️  DEDUP-DUPLICATE: hàm này cũng ở utility.js (peer=276c, shared=268c). Peer load SAU → ghi đè bản này. Sửa ở peer.
-function novaLog(msg, type){
-  let t = ''; try { t = new Date().toLocaleTimeString('vi-VN'); } catch(e){}
-  _novaLog.push({ t, msg: String(msg), type: type || '' });
-  if (_novaLog.length > 800) _novaLog.shift();
-  if (state.tool === 'toollog') novaLogRender();
-}
+// [P0a] fn chet da xoa (shadow boi ban song nap sau: utility/llm.js)
 
 // === L?: let __epInited ===
 let __epInited = false;
 
 // === L?: function switchTool ===
 // ⚠️  DEDUP-DUPLICATE: hàm này cũng ở utility.js (peer=6216c, shared=3075c). Peer load SAU → ghi đè bản này. Sửa ở peer.
-function switchTool(name){
-  if (name === 'toollog') { setTimeout(novaLogRender, 0); }
-  if (name === 'tooladmin') {
-    if (!isAdmin()) return;   // tab admin: chỉ admin
-  } else if (name === 'toolsettings') {
-    /* trang Cài đặt: luôn cho vào */
-  }
-  // Free XEM được mọi tool (không chặn ở đây); chặn ở NÚT hành động trong từng tool → hiện thông báo.
-  state.tool = name;
-  document.querySelectorAll('.nav-item').forEach(t =>
-    t.classList.toggle('active', t.dataset.tool === name)
-  );
-  document.querySelectorAll('.tool').forEach(t =>
-    t.classList.toggle('active', t.id === 'tool-' + name)
-  );
-  // Tool-specific init
-  if (name === 'tool2' && typeof renderSceneTypeToggles === 'function') { renderSceneTypeToggles(); if (typeof t2UpdateAnalyzeBtn === 'function') t2UpdateAnalyzeBtn(); }
-  if (name === 'tooldash' && typeof renderDashboard === 'function') renderDashboard();
-  if (name === 'tool6'){ if (typeof _autoSaveSyncUI === 'function') _autoSaveSyncUI(); if (typeof tvFlowStatus === 'function') tvFlowStatus(); if (typeof tvLoadModelKeys === 'function') tvLoadModelKeys(); if (typeof tvOnModelChange === 'function') tvOnModelChange(); if (typeof tvSetMode === 'function') tvSetMode(document.getElementById('tvMode')?.value || 'scene'); if (typeof tvRenderVideos === 'function') tvRenderVideos(); }
-  if (name === 'tool8' && typeof t8Init === 'function') t8Init();
-  if (name === 'tool7' && typeof t7Build === 'function') t7Build();
-  if (name === 'tool9' && typeof t9Init === 'function') t9Init();
-  if (name === 'tool10' && typeof t10Init === 'function') t10Init();   // T10 tách riêng từ Tool 9 (2026-09-10)
-  if (name === 'tool9' && typeof t9Step2Refresh === 'function') setTimeout(t9Step2Refresh, 200);   // bước 2 (thumbnail) chỉ mở khi đã có tiêu đề
-  if (name === 'toolniche' && typeof nicheInit === 'function') nicheInit();
-  if (name === 'toolflow'){ if (typeof tfInit === 'function') tfInit(); if (typeof _autoSaveSyncUI === 'function') _autoSaveSyncUI(); }
-  if (name === 'tool2'){ try { t2RenderNguon(); } catch (e) {} }
-  if (name === 'toolsettings'){ if (typeof _relocateSettings === 'function') _relocateSettings(); if (typeof tfInit === 'function') tfInit(); if (typeof loadApiSettings === 'function') try { loadApiSettings(); } catch(e){} if (typeof t11Init === 'function') try { t11Init(); } catch(e){} }
-  if (name === 'toolvoice'){
-    // Ba việc độc lập: OmniVoice có thể chưa cài mà giọng đám mây vẫn phải hiện.
-    if (typeof voiceInit === 'function') voiceInit();
-    if (typeof giongTaiDS === 'function') giongTaiDS();
-    if (typeof giongKiemEngine === 'function') giongKiemEngine();
-  }
-  if (name === 'toolupscale' && typeof upInit === 'function') upInit();
-  if (name === 'toolscript' && typeof tsInit === 'function') tsInit();
-  if (name === 'tooladmin' && typeof admListUsers === 'function') admListUsers();
-  if (name === 'tooladmin' && typeof admRenderDash === 'function') admRenderDash();
-  if (typeof _syncChLang === 'function') _syncChLang();   // áp ngôn ngữ kênh vào tool vừa mở
-}
+// [P0a] fn chet da xoa (shadow boi ban song nap sau: utility/nav.js)
 
 // === L?: const upState ===
 const upState = { items: [], running: false, seq: 0, wired: false };
@@ -781,13 +531,7 @@ let _upThumbBusy = false;
 
 // === L?: function tsInit ===
 // ⚠️  DEDUP-DUPLICATE: hàm này cũng ở tool-ts.js (peer=1020c, shared=441c). Peer load SAU → ghi đè bản này. Sửa ở peer.
-function tsInit(){
-  const p = (typeof getProfile === 'function') ? getProfile() : null;
-  const nameEl = document.getElementById('tsProfName'); if (nameEl) nameEl.textContent = p?.tenKenh ? '· ' + p.tenKenh : '';
-  const pp = document.getElementById('tsProfPrompt');
-  if (pp) pp.textContent = (p?.scriptPrompt || '').trim() || 'Chưa có — bấm "Sửa ở Profile" để thêm phong cách viết kịch bản cho kênh.';
-  tsEstimate(); tsOutMeta();
-}
+// [P0a] fn chet da xoa (shadow boi ban song nap sau: tool-ts.js)
 
 async function tsGenerate(rewrite){
   const topic = document.getElementById('tsTopic')?.value.trim();
@@ -846,72 +590,19 @@ let _voiceStarting = null;
 // === L?: let _voicePreset ===
 let _voicePreset = '';
 
-async function voiceInit(){
-  const st = document.getElementById('voiceBackendStatus');
-  if (!window.native?.voiceStart){
-    if (st) st.innerHTML = '<span style="color:var(--red)">Chỉ dùng được trong app desktop.</span>';
-    return;
-  }
-  // Xác minh backend còn sống (không chỉ dựa cờ cũ — phòng khi backend đã tắt/khởi động lại).
-  const cur = await window.native.voiceStatus().catch(() => null);
-  if (cur?.running){ _voiceReady = true; if (cur?.url) VOICE_URL = cur.url; if (st) st.innerHTML = '<span style="color:var(--green)">● Giọng nói sẵn sàng (OmniVoice)</span>'; voiceLoadVoices(); return; }
-  _voiceReady = false;
-  // Đã cài backend trên máy chưa? (thay vì báo lỗi đỏ → hiện panel hướng dẫn cài)
-  const pb = window.native.voiceProbe ? await window.native.voiceProbe().catch(() => null) : null;
-  if (pb && !pb.hasRoot){ voiceShowSetup('need-install'); return; }
-  if (pb && pb.hasRoot && !pb.hasPython){ voiceShowSetup('need-python'); return; }
-  // Có backend → tự khởi động (im lặng) khi mở tab.
-  if (st) st.innerHTML = '⏳ Đang khởi động backend giọng nói (OmniVoice)… lần đầu ~30-60s, giữ app mở.';
-  if (!_voiceStarting) _voiceStarting = window.native.voiceStart();
-  const r = await _voiceStarting; _voiceStarting = null;
-  if (r?.ok){ _voiceReady = true; if (r?.url) VOICE_URL = r.url; if (st) st.innerHTML = '<span style="color:var(--green)">● Giọng nói sẵn sàng (OmniVoice)</span>'; voiceLoadVoices(); }
-  else if (st) st.innerHTML = '<span style="color:var(--red)">Lỗi khởi động: ' + escapeHtml(r?.error || '') + '</span>';
-}
+// === L?: async function voiceInit ===
+// ⚠️  DEDUP-DUPLICATE: hàm này cũng ở utility/voice.js (bản SSOT: hỗ trợ VieNeu/XTTS,
+// probe + auto-start backend). Peer load SAU → ghi đè bản này. Sửa ở peer.
+// [P0a] fn chet da xoa (shadow boi ban song nap sau: utility/voice.js)
 
 // === L?: function voiceShowSetup ===
 // ⚠️  DEDUP-DUPLICATE: hàm này cũng ở utility.js (peer=1468c, shared=1348c). Peer load SAU → ghi đè bản này. Sửa ở peer.
-function voiceShowSetup(kind){
-  const st = document.getElementById('voiceBackendStatus');
-  if (!st) return;
-  const needPy = kind === 'need-python';
-  const msg = needPy
-    ? 'Đã tìm thấy thư mục voice-studio nhưng <b>chưa cài môi trường Python</b>. Mở voice-studio và chạy file cài đặt (setup) một lần, rồi bấm “Kiểm tra lại”.'
-    : 'Giọng nói AI chạy <b>ngay trên máy bạn</b> (đọc bao nhiêu cũng miễn phí). Bấm <b>“Cài backend vào máy”</b> — app tự cài vào thư mục của app, <b>không cần chọn nơi lưu</b>. Chỉ cài một lần là xong.';
-  st.innerHTML = `
-    <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:16px 18px;text-align:left;max-width:720px">
-      <div style="font-weight:800;font-size:14px;color:var(--text);margin-bottom:6px">🎙 Cần cài backend giọng nói (OmniVoice) trên máy</div>
-      <div style="font-size:12.8px;color:var(--text-muted);line-height:1.65;margin-bottom:12px">${msg}</div>
-      <div style="display:flex;gap:10px;flex-wrap:wrap">
-        <button class="btn primary sm" onclick="voiceInstallBackend()">📥 Cài backend vào máy</button>
-        <button class="btn ghost sm" onclick="voicePickRoot()">📁 Đã cài nơi khác — chọn thư mục</button>
-        <button class="btn ghost sm" onclick="voiceInit()">🔄 Kiểm tra lại</button>
-      </div>
-    </div>`;
-}
+// [P0a] fn chet da xoa (shadow boi ban song nap sau: utility/voice.js)
 
-async function voiceInstallBackend(){
-  if (!window.native?.voiceInstallBackend){ voicePickRoot(); return; }
-  const st = document.getElementById('voiceBackendStatus');
-  if (st) st.innerHTML = '⏳ Đang chép backend ra máy…';
-  const r = await window.native.voiceInstallBackend().catch(() => null);
-  if (r?.ok){
-    if (st) st.innerHTML = `
-      <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:16px 18px;text-align:left;max-width:760px">
-        <div style="font-weight:800;color:var(--green);margin-bottom:6px">✓ Đã chép backend vào máy</div>
-        <div style="font-size:12.8px;color:var(--text-muted);line-height:1.7">
-          Thư mục: <code style="background:var(--surface-3);padding:2px 6px;border-radius:5px">${escapeHtml(r.path)}</code> (đã mở sẵn).<br>
-          <b>Bước tiếp — cài Python + model (1 lần):</b> vào thư mục đó, chạy
-          <b>setup-omni.bat</b> (Windows) hoặc <b>setup-omni.command</b> (Mac). Xong bấm <b>🔄 Kiểm tra lại</b>.<br>
-          <span style="color:var(--text-dim)">Chi tiết xem file HUONG-DAN-KHACH.md trong thư mục đó.</span>
-        </div>
-        <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap">
-          <button class="btn primary sm" onclick="voiceInit()">🔄 Kiểm tra lại</button>
-        </div>
-      </div>`;
-  } else if (r && !r.canceled){
-    if (st) st.insertAdjacentHTML('beforeend', '<div style="color:var(--red);font-size:12px;margin-top:8px">' + escapeHtml(r.error || 'Lỗi cài đặt') + '</div>');
-  }
-}
+// === L?: async function voiceInstallBackend ===
+// ⚠️  DEDUP-DUPLICATE: hàm này cũng ở utility/voice.js (bản SSOT). Peer load SAU →
+// ghi đè bản này. Sửa ở peer.
+// [P0a] fn chet da xoa (shadow boi ban song nap sau: utility/voice.js)
 
 // === L?: const _TTS_TEN ===
 const _TTS_TEN = { omni: 'OmniVoice' };
@@ -946,102 +637,78 @@ let _giongTT = { omni: 'no' };
 // === L?: let _giongThemMo ===
 let _giongThemMo = false;
 
-async function giongTaiDS(){
-  const ds = [];
-  try {
-    const data = await fetch(VOICE_URL + '/api/voices').then(r => r.json());
-    const list = Array.isArray(data) ? data : (data.voices || []);
-    _voiceList = list;
-    for (const v of list){
-      // Giọng ⭐ nhà máy của OmniVoice là tiếng Anh, không dùng cho video tiếng Việt.
-      // Chỉ GIẤU khỏi thư viện — file vẫn nằm trong voicebank, muốn hiện lại thì bỏ dòng này.
-      if (v.is_factory) continue;
-      const thietKe = !!(v.attributes && v.attributes.instruct);
-      ds.push({
-        key: 'omni:' + v.id, engine: 'omni', id: v.id, name: v.name || v.id,
-        src: v.is_factory ? 'Giọng có sẵn' : (thietKe ? 'Thiết kế từ mô tả' : 'Clone từ mẫu'),
-        kind: v.is_factory ? 'san' : (thietKe ? 'design' : 'clone'),
-        tags: (v.tags || []).slice(0, 3),
-        lang: (v.attributes && v.attributes.lang) || 'vi',
-        factory: !!v.is_factory,
-      });
-    }
-  } catch (e){ /* backend chưa lên — vẫn hiện giọng đám mây */ }
-  for (const v of _giongCloud()){
-    ds.push({ key: v.engine + ':' + v.id, engine: v.engine, id: v.id, name: v.name,
-      src: 'Giọng dựng sẵn', kind: 'san', tags: Array.isArray(v.tags) ? v.tags.slice(0, 3) : [],
-      lang: v.lang || 'vi', factory: false, model: v.model || '' });
-  }
-  _giongDS = ds;
-  if (!_giongDS.some(v => v.key === _giongChon)) _giongChon = (_giongDS[0] || {}).key || '';
-  giongVe();
-}
+// === L7837 (34d9dff5): const _TTS_KHOA ===
+const _TTS_KHOA = { elevenlabs: 'api_tts_elevenlabs', openai: 'api_tts_openai' };
+
+// === L7842 (34d9dff5): const _GIONG_MAU_CLONE ===
+const _GIONG_MAU_CLONE = {
+  vi: 'Trong một buổi chiều tháng Chín, khi những cơn gió đầu mùa bắt đầu thổi qua thành phố, tôi chợt nhận ra rằng có những điều rất nhỏ lại ở lại rất lâu trong trí nhớ, lâu hơn cả những chuyện tưởng chừng quan trọng hơn nhiều.',
+  en: 'On a quiet afternoon in September, when the first cold wind began to move through the city, I realised that the smallest things often stay with us the longest, far longer than the events we once believed were far more important.',
+};
+
+// === L7803 (34d9dff5): let _giongTTLoi ===
+let _giongTTLoi = {};   // engine → câu lỗi thật của nhà cung cấp
+
+// Key ElevenLabs bắt đầu bằng sk_ (gạch dưới), OpenAI bằng sk- (gạch ngang).
+// Dán nhầm ô là ghi đè key của nhà kia — đã xảy ra, nên chặn ngay lúc lưu.
+// === L7806 (34d9dff5): const _TTS_DAU ===
+const _TTS_DAU = { elevenlabs: /^sk_/, openai: /^sk-/ };
+
+// === L409 (5f2e1d26): let _voiceHW ===
+let _voiceHW = null;   // { device, gpu, vram_gb, cpu_cores, profile, recommended }
+
+// === L419 (5f2e1d26): const _TTS_BACKEND_ID ===
+const _TTS_BACKEND_ID = { omni: 'omnivoice', vieneu: 'vieneu', xtts: 'xtts' };
+
+// === L425 (5f2e1d26): let _voiceBackend ===
+let _voiceBackend = 'omni';
+
+// === L428 (5f2e1d26): let _voiceBackendMacDinh ===
+let _voiceBackendMacDinh = true;
+
+// === L444 (5f2e1d26): let _giongTao ===
+let _giongTao = '';           // khoá đang TẠO mẫu nghe thử (⏳) — chưa phát được
+
+// === L468 (5f2e1d26): let _giongBusy ===
+let _giongBusy = false;
+
+// === L479 (5f2e1d26): const _GIONG_MAU_V ===
+const _GIONG_MAU_V = 'v1';
+
+// === L482 (5f2e1d26): const _GIONG_DOAN_RE ===
+const _GIONG_DOAN_RE = /^Đoạn (\d+)\/(\d+) · (.+)$/;
+
+// === L485 (5f2e1d26): let _giongLuoiMo ===
+let _giongLuoiMo = false;
+
+// === L6826 (630c0a5c): let _voiceList ===
+let _voiceList = [];
+
+// === L?: async function giongTaiDS ===
+// ⚠️  DEDUP-DUPLICATE: hàm này cũng ở utility/voice.js (bản SSOT: KHÔNG ẩn giọng
+// factory, tách engine vieneu/omni, giữ selection). Peer load SAU → ghi đè bản này. Sửa ở peer.
+// [P0a] fn chet da xoa — bản cũ có `if (v.is_factory) continue;` → ẨN TOÀN BỘ giọng
+// /ngôn ngữ có sẵn (57 voice factory) khỏi UI, chỉ còn giọng clone. Root cause của
+// "mất ngôn ngữ sẵn có" (2026-09-11c trong MEMORY.md). KHÔNG tái tạo bản này ở đây.
 
 // === L?: const voiceLoadVoices ===
-const voiceLoadVoices = giongTaiDS;
+// Alias PHẢI late-binding: arrow chỉ resolve global `giongTaiDS` LÚC GỌI (chạy vào
+// bản SSOT của utility/voice.js). Dạng cũ `const voiceLoadVoices = giongTaiDS;` chụp
+// giá trị tại thời điểm nạp script → vĩnh viễn trỏ vào bản lỗi đã xoá ở trên, dù
+// `giongTaiDS` bản mới đã ghi đè sau đó. KHÔNG quay lại dạng chụp giá trị.
+const voiceLoadVoices = (...a) => giongTaiDS(...a);
 
 // === L?: function giongVe ===
 // ⚠️  DEDUP-DUPLICATE: hàm này cũng ở utility.js (peer=2411c, shared=2316c). Peer load SAU → ghi đè bản này. Sửa ở peer.
-function giongVe(){
-  const box = document.getElementById('giongLuoi');
-  const chips = document.getElementById('giongChips');
-  if (!box) return;
-
-  if (chips){
-    const dem = f => _giongDS.filter(v => { const c = _giongLoc; _giongLoc = f; const k = _giongHop(v); _giongLoc = c; return k; }).length;
-    const muc = [['*', 'Tất cả']];
-    for (const e of ['omni','elevenlabs','openai']) if (_giongDS.some(v => v.engine === e)) muc.push(['e:' + e, _TTS_TEN[e]]);
-    for (const [k, t] of [['k:clone','Clone'],['k:design','Thiết kế']]) if (_giongDS.some(v => v.kind === k.slice(2))) muc.push([k, t]);
-    const nhan = {};
-    for (const v of _giongDS) for (const t of (v.tags || [])) nhan[t] = (nhan[t] || 0) + 1;
-    for (const t of Object.keys(nhan).sort((a,b) => nhan[b] - nhan[a]).slice(0, 4)) muc.push([t, t]);
-    chips.innerHTML = muc.map(([f, t]) =>
-      `<div class="gchip${f === _giongLoc ? ' on' : ''}" onclick="giongDatLoc('${escapeHtml(f)}')">${escapeHtml(t)}<span class="c">${dem(f)}</span></div>`).join('');
-  }
-
-  const hien = _giongDS.filter(_giongHop);
-  box.innerHTML = hien.map(v => {
-    const chon = v.key === _giongChon, dangPhat = v.key === _giongPhat;
-    return `<div class="gcard${chon ? ' sel' : ''}${dangPhat ? ' play' : ''}" onclick="giongBam('${escapeHtml(v.key)}')">
-      ${v.factory ? '' : `<button class="btn sm ghost gdel" onclick="event.stopPropagation();giongXoa('${escapeHtml(v.key)}')" title="Xoá giọng">✕</button>`}
-      <div class="gtop">
-        <span class="gpico">${dangPhat ? '❙❙' : '▶'}</span>
-        <div style="min-width:0"><div class="gname">${escapeHtml(v.name)}</div><div class="gsrc">${escapeHtml(v.src)}</div></div>
-      </div>
-      <div class="gtags">${(v.tags || []).map(t => `<span class="gtg">${escapeHtml(t)}</span>`).join('')}<span class="gtg eng">${escapeHtml(_TTS_TEN[v.engine])}</span></div>
-    </div>`;
-  }).join('') + `<div class="gadd" onclick="giongThemBat()">＋ Thêm giọng</div>`;
-
-  const n = document.getElementById('giongDem'); if (n) n.textContent = _giongDS.length + ' giọng';
-  const cur = _giongDS.find(v => v.key === _giongChon);
-  const lb = document.getElementById('giongDangChon');
-  if (lb) lb.textContent = cur ? (cur.name + ' · ' + _TTS_TEN[cur.engine]) : 'chưa chọn giọng';
-  giongVeThanh();
-}
+// [P0a] fn chet da xoa (shadow boi ban song nap sau: utility/voice.js)
 
 // === L?: function giongVeThanh ===
 // ⚠️  DEDUP-DUPLICATE: hàm này cũng ở utility.js (peer=997c, shared=347c). Peer load SAU → ghi đè bản này. Sửa ở peer.
-function giongVeThanh(){
-  const cur = _giongDS.find(v => v.key === _giongChon);
-  const e = cur ? cur.engine : 'omni';
-  for (const [id, hop] of [['slOnDinh', e === 'elevenlabs'], ['slTuongDong', e === 'elevenlabs'], ['slGap', e === 'omni']]){
-    const el = document.getElementById(id);
-    if (el) el.classList.toggle('off', !hop);
-  }
-}
+// [P0a] fn chet da xoa (shadow boi ban song nap sau: utility/voice.js)
 
 // === L?: function giongDocTuyChon ===
 // ⚠️  DEDUP-DUPLICATE: hàm này cũng ở utility.js (peer=843c, shared=453c). Peer load SAU → ghi đè bản này. Sửa ở peer.
-function giongDocTuyChon(){
-  const s = id => parseFloat((document.getElementById(id) || {}).value);
-  return {
-    tocDo: isFinite(s('voiceSpeed')) ? s('voiceSpeed') : 1,
-    gap: isFinite(s('voiceGap')) ? s('voiceGap') : 300,
-    onDinh: isFinite(s('voiceOnDinh')) ? s('voiceOnDinh') : 0.5,
-    tuongDong: isFinite(s('voiceTuongDong')) ? s('voiceTuongDong') : 0.75,
-    lang: (document.getElementById('voiceLang') || {}).value || 'vi',
-  };
-}
+// [P0a] fn chet da xoa (shadow boi ban song nap sau: utility/voice.js)
 
 // === L?: const _TTS_LOI ===
 const _TTS_LOI = [
@@ -1059,153 +726,20 @@ const _TTS_LOI = [
    'Gọi quá nhanh, nhà cung cấp chặn tạm. Chờ một lát rồi thử lại.'],
 ];
 
-// === L?: function _ttsGiaiThich ===
-function _ttsGiaiThich(msg){
-  for (const [re, vi] of _TTS_LOI) if (re.test(msg)) return vi + ' [' + String(msg).slice(0, 110) + ']';
-  return msg;
-}
+// === L?: async function ttsDoc ===
+// ⚠️  DEDUP-DUPLICATE: hàm này cũng ở tool-tts.js (bản SSOT: gọi _ttsChay 5-arg
+// (eng, v, text, o, onTien), return có `engine`). Peer load SAU → ghi đè bản này. Sửa ở peer.
+// [P0a] fn chet da xoa (shadow boi ban song nap sau: tool-tts.js) — bản cũ gọi
+// _ttsChay 4-arg (v, text, o, onTien) + return thiếu `engine` → gãy với SSOT.
 
-// === L?: function _ttsBlob ===
-function _ttsBlob(r, ten){
-  if (!r) throw new Error(ten + ': không có phản hồi.');
-  if (r.error) throw new Error(ten + ': ' + r.error);
-  if (!r.b64){
-    let m = r.text || ('HTTP ' + (r.status || '?'));
-    try { const j = JSON.parse(r.text); m = (j.error && (j.error.message || j.error)) || j.detail && (j.detail.message || j.detail) || m; } catch (e){}
-    throw new Error(ten + ': ' + _ttsGiaiThich(String(m)).slice(0, 320));
-  }
-  const bin = atob(r.b64), u8 = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
-  return new Blob([u8], { type: r.mime || 'audio/mpeg' });
-}
-
-async function _ttsOmni(v, text, o, onTien){
-  if (!_voiceReady){ await voiceInit(); if (!_voiceReady) throw new Error('Backend OmniVoice chưa sẵn sàng.'); }
-  const body = { text, language: o.lang, speed: o.tocDo, gap_ms: Math.round(o.gap), attributes: {}, preset_id: v.id };
-  const sub = await fetch(VOICE_URL + '/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.json());
-  const tid = sub.task_id;
-  if (!tid) throw new Error('Backend không nhận việc.');
-  for (let i = 0; i < 900; i++){
-    await new Promise(r => setTimeout(r, 1000));
-    const s = await fetch(VOICE_URL + '/api/status/' + tid).then(r => r.json());
-    if (s.total && onTien) onTien(s.progress + '/' + s.total + ' khối');
-    if (s.status === 'completed' || s.status === 'done'){
-      if (!s.results || !s.results.merged) throw new Error('Backend không trả file.');
-      return await fetch(VOICE_URL + s.results.merged).then(r => r.blob());
-    }
-    if (s.status === 'failed' || s.status === 'error') throw new Error(s.error || 'Backend báo lỗi.');
-  }
-  throw new Error('Quá lâu không xong.');
-}
-
-async function _ttsEleven(v, text, o){
-  const k = _ttsKey('elevenlabs');
-  if (!k) throw new Error('Chưa có key ElevenLabs — bấm "Sửa key".');
-  return _ttsBlob(await window.native.ttsFetch({
-    url: 'https://api.elevenlabs.io/v1/text-to-speech/' + encodeURIComponent(v.id),
-    method: 'POST',
-    headers: { 'xi-api-key': k, 'Content-Type': 'application/json', 'Accept': 'audio/mpeg' },
-    body: JSON.stringify({
-      text, model_id: v.model || 'eleven_multilingual_v2',
-      voice_settings: { stability: o.onDinh, similarity_boost: o.tuongDong, speed: o.tocDo },
-    }),
-    timeoutMs: 300000,
-  }), 'ElevenLabs');
-}
-
-async function _ttsOpenAI(v, text, o){
-  const k = _ttsKey('openai');
-  if (!k) throw new Error('Chưa có key OpenAI — bấm "Sửa key".');
-  return _ttsBlob(await window.native.ttsFetch({
-    url: 'https://api.openai.com/v1/audio/speech',
-    method: 'POST',
-    headers: { 'Authorization': 'Bearer ' + k, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: v.model || 'gpt-4o-mini-tts', input: text, voice: v.id,
-      speed: Math.max(0.25, Math.min(4, o.tocDo)), response_format: 'mp3',
-    }),
-    timeoutMs: 300000,
-  }), 'OpenAI');
-}
-
-async function ttsDoc(text, onTien){
-  const uu = _giongDS.find(v => v.key === _giongChon) || _giongDS[0];
-  if (!uu) throw new Error('Chưa có giọng nào trong thư viện.');
-  const thu = [uu].concat(_giongDS.filter(v => v.engine !== uu.engine && _giongTT[v.engine] === 'ok'));
-  let loiDau = null;
-  for (const v of thu){
-    try {
-      if (onTien && v !== uu) onTien('chuyển sang ' + _TTS_TEN[v.engine]);
-      const blob = await _ttsChay(v, text, giongDocTuyChon(), onTien);
-      return { blob, giong: v, luiVe: v !== uu };
-    } catch (e){
-      if (!loiDau) loiDau = e;
-      try { novaLog('🎙 ' + _TTS_TEN[v.engine] + ' lỗi — ' + (e.message || e), 'warn'); } catch (_){}
-    }
-  }
-  throw loiDau || new Error('Không engine nào đọc được.');
-}
-
-async function voiceGenerate(){
-  if (typeof gateTool === 'function' && gateTool('toolvoice')) return;
-  const text = ((document.getElementById('voiceText') || {}).value || '').trim();
-  if (!text){ giongBao('Nhập nội dung trước.', 'red'); return; }
-  const btn = document.getElementById('voiceGenBtn');
-  if (btn){ btn.disabled = true; btn.textContent = '⏳ Đang tạo…'; }
-  try {
-    giongBao('Đang tạo giọng…');
-    const t0 = Date.now();
-    const { blob, giong, luiVe } = await ttsDoc(text, s => giongBao('Đang tạo… ' + s));
-    const url = URL.createObjectURL(blob);
-    const au = new Audio(url);
-    const giay = await new Promise(r => { au.onloadedmetadata = () => r(au.duration || 0); au.onerror = () => r(0); });
-    _giongSu.unshift({ url, blob, ten: giong.name, engine: giong.engine, giay, text, khi: Date.now() });
-    _giongSu = _giongSu.slice(0, 12);
-    giongSuVe();
-    giongBao('✓ Xong sau ' + Math.round((Date.now() - t0) / 1000) + ' giây' + (luiVe ? ' (đã lui về ' + _TTS_TEN[giong.engine] + ')' : ''), 'green');
-  } catch (e){
-    giongBao('Lỗi: ' + (e.message || e), 'red');
-  } finally {
-    if (btn){ btn.disabled = false; btn.textContent = '🎙 Tạo giọng'; }
-  }
-}
+// === L?: async function voiceGenerate ===
+// ⚠️  DEDUP-DUPLICATE: hàm này cũng ở utility/voice.js (bản SSOT: đa engine qua
+// ttsDoc 5-arg, lưu lịch sử `_giongSu` kèm engine). Peer load SAU → ghi đè bản này. Sửa ở peer.
+// [P0a] fn chet da xoa (shadow boi ban song nap sau: utility/voice.js)
 
 // === L?: function giongSuVe ===
 // ⚠️  DEDUP-DUPLICATE: hàm này cũng ở utility.js (peer=1425c, shared=1003c). Peer load SAU → ghi đè bản này. Sửa ở peer.
-function giongSuVe(){
-  const box = document.getElementById('giongSu');
-  if (!box) return;
-  if (!_giongSu.length){ box.innerHTML = '<div class="empty-state">Chưa tạo bản nào trong phiên này.</div>'; return; }
-  box.innerHTML = _giongSu.map((h, i) => {
-    const ph = Math.floor(h.giay / 60), gi = Math.round(h.giay % 60);
-    return `<div class="grow-row" onclick="giongSuPhat(${i})">
-      <span class="gpico">▶</span>
-      <div style="flex:1;min-width:0">
-        <div class="gh-txt">${escapeHtml(h.text.slice(0, 70))}${h.text.length > 70 ? '…' : ''}</div>
-        <div class="gh-meta">${escapeHtml(h.ten)} · ${ph}:${String(gi).padStart(2,'0')} · ${_giongKhiNao(h.khi)}</div>
-      </div>
-      <div class="gh-act">
-        <button class="btn sm ghost" onclick="event.stopPropagation();giongSuTai(${i})">Tải</button>
-        <button class="btn sm ghost" onclick="event.stopPropagation();giongSuDungChoVideo(${i})">Dùng cho video</button>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-// === L?: function giongVeKey ===
-function giongVeKey(){
-  const eng = ((document.getElementById('gtEngine') || {}).value) || 'elevenlabs';
-  const nha = document.getElementById('gtKeyNha'); if (nha) nha.textContent = _TTS_TEN[eng].toUpperCase();
-  const o = document.getElementById('gtKey'); if (o) o.value = '';
-  const tt = document.getElementById('gtKeyTT');
-  if (!tt) return;
-  const k = _ttsKey(eng);
-  const rieng = (localStorage.getItem(_TTS_KHOA[eng]) || '').trim();
-  if (!k) tt.innerHTML = '<span style="color:var(--red)">— chưa có key</span>';
-  else tt.innerHTML = '<span style="color:var(--green)">✓ đã có (…' + escapeHtml(k.slice(-4)) + ')</span>'
-    + (!rieng && eng === 'openai' ? ' <span style="color:var(--text-dim)">mượn từ tab Cài đặt</span>' : '')
-    + ' <span style="color:var(--text-dim)">— dán key mới để thay</span>';
-}
+// [P0a] fn chet da xoa (shadow boi ban song nap sau: utility/voice.js)
 
 // === L?: let _giongTra ===
 let _giongTra = {};
@@ -1219,88 +753,10 @@ let _giongTraId = '';
 // === L?: let _giongTenTay ===
 let _giongTenTay = false;
 
-async function _giongTraNgay(id){
-  const tt = document.getElementById('gtVoiceTT');
-  const eng = ((document.getElementById('gtEngine') || {}).value) || 'elevenlabs';
-  if (eng !== 'elevenlabs'){ if (tt) tt.textContent = ''; return; }
-  const k = _ttsKey('elevenlabs');
-  if (!k){ if (tt) tt.innerHTML = '<span style="color:var(--red)">Chưa có key ElevenLabs — lưu key bên dưới rồi dán lại voice id.</span>'; return; }
-  try {
-    const r = await window.native.llmFetch({
-      url: 'https://api.elevenlabs.io/v1/voices/' + encodeURIComponent(id),
-      method: 'GET', headers: { 'xi-api-key': k }, timeoutMs: 20000,
-    });
-    const j = JSON.parse(r.text || '{}');
-    if (!r.ok){
-      const d = j.detail || j.error || {};
-      const vi = d.message || j.message || ('HTTP ' + r.status);
-      if (document.getElementById('gtVoiceId').value.trim() !== id) return;   // đã gõ tiếp
-      tt.innerHTML = '<span style="color:var(--' + (/missing the permission/i.test(vi) ? 'amber' : 'red') + ')">' + escapeHtml(String(vi).slice(0, 170)) + '</span>'
-        + (/missing the permission/i.test(vi) ? '<span style="color:var(--text-dim)"> — bật quyền voices_read cho key, hoặc cứ tự gõ Tên giọng rồi lưu.</span>' : '');
-      return;
-    }
-    if (document.getElementById('gtVoiceId').value.trim() !== id) return;
-    const lb = j.labels || {};
-    const tags = ['gender','age','accent','use_case','descriptive']
-      .map(x => lb[x]).filter(Boolean).map(s => String(s).replace(/_/g, ' ')).slice(0, 3);
-    _giongTra = { id, name: j.name || '', tags };
-    const ten = document.getElementById('gtTen');
-    if (ten && j.name && !_giongTenTay) ten.value = j.name;
-    // category 'premade' = giọng gốc của ElevenLabs, gói miễn phí gọi API được.
-    // Mọi loại khác (professional/cloned/generated — tức lấy từ Voice Library)
-    // đều bị chặn ở gói miễn phí. Báo trước, đừng để lưu xong mới biết.
-    const chuan = String(j.category || '').toLowerCase() === 'premade';
-    tt.innerHTML = '<span style="color:var(--green)">✓ ' + escapeHtml(j.name || '(không tên)') + '</span>'
-      + (tags.length ? '<span style="color:var(--text-dim)"> · ' + escapeHtml(tags.join(' · ')) + '</span>' : '')
-      + (j.category ? '<span style="color:var(--' + (chuan ? 'text-dim' : 'amber') + ')"> · ' + escapeHtml(j.category) + '</span>' : '')
-      + (chuan ? '' : '<div style="color:var(--amber);margin-top:4px">Giọng từ Voice Library — tài khoản ElevenLabs miễn phí KHÔNG gọi được qua API. Chọn giọng <b>premade</b>, nâng gói, hoặc dùng "Nhân bản về máy" nếu gói bạn cho phép.</div>');
-  } catch (e){
-    if (tt) tt.innerHTML = '<span style="color:var(--red)">Tra không được: ' + escapeHtml(String(e.message || e).slice(0, 120)) + '</span>';
-  }
-}
-
-// === L?: function giongMoKey ===
-function giongMoKey(eng){
-  const b = document.getElementById('giongThemBox');
-  if (b && b.style.display === 'none'){ _giongThemMo = false; giongThemBat(); }
-  const c = document.getElementById('giongThemCach'); if (c) c.value = 'nhap';
-  const e = document.getElementById('gtEngine'); if (e && eng) e.value = eng;
-  giongThemDoi();
-  const o = document.getElementById('gtKey');
-  if (o){ o.scrollIntoView({ block: 'center' }); o.focus(); }
-}
-
-async function _giongNhanBan(eng, id, model, ten, nhan){
-  if (!_voiceReady){ await voiceInit(); if (!_voiceReady) throw new Error('Backend OmniVoice chưa sẵn sàng — cần nó để giữ bản sao.'); }
-  const lang = ((document.getElementById('voiceLang') || {}).value === 'en') ? 'en' : 'vi';
-  const doan = _GIONG_MAU_CLONE[lang];
-  giongBao('Đang nhờ ' + _TTS_TEN[eng] + ' đọc ' + doan.length + ' ký tự làm mẫu…');
-  const o = giongDocTuyChon();
-  const gia = { engine: eng, id, model };
-  const blob = eng === 'elevenlabs' ? await _ttsEleven(gia, doan, o) : await _ttsOpenAI(gia, doan, o);
-  if (!blob || blob.size < 4000) throw new Error(_TTS_TEN[eng] + ' trả file rỗng.');
-  giongBao('Đang nạp mẫu ' + Math.round(blob.size / 1024) + ' KB vào OmniVoice…');
-  const fd = new FormData();
-  fd.append('file', new File([blob], 'mau-' + eng + '.mp3', { type: blob.type || 'audio/mpeg' }));
-  const up = await fetch(VOICE_URL + '/api/upload', { method: 'POST', body: fd }).then(r => r.json());
-  if (!up || !up.path) throw new Error('OmniVoice không nhận được file mẫu.');
-  await fetch(VOICE_URL + '/api/voices', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: ten, ref_text: doan, ref_audio: up.path, attributes: { lang }, tags: nhan.concat(['nhân bản']) }),
-  }).then(r => r.json());
-}
-
-async function giongXoa(key){
-  const v = _giongDS.find(x => x.key === key);
-  if (!v || v.factory) return;
-  if (!confirm('Xoá giọng "' + v.name + '"?')) return;
-  try {
-    if (v.engine === 'omni') await fetch(VOICE_URL + '/api/voices/' + v.id, { method: 'DELETE' });
-    else _giongCloudLuu(_giongCloud().filter(x => !(x.engine === v.engine && x.id === v.id)));
-    _giongMau.delete(key);
-    await giongTaiDS();
-  } catch (e){ giongBao('Xoá lỗi: ' + (e.message || e), 'red'); }
-}
+// === L?: async function giongXoa ===
+// ⚠️  DEDUP-DUPLICATE: hàm này cũng ở utility/voice.js (bản SSOT: chỉ xoá giọng
+// clone, gọi DELETE /api/voices đúng engine). Peer load SAU → ghi đè bản này. Sửa ở peer.
+// [P0a] fn chet da xoa (shadow boi ban song nap sau: utility/voice.js)
 
 // === L?: let mvScenes ===
 let mvScenes = [];
@@ -1310,27 +766,7 @@ let mvUploaded = [];
 
 // === L?: function _mvRules ===
 // ⚠️  DEDUP-DUPLICATE: hàm này cũng ở utility.js (peer=2290c, shared=2188c). Peer load SAU → ghi đè bản này. Sửa ở peer.
-function _mvRules(cfg){
-  // Câu khoá style phải theo PROFILE — trước đây ép cứng "flat 2D" nên kênh ảnh thật/lịch sử cũng bị kéo về hoạt hình.
-  const _pm = (typeof _profileMedium === 'function') ? _profileMedium(typeof getProfile === 'function' ? getProfile() : null) : { is2D: true, isPhoto: false };
-  const _lookLock = _pm.isPhoto ? 'Keep the photorealistic look and stable facial features throughout.'
-    : _pm.is2D ? 'Keep the flat 2D look and stable facial features throughout.'
-    : 'Keep the exact art style of the still image and stable facial features throughout.';
-  const _exStyle = _pm.isPhoto ? 'Photorealistic documentary cinematography, muted desaturated palette, tense somber mood.'
-    : _pm.is2D ? 'Dark 2D hand-drawn storybook style, muted desaturated palette, tense somber mood.'
-    : 'Same art style as the still image, muted desaturated palette, tense somber mood.';
-  return `CÔNG THỨC VEO CHÍNH THỨC — viết ĐÚNG THỨ TỰ 5 phần, camera ĐỨNG ĐẦU:
-[Cinematography] → [Subject] → [Action] → [Context] → [Style & Ambiance]
-Ví dụ mẫu (bám sát giọng văn này):
-"Very slow push-in, close-up. A young farmer's solemn face. He slowly glances toward the tree line, faint breath visible in the cold air. Village clearing before dawn, drifting mist and a distant flicker of torchlight behind him. ${_exStyle} ${_lookLock}"
-
-QUY TẮC BẮT BUỘC:
-1. Cinematography mở đầu = "${cfg.camText}" + cỡ cảnh (close-up / medium / wide establishing shot) suy ra từ nội dung ảnh.
-2. Chỉ mô tả CHUYỂN ĐỘNG áp lên ảnh có sẵn — GIỮ NGUYÊN nhân vật, bố cục, art-style. KHÔNG thêm vật thể/nhân vật mới, KHÔNG đổi cảnh, KHÔNG tả lại chi tiết ngoại hình (ảnh đã khóa).
-3. Action = chuyển động NHỎ, CHẬM (breathing, blinking, gaze shift, hair/cloth sway, thin wisp of smoke, flickering firelight, drifting mist, ripples, falling leaves). Mức độ: ${cfg.intText}. Chuyển động tối thiểu để KHÔNG méo mặt/mask.
-4. TUYỆT ĐỐI KHÔNG có câu thoại và KHÔNG dùng dấu ngoặc kép cho lời nói (kênh này lồng tiếng riêng — không để nhân vật cất tiếng, không mô tả âm thanh/nhạc/SFX).
-5. Style & Ambiance ở CUỐI, kết bằng: "${_lookLock}"${cfg.extra ? '\n6. Lưu ý thêm: ' + cfg.extra : ''}`;
-}
+// [P0a] fn chet da xoa (shadow boi ban song nap sau: utility/mvtv.js)
 
 async function _mvGenVision(s, cfg){
   const messages = [{ role: 'user', content: [
@@ -1532,7 +968,7 @@ async function tvGenerate(retryOnly){
 
 // === L?: function tvDownloadOne ===
 // ⚠️  DEDUP-DUPLICATE: hàm này cũng ở utility.js (peer=203c, shared=192c). Peer load SAU → ghi đè bản này. Sửa ở peer.
-function tvDownloadOne(i){ const r = tvResults[i]; if (!r) return; if (r.b64) _mvDownload(_b64ToBlob(r.b64, r.mime), r.name + '.mp4'); else if (r.videoUrl) window.open(r.videoUrl, '_blank'); }
+// [P0a] fn chet da xoa (shadow boi ban song nap sau: utility/mvtv.js)
 
 // === L?: let tvModelKeys ===
 let tvModelKeys = {};
@@ -1580,7 +1016,7 @@ async function tvLoadModelKeys(){ try { const r = await flowBridge.call('VIDEO_M
 
 // === L?: function tvOnModelChange ===
 // ⚠️  DEDUP-DUPLICATE: hàm này cũng ở utility.js (peer=218c, shared=194c). Peer load SAU → ghi đè bản này. Sửa ở peer.
-function tvOnModelChange(){ const m = document.getElementById('mvVidModel')?.value || ''; const w = document.getElementById('tvDurWrap'); if (w) w.style.display = /^veo/.test(m) ? 'none' : ''; }
+// [P0a] fn chet da xoa (shadow boi ban song nap sau: utility/mvtv.js)
 
 async function mvVideoDownloadAll(){
   const rows = tvResults.filter(r => r.status === 'done' && (r.b64 || r.videoUrl));
@@ -2199,33 +1635,7 @@ const SCENE_TYPES_CORE = Object.keys(SCENE_TYPES).filter(k => SCENE_TYPES[k].cor
 
 // === L?: function _t2SceneWarns ===
 // ⚠️  DEDUP-DUPLICATE: hàm này cũng ở utility.js (peer=1844c, shared=1611c). Peer load SAU → ghi đè bản này. Sửa ở peer.
-function _t2SceneWarns(s, idx, scenes){
-  const w = [];
-  const txt = String(s.text || '').trim();
-  const pr  = (state.scenePrompts || {})[s.id] || '';
-  if (!pr.trim()) w.push('chưa có prompt ảnh');
-  // Lời đọc có người hành động mà cảnh không gán nhân vật → thường là AI nhận diện hụt
-  if (!String(s.character || '').trim() && /\b(he|she|they|his|her|người|anh|cô|ông|bà|họ)\b/i.test(txt) && s.shot !== 'b-roll')
-    w.push('lời đọc có người nhưng cảnh không gán nhân vật');
-  if (!String(s.background || '').trim() && !_isInfographicShot(s.shot)) w.push('chưa có bối cảnh');
-  const d = +s.duration || 0;
-  if (d && d < 1.2) w.push('cảnh quá ngắn (' + d.toFixed(1) + 's)');
-  // Cảnh dài bất thường so với lượng chữ = căn timing hỏng. Trước đây lọt hết:
-  // chỉ có cảnh báo quá NGẮN, nên cảnh 215 giây đi qua không ai biết.
-  const uocD = Math.max(2, txt.length / 15);
-  if (d > Math.max(20, uocD * 4)) w.push('cảnh quá dài (' + d.toFixed(0) + 's, chữ chỉ đủ ~' + Math.round(uocD) + 's) — căn timing có thể sai');
-  // 4+ cảnh liên tiếp cùng một nhân vật → đơn điệu
-  if (String(s.character || '').trim() && idx >= 3){
-    const same = [1, 2, 3].every(k => (scenes[idx - k] || {}).character === s.character);
-    if (same) w.push('4+ cảnh liên tiếp cùng nhân vật — nên xen cảnh b-roll');
-  }
-  // Prompt gần giống cảnh liền trước → hai ảnh sẽ na ná nhau
-  if (pr && idx > 0){
-    const prev = (state.scenePrompts || {})[scenes[idx - 1].id] || '';
-    if (prev && prev.length > 40 && pr.slice(0, 90) === prev.slice(0, 90)) w.push('prompt gần trùng cảnh trước');
-  }
-  return w;
-}
+// [P0a] fn chet da xoa (shadow boi ban song nap sau: utility/t2-scenes.js)
 
 // === L?: const _t2Gist ===
 const _t2Gist = (t, n) => String(t || '').replace(/\s+/g, ' ').trim().slice(0, n || 90);
@@ -3114,261 +2524,7 @@ const T2_TUY_CHON = {
 
 // === L?: function buildSceneGenPrompt ===
 // ⚠️  DEDUP-DUPLICATE: hàm này cũng ở utility.js (peer=26142c, shared=24339c). Peer load SAU → ghi đè bản này. Sửa ở peer.
-function buildSceneGenPrompt(batch, prevSceneCtx, p, profileContext, neighborVO){
-  const _ssClean = _cleanSceneStyle(p.sceneStyle);   // dùng thay p.sceneStyle ở các cụm aesthetic
-  /* ── Cảnh dùng TƯ LIỆU CÓ SẴN phải viết kiểu khác hẳn ──────────────────
-     Style profile (tông màu, chất liệu vẽ, ánh sáng dàn dựng, nhân vật khoá
-     theo ảnh tham chiếu) chỉ có nghĩa khi ẢNH DO AI VẼ. Đem nguyên bộ đó đi
-     tìm clip có sẵn thì hỏng cả hai đầu: không kho nào có "flat-2D teal
-     palette", mà từ khoá lại bị nhấn chìm dưới đống chữ tả tông màu.
-     Với cảnh có ⚑ thì "prompt" đổi vai: nó là MÔ TẢ ĐỂ ĐI TÌM, không phải
-     lệnh vẽ.                                                               */
-  const _coThucBatch = (Array.isArray(batch) ? batch : []).some(_laThuc);
-  const luatThuc = _coThucBatch ? `
-
-⚑ CẢNH CÓ NHÃN "TƯ LIỆU THẬT" — VIẾT KHÁC HẲN:
-- Những cảnh này KHÔNG sinh ảnh AI. Chúng sẽ được lấp bằng clip/ảnh QUAY THẬT từ kho tư liệu.
-- Với các cảnh đó, "prompt" KHÔNG phải lệnh vẽ mà là MÔ TẢ ĐỂ ĐI TÌM: 6–14 từ tiếng Anh, chỉ gồm
-  DANH TỪ CỤ THỂ + HÀNH ĐỘNG có thật (vd "capuchin monkey cracking nut with stone",
-  "archaeologist brushing soil at excavation trench").
-- ⛔ TUYỆT ĐỐI KHÔNG đưa vào: tông màu, phong cách vẽ, chất liệu (2D/3D/watercolor/render),
-  ánh sáng dàn dựng, tên nhân vật [slug], hay bất kỳ chữ nào của Style Profile. Không kho tư liệu
-  nào tìm được theo tông màu, và những chữ đó chỉ làm loãng từ khoá.
-- Cảnh KHÔNG có nhãn thì giữ nguyên mọi luật ảnh AI bên dưới.` : '';
-  const _pmScene = _profileMedium(p);                 // Profile trống thì bám medium suy ra được, KHÔNG mặc định 2D
-  // Công thức hình theo KIỂU CẢNH — lượt 1 chỉ chọn kiểu, lượt này mới cần công thức để viết prompt.
-  const _shotRecipes = _sceneTypesOn().map(t => `  • ${t}: ${SCENE_TYPES[t].recipe}`).join('\n');
-  const highDetail = T2_TUY_CHON.highDetail;
-  // Hai chế độ ĐỘC LẬP: shortMode = nhân vật do ảnh reference lo (đồng nhất); highDetail = môi trường tả dày.
-  // Bật CẢ HAI = nhân vật khoá theo reference + bối cảnh chi tiết.
-  // Ô shortPromptMode cũng đã gỡ. Không sao: refShape bên dưới vẫn TRUE nhờ
-  // descMode mặc định 'tag' → hành vi không đổi.
-  const shortMode = false;
-  // refShape = nhân vật do ẢNH REFERENCE gánh → prompt NGẮN, KHÔNG nhồi body-lock/NOT-list (đúng Bản 1 Nano Banana).
-  // Chế độ tag ([tên-nhân-vật] + reference sheet) mặc định coi là có ref → luôn dùng shape ngắn.
-  const refShape = shortMode || (state.descMode || 'tag') === 'tag';
-  const noCharMode = document.getElementById('noCharMode')?.checked;
-  const _brollEl = document.getElementById('brollMode');   // ô tick đã gỡ khỏi UI redesign → không có ô = BẬT (mặc định cũ)
-  const brollMode = (_brollEl ? _brollEl.checked : true) || noCharMode;
-  // 🧩 Style lai: cảnh kể = người que + bối cảnh, cảnh giải thích = icon nền trắng
-  const hybridIconMode = T2_TUY_CHON.hybridIcon && !noCharMode;
-  const hybridRule = hybridIconMode ? `
-🧩 STYLE LAI — TÁCH 2 KIỂU CẢNH (LUẬT BẮT BUỘC, quyết theo nội dung VO):
-1) Cảnh KỂ CHUYỆN (VO là hành động/cảm xúc/lời kể của NGƯỜI) → vẽ NHÂN VẬT (người que của kênh) trong BỐI CẢNH đầy đủ theo Scene Style.
-2) Cảnh GIẢI THÍCH (VO giải thích khái niệm / quy trình / so sánh / số liệu / nguyên nhân-kết quả, KHÔNG phải hành động của nhân vật) → vẽ ICON / PICTOGRAM line-art ĐƠN GIẢN, nét đen đậm, kiểu biểu tượng, trên NỀN TRẮNG TRƠN (plain solid white background). KHÔNG nhân vật người que, KHÔNG bối cảnh phòng/cảnh vật. Mỗi cảnh 1–4 icon, tối giản, nhiều khoảng trắng.
-   - Prompt loại này PHẢI ghi rõ: "minimalist black line-art pictogram icons on a plain solid white background, no scenery, no characters, lots of negative space".
-- Tự quyết mỗi cảnh thuộc loại nào theo VO. Đa số câu kể → kiểu 1; câu giải thích/khái niệm → kiểu 2.
-` : '';
-  // 🏺 Khoá thời đại cho prompt cảnh: ưu tiên giá trị đã đặt ở Tool 3 (state.t3Era), nếu trống → trích kịch bản
-  const eraHintT2 = (state.t3Era && state.t3Era.trim())
-    ? state.t3Era.trim()
-    : (state.script || '').replace(/\s+/g, ' ').trim().slice(0, 400);
-  const eraBlockT2 = eraHintT2
-    ? `\n🏺 BỐI CẢNH & THỜI ĐẠI (áp cho MỌI cảnh): ${eraHintT2}\n- Trang phục, kiểu tóc/đội đầu và đạo cụ của MỌI nhân vật — kể cả nhân vật phụ tả tự do, đám đông, người qua đường — PHẢI đúng thời đại/bối cảnh này; KHÔNG để lẫn đồ/tóc hiện đại sai thời. GIỮ NGUYÊN art-style/phong cách render của kênh (theo Character/Scene Style) ở mọi nhân vật — chỉ đổi trang phục/tóc/đạo cụ cho khớp thời đại.\n`
-    : '';
-  // 🎬 Cảnh b-roll / 🚫 không nhân vật
-  const brollRule = noCharMode ? `
-🚫 VIDEO KHÔNG CÓ NHÂN VẬT (HƯỚNG DẪN / B-ROLL THUẦN) — LUẬT TỐI CAO, ÁP CHO MỌI CẢNH:
-- TUYỆT ĐỐI KHÔNG có người, không nhân vật, không người dẫn, không bóng người, không khuôn mặt trong BẤT KỲ cảnh nào.
-- MỌI cảnh chỉ là: cảnh vật / đồ vật / quá trình / cận cảnh (close-up, macro) / dụng cụ / sơ đồ đơn giản.
-- VO tả hành động của người → chuyển thành cảnh THỂ HIỆN ĐỒ VẬT / KẾT QUẢ / QUÁ TRÌNH, KHÔNG hiện người. VD: "you water the plants" → "close-up of a watering can pouring water onto green seedlings, no person"; câu cảm xúc/đại từ ("she smiles") → thay bằng cảnh vật liên quan trong ngữ cảnh.
-- BỎ QUA hoàn toàn phần phân loại NHÂN VẬT bên dưới.
-- MỖI prompt PHẢI kết thúc kèm cụm: "no people, no person, no humans, no figures, no hands".
-` : (brollMode ? `
-🎬 KHÔNG phải cảnh nào cũng có người — TỰ QUYẾT theo nội dung VO:
-- VO nói về NGƯỜI (hành động, lời người dẫn, cảm xúc, đối thoại) → cảnh CÓ nhân vật.
-- VO tả ĐỒ VẬT / NƠI CHỐN / QUÁ TRÌNH / CẬN CẢNH chi tiết / hiện tượng cụ thể (vd "ants on a leaf", "the vegetable bed", "a jar of baking soda", "roots in the soil", "rain falling") → làm cảnh B-ROLL / INSERT / CẬN CẢNH chỉ có đồ vật + bối cảnh, KHÔNG có người, KHÔNG có người dẫn nhìn camera.
-- Mục tiêu: XEN KẼ cảnh có người và cảnh b-roll cho video tự nhiên — KHÔNG ép người dẫn vào mọi khung hình.
-- ⚠️ QUAN TRỌNG: cảnh có thể đã được GÁN SẴN 1 nhân vật ("nhân vật:" ở dòng cảnh), NHƯNG nếu VO của cảnh đó là TẢ ĐỒ VẬT / KHÁI NIỆM / ẨN DỤ / câu trừu tượng (không phải hành động cụ thể của chính nhân vật đó) → ĐƯỢC PHÉP bỏ người, làm cảnh B-ROLL/INSERT đồ vật, KHÔNG bắt buộc chèn tag [nhân-vật] đã gán. Tag nhân vật chỉ là gợi ý, không phải lệnh cứng khi b-roll.
-- Cảnh b-roll vẫn giữ đúng style/tông màu/ánh sáng của kênh; mô tả rõ chủ thể, góc máy (close-up/macro/wide), bố cục.
-` : '');
-  // ---- Mode-aware: Tag / Inline / Inline+bible ----
-      const dm = state.descMode || 'tag';
-      let charCtx, bgCtx, charHeader, bgHeader, mode1Rule;
-      if (dm === 'inline_bible') {
-        charCtx = state.charactersV.map(c => `- ${c}: ${(state.charBible && state.charBible[c]) || '(chưa có hồ sơ — bấm Quét Trước)'}`).join('\n');
-        bgCtx = state.backgroundsV.map(b => `- ${b}: ${(state.bgBible && state.bgBible[b]) || '(chưa có hồ sơ)'}`).join('\n');
-        charHeader = 'NHÂN VẬT — CHÈN NGUYÊN VĂN mô tả cố định sau vào prompt (KHÔNG đổi chữ, KHÔNG dùng ngoặc vuông):';
-        bgHeader = 'BỐI CẢNH — CHÈN NGUYÊN VĂN mô tả cố định sau:';
-        mode1Rule = `- Tư thế/biểu cảm/hành động: tả theo VO
-- Nhân vật là NGƯỜI: CHÈN NGUYÊN VĂN mô tả cố định của nhân vật đó (ở danh sách trên) vào prompt, KHÔNG đổi 1 chữ, KHÔNG ngoặc vuông → giữ nhân vật giống hệt mọi cảnh. VD: "a tired female nurse, mid-30s, mint-green scrubs, brown hair in low bun, stands at the desk..."
-- Động vật/vật thể: miêu tả bình thường
-- Bối cảnh: CHÈN NGUYÊN VĂN mô tả cố định của bối cảnh đó`;
-      } else if (dm === 'inline') {
-        charCtx = state.charactersV.map(c => '- ' + c).join('\n');
-        bgCtx = state.backgroundsV.map(b => '- ' + b).join('\n');
-        charHeader = 'NHÂN VẬT (gợi ý vai — TẢ ĐẦY ĐỦ ngoại hình trong prompt):';
-        bgHeader = 'BỐI CẢNH (gợi ý):';
-        mode1Rule = `- Tư thế/biểu cảm/hành động: tả theo VO
-- Nhân vật là NGƯỜI: TẢ ĐẦY ĐỦ ngoại hình NGAY trong prompt (tuổi, giới, trang phục+màu, tóc, đặc điểm), KHÔNG dùng ngoặc vuông. VD: "a young male agent in a grey suit, short black hair, stands at the desk..."
-- Nếu cùng 1 nhân vật xuất hiện nhiều cảnh: tả GIỐNG NHAU mỗi lần để nhất quán
-- Động vật/vật thể: miêu tả bình thường
-- Bối cảnh: TẢ ĐẦY ĐỦ bối cảnh trong prompt (KHÔNG ngoặc vuông)`;
-      } else {
-        charCtx = state.charactersV.map(c => '- ' + c).join('\n');
-        bgCtx = state.backgroundsV.map(b => '- ' + b).join('\n');
-        charHeader = 'NHÂN VẬT CÓ REFERENCE SHEET (ghi tag [tên]):';
-        bgHeader = 'BỐI CẢNH (reference từ sheet):';
-        mode1Rule = `- Nhân vật CÓ trong danh sách trên: ghi [tên-nhân-vật] (VD: "[narrator] stands at desk...")
-- Nhân vật PHỤ KHÔNG có trong danh sách (xuất hiện trong VO nhưng chưa có reference): TẢ TỰ DO ngoại hình ngắn gọn theo style chính của kênh — VD nếu cảnh có người lạ, người qua đường, đám đông → mô tả "a [mô tả ngắn] character in same art style" KHÔNG dùng ngoặc vuông
-- Nếu cảnh có NHIỀU nhân vật: ghi đủ cả nhân vật chính (tag) lẫn phụ (tả tự do). VD: "[narrator] talking to a worried elderly woman in plain dress, both in same cartoon style, inside [office-night]"
-- Động vật/vật thể: miêu tả bình thường KHÔNG ngoặc vuông
-- Bối cảnh: ghi [tên-bối-cảnh] (VD: "inside [dark-office-night]...")
-- Style nhân vật phụ phải KHỚP style nhân vật chính (cùng nét vẽ, cùng tỉ lệ)`;
-      }
-      // Detect animation/cartoon style → inject formula block
-      const styleStr = (p.sceneStyle || '').toLowerCase();
-      const isCartoon2D = /cartoon|flat|2d|animation|hand.drawn|stick|explainer|educational/.test(styleStr);
-      // Lấy mô tả nhân vật NGẮN GỌN từ characterStyle của Profile (không hardcode)
-      // Ưu tiên "Đặc điểm nhận dạng" (1 dòng do user đặt) → lặp gọn mỗi cảnh, không bloat prompt.
-      // Nếu trống → lấy 600 ký tự đầu Character Style (đủ chứa đặc điểm cốt lõi như stick-limb; trước đây cắt 280 nên mất).
-      const charStyleShort = ((p.charIdentity && p.charIdentity.trim())
-        ? p.charIdentity.trim()
-        : _trimToSentence((p.characterStyle || '').replace(/\s+/g, ' ').trim(), 600));
-      const animFormulaBlock = (isCartoon2D && refShape) ? `
-🎬 STYLE DO ẢNH REFERENCE GÁNH (BẢN 1 — cảnh có [tên-nhân-vật] = có ảnh reference đính kèm khi tạo ảnh):
-- TUYỆT ĐỐI KHÔNG tả lại toàn bộ ngoại hình / tỉ lệ cơ thể / nét vẽ nhân vật trong prompt (ảnh reference ĐÃ khoá những cái đó — tả lại sẽ ĐÁNH NHAU với ref). Chỉ ghi [tên-nhân-vật] + hành động/biểu cảm theo VO.
-- Prompt viết NGẮN GỌN theo shape Nano Banana: [chủ thể + hành động] tại [bối cảnh] → [góc máy] → [ánh sáng/không khí] → KẾT bằng 1 cụm scene aesthetic NGẮN dương tính (vd "${_ssClean || _pmScene.medium || 'consistent cinematic style, cohesive lighting'}").
-- KHÔNG danh sách NOT/no (trừ "no text, no watermark" ở cuối). Diễn đạt DƯƠNG TÍNH.
-- Nhân vật phụ KHÔNG có ảnh reference: tả NGẮN ngoại hình theo đúng style kênh.
-` : (isCartoon2D ? `
-🎬 STYLE MASTER Ở CUỐI (BẢN 2 — KHÔNG có ảnh reference, tự tả style ở cuối prompt):
-ÁP CÔNG THỨC HÌNH theo "kiểu" của từng cảnh (KHÔNG ghi tên kiểu vào prompt):
-${_shotRecipes}
-⛔ KHÔNG viết cụm phong cách/aesthetic ở cuối prompt — hệ thống TỰ gắn cụm chuẩn giống hệt nhau cho mọi cảnh. Chỉ tả nội dung hình.
-⛔ KHÔNG mô tả CHỮ, SỐ, nhãn, bảng hiệu, tiêu đề ĐỌC ĐƯỢC trong ảnh (không "labeled '35'", không "screen reads DEVALUATION"). Muốn thể hiện số liệu thì diễn bằng SỐ LƯỢNG/kích thước/độ cao/độ dày của vật thể — vd 'một chồng vali cao ngất so với một chiếc lẻ loi' thay vì ghi con số.
-- Viết prompt theo shape: [chủ thể + hành động] tại [bối cảnh] → [góc máy] → [ánh sáng] → rồi CUỐI cùng chèn 1 câu STYLE dương tính gói gọn đặc điểm nhân vật + nét vẽ (dựa trên: "${charStyleShort || 'style nhân vật của kênh'}").
-- Diễn đạt DƯƠNG TÍNH, KHÔNG danh sách NOT (chỉ giữ no text, no watermark ở cuối).
-` : '');
-
-      // 🎯 Logline toàn video — áp cho MỌI cảnh để không lạc chủ đề / không đứt mạch giữa batch
-      const loglineBlock = (state.videoLogline && state.videoLogline.trim())
-        ? `\n🎯 BỐI CẢNH TOÀN VIDEO (mọi cảnh PHẢI bám vào đây):\n"${state.videoLogline.trim()}"\n- Mọi cảnh — kể cả cảnh trừu tượng / câu hỏi tu từ / câu chuyển ý — phải nằm trong THẾ GIỚI HÌNH ẢNH của video này (đúng nhân vật, bối cảnh, thời đại, tông màu nêu trên). KHÔNG vẽ hình generic lạc khỏi câu chuyện.\n`
-        : '';
-      const prompt = `Bạn là prompt engineer G-Labs (Imagen / Nano Banana). Tạo prompt cảnh cho mỗi cảnh bên dưới.
-
-PROFILE KÊNH:
-${profileContext}
-${loglineBlock}
-SCENE AESTHETIC (dùng cho MỌI cảnh): "${_ssClean || 'consistent visual style across all scenes'}"
-
-ĐỊNH HƯỚNG LOOK (diễn đạt DƯƠNG TÍNH trong prompt — KHÔNG chép nguyên thành danh sách "no/not"; chỉ giữ vài negative thật cần như no text, no watermark): "${p.promptRules || ''}"
-${eraBlockT2}${animFormulaBlock}
-
-${charHeader}
-${charCtx || '(không có)'}
-${(state.wardrobe && Object.keys(state.wardrobe).length) ? ('\n👕 TỦ ĐỒ CỐ ĐỊNH (BẮT BUỘC dán ĐÚNG "desc" — KHÔNG tự chế đồ khác, cùng giai đoạn mặc GIỐNG NHAU):\n' + Object.entries(state.wardrobe).map(([n, os]) => `  • [${n}]: ${(os || []).map(o => `khi ${o.when} → "${o.desc}"`).join(' · ')}`).join('\n')) : ''}
-
-${bgHeader}
-${bgCtx || '(không có)'}
-
-Với mỗi cảnh, TRƯỚC TIÊN xác định LOẠI CẢNH từ nội dung VO, sau đó viết prompt phù hợp:
-${hybridRule}${brollRule}${VISUAL_METAPHOR_RULE}
-🔹 LOẠI 1 — NHÂN VẬT TRONG BỐI CẢNH (VO nói về hành động của người):
-${mode1Rule}
-
-🔹 LOẠI 2 — INFOGRAPHIC / BIỂU ĐỒ ĐƠN GIẢN (VO nói về số liệu, so sánh, thống kê):
-- Vẽ ĐƠN GIẢN: 1-2 icon/biểu đồ đơn giản + nhân vật ${dm === 'tag' ? '[tên-nhân-vật]' : 'đơn giản ĐÚNG STYLE KÊNH (KHÔNG mặc định người que)'} chỉ tay hoặc đứng cạnh
-- Vẽ ĐƠN GIẢN, KHÔNG nhiều panel. GHI CHỮ/SỐ THẬT vào biểu đồ (tiêu đề + vài nhãn NGẮN 1-4 từ / con số ĐÚNG, khớp nội dung VO, viết đúng chính tả) — TUYỆT ĐỐI KHÔNG để ô nhãn TRỐNG / "[TEXT]" / "reserved caption". Giữ chữ NGẮN để model vẽ rõ.
-- KHÔNG vẽ nội tạng, ký hiệu y tế trừ khi VO yêu cầu rõ ràng
-- VD: "${dm === 'tag' ? '[narrator-male]' : 'A simple character in the channel art style'} pointing at a simple bar chart with 3 labelled bars — \\"Storage 20\\", \\"Mall 12\\", \\"Office 8\\" written under them, title \\"Cost per month\\" on top; clean flat background, minimal style, short real text spelled correctly"
-
-🔹 LOẠI 3 — QUY TRÌNH / BƯỚC (VO giải thích cách làm, từng bước):
-- Mô tả 2-3 bước từ trái sang phải với mũi tên đơn giản
-- ${dm === 'tag' ? 'Nếu có nhân vật: ghi [tên-nhân-vật] thực hiện hành động' : 'Nhân vật đơn giản (ĐÚNG STYLE KÊNH) thực hiện từng bước'}
-- VD: "Three steps left to right with arrows: step 1 seed icon, step 2 watering can icon, step 3 plant sprouting, warm muted palette, flat 2D style"
-
-🔹 LOẠI 4 — ICON / KHÁI NIỆM (VO giải thích khái niệm trừu tượng):
-- 1 icon trung tâm lớn + tối đa 4 icon phụ xung quanh, kiểu simple flat illustration
-- Dùng metaphor hình ảnh (não = suy nghĩ, tim = cảm xúc, ví tiền = tài chính)
-- KHÔNG vẽ nhân vật realistic, KHÔNG vẽ nội tạng người trừ khi VO nói về y tế cụ thể
-- ${dm === 'tag' ? 'Nếu có nhân vật phụ: ghi [tên-nhân-vật] đứng cạnh icon' : 'Nếu có người: vẽ nhân vật đơn giản ĐÚNG STYLE KÊNH (KHÔNG mặc định người que)'}
-- VD: "Central large coin icon surrounded by 4 small flat icons: house, car, graduation cap, piggy bank, connected by dotted lines, warm yellow background, flat 2D style"
-
-🔹 LOẠI 5 — SỐ/TỪ KHOÁ ẤN TƯỢNG + MINH HOẠ (CHỈ khi VO có con số sốc, năm cụ thể, hoặc 1 từ khoá duy nhất):
-- CHỈ dùng cho text 1-4 TỪ ngắn, KHÔNG dùng cho câu trần thuật/đối thoại
-- Text ngắn bold ở trên/giữa + hình minh hoạ đơn giản bên dưới
-- VD: "Bold black text '13,000 YEARS' at top center, below a simple flat illustration of ancient cave with campfire, warm earthy palette, flat 2D style"
-- KHÔNG dùng LOẠI 5 nếu VO là câu kể chuyện — chọn LOẠI 1 (nhân vật) hoặc LOẠI 4 (icon khái niệm)
-
-QUY TẮC CHUNG:
-- Luôn mô tả BỐ CỤC KHÔNG GIAN (trái/phải/trên/dưới/giữa)
-- 🎬 ÁNH SÁNG CÓ CHỦ ĐÍCH theo CẢM XÚC VO (đừng để phẳng/đều mọi cảnh): căng/sợ → ngược sáng gắt, bóng mạnh, tương phản cao; ấm/hoài niệm → golden hour, nắng xiên mềm; buồn/tĩnh → xanh lạnh, khuếch tán; vui/hy vọng → sáng trong, rực; bí ẩn → tối chủ đạo + 1 vệt sáng điểm. Ghi rõ nguồn sáng + hướng + không khí.
-- 🧭 CHIỀU SÂU & BỐ CỤC: dựng lớp tiền cảnh–trung cảnh–hậu cảnh cho có không gian; đặt chủ thể theo quy tắc 1/3, dùng đường dẫn/phối cảnh dẫn mắt về chủ thể; "close-up" ưu tiên phông mờ nhẹ (độ sâu trường ảnh nông) để tách chủ thể.
-- Kết thúc bằng scene aesthetic tag
-
-⚠️ TEXT TRONG ẢNH — RẤT QUAN TRỌNG (ĐA SỐ CẢNH KHÔNG NÊN CÓ TEXT):
-- MẶC ĐỊNH: KHÔNG có text trong ảnh. Để hình ảnh tự kể chuyện qua nhân vật, icon, bố cục.
-- CHỈ thêm text khi thật cần điểm nhấn: con số ('8 HOURS'), năm ('1965'), 1 từ khoá ('WARNING', 'DANGER')
-- GIỚI HẠN CỨNG: text trong ảnh tối đa 4 TỪ. Viết HOA, trong nháy đơn.
-- TUYỆT ĐỐI KHÔNG đưa cả câu VO, câu thoại, hay tiêu đề dài vào ảnh (vd KHÔNG ghi 'SKIP SEVERAL NIGHTS? THE STREETS STOP WORKING' hay 'SLEEP IS WHEN THE CLEANUP HAPPENS')
-- TUYỆT ĐỐI KHÔNG dịch nguyên VO sang tiếng Anh để làm text — text chỉ là điểm nhấn cực ngắn, không phải tiêu đề câu
-- 🌐 NGÔN NGỮ TEXT: CHỈ TIẾNG ANH. TUYỆT ĐỐI KHÔNG có chữ Hàn, Trung, Nhật, Thái, Ả Rập, hay bất kỳ ngôn ngữ nào khác. Phải ghi rõ trong prompt: "all text in English only, no Korean / Chinese / Japanese characters"
-- LOẠI 4 ICON CONCEPT: icon dùng METAPHOR HÌNH ẢNH thuần (não, đồng hồ, biểu tượng) — KHÔNG dán label chữ dưới mỗi icon (đây là lỗi thường gặp: AI mặc định thêm label Hàn dưới icon health/medical)
-
-🔗 LIÊN TỤC HÌNH ẢNH (để video KHÔNG rời rạc — rất quan trọng):
-- Đây là các cảnh LIÊN TIẾP trong CÙNG 1 video → giữ mạch hình ảnh liền lạc.
-- Cảnh liên tiếp CÙNG bối cảnh → giữ KHÔNG GIAN nhất quán (cùng phòng, cùng layout, cùng hướng ánh sáng), chỉ đổi góc máy/hành động.
-- Đổi góc máy CÓ CHỦ ĐÍCH (vd wide → medium → close để dẫn dắt), KHÔNG nhảy góc ngẫu nhiên giữa các cảnh.
-- Cùng 1 phân đoạn nội dung → tông màu + ánh sáng + bố cục phải nối tiếp mượt với cảnh trước, không đổi đột ngột.
-${prevSceneCtx ? '\n📍 CẢNH NGAY TRƯỚC (cảnh đầu tiên bên dưới phải nối tiếp mượt với cảnh này):\n"' + prevSceneCtx + '"\n' : ''}
-${neighborVO ? `\n🔗 NGỮ CẢNH LÂN CẬN (lời thoại cảnh trước & sau — DÙNG để hiểu bối cảnh nếu cảnh hiện tại thiếu hình ảnh):\n${neighborVO}\n
-⚠️ Nếu lời thoại của cảnh hiện tại KHÔNG có hình ảnh cụ thể (câu hỏi tu từ, câu chuyển ý, câu trừu tượng như "what does it feel like?", "hold that feeling", "here's the thing") → HÃY mượn bối cảnh/nhân vật/không khí từ cảnh trước hoặc cảnh sau để vẽ 1 hình hợp lý, liền mạch. KHÔNG để prompt trống rỗng hay quá chung chung. Hình phải nối tiếp tự nhiên với mạch truyện.` : ''}
-⚠️ TUYỆT ĐỐI KHÔNG:
-- KHÔNG ghi "LOẠI 1", "LOẠI 2", "LOẠI 3", "LOẠI 4", "LOẠI 5" vào prompt output
-- KHÔNG ghi "Type 1", "Type 2", ... hay bất kỳ label phân loại nào
-- KHÔNG ghi "[001]", "[002]" hay chỉ số cảnh vào prompt
-${dm === 'tag' ? '- LUÔN dùng [tên-nhân-vật] và [tên-bối-cảnh] cho MỌI cảnh có nhân vật — KHÔNG tả inline\n- VD đúng: "[narrator-male] walks in [outdoor-nature-daytime]" | VD SAI: "a generic character walks in a green field"\n' : '- KHÔNG dùng ngoặc vuông [] cho tên nhân vật/bối cảnh — TẢ THẲNG bằng chữ tiếng Anh\n'}- Loại cảnh CHỈ DÙNG ĐỂ AI XÁC ĐỊNH STYLE INTERNAL, KHÔNG XUẤT HIỆN trong text prompt cuối cùng
-- Prompt trả về phải BẮT ĐẦU NGAY bằng mô tả visual (vd: "Medium shot of...", "Split layout showing...", "Wide angle of..."), KHÔNG có prefix nào khác
-
-📐 CÔNG THỨC NANO BANANA (Google DeepMind — model instruction-following dựng trên Gemini, viết prompt THEO ĐÚNG shape này):
-- THỨ TỰ: [Chủ thể + tính từ cụ thể] đang [hành động] tại [bối cảnh] → [bố cục/góc máy] → [ánh sáng/không khí] → [phong cách/nét vẽ để GẦN CUỐI]. Đưa CHỦ THỂ–HÀNH ĐỘNG–BỐI CẢNH lên ĐẦU, phong cách/aesthetic xuống CUỐI (KHÔNG front-load style).
-- DƯƠNG TÍNH: tả thứ MUỐN thấy, HẠN CHẾ tối đa "no X / not Y" (model này không dùng negative prompt kiểu SDXL). Vd "clean plain white background" thay vì "no clutter/no background"; "empty street" thay vì "no cars". Chỉ giữ vài negative thật cần: no text, no watermark (+ no people cho b-roll). ⚠️ NGOẠI LỆ: cảnh INFOGRAPHIC / BIỂU ĐỒ / SO SÁNH / BẢN ĐỒ thì ĐƯỢC & NÊN ghi CHỮ/SỐ thật ngắn (tiêu đề + nhãn 1-4 từ / con số đúng) — với cảnh đó KHÔNG thêm "no text".
-- NGÔN NGỮ TỰ NHIÊN, mạch lạc, câu đầy đủ — KHÔNG nhồi từ khoá rời rạc cách nhau bằng dấu phẩy.
-- KHÔNG ghi "--ar" hay tỉ lệ khung vào prompt (tool đã set tỉ lệ riêng qua API).
-
-🛡 AN TOÀN NỘI DUNG (BẮT BUỘC — để qua bộ lọc của tool tạo ảnh):
-Tool tạo ảnh (G-Labs) TỪ CHỐI các prompt có nội dung chết chóc/bạo lực/thương vong trực tiếp. Khi VO nhắc đến chết, chìm, đóng băng, thi thể, nạn nhân, máu, đau đớn... PHẢI viết prompt theo cách GIÁN TIẾP, ẩn dụ, tập trung KHÔNG KHÍ thay vì hành động:
-- "drowning / chết đuối" → "floating in dark water looking up, peaceful, eyes closed"
-- "dead body / thi thể" → "figure drifting gently in deep water, calm, distant"
-- "freezing to death / chết cóng" → "shivering, breath visible, wrapped in cold blue tones"
-- "1,500 victims died / hàng nghìn người chết" → "vast empty dark ocean, scattered distant lights, somber mood" (KHÔNG vẽ người chết, KHÔNG số liệu thương vong)
-- "blood / máu, gore" → bỏ hoàn toàn, thay bằng không khí u tối
-- TUYỆT ĐỐI KHÔNG dùng các từ: dead, death, dying, corpse, drowning, blood, gore, victim, suffering trong prompt tiếng Anh
-- Thay bằng: peaceful, drifting, floating, cold, somber, quiet, still, distant, fading
-- Giữ ĐÚNG cảm xúc và không khí của cảnh, chỉ đổi cách diễn đạt để không vi phạm
-
-Ngôn ngữ prompt: TIẾNG ANH (cho image gen). ${refShape && highDetail ? '70-130 từ/prompt (nhân vật để ảnh reference lo, MÔI TRƯỜNG tả dày chi tiết).' : refShape ? '55-110 từ/prompt (nhân vật CHỈ tag — ảnh reference lo ngoại hình, KHÔNG tả lại body-lock; DỒN chữ vào tả MÔI TRƯỜNG/bối cảnh chi tiết + ánh sáng (hướng/màu/tương phản) + bố cục & CHIỀU SÂU → prompt GIÀU CHI TIẾT, ĐIỆN ẢNH, chỉ gọn ở phần nhân vật).' : highDetail ? '90-160 từ/prompt (CHI TIẾT CAO).' : '60-120 từ/prompt.'}
-${highDetail ? `
-🔍 CHẾ ĐỘ CHI TIẾT CAO — làm ảnh DÀY chi tiết như tranh minh hoạ kể chuyện:
-- ĐẠO CỤ TIỀN CẢNH: gọi tên 3-6 vật cụ thể trong cảnh (vd thùng gỗ, dây thừng cuộn, vò gốm, đuốc, bàn thợ, vũ khí treo tường, sạp hàng) — KHÔNG để nền trống.
-- VẬT LIỆU & TEXTURE: ghi chất liệu bề mặt (gỗ sờn, đồng tán đinh, đá rêu, vải lanh, kim loại gỉ, vữa nứt) để ảnh có độ dày.
-- LỚP CHIỀU SÂU: tả riêng tiền cảnh / trung cảnh / hậu cảnh (vd hậu cảnh có núi xa, cột đền, tàu thuyền, mái nhà, đám đông mờ) để tạo depth.
-- ÁNH SÁNG CỤ THỂ: nguồn sáng + hướng + màu (vd "warm torchlight from the left casting long shadows", "overcast grey daylight from above").
-- Vẫn giữ ĐÚNG art-style của kênh (nét vẽ, tỉ lệ nhân vật, bảng màu) — chỉ thêm chi tiết MÔI TRƯỜNG, KHÔNG đổi style nhân vật.
-- Thêm chi tiết nhưng VẪN giữ luật NO-TEXT ở trên — KHÔNG thêm chữ/label vào ảnh.
-` : ''}${shortMode ? `
-⚡ CHẾ ĐỘ PROMPT NGẮN (người dùng sẽ ĐÍNH ẢNH REFERENCE của nhân vật khi gen):
-- KHÔNG mô tả ngoại hình nhân vật chi tiết (KHÔNG tả đầu tròn, mắt, tay chân, tóc, quần áo, tỉ lệ cơ thể) — ảnh reference đã lo việc đó
-- CHỈ ghi: [tên-nhân-vật] + HÀNH ĐỘNG + TƯ THẾ + cảm xúc (vd: "[passenger-bunk] lying on bunk staring at ceiling, worried")
-- TẬP TRUNG mô tả: bối cảnh, ánh sáng, góc máy, tông màu, không khí
-- KHÔNG nhắc lại đặc điểm style nhân vật — để reference image quyết định
-- Vẫn giữ mô tả style chung cho MÔI TRƯỜNG (flat 2D, màu sắc, outline) nhưng KHÔNG áp lên nhân vật
-` : ''}
-
-${luatThuc}
-
-⚠️ VIẾT ĐẦY ĐỦ prompt RIÊNG cho TỪNG cảnh trong danh sách — KHÔNG được lười:
-- KHÔNG dùng "...", "...full prompt...", "[full prompt]", "same as above", "như cảnh trước", "tương tự".
-- KHÔNG bỏ trống, KHÔNG viết tắt. Mỗi cảnh PHẢI có 1 prompt hoàn chỉnh độc lập, đủ chữ.
-
-Trả về CHỈ JSON array (mỗi cảnh 1 phần tử ĐẦY ĐỦ):
-[{"id":"001","prompt":"<prompt hoàn chỉnh>"}, ...]
-
-CÁC CẢNH:
-${batch.map(s => `[${s.id}] VO: "${s.text}" | nhân vật: ${s.character || '-'} | bối cảnh: ${s.background || '-'} | camera: ${s.camera} | ${s.duration}s${_laThuc(s) ? ' | ⚑ TƯ LIỆU THẬT' : ''}`).join('\n')}`;
-  return prompt;
-}
+// [P0a] fn chet da xoa (shadow boi ban song nap sau: utility/t2-prompts.js)
 
 async function genSingleScenePrompt(id){
   const p = getProfile();
@@ -3826,106 +2982,11 @@ let _t2RegenCtx = null, _t2RegenConc = 1, _t2RegenWorkers = 0, _t2RegenSetup = f
 
 // === L?: function renderTable ===
 // ⚠️  DEDUP-DUPLICATE: hàm này cũng ở utility.js (peer=6974c, shared=6769c). Peer load SAU → ghi đè bản này. Sửa ở peer.
-function renderTable(){
-  const tbl = document.getElementById('sceneTable');
-  const body = document.getElementById('sceneBody');
-  const empty = document.getElementById('emptyList');
-  const addRow = document.getElementById('addSceneRow');
-  if (!tbl) return;
-  document.getElementById('badge-list').textContent = state.scenes.length;
-  const listBar = document.getElementById('sceneListBar');
-  if (state.scenes.length === 0) {
-    tbl.style.display = 'none';
-    empty.style.display = 'block';
-    if (addRow) addRow.style.display = 'block';
-    if (listBar) listBar.style.display = 'none';
-    return;
-  }
-  tbl.style.display = 'table'; empty.style.display = 'none';
-  if (listBar) listBar.style.display = 'flex';
-  if (addRow) addRow.style.display = 'block';
-
-  let _acc = 0;
-  const _starts = state.scenes.map(s => { const st = _acc; _acc += (parseFloat(s.duration) || 0); return st; });
-  const _fmt = t => Math.floor(t / 60) + ':' + String(Math.round(t % 60)).padStart(2, '0');
-
-  body.innerHTML = state.scenes.map((s, i) => {
-    const isEditing = state.editingSceneIdx === i;
-    if (isEditing) {
-      return `<tr class="editing-row">
-        <td class="id">${s.id}</td>
-        <td colspan="5" style="padding:8px">
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr 80px;gap:6px;margin-bottom:6px">
-            <input type="text" id="edt_char_${i}" placeholder="Nhân vật" value="${escapeHtml(s.character || '')}" style="padding:5px 8px;font-size:12px">
-            <input type="text" id="edt_bg_${i}" placeholder="Bối cảnh" value="${escapeHtml(s.background || '')}" style="padding:5px 8px;font-size:12px">
-            <input type="text" id="edt_cam_${i}" placeholder="Camera" value="${escapeHtml(s.camera || 'medium')}" style="padding:5px 8px;font-size:12px">
-            <input type="number" id="edt_dur_${i}" placeholder="Sec" value="${s.duration || 3}" min="1" max="60" style="padding:5px 8px;font-size:12px">
-          </div>
-          <textarea id="edt_text_${i}" placeholder="Lời đọc VO" style="min-height:50px;font-size:12px;padding:6px 8px">${escapeHtml(s.text || '')}</textarea>
-          <div style="margin-top:6px;display:flex;gap:8px">
-            <button class="btn primary sm" onclick="saveEditScene(${i})">✓ Lưu</button>
-            <button class="btn ghost sm" onclick="cancelEditScene()">Huỷ</button>
-          </div>
-        </td>
-      </tr>`;
-    }
-    const isLast = i === state.scenes.length - 1;
-    const imgCell = _t2SceneImgCell(s);
-    const start = _starts[i], end = start + (parseFloat(s.duration) || 0);
-    const pr = state.scenePrompts?.[s.id] || '';
-    const prHtml = pr ? escapeHtml(pr).replace(/\[([^\]]+)\]/g, '<b style="color:var(--accent)">[$1]</b>') : '';
-    return `<tr data-sid="${s.id}">
-      <td class="id">${s.id}</td>
-      <td style="font-family:ui-monospace,monospace;font-size:11px;color:var(--text-muted);white-space:nowrap;line-height:1.35">${_fmt(start)}<br>${_fmt(end)}</td>
-      <td class="dur" style="white-space:nowrap">${s.duration || 0}s${(state.scenePrompts2 && state.scenePrompts2[s.id] && String(state.scenePrompts2[s.id]).trim()) ? `<br><span style="font-size:9px;color:var(--accent);font-weight:700">2 ảnh · ${(((parseFloat(s.duration) || 0) / 2)).toFixed(1)}s/ảnh</span>` : ''}</td>
-      <td>${_shotBadge(s.shot)}${(function(){ const w = _t2SceneWarns(s, i, state.scenes || []); return w.length ? ` <span title="${escapeHtml(w.join(' · '))}" style="font-size:11px;cursor:help;color:var(--amber)">⚠</span>` : ''; })()}${s.wantVideo ? ' <span title="Cảnh này sẽ làm VIDEO Veo (motion) khi Tạo Video" style="font-size:11px">🎬</span>' : ''}${s.wantStock ? ` <span onclick="t2OpenStockPicker('${s.id}')" title="Cảnh dùng VIDEO STOCK free — bấm để chọn trong ${((state.stockCandidates||{})[s.id]||[]).length || 'các'} ứng viên" style="font-size:11px;cursor:pointer;padding:1px 3px;border-radius:4px;${((state.stockCandidates||{})[s.id]||[]).length ? 'background:var(--accent-soft)' : ''}">🎞${((state.stockCandidates||{})[s.id]||[]).length ? '▾' : ''}</span>` : ''}${s.wantYt ? ' <span title="Cảnh này lấy CLIP YOUTUBE — luồng tự động tự lấy ở bước Xen video, hoặc vào Dựng Video chọn cảnh rồi bấm 🎬 YouTube" style="font-size:11px">▶️</span>' : ''}${s.wantWeb ? ` <span onclick="t2OpenWebPicker('${s.id}')" title="Cảnh dùng TƯ LIỆU NGUỒN WEB — bấm để xem/đổi trong ${((state.webCandidates||{})[s.id]||[]).length || 'các'} ứng viên" style="font-size:11px;cursor:pointer;padding:1px 3px;border-radius:4px;${((state.webCandidates||{})[s.id]||[]).length ? 'background:var(--accent-soft)' : ''}">🌐${((state.webCandidates||{})[s.id]||[]).length ? '▾' : ''}</span>` : ''}</td>
-      <td style="text-align:center;padding:8px 4px">${imgCell}</td>
-      <td style="position:relative">
-        <div class="sb-rowacts">
-          <button onclick="editScene(${i})" title="Sửa lời đọc/nhân vật/thời lượng">✏️</button>
-          <button onclick="t2QueueRegen('${s.id}')" title="Tạo lại ẢNH cảnh này — tự xếp vào hàng đợi (bấm nhiều cảnh sẽ nối hàng, chạy theo luồng đa tài khoản)" ${pr ? '' : 'disabled'}>🎨</button>
-          <button onclick="addSceneAfter(${i})" title="Thêm cảnh sau">⊕</button>
-          <button onclick="mergeSceneWithNext(${i})" title="Gộp với cảnh sau" ${isLast ? 'disabled' : ''}>⊗</button>
-          <button onclick="delScene(${i})" title="Xoá cảnh">✕</button>
-        </div>
-        <div style="font-size:13px;line-height:1.5;color:var(--text);padding-right:30px">"${escapeHtml(s.text)}"</div>
-        ${prHtml ? `<div style="font-family:ui-monospace,monospace;font-size:9.5px;line-height:1.4;color:var(--text-dim);background:var(--surface-2);border:1px dashed var(--border-2);border-radius:6px;padding:5px 8px;margin-top:6px">${prHtml}</div>` : ''}
-      </td>
-    </tr>`;
-  }).join('');
-  // Setup drag-drop on each empty image cell
-  document.querySelectorAll('#sceneBody .sb-drop').forEach(el => {
-    el.addEventListener('dragover', e => { e.preventDefault(); el.style.background = 'var(--accent-soft)'; });
-    el.addEventListener('dragleave', () => { el.style.background = ''; });
-    el.addEventListener('drop', e => {
-      e.preventDefault();
-      el.style.background = '';
-      const tr = el.closest('tr');
-      const sid = tr?.dataset.sid;
-      if (sid && e.dataTransfer.files[0]) t2HandleSceneImage(sid, e.dataTransfer.files[0]);
-    });
-  });
-  if (typeof _t2RegenBar === 'function') _t2RegenBar();   // đồng bộ chỉ báo hàng đợi tạo lại sau khi render
-  if (typeof _t2RegenPending !== 'undefined') _t2RegenPending.forEach(k => _t2MarkQueued(String(k).replace(/::b$/, '')));   // giữ badge ⏳ cho cảnh đang chờ (bỏ hậu tố ::b của ảnh B)
-  _t2UpdateGenSceneMiss();
-}
+// [P0a] fn chet da xoa (shadow boi ban song nap sau: utility/t2-regen.js)
 
 // === L?: function saveEditScene ===
 // ⚠️  DEDUP-DUPLICATE: hàm này cũng ở utility.js (peer=1430c, shared=732c). Peer load SAU → ghi đè bản này. Sửa ở peer.
-function saveEditScene(idx){
-  const s = state.scenes[idx];
-  if (!s) return;
-  s.text = document.getElementById('edt_text_' + idx).value.trim();
-  s.character = document.getElementById('edt_char_' + idx).value.trim();
-  s.background = document.getElementById('edt_bg_' + idx).value.trim();
-  s.camera = document.getElementById('edt_cam_' + idx).value.trim() || 'medium';
-  s.duration = parseInt(document.getElementById('edt_dur_' + idx).value) || 3;
-  state.editingSceneIdx = -1;
-  renderTable(); renderPreview(); renderPromptsV();
-  if (typeof renderVeoPrompts === 'function') renderVeoPrompts();
-  if (typeof updateStats === 'function') updateStats(); saveState(true);
-  setStatus2(`✓ Đã sửa cảnh ${s.id}.`, 'ok');
-}
+// [P0a] fn chet da xoa (shadow boi ban song nap sau: utility/t2-edit.js)
 
 // === L?: const setStatus3 ===
 const setStatus3 = (m, t) => setStatusBar('status3', m, t);
@@ -3992,30 +3053,7 @@ const ASSET_BG_LAYOUT_SINGLE = 'LAYOUT: ONE single full-frame cinematic image of
 
 // === L?: function _t3StyleCtx ===
 // ⚠️  DEDUP-DUPLICATE: hàm này cũng ở utility.js (peer=2330c, shared=2262c). Peer load SAU → ghi đè bản này. Sửa ở peer.
-function _t3StyleCtx(){
-  const p = getProfile();
-  const charStyle  = document.getElementById('t3CharStyle').value  || p?.characterStyle  || '';
-  const charStyleB = document.getElementById('t3CharStyleB')?.value || p?.characterStyleB || '';
-  const bgStyle    = document.getElementById('t3BgStyle').value    || p?.backgroundStyle  || '';
-  const rules = document.getElementById('t3PromptRules').value || p?.promptRules || '';
-  // 🏺 Ngữ cảnh THỜI ĐẠI cho trang phục: ưu tiên ô "Bối cảnh & thời đại", nếu trống → trích kịch bản Tool 02
-  const eraInput = (document.getElementById('t3Era')?.value || state.t3Era || '').trim();
-  const scriptHint = (state.script || '').replace(/\s+/g, ' ').trim().slice(0, 700);
-  const eraCtx = eraInput
-    ? `\nBỐI CẢNH & THỜI ĐẠI (suy TRANG PHỤC đúng thời từ đây): ${eraInput}`
-    : (scriptHint ? `\nTRÍCH KỊCH BẢN (suy thời đại + trang phục từ đây): "${scriptHint}"` : '');
-  const eraRule = (eraInput || scriptHint)
-    ? `\n- TRANG PHỤC + KIỂU TÓC/ĐỘI ĐẦU + phụ kiện phải ĐÚNG thời đại/bối cảnh ở trên (vd Ai Cập cổ → khố/váy lanh, áo choàng lanh, vòng cổ wesekh, dép cói; KHÔNG vest/sơ mi/cà vạt/tạp dề hiện đại nếu sai thời). GIỮ NGUYÊN art-style/phong cách render của kênh ĐÚNG theo Character Style ở trên (vd kênh ảnh thật → giữ ảnh thật, kênh 2D → giữ 2D) — CHỈ đổi quần áo, tóc, kiểu đầu, đội đầu, trang sức cho khớp thời đại, KHÔNG đổi phong cách vẽ/chất liệu.`
-    : '';
-  // 🏺 Luật thời đại cho BỐI CẢNH (kiến trúc/vật liệu/đồ vật/ánh sáng theo đúng thời)
-  const eraRuleBg = (eraInput || scriptHint)
-    ? `\n- Kiến trúc, vật liệu, đồ vật và nguồn sáng của bối cảnh phải ĐÚNG thời đại/nơi chốn ở trên — KHÔNG để lẫn yếu tố hiện đại sai thời (vd Ai Cập cổ → tường gạch bùn/đá, cột khắc chữ tượng hình, đèn dầu/đuốc; KHÔNG bóng đèn điện, kính, kim loại/nhựa hiện đại).`
-    : '';
-  // 🖼 Kiểu ảnh bối cảnh: 'single' = 1 ảnh/mỗi bối cảnh (nét, ít lỗi) | 'grid' = 4 góc trong 1 ảnh
-  const bgLayoutMode = (document.getElementById('t3BgLayout')?.value || state.t3BgLayout || 'single');
-  const bgLayout = (bgLayoutMode === 'grid') ? ASSET_BG_LAYOUT : ASSET_BG_LAYOUT_SINGLE;
-  return { p, charStyle, charStyleB, bgStyle, rules, eraInput, scriptHint, eraCtx, eraRule, eraRuleBg, bgLayout };
-}
+// [P0a] fn chet da xoa (shadow boi ban song nap sau: utility/t3-assets.js)
 
 // === L?: const _CHAR_RISKY ===
 const _CHAR_RISKY = /\b(topless|bare[-\s]?chest(ed)?|shirtless|hip[-\s]?wrap|loin[-\s]?cloth|no body hair|chest dots|naked|nude|underwear|undressed)\b/i;
@@ -4510,56 +3548,7 @@ const _T2_WEB_MAX = 18;
 
 // === L?: function _t2WebPickerRender ===
 // ⚠️  DEDUP-DUPLICATE: hàm này cũng ở utility.js (peer=4968c, shared=4955c). Peer load SAU → ghi đè bản này. Sửa ở peer.
-function _t2WebPickerRender(sceneId, note){
-  const m = document.getElementById('t2WebPickerModal'); if (!m) return;
-  const cands = (state.webCandidates || {})[sceneId] || [];
-  const so = (state.scenes || []).findIndex(s => s.id === sceneId) + 1;
-  const dung = (state.mediaPicks || {})[sceneId] || {};
-  const dangDung = dung.trangUrl || '';
-
-  const the = cands.map((c, i) => {
-    const chon = dangDung && (c.trangUrl === dangDung);
-    const gp = c.license ? escapeHtml(String(c.license).slice(0, 30)) : '';
-    const tg = c.author ? escapeHtml(String(c.author).slice(0, 26)) : '';
-    const rui = c.nhom && c.nhom !== 'cong';
-    return `<div style="width:212px;border-radius:9px;overflow:hidden;border:2px solid ${chon ? 'var(--accent)' : 'var(--border)'};background:var(--surface-2);display:flex;flex-direction:column">
-      <div onclick="t2PickWeb('${sceneId}',${i})" style="cursor:pointer;position:relative;height:120px;background:#000">
-        ${c.thumb ? `<img src="${escapeHtml(c.thumb)}" style="width:100%;height:100%;object-fit:cover" loading="lazy" onerror="this.style.opacity=.15">`
-                  : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:var(--text-dim);font-size:22px">🌐</div>'}
-        <span style="position:absolute;top:6px;left:6px;background:rgba(0,0,0,.68);color:#fff;font-size:10px;padding:2px 6px;border-radius:4px">${c.duration ? c.duration + 's' : 'video'}</span>
-        ${chon ? '<span style="position:absolute;top:6px;right:6px;background:var(--accent);color:#000;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px">✓ Đang dùng</span>' : ''}
-        ${c.camTM ? '<span title="Giấy phép CẤM dùng thương mại hoặc cấm sửa đổi — kênh bật kiếm tiền dùng là vi phạm. Lượt tự động đã bỏ qua thẻ này." style="position:absolute;bottom:6px;right:6px;background:rgba(0,0,0,.8);color:#ff6b6b;font-size:10px;font-weight:700;padding:2px 5px;border-radius:4px">⛔ cấm thương mại</span>'
-          : (rui ? '<span title="Nội dung có bản quyền — cân nhắc khi bật kiếm tiền" style="position:absolute;bottom:6px;right:6px;background:rgba(0,0,0,.68);color:var(--amber);font-size:10px;padding:2px 5px;border-radius:4px">⚠️ bản quyền</span>' : '')}
-      </div>
-      <div style="padding:6px 8px;font-size:10.5px;color:var(--text-muted);line-height:1.45;flex:1 1 auto">
-        <div style="font-weight:650;color:var(--text);max-height:28px;overflow:hidden">${escapeHtml(String(c.ten || '').slice(0, 62))}</div>
-        <div style="margin-top:3px">${_srcBadge(c.source)}</div>
-        ${gp ? `<div style="color:var(--teal)">📄 ${gp}</div>` : ''}
-        ${tg ? `<div style="color:var(--text-dim)">© ${tg}</div>` : ''}
-      </div>
-      <div style="display:flex;gap:4px;padding:0 8px 8px">
-        <button class="btn ghost sm" style="flex:1;font-size:10.5px;padding:4px" onclick="t2PickWeb('${sceneId}',${i})">Dùng cảnh này</button>
-        <button class="btn ghost sm" style="font-size:10.5px;padding:4px 7px" title="Mở trang gốc trong trình duyệt" onclick="event.stopPropagation();window.open('${escapeHtml(c.trangUrl || '')}','_blank')">↗</button>
-      </div>
-    </div>`;
-  }).join('');
-
-  const nhip = (typeof webTrangThaiNhip === 'function') ? webTrangThaiNhip() : null;
-  const nhipTxt = nhip ? `Tìm web đã dùng ${nhip.daDung}/${nhip.tran} lượt phiên này${nhip.chan ? ' · <span style="color:var(--amber)">đang bị chặn nhịp</span>' : ''}.` : '';
-  m.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;width:min(940px,96vw);max-height:88vh;display:flex;flex-direction:column;overflow:hidden" onclick="event.stopPropagation()">
-    <div style="padding:15px 18px 10px;border-bottom:1px solid var(--border);flex:0 0 auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-      <span style="font-size:14.5px;font-weight:750">🌐 Tư liệu web — cảnh ${so}</span>
-      <span style="font-size:11px;color:var(--text-dim)">${cands.length} ứng viên</span>
-      <span style="flex:1"></span>
-      <input id="t2WebKw" placeholder="Gõ từ khoá tiếng Anh rồi bấm Tìm thêm" style="background:var(--surface-2);border:1px solid var(--border-2);border-radius:8px;padding:6px 10px;font-size:12px;width:250px">
-      <button class="btn ghost sm" id="t2WebMoreBtn" onclick="t2WebTimThem('${sceneId}')">🔎 Tìm thêm</button>
-      <button class="btn ghost sm" onclick="webMoBang()">⚙ Nền tảng</button>
-      <button class="btn ghost sm" onclick="t2CloseWebPicker()">Đóng</button>
-    </div>
-    <div id="t2WebNote" style="padding:8px 18px 0;font-size:11px;color:var(--text-dim);line-height:1.55;flex:0 0 auto">${note ? escapeHtml(note) + '<br>' : ''}${nhipTxt}</div>
-    <div style="padding:12px 18px 16px;overflow:auto;flex:1 1 auto;display:flex;flex-wrap:wrap;gap:10px">${the || '<div style="color:var(--text-dim);font-size:12px">Chưa có ứng viên nào.</div>'}</div>
-  </div>`;
-}
+// [P0a] fn chet da xoa (shadow boi ban song nap sau: utility/stock.js)
 
 async function downloadMedia(url, kind, sceneNum){
   if (!url) return setStatus5('Không có link tải.', 'error');
@@ -4684,81 +3673,7 @@ let _t7GfxSel = null;
 
 // === L?: function _t7LayerPanel ===
 // ⚠️  DEDUP-DUPLICATE: hàm này cũng ở utility.js (peer=9676c, shared=7840c). Peer load SAU → ghi đè bản này. Sửa ở peer.
-function _t7LayerPanel(L, ctx){
-  const cat = (_t7Cat || []).find(x => x.template === L.template);
-  const esc = (v) => escapeHtml(v == null ? '' : String(v));
-  const lb = (t, extra) => `<div style="font-size:9.5px;letter-spacing:.4px;text-transform:uppercase;color:var(--text-muted);margin:9px 0 4px;font-weight:700;display:flex;justify-content:space-between"><span>${t}</span><span style="text-transform:none;letter-spacing:0;font-weight:400;color:var(--text-dim)">${extra || ''}</span></div>`;
-  // Ô ảnh: nút chọn file thay vì bắt gõ data URL. Ô còn lại là ô chữ thường.
-  const IMGK = /^(src|image|img|photo|logo|thumb)$/i;
-  const fld = (k, v) => IMGK.test(k)
-    ? `<div style="display:flex;gap:6px;align-items:center">
-         <div class="t7-mfield" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;padding:7px 9px">${v === '@scene' ? '🖼 ảnh của cảnh' : (v ? (String(v).startsWith('data:') ? '🖼 ảnh đã chọn' : (_t7IsVid(v) ? '🎬 ' + esc(String(v).split(/[\\/]/).pop()) : esc(String(v).slice(0, 40)))) : '— chưa có ảnh/video —')}</div>
-         <button class="btn ghost sm" style="padding:5px 9px;font-size:11px" onclick="t7LPickImg('${k}')" title="Ảnh — nhúng thẳng vào dự án">🖼 Ảnh</button>
-         <button class="btn ghost sm" style="padding:5px 9px;font-size:11px" onclick="t7LPickVid('${k}')" title="Video — lưu đường dẫn, lúc xuất tự chép vào bản dựng">🎬 Video</button>
-         ${ctx.scene ? `<button class="btn ghost sm" style="padding:5px 8px;font-size:11px" title="Dùng chính ảnh của cảnh này" onclick="t7LUseSceneImg('${k}')">🖼</button>` : ''}
-         ${v ? `<button class="btn ghost sm" style="padding:5px 8px;font-size:11px;color:var(--red)" onclick="t7LSet('${k}','')">✕</button>` : ''}
-       </div>`
-    : `<input class="t7-mfield" style="width:100%" value="${esc(v)}" onchange="t7LSet('${k}',this.value)">`;
-
-  // Ô nội dung: đúng những trường mẫu khai, bỏ các trường màu (đưa xuống nhóm Màu).
-  const COLORK = /^(bg|ink|color|color2|track|mark|fill)$/;
-  const params = (cat && cat.params) || Object.keys(L).filter(k => !/^(template|type|at|until|z|id|in|out|hold|box|style|dx|dy|scale|rotate|opacity)$/.test(k));
-  const content = params.filter(k => !COLORK.test(k)).map(k => lb(k) + fld(k, L[k])).join('');
-  const colors = params.filter(k => COLORK.test(k));
-
-  const chip = (grp, val, label, cur) =>
-    `<span class="t7-cchip${cur === val ? ' on' : ''}" onclick="t7LAnim('${grp}','${val}')">${label}</span>`;
-  const IN = [['fade','mờ dần'],['rise','dâng lên'],['drop','rơi xuống'],['slideL','trượt trái'],['slideR','trượt phải'],['pop','bật'],['defocus','nhoè'],['wipeL','quét ngang'],['zoom','phóng vào'],['deal','chia bài'],['none','không']];
-  const OUT = [['fade','mờ dần'],['sinkL','chìm trái'],['sinkR','chìm phải'],['fall','rơi xuống'],['shrink','co lại'],['wipeR','quét'],['none','không']];
-  const HOLD = [['none','không'],['kenIn','Ken Burns – phóng vào'],['kenOut','Ken Burns – phóng ra'],['panL','lia trái'],['panR','lia phải'],['panU','lia lên'],['panD','lia xuống'],['drift','trôi'],['breathe','thở'],['growX','chạy đầy ngang'],['growY','chạy đầy dọc']];
-  const curIn = (L.in && L.in.preset) || 'fade', curOut = (L.out && L.out.preset) || 'none', curHold = (L.hold && L.hold.preset) || 'none';
-
-  // ── Vị trí / cỡ / độ mờ: mẫu tự dựng bố cục, các ô này ĐÈ LÊN bố cục đó ──
-  const b = L.box || {};
-  const B = (k, ph) => { const cur = _t7BoxRead(L, k);
-    return `<input class="t7-mfield" style="width:100%" type="number" step="1" placeholder="${ph}" value="${cur != null ? esc(cur) : ''}" onchange="t7LBox('${k}',this.value)">`; };
-  const N = (k, ph, step, dflt) => `<input class="t7-mfield" style="width:100%" type="number" step="${step}" placeholder="${ph}" value="${L[k] != null ? esc(L[k]) : ''}" onchange="t7LNum('${k}',this.value,${dflt})">`;
-  const aBtn = (k, v, lbl) => `<span class="t7-cchip${(b[k] || (k === 'align' ? 'left' : 'top')) === v ? ' on' : ''}" onclick="t7LBoxSet('${k}','${v}')">${lbl}</span>`;
-  const opa = Math.round((L.opacity != null ? Number(L.opacity) : 1) * 100);
-  const layout = `<details class="t7-sect">
-    <summary><span><b>📐 Vị trí &amp; cỡ</b><em>Đè lên bố cục mẫu — tính theo % khung hình nên đổi 16:9 ↔ 9:16 vẫn đúng chỗ.</em></span><span class="cv">⌄</span></summary>
-    <div class="bd2">
-      <div class="t7-g2"><div>${lb('X (%)')}${B('x','8')}</div><div>${lb('Y (%)')}${B('y','8')}</div></div>
-      <div class="t7-g2"><div>${lb('Rộng (%)')}${B('w','tự')}</div><div>${lb('Cao (%)')}${B('h','tự')}</div></div>
-      ${lb('Canh chữ trong hộp')}<div style="display:flex;gap:4px;flex-wrap:wrap">${aBtn('align','left','trái')}${aBtn('align','center','giữa')}${aBtn('align','right','phải')}</div>
-      ${lb('Canh dọc')}<div style="display:flex;gap:4px;flex-wrap:wrap">${aBtn('vAlign','top','trên')}${aBtn('vAlign','center','giữa')}${aBtn('vAlign','bottom','dưới')}</div>
-      <div class="t7-g3" style="margin-top:4px">
-        <div>${lb('Cỡ ×')}${N('scale','1','0.05',1)}</div>
-        <div>${lb('Xoay °')}${N('rotate','0','1',0)}</div>
-        <div>${lb('Mờ %')}<input class="t7-mfield" style="width:100%" type="number" min="0" max="100" step="5" value="${opa}" onchange="t7LNum('opacity',this.value===''?'':(parseFloat(this.value)/100),1)"></div>
-      </div>
-      <div class="t7-g2"><div>${lb('Dịch ngang %')}${N('dx','0','1',0)}</div><div>${lb('Dịch dọc %')}${N('dy','0','1',0)}</div></div>
-      <div style="display:flex;gap:5px;margin-top:7px">
-        <button class="btn ghost sm" style="flex:1;padding:5px;font-size:11px;border-color:var(--accent);color:var(--accent)" onclick="t7LPin()" title="Hiện khung 8 nút trên bản xem trước để kéo bằng chuột">📌 Kéo trên khung</button>
-        <button class="btn ghost sm" style="flex:1;padding:5px;font-size:11px" onclick="t7LReset()">↺ Về bố cục gốc</button>
-      </div>
-    </div>
-  </details>`;
-
-  return `<details class="t7-sect" open>
-    <summary><span><b>✏️ Nội dung lớp</b><em>${esc((cat && cat.label) || L.template || L.type)} — ô do chính mẫu khai.</em></span><span class="cv">⌃</span></summary>
-    <div class="bd2">${content || '<div class="t7-dim" style="font-size:11.5px">Mẫu này không có ô điền.</div>'}</div>
-  </details>
-  ${layout}
-  ${colors.length ? `<details class="t7-sect">
-    <summary><span><b>🎨 Màu</b><em>Đè lên màu mặc định của mẫu.</em></span><span class="cv">⌄</span></summary>
-    <div class="bd2"><div class="t7-g2">${colors.map(k => `<div>${lb(k)}<div style="display:flex;gap:5px;align-items:center"><input type="color" style="width:30px;height:28px;padding:0;border:1px solid var(--border);border-radius:6px;background:none;cursor:pointer" value="${esc(/^#[0-9a-f]{6}$/i.test(L[k] || '') ? L[k] : ((cat && cat.defaults && cat.defaults[k]) || '#888888'))}" onchange="t7LSet('${k}',this.value)"><input class="t7-mfield" style="flex:1;min-width:0;font-family:monospace;font-size:11px" value="${esc(L[k] || '')}" placeholder="mặc định" onchange="t7LSet('${k}',this.value)"></div></div>`).join('')}</div></div>
-  </details>` : ''}
-  <details class="t7-sect" open>
-    <summary><span><b>🎞 Chuyển động</b><em>Chọn theo TÊN trong bảng hiệu ứng cố định.</em></span><span class="cv">⌃</span></summary>
-    <div class="bd2">
-      ${lb('Vào', IN.length + ' kiểu')}<div style="display:flex;gap:4px;flex-wrap:wrap">${IN.map(([v,l]) => chip('in', v, l, curIn)).join('')}</div>
-      ${lb('Ra', OUT.length + ' kiểu')}<div style="display:flex;gap:4px;flex-wrap:wrap">${OUT.map(([v,l]) => chip('out', v, l, curOut)).join('')}</div>
-      ${lb('Giữ', HOLD.length + ' kiểu')}<div style="display:flex;gap:4px;flex-wrap:wrap">${HOLD.map(([v,l]) => chip('hold', v, l, curHold)).join('')}</div>
-    </div>
-  </details>
-  ${ctx.timing || ''}${ctx.tail || ''}`;
-}
+// [P0a] fn chet da xoa (shadow boi ban song nap sau: utility/t7.js)
 
 // === L?: let _t7FxTab, _t7Bits, _t7Prev ===
 let _t7FxTab = 'tpl', _t7Bits = null, _t7Prev = null;
@@ -4839,11 +3754,7 @@ let _t7Drag = null;
 
 // === L?: function t7TransJump ===
 // ⚠️  DEDUP-DUPLICATE: hàm này cũng ở tool-t7.js (peer=246c, shared=215c). Peer load SAU → ghi đè bản này. Sửa ở peer.
-function t7TransJump(clipId){
-  t7State.selClip = clipId; _t7GfxSel = null; _t7GlobSel = null;
-  t7RenderDetail(); t7RenderTimeline();
-  setStatus7('Chọn kiểu ở ô "Chuyển cảnh vào" bên phải — 38 kiểu.', 'ok');
-}
+// [P0a] fn chet da xoa (shadow boi ban song nap sau: tool-t7.js)
 
 // === L?: let _t7Clip ===
 let _t7Clip = null;
@@ -4945,34 +3856,7 @@ const _T7_NHAN = {
 
 // === L?: function _t7AiEditCustom ===
 // ⚠️  DEDUP-DUPLICATE: hàm này cũng ở utility.js (peer=1911c, shared=1800c). Peer load SAU → ghi đè bản này. Sửa ở peer.
-function _t7AiEditCustom(q, i){
-  return (q.custom || []).map((L, j) => {
-    const o = (key, nhan, kind, val, chon) => {
-      const id = `cu${i}_${j}_${key}`;
-      const set = `t7AiCustomSet(${i},${j},'${key}',this.value)`;
-      if (kind === 'chon')
-        return `<label for="${id}">${nhan}</label><select id="${id}" onchange="${set}">${
-          chon.map(x => `<option${String(val) === x ? ' selected' : ''}>${x}</option>`).join('')}</select>`;
-      if (kind === 'mau')
-        return `<label for="${id}">${nhan}</label><input id="${id}" type="color" value="${_t7Hex(val)}" oninput="${set}">`;
-      if (kind === 'so')
-        return `<label for="${id}">${nhan}</label><input id="${id}" type="number" value="${escapeHtml(String(val))}" oninput="${set}">`;
-      return `<label for="${id}">${nhan}</label><input id="${id}" type="text" value="${escapeHtml(String(val == null ? '' : val))}" oninput="${set}">`;
-    };
-    const b = L.box || {}, st = L.style || {};
-    const os = [
-      L.type === 'text' ? o('text', 'Chữ', 'text', L.text) : '',
-      o('x', 'Trái %', 'so', b.x), o('y', 'Trên %', 'so', b.y),
-      o('w', 'Rộng %', 'so', b.w), o('h', 'Cao %', 'so', b.h),
-      L.type === 'text' ? o('align', 'Canh', 'chon', b.align, ['left', 'center', 'right']) : '',
-      L.type === 'text' ? o('size', 'Cỡ', 'so', st.size) : '',
-      L.type === 'text' ? o('color', 'Màu chữ', 'mau', st.color) : o('fill', 'Màu khối', 'mau', st.fill),
-      o('in', 'Kiểu vào', 'chon', L.in && L.in.preset, NOVA_IN_PRESETS),
-      o('hold', 'Kiểu giữ', 'chon', L.hold && L.hold.preset, NOVA_HOLD_PRESETS),
-    ].filter(Boolean).join('');
-    return `<div class="edg"><b>Lớp ${j + 1} · ${L.type === 'text' ? 'chữ' : 'khối'}</b><div class="edf">${os}</div></div>`;
-  }).join('');
-}
+// [P0a] fn chet da xoa (shadow boi ban song nap sau: utility/t7.js)
 
 // === L?: let _t7AiEditT2 ===
 let _t7AiEditT2 = null;
@@ -5003,21 +3887,7 @@ const _t7Preset = (v, ds, mac) => (ds.includes(String(v)) ? String(v) : mac);
 
 // === L?: function _t7CustomSpec ===
 // ⚠️  DEDUP-DUPLICATE: hàm này cũng ở utility.js (peer=1069c, shared=967c). Peer load SAU → ghi đè bản này. Sửa ở peer.
-function _t7CustomSpec(){ return `
-✎ TỰ THIẾT KẾ (dùng RẤT THƯA):
-Nếu cảnh này KHÔNG mẫu nào ở trên hợp mà vẫn đáng có đồ hoạ, thay "picks" bằng "custom":
-"custom":[
- {"type":"shape","box":{"x":6,"y":62,"w":52,"h":22},"style":{"fill":"rgba(0,0,0,.6)","radius":12},
-  "at":0,"in":{"preset":"wipeL","dur":0.4},"out":{"preset":"fade","dur":0.3}},
- {"type":"text","text":"chữ ngắn","box":{"x":9,"y":66,"w":46,"align":"left"},
-  "style":{"size":64,"weight":800,"color":"#ffffff"},
-  "at":0.15,"in":{"preset":"rise","dur":0.45},"hold":{"preset":"drift"},"out":{"preset":"fade","dur":0.3}}]
-- Toạ độ theo % khung hình, gốc góc trên-trái. Tối đa 3 lớp, KHÔNG cho hai hộp đè nhau.
-- type chỉ được "text" hoặc "shape". in/hold/out phải lấy đúng tên trong danh sách:
-  vào: ${NOVA_IN_PRESETS.join(' ')}
-  giữ: ${NOVA_HOLD_PRESETS.join(' ')}
-  ra:  ${NOVA_OUT_PRESETS.join(' ')}
-- Chỉ dùng khi thật sự cần bố cục riêng. Có mẫu hợp thì LUÔN dùng mẫu, đừng tự vẽ.`; }
+// [P0a] fn chet da xoa (shadow boi ban song nap sau: utility/t7.js)
 
 // === L?: const _t7TrCam ===
 const _t7TrCam = (cat, id) => {
@@ -5131,21 +4001,7 @@ const _T7_CAM = [];
 
 // === L?: function _t7AiQuotaLine ===
 // ⚠️  DEDUP-DUPLICATE: hàm này cũng ở utility.js (peer=729c, shared=684c). Peer load SAU → ghi đè bản này. Sửa ở peer.
-function _t7AiQuotaLine(S){
-  const q = S.quota, out = [];
-  Object.keys(q).forEach(k => {
-    if (k[0] === '_') return;
-    const con = q[k] - (S.used[k] || 0);
-    if (con <= 0) out.push(`${k}: HẾT, cấm dùng`);
-  });
-  const ambCon = q._ambient - S.amb, txtCon = q._text - S.txt;
-  out.push(`lớp không khí còn ${Math.max(0, ambCon)} lượt`);
-  out.push(`còn ${Math.max(0, txtCon)} cảnh được phép đặt chữ`);
-  const kchu = _T7_NOTEXT.reduce((a2, k) => a2 + (S.used[k] || 0), 0);
-  out.push(`đã dùng ${S.txt} mẫu CÓ CHỮ và ${kchu} mẫu KHÔNG CHỮ` +
-    (S.txt >= 3 && kchu === 0 ? ' → ĐANG LỆCH HẲN VỀ CHỮ, lô này ưu tiên mẫu không chữ' : ''));
-  return out.join(' · ');
-}
+// [P0a] fn chet da xoa (shadow boi ban song nap sau: utility/t7.js)
 
 async function _t7AiMap(clips, onTick){
   if (!state.aiMap) state.aiMap = {};
@@ -5675,34 +4531,11 @@ const _t7Kebab = (k) => k.replace(/[A-Z]/g, m => '-' + m.toLowerCase());
 
 // === L?: function _t7FileUrl ===
 // ⚠️  DEDUP-DUPLICATE: hàm này cũng ở utility.js (peer=408c, shared=271c). Peer load SAU → ghi đè bản này. Sửa ở peer.
-function _t7FileUrl(src){
-  const s = String(src || '');
-  if (!s || /^(https?:|data:|blob:|file:|assets\/)/i.test(s)) return s;
-  if (/^[a-zA-Z]:[\\/]/.test(s)) return 'file:///' + s.replace(/\\/g, '/');
-  if (s.startsWith('/')) return 'file://' + s;
-  return s;
-}
+// [P0a] fn chet da xoa (shadow boi ban song nap sau: utility.js)
 
 // === L?: function _t7LayerHtml ===
 // ⚠️  DEDUP-DUPLICATE: hàm này cũng ở utility.js (peer=1804c, shared=1457c). Peer load SAU → ghi đè bản này. Sửa ở peer.
-function _t7LayerHtml(L){
-  const w = Object.entries(L.wrap).filter(([,v]) => v !== '' && v != null).map(([k,v]) => _t7Kebab(k) + ':' + v).join(';');
-  const cs = L.css ? Object.entries(L.css).filter(([,v]) => v !== '' && v != null).map(([k,v]) => _t7Kebab(k) + ':' + v).join(';') : '';
-  if (L.kind === 'text'){
-    const inner = L.chars
-      ? L.chars.map(ch => `<span style="display:inline-block;white-space:pre;opacity:${ch.opacity};transform:${ch.transform}">${escapeHtml(ch.ch === ' ' ? '\u00a0' : ch.ch)}</span>`).join('')
-      : escapeHtml(L.text);
-    return `<div style="${w}"><div style="${cs};text-align:${L.align}">${inner}</div></div>`;
-  }
-  if (L.kind === 'shape') return `<div style="${w}"><div style="${cs}"></div></div>`;
-  if (L.kind === 'media' && L.src){
-    // Video: tua tới đúng giây bằng mảnh #t= để khung xem trước khớp playhead.
-    if (L.isVideo) return `<div style="${w}"><video src="${_t7FileUrl(L.src)}${/#/.test(L.src)?'':'#t='+(L.vt||0).toFixed(2)}" style="${cs}" muted playsinline preload="metadata"></video></div>`;
-    return `<div style="${w}"><img src="${_t7FileUrl(L.src)}" style="${cs}"></div>`;
-  }
-  if (L.kind === 'bit') return `<div style="${w}"><div style="width:100%;height:100%;border:0.3cqh dashed rgba(255,255,255,.5);border-radius:1cqh;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.75);font-size:2cqh">✨ ${escapeHtml(L.name)}</div></div>`;
-  return '';
-}
+// [P0a] fn chet da xoa (shadow boi ban song nap sau: utility/t7.js)
 
 // === L?: let _t7ThumbObs ===
 let _t7ThumbObs = [];
@@ -5734,13 +4567,7 @@ const _T7_RATES = [0.5, 1, 1.5, 2];
 
 // === L?: function t7CycleRate ===
 // ⚠️  DEDUP-DUPLICATE: hàm này cũng ở tool-t7.js (peer=130c, shared=356c). Peer load SAU → ghi đè bản này. Sửa ở peer.
-function t7CycleRate(){
-  const i = _T7_RATES.indexOf(t7State.rate || 1);
-  t7State.rate = _T7_RATES[(i + 1) % _T7_RATES.length];
-  const b = document.getElementById('t7Rate'); if (b) b.textContent = t7State.rate + 'x';
-  // Đang phát thì khởi động lại vòng phát để mốc thời gian tính theo tốc độ mới.
-  if (t7State.playing){ t7Pause(); t7Play(); }
-}
+// [P0a] fn chet da xoa (shadow boi ban song nap sau: tool-t7.js)
 
 // === L?: let _t7AutoWired ===
 let _t7AutoWired = false;
@@ -5759,13 +4586,7 @@ const T7_SUBSTYLES = {
 
 // === L?: function t7RenderSubStyleChips ===
 // ⚠️  DEDUP-DUPLICATE: hàm này cũng ở tool-t7.js (peer=968c, shared=757c). Peer load SAU → ghi đè bản này. Sửa ở peer.
-function t7RenderSubStyleChips(){
-  const box = document.getElementById('t7SubStyleChips'); if (!box) return;
-  const cur = state.t7SubStyle || 'vien';
-  box.innerHTML = Object.entries(T7_SUBSTYLES).map(([k, v]) =>
-    `<button type="button" onclick="t7PickSubStyle('${k}')" style="border:1px solid ${k===cur?'var(--accent)':'var(--border)'};background:${k===cur?'color-mix(in srgb,var(--accent) 15%,transparent)':'var(--surface-2)'};color:${k===cur?'var(--accent)':'var(--text)'};border-radius:20px;padding:5px 12px;font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:7px">
-      <span style="display:inline-block;padding:0 6px;border-radius:3px;font-size:10px;font-weight:700;${v.prev}">Aa</span>${v.name}</button>`).join('');
-}
+// [P0a] fn chet da xoa (shadow boi ban song nap sau: tool-t7.js)
 
 // === L?: const setStatus8 ===
 const setStatus8 = (m, t) => setStatusBar('status8', m, t);
@@ -5890,168 +4711,10 @@ const T11_SIGNAL_WEIGHT = { direct_request: 3, gap: 2, question: 1 };
 // === L?: const _uploadsOf ===
 const _uploadsOf = channelId => 'UU' + String(channelId).slice(2);
 
-// === L?: const NF_MAP ===
-const NF_MAP = {
-  hot:       { fn: 'hot',       state: 'nfHotState',   out: 'nfHotOut',   btn: 'nfHotBtn',   seed: 'nfHotSeed',   render: nfRenderHot },
-  scorecard: { fn: 'scorecard', state: 'nfScState',    out: 'nfScOut',    btn: 'nfScBtn',    seed: 'nfScSeed',    render: nfRenderScorecard, key: 'channel' },
-  bw:        { fn: 'bw',        state: 'nfBwState',    out: 'nfBwOut',    btn: 'nfBwBtn',    render: nfRenderBw },
-  attention: { fn: 'attention', state: 'nfAttState',    out: 'nfAttOut',    btn: 'nfAttBtn',    seed: 'nfAttSeed',    render: nfRenderAttention },
-};
-
-// === L?: let _nfWired, _nfActive ===
-let _nfWired = false, _nfActive = 'hot';
-
-async function nfRun(mod, fresh){
-  const m = NF_MAP[mod]; if (!m) return;
-  if (!window.native || !window.native.niche){ document.getElementById(m.state).textContent = '⚠️ Chỉ chạy trong app Nova (desktop).'; return; }
-  let payload = { fresh: !!fresh };
-  if (mod === 'bw'){
-    payload.title = (document.getElementById('nfBwTitle')?.value || '').trim();
-    payload.niche = (document.getElementById('nfBwNiche')?.value || '').trim();
-    if (!payload.title){ document.getElementById(m.state).textContent = '⚠️ Nhập tiêu đề cần chấm.'; return; }
-  } else if (m.key){                                   // ô nhận KÊNH thay vì từ khoá ngách
-    const v = (document.getElementById(m.seed)?.value || '').trim();
-    if (!v){ document.getElementById(m.state).textContent = '⚠️ Nhập kênh đối thủ (@handle hoặc link).'; return; }
-    payload[m.key] = v;
-  } else {
-    const seed = (document.getElementById(m.seed)?.value || '').trim();
-    if (!seed){ document.getElementById(m.state).textContent = '⚠️ Nhập từ khoá ngách.'; return; }
-    payload.seed = seed;
-  }
-  const btn = document.getElementById(m.btn); if (btn) btn.disabled = true;
-  document.getElementById(m.state).textContent = '⏳ Đang chạy…'; _nfSet(m.out, '');
-  try {
-    const r = await window.native.niche[m.fn](payload);
-    if (!r || !r.ok){ document.getElementById(m.state).textContent = '❌ ' + ((r&&r.error)||'Lỗi'); return; }
-    m.render(r);
-  } catch(e){ document.getElementById(m.state).textContent = '❌ ' + String(e).slice(0,150); }
-  finally { if (btn) btn.disabled = false; }
-}
-
-// === L?: function _nfHotCard ===
-// ⚠️  DEDUP-DUPLICATE: hàm này cũng ở utility.js (peer=815c, shared=594c). Peer load SAU → ghi đè bản này. Sửa ở peer.
-function _nfHotCard(t){
-  const ratio = Number(t.ratio) || 0, n = Number(t.count) || 0;
-  return `<div class="nf-card">
-    <h5><span>🔥 ${_nfEsc(t.topic)}</span>${_nfBadge(t.heat)}</h5>
-    <div class="tmet">
-      ${ratio ? `<div>Bội số trung vị<b class="up">${ratio.toFixed(1)}×</b></div>` : ''}
-      ${n ? `<div>Số video<b>${n}</b></div>` : ''}
-    </div>
-    <div class="nf-line"><b>Vì sao ăn:</b> ${_nfEsc(t.why)}</div>
-    <div class="nf-line"><b>Góc làm:</b> ${_nfEsc(t.angle)}</div>
-    ${t.title ? `<div class="nf-title-ex">🎬 ${_nfEsc(t.title)}</div>` : ''}
-  </div>`;
-}
-
-// === L?: function nfRenderHot ===
-// ⚠️  DEDUP-DUPLICATE: hàm này cũng ở utility.js (peer=1154c, shared=990c). Peer load SAU → ghi đè bản này. Sửa ở peer.
-function nfRenderHot(r){
-  document.getElementById('nfHotState').textContent =
-    `✅ Quét ${(r.queries||[]).length} góc · ${r.scanned||0} video · trung vị ngách ${_t11oNum(r.median||0)} view` + _nfMeta(r);
-  const items = r.items || [];
-  const rising = items.filter(x => String(x.window||'').toLowerCase() === 'rising');
-  const proven = items.filter(x => String(x.window||'').toLowerCase() !== 'rising');
-  let h = '<div style="margin-bottom:10px">' + (r.queries||[]).map(q => `<span class="qchip">${_nfEsc(q)}</span>`).join('') + '</div>';
-  if (rising.length) h += `<div class="win"><i class="r">ĐANG LÊN</i><em>đăng ≤ 30 ngày — còn chỗ chen vào</em><s></s></div>` + rising.map(_nfHotCard).join('');
-  if (proven.length) h += `<div class="win"><i class="p">ĐÃ ĂN</i><em>30–180 ngày — chắc ăn nhưng đông người làm</em><s></s></div>` + proven.map(_nfHotCard).join('');
-  _nfSet('nfHotOut', items.length ? h : '<div class="nf-state">Không có chủ đề nào vượt trung vị.</div>');
-}
-
-// === L?: let _nfScChannel ===
-let _nfScChannel = '';
-
-// === L?: function nfRenderScorecard ===
-// ⚠️  DEDUP-DUPLICATE: hàm này cũng ở utility.js (peer=2423c, shared=2128c). Peer load SAU → ghi đè bản này. Sửa ở peer.
-function nfRenderScorecard(r){
-  _nfScChannel = r.channel || '';
-  document.getElementById('nfScState').textContent = `✅ Xong — ${r.videoCount} video · trung vị kênh ${_t11oNum(r.median||0)} view` + (r.fromCache?' · ⚡cache':'');
-  const m = r.metrics || {};
-  const ini = (r.channel||'?').replace(/[^\p{L}\p{N} ]/gu,'').trim().split(/\s+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase() || 'YT';
-  let h = `<div class="nf-card">
-    <div class="sc-head">
-      <div class="sc-av">${_nfEsc(ini)}</div>
-      <div style="flex:1">
-        <div style="font-size:16px;font-weight:700">${_nfEsc(r.channel)} ${r.monetized?'<span class="nf-badge nf-hi">Đã bật kiếm tiền</span>':''}</div>
-        <div class="nf-state" style="margin:2px 0 0">${_t11oNum(r.subs||0)} sub · quét ${r.videoCount} video gần nhất</div>
-      </div>
-      <div style="text-align:right"><div style="font-size:26px;font-weight:800;color:var(--accent);line-height:1">${r.health}</div><div style="font-size:11px;color:var(--text-muted)">điểm sức khoẻ</div></div>
-    </div>
-    ${_nfMetricRows(m)}
-    ${r.analysis ? `<div class="nf-title-ex" style="margin-top:12px;white-space:pre-wrap">${_nfEsc(r.analysis)}</div>` : ''}
-  </div>`;
-  if ((r.outliers||[]).length){
-    h += `<div class="nf-card" style="padding:8px 12px"><table class="nf-tbl">
-      <tr><th>Video vượt trội</th><th class="n">View</th><th class="n">Bội số</th><th class="n">Dài</th><th class="n">Tuổi</th></tr>
-      ${r.outliers.map(o => `<tr>
-        <td><a href="${_nfEsc(o.url)}" target="_blank" style="color:inherit;text-decoration:none">${_nfEsc(o.title)}</a></td>
-        <td class="n">${_nfEsc(o.viewsFmt)}</td>
-        <td class="n" style="color:var(--accent);font-weight:800">${o.ratio}×</td>
-        <td class="n" style="color:var(--text-muted)">${Math.round((o.dur||0)/60)}p</td>
-        <td class="n" style="color:var(--text-muted)">${o.days!=null?o.days+'n':'?'}</td></tr>`).join('')}
-    </table></div>`;
-  }
-  _nfSet('nfScOut', h);
-  const row = document.getElementById('nfSimRow'); if (row) row.style.display = 'flex';
-  _nfSet('nfSimOut', '');
-}
-
-// === L?: const _NF_RUNGS ===
-const _NF_RUNGS = [
-  [86,100,'Hiếm: nhị phân bắt ngay + hàm ý sâu'],
-  [71,85,'Rất mạnh, "vì sao phải click" hiển nhiên'],
-  [51,70,'Hook rõ, có căng, làm được'],
-  [21,50,'Có mới nhưng còn chung chung'],
-  [0,20,'Tầm thường, dễ lướt qua'],
-];
-
-// === L?: function nfRenderBw ===
-// ⚠️  DEDUP-DUPLICATE: hàm này cũng ở utility.js (peer=2044c, shared=1794c). Peer load SAU → ghi đè bản này. Sửa ở peer.
-function nfRenderBw(r){
-  const d = r.result || {}, sc = Math.max(0, Math.min(100, Number(d.score)||0));
-  const col = sc >= 71 ? 'var(--accent)' : sc >= 51 ? '#5fbf7f' : '#e08a8a';
-  document.getElementById('nfBwState').textContent = `✅ Xong — ${r.chars} ký tự` + (d.layered ? ' · ý nhiều tầng' : '');
-  const ladder = _NF_RUNGS.map(([lo,hi,txt]) => {
-    const on = sc >= lo && sc <= hi;
-    return `<div class="rung${on?' on':''}"><span class="rg">${lo}–${hi}</span><span class="rl"></span><span>${txt}${on?' ← <b>bạn ở đây</b>':''}</span></div>`;
-  }).join('');
-  const alts = (d.alts||[]).map(a => `<div class="alt"><span>${_nfEsc(a.title)}<div style="font-size:10.5px;color:var(--text-muted);margin-top:2px">${_nfEsc(a.why||'')}</div></span>
-    <span class="nf-badge ${(Number(a.score)||0)>=71?'nf-hi':'nf-mid'}">${Number(a.score)||0}</span></div>`).join('');
-  _nfSet('nfBwOut', `<div class="nf-card">
-      <div class="bw-gauge">
-        <div class="bw-ring" style="background:conic-gradient(${col} 0 ${sc}%,rgba(255,255,255,.07) ${sc}% 100%)"><b>${sc}</b><small>B&amp;W</small></div>
-        <div style="flex:1;min-width:240px">${ladder}</div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px">
-        <div class="pole"><b>Cực A tìm thấy</b>${d.poleA ? _nfEsc(d.poleA) : '<span style="color:var(--text-muted)">— không có —</span>'}</div>
-        <div class="pole"><b>Cực B tìm thấy</b>${d.poleB ? _nfEsc(d.poleB) : '<span style="color:var(--text-muted)">— không có —</span>'}</div>
-      </div>
-      <div class="nf-state" style="margin-top:9px">${_nfEsc(d.verdict||'')}</div>
-    </div>
-    ${alts ? `<div class="nf-card"><h5 style="margin-bottom:8px">✍️ Viết lại theo cặp đối lập</h5>${alts}</div>` : ''}`);
-}
-
-// === L?: function nfRenderAttention ===
-// ⚠️  DEDUP-DUPLICATE: hàm này cũng ở utility.js (peer=1619c, shared=1401c). Peer load SAU → ghi đè bản này. Sửa ở peer.
-function nfRenderAttention(r){
-  document.getElementById('nfAttState').textContent =
-    `✅ Xong — ${r.scanned||0} video, ${r.outliers||0} vượt trội · trung vị ngách ${_t11oNum(r.median||0)} view` + _nfMeta(r);
-  const cards = (r.items||[]).map(t => {
-    const bw = Number(t.bw)||0;
-    return `<div class="nf-card">
-      <h5><span>🎯 ${_nfEsc(t.segment)}</span><span style="font-size:11.5px;font-weight:700;color:var(--accent);white-space:nowrap">🔥 ${t.fire||0} outlier</span></h5>
-      <div class="nf-state" style="margin:0 0 5px">Nhu cầu: ${_nfEsc(t.demand||'')}${t.avgViews?` · view TB tệp ${_t11oNum(t.avgViews)}`:''}</div>
-      <div class="nf-line"><b>Đang muốn:</b> ${_nfEsc(t.need)}</div>
-      <div class="nf-title-ex">💡 ${_nfEsc(t.idea)} ${bw?`<span class="nf-badge ${bw>=71?'nf-hi':'nf-mid'}">B&amp;W ${bw}</span>`:''}
-        ${t.poles?`<div style="font-size:10.5px;color:var(--text-muted);margin-top:4px">Cặp đối lập: ${_nfEsc(t.poles)}</div>`:''}</div>
-      ${(t.samples||[]).length?`<div class="nf-state" style="margin-top:7px">Dựa trên: ${t.samples.map(s=>`<a href="${_nfEsc(s.url)}" target="_blank" style="color:var(--text-muted)">${_nfEsc(String(s.title).slice(0,44))} (${_nfEsc(s.viewsFmt)}, ${s.ratio}×)</a>`).join(' · ')}</div>`:''}
-    </div>`;
-  }).join('');
-  _nfSet('nfAttOut', cards || '<div class="nf-state">Không dựng được tệp khán giả nào.</div>');
-}
-
-// === L?: let _nfWv ===
-let _nfWv = null;
+// [P0a-nf] Cụm NF_MAP / nfRun / nfRenderHot / nfRenderScorecard / nfRenderBw / nfRenderAttention /
+// _NF_RUNGS / _nfScChannel / _nfWired / _nfActive / _nfWv đã DỜI về utility/niche.js (2026-09-10i).
+// Lý do: bảng NF_MAP ở đây capture `render: nfRenderHot...` ngay lúc nạp (stale capture) — bản render
+// mới trong niche.js không bao giờ chạy qua m.render dù tên fn bị ghi đè. Xoá bản cũ → niche.js là owner duy nhất.
 
 // === L?: const setStatus10 ===
 const setStatus10 = (m, t) => setStatusBar('status10', m, t);

@@ -1,0 +1,5 @@
+
+      #tool-toolimzic{ position:relative; min-height:calc(100vh - 170px); }
+      #tool-toolimzic iframe{ position:relative; width:100%; height:100%; min-height:75vh; display:block; }
+      html.dark #tool-toolimzic iframe{ background:#09090b; }
+    

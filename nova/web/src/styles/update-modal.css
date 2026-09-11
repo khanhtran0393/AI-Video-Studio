@@ -1,0 +1,20 @@
+
+  #updateModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:10001;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(3px)}
+  #updateModal .um-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;max-width:440px;width:100%;
+    padding:26px 28px 24px;box-shadow:0 24px 60px rgba(0,0,0,.4);position:relative}
+  #updateModal .um-x{position:absolute;top:14px;right:14px;width:32px;height:32px;border-radius:8px;border:1px solid var(--border);
+    background:var(--surface-2);color:var(--text-muted);font-size:16px;cursor:pointer}
+  #updateModal .um-h{display:flex;align-items:center;gap:10px;font-size:18px;font-weight:800;color:var(--text);margin-bottom:14px}
+  #updateModal .um-h .ic{font-size:22px}
+  #updateModal .um-new{font-size:15px;color:var(--text);margin-bottom:6px}
+  #updateModal .um-new b{color:var(--accent)}
+  #updateModal .um-cur{font-size:13px;color:var(--text-muted);margin-bottom:2px}
+  #updateModal .um-q{font-size:14px;color:var(--text);margin:14px 0 20px}
+  #updateModal .um-prog{display:none;margin:6px 0 18px}
+  #updateModal .um-prog .bar{height:8px;border-radius:99px;background:var(--surface-3);overflow:hidden}
+  #updateModal .um-prog .fill{height:100%;width:0;background:linear-gradient(90deg,var(--accent-2),var(--accent));transition:width .2s ease}
+  #updateModal .um-prog .txt{font-size:12px;color:var(--text-muted);margin-top:6px;text-align:center}
+  #updateModal .um-btns{display:flex;gap:10px;justify-content:flex-end}
+  #updateModal .um-btn{font-family:inherit;font-size:14px;font-weight:750;padding:11px 20px;border-radius:11px;cursor:pointer;border:1px solid var(--border)}
+  #updateModal .um-now{background:linear-gradient(180deg,var(--accent-2),var(--accent));color:var(--on-accent);border:none}
+  #updateModal .um-later{background:var(--surface-3);color:var(--text)}

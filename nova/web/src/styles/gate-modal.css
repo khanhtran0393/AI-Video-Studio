@@ -1,0 +1,12 @@
+
+  #gateModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10000;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(3px)}
+  #gateModal .gm-card{background:var(--surface);border:2px solid var(--accent);border-radius:16px;max-width:440px;width:100%;
+    padding:26px 28px 24px;box-shadow:0 24px 60px rgba(0,0,0,.4);position:relative;text-align:center}
+  #gateModal .gm-x{position:absolute;top:14px;right:14px;width:34px;height:34px;border-radius:50%;border:none;
+    background:var(--surface-3);color:var(--text-muted);font-size:16px;cursor:pointer}
+  #gateModal .gm-title{font-size:19px;font-weight:800;letter-spacing:.02em;color:var(--accent);margin:2px 0 16px}
+  #gateModal .gm-msg{font-size:15px;color:var(--text);line-height:1.55;margin-bottom:22px}
+  #gateModal .gm-btns{display:flex;gap:10px;justify-content:center}
+  #gateModal .gm-btn{font-family:inherit;font-size:14px;font-weight:750;padding:11px 22px;border-radius:11px;cursor:pointer;border:1px solid var(--border)}
+  #gateModal .gm-up{background:linear-gradient(180deg,var(--accent-2),var(--accent));color:var(--on-accent);border:none}
+  #gateModal .gm-ok{background:var(--surface-3);color:var(--text)}

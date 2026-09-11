@@ -172,23 +172,6 @@ contextBridge.exposeInMainWorld('native', {
     pickOutput: (defaultName) => ipcRenderer.invoke('srt-translate:pickOutput', { defaultName }),
     translate: (payload) => ipcRenderer.invoke('srt-translate:translate', payload),
   },
-  // TDT Studio ("Studio") — app PyQt TDTStudio nhúng: process bridge
-  // ở main (nova/tdt-studio/), runtime Python nội bộ, KHÔNG nhận
-  // đường dẫn repo ngoài từ GUI.
-  tdtStudio: {
-    status: () => ipcRenderer.invoke('tdt-studio:status'),
-    launch: () => ipcRenderer.invoke('tdt-studio:launch'),
-    hide: () => ipcRenderer.invoke('tdt-studio:hide'),
-    show: () => ipcRenderer.invoke('tdt-studio:show'),
-    focus: () => ipcRenderer.invoke('tdt-studio:focus'),
-    quit: () => ipcRenderer.invoke('tdt-studio:quit'),
-    setRect: (rect) => ipcRenderer.invoke('tdt-studio:setRect', rect),
-    onEvent: (cb) => {
-      const listener = (_e, s) => cb && cb(s);
-      ipcRenderer.on('tdt-studio:event', listener);
-      return () => ipcRenderer.removeListener('tdt-studio:event', listener);
-    },
-  },
   // Thư viện Hiệu ứng âm thanh (SFX) dựng sẵn.
   sfxLibrary: () => ipcRenderer.invoke('nova:sfxLibrary:list'),
   // Flow tích hợp sẵn (trình duyệt nhúng) — UI gọi flowBridge → window.native.flow.

@@ -113,9 +113,14 @@ async function start() {
     // PYTHONUTF8: stdout/stderr của python khi bị pipe (không phải console) dùng encoding
     // locale (cp1252 trên Windows) → print tiếng Việt (vd 'đ') crash UnicodeEncodeError
     // ngay khi uvicorn import app.py. Ép UTF-8 cho mọi engine/dòng log của backend.
+    // PYTHONDONTWRITEBYTECODE: backend chạy với cwd là source tree (nova/voice-backend/backend)
+    // → Python tự sinh __pycache__ trong source, làm voice-contract-test (assert "không commit
+    // __pycache__") đỏ lặp lại mỗi lần app chạy backend ở máy dev (pattern tái diễn, xem
+    // MEMORY 2026-09-10q). Cấm ghi .pyc ngay từ tiến trình backend thay vì dọn tay.
     const env = { ...process.env, COQUI_TOS_AGREED: '1', VOICE_PORT: String(PORT) };
     env.PYTHONUTF8 = env.PYTHONUTF8 || '1';
     env.PYTHONIOENCODING = env.PYTHONIOENCODING || 'utf-8';
+    env.PYTHONDONTWRITEBYTECODE = env.PYTHONDONTWRITEBYTECODE || '1';
     const defaultEngine = kind;
     env.VOICE_TTS_ENGINE = env.VOICE_TTS_ENGINE || defaultEngine;
     // VieNeu/XTTS không cần Whisper để chạy luồng đọc; OmniVoice mới ưu tiên ASR thật.

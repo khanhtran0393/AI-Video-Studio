@@ -1,0 +1,29 @@
+
+        #tool-tool2 .sbc{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px 18px;margin-bottom:14px}
+        #tool-tool2 .sbc-step{display:flex;align-items:center;gap:9px;font-weight:800;font-size:12.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin-bottom:14px}
+        #tool-tool2 .sbc-step .n{width:20px;height:20px;border-radius:6px;background:var(--accent);color:var(--on-accent);display:grid;place-items:center;font-size:11px;flex:none}
+        #tool-tool2 .sbc-acts{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;align-items:center;text-transform:none;letter-spacing:0}
+        #tool-tool2 .sbc-src{display:grid;grid-template-columns:1fr 300px;gap:16px}
+        @media (max-width:860px){#tool-tool2 .sbc-src{grid-template-columns:1fr}}
+        #tool-tool2 .sbc-side{display:flex;flex-direction:column;gap:10px}
+        /* Cột TRÁI phải cao bằng cột phải. Ô lưới vốn đã giãn theo hàng, nhưng
+           textarea bên trong giữ nguyên min-height nên chừa một khoảng trống to
+           bên dưới. Cho cột trái thành flex dọc rồi để textarea nở hết phần còn
+           lại — hai cột luôn bằng nhau dù cột phải dài ngắn thế nào.          */
+        #tool-tool2 .sbc-src{align-items:stretch}
+        #tool-tool2 .sbc-src>div:first-child{display:flex;flex-direction:column;min-height:0}
+        #tool-tool2 .sbc-src>div:first-child>textarea{flex:1 1 auto;min-height:260px}
+        @media (max-width:860px){#tool-tool2 .sbc-src>div:first-child>textarea{min-height:220px}}
+        #tool-tool2 .sbc-note{font-size:12px;color:var(--text-muted);margin:-6px 0 12px}
+        #tool-tool2 .sbc-adv{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:2px 16px;margin-bottom:14px}
+        #tool-tool2 .sbc-adv>summary{cursor:pointer;list-style:none;font-weight:700;font-size:13px;color:var(--text-muted);padding:12px 0}
+        #tool-tool2 .sbc-adv>summary::-webkit-details-marker{display:none}
+        #tool-tool2 .sbc-adv>summary::after{content:"▾";float:right;color:var(--text-dim)}
+        #tool-tool2 .sbc-adv[open]>summary::after{content:"▴"}
+        #tool-tool2 .scene-table td{vertical-align:top}
+        #tool-tool2 .sb-rowacts{position:absolute;top:6px;right:8px;display:flex;gap:3px;opacity:0;transition:opacity .12s;background:var(--surface);border:1px solid var(--border-2);border-radius:8px;padding:3px;box-shadow:0 6px 16px -8px rgba(0,0,0,.4);z-index:2}
+        #tool-tool2 .scene-table tr:hover .sb-rowacts{opacity:1}
+        #tool-tool2 .sb-rowacts button{border:none;background:transparent;cursor:pointer;font-size:12px;width:24px;height:22px;border-radius:5px;color:var(--text-muted)}
+        #tool-tool2 .sb-rowacts button:hover{background:var(--surface-3);color:var(--accent)}
+        #tool-tool2 .sb-rowacts button:disabled{opacity:.3;cursor:default}
+      
