@@ -37,6 +37,11 @@ Trong Electron: `registerVideoAgentIpc(ipcMain, { adapters })` → 12 channel `v
   timeline → QA → versions/restore), mở qua kênh `videoAgent:openWindow` (`nova/video-agent/window.js`).
 - **Job runtime**: metadata ghi tại `output/job.json`, được `inspect` khôi phục để retry sau restart; mặc định tối đa 1 job,
   mỗi stage timeout 30 phút và preflight yêu cầu tối thiểu 1 GiB trống (đều cấu hình qua options).
+- **Preflight cấu trúc** (`orchestrator/preflight.js`): trước khi chạy, job thu thập danh sách issue
+  `{ code, message, fixHint, blocking }` (dự án tồn tại, dung lượng đĩa, output ghi được, renderer khả dụng).
+  Issue blocking → job FAILED lộ liễu với mã VA_* (Luật 10); danh sách issue persist vào `job.json`
+  (trường `preflight`) để `inspect` hiển thị. Hợp đồng cũ giữ nguyên: `options.skipDiskPreflight` +
+  `options.minFreeBytes`. Pattern học từ TDTStudio `core/export_preflight.py`.
 - **Cancel thật**: truyền xuống Remotion `cancelSignal`, ffmpeg mux và S3 `AbortSignal`; partial output/temp/staged assets được dọn.
 - **Renderer thật**: adapter mặc định lazy-require `renderNovaScenes` (engine Nova Scene) — chạy được trong Electron
   main process (bundle `nova-remotion/bundle` + `@remotion/renderer` có sẵn trong app); ngoài Electron trả
@@ -108,6 +113,17 @@ Lần đầu chạy Remotion tự tải Chrome Headless Shell (~113MB, cache l�
 - Orchestrator tự bơm: sau `PREVIEW_RENDER` và `FULL_RENDER` gọi `extractSceneStats()` (fail-safe — file
   giả/hỏng → không có vision, giữ hành vi Phase 1); `runQA()` giờ truyền `frames` vào provider context
   (`adapters.qaProviders` của caller vẫn thắng default vision).
+- **Watermark/logo QA** (học từ NNLauncher, `qa/watermark.js`) — mở rộng semantic của đường MẶC ĐỊNH:
+  extract 1 frame PNG full-res giữa mỗi cảnh (quá 12 cảnh → sample đều, deterministic) rồi detect qua
+  engine WatermarkRemover-AI có sẵn (`nova/watermark-native.js`) ở chế độ `--preview` — **chỉ detection
+  (Florence-2), không xử lý ảnh, không thêm dependency**. Phát hiện hộp → lỗi `watermark_detected`
+  (severity `high`, mang `boxes` + `suggestedFix: {type:'remove_watermark'}`) → Final QA FAIL chặn upload
+  (§32.12). Auto-Fix không sửa được lỗi này (chiến lược `fix-in-post` trong `auto-fix/loop.js`) → job rơi
+  `NEEDS_REVIEW` cho người dùng chạy tool Xoá watermark rồi render lại. Kết quả detect cache theo
+  (video, mốc-giây) nên Auto-Fix gọi QA lại ≤5 lần không đốt thêm model load. Metadata luôn gắn vào
+  `qaReport.watermark`: `{engine, checked, detected}` hoặc `{unavailable: true, reason: 'VA_WM_*'}` khi
+  thiếu engine/python (degrade khai báo rõ — Luật 10). Tắt bằng `options.watermarkQa === false`;
+  adapter `qaProviders` inject từ ngoài vẫn thắng (không bị bọc thêm).
 
 ## Phase 5 — S3/CDN uploader (§24)
 - `uploader/s3.js` — PUT thẳng S3 bằng `fetch` (Node 24) + **AWS Signature V4 tự ký bằng node crypto**
@@ -119,6 +135,22 @@ Lần đầu chạy Remotion tự tải Chrome Headless Shell (~113MB, cache l�
   orchestrator không đổi. Qua IPC: `videoAgent:run` nhận `payload.upload = { provider:'s3', bucket, region,
   keyPrefix, cdnBase, accessKeyId, secretAccessKey }`.
 - Lỗi có code riêng: `VA_S3_NO_CONFIG`, `VA_S3_NO_CREDS`, `VA_S3_PUT_FAIL`, `VA_S3_NETWORK`.
+
+## TTS local fallback — backend Voice Studio (học từ NNLauncher)
+- `tts/synthesize.js` — tổng hợp giọng offline qua **backend Voice Studio đóng gói kèm app**
+  (`nova/voice-studio/backend/app.py`, uvicorn `127.0.0.1:8771` do `voice-native` quản) đúng hợp đồng
+  `/api/tts`: `POST /api/tts {text, language, preset_id, speed}` → `{task_id}` → poll
+  `GET /api/status/{tid}` tới `completed|failed` → tải `results.merged` (`output.mp3`) + `results.srt`.
+  Không thêm dependency (fetch Node 24). Cổng đọc lại từ `voice-native.URL` (một nguồn); env
+  `VA_TTS_BACKEND_URL` để trỏ chỗ khác.
+- Hook vào orchestrator (`orchestrator/analyze.js`, cả `runAnalysis` lẫn `runAnalysisFromData`):
+  bật `options.autoTts` mà dự án chưa có audio TTS → tự tổng hợp từ `autoTts.text` / `autoTts.textPath`
+  / nội dung script (`.txt`/`.md`) ra `<root>/voice/auto-tts.mp3` (+ `.srt`), rồi gán vào
+  `project.files.ttsAudio` để renderer dùng đúng file đó. Đã có giọng sẵn → skip, không gọi backend.
+- **Fail lộ liễu (Luật 10)**: backend không chạy → `VA_TTS_BACKEND_UNAVAILABLE` (job FAILED, không retry
+  cloud ngầm); backend lỗi tổng hợp → `VA_TTS_SYNTH_FAIL`; không xác định được văn bản →
+  `VA_TTS_AUTO_NO_TEXT`; quá thời gian → `VA_TTS_SYNTH_TIMEOUT`. Hướng dẫn fix nằm ngay message (tiếng Việt):
+  mở tab Tạo giọng nói để khởi động backend, hoặc tắt `options.autoTts`.
 
 ## Còn lại (mở rộng tự nhiên, không chặn luồng chính)
 - Phase 3: rembg/SAM segmentation + character identity thật (`assets/manifest.js` đã có hook `analyzeAsset`).

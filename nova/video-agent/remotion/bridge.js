@@ -58,6 +58,13 @@ function createRendererAdapter() {
     return _fn;
   }
   return {
+    // Preflight: renderer mặc định có nạp được không (không render, chỉ resolve require).
+    probe: () => {
+      const fn = resolve();
+      return typeof fn === 'function'
+        ? { available: true, error: null }
+        : { available: false, error: String(fn.__error || 'renderNovaScenes không nạp được') };
+    },
     render: async ({ spec, manifest, outputPath, quality, voicePath, musicPath, musicVolume, onProgress, registerCancel, signal }) => {
       const fn = resolve();
       if (typeof fn !== 'function') return { ok: false, code: 'VA_RENDERER_UNAVAILABLE',

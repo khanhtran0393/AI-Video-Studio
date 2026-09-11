@@ -8,37 +8,66 @@
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=Be+Vietnam+Pro:wght@400;600;700&family=Montserrat:wght@400;600;700&family=Playfair+Display:wght@600;700&family=Bebas+Neue&display=swap" rel="stylesheet">
 <style>
   :root{
-    --bg:#0b0c10;
-    --panel:#14161d;
-    --panel-2:#191c24;
-    --border:#242733;
-    --text:#e9e7f2;
-    --muted:#8c8a9c;
-    --accent:#7c5cff;
-    --accent-2:#ffb84d;
-    --accent-soft: rgba(124,92,255,0.18);
+    /* Token theme — mirror giá trị từ src/styles/base.css (light).
+       Trang iframe tự chứa nên không link chung; KHI ĐỔI TOKEN trong base.css PHẢI ĐỒNG BỘ Ở ĐÂY. */
+    --bg:#f7f7f5;
+    --surface:#ffffff;
+    --surface-2:#fafaf8;
+    --surface-3:#f0efec;
+    --border:#e5e3de;
+    --border-2:#d8d5cf;
+    --text:#1a1a17;
+    --text-muted:#5e5c54;
+    --text-dim:#94918a;
+    --accent:#c2410c;
+    --on-accent:#ffffff;
+    --accent-2:#ea580c;
+    --accent-soft:#fff7ed;
+    --teal:#0f766e; --violet:#7c3aed; --rose:#e11d48; --green:#16a34a; --red:#dc2626; --blue:#2563eb; --amber:#d97706;
+    /* alias cũ của trang — giữ tên để không phải sửa từng rule */
+    --panel: var(--surface);
+    --panel-2: var(--surface-2);
+    --muted: var(--text-muted);
     --radius:14px;
+  }
+  html.dark{
+    /* mirror html.dark trong base.css — bật/tắt bởi shell.js (localStorage 'darkMode') */
+    --bg:#09090b;
+    --surface:#111114;
+    --surface-2:#18181b;
+    --surface-3:#24242a;
+    --border:#29292f;
+    --border-2:#35353d;
+    --text:#f4f4f5;
+    --text-muted:#a1a1aa;
+    --text-dim:#71717a;
+    --accent:#f59e0b;
+    --on-accent:#1c0f05;
+    --accent-2:#ff7b00;
+    --accent-soft:#2a1a08;
+    --teal:#2dcbb1; --violet:#8f72de; --rose:#f06f8a; --green:#3dce85; --red:#ee736e; --blue:#609ce4; --amber:#f2b749;
   }
   *{box-sizing:border-box;}
   html,body{height:100%;}
   body{
     margin:0;
     background:
-      radial-gradient(1200px 700px at 15% -10%, rgba(124,92,255,0.10), transparent 60%),
-      radial-gradient(900px 600px at 100% 10%, rgba(255,184,77,0.06), transparent 55%),
+      radial-gradient(1200px 700px at 15% -10%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 60%),
+      radial-gradient(900px 600px at 100% 10%, color-mix(in srgb, var(--amber) 5%, transparent), transparent 55%),
       var(--bg);
     color:var(--text);
-    font-family:'Inter',system-ui,sans-serif;
+    font-family:'Be Vietnam Pro',system-ui,sans-serif;
     min-height:100vh;
   }
-  h1,h2,h3,.brand{font-family:'Space Grotesk',system-ui,sans-serif;}
+  h1,h2,h3,.brand{font-family:'Be Vietnam Pro',system-ui,sans-serif;}
   .app{
     display:grid;
-    grid-template-columns: 360px 1fr;
-    min-height:100vh;
+    grid-template-columns: 360px minmax(0,1fr);
+    grid-template-rows: minmax(0,1fr);
+    height:100vh;
   }
   @media (max-width: 920px){
-    .app{grid-template-columns: 1fr; grid-template-rows:auto auto;}
+    .app{grid-template-columns: 1fr; grid-template-rows:auto auto; height:auto;}
   }
 
   /* ---- sidebar ---- */
@@ -46,9 +75,9 @@
     border-right:1px solid var(--border);
     padding:22px 20px 40px;
     overflow-y:auto;
-    max-height:100vh;
+    min-height:0;
   }
-  @media (max-width:920px){ .sidebar{max-height:none; border-right:none; border-bottom:1px solid var(--border);} }
+  @media (max-width:920px){ .sidebar{overflow:visible; border-right:none; border-bottom:1px solid var(--border);} .main{height:auto; overflow:visible;} }
 
   .brand{
     display:flex; align-items:center; gap:10px;
@@ -117,7 +146,7 @@
 
   .field{margin-bottom:14px;}
   .field-row{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px;}
-  .field label{font-size:12.5px; color:#c9c7d6; font-weight:500;}
+  .field label{font-size:12.5px; color:var(--text-muted); font-weight:500;}
   .field .val{font-size:11.5px; color:var(--accent-2); font-variant-numeric:tabular-nums;}
 
   input[type="range"]{
@@ -126,7 +155,7 @@
   }
   input[type="range"]::-webkit-slider-thumb{
     -webkit-appearance:none; width:15px;height:15px;border-radius:50%;
-    background:var(--accent); cursor:pointer; border:2px solid #fff2;
+    background:var(--accent); cursor:pointer; border:2px solid var(--surface);
     box-shadow:0 0 0 4px var(--accent-soft);
   }
   input[type="color"]{
@@ -169,12 +198,15 @@
   /* ---- main / preview ---- */
   .main{
     display:flex; flex-direction:column; align-items:center;
+    min-height:0; height:100%;
+    overflow-y:auto;
     padding:28px 24px 20px; gap:16px;
   }
   .stage-wrap{
     position:relative;
+    flex:0 0 auto;          /* không cho flexbox bóp dẹt khung preview (overflow:hidden → min auto = 0) */
     width:min(92%, 620px);
-    aspect-ratio: 9/16;
+    aspect-ratio: 9/16;     /* mục 7 — JS ghi đè inline khi đổi khổ (setOrientation) */
     border-radius:20px;
     background:#000;
     overflow:hidden;
@@ -183,7 +215,7 @@
   }
   .glow-ring{
     position:absolute; inset:0; border-radius:20px; pointer-events:none;
-    box-shadow: inset 0 0 0 2px rgba(124,92,255, var(--pulse, 0.15));
+    box-shadow: inset 0 0 0 2px rgb(from var(--accent) r g b / var(--pulse, 0.15));
     transition: box-shadow .05s linear;
     z-index:5;
   }
@@ -206,9 +238,9 @@
     font-family:inherit; transition:all .15s;
   }
   .btn:hover{border-color:var(--accent); background:var(--panel-2);}
-  .btn.primary{background:var(--accent); border-color:var(--accent); color:#fff;}
+  .btn.primary{background:var(--accent); border-color:var(--accent); color:var(--on-accent);}
   .btn.primary:hover{filter:brightness(1.08);}
-  .btn.gold{background:var(--accent-2); border-color:var(--accent-2); color:#1a1200;}
+  .btn.gold{background:var(--accent-2); border-color:var(--accent-2); color:var(--on-accent);}
   .btn:disabled{opacity:.4; cursor:not-allowed;}
 
   .seek{
@@ -239,12 +271,24 @@
     width:min(92%,620px); background:var(--panel); border:1px solid var(--border);
     border-radius:12px; padding:14px 16px; font-size:12px; color:var(--muted); line-height:1.6;
   }
-  .export-note b{color:#c9c7d6;}
+  .export-note b{color:var(--text);}
   .export-note code{
-    background:#000; padding:2px 6px; border-radius:5px; color:var(--accent-2);
+    background:var(--surface-3); padding:2px 6px; border-radius:5px; color:var(--accent-2);
     font-size:11.5px; word-break:break-all;
   }
 </style>
+<script>
+  // Đồng bộ light/dark với app gốc: shell.js toggle html.dark + lưu localStorage['darkMode'] ('1'/'0').
+  // Iframe cùng origin → đọc key lúc nạp (khung khi iframe lazy-load sau khi user đã toggle)
+  // và nghe sự kiện 'storage' để đổi theme live khi user bấm nút ☀️/🌙 trên app chính.
+  (function () {
+    var apply = function (v) { document.documentElement.classList.toggle('dark', v === '1'); };
+    apply(localStorage.getItem('darkMode'));
+    window.addEventListener('storage', function (e) {
+      if (e.key === 'darkMode' || e.key === null) apply(e.newValue);
+    });
+  })();
+</script>
 </head>
 <body>
 <div class="app">
@@ -279,6 +323,26 @@
         </div>
         <input type="file" id="audInput">
       </label>
+      <label class="upload-box" style="margin-bottom:10px;">
+        <div class="ic">🎞️</div>
+        <div class="meta">
+          <div class="name" id="slidesName">Slideshow nhiều ảnh (tuỳ chọn)</div>
+          <div class="hint" id="slidesHint">Chọn nhiều ảnh — tự chuyển cảnh theo nhạc</div>
+        </div>
+        <input type="file" id="slidesInput" accept="image/*" multiple>
+      </label>
+      <div class="field" id="slideModeField" style="display:none;">
+        <div class="field-row"><label>Chuyển cảnh theo</label></div>
+        <select class="sel" id="slideModeSel">
+          <option value="time">⏱ Thời lượng cố định</option>
+          <option value="cue">🎤 Từng dòng lời hát (.srt/.lrc)</option>
+        </select>
+      </div>
+      <div class="field" id="slideSecsField" style="display:none;">
+        <div class="field-row"><label>Mỗi ảnh hiển thị</label><span class="val" id="v-ssecs">4s</span></div>
+        <input type="range" id="slideSecs" min="1" max="20" step="0.5" value="4">
+      </div>
+      <button class="btn" id="slidesClearBtn" style="display:none;width:100%;justify-content:center;margin-bottom:10px;">🗑 Xoá slideshow (về 1 ảnh nền)</button>
       <div style="font-size:11px;color:var(--muted);margin-top:8px;line-height:1.5;">
         Trên điện thoại không bấm chọn được file? Thường do đang mở trang này trong trình duyệt của app khác (Messenger, Zalo, TikTok, Facebook...) — hãy chọn "Mở bằng Chrome/Safari" rồi thử lại.
       </div>
@@ -557,8 +621,8 @@
       <label class="upload-box" style="margin-bottom:10px;">
         <div class="ic">📝</div>
         <div class="meta">
-          <div class="name" id="srtName">Chọn file .srt</div>
-          <div class="hint">Hoặc dán trực tiếp bên dưới</div>
+          <div class="name" id="srtName">Chọn file .srt / .lrc</div>
+          <div class="hint">Hoặc dán trực tiếp bên dưới (hỗ trợ cả SRT và LRC)</div>
         </div>
         <input type="file" id="srtInput">
       </label>
@@ -601,6 +665,31 @@
         </select>
       </div>
 
+      <div class="field">
+        <div class="field-row"><label>Karaoke tô chữ</label></div>
+        <select class="sel" id="lyricKaraokeSel">
+          <option value="off">Tắt — chữ trắng như cũ</option>
+          <option value="word">🎤 Tô dần theo từng chữ hát</option>
+        </select>
+        <div style="font-size:11px;color:var(--muted);margin-top:6px;">Ước lượng theo độ dài chữ trong câu — không cần file timing từng từ.</div>
+      </div>
+
+      <div class="field">
+        <div class="field-row"><label>Kiểu chữ lời</label></div>
+        <select class="sel" id="lyricStyleSel">
+          <option value="plain">Bình thường (chỉ bóng)</option>
+          <option value="outline">⬤ Viền đậm quanh chữ</option>
+          <option value="badge">▭ Khung nền mờ sau từng dòng</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <div class="field-row"><label>Màu karaoke tô</label></div>
+        <div class="color-row">
+          <input type="color" id="lyricAccent" value="#ffd166">
+        </div>
+      </div>
+
       <div class="row2">
         <div class="field">
           <div class="field-row"><label>Vị trí ngang</label><span class="val" id="v-lposx">50%</span></div>
@@ -610,6 +699,15 @@
           <div class="field-row"><label>Vị trí dọc</label><span class="val" id="v-lposy">88%</span></div>
           <input type="range" id="lyricPosY" min="5" max="95" step="1" value="88">
         </div>
+      </div>
+
+      <div class="row2" style="margin-top:14px;">
+        <button class="btn" id="saveProjectBtn" style="justify-content:center;">💾 Lưu dự án</button>
+        <button class="btn" id="openProjectBtn" style="justify-content:center;">📂 Mở dự án</button>
+      </div>
+      <input type="file" id="projectInput" accept=".json,application/json" style="display:none;">
+      <div style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5;">
+        Dự án .json lưu toàn bộ cài đặt + lời hát để mở lại trên máy khác. Ảnh & nhạc gốc phải chọn lại (trình duyệt không cho lưu file vào file dự án).
       </div>
       </div>
     </details>
@@ -637,6 +735,7 @@
       <button class="btn" id="restartBtn" disabled>⟲ Từ đầu</button>
       <button class="btn gold" id="exportAudioBtn" disabled>⬇ Xuất video (kèm nhạc)</button>
       <button class="btn" id="exportSilentBtn" disabled>⬇ Xuất video hình (giữ nhạc gốc riêng)</button>
+      <button class="btn" id="exportOfflineBtn" disabled>⚡ Xuất nhanh (không cần giữ tab)</button>
       <button class="btn" id="cancelExportBtn" style="display:none;">✕ Huỷ ghi</button>
       <button class="btn gold" id="muxBtn" style="display:none;">⚡ Ghép nhạc tự động (.mkv)</button>
     </div>
@@ -651,6 +750,8 @@
       <b>Lưu ý quan trọng khi xuất video:</b> giữ tab này <b>đang mở và hiển thị trên màn hình</b> suốt quá trình ghi (không chuyển tab, không thu nhỏ cửa sổ). Trình duyệt tự làm chậm canvas khi tab bị ẩn, đó là nguyên nhân hiệu ứng có thể "biến mất" hoặc đứng khung ở một đoạn giữa video.
       <br><br>
       <b>Về độ nét:</b> file xuất được render ở độ phân giải gấp ~1.5 lần khung xem trước (khổ dọc 720 → 1080×1920), nên file luôn nét hơn phần đang xem trên màn hình.
+      <br><br>
+      <b>Về "⚡ Xuất nhanh":</b> nút này render TỪNG KHUNG theo đồng hồ logic rồi ghép bằng FFmpeg trong app — ra file <code>.mp4</code> nét, không rớt khung, <b>không cần giữ tab hiển thị</b>, và thường nhanh hơn thời lượng nhạc. Cần app Nova (có FFmpeg) và trình duyệt hỗ trợ WebCodecs. Không dùng được slideshow "theo nhịp bass" chưa tính trước — mọi chuyển cảnh đều chạy đúng như xem trước.
       <br><br>
       <b>Về chất lượng nhạc:</b> khi xem trước, nhạc phát trực tiếp từ file gốc — không đổi gì cả.
       Nút <b>"kèm nhạc"</b> ghép nhanh 1 file, nhưng trình duyệt sẽ mã hoá lại âm thanh (chất lượng cao, nhưng không phải bản sao tuyệt đối).

@@ -1,10 +1,116 @@
 {
-  "generatedAt": "2026-09-11T02:37:30.076Z",
+  "generatedAt": "2026-09-11T05:38:39.037Z",
   "htmlFiles": 10,
   "jsFiles": 65,
-  "definedNames": 1793,
-  "callSites": 1251,
-  "errors": [],
+  "definedNames": 1750,
+  "callSites": 1212,
+  "errors": [
+    {
+      "msg": "HTML goi ham \"giongLibMo\"() nhung ham nay KHONG duoc dinh nghia o bat ky file JS renderer nao",
+      "file": "web/index.html",
+      "line": 2642,
+      "attr": "onclick",
+      "sample": "giongLibMo(event)"
+    },
+    {
+      "msg": "HTML goi ham \"giongThemBat\"() nhung ham nay KHONG duoc dinh nghia o bat ky file JS renderer nao",
+      "file": "web/index.html",
+      "line": 2651,
+      "attr": "onclick",
+      "sample": "giongThemBat()"
+    },
+    {
+      "msg": "HTML goi ham \"giongLuoiBat\"() nhung ham nay KHONG duoc dinh nghia o bat ky file JS renderer nao",
+      "file": "web/index.html",
+      "line": 2652,
+      "attr": "onclick",
+      "sample": "giongLuoiBat()"
+    },
+    {
+      "msg": "HTML goi ham \"giongThemDoi\"() nhung ham nay KHONG duoc dinh nghia o bat ky file JS renderer nao",
+      "file": "web/index.html",
+      "line": 2663,
+      "attr": "onchange",
+      "sample": "giongThemDoi()"
+    },
+    {
+      "msg": "HTML goi ham \"giongThemLuu\"() nhung ham nay KHONG duoc dinh nghia o bat ky file JS renderer nao",
+      "file": "web/index.html",
+      "line": 2683,
+      "attr": "onclick",
+      "sample": "giongThemLuu()"
+    },
+    {
+      "msg": "HTML goi ham \"giongThemBat\"() nhung ham nay KHONG duoc dinh nghia o bat ky file JS renderer nao",
+      "file": "web/index.html",
+      "line": 2684,
+      "attr": "onclick",
+      "sample": "giongThemBat()"
+    },
+    {
+      "msg": "HTML goi ham \"giongDemChu\"() nhung ham nay KHONG duoc dinh nghia o bat ky file JS renderer nao",
+      "file": "web/index.html",
+      "line": 2695,
+      "attr": "oninput",
+      "sample": "window.giongDemChu()"
+    },
+    {
+      "msg": "HTML goi ham \"voiceLoadScript\"() nhung ham nay KHONG duoc dinh nghia o bat ky file JS renderer nao",
+      "file": "web/index.html",
+      "line": 2699,
+      "attr": "onclick",
+      "sample": "voiceLoadScript()"
+    },
+    {
+      "msg": "HTML goi ham \"voiceGenerate\"() nhung ham nay KHONG duoc dinh nghia o bat ky file JS renderer nao",
+      "file": "web/index.html",
+      "line": 2700,
+      "attr": "onclick",
+      "sample": "voiceGenerate()"
+    },
+    {
+      "msg": "HTML goi ham \"voiceBackendMo\"() nhung ham nay KHONG duoc dinh nghia o bat ky file JS renderer nao",
+      "file": "web/index.html",
+      "line": 2709,
+      "attr": "onclick",
+      "sample": "voiceBackendMo(event)"
+    },
+    {
+      "msg": "HTML goi ham \"voiceBackendChon\"() nhung ham nay KHONG duoc dinh nghia o bat ky file JS renderer nao",
+      "file": "web/index.html",
+      "line": 2717,
+      "attr": "onclick",
+      "sample": "voiceBackendChon('omni')"
+    },
+    {
+      "msg": "HTML goi ham \"voiceBackendChon\"() nhung ham nay KHONG duoc dinh nghia o bat ky file JS renderer nao",
+      "file": "web/index.html",
+      "line": 2720,
+      "attr": "onclick",
+      "sample": "voiceBackendChon('vieneu')"
+    },
+    {
+      "msg": "HTML goi ham \"voiceBackendChon\"() nhung ham nay KHONG duoc dinh nghia o bat ky file JS renderer nao",
+      "file": "web/index.html",
+      "line": 2723,
+      "attr": "onclick",
+      "sample": "voiceBackendChon('xtts')"
+    },
+    {
+      "msg": "HTML goi ham \"giongDDMo\"() nhung ham nay KHONG duoc dinh nghia o bat ky file JS renderer nao",
+      "file": "web/index.html",
+      "line": 2756,
+      "attr": "onclick",
+      "sample": "giongDDMo(event)"
+    },
+    {
+      "msg": "HTML goi ham \"giongSuGhep\"() nhung ham nay KHONG duoc dinh nghia o bat ky file JS renderer nao",
+      "file": "web/index.html",
+      "line": 2831,
+      "attr": "onclick",
+      "sample": "giongSuGhep()"
+    }
+  ],
   "warnings": [
     "Ham \"exporting\" o web/handdraw-studio-panel.js khong ai goi (co the xoa)",
     "Ham \"selected\" o web/handdraw-studio-panel.js khong ai goi (co the xoa)",
@@ -25,8 +131,7 @@
     "Ham \"upState\" o web/src/toolbox/shared-consts.js khong ai goi (co the xoa)",
     "Ham \"VOICE_URL\" o web/src/toolbox/shared-consts.js khong ai goi (co the xoa)",
     "Ham \"VOICE_SETUP_URL\" o web/src/toolbox/shared-consts.js khong ai goi (co the xoa)",
-    "Ham \"voiceInstallBackend\" o web/src/toolbox/shared-consts.js khong ai goi (co the xoa)",
-    "Ham \"giongXoa\" o web/src/toolbox/shared-consts.js khong ai goi (co the xoa)",
+    "Ham \"voiceLoadVoices\" o web/src/toolbox/shared-consts.js khong ai goi (co the xoa)",
     "Ham \"mvScenes\" o web/src/toolbox/shared-consts.js khong ai goi (co the xoa)",
     "Ham \"mvUploaded\" o web/src/toolbox/shared-consts.js khong ai goi (co the xoa)",
     "Ham \"tvState\" o web/src/toolbox/shared-consts.js khong ai goi (co the xoa)",
@@ -230,7 +335,6 @@
     "Ham \"t7ClipPointerDown\" o web/src/toolbox/tool-t7.js khong ai goi (co the xoa)",
     "Ham \"t7CycleRate\" o web/src/toolbox/tool-t7.js khong ai goi (co the xoa)",
     "Ham \"t7ToggleSubPreview\" o web/src/toolbox/tool-t7.js khong ai goi (co the xoa)",
-    "Ham \"t7Fullscreen\" o web/src/toolbox/tool-t7.js khong ai goi (co the xoa)",
     "Ham \"t7SeekPointerDown\" o web/src/toolbox/tool-t7.js khong ai goi (co the xoa)",
     "Ham \"t7RulerPointerDown\" o web/src/toolbox/tool-t7.js khong ai goi (co the xoa)",
     "Ham \"t7PickSubStyle\" o web/src/toolbox/tool-t7.js khong ai goi (co the xoa)",
@@ -243,6 +347,7 @@
     "Ham \"tsSetWords\" o web/src/toolbox/tool-ts.js khong ai goi (co the xoa)",
     "Ham \"tsAnalyzeCompetitor\" o web/src/toolbox/tool-ts.js khong ai goi (co the xoa)",
     "Ham \"script\" o web/src/toolbox/tool-ts.js khong ai goi (co the xoa)",
+    "Ham \"giongVeKey\" o web/src/toolbox/tool-tts.js khong ai goi (co the xoa)",
     "Ham \"giongMoKey\" o web/src/toolbox/tool-tts.js khong ai goi (co the xoa)",
     "Ham \"naturalSort\" o web/src/toolbox/utility.js khong ai goi (co the xoa)",
     "Ham \"srtPath\" o web/srt-translate-panel.js khong ai goi (co the xoa)",

@@ -16,8 +16,8 @@ const { registerUpscaleIpc } = require('./upscale');
 const { registerLlmIpc } = require('./llm');
 const { registerFilesIpc } = require('./files');
 const { registerVoiceIpc } = require('./voice');
-const { registerWatermarkIpc } = require('./watermark');
 const { registerSystemIpc } = require('./system');
+const { registerSecretVaultIpc } = require('./secret-vault');
 const { registerImzicIpc } = require('./imzic');
 const { registerWhiteboardIpc } = require('../../whiteboard-studio/ipc');
 const { registerSrtTranslateIpc } = require('../../srt-translate/ipc');
@@ -29,8 +29,8 @@ function registerAllIpc() {
   registerLlmIpc();
   registerFilesIpc();
   registerVoiceIpc();
-  registerWatermarkIpc();
   registerSystemIpc();
+  registerSecretVaultIpc();
   registerImzicIpc();
 
   // ── Whiteboard Studio (port TPL Studio Stories) — module độc lập,

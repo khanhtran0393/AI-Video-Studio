@@ -23,20 +23,7 @@ function registerEditorProNiche(ipcMain, opts = {}) {
   H('nova:niche:spike_ai', wrap((e, p) => N.viewSpikesAi(p)));
   // ── Bình luận, theo dõi, so sánh ──
   H('nova:niche:comments', wrap((e, p) => { if (!seedOf(p)) return { ok: false, error: 'Nhập từ khoá ngách' }; return N.commentMining(seedOf(p), on(e), opt(p)); }));
-  H('nova:niche:watchlist', wrap((e, p) => {
-    const action = String(p.action || 'tick').toLowerCase();
-    if (action === 'list') return { ok: true, list: N.watchlistList() };
-    if (action === 'add') {
-      if (!seedOf(p)) return { ok: false, error: 'Nhập từ khoá để thêm' };
-      return { ok: true, list: N.watchlistAdd(seedOf(p)) };
-    }
-    if (action === 'remove') {
-      if (!seedOf(p)) return { ok: false, error: 'Nhập từ khoá để xoá' };
-      return { ok: true, list: N.watchlistRemove(seedOf(p)) };
-    }
-    // mặc định: tick toàn bộ danh sách
-    return N.watchlistTick(on(e));
-  }));
+  // ('nova:niche:watchlist' đã gỡ — renderer không bao giờ gọi; MEMORY 2026-09-11q)
   H('nova:niche:compare', wrap((e, p) => {
     const channels = p.channels || [];
     if (!Array.isArray(channels) || !channels.length) return { ok: false, error: 'Cần danh sách kênh (mảng)' };

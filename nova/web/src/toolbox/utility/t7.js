@@ -1813,24 +1813,36 @@ async function _t7DrawGfx(){
   // Đang bấm thử một đề xuất → vẽ lớp TẠM của nó, không đụng state.sceneSpecs.
   const sp = (c && _t7AiTry && _t7AiTry.sceneId === c.sceneId) ? _t7AiTry.spec
            : (c && (state.sceneSpecs || {})[c.sceneId]);
-  if (!c || !sp){ box.innerHTML = ''; _t7OvKey = ''; return; }
+  if (!c || !sp){ box.innerHTML = ''; _t7OvKey = ''; _t7OvPend = ''; return; }
   // _t7ClipAt chỉ trả {clip,index} — tự tính giây TRONG cảnh, không thì lớp luôn đứng ở giây 0.
   let _t0 = 0; for (const x of t7State.clips){ if (x.id === c.id) break; _t0 += _t7ClipDur(x); }
   const tIn = Math.max(0, Math.min(_t7ClipDur(c), (t7State.playT || 0) - _t0));
   // Chỉ gọi lại khi đổi cảnh / đổi spec / nhích quá 0.1s — tránh gọi IPC mỗi khung.
   const key = c.sceneId + ':' + (sp.rev || 0) + ':' + (_t7AiTry ? 'thu' : '') + ':' + tIn.toFixed(1);
-  if (key === _t7OvKey || _t7OvBusy) return;
+  if (key === _t7OvKey){ _t7OvPend = ''; return; }
+  if (_t7OvBusy){ _t7OvPend = key; return; }   // có request mới hơn chờ vẽ → response hiện tại về muộn sẽ bị bỏ
   _t7OvBusy = true;
+  _t7OvPend = key;
   try {
     // Gửi kèm ảnh cảnh để main thay chỗ giữ '@scene' — không thì xem trước cố tải ảnh tên "@scene".
     let sceneSrc = '';
     try { const im = _t7ClipImg(c); if (im) sceneSrc = await _t7AssetUrl(im); } catch (e) {}
     const r = await window.native.previewLayers({ spec: Object.assign({}, sp, { durationSec: _t7ClipDur(c) }), t: tIn, sceneSrc });
-    _t7OvKey = key;
+    // Response cũ về muộn (đã có key mới hơn được yêu cầu trong lúc chờ) → BỎ, không ghi đè lớp
+    // đang hiển thị. Không có token này thì khi phát/tua qua biên cảnh (đặc biệt ngay sau
+    // Tách/Nhân đôi) lớp đồ hoạ bị vẽ chéo giữa 2 cảnh → ảnh xem trước nhấp nháy 2 ảnh A/B.
+    if (_t7OvPend !== key) return;
+    _t7OvKey = key; _t7OvPend = '';
     if (!r || !r.ok){ box.innerHTML = ''; return; }
     box.innerHTML = (r.items || []).map(_t7LayerHtml).join('');
-  } catch (e){ box.innerHTML = ''; }
-  finally { _t7OvBusy = false; }
+  } catch (e){
+    if (_t7OvPend === key){ _t7OvKey = key; _t7OvPend = ''; box.innerHTML = ''; }
+  }
+  finally {
+    _t7OvBusy = false;
+    // Vẫn còn key mới hơn chưa được vẽ (request bị skip khi đang bận) → vẽ tiếp ĐÚNG key mới nhất.
+    if (_t7OvPend && _t7OvPend !== _t7OvKey) _t7DrawGfx();
+  }
   _t7DrawGlob();
 }
 

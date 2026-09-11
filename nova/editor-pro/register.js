@@ -3,13 +3,11 @@ const fs = require('fs');
 const path = require('path');
 const { registerEditorProIpc } = require('./ipc-handlers');
 const { registerEditorProAI } = require('./ipc-ai');
-const { registerEditorProRender } = require('./ipc-render');
 const { registerEditorProRemotion } = require('./ipc-remotion-render');
 const { registerEditorProClips } = require('./ipc-clips');
 const { registerEditorProAutoVideo } = require('./ipc-autovideo');
 const { registerEditorProCompetitor } = require('./ipc-competitor');
 const { registerEditorProNiche } = require('./ipc-niche');
-const { registerSceneBridge } = require('./scene-bridge');
 const { registerSmartClip } = require('./ipc-smartclip');
 const { registerSfxLibrary } = require('./sfx-library');
 const { registerNguonWeb } = require('./ipc-nguon-web');
@@ -28,7 +26,6 @@ function registerEditorPro(ipcMain, opts = {}) {
   mark(registerEditorProAutoVideo(ipcMain));    // nút Sinh video tự động
   mark(registerEditorProCompetitor(ipcMain));   // phân tích đối thủ smart
   mark(registerEditorProNiche(ipcMain, opts));  // Tìm Ngách (Niche Finder) 6 module
-  mark(registerSceneBridge(ipcMain));           // cầu nối Tool 2 → Editor Pro
   mark(registerSmartClip(ipcMain));             // cắt clip YouTube khớp cảnh (smart-clip)
   mark(registerSfxLibrary(ipcMain));            // thư viện SFX dựng sẵn
   mark(registerNguonWeb(ipcMain));              // 50 nguồn web: tìm + đọc thông tin + tải clip (yt-dlp)

@@ -108,8 +108,8 @@ function _t9SnapChapters(chapters){
 function _t11KeyState(){
   const st = document.getElementById('t11KeyState'); if (!st) return;
   const k = (localStorage.getItem('yt_api_key') || '').trim();
-  st.innerHTML = k ? '<span style="color:var(--green)">✓ Đã có key — bổ sung được like/comment/sub.</span>'
-                   : '<span style="color:var(--text-muted)">Chưa có key — vẫn chạy được, chỉ thiếu like/comment/sub.</span>';
+  st.innerHTML = k ? '<span style="color:var(--green)">✓ Đã có key — like/comment/sub lấy nhanh qua YouTube Data API.</span>'
+                   : '<span style="color:var(--green)">✓ Không cần key — app tự lấy like/comment qua yt-dlp (zero cấu hình). Dán key nếu muốn dữ liệu nhanh hơn.</span>';
 }
 
 function _t11oNum(n){ n = Number(n)||0; return n>=1e6 ? (n/1e6).toFixed(1)+'M' : n>=1e3 ? (n/1e3).toFixed(1)+'K' : String(n); }

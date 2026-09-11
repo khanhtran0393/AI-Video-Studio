@@ -102,60 +102,9 @@ async function _ttsOpenAI(v, text, o){
   }), 'OpenAI');
 }
 
-// === L?: function giongVeKey ===
-function giongVeKey(){
-  const eng = ((document.getElementById('gtEngine') || {}).value) || 'elevenlabs';
-  const nha = document.getElementById('gtKeyNha'); if (nha) nha.textContent = _TTS_TEN[eng].toUpperCase();
-  const o = document.getElementById('gtKey'); if (o) o.value = '';
-  const tt = document.getElementById('gtKeyTT');
-  if (!tt) return;
-  const k = _ttsKey(eng);
-  const rieng = (localStorage.getItem(_TTS_KHOA[eng]) || '').trim();
-  if (!k) tt.innerHTML = '<span style="color:var(--red)">— chưa có key</span>';
-  else tt.innerHTML = '<span style="color:var(--green)">✓ đã có (…' + escapeHtml(k.slice(-4)) + ')</span>'
-    + (!rieng && eng === 'openai' ? ' <span style="color:var(--text-dim)">mượn từ tab Cài đặt</span>' : '')
-    + ' <span style="color:var(--text-dim)">— dán key mới để thay</span>';
-}
-
-async function _giongTraNgay(id){
-  const tt = document.getElementById('gtVoiceTT');
-  const eng = ((document.getElementById('gtEngine') || {}).value) || 'elevenlabs';
-  if (eng !== 'elevenlabs'){ if (tt) tt.textContent = ''; return; }
-  const k = _ttsKey('elevenlabs');
-  if (!k){ if (tt) tt.innerHTML = '<span style="color:var(--red)">Chưa có key ElevenLabs — lưu key bên dưới rồi dán lại voice id.</span>'; return; }
-  try {
-    const r = await window.native.llmFetch({
-      url: 'https://api.elevenlabs.io/v1/voices/' + encodeURIComponent(id),
-      method: 'GET', headers: { 'xi-api-key': k }, timeoutMs: 20000,
-    });
-    const j = JSON.parse(r.text || '{}');
-    if (!r.ok){
-      const d = j.detail || j.error || {};
-      const vi = d.message || j.message || ('HTTP ' + r.status);
-      if ((((document.getElementById('gtVoiceId') || {}).value) || '').trim() !== id) return;   // đã gõ tiếp
-      tt.innerHTML = '<span style="color:var(--' + (/missing the permission/i.test(vi) ? 'amber' : 'red') + ')">' + escapeHtml(String(vi).slice(0, 170)) + '</span>'
-        + (/missing the permission/i.test(vi) ? '<span style="color:var(--text-dim)"> — bật quyền voices_read cho key, hoặc cứ tự gõ Tên giọng rồi lưu.</span>' : '');
-      return;
-    }
-    if ((((document.getElementById('gtVoiceId') || {}).value) || '').trim() !== id) return;
-    const lb = j.labels || {};
-    const tags = ['gender','age','accent','use_case','descriptive']
-      .map(x => lb[x]).filter(Boolean).map(s => String(s).replace(/_/g, ' ')).slice(0, 3);
-    _giongTra = { id, name: j.name || '', tags };
-    const ten = document.getElementById('gtTen');
-    if (ten && j.name && !_giongTenTay) ten.value = j.name;
-    // category 'premade' = giọng gốc của ElevenLabs, gói miễn phí gọi API được.
-    // Mọi loại khác (professional/cloned/generated — tức lấy từ Voice Library)
-    // đều bị chặn ở gói miễn phí. Báo trước, đừng để lưu xong mới biết.
-    const chuan = String(j.category || '').toLowerCase() === 'premade';
-    tt.innerHTML = '<span style="color:var(--green)">✓ ' + escapeHtml(j.name || '(không tên)') + '</span>'
-      + (tags.length ? '<span style="color:var(--text-dim)"> · ' + escapeHtml(tags.join(' · ')) + '</span>' : '')
-      + (j.category ? '<span style="color:var(--' + (chuan ? 'text-dim' : 'amber') + ')"> · ' + escapeHtml(j.category) + '</span>' : '')
-      + (chuan ? '' : '<div style="color:var(--amber);margin-top:4px">Giọng từ Voice Library — tài khoản ElevenLabs miễn phí KHÔNG gọi được qua API. Chọn giọng <b>premade</b>, nâng gói, hoặc dùng "Nhân bản về máy" nếu gói bạn cho phép.</div>');
-  } catch (e){
-    if (tt) tt.innerHTML = '<span style="color:var(--red)">Tra không được: ' + escapeHtml(String(e.message || e).slice(0, 120)) + '</span>';
-  }
-}
+// [P0a] Đã xoá: giongVeKey + _giongTraNgay (UI cloud ElevenLabs/OpenAI đã bỏ —
+// không còn lời gọi nào; biến mồ côi _giongTra/_giongTraHen/_giongTraId/
+// _giongTenTay trong shared-consts.js cũng đã xoá).
 
 // === L?: function giongMoKey ===
 function giongMoKey(eng){

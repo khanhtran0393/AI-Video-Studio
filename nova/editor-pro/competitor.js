@@ -1,39 +1,19 @@
-// Phân tích đối thủ (lean, smart): kênh → yt-dlp video+view → outlier → Claude phân tích + gợi ý.
+// Phân tích đối thủ (lean, smart): kênh → yt-dlp video+view → outlier → enrich like/comment
+// (API nếu có key Nova, không thì yt-dlp KHÔNG CẦN KEY) → AI (API đã cấu hình) phân tích + gợi ý.
 const { spawn } = require('child_process');
 const fs = require('fs'); const path = require('path'); const os = require('os');
 const { YTDLP } = require('./ytdlp-path');   // ưu tiên bản đóng gói theo app (ytdlp-bin/), không có mới dò máy/PATH
 let _ck = null; try { _ck = require('./nova-cookies'); } catch (_) {}
+let _yt = null; try { _yt = require('./nova-yt'); } catch (_) {}   // enrich like/comment/engRate
 
 function run(args, timeoutMs = 120000) {
   return new Promise((res, rej) => { const ps = spawn(YTDLP, args, { windowsHide: true }); let o = '', e = ''; const t = setTimeout(() => { try { ps.kill('SIGKILL'); } catch (_) {} rej(new Error('yt-dlp timeout')); }, timeoutMs);
     ps.stdout.on('data', d => o += d); ps.stderr.on('data', d => e += d); ps.on('error', rej); ps.on('close', c => { clearTimeout(t); c === 0 ? res(o) : rej(new Error(e.split('\n').slice(-2).join(' '))); }); });
 }
-// ── AI: ưu tiên ĐÚNG API người dùng đã cấu hình trong Cài đặt → API (kho nova-settings),
-// gọi thẳng relay/nhà cung cấp. CLI bridge nội bộ chỉ còn là CHỖ LÙI. ──
-const _KHO = () => {
-  try {
-    const p = process.env.NOVA_SETTINGS || path.join(require('electron').app.getPath('userData'), 'nova-settings.json');
-    return JSON.parse(fs.readFileSync(p, 'utf8')) || {};
-  } catch (_) { return {}; }
-};
-const _NHA_CC = {
-  'openai-compatible': { kieu: 'oa', url: '', khoa: 'api_key', mac: '' },   // relay tự nhập URL — cần api_base_url + api_model
-  openai:     { kieu: 'oa', url: 'https://api.openai.com/v1/chat/completions',      khoa: 'api_key_openai',     mac: 'gpt-4o-mini' },
-  openrouter: { kieu: 'oa', url: 'https://openrouter.ai/api/v1/chat/completions',   khoa: 'api_key_openrouter', mac: 'openai/gpt-4o-mini' },
-  groq:       { kieu: 'oa', url: 'https://api.groq.com/openai/v1/chat/completions', khoa: 'api_key_groq',       mac: 'meta-llama/llama-4-scout-17b-16e-instruct' },
-  deepseek:   { kieu: 'oa', url: 'https://api.deepseek.com/chat/completions',       khoa: 'api_key_deepseek',   mac: 'deepseek-chat' },
-  gemini:     { kieu: 'oa', url: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
-                khoa: 'api_key_gemini', mac: 'gemini-2.5-flash-lite' },
-  anthropic:  { kieu: 'an', url: 'https://api.anthropic.com/v1/messages',           khoa: 'api_key_anthropic',  mac: 'claude-haiku-4.5' },
-};
-// Chuẩn hoá URL như tab Cài đặt của app: https://host → …/v1/chat/completions (đủ /v1 thì không thêm nữa).
-function _oaUrl(base) {
-  let b = String(base || '').trim().replace(/\/+$/, '');
-  b = b.replace(/([^:])\/{2,}/g, '$1/');
-  if (/\/chat\/completions$/i.test(b)) return b;
-  if (/\/v1$/i.test(b)) return b + '/chat/completions';
-  return b + '/v1/chat/completions';
-}
+// ── AI: dùng ĐÚNG API người dùng đã cấu hình trong Cài đặt — MỘT NGUỒN máy gọi API là
+// niche/loi.js. noBridge:true → KHÔNG lùi CLI bridge Claude; AI chưa cấu hình hoặc lỗi
+// thì báo lỗi thật kèm tên provider (Luật 10). ──
+const { claude, _KHO } = require('./niche/loi');
 async function _goiApi(sys, u, kho) {
   // Relay có khi lỗi 5xx tạm thời hoặc chặn "duplicate request" — thử tối đa 4 lần (5xx 2/5/8s; duplicate 5s).
   let err;
@@ -144,13 +124,29 @@ async function analyzeCompetitor(channelUrl, onProgress = () => {}, count = 20) 
   const avg = vids.reduce((s, x) => s + x.views, 0) / vids.length;
   vids.forEach(x => x.ratio = avg ? +(x.views / avg).toFixed(2) : 0);
   const outliers = vids.filter(x => x.ratio >= 1.5).sort((a, b) => b.views - a.views);
+  // Enrich like/comment (≤count video): có key Nova → YouTube API nhanh;
+  // không key → yt-dlp chế độ KHÔNG CẦN KEY (song song 8, cache phiên 24h).
+  let enrichedVia = '';
+  if (_yt) {
+    try {
+      onProgress(60, 'Bổ sung like/comment…');
+      const { key, mode, map } = await _yt.enrich(vids.slice(0, count).map(x => x.id), (p, m) => onProgress(60, m));
+      if (Object.keys(map).length) {
+        enrichedVia = mode || (key ? 'api' : 'yt-dlp');
+        vids.forEach(x => { const e = map[x.id]; if (e) { x.likes = e.likes; x.comments = e.comments; x.engRate = e.engRate; x.vel = e.vel || x.vel; x.days = e.days != null ? e.days : x.days; x.date = e.date || x.date; } });
+      }
+    } catch (_) {}
+  }
   onProgress(70, 'Claude phân tích…');
-  const list = vids.slice(0, count).map(x => `${(x.views / 1000).toFixed(0)}k views (x${x.ratio}) | ${x.dur ? Math.round(x.dur / 60) + 'p' : '?'} | ${x.title}`).join('\n');
-  const analysis = await claude(
-    'Bạn là chuyên gia phân tích kênh YouTube, trả lời tiếng Việt, thẳng và thực chiến.',
-    `Đây là ${vids.length} video gần đây của 1 kênh đối thủ (đã tính x = số lần view so với trung bình kênh):\n${list}\n\nPhân tích giúp tôi:\n1. VIDEO ĐỘT PHÁ (outlier, x cao) — chủ đề/kiểu tiêu đề nào đang ăn nhất, VÌ SAO.\n2. CÔNG THỨC TIÊU ĐỀ họ dùng (cấu trúc, từ khóa hook).\n3. Độ dài video ưu tiên.\n4. 6 Ý TƯỞNG VIDEO + tiêu đề gợi ý cho tôi làm theo hướng đang ăn.\nNgắn gọn, gạch đầu dòng.`);
+  const list = vids.slice(0, count).map(x => `${(x.views / 1000).toFixed(0)}k views (x${x.ratio}${x.engRate != null ? ', eng ' + x.engRate + '%' : ''}) | ${x.dur ? Math.round(x.dur / 60) + 'p' : '?'} | ${x.title}`).join('\n');
+  let analysis = '', analysisError = '';
+  try {
+    analysis = await claude(
+      'Bạn là chuyên gia phân tích kênh YouTube, trả lời tiếng Việt, thẳng và thực chiến.',
+      `Đây là ${vids.length} video gần đây của 1 kênh đối thủ (x = số lần view so với trung bình kênh; eng% = (like+comment)/view — cao bất thường = nội dung chạm đúng tệp):\n${list}\n\nPhân tích giúp tôi:\n1. VIDEO ĐỘT PHÁ (outlier, x cao) — chủ đề/kiểu tiêu đề nào đang ăn nhất, VÌ SAO. Chú ý video vừa view cao VỪA eng cao — đó là tín hiệu nội dung thật sự chạm.\n2. CÔNG THỨC TIÊU ĐỀ họ dùng (cấu trúc, từ khóa hook).\n3. Độ dài video ưu tiên.\n4. TÍN HIỆU TƯƠNG TÁC (nếu có eng%): video nào eng cao lệch hẳn — học cái gì.\n5. 6 Ý TƯỞNG VIDEO + tiêu đề gợi ý cho tôi làm theo hướng đang ăn.\nNgắn gọn, gạch đầu dòng.`);
+  } catch (err) { analysisError = String((err && err.message) || err).slice(0, 160); }   // lỗi lộ liễu, giữ outlier cho UI (Luật 10)
   onProgress(100, 'Xong');
-  return { ok: true, channel: channelUrl, count: vids.length, avgViews: Math.round(avg), outliers: outliers.slice(0, 8), topVideos: vids.slice(0, 10), analysis };
+  return { ok: true, channel: channelUrl, count: vids.length, avgViews: Math.round(avg), enrichedVia, outliers: outliers.slice(0, 8), topVideos: vids.slice(0, 10), analysis, analysisError };
 }
 // 📈 Tìm thumbnail ĐANG ĂN theo CHỦ ĐỀ (không cần kênh cụ thể).
 // ytsearch → lấy id/view/kênh → tính bội số so với TRUNG VỊ (median chịu nhiễu tốt hơn trung bình khi có video triệu view).
@@ -180,8 +176,23 @@ async function topicThumbOutliers(topic, onProgress = () => {}, count = 40) {
     x.url = 'https://www.youtube.com/watch?v=' + x.id;
   });
   rows.sort((a, b) => b.ratio - a.ratio);
+  const items = rows.slice(0, 24);
+  // Enrich like/comment cho TOP 12 (yt-dlp KHÔNG CẦN KEY, cache phiên 24h) → Eng% giúp
+  // phân biệt mẫu VÀNG (view cao + eng cao) với "thumbnail kéo được nhưng nội dung không giữ chân".
+  if (_yt) {
+    try {
+      onProgress(90, 'Bổ sung mức tương tác…');
+      const top = items.slice(0, 12);
+      const { map } = await _yt.enrich(top.map(x => x.id), () => {});
+      top.forEach(x => {
+        const e = map[x.id]; if (!e) return;
+        x.likes = e.likes; x.comments = e.comments; x.engRate = e.engRate;
+        x.verdict = e.engRate >= 2 ? 'mẫu vàng — kéo view VÀ giữ chân' : (e.engRate < 1 ? 'thumbnail kéo nhưng nội dung không giữ chân' : '');
+      });
+    } catch (_) {}
+  }
   onProgress(100, 'Xong');
-  return { ok: true, topic: q, median: med, items: rows.slice(0, 24) };
+  return { ok: true, topic: q, median: med, items };
 }
 
 // 🔗 Lấy thumbnail từ 1 link video bất kỳ.

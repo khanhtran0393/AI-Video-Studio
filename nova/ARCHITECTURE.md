@@ -273,7 +273,8 @@ npm start              # smoke test: splash ≥5s → main window → IPC → qu
 - `state.<key>` và destructuring từ `state` phải khớp key khai báo trong `main/state.js`;
   key khai báo mà không module nào dùng cũng bị báo (state chết phải xoá).
 - Không module main được ghi biến `global.*` — mọi trạng thái chia sẻ qua `state.js`.
-- Hằng số của `state.js` (WEB_DIR, NOVA_REMOTION_DIR, AUTH_HOSTS, SPLASH_MIN_MS,
+- Hằng số của `state.js` (WEB_DIR, NOVA_REMOTION_DIR, AUTH_HOST_NAMES,
+  EXTERNAL_LINK_HOST_NAMES, SPLASH_MIN_MS,
   SPLASH_MAX_MS) chỉ được định nghĩa một nơi duy nhất.
 - Cổng bridge 8793/8794/8795/8796 cấm hardcode trong `main/` (chủ sở hữu: module bridge
   gốc ở `nova/`); cổng web 47280–47283 chỉ được đặt trong `main/server.js` (PREFERRED).

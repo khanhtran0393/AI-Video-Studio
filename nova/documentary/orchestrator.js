@@ -99,7 +99,7 @@ function createOrchestrator(options = {}) {
     versioning.commit(project, 'visual-plan');
     progress('visual-plan', 40);
 
-    return await runStages2({ project, store, providers, cache, costs, queue, versioning, logger, renderAdapter, input, alignment: aligned, scenes, anchors, beatPlans, allBeats, progress, onProgress, projectId });
+    return await runStages2({ project, store, providers, cache, costs, queue, versioning, logger, renderAdapter, input, alignment: aligned, scenes, anchors, beatPlans, allBeats, progress, onProgress, projectId, flowAccounts });
   }
 
   return { run, providers };
@@ -107,7 +107,7 @@ function createOrchestrator(options = {}) {
 
 // Phần 2 của orchestrator — stages 6..13. Tách ra để giữ mỗi edit gọn.
 async function runStages2(ctx) {
-  const { project, store, providers, cache, costs, queue, versioning, logger, renderAdapter, input, alignment, scenes, anchors, beatPlans, allBeats, progress, projectId } = ctx;
+  const { project, store, providers, cache, costs, queue, versioning, logger, renderAdapter, input, alignment, scenes, anchors, beatPlans, allBeats, progress, projectId, flowAccounts } = ctx;
 
   // STAGE 6 — asset database: vision + embedding, parallel qua job queue (§9/§10/§29)
   const visionAnalyzer = createVisionAnalyzer({ providers, cache, costs, logger });

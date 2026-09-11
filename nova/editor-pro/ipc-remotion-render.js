@@ -6,6 +6,8 @@ const fs = require('fs');
 const os = require('os');
 // §32.17 — thông báo lỗi render tiếng Việt (bảng mã + dịch lỗi hệ thống dùng chung với Video Agent).
 const { viText } = require('../video-agent/errors');
+// Hardlink-restore (học từ TDTStudio export_plate_cache.py) — xem nova/core/link-or-copy.js.
+const { hardlinkOrCopy } = require('../core/link-or-copy');
 
 const DIR = __dirname;
 // Trong app đóng gói, __dirname nằm TRONG app.asar — chỉ đọc được, KHÔNG ghi được, và Remotion
@@ -105,7 +107,11 @@ function stageLocalAssets(scenes) {
     try {
       fs.mkdirSync(dir, { recursive: true });
       const name = runId + '-a' + staged + '_' + path.basename(abs).replace(/[^\w.-]/g, '_');
-      fs.copyFileSync(abs, path.join(dir, name));
+      // Hardlink khi cùng ổ đĩa (TDTStudio export_plate_cache.py): asset video/ảnh lớn
+      // không bị chép lại mỗi render — gần như 0 I/O ghi, 0 dung lượng thêm. Khác ổ /
+      // FS không hỗ trợ → fallback copy (hành vi cũ, mã khai báo 'copy:<code>').
+      // Hardlink chia sẻ inode: cleanupStaged() chỉ bỏ link, file gốc nguyên vẹn.
+      hardlinkOrCopy(abs, path.join(dir, name));
       const rel = 'assets/' + name;
       map.set(abs, rel); staged++;
       return rel;
@@ -133,17 +139,28 @@ function stageLocalAssets(scenes) {
 
 // Nova Scene render ra video CÂM (Remotion chỉ dựng hình từ spec). Ghép giọng đọc + nhạc nền
 // bằng ffmpeg ngay sau đó, để bản xuất dùng được luôn chứ không phải tự ghép tay.
+// CPU budget (học từ TDTStudio): ffmpeg con chạy ưu tiên BELOW_NORMAL + số thread theo ngân sách,
+// để máy yếu không bị khớp UI trong lúc mux.
+const cpuBudget = require('./cpu-budget');
 async function muxAudio({ videoPath, voiceB64, musicB64, musicVolume = 0.22, registerCancel, signal }) {
   if (!voiceB64 && !musicB64) return videoPath;
   const FFMPEG = require('./ff-path').FFMPEG;   // đường dẫn đã gỡ khỏi app.asar (spawn được)
   const { spawn } = require('child_process');
-  const write = (b64, ext) => {
+  const write = (b64, ext, label) => {
     if (!b64) return null;
     const raw = String(b64).replace(/^data:[^,]+,/, '');
     const f = path.join(TMP, `au-${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${ext}`);
-    try { fs.writeFileSync(f, Buffer.from(raw, 'base64')); return f; } catch (_) { return null; }
+    try { fs.writeFileSync(f, Buffer.from(raw, 'base64')); return f; }
+    catch (e) {
+      // Luật 10 — không fallback ngầm: b64 giọng đọc CÓ SẴN mà ghi file tạm thất bại
+      // (ổ đầy / antivirus khoá file) mà âm thầm bỏ qua → MP4 render xong nhưng MẤT GIỌNG
+      // ĐỌC, người dùng phát hiện muộn. Fail lộ liễu với mã VA_MUX_WRITE_FAIL.
+      const err = new Error(`Không ghi được file ${label} tạm vào ${TMP}: ${String((e && e.message) || e)}`);
+      err.code = 'VA_MUX_WRITE_FAIL';
+      throw err;
+    }
   };
-  const voice = write(voiceB64, 'mp3'), music = write(musicB64, 'mp3');
+  const voice = write(voiceB64, 'mp3', 'giọng đọc'), music = write(musicB64, 'mp3', 'nhạc nền');
   if (!voice && !music) return videoPath;
   const out = videoPath.replace(/\.mp4$/i, '') + '-audio.mp4';
   const args = ['-y', '-i', videoPath];
@@ -155,7 +172,7 @@ async function muxAudio({ videoPath, voiceB64, musicB64, musicVolume = 0.22, reg
     args.push('-map', '0:v', '-map', '1:a');
     if (music && !voice) args.push('-filter:a', `volume=${musicVolume}`);
   }
-  args.push('-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-shortest', out);
+  args.push('-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-threads', String(cpuBudget.videoThreads()), '-shortest', out);
   let cancelled = !!(signal && signal.aborted), child = null;
   const cancel = () => { cancelled = true; try { if (child) child.kill('SIGKILL'); } catch (_) {} };
   if (typeof registerCancel === 'function') registerCancel(cancel);
@@ -164,12 +181,22 @@ async function muxAudio({ videoPath, voiceB64, musicB64, musicVolume = 0.22, reg
     if (cancelled) { const e = new Error('ffmpeg mux đã huỷ'); e.code = 'VA_CANCELLED'; throw e; }
     const status = await new Promise((resolve, reject) => {
       child = spawn(FFMPEG, args, { stdio: 'ignore', windowsHide: true });
+      // CPU budget — hạ ưu tiên (best-effort, degrade có chủ đích phải được ghi nhận).
+      const prio = cpuBudget.applyLowPriority(child);
+      if (!prio.ok) { try { process.emitWarning('cpu-budget: không hạ được ưu tiên ffmpeg con — ' + prio.error, 'NovaCpuBudget'); } catch (_) {} }
       child.once('error', reject);
       child.once('close', (code) => resolve(code));
       if (cancelled) cancel();
     });
     if (cancelled) { const e = new Error('ffmpeg mux đã huỷ'); e.code = 'VA_CANCELLED'; throw e; }
-    if (status !== 0 || !fs.existsSync(out)) { try { if (fs.existsSync(out)) fs.unlinkSync(out); } catch (_) {} return videoPath; }
+    if (status !== 0 || !fs.existsSync(out)) {
+      // Luật 10 — ffmpeg mux thất bại KHÔNG được trả video câm im lặng (người dùng mất
+      // giọng đọc mà không hề hay biết). Xoá output dở và fail lộ liễu.
+      try { if (fs.existsSync(out)) fs.unlinkSync(out); } catch (_) {}
+      const e = new Error(`ffmpeg ghép giọng đọc/nhạc nền thất bại (exit ${status}) — video không được trả về để tránh mất giọng âm thầm.`);
+      e.code = 'VA_RENDER_FAIL';
+      throw e;
+    }
     try { fs.unlinkSync(videoPath); } catch (_) {}
     try { fs.renameSync(out, videoPath); return videoPath; } catch (_) { return out; }
   } catch (error) {
@@ -286,7 +313,8 @@ function registerEditorProRemotion(ipcMain) {
     catch (err) { return { ok: false, error: String(err && err.message || err).slice(0, 200) }; }
   });
 
-  // Kênh riêng cho engine Nova Scene — KHÔNG đụng 'remotion:renderVideo' (bundle cũ) để hai luồng sống song song.
+  // Kênh riêng cho engine Nova Scene — ('remotion:renderVideo' bundle cũ ĐÃ GỠ:
+  // renderer không bao giờ gọi; MEMORY 2026-09-11q).
   const chNova = 'remotion:renderNovaScenes';
   try { ipcMain.removeHandler(chNova); } catch (_) {}
   ipcMain.handle(chNova, async (e, payload = {}) => {
@@ -304,33 +332,21 @@ function registerEditorProRemotion(ipcMain) {
     } catch (err) { return { ok: false, code: (err && err.code) || undefined, error: viText(err && err.code, String(err && err.message || err)).slice(0, 300) }; }
   });
 
-  const ch = 'remotion:renderVideo';
-  try { ipcMain.removeHandler(ch); } catch (_) {}
-  ipcMain.handle(ch, async (e, payload = {}) => {
-    try {
-      try { fs.writeFileSync(path.join(TMP, 'last-composition.json'), JSON.stringify(payload.composition || payload, null, 2)); } catch (_) {}
-      let outputPath = payload.outputPath;
-      if (!outputPath) {
-        const w = BrowserWindow.fromWebContents(e.sender) || BrowserWindow.getFocusedWindow();
-        const r = await dialog.showSaveDialog(w, { defaultPath: `nova-export-${Date.now()}.mp4`, filters: [{ name: 'MP4', extensions: ['mp4'] }] });
-        if (r.canceled) return { ok: false, error: 'Đã huỷ' };
-        outputPath = r.filePath;
-      }
-      const onProgress = (p, msg) => { try { e.sender.send('remotion:progress', { percent: p, message: msg }); } catch (_) {} };
-      const composition = payload.composition || payload;
-      try {
-        return await renderRemotionFull({ composition, outputPath, onProgress });
-      } catch (err) {
-        // fallback ffmpeg MVP nếu Remotion lỗi
-        try {
-          const { renderComposition } = require('./ipc-render');
-          const r = await renderComposition({ composition, outputPath, onProgress });
-          return { ...r, engine: 'ffmpeg-fallback', remotionError: String(err && err.message || err) };
-        } catch (_) { return { ok: false, code: (err && err.code) || undefined, error: 'Không render được video: ' + viText(err && err.code, String(err && err.message || err)).slice(0, 300) }; }
-      }
-    } catch (err) { return { ok: false, error: String(err && err.message || err) }; }
-  });
-  return [ch, chNova];
+  return [chNova];
 }
 
-module.exports = { registerEditorProRemotion, renderRemotionFull, renderNovaScenes };
+// Đường dẫn binary vendored mà render pipeline có thể spawn: ffmpeg (ff-path →
+// ffmpeg-static, đã unasar) + chrome-headless-shell vendored (nếu tìm thấy).
+// Dùng bởi nova/main/janitor.js lúc STARTUP để quét tiến trình mồ côi — CHỈ kill
+// theo đường dẫn exe trùng khớp, không kill theo tên (xem nova/core/orphan-pids.js).
+function vendoredRendererExes() {
+  const out = [];
+  try {
+    const { FFMPEG } = require('./ff-path');
+    if (FFMPEG) out.push({ exe: FFMPEG, tag: 'ffmpeg (mux/nova-scene)' });
+  } catch (_) {}
+  if (BROWSER) out.push({ exe: BROWSER, tag: 'chrome-headless-shell (remotion)' });
+  return out;
+}
+
+module.exports = { registerEditorProRemotion, renderRemotionFull, renderNovaScenes, vendoredRendererExes };

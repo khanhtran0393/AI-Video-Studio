@@ -24,7 +24,7 @@
           align-items:center;justify-content:center;font-weight:700;font-size:12px;flex:none;
           background:var(--surface-2);border:1px solid var(--border);color:var(--text-muted); }
         #tool-toolvideoagent .va-step.active .va-step-num{ background:var(--accent);border-color:var(--accent);color:var(--on-accent); }
-        #tool-toolvideoagent .va-step.done .va-step-num{ background:var(--green);border-color:var(--green);color:#fff; }
+        #tool-toolvideoagent .va-step.done .va-step-num{ background:var(--green);border-color:var(--green);color:#04211d; } /* chữ tối trên green — cùng convention .dstep base.css */
         #tool-toolvideoagent .va-step-title{ font-size:14px;font-weight:700; }
         #tool-toolvideoagent .va-step-sub{ font-size:12px;color:var(--text-muted);margin-top:2px; }
         #tool-toolvideoagent .va-lbl{ font-size:11.5px;font-weight:600;color:var(--text-muted);
@@ -157,7 +157,7 @@
           color:var(--text-muted);z-index:1;transition:all .2s; }
         #tool-toolvideoagent .va-rail-node.active .va-rail-dot{ background:var(--accent);border-color:var(--accent);
           color:var(--on-accent);box-shadow:0 0 0 5px color-mix(in srgb,var(--accent) 18%,transparent); }
-        #tool-toolvideoagent .va-rail-node.done .va-rail-dot{ background:var(--green);border-color:var(--green);color:#fff; }
+        #tool-toolvideoagent .va-rail-node.done .va-rail-dot{ background:var(--green);border-color:var(--green);color:#04211d; }
         #tool-toolvideoagent .va-rail-lbl{ font-size:11.5px;color:var(--text-muted);font-weight:600;text-align:center; }
         #tool-toolvideoagent .va-rail-node.active .va-rail-lbl{ color:var(--text); }
         #tool-toolvideoagent .va-step{ position:relative;border-radius:16px;padding:18px 20px;

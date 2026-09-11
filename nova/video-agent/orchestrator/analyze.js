@@ -11,6 +11,7 @@ const { buildVideoSpec } = require('../video-spec/build');
 const { validateVideoSpec } = require('../video-spec/schema');
 const { VersionStore } = require('../versioning/store');
 const { createDefaultGateway, createPlanningAdapters } = require('../ai-gateway');
+const { autoSynthesizeTts } = require('../tts/synthesize');
 
 async function runAnalysis(projectDir, ctx) {
   const { step, adapters = {}, options = {}, signal } = ctx;
@@ -21,7 +22,16 @@ async function runAnalysis(projectDir, ctx) {
   const planners = createPlanningAdapters(aiGateway, { ...(options.ai || prj.config.ai || {}), signal });
   const script = await step('ANALYZING_SCRIPT', () => analyzeScript(prj.files.script, prj.config,
     { analyze: adapters.analyzeScript || planners.analyzeScript }));
-  const tts = await step('ANALYZING_TTS', () => analyzeTts({ ttsTimestampsPath: prj.files.ttsTimestamps, audioPath: prj.files.ttsAudio, options }));
+  const tts = await step('ANALYZING_TTS', async () => {
+    // TTS local fallback (học từ NNLauncher): options.autoTts bật mà dự án chưa có giọng
+    // → tự tổng hợp qua backend Voice Studio local (voice-studio 8771). Lỗi → VA_TTS_*
+    // lộ liễu (Luật 10 — không retry cloud ngầm, không fallback im lặng).
+    if (!prj.files.ttsAudio && options.autoTts) {
+      const synth = await autoSynthesizeTts({ project: prj, options, projectDir, signal });
+      prj.files.ttsAudio = synth.path; // renderer/spec đọc đúng file giọng vừa tổng hợp
+    }
+    return analyzeTts({ ttsTimestampsPath: prj.files.ttsTimestamps, audioPath: prj.files.ttsAudio, options });
+  });
   const manifest = await step('ANALYZING_ASSETS', () => buildAssetManifest(prj, { analyzeAsset: adapters.analyzeAsset }));
   await step('PROCESSING_ASSETS', () => Promise.resolve(manifest.assets.filter(a => a.type === 'character' || a.type === 'background').length));
   const storyPlan = await step('BUILDING_STORY_PLAN', () => buildStoryPlan(script, tts));
@@ -99,6 +109,16 @@ async function runAnalysisFromData(inputData, ctx) {
       const ext = prj.files.ttsAudio && prj.files.ttsAudio.includes('.') ? path.extname(prj.files.ttsAudio) : '.mp3';
       audioPath = path.join(tmpDir, 'voice' + ext);
       fs.writeFileSync(audioPath, Buffer.from(prj.files.ttsAudioData, 'base64'));
+    }
+
+    // TTS local fallback (học từ NNLauncher): import dữ liệu trực tiếp mà chưa có audio
+    // → tổng hợp qua backend Voice Studio local. Ghi file ra rootDir (KHÔNG phải tmpDir —
+    // tmpDir bị xoá sau step nhưng renderer vẫn cần file này ở FULL_RENDER).
+    if (!audioPath && !prj.files.ttsAudio && options.autoTts) {
+      const synth = await autoSynthesizeTts({ project: prj, options,
+        projectDir: inputData.rootDir || prj.root || null, signal });
+      audioPath = synth.path;
+      prj.files.ttsAudio = audioPath; // renderer/spec đọc đúng file giọng vừa tổng hợp
     }
 
     const result = await analyzeTts({

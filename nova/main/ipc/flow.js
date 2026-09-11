@@ -70,8 +70,6 @@ function registerFlowIpc() {
   ipcMain.handle('flow-cft-cancel', () => { flowCft.cancelAdd(); return { ok: true }; });
   // Engine Chrome thật đa profile (GĐ2: login + lưu account bền vững + CDP).
   try { flowChrome.restore(); } catch (e) { console.warn('[flow-chrome] restore:', e && e.message); }
-  // Đẩy log tiến trình chính (làm mới token…) sang tab Nhật ký của renderer.
-  try { flowChrome.setLogSink((line) => { try { if (state.mainWindow && !state.mainWindow.isDestroyed()) state.mainWindow.webContents.send('nova-log', line); } catch (e) {} }); } catch (e) {}
   ipcMain.handle('flowChrome', (_e, action, payload) => flowChrome.handle(action, payload));
   // Chế độ "1 tab + N token": gom token N account (flow-chrome) → bơm sang extension để nó tự xoay vòng.
   ipcMain.handle('flow-push-ext', async () => {

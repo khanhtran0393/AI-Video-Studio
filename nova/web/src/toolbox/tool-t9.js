@@ -305,9 +305,10 @@ function t9RefRender(){
   box.innerHTML = (t9Ref.items || []).map((x, i) => {
     const on = t9Ref.sel === i;
     const xr = x.ratio ? `<span style="position:absolute;left:6px;bottom:6px;background:var(--green);color:#fff;font:700 10px ui-monospace,monospace;padding:2px 6px;border-radius:4px">x${x.ratio}</span>` : '';
+    const eng = x.engRate != null ? `<span title="${escapeHtml(x.verdict || 'mức tương tác (like+comment)/view')}" style="position:absolute;right:6px;bottom:6px;background:${x.engRate >= 2 ? 'var(--green)' : x.engRate < 1 ? 'var(--red)' : 'rgba(0,0,0,.6)'};color:#fff;font:700 10px ui-monospace,monospace;padding:2px 6px;border-radius:4px">${x.engRate}%</span>` : '';
     const ch = x.channel ? `<span style="position:absolute;left:6px;top:6px;background:rgba(0,0,0,.6);color:#fff;font-size:9px;padding:1px 5px;border-radius:3px;max-width:70%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(x.channel)}</span>` : '';
     return `<div onclick="t9RefPick(${i})" title="${escapeHtml(x.title || '')}" style="position:relative;aspect-ratio:16/9;border-radius:9px;overflow:hidden;cursor:pointer;border:2px solid ${on ? 'var(--accent)' : 'var(--border)'};background:#000 center/cover no-repeat url('${x.thumbSmall || x.thumb}')">
-      ${ch}${xr}${on ? '<span style="position:absolute;right:6px;top:6px;width:19px;height:19px;border-radius:50%;background:var(--accent);color:var(--on-accent);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700">✓</span>' : ''}</div>`;
+      ${ch}${xr}${eng}${on ? '<span style="position:absolute;right:6px;top:6px;width:19px;height:19px;border-radius:50%;background:var(--accent);color:var(--on-accent);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700">✓</span>' : ''}</div>`;
   }).join('') || '<div style="grid-column:1/-1;font-size:12px;color:var(--text-dim)">Chưa có mẫu — nhập chủ đề rồi bấm Tìm.</div>';
   if (t9Ref.items.length === 1) t9RefPick(0);
 }

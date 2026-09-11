@@ -5,6 +5,10 @@
  * mồ côi (atomic-write dở dang) trong userData, xoá userData của TÊN APP CŨ
  * (rebrand — mỗi bản ~430MB Chrome CfT), và chỉ DEV: rác log/script dự án.
  * QUIT (runQuitJanitor): xoá "*.tmp" mồ côi cũ trong userData (rẻ, nhanh).
+ * ORPHAN (bất đồng bộ, không chặn startup): quét & kill ffmpeg/chrome-headless-shell
+ * mồ côi của phiên trước (crash/kill) theo ĐƯỜNG DẪN EXE vendored — học từ TDTStudio
+ * ffplay_guard.py, thay Win32 Job Object bằng thuần Node (Luật 9). Xem
+ * nova/core/orphan-pids.js + vendoredRendererExes() của editor-pro/ipc-remotion-render.js.
  * KHÔNG đụng: nova-settings.json, flow-accounts.json, cft/, Cache Chromium
  * (tự giới hạn), lifecycle.log (tự cắt 512KB ở lifecycle-log.js).
  * Guard: env AI_VIDEO_STUDIO_KEEP_LEGACY_USERDATA=1 tắt xoá userData cũ.
@@ -12,6 +16,7 @@
 const fs = require('fs');
 const path = require('path');
 const { cleanupTempOrphans } = require('../core/temp');
+const { sweepOrphanRendererProcesses } = require('../core/orphan-pids');
 
 // Tên userData đã từng dùng theo lịch sử rebrand. KHÔNG liệt kê userData
 // đang dùng — active được suy ra động từ app.getPath('userData').
@@ -108,9 +113,35 @@ function cleanDevJunk(dirs) {
   return removed;
 }
 
+// Quét tiến trình render mồ côi (ffmpeg/chrome-headless-shell còn sống sau crash).
+// CHẠY BẤT ĐỒNG BỘ fire-and-forget: runStartupJanitor giữ nguyên hợp đồng đồng bộ
+// (scripts/test-janitor.js phụ thuộc), kết quả chỉ log. Yêu cầu electron (đường exe
+// từ editor-pro/ipc-remotion-render.js) — không nạp được (vd plain-node test) thì
+// bỏ qua CÓ KHAI BÁO bằng emitWarning, không nuốt ngầm (Luật 10).
+function sweepOrphanRenderersAsync(logger) {
+  try {
+    const { vendoredRendererExes } = require('../editor-pro/ipc-remotion-render');
+    return sweepOrphanRendererProcesses({ exePaths: vendoredRendererExes(), logger })
+      .then((st) => {
+        if (st && !st.skipped && st.killed && st.killed.length) {
+          try { logger.log('[janitor] tiến trình render mồ côi đã dọn:', st.killed.map((k) => k.pid).join(', ')); } catch (_) {}
+        }
+        return st;
+      })
+      .catch((e) => {
+        try { process.emitWarning('[janitor] quét tiến trình mồ côi bỏ qua — ' + String((e && e.message) || e), 'NovaJanitorOrphanSweep'); } catch (_) {}
+        return { skipped: true, reason: 'SWEEP_ERROR', error: String((e && e.message) || e) };
+      });
+  } catch (e) {
+    try { process.emitWarning('[janitor] quét tiến trình mồ côi bỏ qua (không nạp được editor-pro trong môi trường này) — ' + String((e && e.message) || e), 'NovaJanitorOrphanSweep'); } catch (_) {}
+    return null;
+  }
+}
+
 function runStartupJanitor(app, logger) {
   const log = logger || console;
-  const stats = { temp: null, userDataTmp: null, legacyUserData: [], devJunk: [] };
+  const stats = { temp: null, userDataTmp: null, legacyUserData: [], devJunk: [], orphanProcs: null };
+  stats.orphanProcs = sweepOrphanRenderersAsync(log);
   stats.temp = cleanupTempOrphans();
   if (stats.temp.removed || stats.temp.dirsRemoved) {
     try { log.log('[janitor] temp:', stats.temp.removed, 'file /', stats.temp.dirsRemoved, 'thư mục,', (stats.temp.bytes / 1024).toFixed(0), 'KB'); } catch (_) {}

@@ -2,8 +2,9 @@
 /* ============================================================
 
    SHARED STATE — tách từ shared-consts.js 2026-09-10
-   Block này chỉ chứa: state object + tool registry (ALL_TOOLS, TOOL_LABELS)
-   + tier/pricing/models config (TIER_CONFIG, TOOL_MIN_TIER, PRICING, PAYMENT_INFO, MODELS)
+   Block này chỉ chứa: state object + tool registry (ALL_TOOLS)
+   + tier/pricing/models config (TIER_CONFIG, PRICING, PAYMENT_INFO, MODELS)
+   (TOOL_LABELS + TOOL_MIN_TIER đã xoá — dead sau refactor registry, 2026-09-11u)
    + provider helpers (VISION_PROVIDERS, _provKeyName).
    Load TRƯỚC shared-consts.js; Tat ca khai bao dung var de vao globalThis trong renderer (const/let KHONG vao global)..
 
@@ -52,13 +53,7 @@ var state = {
 // === L?: const ALL_TOOLS ===
 var ALL_TOOLS = ['tool1', 'tool2', 'tool3', 'tool4', 'tool5', 'tool6', 'tool7', 'tool8', 'tool9', 'toolniche', 'toolflow', 'toolvoice', 'tooldash', 'toolsettings', 'toolscript'];
 
-// === L?: const TOOL_LABELS ===
-var TOOL_LABELS = {
-  tool1: 'Profile Kênh', toolscript: 'Tạo Kịch Bản', tool2: 'Phân Cảnh', tool3: 'Prompt Nhân vật & Bối cảnh',
-  tool4: 'Đổi Tên Ảnh', tool5: 'Tìm Media', tool6: 'Tạo Video (Image→Video)', tool7: 'Dựng Video',
-  tool8: 'Căn Timing', tool9: 'YouTube SEO & Thumbnail AI', toolniche: 'Nghiên cứu Ngách',
-  toolflow: 'Tạo Ảnh Hàng Loạt', toolvoice: 'Tạo giọng nói', tooldash: 'Dashboard', toolsettings: 'Cài đặt'
-};
+// === L?: const TOOL_LABELS === (ĐÃ XOÁ — dead, scanner 2 lớp tmp-deadfn2 2026-09-11u: registry mới không dùng)
 
 // === L?: const TIER_CONFIG ===
 var TIER_CONFIG = {
@@ -95,8 +90,7 @@ var TIER_CONFIG = {
   }
 };
 
-// === L?: const TOOL_MIN_TIER ===
-var TOOL_MIN_TIER = { tool4: 'pro', tool5: 'pro', tool6: 'pro', tool8: 'pro', tool9: 'pro', toolniche: 'pro', toolflow: 'pro', toolvoice: 'pro' };
+// === L?: const TOOL_MIN_TIER === (ĐÃ XOÁ — dead, scanner 2 lớp tmp-deadfn2 2026-09-11u; login đã gỡ, mọi tool mở khóa)
 
 // === L?: const PRICING ===
 var PRICING = {

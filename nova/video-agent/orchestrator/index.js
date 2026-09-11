@@ -11,11 +11,17 @@ const { SceneCache, sceneKey } = require('../cache/store');
 const { createRendererAdapter } = require('../remotion/bridge');
 const { createUploader } = require('../uploader/local');
 const { extractSceneStats, createVisionProviders } = require('../qa/vision');
+const { createWatermarkProvider } = require('../qa/watermark');
 const { PROGRESS, hashMap, styleVer } = require('./states');
 const { viError, cleanupArtifacts, removeDirIfEmpty } = require('../errors');
+const { collectPreflightIssues, firstBlocking } = require('./preflight');
 
 function createVideoJob({ projectDir, adapters = {}, options = {} }) {
-  const render = adapters.render || createRendererAdapter();
+  // Renderer inject từ ngoài (IPC/test/adapter riêng) được coi là hợp lệ — preflight
+  // chỉ probe renderer MẶC ĐỊNH của bridge. Adapter inject có thể là object {render}
+  // (mock test) hoặc hàm render trực tiếp — chỉ cần có `render` là tính là inject.
+  const injectedRender = !!(adapters && adapters.render);
+  const render = injectedRender ? adapters.render : createRendererAdapter();
   const upload = adapters.upload || ((x) => createUploader().upload(x));
   const events = []; const listeners = [];
   let state = 'CREATED', cancelled = false, spec = null, timeline = null, qaReport = null, output = null, url = null;
@@ -78,16 +84,16 @@ function createVideoJob({ projectDir, adapters = {}, options = {} }) {
 
   async function run() {
     try {
-      // Rendering may temporarily need several times the final file size. Refuse
-      // to start on a nearly-full volume to avoid partial/corrupt output.
-      if (typeof fs.statfsSync === 'function' && options.skipDiskPreflight !== true) {
-        const disk = fs.statfsSync(path.resolve(projectDir));
-        const freeBytes = Number(disk.bavail) * Number(disk.bsize);
-        const minFreeBytes = Number(options.minFreeBytes) || 1024 * 1024 * 1024;
-        if (Number.isFinite(freeBytes) && freeBytes < minFreeBytes) {
-          const e = new Error('Không đủ dung lượng trống để render (cần tối thiểu ' + minFreeBytes + ' byte).'); e.code = 'VA_DISK_SPACE'; throw e;
-        }
-      }
+      // Preflight cấu trúc — kiểm tra hết điều kiện cần TRƯỚC khi đốt thời gian render
+      // (pattern PreflightIssue học từ TDTStudio). Blocking → fail lộ liễu ngay với mã
+      // VA_* (Luật 10); non-blocking chỉ ghi vào job.json cho inspect hiển thị.
+      const preflightIssues = collectPreflightIssues({
+        projectDir, options,
+        probeRenderer: injectedRender ? null : () => render.probe(),
+      });
+      out.preflight = preflightIssues;
+      const blocking = firstBlocking(preflightIssues);
+      if (blocking) { const e = new Error(blocking.message); e.code = blocking.code; e.details = preflightIssues; throw e; }
 
       // Kiểm tra nếu có inputData (import từ tool) thì dùng runAnalysisFromData
       let A;
@@ -104,16 +110,37 @@ function createVideoJob({ projectDir, adapters = {}, options = {} }) {
       const cacheCtx = { assetHashes: hashMap(manifest), timelineHash: timeline.hash, styleVersion: styleVer(project.config) };
       // Phase 4 (Vision QA): stats frame render thật, bơm vào provider semantic/continuity.
       let visionStats = null;
+      let qaVideoPath = null; // video render thật gần nhất (preview/full) cho Watermark QA
+      const wmMeta = {};      // metadata Watermark QA gắn vào qaReport (kể cả unavailable có chủ đích)
       const doQA = (s) => {
         let providers = adapters.qaProviders || {};
         if (visionStats && Array.isArray(visionStats) && visionStats.length) {
           const vp = createVisionProviders({ stats: visionStats });
           providers = { semantic: providers.semantic || vp.semantic, continuity: providers.continuity || vp.continuity };
         }
+        // Watermark/logo QA (học từ NNLauncher): mặc định BẬT trên đường mặc định; tắt bằng
+        // options.watermarkQa === false. Adapter qaProviders inject từ ngoài vẫn THẮNG
+        // (không bị bọc thêm) — giữ nguyên hợp đồng adapter cũ.
+        const wmEnabled = options.watermarkQa !== false && !adapters.qaProviders && !!qaVideoPath;
+        if (wmEnabled) {
+          const baseSemantic = providers.semantic;
+          const wmProvider = createWatermarkProvider({ videoPath: qaVideoPath, meta: wmMeta,
+            onLog: (line) => emit(state, { log: String(line) }) });
+          providers = { ...providers, semantic: async (ctx) => {
+            const base = baseSemantic ? await baseSemantic(ctx) : [];
+            return base.concat(await wmProvider(ctx));
+          } };
+        }
         return runQA({ spec: s, timeline: buildTimeline(s), storyPlan: A.storyPlan, manifest, audioDuration: tts.duration,
-          providers, frames: visionStats });
+          providers, frames: visionStats }).then((report) => {
+            if (wmEnabled) report.watermark = { ...wmMeta };
+            return report;
+          });
       };
-      const grabFrames = (videoPath) => { try { return extractSceneStats({ videoPath, spec }); } catch (_) { return null; } };
+      const grabFrames = (videoPath) => {
+        qaVideoPath = videoPath || null;
+        try { return extractSceneStats({ videoPath, spec }); } catch (_) { return null; }
+      };
 
       if (options.skipPreview !== true) {
         const preview = await step('PREVIEW_RENDER', () => renderPreview({ adapter: render, spec, manifest, projectDir,

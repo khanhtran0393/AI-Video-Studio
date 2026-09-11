@@ -109,6 +109,55 @@ function registerVoiceIpc() {
     } catch (e) { return { error: String((e && e.message) || e) }; }
   });
 
+  // ── Lịch sử "Đã tạo" (tab Tạo giọng nói) persist trên đĩa ────────────────
+  // Tách thư mục riêng (userData/voice-history) khỏi voice-sample-cache vì
+  // voice-sample-clear(null) xoá SẠCH cache mẫu khi đổi engine — không được
+  // đụng vào lịch sử của người dùng. Audio ghi file nhị phân, meta ghi .json
+  // cùng tên (khi.json + khi.wav|.mp3).
+  function voiceHistoryDir(){ return path.join(app.getPath('userData'), 'voice-history'); }
+  ipcMain.handle('voice-history-save', (_e, payload = {}) => {
+    try {
+      const { khi, ext, buf, meta } = payload || {};
+      const id = String(khi || '').replace(/[^0-9]/g, '').slice(0, 16);
+      if (!id || !(buf instanceof Uint8Array) || !buf.length) return { error: 'DỮ_LIỆU_KHÔNG_HỢP_LỆ' };
+      const dir = voiceHistoryDir();
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, id + (ext === '.mp3' ? '.mp3' : '.wav')), Buffer.from(buf));
+      fs.writeFileSync(path.join(dir, id + '.json'), JSON.stringify(meta && typeof meta === 'object' ? meta : {}), 'utf8');
+      return { ok: true };
+    } catch (e) { return { error: String((e && e.message) || e) }; }
+  });
+  ipcMain.handle('voice-history-list', () => {
+    try {
+      const dir = voiceHistoryDir();
+      if (!fs.existsSync(dir)) return { ok: true, items: [] };
+      const entries = [];
+      for (const f of fs.readdirSync(dir)){
+        if (!f.endsWith('.json')) continue;
+        const audio = f.slice(0, -5);
+        try {
+          const meta = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
+          const size = fs.statSync(path.join(dir, audio)).size;
+          entries.push({ meta, audio, size });
+        } catch (_) {   // json mồ côi (mất file audio) — dọn luôn
+          try { fs.rmSync(path.join(dir, f), { force: true }); } catch (_) {}
+        }
+      }
+      entries.sort((a, b) => (b.meta && b.meta.khi || 0) - (a.meta && a.meta.khi || 0));
+      // Giữ tối đa 40 bản mới nhất và ≤ 64MB — phần cũ xoá cho nhẹ đĩa.
+      const giu = []; let tong = 0;
+      for (const e of entries){
+        if (giu.length < 40 && tong + e.size <= 64 * 1024 * 1024){ giu.push(e); tong += e.size; }
+        else { try { fs.rmSync(path.join(dir, e.audio), { force: true }); } catch (_) {} try { fs.rmSync(path.join(dir, e.audio + '.json'), { force: true }); } catch (_) {} }
+      }
+      const items = [];
+      for (const e of giu){
+        try { items.push({ meta: e.meta, buf: new Uint8Array(fs.readFileSync(path.join(dir, e.audio))) }); } catch (_) {}
+      }
+      return { ok: true, items };
+    } catch (e) { return { error: String((e && e.message) || e), items: [] }; }
+  });
+
   voiceNative.onLog((line) => { try { if (state.mainWindow && !state.mainWindow.isDestroyed()) state.mainWindow.webContents.send('voice-log', line); } catch {} });
 }
 

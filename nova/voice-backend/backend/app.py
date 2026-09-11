@@ -38,6 +38,103 @@ try:
 except Exception as _e:  # noqa
     print(f"[voicebank] seed_factory lỗi: {_e}")
 
+# ---- Dọn rác data/output khi khởi động ----
+# Kết quả render (wav/mp3/srt…) tích tụ vô hạn qua các phiên (đã thấy ~200MB rác).
+# TASKS là bộ nhớ trong và reset mỗi lần khởi động → dọn lúc startup là an toàn.
+OUTPUT_KEEP_ENTRIES = 200                  # giữ tối đa N mục mới nhất
+OUTPUT_MAX_TOTAL_BYTES = 512 * 1024 * 1024  # và tổng dung lượng ≤ 512MB
+OUTPUT_MIN_AGE_S = 3600                     # bỏ qua mục mới hơn 1 giờ (có thể đang ghi dở)
+
+
+def _prune_output_startup() -> int:
+    """Dọn data/output tích tụ các phiên trước, trả số mục đã xoá (không ném lỗi).
+
+    Quy tắc: giữ các mục mới nhất; bỏ mục vượt OUTPUT_KEEP_ENTRIES hoặc khiến
+    tổng vượt OUTPUT_MAX_TOTAL_BYTES. Mục mới hơn OUTPUT_MIN_AGE_S luôn được giữ.
+    """
+    removed = 0
+    try:
+        entries: list[tuple[float, int, Path]] = []
+        for p in config.OUTPUT_DIR.iterdir():
+            try:
+                st = p.stat()
+                entries.append((st.st_mtime, st.st_size, p))
+            except OSError:
+                continue
+        entries.sort(reverse=True)  # mới nhất trước
+        total = 0
+        kept = 0
+        now = time.time()
+        for mtime, size, p in entries:
+            if mtime > now - OUTPUT_MIN_AGE_S:
+                total += size
+                continue
+            if kept < OUTPUT_KEEP_ENTRIES and total + size <= OUTPUT_MAX_TOTAL_BYTES:
+                kept += 1
+                total += size
+                continue
+            try:
+                if p.is_dir():
+                    shutil.rmtree(p, ignore_errors=True)
+                else:
+                    p.unlink(missing_ok=True)
+                removed += 1
+            except OSError:
+                total += size
+    except Exception:  # noqa — dọn rác không bao giờ được làm sập backend
+        return removed
+    return removed
+
+
+try:
+    _pruned = _prune_output_startup()
+    if _pruned:
+        print(f"[cleanup] đã dọn {_pruned} mục cũ trong data/output")
+except Exception as _e:  # noqa
+    print(f"[cleanup] dọn data/output lỗi: {_e}")
+
+
+# ---- Dọn rác data/uploads khi khởi động ----
+# /api/upload và /api/asr lưu file mẫu âm thanh vào data/uploads. File chỉ là
+# input TẠM: /api/tts dùng trực tiếp rồi thôi, /api/asr tiêu thụ trong task,
+# còn khi lưu giọng (save_voice) file được COPY vào voicebank → không preset
+# nào tham chiếu lâu dài tới uploads. Tích tụ vô hạn qua các phiên → dọn.
+UPLOAD_MAX_AGE_S = 7 * 24 * 3600            # xoá file cũ hơn 7 ngày (file đang ghi dở tự nằm trong ngưỡng này)
+
+
+def _prune_uploads_startup() -> int:
+    """Dọn data/uploads tích tụ các phiên trước, trả số file đã xoá (không ném lỗi)."""
+    removed = 0
+    try:
+        up_dir = config.DATA_DIR / "uploads"
+        if not up_dir.is_dir():
+            return 0
+        now = time.time()
+        for p in up_dir.iterdir():
+            try:
+                if p.stat().st_mtime > now - UPLOAD_MAX_AGE_S:
+                    continue
+                if p.is_dir():
+                    shutil.rmtree(p, ignore_errors=True)
+                else:
+                    p.unlink(missing_ok=True)
+                removed += 1
+            except OSError:
+                continue
+    except Exception:  # noqa — dọn rác không bao giờ được làm sập backend
+        return removed
+    return removed
+
+
+try:
+    _pruned_up = _prune_uploads_startup()
+    if _pruned_up:
+        print(f"[cleanup] đã dọn {_pruned_up} file mẫu cũ trong data/uploads")
+except Exception as _e:  # noqa
+    print(f"[cleanup] dọn data/uploads lỗi: {_e}")
+
+
+
 # ---- Hàng chờ + trạng thái task ----
 TASKS: dict[str, dict] = {}
 _QUEUE: "Queue[str]" = Queue()

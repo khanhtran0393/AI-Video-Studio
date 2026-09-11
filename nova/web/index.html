@@ -4,6 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AI Video Studio</title>
+<script>
+  // Restore dark mode lúc boot (lưu bởi toggleTheme trong shell.js, key 'darkMode' '1'/'0').
+  // Chạy sớm trước khi render để tránh nháy; iframe tool (img-to-vid.html) đọc cùng key để đồng bộ.
+  document.documentElement.classList.toggle('dark', localStorage.getItem('darkMode') === '1');
+</script>
 
 <!-- Nhận diện AI Video Studio -->
 <link rel="icon" type="image/png" href="brand-logo.png">
@@ -442,7 +447,7 @@
     <div class="tb-spacer"></div>
     <a id="tbMacUpdate" title="Có bản mới cho Mac — bấm để tải từ web" onclick="macDownloadUpdate();return false;"
        style="display:none;align-items:center;gap:7px;padding:6px 12px;border-radius:999px;cursor:pointer;
-              font-size:12.5px;font-weight:700;color:#fff;text-decoration:none;
+              font-size:12.5px;font-weight:700;color:var(--on-accent);text-decoration:none;
               background:linear-gradient(180deg,var(--accent-2),var(--accent));box-shadow:0 3px 12px -4px var(--accent)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="width:14px;height:14px"><path d="M12 3v12m0 0l4-4m-4 4l-4-4M5 21h14"/></svg>
       <span id="tbMacUpdTxt">Có bản mới — Tải cho Mac</span>
@@ -1725,7 +1730,7 @@
 
         <!-- MODE: prompt -->
         <div class="tv-mbody" data-m="prompt" style="display:none">
-          <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:9px 13px;font-size:12px;color:#9a3412;margin-bottom:12px;line-height:1.5">✍️ <b>Text → Video:</b> Veo tự dựng hình từ mô tả, <b>không cần ảnh</b>. Mỗi dòng = 1 video. (Tốn credit cao hơn image→video.)</div>
+          <div style="background:var(--accent-soft);border:1px solid color-mix(in srgb,var(--accent) 38%,transparent);border-radius:10px;padding:9px 13px;font-size:12px;color:var(--text-muted);margin-bottom:12px;line-height:1.5">✍️ <b>Text → Video:</b> Veo tự dựng hình từ mô tả, <b>không cần ảnh</b>. Mỗi dòng = 1 video. (Tốn credit cao hơn image→video.)</div>
           <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
             <button class="btn ghost sm" onclick="document.getElementById('tvPromptFile').click()">📄 Nhập file (.txt)</button>
             <span style="font-size:11.5px;color:var(--text-dim)"><b id="tvPromptCount">0</b> video</span>
@@ -1888,10 +1893,10 @@
 
       <div class="actions mb-24">
         <button class="btn primary" onclick="t8WhisperAlign()">🎯 Whisper Align (căn timing)</button>
-        <button class="btn" style="background:var(--teal);border-color:var(--teal);color:#fff" onclick="t8AlignBySRT()">📄 Căn theo SRT</button>
+        <button class="btn" style="background:var(--teal);border-color:var(--teal);color:var(--on-accent)" onclick="t8AlignBySRT()">📄 Căn theo SRT</button>
         <button class="btn" onclick="t8ApplyTimings()">✓ Áp dụng timing vào cảnh</button>
         <button class="btn ghost" onclick="t8ExportSRT()">↓ Xuất SRT</button>
-        <button class="btn" style="background:var(--violet);border-color:var(--violet);color:#fff" onclick="t8AudioToSRT()" title="Bỏ audio bất kỳ → ra file SRT (không cần cảnh ở Tool 02)">🎙 Audio → SRT (độc lập)</button>
+        <button class="btn" style="background:var(--violet);border-color:var(--violet);color:var(--on-accent)" onclick="t8AudioToSRT()" title="Bỏ audio bất kỳ → ra file SRT (không cần cảnh ở Tool 02)">🎙 Audio → SRT (độc lập)</button>
         <span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--text-muted)">
           ~<input type="number" id="srtLineSec" value="4" min="2" max="10" style="width:48px;padding:5px 6px;text-align:center">s/dòng
         </span>
@@ -2022,6 +2027,19 @@
                 <span class="tc" id="t7AspectLabel">16:9</span>
               </div>
             </div>
+          </div>
+          <!-- Hàng nút hành động dưới preview (khôi phục 2026-09-11: đã bị xoá nhầm trong đợt dọn "hàng nút mini dư thừa" — mọi hàm handler vẫn còn sống trong tool-t7.js/utility/t7.js) -->
+          <div class="t7-actrow" id="t7ActRow">
+            <button class="t7-tlbtn" title="Hoàn tác (Ctrl/⌘+Z)" onclick="t7Undo()">↶ Hoàn tác</button>
+            <button class="t7-tlbtn" title="Làm lại (Ctrl/⌘+Shift+Z)" onclick="t7Redo()">↷ Làm lại</button>
+            <button class="t7-tlbtn" title="Cắt clip tại vạch phát (S)" onclick="t7SplitAtPlayhead()">✂ Tách</button>
+            <button class="t7-tlbtn" title="Nhân đôi clip đang chọn" onclick="t7DupSel()">⧉ Nhân đôi</button>
+            <button class="t7-tlbtn" title="Xoá clip đang chọn (Delete)" onclick="t7DeleteSel()">🗑 Xoá</button>
+            <button class="t7-tlbtn" title="Thêm ảnh đè (full-frame) lên video" onclick="document.getElementById('t7OverlayInput').click()">🖼 Ảnh đè</button>
+            <button class="t7-tlbtn" title="Mở thư viện hiệu ứng âm thanh (SFX)" onclick="t7SfxLibOpen()">🔊 SFX</button>
+            <button class="t7-tlbtn" title="Nhập giọng đọc (MP3/WAV) cho bản dựng" onclick="document.getElementById('t7VoInput').click()">🎙 Giọng đọc</button>
+            <button class="t7-tlbtn" title="Nhập nhạc nền (MP3/WAV)" onclick="document.getElementById('t7BgmInput').click()">🎵 Nhạc nền</button>
+            <button class="t7-tlbtn" title="Đồng bộ lại cảnh từ tab Phân Cảnh" onclick="t7Build()">↻ Đồng bộ cảnh</button>
           </div>
           <div id="t7StatusLean" style="min-height:17px;padding:2px 14px 8px;font-size:12px;color:var(--text-muted);text-align:center"></div>
           <div id="t7PreviewCap" class="t7-pcap" style="display:none"></div>
@@ -2309,6 +2327,13 @@
           <div class="nf-state" id="nfScState"></div>
           <div id="nfScOut"></div>
           <div id="nfScAiOut"></div>
+          <!-- 🧠 Phân tích sâu — wire bridge nova:analyzeCompetitor (quét 20 video → outlier + Eng% → Claude 5 mục) -->
+          <div class="nf-row" style="margin-top:-4px">
+            <button class="nf-btn" id="nfDeepBtn" onclick="nfDeepRun()">🧠 Phân tích sâu (Claude)</button>
+            <button class="nf-btn ghost" onclick="nfCopyDeep()" title="Copy kết quả phân tích sâu ra clipboard (Markdown)">📋</button>
+          </div>
+          <div class="nf-state" id="nfDeepState">Quét ~20 video gần nhất → outlier + Eng% → Claude: công thức tiêu đề, độ dài ưu tiên, tín hiệu tương tác, 6 ý tưởng video. Kênh lấy từ ô phía trên.</div>
+          <div id="nfDeepOut"></div>
         </div>
 
         <!-- 👥 Kênh giống — từng là hàng ẩn trong panel Soi kênh, giờ là ô độc lập (cùng tệp khán giả) -->
@@ -2415,8 +2440,11 @@
               <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="float:right;font-size:11px;color:var(--accent);font-weight:600;text-decoration:none;text-transform:none">Lấy Key ↗</a>
             </label>
             <div style="display:flex;gap:8px">
-              <textarea id="flowApiKey" rows="4" placeholder="Mỗi key một dòng…" style="flex:1;resize:vertical;min-height:64px"></textarea>
-              <button class="btn ghost sm" onclick="saveFlowApiKey()" style="white-space:nowrap">💾 Lưu</button>
+              <textarea id="flowApiKey" rows="4" placeholder="Mỗi key một dòng…" autocomplete="off" spellcheck="false" style="flex:1;resize:vertical;min-height:64px"></textarea>
+              <div style="display:flex;flex-direction:column;gap:6px">
+                <button class="btn ghost sm" onclick="saveFlowApiKey()" style="white-space:nowrap">💾 Lưu</button>
+                <button class="btn ghost sm" id="flowApiKeyToggle" onclick="toggleFlowApiKeyVisibility()" title="Hiện/Ẩn API key" style="white-space:nowrap">👁 Hiện</button>
+              </div>
             </div>
             <div id="flowApiKeyStatus" style="margin-top:6px;font-size:11.5px;color:var(--text-muted)"></div>
           </div>
@@ -2715,7 +2743,8 @@
 
             <div class="rhead" style="margin-top:18px">Ngôn ngữ</div>
             <div class="sl" id="slNgonNgu">
-              <select id="voiceLang">
+              <select id="voiceLang" onchange="try { giongDDVe(); } catch (_){}">
+                <option value="all">Tất cả ngôn ngữ</option>
                 <option value="vi" selected>Tiếng Việt</option>
                 <option value="en">English (Anh)</option>
                 <option value="zh">中文 (Trung)</option>
@@ -2758,10 +2787,10 @@
               <div class="why" id="whyTocDo"></div>
             </div>
             <div class="sl" id="slCaoDo">
-              <div class="slh"><b>Cao độ</b><span id="vPitchVal">0 st</span></div>
+              <div class="slh" title="±12 nửa cung (st) — trầm hơn hay cao hơn giọng gốc. Áp dụng cho mọi engine (xử lý hậu kỳ, giữ nguyên tốc độ)."><b>Cao độ</b><span id="vPitchVal">0 st</span></div>
               <input type="range" id="voicePitch" min="-12" max="12" step="1" value="0"
                 oninput="document.getElementById('vPitchVal').textContent=(+this.value>0?'+':'')+this.value+' st'">
-              <div class="why" id="whyCaoDo">±12 nửa cung (st) — trầm hơn hay cao hơn giọng gốc. Áp dụng cho mọi engine (xử lý hậu kỳ, giữ nguyên tốc độ).</div>
+              <div class="why" id="whyCaoDo">Trầm/cao hơn giọng gốc</div>
             </div>
             <div class="sl" id="slGap">
               <div class="slh"><b>Nghỉ giữa câu</b><span id="vGapVal">300 ms</span></div>
@@ -2776,34 +2805,34 @@
             <summary style="cursor:pointer;font-weight:600;font-size:13.5px;color:var(--text-muted);user-select:none">⚙️ Cài đặt nâng cao</summary>
             <div style="margin-top:12px;display:flex;flex-direction:column;gap:12px">
               <div class="sl" id="slTopP" data-engines="vieneu">
-                <div class="slh"><b>Top P (sáng tạo / ổn định) — VieNeu</b><span id="vTopPVal">0.85</span></div>
+                <div class="slh" title="VieNeu (LM-based). Giảm để giọng đọc ngẫu hứng, có hồn hơn (giống ElevenLabs). Tăng để ổn định."><b>Top P — VieNeu</b><span id="vTopPVal">0.85</span></div>
                 <input type="range" id="voiceTopP" min="0" max="1" step="0.01" value="0.85"
                   oninput="document.getElementById('vTopPVal').textContent=(+this.value).toFixed(2)">
-                <div class="why">Dành cho VieNeu (LM-based). Giảm để giọng đọc ngẫu hứng, có hồn hơn (giống ElevenLabs). Tăng để ổn định.</div>
+                <div class="why">Thấp = có hồn · cao = ổn định</div>
               </div>
               <div class="sl" id="slTopK" data-engines="vieneu">
-                <div class="slh"><b>Top K — VieNeu</b><span id="vTopKVal">50</span></div>
+                <div class="slh" title="VieNeu (LM-based). Độ đa dạng của âm thanh. Giá trị cao hơn cho giọng tự nhiên hơn."><b>Top K — VieNeu</b><span id="vTopKVal">50</span></div>
                 <input type="range" id="voiceTopK" min="1" max="100" step="1" value="50"
                   oninput="document.getElementById('vTopKVal').textContent=this.value">
-                <div class="why">Dành cho VieNeu (LM-based). Độ đa dạng của âm thanh. Giá trị cao hơn cho giọng tự nhiên hơn.</div>
+                <div class="why">Cao = tự nhiên hơn</div>
               </div>
               <div class="sl" id="slRepPen" data-engines="vieneu">
-                <div class="slh"><b>Repetition Penalty (độ mượt) — VieNeu</b><span id="vRepPenVal">2.0</span></div>
+                <div class="slh" title="VieNeu. Tăng để tránh AI bị lắp bắp hoặc lặp chữ."><b>Repetition — VieNeu</b><span id="vRepPenVal">2.0</span></div>
                 <input type="range" id="voiceRepPen" min="1.0" max="3.0" step="0.1" value="2.0"
                   oninput="document.getElementById('vRepPenVal').textContent=(+this.value).toFixed(1)">
-                <div class="why">Dành cho VieNeu. Tăng để tránh AI bị lắp bắp hoặc lặp chữ.</div>
+                <div class="why">Tránh lặp chữ, lắp bắp</div>
               </div>
               <div class="sl" id="slGenSpeed" data-engines="omni">
-                <div class="slh"><b>Tốc độ generation — OmniVoice</b><span id="vGenSpeedVal">0.9×</span></div>
+                <div class="slh" title="OmniVoice (diffusion-based). Điều chỉnh tốc độ sinh âm thanh (ảnh hưởng guidance_scale)."><b>Tốc độ sinh — OmniVoice</b><span id="vGenSpeedVal">0.9×</span></div>
                 <input type="range" id="voiceGenSpeed" min="0.5" max="1.5" step="0.05" value="0.9"
                   oninput="document.getElementById('vGenSpeedVal').textContent=(+this.value).toFixed(2)+'×'">
-                <div class="why">Dành cho OmniVoice (diffusion-based). Điều chỉnh tốc độ sinh âm thanh (ảnh hưởng guidance_scale).</div>
+                <div class="why">Cao = nhanh hơn</div>
               </div>
               <div class="sl" id="slDiffSteps" data-engines="omni">
-                <div class="slh"><b>Diffusion Steps (độ sắc nét) — OmniVoice</b><span id="vDiffStepsVal">16</span></div>
+                <div class="slh" title="OmniVoice. Số càng cao âm thanh càng trong nhưng tạo chậm hơn (ảnh hưởng num_step)."><b>Sắc nét — OmniVoice</b><span id="vDiffStepsVal">16</span></div>
                 <input type="range" id="voiceDiffSteps" min="4" max="32" step="2" value="16"
                   oninput="document.getElementById('vDiffStepsVal').textContent=this.value">
-                <div class="why">Dành cho OmniVoice. Số càng cao âm thanh càng trong nhưng tạo chậm hơn (ảnh hưởng num_step).</div>
+                <div class="why">Cao = trong hơn, chậm hơn</div>
               </div>
             </div>
             </details>
@@ -2813,10 +2842,10 @@
 
       <!-- ── ĐÃ TẠO ── -->
       <div class="panel mb-16">
-        <div class="panel-head"><span>Đã tạo</span><span style="text-transform:none;letter-spacing:0;font-weight:500;color:var(--text-dim);font-size:12px">trong phiên này</span></div>
+        <div class="panel-head"><span>Đã tạo</span><span style="text-transform:none;letter-spacing:0;font-weight:500;color:var(--text-dim);font-size:12px">lưu trên máy — còn đó khi mở lại app</span></div>
         <div class="panel-body" style="padding:10px">
           <button class="btn primary sm" id="giongGhepBtn" style="display:none;width:100%;margin-bottom:8px" onclick="giongSuGhep()">🔗 Ghép các đoạn đã xong</button>
-          <div id="giongSu"><div class="empty-state">Chưa tạo bản nào trong phiên này.</div></div>
+          <div id="giongSu"><div class="empty-state">Chưa tạo bản nào. Bản đã tạo được lưu trên máy — còn đó khi mở lại app.</div></div>
         </div>
       </div>
 
@@ -2825,7 +2854,7 @@
         <div class="panel-head"><span>Engine</span><span id="giongEngineDem" style="text-transform:none;letter-spacing:0;font-weight:500;color:var(--text-dim);font-size:12px">…</span></div>
         <div class="panel-body">
           <div class="geng" id="giongEngine"></div>
-          <div class="ghint">Cả ba engine chạy trong máy qua backend voice-studio. Chấm xanh = backend sẵn sàng; xám = backend chưa chạy; đỏ = engine lỗi lần đọc gần nhất (đọc được lại thì tự xanh). Engine đang dùng chọn trong khối “Đọc thành giọng”.</div>
+          <div class="ghint">Chấm xanh = sẵn sàng · xám = chưa chạy · đỏ = lỗi lần đọc gần nhất. Chọn engine ở khối "Đọc thành giọng".</div>
         </div>
       </div>
 
@@ -2912,10 +2941,10 @@
 
           <div class="settings-h" style="margin-top:22px">🔎 Phân tích đối thủ (YouTube)</div>
           <div style="background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:16px 18px">
-            <label style="display:block;font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.3px;margin:0 0 4px">YouTube Data API v3
+            <label style="display:block;font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.3px;margin:0 0 4px">YouTube Data API v3 <span style="text-transform:none;color:var(--green);font-weight:600">(tùy chọn — không cần key vẫn chạy đủ)</span>
               <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener" style="float:right;font-size:11px;color:var(--accent);font-weight:600;text-decoration:none;text-transform:none">Lấy Key ↗</a></label>
-            <div style="display:flex;gap:8px"><input type="password" id="t11YtKey" placeholder="Paste key…" style="flex:1"><button class="btn ghost sm" onclick="t11SaveKeys()" style="white-space:nowrap">💾 Lưu</button></div>
-            <div style="font-size:11px;color:var(--text-dim);margin-top:7px">Bước 1: bấm <a href="https://console.cloud.google.com/apis/library/youtube.googleapis.com" target="_blank" rel="noopener" style="color:var(--accent);font-weight:600;text-decoration:none">Enable YouTube Data API v3 ↗</a> (bắt buộc, không enable thì key báo lỗi) · Bước 2: <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener" style="color:var(--accent);font-weight:600;text-decoration:none">Create Credentials → API key ↗</a> rồi dán vào ô trên. Phần tổng hợp / đẻ tiêu đề dùng luôn <b>AI provider chính</b> (ở mục trên) — không cần key riêng.</div>
+            <div style="display:flex;gap:8px"><input type="password" id="t11YtKey" placeholder="Paste key… (không bắt buộc)" style="flex:1"><button class="btn ghost sm" onclick="t11SaveKeys()" style="white-space:nowrap">💾 Lưu</button></div>
+            <div style="font-size:11px;color:var(--text-dim);margin-top:7px"><b style="color:var(--green)">Không dán key vẫn chạy đủ:</b> app tự lấy view/like/comment qua yt-dlp (đã đóng gói sẵn) — không quota, không cần Google Cloud. Dán key chỉ để dữ liệu nhanh hơn và thêm sub/engagement chính xác: Bước 1 <a href="https://console.cloud.google.com/apis/library/youtube.googleapis.com" target="_blank" rel="noopener" style="color:var(--accent);font-weight:600;text-decoration:none">Enable YouTube Data API v3 ↗</a> · Bước 2 <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener" style="color:var(--accent);font-weight:600;text-decoration:none">Create Credentials → API key ↗</a> rồi dán vào ô trên. Phần tổng hợp / đẻ tiêu đề dùng luôn <b>AI provider chính</b> (ở mục trên) — không cần key riêng.</div>
             <div id="t11KeyState" style="margin-top:9px;font-size:11.5px"></div>
           </div>
 
@@ -3435,7 +3464,42 @@ function toggleApiSection(){
       </div>
 <script>
 // Flow API Key management
+// Key được ẨN mặc định trong textarea (chỉ lộ 4 ký tự đầu + 4 cuối) để bảo vệ
+// người dùng khi quay màn hình / demo. Giá trị thật nằm trong `realValue`,
+// không bao giờ đổ nguyên văn vào textarea khi đang ở chế độ ẩn.
 (function() {
+  var MASK_CHAR = '•';
+  var realValue = '';   // chuỗi key thật, phân tách bằng '\n'
+  var revealed = false; // trạng thái hiện/ẩn
+
+  function maskLine(s) {
+    if (!s) return s;
+    if (s.length <= 8) return new Array(s.length + 1).join(MASK_CHAR);
+    return s.slice(0, 4) + new Array(9).join(MASK_CHAR) + s.slice(-4);
+  }
+
+  function renderInput() {
+    var input = document.getElementById('flowApiKey');
+    if (!input) return;
+    if (revealed) {
+      input.value = realValue;
+    } else {
+      input.value = realValue.split(/\r?\n/).filter(function (s) { return s.trim().length > 0; })
+        .map(maskLine).join('\n');
+    }
+  }
+
+  function setReveal(v) {
+    revealed = !!v;
+    renderInput();
+    var btn = document.getElementById('flowApiKeyToggle');
+    if (btn) btn.textContent = revealed ? '🙈 Ẩn' : '👁 Hiện';
+  }
+
+  window.toggleFlowApiKeyVisibility = function() {
+    setReveal(!revealed);
+  };
+
   function loadFlowApiKey() {
     const input = document.getElementById('flowApiKey');
     const status = document.getElementById('flowApiKeyStatus');
@@ -3450,9 +3514,10 @@ function toggleApiSection(){
       try { val = localStorage.getItem('flowApiKey'); } catch (e) {}
     }
     if (val) {
-      input.value = val;
+      realValue = val;
+      renderInput(); // hiển thị dạng ẩn mặc định
       var count = val.split(/\r?\n/).filter(function (s) { return s.trim().length > 0; }).length;
-      if (status) status.textContent = '✅ Đã tải ' + count + ' key';
+      if (status) status.textContent = '✅ Đã tải ' + count + ' key (đã ẩn — bấm 👁 Hiện để xem)';
     } else if (status) {
       status.textContent = '';
     }
@@ -3462,12 +3527,29 @@ function toggleApiSection(){
     const input = document.getElementById('flowApiKey');
     const status = document.getElementById('flowApiKeyStatus');
     if (!input) return;
-    const lines = input.value.split(/\r?\n/).map(function (s) { return s.trim(); }).filter(function (s) { return s.length > 0; });
-    if (!lines.length) {
-      if (status) status.textContent = '⚠️ Vui lòng nhập ít nhất một API key';
+    var lines = input.value.split(/\r?\n/).map(function (s) { return s.trim(); });
+    var realLines = realValue ? realValue.split(/\r?\n/).filter(function (s) { return s.trim().length > 0; }) : [];
+    // Bản đồ mask → key thật, để "giải" dòng bị ẩn khi lưu
+    var maskMap = {};
+    realLines.forEach(function (r) { maskMap[maskLine(r)] = r; });
+    // Dòng chứa ký tự mask → giữ key thật ở cùng vị trí (không lưu ký tự '•' vào kho).
+    // Muốn thay key: xoá dòng đó rồi dán key mới.
+    var resolved = [];
+    for (var i = 0; i < lines.length; i++) {
+      var ln = lines[i];
+      if (ln.length === 0) continue;
+      if (ln.indexOf(MASK_CHAR) !== -1) {
+        var real = (realLines[i] && maskLine(realLines[i]) === ln) ? realLines[i] : maskMap[ln];
+        if (real) resolved.push(real);
+      } else {
+        resolved.push(ln);
+      }
+    }
+    if (!resolved.length) {
+      if (status) status.textContent = '⚠️ Vui lòng nhập ít nhất một API key (muốn thay key đã ẩn: xoá dòng đó rồi dán key mới)';
       return;
     }
-    const key = lines.join('\n');
+    const key = resolved.join('\n');
     var saved = false;
     try {
       if (window.novaStore && typeof window.novaStore.set === 'function') {
@@ -3475,8 +3557,9 @@ function toggleApiSection(){
       }
     } catch (e) { saved = false; }
     if (saved) {
-      input.value = key;
-      if (status) status.textContent = '✅ Đã lưu ' + lines.length + ' key';
+      realValue = key;
+      setReveal(false); // quay về chế độ ẩn sau khi lưu
+      if (status) status.textContent = '✅ Đã lưu ' + resolved.length + ' key (đã ẩn)';
     } else {
       if (status) status.textContent = '❌ Lưu thất bại (kho cài đặt không khả dụng)';
     }

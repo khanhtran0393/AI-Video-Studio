@@ -206,17 +206,135 @@ async function phase5(tmp) {
   Object.keys(saved).forEach(k => { if (saved[k] != null) process.env[k] = saved[k]; });
 }
 
+// ── Phase 6: Watermark/logo QA + TTS local fallback (học từ NNLauncher) ──
+async function phase6(tmp) {
+  const http = require('http');
+  const { sceneFrameTimes, normalizeBoxes, extractFrame, createWatermarkProvider } = require('./qa/watermark');
+  const { classifyFixStrategy } = require('./auto-fix/loop');
+  const { probeVoiceBackend, synthesizeVoice, autoSynthesizeTts } = require('./tts/synthesize');
+
+  const spec6 = { fps: 10, scenes: [] };
+  for (let i = 0; i < 5; i++) spec6.scenes.push({ id: 's' + (i + 1), start: i, end: i + 1,
+    camera: { type: 'static', from: null, to: null }, transition: 'cut', elements: [], captions: [] });
+
+  // 1. sceneFrameTimes — giữa cảnh, sampling đều, deterministic.
+  const times5 = sceneFrameTimes(spec6, 12);
+  assert('P6: 5 cảnh → 5 mốc giữa cảnh', times5.length === 5 && times5[0].t === 0.5 && times5[4].t === 4.5, times5);
+  const times2 = sceneFrameTimes(spec6, 2);
+  assert('P6: sample đều 2/5 cảnh (s1, s5)', times2.length === 2 && times2[0].sceneId === 's1' && times2[1].sceneId === 's5', times2);
+  assert('P6: deterministic (2 lần gọi giống nhau)', JSON.stringify(times2) === JSON.stringify(sceneFrameTimes(spec6, 2)));
+
+  // 2. normalizeBoxes — lọc hộp rác, làm tròn score.
+  const nb = normalizeBoxes({ boxes: [{ x1: 10.4, y1: 20.2, x2: 110.6, y2: 60.8, score: 0.91234 },
+    { x1: 'x', y1: 1, x2: 2, y2: 2 }, { x1: 5, y1: 5, x2: 5, y2: 5 }, null] });
+  assert('P6: normalizeBoxes chỉ giữ hộp hợp lệ + làm tròn', nb.length === 1 && nb[0].x1 === 10.4 && nb[0].score === 0.912, nb);
+  assert('P6: normalizeBoxes đầu vào xấu → []', normalizeBoxes(null).length === 0 && normalizeBoxes({ boxes: 'x' }).length === 0);
+
+  // 3. extractFrame + provider với detect inject trên video thật.
+  makeVideo(tmp, 'wm-src.mp4', 'testsrc=s=320x240:r=10:d=5');
+  const vid = path.join(tmp, 'wm-src.mp4');
+  const framePng = path.join(tmp, 'wm-frame.png');
+  assert('P6: extractFrame trích được PNG', extractFrame(vid, 1.5, framePng, FFMPEG) && fs.existsSync(framePng));
+
+  const meta = {}; const calls = [];
+  const wp = createWatermarkProvider({ videoPath: vid, ffmpeg: FFMPEG, meta, maxFrames: 3,
+    detect: async () => { calls.push(1); return { boxes: [{ x1: 1, y1: 1, x2: 50, y2: 40, score: 0.98 }] }; } });
+  const wmErrors = await wp({ spec: spec6 });
+  assert('P6: provider phát watermark ở 3 frame sample', wmErrors.length === 3 && wmErrors.every((e) => e.type === 'watermark_detected'), wmErrors.length);
+  assert('P6: lỗi mang scene + suggestedFix remove_watermark', wmErrors[0].scene === 's1' && wmErrors[0].suggestedFix.type === 'remove_watermark' && wmErrors[0].severity === 'high', wmErrors[0]);
+  assert('P6: meta đếm checked/detected', meta.checked === 3 && meta.detected === 3 && meta.engine === 'injected', meta);
+  const again = await wp({ spec: spec6 });
+  assert('P6: cache theo (video,t) — detect không gọi lại', calls.length === 3 && again.length === 3, calls.length);
+
+  // 4. Phân loại chiến lược auto-fix + runQA ăn lỗi watermark.
+  assert('P6: classifyFixStrategy watermark → fix-in-post', classifyFixStrategy({ type: 'watermark_detected' }) === 'fix-in-post');
+  const qaWm = await runQA({ spec: spec6, timeline: buildTimeline(spec6), providers: { semantic: async () => wmErrors } });
+  assert('P6: runQA fail khi có watermark', qaWm.status === 'fail', qaWm.status);
+
+  // 5. Thiếu video → mảng rỗng (không ném).
+  const wpNone = createWatermarkProvider({ videoPath: path.join(tmp, 'khong-ton-tai.mp4') });
+  assert('P6: thiếu video → mảng rỗng', (await wpNone({ spec: spec6 })).length === 0);
+
+  // 6. Backend TTS mock đúng hợp đồng voice-studio /api/tts.
+  let lastTtsBody = null; let polls = 0;
+  const srv = http.createServer((req, res) => {
+    const url = req.url.split('?')[0];
+    res.setHeader('Content-Type', 'application/json');
+    if (url === '/api/health') { res.end(JSON.stringify({ status: 'ok', tts_engine: 'omnivoice', asr_engine: 'faster-whisper' })); return; }
+    if (url === '/api/tts') { let b = ''; req.on('data', (c) => { b += c; }); req.on('end', () => { lastTtsBody = JSON.parse(b); res.end(JSON.stringify({ task_id: 'tid_1', status: 'pending', poll_url: '/api/status/tid_1' })); }); return; }
+    if (url === '/api/status/tid_1') { polls++;
+      if (polls < 2) res.end(JSON.stringify({ id: 'tid_1', status: 'running', progress: 1, total: 3 }));
+      else res.end(JSON.stringify({ id: 'tid_1', status: 'completed',
+        results: { merged: '/api/files/tid_1/output.mp3', srt: '/api/files/tid_1/output.srt', lines: [] } }));
+      return; }
+    if (url === '/api/files/tid_1/output.mp3') { res.setHeader('Content-Type', 'audio/mpeg'); res.end(Buffer.from('ID3MOCK')); return; }
+    if (url === '/api/files/tid_1/output.srt') { res.end('1\n00:00:00,000 --> 00:00:02,000\nXin chào\n'); return; }
+    res.statusCode = 404; res.end(JSON.stringify({ error: 'not_found' }));
+  });
+  await new Promise((r) => srv.listen(0, '127.0.0.1', r));
+  const base = 'http://127.0.0.1:' + srv.address().port;
+
+  const probe = await probeVoiceBackend({ baseUrl: base });
+  assert('P6: probe backend mock → ok + engine omnivoice', probe.ok && probe.engine === 'omnivoice', probe);
+
+  const outDir = fs.mkdtempSync(path.join(tmp, 'tts-'));
+  const synth = await synthesizeVoice({ text: 'Xin chào thế giới', baseUrl: base,
+    outPath: path.join(outDir, 'a.mp3'), srtPath: path.join(outDir, 'a.srt'), pollMs: 10 });
+  assert('P6: synthesizeVoice ghi mp3 + srt', synth.ok && fs.readFileSync(path.join(outDir, 'a.mp3'), 'utf8') === 'ID3MOCK'
+    && /Xin chào/.test(fs.readFileSync(path.join(outDir, 'a.srt'), 'utf8')), synth);
+  assert('P6: body /api/tts đúng hợp đồng (text, language, preset_id, speed)',
+    lastTtsBody && lastTtsBody.text === 'Xin chào thế giới' && lastTtsBody.language === 'vi'
+    && lastTtsBody.preset_id === null && lastTtsBody.speed === 1, lastTtsBody);
+
+  // 7. Backend không có → fail lộ liễu VA_TTS_BACKEND_UNAVAILABLE (không fallback ngầm).
+  const deadProbe = await probeVoiceBackend({ baseUrl: 'http://127.0.0.1:1', timeoutMs: 800 });
+  assert('P6: probe backend chết → ok:false + code', !deadProbe.ok && deadProbe.code === 'VA_TTS_BACKEND_UNAVAILABLE', deadProbe);
+  const failed = await synthesizeVoice({ text: 'abc', baseUrl: 'http://127.0.0.1:1',
+    outPath: path.join(outDir, 'b.mp3') }).then(() => null, (e) => e);
+  assert('P6: synthesizeVoice backend chết → VA_TTS_BACKEND_UNAVAILABLE', !!failed && failed.code === 'VA_TTS_BACKEND_UNAVAILABLE', failed && failed.code);
+
+  // 8. autoSynthesizeTts: thiếu text → VA_TTS_AUTO_NO_TEXT; đã có giọng → skip.
+  const noText = await autoSynthesizeTts({ project: { files: { script: path.join(tmp, 'khong-co.md') } },
+    options: { autoTts: {} }, projectDir: outDir }).then(() => null, (e) => e);
+  assert('P6: autoTts không có text → VA_TTS_AUTO_NO_TEXT', !!noText && noText.code === 'VA_TTS_AUTO_NO_TEXT', noText && noText.code);
+  const skip = await autoSynthesizeTts({ project: { files: { ttsAudio: 'voice/x.wav' } }, options: { autoTts: {} }, projectDir: outDir });
+  assert('P6: autoTts skip khi đã có giọng sẵn', !!skip && !!skip.skipped, skip);
+
+  // 9. autoSynthesizeTts end-to-end qua mock backend (text từ textPath).
+  const txtPath = path.join(outDir, 'script.txt');
+  fs.writeFileSync(txtPath, 'Kịch bản thử');
+  const auto = await autoSynthesizeTts({ project: { files: {} },
+    options: { autoTts: { textPath: txtPath, baseUrl: base } }, projectDir: outDir });
+  assert('P6: autoTts end-to-end ghi auto-tts.mp3 + .srt', !!auto && auto.ok
+    && fs.existsSync(path.join(outDir, 'voice', 'auto-tts.mp3')) && fs.existsSync(path.join(outDir, 'voice', 'auto-tts.srt')), auto);
+
+  // 10. Orchestrator integration: autoTts bật + backend chết → FAILED với mã lộ liễu.
+  // (baseUrl trỏ port chết để test deterministc — không phụ thuộc backend thật 8771 có đang chạy hay không.)
+  const jobDir2 = makeFixture();
+  fs.unlinkSync(path.join(jobDir2, 'tts', 'chapter-001.wav')); // xoá giọng sẵn có → autoTts phải chạy
+  process.env.VA_TMP_OUT = jobDir2;
+  const job2 = createVideoJob({ projectDir: jobDir2, adapters: { render: mockRenderer() },
+    options: { autoTts: { baseUrl: 'http://127.0.0.1:1' } } });
+  const res2 = await job2.run();
+  assert('P6: orchestrator autoTts thiếu backend → FAILED', res2.status === 'FAILED', res2.status);
+  assert('P6: error code = VA_TTS_BACKEND_UNAVAILABLE', res2.error && res2.error.code === 'VA_TTS_BACKEND_UNAVAILABLE', res2.error && res2.error.code);
+  try { fs.rmSync(jobDir2, { recursive: true, force: true }); } catch (_) {}
+
+  await new Promise((r) => srv.close(r));
+}
+
 async function main() {
   const tmp = makeTmp();
   try {
     await phase3(tmp);
     await phase4(tmp);
     await phase5(tmp);
+    await phase6(tmp);
   } finally {
     try { fs.rmSync(tmp, { recursive: true, force: true }); } catch (_) {}
   }
   const { pass, fail } = counters();
-  console.log('\n=== NOVA VIDEO AGENT — Phase 3/4/5 acceptance (§33) ===');
+  console.log('\n=== NOVA VIDEO AGENT — Phase 3/4/5/6 acceptance (§33) ===');
   console.log('PASS: ' + pass + '  FAIL: ' + fail);
   if (fail) process.exitCode = 1;
 }

@@ -3,17 +3,27 @@
  * Cửa sổ chính của app (AI Video Studio).
  * - Tạo BrowserWindow, reveal sau khi trang tải xong (chờ splash đủ SPLASH_MIN_MS).
  * - Cửa sổ chính của app (AI Video Studio).
- * - Link "Lấy Key ↗" (EXTERNAL_LINK_HOSTS) mở bằng trình duyệt mặc định của hệ
- *   thống; popup đăng nhập bên thứ 3 (AUTH_HOSTS) mở trong cửa sổ app.
+ * - Link "Lấy Key ↗" (EXTERNAL_LINK_HOST_NAMES) mở bằng trình duyệt mặc định của hệ
+ *   thống; popup đăng nhập bên thứ 3 (AUTH_HOST_NAMES) mở trong cửa sổ app.
+ *   Mọi quyết định allowlist đi qua security-policy.js (đã wire ở setWindowOpenHandler
+ *   + will-navigate).
  * - Menu chuột phải tiếng Việt cho ô nhập.
  */
 const path = require('path');
 const { BrowserWindow, Menu, shell } = require('electron');
 const state = require('./state');
-const { AUTH_HOSTS, EXTERNAL_LINK_HOSTS, SPLASH_MIN_MS, SPLASH_MAX_MS } = require('./state');
+const {
+  AUTH_HOST_NAMES, EXTERNAL_LINK_HOST_NAMES, SPLASH_MIN_MS, SPLASH_MAX_MS,
+} = require('./state');
+const securityPolicy = require('./security-policy');
 const { NOVA_PARTITION } = require('./identity');
 const { brandIconPath } = require('./brand');
 const { closeSplashWindow } = require('./splash');
+
+// Set host tin cậy cho security-policy (isAllowlistedHost khớp host & subdomain
+// y như regex AUTH_HOSTS/EXTERNAL_LINK_HOSTS — cùng nguồn danh sách ở state.js).
+const AUTH_HOST_SET = new Set(AUTH_HOST_NAMES);
+const EXTERNAL_LINK_HOST_SET = new Set(EXTERNAL_LINK_HOST_NAMES);
 
 function createWindow(startUrl) {
   state.mainWindow = new BrowserWindow({
@@ -136,8 +146,20 @@ function createWindow(startUrl) {
   }
   setTimeout(reveal, SPLASH_MAX_MS);
   state.mainWindow.loadURL(startUrl).catch(() => reveal());
+  // Origin gốc của renderer — security-policy so sánh chính xác bằng new URL().origin
+  // (không substring/regex hostname) cho phép điều hướng nội bộ cùng origin.
+  let rendererOrigin = '';
+  try { rendererOrigin = new URL(startUrl).origin; } catch (_) { rendererOrigin = ''; }
+  // Guard điều hướng khung chính (will-navigate): chặn location.href tới URL lạ
+  // (open-redirect /inject script qua location) — chỉ cho cùng origin renderer
+  // hoặc host trong allowlist. Popup/window ngoài có handler riêng ở dưới.
+  state.mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (securityPolicy.isTrustedNavigationUrl(url, rendererOrigin, EXTERNAL_LINK_HOST_SET)) return;
+    event.preventDefault();
+    try { console.warn('[window] đã chặn điều hướng tới URL không tin cậy:', url); } catch (_) {}
+  });
   state.mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    // Chính sách mở link:
+    // Chính sách mở link (qua security-policy.js — So sánh origin/host chính xác):
     // 1) Host "Lấy Key ↗" (EXTERNAL_LINK_HOSTS — state.js, kiểm TRƯỚC để
     //    console.cloud.google.com / aistudio.google.com không rơi vào nhánh
     //    AUTH_HOSTS dưới): mở bằng TRÌNH DUYỆT MẶC ĐỊNH của hệ thống
@@ -148,17 +170,19 @@ function createWindow(startUrl) {
     // 3) Mọi URL khác bị deny lộ liễu + log — renderer tự xử lý trong app
     //    (novaCopyLink / novaDownloadUrl trong nova/web/index.html). Video
     //    Agent & các tool sidebar luôn là tab trong app.
-    try {
-      if (EXTERNAL_LINK_HOSTS.test(new URL(url).hostname)) {
-        // openExternal trả promise — bắt lỗi để không thành rejection lơ lửng.
-        const p = shell.openExternal(new URL(url).toString());
-        if (p && typeof p.catch === 'function') p.catch(() => {});
-        return { action: 'deny' };
-      }
-      if (AUTH_HOSTS.test(new URL(url).hostname)) {
-        return { action: 'allow', overrideBrowserWindowOptions: { width: 500, height: 660, autoHideMenuBar: true, webPreferences: { partition: NOVA_PARTITION, contextIsolation: true, nodeIntegration: false } } };
-      }
-    } catch {}
+    if (!securityPolicy.isValidAbsoluteUrl(url)) {
+      try { console.warn('[window] từ chối URL không phải http(s) hợp lệ:', url); } catch (_) {}
+      return { action: 'deny' };
+    }
+    if (securityPolicy.isTrustedExternalUrl(url, EXTERNAL_LINK_HOST_SET)) {
+      // openExternal trả promise — bắt lỗi để không thành rejection lơ lửng.
+      const p = shell.openExternal(new URL(url).toString());
+      if (p && typeof p.catch === 'function') p.catch(() => {});
+      return { action: 'deny' };
+    }
+    if (securityPolicy.isAllowlistedHost(url, AUTH_HOST_SET)) {
+      return { action: 'allow', overrideBrowserWindowOptions: { width: 500, height: 660, autoHideMenuBar: true, webPreferences: { partition: NOVA_PARTITION, contextIsolation: true, nodeIntegration: false } } };
+    }
     try { console.warn('[window] đã chặn mở cửa sổ ngoài (chỉ Lấy Key qua trình duyệt + đăng nhập bên thứ 3 được phép):', url); } catch (_) {}
     return { action: 'deny' };
   });

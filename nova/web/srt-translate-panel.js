@@ -108,8 +108,8 @@
       #tool-toolsrttranslate .st-note{ font-size:11px; color:var(--text-dim); margin-top:10px; line-height:1.5; }
       #tool-toolsrttranslate .st-actions{ display:flex; gap:9px; flex-wrap:wrap; }
       #tool-toolsrttranslate .st-status{ min-height:20px; font-size:12px; color:var(--text-muted); margin-bottom:10px; }
-      #tool-toolsrttranslate .st-status.err{ color:#f87171; }
-      #tool-toolsrttranslate .st-status.ok{ color:#4ade80; }
+      #tool-toolsrttranslate .st-status.err{ color:var(--red); }
+      #tool-toolsrttranslate .st-status.ok{ color:var(--green); }
       #tool-toolsrttranslate .st-list{ display:flex; flex-direction:column; gap:6px; max-height:52vh; overflow:auto; }
       #tool-toolsrttranslate .st-cue{ display:grid; grid-template-columns:96px 1fr 1fr; gap:10px; align-items:start; font-size:12px; padding:8px 10px; border:1px solid var(--border); border-radius:9px; background:var(--surface-2); }
       #tool-toolsrttranslate .st-t{ color:var(--text-dim); font-family:ui-monospace,Menlo,monospace; font-size:11px; }

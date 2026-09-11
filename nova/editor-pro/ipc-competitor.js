@@ -1,5 +1,7 @@
 const { analyzeCompetitor, topicThumbOutliers, thumbFromUrl } = require('./competitor');
 function registerEditorProCompetitor(ipcMain) {
+  // Phân tích đối thủ thông minh — GIỮ HỢP ĐỒNG dù renderer chưa gọi
+  // (quyết định owner tại MEMORY 2026-09-11s: nâng cấp giữ kênh cho lúc wire).
   const ch = 'nova:analyzeCompetitor';
   try { ipcMain.removeHandler(ch); } catch (_) {}
   ipcMain.handle(ch, async (e, payload = {}) => {
@@ -10,7 +12,7 @@ function registerEditorProCompetitor(ipcMain) {
       return await analyzeCompetitor(channel, onProgress, Math.max(8, Math.min(30, Number(payload.count) || 20)));
     } catch (err) { return { ok: false, error: String(err && err.message || err).slice(0, 200) }; }
   });
-  // 📈 Thumbnail outlier theo CHỦ ĐỀ (cho tab SEO)
+  // Thumbnail tham chiếu: tìm outlier theo chủ đề / lấy từ link video.
   const ch2 = 'nova:thumbOutliers';
   try { ipcMain.removeHandler(ch2); } catch (_) {}
   ipcMain.handle(ch2, async (e, payload = {}) => {

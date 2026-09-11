@@ -2326,4 +2326,501 @@ Khi validate env config, đừng đặt min quá cao — test cần giá trị n
 - Dọn dẹp: xoá `nova/scripts/tmp-t7-diagnose.js`, `tmp-t7grep.js`, `AI-Video-Studio-tmp1.txt`, `AI-Video-Studio-tmp2.txt`, các thư mục `%TEMP%\nova-t7diag-*`.
 - Đã commit (2026-09-11) trong cùng snapshot đa session (cùng mốc với entry 2026-09-11c, Bổ sung 2).
 
+## 2026-09-11e — Tool 7 "Dựng Video": khôi phục hàng nút hành động dưới preview (bị xoá nhầm từ 2026-09-08)
 
+- **Bối cảnh**: sau fix 2026-09-11d, user báo "vẫn không thấy nút nào" — screenshot cho thấy pctl overlay ĐÃ hiện đúng (▶ 1x 00:00 ▢ ⛶ 16:9); hàng nút user cần là **hàng nút mini dưới .t7-player** (✂ Tách / 🖼 Ảnh đè / 🔊 SFX / ↶ …) đã bị xoá trong đợt "dọn hàng nút mini dư thừa" (MEMORY 2026-09-08, 2 entry trùng).
+- **Phát hiện quan trọng**: toàn bộ handler vẫn còn sống — `t7Undo/t7Redo` (tool-t7.js L6/L8), `t7SplitAtPlayhead` L19, `t7DeleteSel` L31, `t7DupSel` L36, `t7ToggleSnap` L506, `t7AddOverlays` L1827, `t7SfxLibOpen` L1860, `t7HandleAudio` L2181, `t7HandleBgm` L2196; block timeline cũ `#t7Tl` (`display:none`, DOM giữ để tránh null-crash) vẫn chứa `.t7-tlbar` + inputs `t7VoInput/t7BgmInput/t7OverlayInput/t7SfxInput/t7SfxModal` ở index.html ~L2100–2180; class CSS `.t7-tlbtn` vẫn được định nghĩa (build-video.css L244).
+- **Fix**: (1) index.html — chèn `<div class="t7-actrow" id="t7ActRow">` ngay sau `</div>` đóng `.t7-player`, trước `#t7StatusLean`, 10 nút dùng lại class `.t7-tlbtn`: ↶ Hoàn tác / ↷ Làm lại / ✂ Tách / ⧉ Nhân đôi / 🗑 Xoá / 🖼 Ảnh đè / 🔊 SFX / 🎙 Giọng đọc (`t7VoInput`) / 🎵 Nhạc nền (`t7BgmInput`) / ↻ Đồng bộ cảnh (`t7Build`). (2) build-video.css L226 — thêm `.t7-actrow{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:7px 14px 1px}`. Lý do lần xoá trước làm vỡ `_t7SyncColHeight` không còn áp dụng: sau fix 11d player đã `width:100%` + `_pinW()` ghim px, hàng nút dưới player không chèn ép khung nữa.
+- **Kiểm định**: `npm run check` **EXIT 0** đầy đủ (syntax 394, IPC 151/19, parity 0, shared 31/18, size 0 warn, toplevel ✅, shadow 0 lỗi — 110 warn id-tham-chiếu có guard là noise có sẵn). Lưu ý dò lỗi: chạy từng sub-check riêng (`node nova/scripts/toplevel-check.js`) để phân biệt verdict thật với các dòng "bị đè bởi" informational của cơ chế dedup shared-consts → per-tool; lần `npm run check` đầu bị ngắt giữa chừng gây EXIT 1 giả.
+- User cần **Ctrl+R hoặc restart app** để thấy hàng nút mới (renderer không tự nạp lại HTML).
+
+
+
+
+## 2026-09-11e — Dọn 38 script tmp-* + kiểm tra chéo ghi đè / bị ẩn toàn renderer
+
+- **Dọn dẹp**: xoá 38 file `nova/scripts/tmp-*.js` (trong đó `tmp-hc.js` 441KB đang kích warning size-budget). Quét tham chiếu trước khi xoá: không có package.json / CI / script chính thức nào phụ thuộc (chỉ ipc-inventory.json tự sinh lại, log lịch sử trong chính MEMORY.md này, worktree .kilo). Sau xoá: size budget 0 warnings; syntax check 394 files (trước 431).
+- **Audit ghi đè hàm (script tạm, đã xoá)**: parse 55 đơn vị nạp của index.html theo thứ tự, truy vết khai báo top-level depth-0 (bỏ qua scope lồng — lần quét thô sai 72 false-positive do regex bắt cả khai báo trong hàm). Kết quả: **19 tên trùng, 100% là pattern stub `shared-consts.js` → bản thật trong module** (đúng thiết kế, khớp 52 dòng "bị đè" của check:toplevel). **0 ghi đè bất thường.** Mở rộng sang 9 HTML còn lại của nova/web: **0 trùng khai báo**.
+- **Audit "bị ẩn"**: 97 element inline `display:none` có id trong index.html, phân loại bằng truy vết biến + `show()` helper + loop `el.style.display = hop ? '' : 'none'` (voice.js giongThemDoi) + label for=. Kết quả:
+  - **Không có tính năng sống nào bị ẩn oan** (không lặp lại lỗi class "chi tiết giọng đọc bị che").
+  - Ẩn CHỦ ĐÍCH: input file (t3ImgInput, assetFileInput, fileInput, t7MediaInput, t7OverlayInput, t7SfxInput — kích bằng .click()/label), state holder ẩn (t7Aspect — select giữ giá trị thay bằng segmented buttons; tfUseRefs — checkbox Tool 2 đọc để khoá mặt, có comment "giữ ẩn" trong HTML), t7PreviewAudio (audio chạy khi ẩn).
+  - Đã xác minh CÒN SỐNG (false alarm của heuristic): gtDesign, upNote, upBatchBar, upClearDoneBtn, upRetryBtn, t9Step2Body, t7ExpCloseBtn, t7FxPanel, t7MediaPanel, pStyleImgInput, mvUploadInput, tvPromptFile, t7AutoModal.
+  - UI CHẾT (ẩn vĩnh viễn, JS ghi textContent có guard hoặc không tham chiếu) — informational, chờ quyết định dọn: pChannelInfoBox, pExtractBox, t2TimingInfo, sub-prompts, sub-srt, mvVidCount, t8SrtOutput, t7RenderCanvas, t7VoInput, t7BgmInput, bulkUpsBtn, bulkUpsHint, gtDesignInfo, t2AssetInfo, statAssigned, badge-list/assets/prompts, t9Titles (có comment "giờ hiện ở bảng chọn"), t9Step2Hint, t8ApiPanel (inline chỉ sửa head span), upgCompare. Cùng họ với ~110 warn C2 của check:shadow.
+- **Kiểm định**: `npm run check` EXIT 0 (đã xác minh bằng $LASTEXITCODE trực tiếp). Lưu ý môi trường: PS 5.1 bọc stderr của check:shadow (110 warn in ra stderr) thành NativeCommandError khi redirect `2>&1` — exit code thật vẫn 0, không phải lỗi check.
+- Không sửa code renderer trong phiên này; không commit.
+
+## 2026-09-11f — P0a dọn ttsDoc + build fresh + e2e GUI 3 run (packaged, CDP)
+
+**P0a — cruft `ttsDoc` (hoàn thành)**:
+- Xoá `async function ttsDoc` chết trong `nova/web/src/toolbox/shared-consts.js` (trước đây line 785, 17 dòng) — shadowed bởi bản SSOT trong `tool-tts.js` (load sau, ghi đè). Verify-before-write: load order index.html (shared-consts #2 → tool-tts ở khối per-tool), bản cũ gọi `_ttsChay` 4-arg + return thiếu `engine` (caller sống voice.js:492/506, autopipe.js:164 destructuring `engine` → bản cũ gãy kép). Đặt marker `=== L?: async function ttsDoc ===` + `[P0a] fn chet da xoa` theo pattern repo. `npm run check` EXIT 0; smoke cô lập `tmp-deep-smoke.js` PASS (0 lỗi chết).
+
+**Build fresh packaged**:
+- `npm run build:win` EXIT 0 → `dist/AI-Video-Studio-Setup-1.0.1-x64.exe` + `...Portable...exe` (NSIS + portable, sign self-signed, asar integrity OK).
+
+**E2E GUI (`ui-functions-e2e.js`, exe packaged, CDP bấm nút thật) — 3 run**:
+- **Run 1** (`e2e-2026-09-11T03-52-37-359Z`, fixture CŨ): pass 3 / fail 2 / attempted 8. S1 tabSweep 24 tabs 0 lỗi, S2 script PASS, **S3 TTS PASS (mp3 thật 19.64s/394KB qua backend OmniVoice local 8772)** — mục tiêu validate voice/TTS identifiers runtime: ✓. 2 fail + S8-tool9 sai format đều do **fixture lỗi thời**: (a) mock chỉ nhận prompt storyboard qua marker `ĐOẠN KỊCH BẢN` trong khi prompt sống (tool-t2.js:357) đã tiếng Anh `SCRIPT SEGMENT:` → trả SCRIPT_FULL văn xuôi → callLLMJson fail → "AI chưa tạo được cảnh"; (b) tool9 cần JSON `{titles,hook,body,topics,chapters,cta,tags,hashtags}` mà mock trả văn xuôi; (c) S5/S6 bám lưới 8 panel cũ (`#btnRunFull`, panel-08 renderInfo) đã bị thay bằng wizard Whiteboard Studio (video-agent-panel.js: `#vaNarration`, `#vaRunBtn`, `#vaProgressLabel`, `#vaLog`, `#vaResult`).
+- **Fix fixture (ui-functions-e2e.js)**: thêm `seoPackFromPrompt()` + route mock: `/SCRIPT SEGMENT:|storyboard director|ĐOẠN KỊCH BẢN/` → storyboard JSON (tái dùng `storyboardFromPrompt`), `/"titles"\s*:\s*\[10/` → SEO JSON; viết lại S5 theo wizard (điền `#vaNarration` = storyboard S4 thật → `#vaRunBtn` → poll progress/log → mp4 từ "Render xong:" + probe ffprobe); S6 → chính sách in-app (openWindow phải inApp:true, cấm target `/video-agent\.html/`) + mount wizard (va-root, #vaNarration/#vaRunBtn/#vaResult, tab Dễ/Nâng cao). Splice bằng script tmp (đã xoá). `node --check` + `npm run check` EXIT 0.
+- **Run 2** (`...T04-20-47-790Z`): app packaged bị THOÁT sạch code=0 giữa S3 ("CDP is not connected") → pass 2 / fail 11 — **nhiễm môi trường** (nghi session song song chạy smoke/e2e cùng lúc gọi killAppExes trúng exe dist). Bài học: e2e packaged cần chạy khi không có session khác chạm dist.
+- **Run 3** (`...T04-24-50-538Z`): **pass 4 / fail 2 / attempted 7**. PASS: S1, S2, S3 TTS, **S4 storyboard 5 cảnh** (mock fix hiệu quả), S8-tool9 SEO PASS có product `seo-pack.json`. **S5-vaPanel FAIL = BUG THẬT được e2e bắt**: wizard chạy đúng → documentary pipeline dựng TIMELINE THẬT (project `video_mtwgfzy7`: 5 scenes, durationSec 41.307, narration từ storyboard S4) rồi crash ở STAGE 10a — `documentary:runFull` ném `DOC_UNKNOWN: flowAccounts is not defined` (viError wrap tại `nova/documentary/ipc.js:39`). Đúng bug MEMORY [2026-09-08] entry (2) — **đã bị refactor tái phá vỡ**: hiện `run()` (44-101) gọi `runStages2(ctx)` (109, module-level) nhưng STAGE 10a line 197 vẫn xài `flowAccounts` trần (chỉ được declare trong closure `createOrchestrator` line 42). **KHÔNG fix chéo**: file đang do session song song sở hữu (worktree `.kilo\worktrees\alkaline-hook` đang refactor runStages2 — fix của họ có vẻ đúng hướng: đưa flowAccounts vào ctx). S6-vaWindowPipeline fail = renderer CDP đóng băng sau lỗi main ("Timed out waiting for page target") — stall đã biết; mount wizard bản thân đã được S5 chứng minh (fill + click #vaRunBtn thành công).
+- Sản phẩm đối chiếu: `smoke-results/e2e-2026-09-11T04-24-50-538Z/` (report.json, screenshots, products).
+
+**Việc khác trong phiên**:
+- Sửa hộ syntax `nova/scripts/tmp-hidden-audit.js:54` (khai báo `canShow`/`maybe` trùng do dán đôi, làm gãy `check:syntax` toàn cục) — xoá dòng lặp; session sở hữu kiểm lại logic khi chạy tiếp.
+- Tool tmp dùng một lần đã xoá (tmp-fix-e2e.js, tmp-s5s6*.txt, tmp-read-asar.js, tmp-list-asar.js, tmp-asar-header.js); để lại `tmp-find-ident.js` (grep định danh generic — hữu ích cho audit đang chạy).
+- `npm run check` EXIT 0 sau mọi thay đổi. Không commit (owner session commit).
+
+**Next**:
+- Chờ session sở hữu documentary fix `flowAccounts` (runStages2 ctx) → rebuild → re-run e2e: S5 có khả năng PASS đầy đủ (timeline 41.3s đã dựng được, chỉ thiếu render).
+- S6 có thể nâng cấp thêm: retry mount check sau stall, hoặc chạy S6 trước S5.
+- S8 tool9 verdict 'attempted' dù "✓ Xong" + product — cân nhắc nâng rule verdict trong e2e.
+- ⚠️ **Check cuối bị chặn bởi session song song**: lúc kết thúc phiên, `package.json` working tree bị stripped còn ~594 bytes, MẤT TOÀN section `scripts` (git diff --stat: 1 insertion + 35 deletions; HEAD vẫn nguyên) → `npm run check` báo `Missing script: "check"`. Không phải thay đổi của phiên này (check EXIT 0 ngay trước đó sau mọi edit). KHÔNG restore thay họ — session sở hữu đang sửa dở; cần re-run `npm run check` khi họ xong.
+
+## 2026-09-11g — Kiểm tra chéo chồng chéo code/logic/UI toàn app + khôi phục `package.json`
+
+Audit chồng chéo theo yêu cầu user: chạy toàn bộ pin kiểm định (syntax/ipc/parity/shared/size/toplevel/shadow/dedup-refcheck/dedup-shared-consts/handler-contract) + `test:video-agent` + smoke.
+
+- **Khôi phục `package.json`**: working tree bị stripped toàn bộ section `scripts` (27 script) + `devDependencies` (electron, electron-builder, png-to-ico) — đúng hiện trạng phiên trước ghi ở entry 2026-09-11f. Diff so với HEAD là xóa thuần (0 dòng thêm nội dung) nên restore bằng `git checkout -- package.json` không mất công của ai. Sau restore: `npm run check` **EXIT 0** (394 file syntax, 151 kênh IPC / 0 trùng, parity 0 pair, 18 state keys, size 0 warn, shadow 0 lỗi thật).
+- **Kết quả audit chồng chéo (không có chồng chéo phá hủy mới)**:
+  - `check:toplevel`: 0 xung đột `let/const/class`; 52 hàm `shared-consts.js` bị đè bởi file per-tool/utility — pattern đã biết, CHẤP NHẬN (bản effective luôn là file nạp sau; `dedup-shared-consts`: SAME 0, SHARED_BIGGER 0 → không có case "logic cũ đè lên logic mới").
+  - `dedup-refcheck`: 0 top-level ref trỏ tới định nghĩa chỉ có ở peer → zero-risk ReferenceError.
+  - `handler-shadow-check`: **0 lỗi shadowing/id-trung**; 110 cảnh báo C2 (id tham chiếu không thấy tĩnh nhưng ĐÃ CÓ guard) — chỉ mang tính thông tin; exit 1 trước đó là nhiễu stderr PowerShell, không phải lỗi thật.
+  - `handler-contract-check`: 0 errors, 267 warning hàm "dead" (nợ dọn dẹp, không phá runtime).
+  - IPC inventory: 151 kênh + 19 events, **0 kênh trùng tên**.
+  - `test:video-agent` EXIT 0: PASS 42+56+16, FAIL 0; IPC smoke 12 kênh; bridge contract OK.
+- **Bug thật đã FIX (2026-09-11g, user duyệt)**: `nova/documentary/orchestrator.js` — `runStages2(ctx)` là hàm module-level (dòng 109), destructuring ctx dòng 110 thiếu `flowAccounts`, nhưng STAGE 10a dòng 197 (`if (flowAccounts.length > 0 …)`) vẫn dùng biến trần chỉ tồn tại trong closure `createOrchestrator` (dòng 42) → `ReferenceError` (`DOC_UNKNOWN`) ngay khi pipeline dựng xong timeline. Fix 2 dòng: truyền `flowAccounts` vào object ctx tại dòng 102 + thêm vào destructuring dòng 110. Kiểm định sau fix: `npm run check` EXIT 0, `test:documentary` (nova/) EXIT 0 "documentary-test-ok", `test:video-agent` EXIT 0. Đóng nợ e2e Run 3 S5 (2026-09-11f).
+- `npm start` smoke: exit 0 (single-instance chặn vì app user đang mở — không phải lỗi).
+
+## 2026-09-11h — Sửa màu chữ khó đọc ở chế độ sáng (light mode)
+
+User báo: chuyển GUI sang chế độ sáng có các UI không nhìn rõ chữ. Audit bằng script quét luminance màu chữ cứng trên toàn bộ src/styles/*.css + index.html + panel JS. Kết luận: chỉ `index.html` + `src/styles/*.css` là theo theme (light/dark qua `html.dark`); video-agent.html / documentary.html / img-to-vid.html / các showcase là nền tối cố định có chủ đích — KHÔNG đụng.
+
+Fix (6 vị trí, dùng CSS var theme-aware, giữ nguyên ngoại hình dark qua override `html.dark` khi cần):
+- `base.css` `.auto-arrow`: `#d6cfc2` (be nhạt, vô hình trên nền sáng) → `var(--text-dim)` + `html.dark .auto-arrow{color:#d6cfc2}`.
+- `srt-translate-panel.js` `.st-status.err/.ok`: `#f87171`/`#4ade80` (pastel dark-mode) → `var(--red)`/`var(--green)`.
+- `niche.js` (3 chỗ trạng thái lỗi/verdict): `#e08a8a` → `var(--red)`, `#5fbf7f` → `var(--green)`.
+- `build-video.css` `.t7-pcap .vi`: `#6ea8dc` → `var(--blue)`.
+
+Không đụng: hero `.va-hero`/`.wb-hero` (nền gradient tối cố định — chữ trắng vẫn đạt tương phản), log box tối (`va-log`, `wb-logs`, `novaLogBox`), timeline dựng phim `.t7-tl` (LUÔN tối có chủ đích, comment trong CSS), các badge trắng trên overlay ảnh (nền rgba đen).
+
+Kiểm định: `npm run check` EXIT 0 (cảnh báo C2 shadow là nhiễu đã biết, có guard); `npm start` smoke EXIT 0, renderer nạp index.html sạch, quit. File audit tạm (tmp-theme-audit-out.txt) đã dọn khỏi nova/scripts.
+
+## 2026-09-11i — Chọn lọc cải tiến học từ D:/repo/TDTStudio (preflight cấu trúc + CPU budget + selfcheck bundle)
+
+- **Preflight cấu trúc video-agent**: module mới `nova/video-agent/orchestrator/preflight.js` — thu thập danh sách issue `{code, message, fixHint, blocking}` (dự án tồn tại; đĩa trống ≥1 GiB giữ nguyên hợp đồng `skipDiskPreflight`/`minFreeBytes`; output ghi được; renderer mặc định khả dụng qua `probe()` mới ở remotion/bridge). Blocking → job FAILED lộ liễu với mã VA_* (Luật 10); danh sách issue persist vào `job.json` (trường `preflight`) để inspect đọc. Mã mới trong errors.js: `VA_OUTPUT_NOT_WRITABLE`, `VA_MUX_WRITE_FAIL`.
+- **CPU budget** `nova/editor-pro/cpu-budget.js`: ffmpeg con trong `muxAudio` chạy ưu tiên BELOW_NORMAL (`os.setPriority`) + `-threads` theo ngân sách 75% cores. Học `core/cpu_budget.py` của TDTStudio nhưng KHÔNG dùng Win32 Job Object vì cần native module — cấm theo Luật 9; degrade không hạ được ưu tiên được emitWarning (không nuốt).
+- **Fix Luật 10 — 2 chỗ trong `muxAudio` (ipc-remotion-render.js)**: (1) ghi file âm thanh tạm thất bại trước đây nuốt lỗi → trả video câm; giờ ném `VA_MUX_WRITE_FAIL`; (2) ffmpeg mux exit≠0 trước đây im lặng `return videoPath` (mất giọng đọc âm thầm); giờ xoá output dở + ném `VA_RENDER_FAIL`.
+- **Bundle selfcheck**: `nova/scripts/bundle-selfcheck.js` + `npm run check:bundle` — kiểm ffmpeg thật (không rơi vào asar), nova-remotion/bundle có index.html, chrome-headless-shell (WARN nếu chưa tải — renderer tự tải lần đầu), compositor unpacked, web/index.html, userdata ghi được. Không GUI, không mạng; exit 1 khi có FAIL. Học `--selfcheck` của TDTStudio.
+- **Chọn KHÔNG làm**: encoder probe (Remotion renderMedia dùng compositor riêng không cắm được hw encoder; mux đang `-c:v copy` không encode → không có chỗ dùng hợp lý); Undo/History snapshot editor-pro + AV-sync để backlog.
+- **Kiểm định**: `npm run check` PASS; `npm run test:video-agent` PASS — preflight chỉ probe renderer MẶC ĐỊNH nên không phá các test inject mock adapter.
+
+## 2026-09-11j — Light mode: fix hàng nút pill Tool 7 tối-on-khó-đọc + phục hồi `package.json` hỏng JSON
+
+- **Bug chính (user báo kèm screenshot tab Dựng Video ở light mode)**: hàng nút hành động dưới preview (`#t7ActRow`: Hoàn tác/Tách/Nhân đôi/Ảnh đè/SFX/Giọng đọc/Nhạc nền/Đồng bộ cảnh) render nền xanh đen `#171e3a` cứng + chữ màu tối → **tối trên tối, không đọc được**.
+- **Nguyên nhân gốc**: `.t7-tlbtn` (build-video.css) dùng `var(--tldim)`/`var(--tlline)` + nền `#171e3a` — biến `--tl*` chỉ được định nghĩa trong phạm vi `.t7-tl` (timeline always-dark). Nút trong `#t7ActRow` nằm NGOÀI `.t7-tl` → `--tldim` rỗng → `color` invalid-at-computed-time rơi về giá trị kế thừa (tối) trên nền tối cứng.
+- **Fix** (`nova/web/src/styles/build-video.css` ~L246-255): `.t7-tlbtn` mặc định theo theme (`color:var(--text-muted)`, `background:var(--surface-3)`, `border:1px solid var(--border)`, hover `--accent`/`--text`); thêm override `.t7-tl .t7-tlbtn` giữ NGUYÊN bộ màu tối timeline (nút này chỉ dùng ở 2 chỗ: `#t7ActRow` ngoài theme + bên trong `.t7-tl` đang display:none). Timeline always-dark không đổi (đúng thiết kế L239-242).
+- **Phục hồi `package.json`**: entry 2026-09-11i thêm script `check:bundle` nhưng để dấu phẩy thừa trước `}` → JSON hỏng, toàn bộ `npm run *` die với EJSONPARSE. Đã bỏ trailing comma (L37-38).
+- **Kiểm định**: `npm run check` EXIT 0 (C2 shadow warnings = nhiễu đã biết, có guard). Không chạy `npm start` (thay đổi thuần CSS, không đụng main/preload/IPC).
+- **Chưa commit**; working tree còn diffs đa session (index.html, documentary/orchestrator.js, ui-functions-e2e.js…).
+
+## 2026-09-11l — Light mode Round 3: mở rộng theme-aware cho nút & text còn lại
+- **Bối cảnh:** sau khi sửa `.t7-tlbtn` (Round 2, entry 2026-09-11j), quét toàn bộ hex hardcode trong `nova/web/src/styles/*.css` + `index.html` (scanner tmp, 192 dòng hit) và phân loại: (a) có chủ đích — giữ nguyên, (b) hỏng theme / lệch phong cách — sửa.
+- **Sửa (theo phong cách chủ đạo: accent pill + --on-accent, --surface*/--border, tint mềm color-mix):**
+  - `tool-niche.css`: sidebar `#f9f9f9`→`--surface-2`, scrollbar `#ddd`→`--border-2`, tile `#555/#333`→`--text-muted/--text`, hover `rgba(0,0,0,.04)`→`--surface-3`, active xanh `#3b82f6`→`--accent`+`--on-accent` (hợp tông cam của app), content `#fff`→`--bg`. Trước đây panel này trắng cứng cả ở dark mode.
+  - `base.css`: `.info-box` (default/violet/teal) + `.status-bar` (ok/error/working) pastel hex cứng → `color-mix` tint theo `--accent/--violet/--teal/--green/--red` (trước đây không có override `html.dark`); `.auto-step` base/active/done/fail → theme pill; `.auto-stop` `#fff`→`--surface`; `.ptag` `#fef2f2`→color-mix rose; `.veo-mode-btn.active` viền `#fed7aa`→color-mix accent; các chỗ chữ trên nền accent cứng (`sb-export`, `tb-av`, `tb-upd-ic`, `tb-newvid`, `wb-tab.active`, `wb-btn-primary`, `.dstep .st.cur .dot`) → `var(--on-accent)` (khớp convention sẵn có của `.tb-upgrade`; dark giữ #1c0f05, light lên trắng = tương phản tốt hơn).
+  - `build-video.css`: `.t7-vidbtn.on` `#1c0f05`→`--on-accent`.
+  - `video-agent.css`: `.va-step.done` + `.va-rail-node.done` chữ `#fff`→`#04211d` trên green (cùng convention `.dstep` — trắng trên green dark #3dce85 chỉ đạt tp ~2.0).
+  - `index.html`: badge "Có bản mới — Tải cho Mac" `#fff`→`--on-accent`; info box Tool 6 "Text → Video" `#fff7ed/#fed7aa/#9a3412` → `--accent-soft`/color-mix/`--text-muted`; 2 nút Tool 8 (teal/violet) `#fff`→`--on-accent` (sửa dark mode: teal #2dcbb1 + trắng chỉ tp ~2.0).
+- **Giữ nguyên có chủ đích:** badge `rgba(0,0,0,.5)+#fff` trên media, `.t7-player/.t7-pctl` trên player, màu code legend `.k-*/.t7-gclip`, timeline `.t7-*` (always-dark), hero tự chứa (`.wb-root-v2`, `.va-hero`), console log (`novaLogBox`, `.va-log`), QR trắng, pastel chip `.pc-ico`, gradient thumb `.pf-th/.dproj`.
+- **Kiểm định:** `npm run check` EXIT 0 (C2 shadow warns = noise đã biết). `npm start` không chạy — thuần CSS/inline style.
+- **Phát hiện môi trường:** chạy `npm run check` lúc 1 lần exit 1 do race trong `syntax-check.js` — session song song tạo/xoá `tmp-imgcheck.js` giữa bước readdir và `node --check` (MODULE_NOT_FOUND). Chạy lại khi working tree sạch tmp → EXIT 0. Không phải lỗi từ thay đổi.
+- **Tmp:** `nova/scripts/tmp-scan-theme.js`, `tmp-fix-onaccent.js`, `tmp-mem-2026-09-11k.js`→đổi tên l, `tmp-scan-out.txt`, `tmp-check-out.txt` — đã xoá sau task.
+
+## 2026-09-11k — Audit code mồ côi / dead / zombie (check-only, chưa xoá module nào)
+
+- **Phạm vi quét** (script `tmp-orphan-scan.js` tự viết, đã xoá sau audit): file web mồ côi, trang HTML mồ côi, kênh IPC zombie, module main mồ côi, dead functions, rác `tmp-*`.
+- **IPC zombie: 0** — không có kênh nào đăng ký ở main mà renderer không gọi (quét `ipcMain.handle/on` vs `invoke/send` + preload).
+- **Mồ côi thật — cụm showcase/player HTML tĩnh** (không một file nào trong repo tham chiếu): `nova/web/advanced-motion-showcase.html`, `nova/web/antarctica-doc-player.html`, `nova/web/documentary-channels-live-vfx.html`, `nova/web/documentary-vfx-showcase.html`, `nova/web/youtube-creators-vfx-showcase.html`, `nova/web/handdraw-studio-panel.js.cp1258.fixed` (bản backup encoding lỗi), `nova/web/img/s1..s6.jpg`. → Đề xuất xoá khi owner duyệt; chưa xoá (chờ commit của phiên song song).
+- **Mồ côi thật — module chưa wire** (git log -S xác nhận `main.plain.js` CHƯA BAO GIỜ require): `nova/main/secret-vault.js`, `nova/main/security-policy.js`. Cả 2 có test + được mô tả trong MEMORY (wiring) nhưng hiện không module nào import → hoặc wire vào main hoặc gỡ. Chưa xoá — cần quyết định owner.
+- **Zombie candidate**: `nova/editor-pro/remotion/remotion-bit-sfx-manifest.js` — "ES module copy của JSON" không ai import (JSON gốc cũng không tồn tại). Chưa xoá.
+- **POC cluster có chủ đích — KHÔNG xoá**: `nova/editor-pro/nova-remotion/poc-narrator/*` (render.js, build-video.js, các *-sheet.js…) — script demo chạy tay, có README, không ai require nhưng là proof-of-concept.
+- **False positive đã loại** (quét chuỗi naive không bắt require qua path trung gian): toàn bộ `documentary/ai/*`, `documentary/core/*` (llm-json, job-queue, versioning…), `documentary/pipeline/*`, `editor-pro/gpu-encoder.js`, `editor-pro/nova-yt.js` (optional require trong `editor-pro/niche/loi.js` — try/catch CÓ CHỦ ĐÍCH, lưu ý Luật 10 khi review), `main/error-reporter.js`, `main/global-errors.js`, `main/janitor.js`, `main/lifecycle-log.js`, `main/single-instance.js`, `main/updater.js`; `editor-pro/nova-remotion/bundle/*.bundle.js` = webpack chunk của Remotion runtime.
+- **Dead functions: 269 warning / 17 file** (tăng từ 267). Phân bố: `shared-consts.js` 103 (pattern chia sẻ đã chấp nhận — phần lớn là data global false-positive của checker), `tool-t7.js` 67 (t7Media*/t7Glob*/t7Fx* — cụm dead THẬT, ứng viên dọn), `tool-t2.js` 33, `video-agent-panel.js` 12, `srt-translate-panel.js` 11 (file của phiên song song — KHÔNG đụng), còn lại ≤9. Nhiều warning là nhiễu (checker không đếm truy cập thuộc tính: `state`, `ALL_TOOLS`… bị báo dead dù dùng khắp nơi).
+- **Rác tmp-* đã dọn** (stale ≤ 2026-09-10 + script scan tạm của audit này): `tmp-h7-*` (7), `tmp-h8-*` (10), `tmp-h9-*` (2), `tmp-hunt6.out`, `tmp-voice-uvicorn.err/out`, `scripts/__pycache__/tmp-tdt-render-drive.cpython-313.pyc`. Giữ nguyên 100% tmp-* ngày 09-11 (của phiên song song đang chạy: h10→h23, tmp-ctx/eng2/engine/maps/patch1/routes/safe/scan, tmp-t7-flicker.js).
+- **Lưu ý vận hành**: `nova/handler-contract-report.json` bị phiên song song ghi/xoá trong lúc audit → đọc report phải chạy lại check trong cùng tiến trình. Terminal PowerShell dùng chung 2 phiên, PSReadLine lỗi với lệnh dài → ưu tiên script file thay `node -e` dài; KHÔNG `Stop-Process node` (đã từng kill nhầm node của phiên khác).
+
+## 2026-09-11l — Thực thi dọn mồ côi (13 file) + WIRE `secret-vault`/`security-policy` vào app (user duyệt "tiến hành")
+
+### A. Đã xoá (git rm, đã xác minh 0 tham chiếu trước khi xoá)
+- 5 HTML showcase/player tĩnh: `advanced-motion-showcase.html`, `antarctica-doc-player.html`, `documentary-channels-live-vfx.html`, `documentary-vfx-showcase.html`, `youtube-creators-vfx-showcase.html`.
+- `web/handdraw-studio-panel.js.cp1258.fixed` (backup encoding lỗi).
+- 6 ảnh `web/img/s1..s6.jpg` — 0 tham chiếu tuyệt đối (kể cả trong chính 5 HTML đã xoá); thư mục `web/img/` rỗng → gỡ luôn.
+- `editor-pro/remotion/remotion-bit-sfx-manifest.js` (ES module copy của JSON không tồn tại, 0 import).
+
+### B. Wire Secret Vault (safeStorage) — module `nova/main/secret-vault.js` giờ SỐNG
+- IPC mới: `nova/main/ipc/secret-vault.js` — 6 kênh `secretVault:get/set/delete/list/getAll/migrate`; validate input lộ liễu (key lạ THROW qua rejected invoke — đúng Luật 10).
+- Đăng ký trong `nova/main/ipc/index.js` (`registerSecretVaultIpc()`, gọi trực tiếp không try/catch nuốt).
+- Preload: expose `window.native.secretVaultGet/Set/Delete/List/GetAll/Migrate` (contextIsolation giữ nguyên).
+- Chưa có renderer nào gọi — đây là hạ tầng cho feature lưu credential (thay `novaStore` plain-text cho key nhạy cảm trong TOP_LEVEL_SECRET_KEYS).
+
+### C. Wire Security Policy — module `nova/main/security-policy.js` giờ SỐNG
+- `nova/main/window.js`: `setWindowOpenHandler` đổi từ regex hostname sang policy (`isValidAbsoluteUrl` → `isTrustedExternalUrl` → `isAllowlistedHost`) — hành vi giữ nguyên; thêm guard MỚI `will-navigate` (chặn location.href tới URL lạ: chỉ cùng origin renderer hoặc host allowlist — chống open-redirect).
+- `nova/main/state.js`: thay cặp regex `AUTH_HOSTS`/`EXTERNAL_LINK_HOSTS` bằng mảng `AUTH_HOST_NAMES`/`EXTERNAL_LINK_HOST_NAMES` (nguồn chân lý duy nhất, Luật 3). Regex cũ bị check:shared báo state chết → GỠ khỏi exports; policy dùng Set<string> dựng từ 2 mảng.
+- **Kiểm chứng tương đương** (tmp-policy-equiv.js, 21 mẫu gồm evil-google.com, google.com.evil.com, javascript:, file://): policy Set khớp 100% hành vi regex cũ trên AUTH + EXTERNAL.
+- Doc đồng bộ: comment header window.js + `nova/ARCHITECTURE.md` L276 đổi tên hằng số.
+
+### D. Kiểm định
+- `npm run check` EXIT 0 (sau xoá 13 file AND sau wire; check:shared bắt đúng 2 state chết lần đầu → sửa xong EXIT 0). IPC inventory: 157 kênh (151 + 6 secretVault), 19 events.
+- Vault smoke (stub `electron` qua `Module._load`): 6 kênh đăng ký OK; set/get/getAll/migrate/list/delete PASS; key lạ bị từ chối PASS; vault.bin JSON v=1, giá trị base64(safeStorage.encrypt) — KHÔNG plain text PASS; delete gỡ key khỏi file PASS.
+- Policy equiv PASS (21 mẫu, 0 lệch).
+- `npm start` KHÔNG xác định được: single-instance guard báo instance khác đang chạy (app của phiên song song) → thoát ngay EXIT 0 nhưng chưa boot. Cần chạy lại `npm start` khi instance kia đóng để smoke UI thật.
+- Học được: persist của vault chạy async qua `_writeChain` → test phải chờ (~300ms) trước khi đọc file; format vault: `{"v":1,"items":{key: base64(encrypt(value))}}`.
+
+### E. Còn lại (chưa làm, không thuộc task này)
+- Dead functions 269 warning (cụm thật nhất: `tool-t7.js` 67 hàm) — cleanup lớn, vướng file phiên song song.
+- Chưa commit toàn bộ (phiên song song sở hữu commit).
+
+## 2026-09-11m — Học từ NNLauncher: Watermark/logo QA cho FINAL_QA + TTS local fallback qua backend Voice Studio
+
+### Bối cảnh
+- Task tích hợp 2 pattern học được từ `D:\NNLauncher` (PyInstaller, chỉ học pattern không decompile):
+  (1) detector logo/watermark ONNX chạy offline → đưa vào QA video-agent; (2) OmniVoice local TTS →
+  fallback khi dự án chưa có giọng đọc.
+- Khám phá then chốt: repo **đã có sẵn** `nova/watermark-native.js` (WatermarkRemover-AI, chế độ
+  `--preview` trả JSON boxes chỉ-detection) và `nova/voice-studio/backend/app.py` (FastAPI OmniVoice
+  0.2.1, uvicorn 8771, `/api/tts` task-based + `/api/status/{tid}` + `/api/files/{tid}/output.mp3|srt`)
+  → không cần thêm dependency, không copy code NNLauncher (đúng Luật 9-10).
+
+### A. Watermark/logo QA (`nova/video-agent/qa/watermark.js` — module mới)
+- `createWatermarkProvider({videoPath, meta, maxFrames, detect, ...})`: extract 1 frame PNG full-res
+  giữa mỗi cảnh bằng ffmpeg (quá 12 cảnh → sample đều deterministic, mô phỏng đúng cursor-accumulation
+  của `qa/vision.js`) → detect qua `watermark-native.preview(..., {overwrite:false})` → lỗi
+  `{scene, type:'watermark_detected', severity:'high', boxes, suggestedFix:{type:'remove_watermark'}}`.
+- Cache detect theo `(videoPath, t)` — Auto-Fix gọi QA lại ≤5 lần trên cùng preview không đốt lại model.
+- Wire vào `orchestrator/index.js doQA()`: mặc định BẬT trên đường mặc định (preview + full), tắt bằng
+  `options.watermarkQa === false`; adapter `qaProviders` inject từ ngoài vẫn THẮNG (giữ hợp đồng cũ).
+  Metadata gắn `qaReport.watermark`: `{engine, checked, detected}` hoặc
+  `{unavailable:true, reason:'VA_WM_ENGINE_UNAVAILABLE'|'VA_WM_ENGINE_NO_PYTHON'}` (degrade khai báo rõ — L10).
+- `auto-fix/loop.js classifyFixStrategy`: `watermark_detected` → `fix-in-post` (không auto-fix được —
+  job rơi NEEDS_REVIEW, người dùng chạy tool Xoá watermark ngoài pipeline rồi render lại; severity high
+  → FINAL_QA FAIL chặn upload §32.12).
+
+### B. TTS local fallback (`nova/video-agent/tts/synthesize.js` — module mới)
+- Client backend Voice Studio: `probeVoiceBackend` (GET `/api/health`, nhận `{status:'ok'}` mới tính
+  ok — không nhận nhầm service khác) → `synthesizeVoice` (POST `/api/tts` → poll status → tải
+  `results.merged` + `results.srt`, SRT là sản phẩm phụ thiếu không cản audio). Cổng đọc lại từ
+  `voice-native.URL` (lazy-require, một nguồn — không hardcode 8771 thứ hai); env `VA_TTS_BACKEND_URL`.
+- `autoSynthesizeTts` hook vào `orchestrator/analyze.js` (CẢ `runAnalysis` lẫn `runAnalysisFromData`):
+  `options.autoTts` bật + chưa có ttsAudio → tổng hợp từ `autoTts.text`/`textPath`/script (.txt/.md) ra
+  `<root>/voice/auto-tts.mp3` (+.srt) rồi gán `project.files.ttsAudio` (renderer/spec đọc đúng file).
+  Nhánh FromData ghi ra `rootDir` KHÔNG phải tmpDir (tmp bị xoá sau step nhưng FULL_RENDER vẫn cần file).
+- Fail lộ liễu: `VA_TTS_BACKEND_UNAVAILABLE` / `VA_TTS_SYNTH_FAIL` / `VA_TTS_AUTO_NO_TEXT` /
+  `VA_TTS_SYNTH_TIMEOUT` — không retry cloud ngầm (L10). Poll lỗi tạm thời retry tới deadline (có timeout chặn).
+
+### C. Test (`test-phases.js` — phase 6 mới, 24 assert P6)
+- sceneFrameTimes deterministic/sampling đều; normalizeBoxes lọc hộp rác; extractFrame ffmpeg thật;
+  provider với detect inject → 3 lỗi watermark + meta + cache không gọi lại; classifyFixStrategy;
+  runQA fail khi có watermark; thiếu video → mảng rỗng.
+- TTS: mock HTTP server đúng hợp đồng `/api/tts` → synthesizeVoice ghi mp3+srt, body đúng
+  `{text, language, preset_id, speed}`; backend chết → `VA_TTS_BACKEND_UNAVAILABLE`; autoTts
+  no-text/skip/end-to-end; orchestrator integration autoTts + port chết → FAILED với mã lộ liễu.
+- **Bẫy môi trường**: integration test đầu dùng `autoTts: {}` (default backend 8771) — backend OmniVoice
+  THẬT đang chạy trên máy → job COMPLETED thay vì FAILED. Fix: trỏ `autoTts.baseUrl` vào port chết
+  (`http://127.0.0.1:1`) để test deterministic, không phụ thuộc backend thật.
+
+### D. Kiểm định
+- `npm run check` EXIT 0; `npm run test:video-agent` EXIT 0 (Phase1 42 PASS, IPC-SMOKE-OK,
+  BRIDGE-CONTRACT-OK, Phase 3/4/5/6 **79 PASS / 0 FAIL**, BEHAVIOR-FRAME-V5-OK, Gateway 16 PASS).
+- Lưu ý: `npm run check` chạy ngay sau khi phiên song song xoá tmp-* của nó có thể báo
+  MODULE_NOT_FOUND (file biến mất giữa walk và check) — chạy lại là hết, không phải lỗi của thay đổi này.
+
+### E. File chạm / không chạm
+- Mới: `nova/video-agent/qa/watermark.js`, `nova/video-agent/tts/synthesize.js`.
+- Sửa: `orchestrator/index.js` (doQA + qaVideoPath + wmMeta), `orchestrator/analyze.js` (2 hook autoTts),
+  `auto-fix/loop.js` (1 dòng classifyFixStrategy), `test-phases.js` (phase6), `video-agent/README.md`,
+  `MEMORY.md` (entry này).
+- Không chạm: IPC/preload (0 kênh mới), voice-native, voice-studio backend, watermark-native, main.plain.js.
+## 2026-09-11n — Theme hoá tool I-MZic (img-to-vid.html) + đồng bộ dark mode iframe + restore boot darkMode
+
+### Bối cảnh
+- User báo "I-MZic vẫn chưa hoàn thiện" → làm rõ: tool `toolimzic` (iframe `nova/web/img-to-vid.html`,
+  trang tự chứa ~2300 dòng: beat-zoom, hiệu ứng, waveform, SRT, mux ffmpeg qua `imzicMux`) **chưa** nằm
+  trong phạm vi sweep theme Round 3 (lần quét trước chỉ_cover `src/styles/*.css` + `index.html`).
+  Trang giữ palette riêng tím `#7c5cff` + cam `#ffb84d`, font Space Grotesk, chỉ dark — lệch hẳn
+  thiết kế chủ đạo (accent cam `#c2410c`/`#f59e0b`, font Be Vietnam Pro, light/dark).
+
+### A. Chuyển img-to-vid.html sang token theme app
+- `:root` của trang giờ **mirror giá trị token** `src/styles/base.css` (light) + thêm khối `html.dark`
+  (dark) — trang iframe tự chứa nên không link chung; comment trong file cảnh báo PHẢI ĐỒNG BỘ khi
+  đổi token ở base.css.
+- Giữ alias cũ (`--panel`→`var(--surface)`, `--panel-2`→`var(--surface-2)`, `--muted`→`var(--text-muted)`)
+  để không phải sửa 13+ rule — không đổi tên contract nội bộ.
+- Hex chuyển: label `#c9c7d6`→`--text-muted`; thumb border `#fff2`→`--surface`; `.btn.primary/.gold`
+  text `#fff`/`#1a1200`→`--on-accent`; `export-note b`→`--text`; `export-note code` bg `#000`→`--surface-3`.
+- Glow ring nhịp: `rgba(124,92,255,var(--pulse))`→`rgb(from var(--accent) r g b / var(--pulse))`
+  (relative color — Chromium hiện tại OK; `--pulse` do JS set động theo energy, giữ nguyên).
+- Body radial-gradient tím→`color-mix(in srgb, var(--accent) 7%, transparent)` + amber 5%.
+- Font: body + heading → `'Be Vietnam Pro'` (app font; trang vốn đã load font này).
+- **GIỮ NGUYÊN** (chủ đích): `#000` stage preview + shadow (media luôn đen), mọi màu trong canvas/
+  `input type=color` (L675–1606) — là MÀU NỘI DUNG VIDEO người dùng chọn, không phải UI chrome.
+- Google Fonts link giữ nguyên (Space Grotesk là lựa chọn lyricFont trên canvas).
+
+### B. Đồng bộ dark mode iframe + sửa thiếu restore boot của app
+- Phát hiện: `shell.js` chỉ có `toggleTheme()` (toggle + `setItem('darkMode','1'/'0')`), KHÔNG có nơi
+  nào `getItem('darkMode')` lúc boot → app gốc khởi động luôn light dù user đã chọn dark (bug còn treo
+  trước đó, không do task này gây).
+- Fix nhỏ: `index.html` head thêm 1 dòng restore `html.dark` từ `localStorage['darkMode']` (chạy sớm
+  tránh nháy).
+- `img-to-vid.html` thêm script sync ở `</head>`: đọc `darkMode` lúc nạp + nghe sự kiện `storage`
+  (iframe cùng origin qua server 47280) → đổi theme live khi user bấm ☀️/🌙 trên app chính.
+- Khi iframe chưa lazy-load: đọc key lúc load nên luôn khớp.
+
+### Kiểm định
+- `npm run check` → EXIT 0 (C2 warnings là note "đã có guard" có sẵn, không liên quan).
+- node --check toàn bộ 12 inline script (2 HTML) OK; scanner hex: CSS của trang chỉ còn token +
+  `#000` stage (chủ đích).
+
+### Còn lại
+- Chưa chạy `npm start` smoke UI (cần user xác nhận visual light/dark ở tool I-MZic: sidebar, nút
+  primary/gold, glow ring, export-note).
+
+## 2026-09-11n — Ẩn API Key Flow (dùng chung) trong panel "Tài khoản Flow" (bảo vệ người dùng)
+
+- **Vấn đề**: textarea `#flowApiKey` hiển thị toàn bộ key plain text — rủi ro khi quay màn hình/demo/chia sẻ.
+- **Sửa** (`nova/web/index.html`, chỉ UI renderer, không đổi hợp đồng):
+  - Mặc định ẨN: mỗi key hiển thị 4 ký tự đầu + 8 dấu • + 4 ký tự cuối; giá trị thật giữ trong closure `realValue`, không đổ vào textarea khi đang ẩn.
+  - Thêm nút `#flowApiKeyToggle` (👁 Hiện / 🙈 Ẩn) — `window.toggleFlowApiKeyVisibility`.
+  - `saveFlowApiKey`: dòng chứa ký tự mask được "giải" về key thật cùng vị trí (mask map) — không bao giờ lưu ký tự mask vào kho; muốn thay key: xoá dòng rồi dán key mới. Sau khi lưu tự quay về chế độ ẩn.
+  - Thêm `autocomplete=off` + `spellcheck=false` cho textarea.
+- **Không phá**: key vẫn lưu ở `novaStore('api_key_flow')` / `localStorage.flowApiKey` nguyên dạng — các consumer khác đọc từ kho, không đọc textarea.
+- **Kiểm định**: `npm run check` PASS (exit 0); test logic mask/resolve thay key bằng node PASS.
+
+## 2026-09-11n — Sửa bảng tài khoản Flow (Chrome): cột "Loại" hiện nhầm "Free" + cột "Tín dụng" trống "—"
+
+- **Vấn đề**: bảng `fcRenderList` (`nova/web/src/toolbox/utility/tf.js`) hiện `Free` cho mọi tier null —
+  trong khi tier null nghĩa là CHƯA verify được (chưa bấm ↻ / verify fail phần phụ), không phải Free.
+  Cột Tín dụng luôn "—" vì: (1) verify chỉ chạy lúc login/refresh; (2) `genVideo` poll được
+  `remainingCredits` mới nhất nhưng KHÔNG ghi ngược vào account record.
+- **Sửa 1** `tf.js`: `tfTierName(null)` → null; thêm `tfTierCell(t)` — null → "Chưa rõ" (dim, tooltip
+  hướng dẫn bấm ↻); ONE→Pro (accent), TWO→Ultra (violet), tier lạ → Free. 2 ô bảng dùng `tfTierCell`.
+- **Sửa 2** `flow-chrome/gen.js` `genVideo` loop poll: `p.credits != null` → ghi ngược `a.credits` + `persist()`
+  → tín dụng tự cập nhật sau mỗi lần gen video, không cần bấm làm mới.
+- **Sửa 3** `flow-chrome/dang-nhap.js` `_verifyBody`: nhận MỌI `userPaygateTier` là string truthy (trước chỉ
+  ONE/TWO → tài khoản Free thật bị lưu tier=null → hiện nhầm). UI map tier lạ → "Free".
+- **Không đổi**: hợp đồng IPC `flowChrome*`, shape `GET_ACCOUNTS` (tier/credits đã có sẵn trong
+  `statusPayload`), cấu trúc store `chrome-accounts.json`.
+- **Kiểm định**: `npm run check` EXIT 0. Cần smoke thật: bấm ↻ Làm mới trên 1 tài khoản → cột Loại/Tín dụng
+  phải hiện giá trị thật; gen 1 video → Tín dụng tự cập nhật.
+
+### Bổ sung (user báo "vẫn chưa được" — table vẫn Chưa rõ/—)
+- Nguyên nhân: dữ liệu tier/credits CHỈ lấy được khi verify (mở Chrome điều khiển) — user chưa bấm ↻
+  từng account, hoặc bấm rồi nhưng API /v1/credits trả trống mà UI cũ báo "✅ Đã làm mới" che lỗi.
+- Store thật `%APPDATA%\AI Video Studio Independent\chrome-accounts\chrome-accounts.json`: account #1
+  tier=null, credits=null, token KHÔNG persist (chỉ in-memory) → không tự khôi phục được sau restart.
+- Sửa thêm:
+  - `dang-nhap.js refreshOne`: trả thêm `tier` + `creditsStatus` (HTTP của lần hỏi /v1/credits).
+  - `tf.js fcRefresh`: ✅ hiện "Tier · N tín dụng"; nếu trống → ⚠️ kèm mã HTTP + hướng dẫn đóng hết
+    Chrome Flow rồi bấm lại. `fcRefreshAll`: tổng hợp x/y đọc được tín dụng, lỗi liệt kê từng account.
+  - `gen.js genTest` (sinh ảnh): sau khi gen xong hỏi /v1/credits + ghi ngược `a.credits` + persist
+    (API generate ảnh không trả số dư; import thêm FLOW_API_KEY từ nen-tang).
+
+### Bổ sung 2 (probe runtime — NGUYÊN NHÂN GỐC: Google migrate Flow sang flow.google.com)
+- Dùng `nova/scripts/tmp-probe-flow-credits.js` (Electron thật + engine thật) lần theo dấu:
+  1. `verifyAccount(1)` fail "Không bắt được token" — dù profile ĐANG ĐĂNG NHẬP (trang hiện project
+     "Nova pool", cookie Google đầy đủ, hạn 2027).
+  2. `labs.google/fx/tools/flow` → REDIRECT sang `flow.google.com` (frontend mới "AiSandboxAngularFrontend").
+  3. Session endpoint cũ `labs.google/fx/api/auth/session` gọi thẳng bằng cookie thật từ CDP (không CORS)
+     → **200 với body `{}` RỖNG** → nguồn token ya29 duy nhất của engine ĐÃ CHẾT.
+  4. Trang mới KHÔNG phát ya29 trong 20s quan sát network — chỉ dùng `batchexecute`
+     (`/_/AiSandboxAngularFrontend/data/batchexecute`, auth cookie) + gRPC-Web `FlowService.*`
+     với `X-Goog-Api-Key`. rpcid `cPZSdc` chỉ trả banner marketing, KHÔNG có số dư credit.
+  5. REST `aisandbox-pa.googleapis.com/v1/credits` từ chối CẢ: API key (401 "API keys are not
+     supported"), cookie Google thuần (401), SAPISIDHASH+authuser (401) — chỉ nhận OAuth2 access
+     token mà không nguồn nào còn cấp.
+- **Kết luận**: cột Loại/Tín dụng trống KHÔNG phải bug UI — là Google đổi nền tảng. Verify/gen của
+  engine flow-chrome đều chết vì cùng nguồn token. Đăng nhập lại KHÔNG giải quyết được.
+- **Sửa theo Luật 10 (fail lộ liễu, không fallback ngầm)**:
+  - `dang-nhap.js _verifyBody`: khi captureToken fail VÀ trang đang ở `flow.google.com` → trả
+    `{ error: 'FLOW_MIGRATED: …', needLogin: true, migrated: true }` (message giải thích rõ, cấm
+    hướng dẫn đăng nhập lại). Giữ nguyên message cũ cho các nguyên nhân khác.
+  - `token-captcha.js ensureLive`: cùng check — token fail + host flow.google.com → throw
+    `FLOW_MIGRATED: …` (gen báo lỗi nhất quán; đọc host TRƯỚC khi closeChrome).
+- **Đường đi tiếp (chưa làm — cần task riêng, effort lớn)**: port engine sang giao thức mới —
+  gen qua gRPC-Web `FlowService.StreamGenerateContent` (cần reverse protobuf + X-Goog-Api-Key),
+  credits/tier qua batchexecute hoặc gRPC user-status. Probe script giữ lại làm tài liệu tham khảo.
+- **Kiểm định**: `npm run check` EXIT 0; probe xác nhận verify trả `FLOW_MIGRATED` đúng.
+
+
+## 2026-09-11o — I-MZic: sửa layout thanh trượt trái + cứu 2 file core bị xáo trộn
+
+- **Layout `nova/web/img-to-vid.html`:** user báo thanh trượt cột trái không cao bằng khung xem trước. Nguyên nhân: `.app` grid `min-height:100vh` (cột phải cao hơn viewport → cả trang cuộn) trong khi `.sidebar` bị chặn `max-height:100vh` → track cuộn trái chỉ dài 100vh, phần dưới cột trái "chết". Fix: `.app{height:100vh; grid-template-rows:minmax(0,1fr); grid-template-columns:360px minmax(0,1fr)}`, `.sidebar` bỏ max-height (scroll nội bộ, `min-height:0`), `.main` thêm `height:100%; overflow-y:auto` (2 cột cuộn độc lập, 2 scrollbar cao bằng nhau). Media ≤920px reset về `height:auto; overflow:visible` (xếp dọc như cũ).
+- **Phát hiện file hỏng do session song song (đã vá, có test bảo vệ):**
+  - `nova/core/orphan-pids.js` — thân hàm `matchOrphans` bị cắt, vòng lặp lọc + `return out;}` bị đẩy mồ côi xuống SAU `module.exports`. Đã ghép lại đúng chỗ; xóa fragment cuối file.
+  - `nova/core/test-maintenance.js` — `assert.rejects` mục 3d thiếu matcher `/WMI_DOWN/` + dấu `)`, đuôi bị đẩy xuống sau `})().catch()`. Đã hoàn thiện; xóa fragment cuối file.
+  - Kiểm chứng: `node nova/core/test-maintenance.js` → PASS 1→4c toàn bộ.
+- **Kiểm định:** `npm run check` EXIT 0 (404 files syntax OK). Chưa chạy `npm start` (chờ user xác nhận visual cả light/dark cho I-MZic).
+
+
+## 2026-09-11p — Quét lại logic không sử dụng bằng require-graph resolver (check-only, chưa xoá gì)
+
+- **Phương pháp mới, hết FP "path trung gian"**: dựng require-graph thật từ entry `main.plain.js` + `preload.js` (resolver tương đối .js/.json/index), 332 file JS → graph nạp 222. Ứng viên mồ côi = corpus − graph, sau đó lọc "được tham chiếu bằng chuỗi" (spawn/path động/manifest).
+- **Mồ côi thật MỚI phát hiện (2 cụm, chờ owner quyết — wire hoặc xoá):**
+  - `nova/flow-shared/` (4 file: index.js, compress.js, face-lock.js, telemetry.js) — index.js là "re-export khoá H1+H3+H5" cho engine, NHƯNG `git grep 'flow-shared'` toàn repo (trừ ipc-inventory.json) = **0 consumer**. Giống hệt trạng thái cũ của secret-vault: dựng sẵn chưa wire. Lưu ý audit 11k đã bỏ sót cụm này vì đếm chuỗi thô trúng `ipc-inventory.json` (file inventory tự sinh liệt kê mọi file — KHÔNG phải usage; các "JSON list" khác cùng bản chất).
+  - `nova/utility-process/` (4 file: manager.js, hash-worker/index.js, worker.js, __test__/hash-worker.test.js) — 0 tham chiếu ngoài cụm (kể cả chuỗi). Toàn bộ cụm không nằm trong graph.
+- **Zombie "cầu nối" — phát hiện quan trọng nhất**: ~26 method preload CÓ handler main đăng ký NHƯNG không một file renderer nào (web/, editor-pro html, voice-studio) gọi tên method lẫn kênh IPC: `wm-*` (9, watermark), `disk-guard:*` (3), `app-version`, `update-status`, `sys-stats`, `login-window` (login ĐÃ GỎI khỏi app — nghi leftover), `nova-log`, `voice-log`, `nova:analyzeCompetitor`(+progress), `nova:thumbOutliersProgress`, `nova:niche:watchlist`, `nova:sceneBridge:push`, `nova:parallaxClip`, `nova:khopLoiProgress`, `nova:parallaxProgress`, `remotion:renderVideo`(+progress). Giải thích vì sao audit 11k báo "zombie IPC = 0": định nghĩa cũ đếm invoke trong preload là usage → chuỗi handler+bridge tưởng sống. Ngoại lệ CỐTÍNH: 6 method `secretVault*` (hạ tầng mới wire, chưa có UI — không phải dead).
+- **Đã xác minh KHÔNG mồ côi (bẫy của scanner, kiểm tay xong):** MV3 background/popup/app/content/injected (flow-extension + nova-studio) nạp qua `manifest.json`; `core/result.js` sống qua `scripts/foundation-test.js` (`npm run test:foundation`); `video-agent/test.js|test-bridge|test-ipc|test-phases` là npm-script entry (thấy phiên song song đang chạy test.js thật); `video-agent/check.js` = tool syntax-check chạy tay (README ghi); `whiteboard-studio/py-backend-*-test.js`, `web/_smoke_*.js`, `web/_check_hd_ids.js` = script kiểm định một lần có chú thích "Chạy: node …"; `editor-pro/ipc-*.js` là handler main-side (không phải renderer). Dynamic-require thật chỉ có `native-tools/ffmpeg.js` (require(mod), try/catch có chủ đích) — các hit còn lại là COMMENT lazy-require (§5) hoặc venv Python noise.
+- **Dead functions refined: 269 cảnh báo → 56 dead thật** (đếm `\bfn\b` trên toàn corpus renderer sau khi loại khai báo): `tool-t7.js` 24 (t7MediaAddScene, t7GfxJump, t7GlobPick…), `shared-consts.js` 11 (BRIDGE_FILES, SUPPORT_YOUTUBE, VEO_*… — hằng dữ liệu, có thể truy cập động, cần rà tay trước khi xoá), `video-agent-panel.js` 6 (importedImages, easyPipeline… — state), `tool-t2.js` 4, `shared-state.js` 3 (ALL_TOOLS, TOOL_LABELS, TOOL_MIN_TIER — nghi truy cập động), `tool-t10.js` 3, `tool-queue.js` 2, còn lại 1/cfile. **Chưa xoá** — cần xác nhận không truy cập dynamic `obj[name]`.
+- **15 `errors` (bug thật, KHÔNG đụng — index.html do phiên song song sở hữu):** `web/index.html` gọi 11 hàm không tồn tại ở bất kỳ JS renderer nào: `giongLibMo`, `giongThemBat`, `giongLuoiBat`, `giongThemDoi`, `giongThemLuu`, `giongDemChu`, `voiceLoadScript`, `voiceGenerate`, `voiceBackendMo`, `voiceBackendChon(3 nơi)`, `giongDDMo`, `giongSuGhep` → bấm nút tương ứng sẽ throw. Có thể là trạng thái đang sửa dở của phiên song song (nhóm giong*/voice* = panel Giọng nói) — bàn giao owner.
+- **Tmp đã xoá sau quét:** `nova/scripts/tmp-orphan2.js`, `tmp-verify2.js` (lưu ý: regex catastrophic từng treo 1 node process — phải Stop-Process theo PID nhận diện qua CommandLine, tuyệt đối không kill node khác), `tmp-deadrefine.js`.
+- **Học được:** (1) `ipc-inventory.json`/JSON list chứa tên mọi file → mọi scanner đếm chuỗi phải loại trừ nó; (2) khi quét usage phải loại chính script scanner (self-pollution) và thư mục `scripts/` (scratch/test); (3) PSReadLine crash với lệnh dài → grep chéo đưa vào script file chạy `git grep` qua `execFileSync`.
+
+
+## 2026-09-11m — TDTStudio pattern #2: orphan process sweep + hardlink staged assets (user duyệt "thực hiện")
+
+### A. Orphan process sweep (học `ffplay_guard.py`, thay Win32 Job Object bằng thuần Node — Luật 9)
+- `nova/core/orphan-pids.js` (MỚI): quét & kill tiến trình render mồ côi (ffmpeg/chrome-headless-shell còn sống sau crash/kill). KHÔNG pidfile (renderMedia không lộ PID con + pidfile stale) — quét THEO ĐƯỜNG DẪN EXE: chỉ kill khi WMI `ExecutablePath` TRÙNG KHẮP binary vendored (ff-path → ffmpeg-static đã unasar; chrome-headless-shell trong editor-pro/remotion-browser). Lister: powershell `Get-CimInstance Win32_Process -Filter "Name='ffmpeg.exe' OR ..."` (timeout 20s); killer: `taskkill /F /T /PID`. Guard an toàn: bỏ exe không tuyệt đối/không tồn tại trên đĩa (fallback bare 'ffmpeg' theo PATH), tự vệ loại `process.execPath`, mismatch path → THA (fail-safe), kill fail từng pid không hỏng tổng thể. DI lister/killer để test.
+- `editor-pro/ipc-remotion-render.js`: export MỚI `vendoredRendererExes()` (FFMPEG + BROWSER nếu có) — nguồn duy nhất của danh sách exe vendored. `module.exports` giữ nguyên tên cũ + thêm 1.
+- `main/janitor.js`: `runStartupJanitor` GIỮ HỢP ĐỒNG ĐỒNG BỘ (test-janitor phụ thuộc); sweep chạy fire-and-forget → `stats.orphanProcs` là promise; require editor-pro lỗi (plain-node) → degrade CÓ KHAI BÁO qua `emitWarning('NovaJanitorOrphanSweep')`, không nuốt ngầm.
+- Lý do an toàn thời điểm: single-instance chặn instance kép → lúc startup chưa có render nào của instance này chạy.
+
+### B. Hardlink staged assets (học `export_plate_cache.py`)
+- `nova/core/link-or-copy.js` (MỚI): `hardlinkOrCopy(src, dest, {linkFn})` — fs.linkSync trước, lỗi (EXDEV/EPERM…) → fallback copy trả mã `copy:<code>` (degrade khai báo, không phải fallback ngầm Luật 10); copy cũng lỗi → NÉM.
+- Gắn vào `stageLocalAssets()` của `editor-pro/ipc-remotion-render.js` (chỗ duy nhất chép media lớn mỗi render). SceneCache chỉ cache METADATA → pattern "cache restore" không có chỗ gắn khác. cleanupStaged() chỉ bỏ link — file gốc người dùng nguyên vẹn (an toàn hơn copy cũ).
+
+### C. Test & kiểm định
+- `nova/core/test-maintenance.js` (MỚI) + script npm `test:maintenance`: 10/10 PASS — normExe, matchOrphans (tha ffmpeg hệ thống, chống prefix-match), sweep DI (skip NO_VENDORED_EXE, tự vệ execPath, kill đúng pid, lỗi kill ghi nhận failed, lister hỏng ném lộ liễu), lister WMI THẬT nhìn thấy tiến trình con vừa spawn, hardlink + unlink an toàn + fallback EXDEV + copy lỗi ném. KHÔNG BAO GIỜ test sweep-kill với process.execPath (sẽ giết mọi node.exe trên máy).
+- `node nova/scripts/test-janitor.js` PASS (warning sweep ở 11i/l đã hết — giờ editor-pro nạp được và sweep chạy thật).
+- `npm run check` EXIT 0; `test:video-agent` EXIT 0 (42 + IPC 12kênh/80events + bridge + 79 + 16 PASS, đúng baseline); `check:bundle` 0 FAIL (1 WARN có sẵn: chrome-headless-shell chưa tải — sweep xử lý BROWSER null). `npm start` EXIT 0 (stdout electron không qua pipe được để đọc log janitor — xem hạn chế).
+
+### D. Còn lại
+- Commit là quyết định user (working tree trộn file phiên song song). File phiên này: `nova/core/orphan-pids.js`, `nova/core/link-or-copy.js`, `nova/core/test-maintenance.js`, `nova/main/janitor.js`, `nova/editor-pro/ipc-remotion-render.js`, `package.json`, `MEMORY.md`.
+
+
+
+## 2026-09-11p — I-MZic: khung preview bị bóp dẹt sau đổi layout (flex-shrink) — đã vá
+
+- User báo khung hiển thị xem trước "bị thu nhỏ" so với mục 7 (Khung hình — chọn khổ ▯ Dọc 9:16 / khổ ngang). Nguyên nhân KHÔNG phải `.stage-wrap` bị sửa (diff git xác nhận giữ nguyên `width:min(92%,620px); aspect-ratio:9/16`) mà là hệ quả của đổi layout `2026-09-11o`: `.main` có `height:100%` cố định + `.stage-wrap` có `overflow:hidden` (cho bo góc) → min-height tự động của flex item = 0 → flexbox **bóp dẹt** khung 9:16 (620×1102) xuống còn chiều cao viewport → canvas méo, trông như bị thu nhỏ.
+- Fix 1 dòng: `.stage-wrap{flex:0 0 auto}` — flexbox không đụng vào khung; khung giữ đúng tỷ lệ mục 7 (JS `setOrientation`/`applyLandscapeCustomSize` vẫn ghi đè inline `aspectRatio` khi đổi khổ), cột phải `.main` (overflow-y:auto) tự cuộn để xem phần dưới khung — đúng thiết kế 2 scrollbar độc lập.
+- Ghi chú môi trường: session song song đang hoạt động — 4 file `nova/utility-process/*` bị xoá + stage xoá trong git index NGAY TRONG lúc `npm run check` chạy → check:syntax MODULE_NOT_FOUND tạm thời (race). Chạy lại sau khi xoá hoàn tất → EXIT 0. Nếu gặp lại lỗi này, re-run trước khi chẩn đoán sâu.
+- Kiểm định: `npm run check` EXIT 0. Chờ user xác nhận visual khung preview đúng tỷ lệ 9/16 và không còn bị bóp.
+
+## 2026-09-11q — Kiểm chứng SỐNG máy captcha Flow: GUEST đã CHẾT do Google chuyển domain + bắt login (cần quyết định user)
+
+- Phát hiện (test thật bằng Chrome profile TRỐNG qua CDP, đúng mô phỏng `_launchGuest`/`_openGuest`):
+  - `labs.google/fx/tools/flow` → HTTP **308 → `flow.google.com/`** — Google đã chuyển Flow sang domain riêng.
+  - `flow.google.com/fx/tools/flow` → **404**. Đường dẫn cũ chết hoàn toàn.
+  - Guest (không login) vào `flow.google.com/` → bị đá sang `accounts.google.com/v3/signin/...` → `window.grecaptcha` KHÔNG bao giờ load → `ensureGuestCaptcha()` fail (`GRECAPTCHA_NOT_READY`).
+- Hệ quả cho code hiện tại:
+  - `flow-chrome/token-captcha.js` (FLOW_URL hardcode `labs.google/fx/tools/flow` tại `nen-tang.js:32`): máy captcha **GUEST không còn đúc được token** → `pageEval()` tự rơi về máy ACCOUNT (fallback có log, không nuốt lỗi — đúng Luật 10).
+  - Máy ACCOUNT có thể vẫn chạy nếu account đã login và `flow.google.com/` tự vào workspace khi có phiên — CHƯA kiểm chứng (không đụng profile account thật của user trong test).
+  - `flow-extension` / `nova-studio`: manifest chỉ match `https://labs.google/*` → content script KHÔNG inject trên `flow.google.com` → engine extension nghi gãy theo.
+- Chưa sửa gì (Luật 10 — không tự ý đổi hợp đồng URL): cần user quyết định cập nhật FLOW_URL + manifest matches sang domain mới và kiểm chứng hợp đồng reCAPTCHA/API trên domain mới.
+- Script kiểm thử dùng một lần (tmp-captcha-live-test.js, tmp-probe-flow.js) đã xoá sau khi chạy.
+
+## 2026-09-11r — Phân tích đối thủ: bỏ BẮT BUỘC YouTube Data API key → chế độ KHÔNG CẦN KEY qua yt-dlp
+
+- User phản ánh user thường khó lấy YouTube Data API v3 key (phải tạo Google Cloud project + enable API + tạo credentials). Thực tế key chỉ dùng để enrich like/comment/sub — toàn bộ khám phá video/view/duration đã chạy free bằng yt-dlp.
+- Giải pháp: `nova-yt.js` thêm `enrichKeyless(ids, onProgress, concurrency=6)` — yt-dlp `--skip-download --print` từng video (like_count, comment_count, view_count, duration, upload_date, channel, channel_follower_count) song song 6 luồng, timeout 60s/video, có cookie Nova, bỏ qua video lỗi (không bịa giá trị — Luật 10). Đã PASS test thật (2 video phổ biến: view/like/comment khớp).
+- Hợp đồng `enrich()` mở rộng thành `{ key, mode: 'api'|'yt-dlp', map }` (mode khai báo tường minh nguồn dữ liệu, không phải fallback ngầm); map giữ nguyên hình dạng cũ → caller duy nhất `niche/loi.js searchVideos()` đọc `mode`, hợp nhất có guard (`e.subs || x.subs`, `e.viewPerSub || x.viewPerSub`) và trả thêm `enrichedVia` để UI phân biệt.
+- UI: `web/index.html` ô key thành "tùy chọn — không cần key vẫn chạy đủ"; `web/src/toolbox/utility/transcribe.js` `_t11KeyState` báo xanh cả 2 trạng thái; `web/src/toolbox/utility/niche.js` `_nfMeta` + render spike hiển thị nguồn '(yt-dlp, không cần key)' vs '(API)'.
+- Giới hạn chế độ không key: chậm hơn API (~2-4s/video × N video, song song 6); sub chỉ có khi yt-dlp trả `channel_follower_count`; comment_count của video tắt bình luận = 0. Đổi phải cân nhắc: hợp đồng `{key, map}` cũ đã đổi thành `{key, mode, map}` — đã rà 1 consumer duy nhất (loi.js).
+- Kiểm định: `node --check` PASS; test thật `enrichKeyless` PASS rồi xoá `nova/scripts/tmp-test-enrich-keyless.js`; `npm run check` EXIT 0.
+
+## 2026-09-11s — Cải tiến 2 lớp cho phân tích đối thủ: tốc độ (cache phiên enrich) + chất lượng (Eng% vào outlier & prompt AI)
+
+- **Tốc độ**: `nova-yt.js` `enrichKeyless` thêm cache phiên in-memory 24h (`_ckCache` Map) — ID đã enrich gần đây dùng lại ngay không re-fetch (test: cold 3494ms → warm 0ms); tăng song song 6→8 luồng. Cache chỉ theo phiên process (không ghi đĩa) vì loi.js đã có file-cache riêng cho cả kết quả module.
+- **Chất lượng (Eng% = (like+comment)/view)**:
+  - `niche/kenh.js` `channelScorecard`: trước khi AI đọc mô-típ, enrich like/comment cho các outlier (≤8 video) qua `_yt.enrich` (API nếu có key, yt-dlp nếu không — same hợp đồng `{key, mode, map}`); trả thêm `enrichedVia`; outlier thêm `likes/comments/engRate`; prompt AI bổ sung chú giải eng% + yêu cầu chú ý "video vừa view cao VỪA eng cao". Bump cache key `n<count>` → `v2-n<count>` (cache cũ thiếu eng, không để trộn).
+  - `competitor.js` `analyzeCompetitor`: enrich `vids.slice(0,count)` trước bước Claude; list đưa AI thêm `eng x%`; prompt thêm mục 4 "TÍN HIỆU TƯƠNG TÁC"; return thêm `enrichedVia`.
+  - `web/src/toolbox/utility/niche.js` `nfRenderScorecard`: bảng "Video vượt trội" thêm cột **Eng** (≥2% tô xanh; không có dữ liệu hiển thị '—').
+- Lưu ý: `nova:analyzeCompetitor` vẫn là zombie bridge (preload + handler sống, chưa renderer gọi) — nâng cấp giữ hợp đồng cho lúc wire; UI thật đang là Niche Finder → Scorecard.
+- Kiểm định: `node --check` PASS 4 file; test thật PASS (cache phiên + scorecard `@mkbhd` 10 video → outlier x2.63 có eng 2.18%, likes=257087, enrichedVia='yt-dlp'; bước AI ở máy test gặp HTTP 500 content-blocked từ relay → lộ liễu vào `analysisError`, đúng Luật 10); `tmp-test-eng-cache.js` đã xoá; `npm run check` EXIT 0.
+
+## 2026-09-11u — Dọn dẹp phế liệu đã duyệt: 2 cụm mồ côi + 10 kênh IPC zombie + 8 const chết (scanner sửa false-positive)
+- Bối cảnh: user chọn "dọn sâu nhất" cho kết quả audit require-graph (entry 2026-09-11k/11p). Session song song hoạt động — chỉ đụng file ngoài danh mục của họ.
+- **Xoá mồ côi (git rm)**: `nova/flow-shared/` (4 file, 0 consumer) + `nova/utility-process/` (4 file, 0 ref kể cả string path).
+- **Gỡ 10 kênh IPC zombie** (main handler + preload method đồng thời, đúng Luật 1):
+  - `wm-*` ×8 + `nova/main/ipc/watermark.js` xoá cả file (lưu ý `watermark-native` module GIỮ — mcp-bridge + lifecycle vẫn dùng).
+  - `disk-guard:*` ×3, `sys-stats`, `login-window`, `app-version` (handler trong `main/ipc/system.js`; module `storage/disk-guard.js` GIỮ — native-tools/render.js vẫn dùng).
+  - `nova-log` (send-only trong `main/ipc/flow.js`).
+  - `nova:sceneBridge:*` ×4 + `nova:sceneBridge:ready`: xoá cả `editor-pro/scene-bridge.js` (editor.html đã gỡ từ 2026-09-10o; pull/peek/diag chưa từng có preload).
+  - `nova:parallaxClip` + `nova:parallaxProgress` (preload): module `parallax-native` GIỮ — còn dùng bởi `nova/scripts/produce-real-outputs.js`, `release-paths-check.js`.
+  - `remotion:renderVideo` (đăng ký TRÙNG ở cả `ipc-remotion-render.js` lẫn `ipc-render.js`): xoá cả 2 registration + `editor-pro/ipc-render.js` xoá cả file (`renderComposition` không còn ai require). Giữ `remotion:progress` (chNova vẫn send) + `onRemotionProgress2` (renderer CÒN dùng).
+  - `nova:thumbOutliersProgress` (preload-only), `nova:niche:watchlist` (handler + preload).
+  - **GIỮ có chủ đích**: `voice-log`/`onVoiceLog` (kề vùng voice panel session song song đang sửa), `nova:analyzeCompetitor`/`onCompetitorProgress` (owner quyết định GIỮ hợp đồng lúc wire — 2026-09-11s; tôi đã gỡ nhầm rồi hoàn tác đúng kênh này), `secretVault*` (hạ tầng mới chưa UI).
+- **Sửa false-positive scanner**: deadrefine cũ loại chuỗi trước khi đếm → hỏng với `onclick="fn()"` trong template literal → phần lớn "56 dead fn" thực ra SỐNG (queueRemove, queueRetry, t9PickTitle, t10*, t2*, adv*, imported*, easyPipeline, ALL_TOOLS, t10Ref/T10_REF_RULE, ASSET_NO_TEXT_RULE...). Script mới (tmp-zfix.js, đã xoá): corpus renderer đúng = HTML inline + `<script src>` HTML nạp (70 file, 24 HTML), đếm raw sau strip comment → **245 khai báo raw-dead**, quá rộng và đè vùng WIP → KHÔNG xoá hàng loạt.
+- **Xoá 8 const chết double-verify** trong `shared-consts.js` (31 dòng): BRIDGE_FILES (blob base64 CLI-bridge thời tiền-native), SUPPORT_YOUTUBE, __epInited, _fcTestId, setStatus11, YT_API, T11_SIGNAL_WEIGHT, _T11_SIGNAL.
+- **Backlog không xử lý** (chuyển owner): VEO_SHOT_TYPES/VEO_ROTATIONS/VEO_ROTATION/veoUI — KHÔNG xoá vì có comment chủ đích khôi phục 2026-09-10 (veoInit từng tham chiếu) + index.html đang refactor; TOOL_LABELS/TOOL_MIN_TIER (shared-state) — kề vùng registry; nhóm t7/t8/ts/tts panel (nhiều fn panel chết thật nhưng index.html đang tay khác).
+- **Sửa phụ**: `_channels.json` cleanup — toàn bộ 464 entry từng có dấu `'` thừa cuối (bug generator, khiến default-coverage register kênh rác `agents:chat'`); đã strip + sort; check PASS.
+- Kiểm định: `npm run check` EXIT 0 (sau mỗi batch); `npm run test:video-agent` EXIT 0 (42+79+16 PASS, IPC smoke 12 kênh OK). `npm start` vẫn deferred (single-instance, session song song).
+
+- **Tiếp tục (cuối ngày)**: quét lại dead-fn bằng scanner AST 2 lớp (tmp-deadfn2, ĐÃ XOÁ sau chạy): lớp 1 corpus = mọi HTML `nova/web` + closure `<script src>`, đếm raw occurrence GIỮ string (bắt được `onclick="fn()"` trong template literal — sửa đúng false-positive cũ); lớp 2 gate repo-wide (loại node_modules/dist/build/output/*-bin). Kết quả SAU mega-commit `01b108b4` (refactor renderer + xoá dead voice của phiên song song): từ 245 raw-dead xuống **2 candidate thật** — `TOOL_LABELS` + `TOOL_MIN_TIER` (shared-state.js, legacy pre-login; "alive" chỉ trong `.kilo/worktrees` + `logs/index-original-*.html` — không phải runtime). Đã xoá cả 2 + sửa header comment block. Scanner sanity-pass (queueRemove/queueRetry đúng KHÔNG bị báo chết).
+- **npm start smoke ĐÃ chạy được lần đầu**: renderer boot sạch, `[reorder] panels reordered to match sidebar order` — registry chạy OK sau xoá 2 const; `electron .` không tự quit nên app đóng tay (taskkill) → `SMOKE_EXIT=1` là do force-kill, không phải lỗi app. `npm run check` EXIT 0 sau thay đổi.
+
+## 2026-09-11t — SỬA XONG máy captcha Flow: GUEST SỐNG LẠI trên flow.google.com (đối chiếu app gốc D:\Nova Studio + test thật)
+
+- **Đối chiếu app gốc** (`D:\Nova Studio`, bóc `resources/app.asar`): bản gốc đã cập nhật 9/2026 — `flow-chrome.js` của nó giữ `FLOW_URL = labs.google/fx/tools/flow` (để rình Bearer), thêm `FLOW_CAPTCHA_URL = flow.google.com/project/<id-giả>` (máy captcha ACCOUNT phải đứng trang project vì trang chủ domain mới không nạp reCAPTCHA), `GUEST_CAPTCHA_URL = labs.google/fx/tools/flow` (đo 10/9: guest vẫn mint được), cờ stealth `--disable-blink-features=AutomationControlled` + `JS_GIAU_WEBDRIVER` ở MỌI lần mở Chrome, manifest extension thêm `flow.google.com`.
+- **Nhưng test lại NGÀY 11/9** (tái lập đúng `_launchGuest` bản gốc, đủ cờ stealth): `labs.google/fx/tools/flow` giờ đá guest thẳng sang `flow.google.com/about` — **không còn trang nào tự nạp reCAPTCHA cho khách** → cách của bản gốc (đo 10/9) cũng đã chết. Kết luận entry `2026-09-11q` giữ nguyên hướng, nhưng nguyên nhân sâu hơn: không cờ nào sửa được, phải tự nạp reCAPTCHA.
+- **Giải pháp đã ĐO THẬT và OK (3/3 token ~2.340–2.446 ký tự)**: đứng ở `flow.google.com/about` (khách không bị bắt login) → CDP `Page.setBypassCSP` → chèn `https://www.google.com/recaptcha/enterprise.js?render=6LdsFiUs…` (site key CŨ vẫn hợp lệ) → `grecaptcha.enterprise.execute(key, {action})` ra token chuẩn. Lưu ý kỹ thuật: chèn bằng `addScriptToEvaluateOnNewDocument` FAIL vì `document.head` null ở document_start — phải chèn SAU khi trang load bằng `Runtime.evaluate`; hỏi grecaptcha bằng NHIỀU câu NGẮN (`evalInPageT`) chứ không một câu `awaitPromise` dài (treo theo trang cũ).
+- **Fix trong repo** (`nova/flow-chrome/`):
+  - `nen-tang.js`: thêm hằng `GUEST_CAPTCHA_URL = 'https://flow.google.com/about'`, `FLOW_CAPTCHA_URL = 'https://flow.google.com/project/00000000-0000-0000-0000-000000000000'`, `SITE_KEY`, `CO_GIAU_TU_DONG`, `CO_KHUNG_NEN`, `CO_KHONG_NGU`, `JS_GIAU_WEBDRIVER` (SITE_KEY dồn về một nguồn ở đây, `gen.js` import lại).
+  - `token-captcha.js`: `_launchGuest` thêm đủ cờ stealth/khung-nền/không-ngủ + mở `GUEST_CAPTCHA_URL`; `_openGuest` mới: bypass CSP + giấu webdriver + navigate + chèn enterprise.js + poll ngắn, không thấy grecaptcha thì BÁO HỎNG lộ liễu (Law 10); `pageEval` nhánh account: đưa cửa sổ sang trang project + chờ grecaptcha trước khi mint (port từ bản gốc, đo 5/9).
+  - `tien-trinh.js`: `launchChrome` thêm `CO_GIAU_TU_DONG` (+ `CO_KHONG_NGU` khi debug), phiên điều khiển inject `JS_GIAU_WEBDRIVER`.
+  - `flow-extension/manifest.json`: content_scripts + web_accessible_resources thêm `https://flow.google.com/*` (host_permissions đã có `*.google.com`).
+- **Hạn chế đã biết (KHÔNG sửa trong task này)**: gen ACCOUNT trong `gen.js` (genTest + video pipeline) vẫn gọi tRPC `labs.google` bằng fetch NGAY TRONG trang — trang giờ nằm ở `flow.google.com` → chéo origin hỏng (bản gốc cũng ghi nhận và phải viết lại cả tầng API sang batchexecute — migration lớn, chờ user quyết định). Guest captcha đã sống lại là đường chính đang dùng (khuyến nghị Guest).
+- Dọn dẹp: toàn bộ `tmp-captcha-*`, `tmp-patch-*`, `tmp-asar-*`, `tmp-g*.txt`, `tmp-retest-*` đã xoá (kể cả thư mục `tmp-asar-extract`).
+- Kiểm định: `npm run check` EXIT 0 (7 bước PASS, chạy SAU khi sửa xong toàn bộ).
+
+## 2026-09-11u — NÂNG CẤP gen ACCOUNT lên HTTP thuần: hết cảnh chéo origin trên flow.google.com (port mô hình flow-http.js của app gốc)
+
+- **Mục tiêu**: sửa đường gen bằng Account (hạn chế còn treo của entry `2026-09-11t`). Đối chiếu lại `app.asar` của `D:\Nova Studio`: bản gốc KHÔNG chuyển gen sang batchexecute như nghi ngờ — nó tách tầng API thành `flow-http.js` (HTTP thuần từ tiến trình chính, trình duyệt CHỈ mint captcha) + `flow-http-pool.js` (kho account/xoay vòng); batchexecute chỉ dùng để bóc link video kết quả. `apiFetch` legacy của nó vẫn fetch trong trang (chết như của ta).
+- **Port vào repo** (`nova/flow-chrome/`):
+  - `http.js` (MỚI, module thuần không Electron): `xin` (https.request + proxy CONNECT per-account), `parseProxy`, `layToken` (cookie→Bearer qua `labs.google/fx/api/auth/session`), `hanToken` (hạn thật token từ `oauth2.googleapis.com/tokeninfo`), `json`, hằng `UA`.
+  - `tien-trinh.js`: **`apiFetch` đổi transport** — HTTP thuần, cookie đúng host lấy từ jar CDP của CHÍNH Chrome account (`_chonCookie` khớp theo luật `H===D || H.endsWith('.'+D)`, không gửi nhầm cookie google.com sang aisandbox), header mặc định theo host (Origin/Referer/Sec-Fetch: labs.google=same-origin, aisandbox=cross-site, flow.google.com), UA thật của profile (cache `cdp._ua`), proxy của account (`cdp._proxy` stash lúc `_openForOperation`). Chữ ký + hình trả `{ok,status,text}` GIỮ NGUYÊN → 14 call site (gen.js + dang-nhap.js) không phải đổi. `captureToken` thêm đường CHÍNH cookie→HTTP (vòng fetch trong trang giữ làm dự phòng) + `ganHanChoYa29` (hạn thật từ tokeninfo, dự phòng 20 phút — hết cảnh token hạn null làm mint lại cả kho mỗi lần mở app).
+  - `gen.js`: 3 chỗ mint captcha đổi `evalInPage(cdp,…)` → `pageEval(id,…)` (trang account không còn grecaptcha; guest→máy guest, machine→cửa sổ captcha riêng, không đụng cửa sổ đang đọc cookie).
+- **Verify PASS**: `npm run check` EXIT 0 (8 bước gồm shadow); `node --check` 3 file OK; module `http.js` test thật (session không cookie → HTTP 200 `{}`; aisandbox → 401; hanToken giả → null); harness `tmp-verify-http-migration.js` dựng đúng header của `apiFetch` mới gọi 2 host thật → **tRPC trả HTTP 401 UNAUTHORIZED (response tRPC hợp lệ), aisandbox trả HTTP 401 invalid auth** — tầng HTTP thông suốt cả 2 host, hết cảnh "Failed to fetch" chéo origin. 401 là đúng kỳ vọng khi chưa có cookie/Bearer thật.
+- **Hạn chế**: E2E gen thật (tạo project + sinh ảnh/video) CHƯA chạy được vì cần profile account ĐÃ ĐĂNG NHẬP — chờ user dùng app với account thật để xác nhận lần gen đầu. Luật trust của tRPC (cookie+Bearer cùng account, đo bản gốc 8/9/2026) đã được tôn trọng: tRPC mang cookie jar account + Bearer cùng account.
+- Dọn dẹp: xoá `tmp-asar-extract`, `tmp-verify-http-migration.js`, các tmp cũ sót (`tmp-check-final.log`, `tmp-t7grep.*`).
+- **Chưa đụng (out of scope)**: `flow-native/` (engine BrowserWindow đa profile) vẫn fetch API trong trang — sẽ cần cùng mô hình HTTP thuần nếu user dùng engine đó.
+
+## 2026-09-11t — Vòng 3: đào bình luận khán giả + Eng% cho thumbnail theo chủ đề + polish UI
+
+- **Đào bình luận (không cần key)**: `niche/kenh.js` thêm `mineComments(videoId, max)` — yt-dlp `--write-comments --print '%(id)s\t%(comments)j'` với `youtube:max_comments=N,all`, lọc text ≥12 ký tự, lấy tối đa 60. Đã export từ module (sẵn cho UI panel sau). `channelScorecard` giờ đào bình luận nổi nhất của outlier #1 (tắt bằng `opts.mineComments:false`) → đưa vào prompt AI với câu hỏi "khán giả đang ĐÒI NHỌC GÌ/lặp lại điều gì → 1 hướng khai thác". Kết quả đào được báo qua `commentsNote` ('52 bình luận nổi' / lý do không đọc được / lỗi) — degrade tường minh, không chặn phân tích (Luật 10). Cache key bump `v2-n` → `v3-n` (+`-noc` khi tắt mining).
+- **Eng% cho "Thumbnail đang ăn theo chủ đề"**: `competitor.js` `topicThumbOutliers` enrich like/comment TOP 12 (yt-dlp, cache phiên) → mỗi item có `engRate` + `verdict`: eng≥2% = "mẫu vàng — kéo view VÀ giữ chân", eng<1% = "thumbnail kéo nhưng nội dung không giữ chân". Lỗi enrich được nuốt có chủ đích (tính năng tăng cường, view/bội số vẫn nguyên).
+- **UI**:
+  - `web/src/toolbox/utility/niche.js`: dòng trạng thái Scorecard thêm `📊 like/comment (yt-dlp, không cần key)` (hoặc `(API)`) + `💬 <commentsNote>`; tooltip cột Eng hiện like/comment tuyệt đối (toLocaleString vi-VN).
+  - `web/src/toolbox/tool-t9.js` `t9RefRender`: badge Eng% góc phải-dưới mỗi thumbnail (xanh ≥2%, đỏ <1%, xám giữa), tooltip kèm verdict mẫu vàng/bẫy.
+- Kiểm định: `node --check` PASS 4 file; test thật PASS (mineComments video dQw4w9WgXcQ → 52 bình luận; topicThumbOutliers 'deep sea documentary' → 24 mẫu, 12 có eng, 1 mẫu vàng eng 2.64%, 8 bẫy eng 0.57–0.73% — đúng trực giác video FULL EPISODE kéo view nhưng eng thấp); `tmp-test-comments-eng.js` đã xoá; `npm run check` EXIT 0.
+- Còn treo (đã biết, chưa làm): wire bridge zombie `nova:analyzeCompetitor` thành panel UI riêng — backend đã đủ (outlier + eng + enrichedVia).
+
+## 2026-09-11u — Wire bridge `nova:analyzeCompetitor` vào UI: nút "🧠 Phân tích sâu (Claude)" trong panel Thẻ điểm kênh
+
+- **UI** (`web/index.html` + `web/src/toolbox/utility/niche.js`): panel `nf-panel-scorecard` thêm hàng nút "🧠 Phân tích sâu (Claude)" + copy Markdown + `nfDeepState`/`nfDeepOut`. Hàm mới `nfDeepRun/nfRenderDeep/nfCopyDeep` (tên độc nhất, check:toplevel pass): dùng chung ô nhập kênh `nfScSeed` (fallback `_nfScChannel` từ lần soi kênh gần nhất), gọi `window.native.analyzeCompetitor({channel, count:20})` + stream progress `onCompetitorProgress` (unsubscribe trong finally). Render: bảng "Video ăn nhất kênh" (View/Bội số/Eng, tooltip like-comment tuyệt đối) + phân tích Claude 5 mục (công thức tiêu đề, độ dài, tín hiệu tương tác, 6 ý tưởng video); AI lỗi → dòng ⚠️ `analysisError`, bảng số liệu vẫn hiển thị.
+- **Backend** (`editor-pro/competitor.js`): bọc `claude()` trong `analyzeCompetitor` bằng try/catch → `analysisError` lộ liễu, vẫn trả `{ok:true, outliers, enrichedVia,…}` — trước đây AI lỗi làm cả call `{ok:false}` mất dữ liệu số (Luật 10 + nhất quán với channelScorecard).
+- Không đổi hợp đồng IPC: kênh `nova:analyzeCompetitor` + progress + preload đã tồn tại từ trước, giờ renderer mới gọi (thoát trạng thái zombie). `check:ipc` inventory không đổi.
+- Kiểm định: `node --check` PASS; test thật `analyzeCompetitor('@mkbhd', …, 10)` PASS — ok=true, TBV 5.626.434, outlier x2.33 có eng 2.13%, enrichedVia='yt-dlp', AI lỗi relay HTTP 500 → `analysisError` (đúng Luật 10); `tmp-test-analyze-deep.js` đã xoá; `npm run check` EXIT 0.
+- Smoke `npm start` cùng phiên: main process lên đủ bridge (8793-8796), renderer load `index.html` 0 SyntaxError/Uncaught (chỉ nhiễu ResizeObserver lành tính tồn tại từ trước); app không tự quit trong ~3 phút nên đã force-kill (dòng render-process-gone là hệ quả kill, không phải lỗi).
+
+## 2026-09-11t — Tool 7 "Dựng Video": preview nhấp nháy 2 ảnh A/B sau ✂ Tách / ⧉ Nhân đôi — đã vá race `_t7DrawGfx`
+
+- **Bỏ tải probe listen 6 lần**: log `t7listen6.txt` + screenshots (`t7shot-*.png`, đã xem ảnh) chứng minh user KHÔNG bao giờ mở video trong cửa sổ probe (clips=0 suốt 150s, Tool 7 hiện "Chưa có cảnh", chỉ 1 render empty-state tại tool-t7.js:63). Mọi báo cáo "tái hiện trong [PROBE]" là nhầm — flicker xảy ra ở app thật của user (instance khác). Không tiếp tục vòng lặp probe-listen nữa.
+- **Loại nghi vấn cũ**: đường Remotion preview (`t7RemotionSeek`/`_t7RmState`) là **dead code trong GUI** — `_t7RmState.on` không bao giờ được gán `true` ở đâu trong web. `t7PreviewImg.src` có đúng 1 writer (t7RenderPreview, tool-t7.js:1650).
+- **Repro tự động bằng CDP** (`nova/scripts/tmp-t7-flicker.js`, chế độ mặc định — inject 2 cảnh canvas + tách/nhân đôi/phát loop, monitor `data-cid` + hash src 100ms): **0 alternation** ở mọi kịch bản (idle, phát qua biên, fx/trans, variant A/B, rebuild `t7Build`/`_t7AutoBuild` — A/B sync giữ nguyên tách tay, đúng thiết kế). Nhân tố quyết định từ user (trả lời xác nhận): 2 ảnh luân phiên là **variant A/B của CÙNG một cảnh**.
+- **Root cause khả định**: race trong `_t7DrawGfx` (utility/t7.js) — response IPC `previewLayers` của key cũ về muộn ghi đè `t7GfxOv` (lớp đồ hoạ AI vẽ ĐÈ TOÀN KHUNG kèm backdrop '@scene' = ảnh cảnh). Code đã tự comment nhận biết race này ở tool-t7.js:930 nhưng chỉ vá nhánh `_t7AiTry`. Khi phát/tua qua biên A/B (mới được tạo bởi Tách/Nhân đôi), response stale/correct xen kẽ → ảnh nhấp nháy 2 variant.
+- **Fix** (token/discard, khai báo rõ — đúng Luật 10): thêm `_t7OvPend` vào shared-consts.js:4527; `_t7DrawGfx` ghi `key` vào `_t7OvPend` trước await, sau await **bỏ response nếu `_t7OvPend !== key`** (có request mới hơn), chỉ apply khi là key mới nhất; request bị skip khi busy được vẽ lại trong `finally` đúng key mới nhất (hết kẹt lớp stale). Không đổi export/IPC/channel nào.
+- **Kiểm chứng sau fix**: probe synthetic re-run → 0 alternation, gfx vẫn render (571 bytes ở idle); `npm run check` **EXIT 0** (syntax 398 files, shared 18 keys, ipc 135 channels, size 0 err, toplevel/shadow/parity PASS).
+- **Còn treo**: (1) chờ user xác nhận flicker hết trong app thật; (2) chế độ REAL của probe (tự mở video thật) bị chặn — spawn dev electron không hydrate `state.profiles` (trống sau 40s dù đúng userData; cần cách attach vào app đang hoạt động của user với `--remote-debugging-port`); (3) `tmp-t7-flicker.js` chưa xoá — giữ lại để verify, xoá khi user xác nhận.
+
+## 2026-09-11m — Port VERIFY sang giao thức MỚI flow.google.com (batchexecute): tier/credits/email SỐNG LẠI
+
+- **Bằng chứng giao thức** (probe bắt network + grep bundle gstatic, log `%TEMP%\probe11.log`):
+  - `nzlxg` = `/VideoFxService.GetCredits` → inner JSON `[remaining,?,?,?,null,total]` (acc #1: 1050,1050 — PRO 1000/tháng + 50 daily).
+  - `o30O0e` = person.info (email) · `Yizz8d` = `/FlowService.GetUserSettings` · `KV2T2d` = `/AiSandbox.CheckToolAvailability` · `NfrxTb` = `/AiSandbox.CheckUserAcknowledgement` · `cPZSdc` = `/VideoFxService.GetFlowAppConfig` (chỉ banner — xác nhận KHÔNG phải credits).
+  - Gen = `FlowService/StreamGenerateContent` (gRPC-Web, chưa port).
+  - Gọi batchexecute tay thiếu XSRF `at` → 400 `xsrf` → cách duy nhất khả thi: để CHÍNH TRANG tự gọi rồi nghe lén response qua CDP Network.
+- **Sửa `nova/flow-chrome/dang-nhap.js`**:
+  - Thêm `_batchInner` (bóc inner JSON từ batchexecute) + `MIGRATED_TIER_MAP` + `_verifyMigrated`: navigate `flow.google.com` → nghe `rpcids=nzlxg`/`o30O0e` qua `cdp.on` + poll DOM `flow-user-tier-chip` (40s). Tier chip `PRO`→`PAYGATE_TIER_ONE`, `ULTRA`→`PAYGATE_TIER_TWO`, khác→`PAYGATE_TIER_FREE` (giữ nguyên hợp đồng tier cũ cho UI/gen config).
+  - `_verifyBody`: đọc host TRƯỚC `captureToken` (tiết kiệm ~22s chờ token vô ích) + đọc LẠI host sau khi fail; nhánh `flow.google.com` giờ chạy `_verifyMigrated` (không còn trả lỗi FLOW_MIGRATED ở verify — nhánh FLOW_MIGRATED vẫn còn ở `token-captcha.js ensureLive` cho đường GEN).
+- **Sự cố + bài học store**: probe chạy ngoài app không gọi `restore()` → `persist()` ghi store rỗng ĐÃ XOÁ record acc #1 trong `chrome-accounts.json`. Đã khôi phục tay bằng dữ liệu verify mới (email/tier/credits thật; `cookieExpiry` mất → null). Fix gốc: `_verifyMigrated` chỉ `persist()` khi `accounts.get(id)` tồn tại; probe giờ gọi `restore()` trước; cấm ghi store bằng PowerShell `Set-Content` (BOM làm `JSON.parse` hỏng — phải ghi bằng node không BOM).
+- **Kết quả thật**: `verifyAccount(1)` 9s → `{ok:true, credits:1050, tier:'PAYGATE_TIER_ONE', email:'khanhtran0393@gmail.com', creditsStatus:'batchexecute', migrated:true}`; store persist đúng (`STORE#1` xác nhận). `npm run check` EXIT 0.
+- **Còn treo**: gen ACCOUNT vẫn chết (ya29 không còn — cần port `StreamGenerateContent` gRPC-Web, task lớn chờ user); đường verify cũ token/REST giữ làm dự phòng cho profile chưa migrate.
+- `tmp-probe-flow-credits.js` **GIỮ LẠI**: hiện là probe xác minh verify giao thức mới (chạy: `npx electron nova/scripts/tmp-probe-flow-credits.js`).

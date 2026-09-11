@@ -370,7 +370,8 @@ function tfStartBuiltinPoll(){
   }, 6000);
 }
 
-function tfTierName(t){ return t === 'PAYGATE_TIER_TWO' ? 'Ultra' : t === 'PAYGATE_TIER_ONE' ? 'Pro' : 'Free'; }
+function tfTierName(t){ return t === 'PAYGATE_TIER_TWO' ? 'Ultra' : t === 'PAYGATE_TIER_ONE' ? 'Pro' : t ? 'Free' : null; }   // tier null = CHƯA verify được → KHÔNG được hiện nhầm thành "Free"
+function tfTierCell(t){ const n = tfTierName(t); if (!n) return '<span style="color:var(--text-dim)" title="Chưa verify — bấm ↻ Làm mới để cập nhật gói + tín dụng">Chưa rõ</span>'; const col = t === 'PAYGATE_TIER_TWO' ? 'var(--violet)' : t === 'PAYGATE_TIER_ONE' ? 'var(--accent)' : 'var(--text-muted)'; return `<b style="color:${col}">${n}</b>`; }
 
 function _tfFmtExpiry(ms){ const d = new Date(ms); const p = n => String(n).padStart(2,'0'); return `${p(d.getDate())}/${p(d.getMonth()+1)} ${p(d.getHours())}:${p(d.getMinutes())}`; }
 
@@ -415,7 +416,7 @@ function tfRenderConn(s){
       html += `<tr style="border-top:1px solid var(--border)">
         ${ext ? '' : `<td style="padding:5px 4px"><input type="checkbox" ${a.enabled !== false ? 'checked' : ''} onchange="tfSetEnabled(${a.id}, this.checked)"></td>`}
         <td style="padding:5px 4px">${a.engine === 'chrome' ? '🖥️ ' : ''}${escapeHtml(a.email || ('TK ' + (a.id ?? '')))}</td>
-        <td style="padding:5px 4px"><b>${tfTierName(a.tier)}</b></td>
+        <td style="padding:5px 4px">${tfTierCell(a.tier)}</td>
         <td style="padding:5px 4px">${a.credits ?? '—'}</td>
         ${ext ? '' : `<td style="padding:5px 4px">${_tfExpCell(a.cookieExpiry)}</td><td style="padding:5px 4px">${_tfExpCell(tokExp)}</td>`}
         <td style="padding:5px 4px">${st}</td>
@@ -556,7 +557,7 @@ async function fcRenderList(){
       <td style="padding:6px 5px"><input type="checkbox" ${a.useImage!==false?'checked':''} onchange="fcSetUse(${a.id},'image',this.checked)"></td>
       <td style="padding:6px 5px"><input type="checkbox" ${a.useVideo!==false?'checked':''} onchange="fcSetUse(${a.id},'video',this.checked)"></td>
       <td style="padding:6px 5px;white-space:nowrap">${escapeHtml(a.email||('Chrome '+a.id))}</td>
-      <td style="padding:6px 5px"><b>${tfTierName(a.tier)}</b></td>
+      <td style="padding:6px 5px">${tfTierCell(a.tier)}</td>
       <td style="padding:6px 5px;color:var(--amber)">${a.credits ?? '—'}</td>
       <td style="padding:6px 5px"><input value="${escapeHtml(a.proxy||'')}" placeholder="host:port" onchange="fcSetProxy(${a.id},this.value)" style="width:96px;padding:3px 5px;border:1px solid var(--border);border-radius:5px;background:var(--surface);color:var(--text);font-size:11px"></td>
       <td style="padding:6px 5px">${_fcDate(a.cookieExpiry)}</td>
@@ -590,7 +591,7 @@ async function fcSetCapMode(m){
   _fcStatus(_capModeCache === 'guest' ? '✓ Máy captcha: Guest — Chrome trống xoay liên tục (né unusual-activity, không đụng tài khoản).' : '✓ Máy captcha: Tài khoản — xoay giữa các account.', 'var(--green)');
 }
 
-async function fcRefreshAll(){ _fcStatus('⏳ Đang làm mới tất cả (mở Chrome từng cái)…','var(--violet)'); const s = await window.native.flowChrome('GET_ACCOUNTS').catch(()=>null); for (const a of (s?.accounts||[])){ if (a.enabled!==false && !a.needLogin) await window.native.flowChrome('REFRESH',{id:a.id}).catch(()=>{}); } _fcStatus('✅ Đã làm mới tất cả.','var(--green)'); fcRenderList(); }
+async function fcRefreshAll(){ _fcStatus('⏳ Đang làm mới tất cả (mở Chrome từng cái)…','var(--violet)'); const s = await window.native.flowChrome('GET_ACCOUNTS').catch(()=>null); let okC = 0, tot = 0; const errs = []; for (const a of (s?.accounts||[])){ if (a.enabled!==false && !a.needLogin){ tot++; const r = await window.native.flowChrome('REFRESH',{id:a.id}).catch(e=>({error:String(e)})); if (r?.credits != null) okC++; if (r?.error) errs.push('#'+a.id+': '+r.error); } } if (errs.length) _fcStatus('❌ Làm mới xong ' + okC + '/' + tot + ' đọc được tín dụng — lỗi: ' + escapeHtml(errs.join(' | ').slice(0,180)), 'var(--red)'); else if (okC === tot && tot > 0) _fcStatus('✅ Đã làm mới tất cả — ' + okC + '/' + tot + ' đọc được gói + tín dụng.', 'var(--green)'); else _fcStatus('⚠️ Làm mới xong nhưng chỉ ' + okC + '/' + tot + ' đọc được gói/tín dụng — đóng hết cửa sổ Chrome Flow rồi thử lại.', 'var(--amber)'); fcRenderList(); }
 
 async function tfAddCookie2(){
   const ta = document.getElementById('tfCookieInput2'); const v = ta ? ta.value.trim() : '';
@@ -604,7 +605,15 @@ async function tfAddCookie2(){
 
 async function fcSetEnabled(id, en){ await window.native.flowChrome('SET_ENABLED', { id, enabled: en }).catch(()=>{}); }
 
-async function fcRefresh(id){ _fcStatus('⏳ Làm mới account #' + id + '…', 'var(--violet)'); const r = await window.native.flowChrome('REFRESH', { id }).catch(e=>({error:String(e)})); _fcStatus(r?.error ? ('❌ ' + r.error) : ('✅ Đã làm mới' + (r.email ? ' ' + escapeHtml(r.email) : '')), r?.error ? 'var(--red)' : 'var(--green)'); fcRenderList(); }
+async function fcRefresh(id){ _fcStatus('⏳ Làm mới account #' + id + '… (mở Chrome điều khiển, ~10s)', 'var(--violet)'); const r = await window.native.flowChrome('REFRESH', { id }).catch(e=>({error:String(e)}));
+  if (r?.error){ _fcStatus('❌ ' + r.error, 'var(--red)'); }
+  else {
+    const ten = tfTierName(r.tier);
+    if (r.credits != null && ten) _fcStatus('✅ Đã làm mới' + (r.email ? ' ' + escapeHtml(r.email) : '') + ' — ' + ten + ' · ' + r.credits + ' tín dụng.', 'var(--green)');
+    else if (r.credits != null) _fcStatus('✅ Đã làm mới — ' + r.credits + ' tín dụng (gói chưa rõ).', 'var(--green)');
+    else _fcStatus('⚠️ Đã làm mới token nhưng chưa đọc được gói/tín dụng' + (r.creditsStatus ? ' (HTTP ' + r.creditsStatus + ')' : '') + ' — đóng hết cửa sổ Chrome Flow rồi bấm ↻ thử lại.', 'var(--amber)');
+  }
+  fcRenderList(); }
 
 async function fcRemove(id){ if (!confirm('Xoá account Chrome #' + id + '? (xoá cả profile đăng nhập)')) return; await window.native.flowChrome('REMOVE', { id }).catch(()=>{}); fcRenderList(); }
 

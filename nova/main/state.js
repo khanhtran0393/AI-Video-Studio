@@ -12,18 +12,30 @@ const WEB_DIR = path.join(__dirname, '..', 'web');
 // AI sinh SPEC JSON cho từng cảnh, engine cố định diễn giải → thời lượng luôn bằng đúng giây của cảnh.
 const NOVA_REMOTION_DIR = path.join(__dirname, '..', 'editor-pro', 'nova-remotion', 'bundle');
 
+// ── Danh sách host tin cậy (NGUỒN CHÂN LÝ) ──
+// window.js dựng Set<string> từ 2 mảng này cho security-policy.js
+// (isAllowlistedHost khớp host & subdomain — thay cho cặp regex cũ
+// AUTH_HOSTS/EXTERNAL_LINK_HOSTS đã gỡ). Thêm host mới: sửa mảng ở đây,
+// KHÔNG nhái tên host ở file khác.
+const AUTH_HOST_NAMES = [
+  'accounts.google.com', 'google.com', 'firebaseapp.com', 'novastudio.com',
+];
+const EXTERNAL_LINK_HOST_NAMES = [
+  'console.anthropic.com', 'platform.openai.com', 'aistudio.google.com',
+  'console.cloud.google.com', 'platform.deepseek.com', 'openrouter.ai',
+  'console.groq.com', 'console.mistral.ai', 'dashboard.cohere.com',
+  'docs.perplexity.ai', 'api.together.xyz', 'fireworks.ai',
+  'pexels.com', 'pixabay.com', 'unsplash.com',
+];
+
 module.exports = {
   // ── Hằng số ──
   WEB_DIR,
   NOVA_REMOTION_DIR,
-  // Host được phép mở cửa sổ đăng nhập popup (Google/Firebase), còn lại mở trình duyệt ngoài.
-  AUTH_HOSTS: /(^|\.)(accounts\.google\.com|google\.com|firebaseapp\.com|novastudio\.com)$/i,
-  // Host "Lấy API key / tài liệu" mà UI link ra ngoài (Lấy Key ↗ ở trang Cài đặt).
-  // Ưu tiên KIỂM TRA TRƯỚC AUTH_HOSTS trong window.js: các host này mở bằng trình
-  // duyệt mặc định của hệ thống (shell.openExternal) — gồm console Cloud/AI Studio
-  // tuy là subdomain của google.com (nếu để AUTH_HOSTS khớp trước sẽ bị mở nhầm
-  // popup đăng nhập 500x660 trong app).
-  EXTERNAL_LINK_HOSTS: /(^|\.)(console\.anthropic\.com|platform\.openai\.com|aistudio\.google\.com|console\.cloud\.google\.com|platform\.deepseek\.com|openrouter\.ai|console\.groq\.com|console\.mistral\.ai|dashboard\.cohere\.com|docs\.perplexity\.ai|api\.together\.xyz|fireworks\.ai|pexels\.com|pixabay\.com|unsplash\.com)$/i,
+  // Danh sách host gốc (NGUỒN CHÂN LÝ) — window.js dựng Set<string> cho
+  // security-policy.js (isAllowlistedHost khớp host & subdomain, thay regex cũ).
+  AUTH_HOST_NAMES,
+  EXTERNAL_LINK_HOST_NAMES,
   // Logo phải hiển thị tối thiểu 5 giây khi khởi động; nếu app tải lâu hơn thì
   // splash giữ nguyên cho tới khi trang chính tải xong (reveal chờ did-finish-load).
   SPLASH_MIN_MS: 5000,

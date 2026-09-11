@@ -33,7 +33,9 @@
     "build": "electron-builder --config electron-builder.json",
     "smoke:packaged": "node nova/scripts/packaged-smoke.js",
     "build:smoke": "npm run build:win && npm run smoke:packaged",
-    "check:shadow": "node nova/scripts/handler-shadow-check.js"
+    "check:shadow": "node nova/scripts/handler-shadow-check.js",
+    "check:bundle": "node nova/scripts/bundle-selfcheck.js",
+    "test:maintenance": "node nova/core/test-maintenance.js"
   },
   "dependencies": {
     "@remotion/bundler": "4.0.518",

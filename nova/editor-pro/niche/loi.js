@@ -1,5 +1,6 @@
 // Tìm Ngách (Niche Finder) — 6 module, đấu vào đồ thật của Nova:
-//   yt-dlp (cookie Nova) khám phá FREE → YouTube Data API (key Nova) enrich like/comment/sub
+//   yt-dlp (cookie Nova) khám phá FREE → enrich like/comment/sub: CÓ key Nova thì qua
+//   YouTube Data API, KHÔNG có key thì qua yt-dlp (chế độ KHÔNG CẦN KEY, mode='yt-dlp')
 //   → AI phân tích (ưu tiên API đã cấu hình trong Cài đặt; CLI bridge chỉ là chỗ lùi). + cache kết quả. Không dùng key/DB proprietary của Fractal.
 const { spawn } = require('child_process');
 const fs = require('fs'); const path = require('path'); const os = require('os');
@@ -134,12 +135,20 @@ async function claude(sys, content, opts) {
     if (typeof opts.model === 'string' && opts.model.trim()) kho.api_model = opts.model.trim();
     if (opts.baseUrl != null) kho.api_base_url = opts.baseUrl;
   }
+  let aiErr = null;
   try {
     const r = await _goiApi(sys, content, kho);
     if (r != null && String(r).trim()) return r;
+    aiErr = new Error('AI chưa cấu hình (api_provider trống) — mở Cài đặt → API.');
   } catch (e) {
-    console.warn('[niche] API cấu hình lỗi, lùi về CLI bridge:', (e && e.message) || e);
+    aiErr = e;
   }
+  if (opts && opts.noBridge) {
+    // CẤM lùi CLI bridge Claude: caller với noBridge:true phải chạy bằng ĐÚNG API đã cấu hình —
+    // lỗi lộ liễu kèm tên provider để dễ chẩn đoán (Luật 10).
+    throw new Error('[' + (kho.api_provider || 'chưa cấu hình AI') + '] ' + ((aiErr && aiErr.message) || String(aiErr)));
+  }
+  console.warn('[niche] API cấu hình lỗi, lùi về CLI bridge:', (aiErr && aiErr.message) || aiErr);
   // CLI bridge nội bộ app. App mới chạy bridge ở 8795 (xem cli-bridge-native.plain.js),
   // bản build cũ/nhánh khác có thể còn 8790 → thử cả hai.
   const candidates = ['http://127.0.0.1:8795/chat/completions', 'http://127.0.0.1:8790/chat/completions'];
@@ -269,19 +278,20 @@ async function searchVideos(query, n = 20, onProgress = () => {}, opts = {}) {
     const subs = parseInt(sub) || 0;
     return { views, date: up || '', days, dur: parseInt(d) || 0, channel: (ch || '').trim(), channelUrl: /^https?:/i.test(chUrl || '') ? chUrl.trim() : '', id: (id || '').trim(), url: id ? 'https://youtu.be/' + id : '', title: (t.join('\t') || '').trim(), vel: days != null ? Math.round(views / Math.max(days, 1)) : 0, likes: 0, comments: 0, subs, engRate: 0, viewPerSub: subs ? +(views / subs).toFixed(2) : 0, demand: views };
   }).filter(x => x.title);
-  // Enrich chính xác (like/comment/sub) qua YT Data API — key của Nova
-  let enriched = false;
+  // Enrich like/comment/sub: CÓ key → YouTube Data API (nhanh, 1 unit/50 video);
+  // KHÔNG key → yt-dlp chế độ KHÔNG CẦN KEY (chậm hơn nhưng zero cấu hình). Báo rõ enrichedVia để UI hiển thị.
+  let enriched = false, enrichedVia = '';
   if (_yt) {
     try {
-      onProgress(42, 'Bổ sung like/comment/sub (YouTube API)…');
-      const { key, map } = await _yt.enrich(vids.map(x => x.id));
-      if (key) {
-        enriched = true;
-        vids.forEach(x => { const e = map[x.id]; if (e) { x.views = e.views || x.views; x.likes = e.likes; x.comments = e.comments; x.dur = e.dur || x.dur; x.days = e.days != null ? e.days : x.days; x.channel = e.channel || x.channel; x.subs = e.subs; x.vel = e.vel || x.vel; x.engRate = e.engRate; x.viewPerSub = e.viewPerSub; x.demand = e.demand; } });
+      const { key, mode, map } = await _yt.enrich(vids.map(x => x.id), (p, m) => onProgress(42 + Math.round(p * 0.18), m));
+      if (key) onProgress(42, 'Bổ sung like/comment/sub (YouTube API)…');
+      if (Object.keys(map).length) {
+        enriched = true; enrichedVia = mode || (key ? 'api' : 'yt-dlp');
+        vids.forEach(x => { const e = map[x.id]; if (e) { x.views = e.views || x.views; x.likes = e.likes; x.comments = e.comments; x.dur = e.dur || x.dur; x.days = e.days != null ? e.days : x.days; x.channel = e.channel || x.channel; x.subs = e.subs || x.subs; x.vel = e.vel || x.vel; x.engRate = e.engRate; x.viewPerSub = e.viewPerSub || x.viewPerSub; x.demand = e.demand; } });
       }
     } catch (_) {}
   }
-  return { vids, enriched };
+  return { vids, enriched, enrichedVia };
 }
 
 // ══════════════════════════════════════════════════════════════════

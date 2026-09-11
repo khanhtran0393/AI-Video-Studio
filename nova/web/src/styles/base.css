@@ -229,7 +229,7 @@ html,body{
   background:linear-gradient(90deg,var(--accent-2),var(--accent));width:0;transition:width .5s ease}
 .statusbar .sb-spacer{flex:1}
 .statusbar .sb-export{display:inline-flex;align-items:center;gap:7px;
-  background:linear-gradient(180deg,var(--accent-2),var(--accent));color:#1c0f05;
+  background:linear-gradient(180deg,var(--accent-2),var(--accent));color:var(--on-accent);
   font-weight:800;font-size:12.5px;border:none;border-radius:8px;padding:7px 15px;cursor:pointer;
   box-shadow:0 6px 16px -8px var(--accent)}
 .statusbar .sb-export:hover{filter:brightness(1.05)}
@@ -266,7 +266,7 @@ html,body{
   border:1px solid var(--border);border-radius:10px;cursor:pointer;user-select:none}
 .tb-user:hover{border-color:var(--border-strong,var(--accent))}
 .tb-user .tb-av{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;font-weight:800;
-  font-size:12px;color:#1a0e05;background:linear-gradient(135deg,var(--accent-2),var(--accent))}
+  font-size:12px;color:var(--on-accent);background:linear-gradient(135deg,var(--accent-2),var(--accent))}
 .tb-user .tb-name{font-size:12.5px;font-weight:700;line-height:1.1}
 .tb-user .tb-role{font-size:10.5px;color:var(--text-muted)}
 .tb-user .tb-caret{width:14px;height:14px;color:var(--text-muted);flex-shrink:0;transition:transform .15s}
@@ -284,7 +284,7 @@ html,body{
   padding:9px 11px;margin-bottom:10px;cursor:pointer}
 .tb-upd.on{display:flex}
 .tb-upd:hover{background:color-mix(in srgb,var(--accent) 22%,transparent)}
-.tb-upd-ic{width:26px;height:26px;border-radius:7px;background:var(--accent);color:#1c0f05;
+.tb-upd-ic{width:26px;height:26px;border-radius:7px;background:var(--accent);color:var(--on-accent);
   display:grid;place-items:center;font-size:15px;font-weight:800;flex-shrink:0}
 .tb-upd-tx{display:flex;flex-direction:column;line-height:1.25;min-width:0}
 .tb-upd-tx b{font-size:12.5px;color:var(--text)}
@@ -299,7 +299,7 @@ html,body{
 .tb-ws #videoSelect{max-width:160px}
 .tb-ws-sep{width:1px;height:20px;background:var(--border)}
 .tb-newvid{display:inline-flex;align-items:center;gap:5px;background:linear-gradient(180deg,var(--accent-2),var(--accent));
-  color:#1c0f05;font-weight:700;font-size:12.5px;border:none;border-radius:9px;padding:7px 11px;cursor:pointer;white-space:nowrap}
+  color:var(--on-accent);font-weight:700;font-size:12.5px;border:none;border-radius:9px;padding:7px 11px;cursor:pointer;white-space:nowrap}
 .tb-newvid svg{width:14px;height:14px}
 .tb-upgrade{display:inline-flex;align-items:center;gap:6px;margin-right:8px;
   background:linear-gradient(180deg,var(--accent-2),var(--accent));color:var(--on-accent);
@@ -394,7 +394,7 @@ textarea{resize:vertical;line-height:1.6;font-family:inherit}
 /* ============ INFO BOX ============ */
 .info-box{
   background:var(--accent-soft);
-  border:1px solid #fed7aa;
+  border:1px solid color-mix(in srgb,var(--accent) 38%,transparent);
   border-radius:8px;
   padding:12px 16px;
   margin-bottom:20px;
@@ -402,9 +402,10 @@ textarea{resize:vertical;line-height:1.6;font-family:inherit}
   line-height:1.65;
 }
 .info-box .lbl{color:var(--accent);font-weight:600}
-.info-box.violet{background:#f5f3ff;border-color:#ddd6fe}
+/* Viền/nền tint mềm theo theme (color-mix) — trước đây pastel hex cứng, nhìn lệch ở dark */
+.info-box.violet{background:color-mix(in srgb,var(--violet) 8%,transparent);border-color:color-mix(in srgb,var(--violet) 35%,transparent)}
 .info-box.violet .lbl{color:var(--violet)}
-.info-box.teal{background:#f0fdfa;border-color:#99f6e4}
+.info-box.teal{background:color-mix(in srgb,var(--teal) 8%,transparent);border-color:color-mix(in srgb,var(--teal) 35%,transparent)}
 .info-box.teal .lbl{color:var(--teal)}
 
 /* ============ STATUS BAR ============ */
@@ -419,9 +420,9 @@ textarea{resize:vertical;line-height:1.6;font-family:inherit}
   min-height:38px;
   display:flex;align-items:center;gap:8px;
 }
-.status-bar.ok{border-color:#86efac;background:#f0fdf4;color:var(--green)}
-.status-bar.error{border-color:#fca5a5;background:#fef2f2;color:var(--red)}
-.status-bar.working{border-color:#c4b5fd;background:#f5f3ff;color:var(--violet)}
+.status-bar.ok{border-color:color-mix(in srgb,var(--green) 40%,transparent);background:color-mix(in srgb,var(--green) 9%,transparent);color:var(--green)}
+.status-bar.error{border-color:color-mix(in srgb,var(--red) 40%,transparent);background:color-mix(in srgb,var(--red) 9%,transparent);color:var(--red)}
+.status-bar.working{border-color:color-mix(in srgb,var(--violet) 40%,transparent);background:color-mix(in srgb,var(--violet) 9%,transparent);color:var(--violet)}
 .spinner{
   display:inline-block;width:11px;height:11px;
   border:1.5px solid var(--violet);border-top-color:transparent;
@@ -629,7 +630,7 @@ html.dark .pc-ico.i-rule{background:#3a1414;color:#f87171}
 .dstep .st{display:flex;flex-direction:column;align-items:center;gap:7px;min-width:76px;flex:1}
 .dstep .dot{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;border:2px solid var(--border-bright);color:var(--text-dim);font-weight:800;font-size:13px}
 .dstep .st.done .dot{background:var(--green);border-color:var(--green);color:#04211d}
-.dstep .st.cur .dot{background:var(--accent);border-color:var(--accent);color:#1c0f05;animation:autopulse 1.4s ease-in-out infinite}
+.dstep .st.cur .dot{background:var(--accent);border-color:var(--accent);color:var(--on-accent);animation:autopulse 1.4s ease-in-out infinite}
 .dstep .st .nm{font-size:11.5px;font-weight:600;text-align:center}
 .dstep .st.done .nm{color:var(--green)}.dstep .st.cur .nm{color:var(--accent)}
 .dstep .st .sb{font-size:10px;color:var(--text-dim)}
@@ -719,23 +720,25 @@ html.dark .pc-ico.i-rule{background:#3a1414;color:#f87171}
 .auto-btn:hover{filter:brightness(1.05)}
 .auto-btn:active{transform:translateY(1px)}
 .auto-stop{
-  background:#fff;border:1.5px solid var(--red,#dc2626);color:var(--red,#dc2626);
+  background:var(--surface);border:1.5px solid var(--red,#dc2626);color:var(--red,#dc2626);
   font-weight:600;font-size:13px;padding:10px 18px;border-radius:10px;cursor:pointer;
 }
 .auto-hint{font-size:11.5px;color:var(--text-muted);line-height:1.45}
 #autoBar{display:none;align-items:center;gap:5px;flex-wrap:wrap;font-size:11.5px}
 .auto-step{
   display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:999px;
-  background:#fff;border:1px solid #e7e2d9;color:#94918a;white-space:nowrap;transition:all .2s;
+  background:var(--surface);border:1px solid var(--border);color:var(--text-dim);white-space:nowrap;transition:all .2s;
 }
 .auto-step b{font-weight:700}
-.auto-step.active{background:#c2410c;border-color:#c2410c;color:#fff;animation:autopulse 1s ease-in-out infinite}
-.auto-step.done{background:#dcfce7;border-color:#86efac;color:#15803d}
+/* Pill trạng thái theo theme — trước đây #fff/#c2410c/#dcfce7/#fee2e2 cứng (light cả ở dark mode) */
+.auto-step.active{background:var(--accent);border-color:var(--accent);color:var(--on-accent);animation:autopulse 1s ease-in-out infinite}
+.auto-step.done{background:color-mix(in srgb,var(--green) 14%,transparent);border-color:color-mix(in srgb,var(--green) 40%,transparent);color:var(--green)}
 .auto-step.done::after{content:'✓';font-weight:700}
 .auto-step.skip{opacity:.5;text-decoration:line-through}
-.auto-step.fail{background:#fee2e2;border-color:#fca5a5;color:#b91c1c}
+.auto-step.fail{background:color-mix(in srgb,var(--red) 14%,transparent);border-color:color-mix(in srgb,var(--red) 40%,transparent);color:var(--red)}
 .auto-step.fail::after{content:'✕';font-weight:700}
-.auto-arrow{color:#d6cfc2;font-size:11px}
+.auto-arrow{color:var(--text-dim);font-size:11px}
+html.dark .auto-arrow{color:#d6cfc2}   /* giữ nguyên tông be nhạt của dark mode */
 @keyframes autopulse{0%,100%{opacity:1}50%{opacity:.55}}
 
 /* ============ SUBTABS ============ */
@@ -785,7 +788,7 @@ html.dark .pc-ico.i-rule{background:#3a1414;color:#f87171}
 .preview-scene .pid{color:var(--accent);font-weight:600}
 .preview-scene .ptag{
   color:var(--rose);font-size:10px;margin-left:6px;
-  background:#fef2f2;padding:1px 6px;border-radius:3px;
+  background:color-mix(in srgb,var(--rose) 10%,transparent);padding:1px 6px;border-radius:3px;
 }
 .preview-scene .ptext{
   color:var(--text);font-size:13.5px;line-height:1.6;
@@ -1054,7 +1057,7 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
 .t2-toolcard .t2-group:first-of-type{ border-top:none; }
 
 /* ===== Tool 6 — Veo Shot Forge ===== */
-.veo-mode-btn.active{ background:var(--accent-soft);border-color:#fed7aa;color:var(--accent);font-weight:600; }
+.veo-mode-btn.active{ background:var(--accent-soft);border-color:color-mix(in srgb,var(--accent) 38%,transparent);color:var(--accent);font-weight:600; }
 .veo-shot{ display:flex;flex-direction:column;gap:7px;background:var(--surface);
   border:1px solid var(--border);border-radius:10px;padding:10px 12px; }
 .veo-shot-head{ display:flex;align-items:center;gap:9px;flex-wrap:wrap; }
@@ -1081,7 +1084,7 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
 .wb-tab{ background:transparent;border:1px solid var(--border);border-radius:8px;padding:6px 14px;
   cursor:pointer;font-size:12.5px;color:var(--text-muted); }
 .wb-tab:hover{ color:var(--text);border-color:var(--accent); }
-.wb-tab.active{ background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600; }
+.wb-tab.active{ background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-weight:600; }
 .wb-pane{ display:flex;flex-direction:column;gap:14px; }
 .wb-group{ background:var(--surface-1,var(--surface-2));border:1px solid var(--border);border-radius:10px;
   padding:14px;display:flex;flex-direction:column;gap:10px; }
@@ -1099,7 +1102,7 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
   border-radius:6px;display:block;cursor:pointer; }
 .wb-preview-bar{ display:flex;align-items:center;gap:12px;flex-wrap:wrap; }
 .wb-time{ font-family:monospace;font-size:12px;color:var(--text-muted); }
-.wb-btn-primary{ background:var(--accent);border-color:var(--accent);color:#fff; }
+.wb-btn-primary{ background:var(--accent);border-color:var(--accent);color:var(--on-accent); }
 /* Nút bấm trong panel Whiteboard / Vẽ Tay Ảnh: các <button> không có class .btn
    → khoác diện mạo .btn của app (trước đó nút hiển thị kiểu mặc định trình duyệt — xấu). */
 .wb-root button:not(.wb-tab){

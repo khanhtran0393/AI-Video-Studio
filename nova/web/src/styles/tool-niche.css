@@ -48,19 +48,22 @@
         #tool-toolniche .nf-wrap{display:flex;height:calc(100vh - 120px);margin:0 -18px;border-top:1px solid var(--border)}
         
         /* ── Sidebar ── */
-        #tool-toolniche .nf-sidebar{width:240px;flex:0 0 auto;border-right:1px solid var(--border);background:#f9f9f9;overflow-y:auto;padding:16px 12px}
+        /* Sidebar: theme-aware — trước đây nền #f9f9f9 cứng (trắng cả ở dark mode) */
+        #tool-toolniche .nf-sidebar{width:240px;flex:0 0 auto;border-right:1px solid var(--border);background:var(--surface-2);overflow-y:auto;padding:16px 12px}
         #tool-toolniche .nf-sidebar::-webkit-scrollbar{width:6px}
-        #tool-toolniche .nf-sidebar::-webkit-scrollbar-thumb{background:#ddd;border-radius:3px}
-        #tool-toolniche .nf-tile{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:10px;cursor:pointer;color:#555;font-size:14px;font-weight:500;margin-bottom:8px;transition:all .2s ease}
-        #tool-toolniche .nf-tile:hover{background:rgba(0,0,0,0.04);color:#333}
-        #tool-toolniche .nf-tile.active{background:#3b82f6;color:#fff;box-shadow:0 4px 12px rgba(59,130,246,0.25)}
+        #tool-toolniche .nf-sidebar::-webkit-scrollbar-thumb{background:var(--border-2);border-radius:3px}
+        /* Tile: pill theo phong cách chủ đạo — muted → hover nổi lên → active accent + on-accent
+           (trước đây #555/#333/active xanh #3b82f6 cứng, lệch tông accent cam của app) */
+        #tool-toolniche .nf-tile{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:10px;cursor:pointer;color:var(--text-muted);font-size:14px;font-weight:500;margin-bottom:8px;transition:all .2s ease}
+        #tool-toolniche .nf-tile:hover{background:var(--surface-3);color:var(--text)}
+        #tool-toolniche .nf-tile.active{background:var(--accent);color:var(--on-accent);box-shadow:0 4px 12px color-mix(in srgb,var(--accent) 25%,transparent)}
         #tool-toolniche .nf-tile.active .nf-ico{filter:none}
         #tool-toolniche .nf-ico{font-size:16px;flex:0 0 auto}
         #tool-toolniche .nf-tile h4{margin:0;font-size:inherit;font-weight:inherit;color:inherit}
         #tool-toolniche .nf-tile p{display:none}
         
         /* ── Content ── */
-        #tool-toolniche .nf-content{flex:1;overflow-y:auto;padding:24px;background:#fff}
+        #tool-toolniche .nf-content{flex:1;overflow-y:auto;padding:24px;background:var(--bg)}
         #tool-toolniche .nf-panel{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;display:none;box-shadow:0 2px 16px rgba(0,0,0,0.03)}
         #tool-toolniche .nf-panel.active{display:block}
         #tool-toolniche .nf-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}

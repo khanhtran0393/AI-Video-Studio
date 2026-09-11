@@ -118,9 +118,9 @@ assert(!editorAi.includes('window.novaStore'),
 assert(!editorAi.includes('window.native.ttsFetch'),
   'Editor Pro IPC không được gọi window.native.ttsFetch');
 const editorChannels = read('editor-pro/_channels.json');
-assert(editorChannels.includes("editor-pro:ttsGenerate'"),
+assert(editorChannels.includes('"editor-pro:ttsGenerate"'),
   'Catalog Editor Pro phải chứa channel TTS riêng');
-assert(!editorChannels.includes("ai:ttsGenerate'"),
+assert(!editorChannels.includes('"ai:ttsGenerate"'),
   'Catalog Editor Pro không được chứa channel TTS dùng chung cũ');
 const novaWeb = rendererSources;   // gộp index.html + toolbox (xem mục 4)
 assert(!novaWeb.includes('ai:ttsGenerate'),

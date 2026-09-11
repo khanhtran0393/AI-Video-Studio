@@ -63,6 +63,7 @@ function classifyFixStrategy(error) {
   if (/element_out_of_frame|character_overlap|caption_placement/.test(type)) return 'fix-in-post';
   if (/caption_timing|caption_too_short|tts_out_of_sync|trans_long/.test(type)) return 'edit';
   if (/black_frame|white_frame|flat_frame|frozen_frame/.test(type)) return 're-roll';
+  if (/watermark_detected/.test(type)) return 'fix-in-post'; // watermark không sửa bằng spec — cần tool xử lý ảnh
   return 'keep';
 }
 

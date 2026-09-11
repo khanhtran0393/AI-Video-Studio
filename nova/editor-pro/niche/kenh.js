@@ -2,6 +2,7 @@
      + tìm kênh giống. Module CommonJS: hứng hàm dùng chung từ ./loi qua require.
      Đường require cũ vẫn ổn nhờ niche.js (file gốc) re-export từ ./niche/index. ── */
 const { run, claude, cookies, daysSince, kfmt, cached, searchVideos, median, pool } = require('./loi');
+let _yt = null; try { _yt = require('../nova-yt'); } catch (_) {}   // enrich like/comment: API nếu có key, yt-dlp nếu không
 
 // ══════════════════════════════════════════════════════════════════
 //  1c) THẺ ĐIỂM KÊNH — 5 chỉ số sức khoẻ + outlier + kênh giống.
@@ -57,6 +58,27 @@ function healthScore(m) {
   return Math.round(Math.max(0, Math.min(100, s)));
 }
 
+// Đào bình luận khán giả của 1 video (yt-dlp --write-comments, KHÔNG CẦN KEY) —
+// demand thật từ người xem: họ đòi gì, nhắc lại điều gì. Lỗi trả mảng rỗng + caller báo chú giải.
+async function mineComments(videoId, maxComments = 80) {
+  const args = ['--skip-download', '--no-warnings', '--write-comments',
+    '--extractor-args', 'youtube:max_comments=' + Math.max(20, Math.min(200, maxComments)) + ',all',
+    '--print', '%(id)s\t%(comments)j',
+    'https://www.youtube.com/watch?v=' + String(videoId).trim()];
+  const ck = await cookies();
+  if (ck) args.push('--cookies', ck);
+  const out = await run(args, 120000);
+  const line = out.trim().split('\n').filter(Boolean).pop() || '';
+  const idx = line.indexOf('\t');
+  if (idx < 0) return [];
+  let arr;
+  try { arr = JSON.parse(line.slice(idx + 1)); } catch (_) { return []; }
+  return (Array.isArray(arr) ? arr : [])
+    .map(c => String((c && c.text) || '').replace(/\s+/g, ' ').trim())
+    .filter(t => t.length >= 12)
+    .slice(0, 60);
+}
+
 async function channelScorecard(channelUrl, onProgress = () => {}, opts = {}) {
   const count = Math.max(8, Math.min(30, Number(opts.count) || 20));
   // Key cache gộp cả count + cờ analyze: soi 20 video rồi đổi sang 30 (hoặc gọi
@@ -85,21 +107,49 @@ async function channelScorecard(channelUrl, onProgress = () => {}, opts = {}) {
     const outliers = vids.filter(x => x.ratio >= 1.5).sort((a, b) => b.ratio - a.ratio).slice(0, 8);
 
     let analysis = ''; let analysisError = '';
+    let enrichedVia = '';
     if (opts.analyze !== false && outliers.length) {
+      // Enrich like/comment cho outlier (≤8 video): có key Nova → YouTube API nhanh;
+      // không key → yt-dlp chế độ KHÔNG CẦN KEY (song song 8, có cache phiên 24h).
+      if (_yt) {
+        try {
+          onProgress(52, 'Bổ sung like/comment…');
+          const { key, mode, map: em } = await _yt.enrich(outliers.map(x => x.id), (p, m) => onProgress(52 + Math.round(p * 0.15), m));
+          if (Object.keys(em).length) {
+            enrichedVia = mode || (key ? 'api' : 'yt-dlp');
+            vids.forEach(x => { const e = em[x.id]; if (e) { x.likes = e.likes; x.comments = e.comments; x.engRate = e.engRate; } });
+          }
+        } catch (_) {}
+      }
       onProgress(70, 'Claude đọc mô-típ…');
+      // Đào bình luận của outlier #1 (tùy chọn, tắt bằng opts.mineComments === false):
+      // demand thật từ người xem — view/like không cho được. Lỗi lộ liễu qua commentsNote, không chặn.
+      let commentsBlock = ''; let commentsNote = '';
+      if (opts.mineComments !== false) {
+        try {
+          onProgress(58, 'Đọc bình luận khán giả…');
+          const cmts = await mineComments(outliers[0].id, 80);
+          commentsNote = cmts.length ? cmts.length + ' bình luận nổi' : 'bình luận không đọc được (tắt BTA/video giới hạn)';
+          if (cmts.length) commentsBlock = `\n\nBÌNH LUẬN NGƯỜI XEM (video "${outliers[0].title.slice(0, 60)}" — ${cmts.length} bình luận nổi nhất):\n` + cmts.map(t => '- ' + t.slice(0, 160)).join('\n');
+        } catch (err) { commentsNote = 'lỗi đào bình luận: ' + String((err && err.message) || err).slice(0, 80); }
+      }
       try {
+        const ds = outliers.map(x => `x${x.ratio} · ${kfmt(x.views)} view · ${Math.round(x.dur / 60)}p · ${x.engRate != null ? `eng ${x.engRate}% · ` : ''}${x.title}`).join('\n');
+        const ask = 'Viết 3-5 câu: mô-típ nào đang ăn ở kênh này (chú ý video vừa view cao VỪA eng cao — đó là tín hiệu nội dung thật sự chạm)'
+          + (commentsBlock ? ', và khán giả đang ĐÒI NHỌC GÌ/lặp lại điều gì trong bình luận (gợi 1 hướng khai thác)' : '')
+          + ', người mới chen vào bằng cách nào. Bám số liệu, không nói chung chung.';
         analysis = await claude(
           'Bạn là chuyên gia nội dung YouTube, trả lời tiếng Việt, ngắn gọn.',
-          `Kênh "${name}" (${kfmt(subs)} sub). Trung vị kênh ${kfmt(med)} view.\nChỉ số: VPS ${m.vps}× · longform ${Math.round(m.longform * 100)}% · độ ổn định (CV) ${m.cv} · xu hướng ${m.trend > 0 ? '+' : ''}${Math.round(m.trend * 100)}%/tháng.\n\nVIDEO VƯỢT TRỘI:\n${outliers.map(x => `x${x.ratio} · ${kfmt(x.views)} view · ${Math.round(x.dur / 60)}p · ${x.title}`).join('\n')}\n\nViết 3-5 câu: mô-típ nào đang ăn ở kênh này, và người mới chen vào bằng cách nào. Bám số liệu, không nói chung chung.`);
+          `Kênh "${name}" (${kfmt(subs)} sub). Trung vị kênh ${kfmt(med)} view.\nChỉ số: VPS ${m.vps}× · longform ${Math.round(m.longform * 100)}% · độ ổn định (CV) ${m.cv} · xu hướng ${m.trend > 0 ? '+' : ''}${Math.round(m.trend * 100)}%/tháng.\n\nVIDEO VƯỢT TRỘI (eng% = (like+comment)/view — cao bất thường = nội dung chạm đúng tệp):\n${ds}${commentsBlock}\n\n${ask}`);
       } catch (err) { analysisError = String((err && err.message) || err).slice(0, 160); }   // lỗi lộ liễu ra UI, không nuốt (Luật 10)
     }
     onProgress(100, 'Xong');
     return {
       ok: true, channel: name, subs, subsFmt: kfmt(subs), videoCount: vids.length, median: Math.round(med),
-      metrics: m, health: healthScore(m), monetized: monetizedGuess(subs, m), analysis, analysisError,
-      outliers: outliers.map(x => ({ title: x.title, views: x.views, viewsFmt: kfmt(x.views), ratio: x.ratio, dur: x.dur, days: x.days, url: x.url, id: x.id })),
+      metrics: m, health: healthScore(m), monetized: monetizedGuess(subs, m), analysis, analysisError, enrichedVia, commentsNote,
+      outliers: outliers.map(x => ({ title: x.title, views: x.views, viewsFmt: kfmt(x.views), ratio: x.ratio, dur: x.dur, days: x.days, url: x.url, id: x.id, likes: x.likes, comments: x.comments, engRate: x.engRate })),
     };
-  }, 'n' + count + (opts.analyze === false ? '-noan' : ''));
+  }, 'v3-n' + count + (opts.analyze === false ? '-noan' : '') + (opts.mineComments === false ? '-noc' : ''));
 }
 
 // KÊNH GIỐNG — không có API key nên bỏ tín hiệu featuredChannels (YouTube đã gỡ tab này ở nhiều kênh),
@@ -179,4 +229,4 @@ async function channelScorecardAi(opts) {
   }
 }
 
-module.exports = { channelScorecard, channelScorecardAi, similarChannels };
+module.exports = { channelScorecard, channelScorecardAi, similarChannels, mineComments };

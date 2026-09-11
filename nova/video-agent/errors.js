@@ -25,6 +25,8 @@ const VI_MESSAGES = {
   VA_UPLOAD_FAIL: 'Không tải lên được video kết quả.',
   VA_UPLOAD_SOURCE_MISSING: 'File video cần tải lên không tồn tại.',
   VA_RENDERER_UNAVAILABLE: 'Không nạp được bộ render Remotion. Chạy lệnh: node editor-pro/nova-remotion/build.js rồi thử lại.',
+  VA_OUTPUT_NOT_WRITABLE: 'Thư mục output của dự án không ghi được. Hãy chọn thư mục dự án khác (vd Desktop) hoặc chạy app với quyền ghi phù hợp.',
+  VA_MUX_WRITE_FAIL: 'Không ghi được file âm thanh tạm khi ghép giọng đọc/nhạc nền (thường do ổ đĩa đầy hoặc antivirus khoá file). Hãy dọn dung lượng rồi thử lại.',
   VA_S3_NO_CONFIG: 'Chưa cấu hình bucket S3 để tải lên. Hãy khai báo bucket trong phần cài đặt upload.',
   VA_S3_NO_CREDS: 'Thiếu khoá S3 (access key / secret) để tải lên. Hãy khai báo VA_S3_ACCESS_KEY_ID và VA_S3_SECRET_ACCESS_KEY.',
   VA_BUSY: 'Đang có một job Video Agent khác chạy. Vui lòng đợi job hiện tại xong rồi thử lại.',

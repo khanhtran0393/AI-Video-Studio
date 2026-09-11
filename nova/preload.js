@@ -43,13 +43,12 @@ contextBridge.exposeInMainWorld('novaStore', {
 contextBridge.exposeInMainWorld('native', {
   isDesktop: true,
   platform: process.platform,
-  // Phân tích đối thủ thông minh (outlier view + Claude gợi ý ý tưởng).
+  // Phân tích đối thủ thông minh — GIỮ cho lúc wire (MEMORY 2026-09-11s).
   analyzeCompetitor: (payload) => ipcRenderer.invoke('nova:analyzeCompetitor', payload),
   onCompetitorProgress: (cb) => ipcRenderer.on('nova:analyzeCompetitorProgress', (_e, s) => cb(s)),
   // Thumbnail tham chiếu: tìm outlier theo chủ đề / lấy từ link video.
   thumbOutliers: (payload) => ipcRenderer.invoke('nova:thumbOutliers', payload),
   thumbFromUrl: (payload) => ipcRenderer.invoke('nova:thumbFromUrl', payload),
-  onThumbOutliersProgress: (cb) => ipcRenderer.on('nova:thumbOutliersProgress', (_e, s) => cb(s)),
   // Tìm Ngách (Niche Finder) — 7 module.
   niche: {
     attention: (p) => ipcRenderer.invoke('nova:niche:attention', p),
@@ -59,7 +58,6 @@ contextBridge.exposeInMainWorld('native', {
     bw: (p) => ipcRenderer.invoke('nova:niche:bw', p),
     spike: (p) => ipcRenderer.invoke('nova:niche:spike', p),
     comments: (p) => ipcRenderer.invoke('nova:niche:comments', p),
-    watchlist: (p) => ipcRenderer.invoke('nova:niche:watchlist', p),
     compare: (p) => ipcRenderer.invoke('nova:niche:compare', p),
     pain: (p) => ipcRenderer.invoke('nova:niche:pain', p),
     forecast: (p) => ipcRenderer.invoke('nova:niche:forecast', p),
@@ -67,8 +65,6 @@ contextBridge.exposeInMainWorld('native', {
     breakdown: (p) => ipcRenderer.invoke('nova:niche:breakdown', p),
   },
   onNicheProgress: (cb) => ipcRenderer.on('nova:nicheProgress', (_e, s) => cb(s)),
-  // Cầu nối Tool 2 → Editor Pro (đưa ảnh cảnh + thoại sang timeline).
-  sceneBridgePush: (payload) => ipcRenderer.invoke('nova:sceneBridge:push', payload),
   // Tạo tự động (AI) — sinh video hoàn chỉnh từ chủ đề/kịch bản.
   autoVideo: (payload) => ipcRenderer.invoke('nova:autoVideo', payload),
   onAutoVideoProgress: (cb) => ipcRenderer.on('nova:autoVideoProgress', (_e, s) => cb(s)),
@@ -76,19 +72,15 @@ contextBridge.exposeInMainWorld('native', {
   smartClip: (payload) => ipcRenderer.invoke('nova:smartClip', payload),
   probeVideo: (url) => ipcRenderer.invoke('nova:probeVideo', url),   // thời lượng + heatmap + storyboard, không cắt
   onSmartClipProgress: (cb) => ipcRenderer.on('nova:smartClipProgress', (_e, s) => cb(s)),
-  parallaxClip: (payload) => ipcRenderer.invoke('nova:parallaxClip', payload),
   // 🌐 Nguồn web (50 nền tảng): fetch qua main vì Bing/DDG/Dailymotion không gửi header CORS.
   // Khớp lời: bóc băng video nguồn rồi tìm đúng giây khớp lời thoại cảnh.
   khopLoi: (payload) => ipcRenderer.invoke('nova:khopLoi', payload),
-  onKhopLoiProgress: (cb) => ipcRenderer.on('nova:khopLoiProgress', (_e, s) => cb(s)),
   nguonWeb: {
     get: (p) => ipcRenderer.invoke('web:get', p),        // GET thô (API JSON hoặc trang HTML)
     info: (p) => ipcRenderer.invoke('web:info', p),      // yt-dlp đọc tiêu đề/thời lượng/ảnh của 1 URL bất kỳ
     search: (p) => ipcRenderer.invoke('web:search', p),  // ytsearch của yt-dlp
     clip: (p) => ipcRenderer.invoke('web:clip', p),      // tải + cắt đúng số giây của cảnh
   },
-  onParallaxProgress: (cb) => ipcRenderer.on('nova:parallaxProgress', (_e, s) => cb(s)),
-  renderRemotion: (payload) => ipcRenderer.invoke('remotion:renderVideo', payload),   // xuất video bằng Remotion (bit hiệu ứng) từ luồng auto
   renderNovaScenes: (payload) => ipcRenderer.invoke('remotion:renderNovaScenes', payload),   // xuất bằng engine Nova Scene (spec JSON do AI sinh)
   sceneTemplates: () => ipcRenderer.invoke('nova:sceneTemplates'),
   sceneTransitions: () => ipcRenderer.invoke('nova:sceneTransitions'),
@@ -96,7 +88,6 @@ contextBridge.exposeInMainWorld('native', {
   fxPreviews: () => ipcRenderer.invoke('nova:fxPreviews'),
   previewLayers: (p) => ipcRenderer.invoke('nova:previewLayers', p),                            // danh mục mẫu đồ hoạ cho AI chọn
   onRemotionProgress2: (cb) => ipcRenderer.on('remotion:progress', (_e, s) => cb(s)),
-  onRemotionProgress: (cb) => ipcRenderer.on('remotion:progress', (_e, s) => cb && cb(s)),
   // Documentary automation vertical slice: project CRUD, deterministic pipeline, Nova Scene render.
   documentary: {
     create: (payload) => ipcRenderer.invoke('documentary:create', payload),
@@ -204,7 +195,6 @@ contextBridge.exposeInMainWorld('native', {
   // I-MZic (Ảnh & Nhạc): ghép video câm + nhạc gốc bằng FFmpeg (copy stream).
   imzicMux: (payload) => ipcRenderer.invoke('imzic-mux', payload),
   exportDir: () => ipcRenderer.invoke('export-dir'),
-  loginWindow: (isLogin) => ipcRenderer.invoke('login-window', isLogin),
   flowCftAdd: () => ipcRenderer.invoke('flow-cft-add'),
   flowCftCancel: () => ipcRenderer.invoke('flow-cft-cancel'),
   onFlowCftProgress: (cb) => ipcRenderer.on('flow-cft-progress', (_e, o) => cb(o)),
@@ -213,13 +203,7 @@ contextBridge.exposeInMainWorld('native', {
   // Bơm N token sang extension (chế độ 1 tab + N token).
   flowPushExt: () => ipcRenderer.invoke('flow-push-ext'),
   // Log tiến trình chính (làm mới token…) → tab Nhật ký.
-  onNovaLog: (cb) => ipcRenderer.on('nova-log', (_e, line) => cb(line)),
-  // Thông số hệ thống thật (RAM/CPU) cho thanh trạng thái.
-  sysStats: () => ipcRenderer.invoke('sys-stats'),
-  // Bảo vệ ổ đĩa (NVMe/SSD): xem chỗ trống, dọn file tạm, xoá job cũ.
-  diskStatus: () => ipcRenderer.invoke('disk-guard:status'),
-  diskCleanupTemp: (days) => ipcRenderer.invoke('disk-guard:cleanup-temp', days),
-  diskPruneOldJobs: (root, days) => ipcRenderer.invoke('disk-guard:prune-artifacts', { root, days }),
+  // ('nova-log' đã gỡ — renderer không bao giờ nghe; MEMORY 2026-09-11q)
   // Voice native (OmniVoice) — khởi động backend giọng nói.
   voiceStart: () => ipcRenderer.invoke('voice-start'),
   voiceStatus: () => ipcRenderer.invoke('voice-status'),
@@ -230,22 +214,25 @@ contextBridge.exposeInMainWorld('native', {
   voiceSampleSave: (payload) => ipcRenderer.invoke('voice-sample-save', payload),
   voiceSampleLoad: (key) => ipcRenderer.invoke('voice-sample-load', key),
   voiceSampleClear: (key) => ipcRenderer.invoke('voice-sample-clear', key),
+  // Lịch sử "Đã tạo" persist trên đĩa (userData/voice-history) — tách khỏi
+  // voice-sample-cache vì việc đổi engine sẽ xoá SẠCH thư mục cache mẫu.
+  voiceHistorySave: (payload) => ipcRenderer.invoke('voice-history-save', payload),
+  voiceHistoryList: () => ipcRenderer.invoke('voice-history-list'),
   flowExtExport: () => ipcRenderer.invoke('flow-ext-export'),
   onVoiceLog: (cb) => ipcRenderer.on('voice-log', (_e, s) => cb(s)),
-  // Watermark native — xoá watermark/logo (đặc biệt watermark Flow/Veo).
-  wmProbe: () => ipcRenderer.invoke('wm-probe'),
-  wmRemoveFile: (input, output, opts) => ipcRenderer.invoke('wm-remove-file', { input, output, opts }),
-  wmRemoveFolder: (input, output, opts) => ipcRenderer.invoke('wm-remove-folder', { input, output, opts }),
-  wmPreview: (input, opts) => ipcRenderer.invoke('wm-preview', { input, opts }),
-  wmCancel: () => ipcRenderer.invoke('wm-cancel'),
-  wmPickRoot: () => ipcRenderer.invoke('wm-pick-root'),
-  wmTestFile: (opts) => ipcRenderer.invoke('wm-test-file', { opts }),
-  onWmLog: (cb) => ipcRenderer.on('wm-log', (_e, s) => cb(s)),
-  // Phiên bản app + cập nhật (thông báo hiện ở góc trên phải).
-  appVersion: () => ipcRenderer.invoke('app-version'),
+  // Cập nhật app (thông báo hiện ở góc trên phải).
   onUpdate: (cb) => ipcRenderer.on('update-status', (_e, s) => cb(s)),
   updateDownload: () => ipcRenderer.invoke('update-download'),
   updateInstall: () => ipcRenderer.invoke('update-install'),
+  // Secret Vault — kho credential MÃ HOÁ (safeStorage) trong <userData>/secure.
+  // Key phải nằm trong TOP_LEVEL_SECRET_KEYS (nova/main/secret-vault.js); key lạ
+  // sẽ bị main từ chối lộ liễu (rejected invoke).
+  secretVaultGet: (key) => ipcRenderer.invoke('secretVault:get', key),
+  secretVaultSet: (key, value) => ipcRenderer.invoke('secretVault:set', key, value),
+  secretVaultDelete: (key) => ipcRenderer.invoke('secretVault:delete', key),
+  secretVaultList: () => ipcRenderer.invoke('secretVault:list'),
+  secretVaultGetAll: () => ipcRenderer.invoke('secretVault:getAll'),
+  secretVaultMigrate: (raw) => ipcRenderer.invoke('secretVault:migrate', raw),
   // Video Agent: giữ NGUYÊN block khai báo ĐẦU TIÊN (có openWindow + bọc args
   // {jobId}/{projectDir} đúng như video-agent.html gọi). Block thứ hai trùng key
   // videoAgent đã XOÁ: trong object literal key trùng thì block SAU đè block

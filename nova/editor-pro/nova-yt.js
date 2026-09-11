@@ -1,8 +1,22 @@
 // YouTube Data API v3 enrichment — dùng KEY CỦA NOVA (localStorage 'yt_api_key'),
 // KHÔNG dùng key hardcode của Fractal. Chỉ enrich ID đã tìm (videos.list = 1 unit/50 vid),
 // không search.list (100 unit) → tiết kiệm quota.
+// MÁY CHƯA CÓ KEY → chế độ KHÔNG CẦN KEY qua yt-dlp (like/comment/view/dur/ngày đăng),
+// khai báo tường minh qua mode='yt-dlp' trong kết quả — không phải fallback ngầm.
 let _nk = null; try { _nk = require('./nova-keys'); } catch (_) {}
+let _ck = null; try { _ck = require('./nova-cookies'); } catch (_) {}
 const YT = 'https://www.googleapis.com/youtube/v3/';
+const { spawn } = require('child_process');
+const { YTDLP } = require('./ytdlp-path');   // ưu tiên bản đóng gói theo app (ytdlp-bin/)
+
+function run(args, timeoutMs = 60000) {
+  return new Promise((res, rej) => {
+    const ps = spawn(YTDLP, args, { windowsHide: true }); let o = '', e = '';
+    const t = setTimeout(() => { try { ps.kill('SIGKILL'); } catch (_) {} rej(new Error('yt-dlp timeout')); }, timeoutMs);
+    ps.stdout.on('data', d => o += d); ps.stderr.on('data', d => e += d);
+    ps.on('error', rej); ps.on('close', c => { clearTimeout(t); c === 0 ? res(o) : rej(new Error(e.split('\n').slice(-2).join(' '))); });
+  });
+}
 
 async function ytKey() {
   if (process.env.YT_API_KEY) return process.env.YT_API_KEY.trim();   // cho test CLI
@@ -21,10 +35,14 @@ function isoToSec(iso) {
 }
 function daysSince(iso) { if (!iso) return null; const d = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000); return d >= 0 ? d : null; }
 
-// ids: mảng videoId → map id → {views,likes,comments,dur,date,days,channelId,channel,subs, engRate, viewPerSub, demand, vel}
-async function enrich(ids) {
+// ids: mảng videoId → map id → {views,likes,comments,dur,date,days,channel, subs?, engRate, viewPerSub?, demand, vel}
+// Trả về { key, mode, map }: mode='api' (có key YouTube Data API) hoặc mode='yt-dlp' (không cần key).
+// onProgress(p, m) chỉ dùng ở chế độ yt-dlp (p: 0–100).
+async function enrich(ids, onProgress = () => {}) {
   const key = await ytKey();
-  if (!key || !ids.length) return { key: !!key, map: {} };
+  if (!ids || !ids.length) return { key: !!key, mode: key ? 'api' : 'yt-dlp', map: {} };
+  // Không có key → enrich bằng yt-dlp (yt-dlp-bin đã đóng gói theo app, zero cấu hình).
+  if (!key) { const m = await enrichKeyless(ids, onProgress); return { key: false, mode: 'yt-dlp', map: m }; }
   const map = {};
   for (let i = 0; i < ids.length; i += 50) {
     const chunk = ids.slice(i, i + 50).filter(Boolean);
@@ -53,7 +71,65 @@ async function enrich(ids) {
     } catch (_) {}
   }
   for (const v of Object.values(map)) { v.subs = subs[v.channelId] || 0; v.viewPerSub = v.subs ? +(v.views / v.subs).toFixed(2) : 0; }
-  return { key: true, map };
+  return { key: true, mode: 'api', map };
 }
 
-module.exports = { enrich, ytKey };
+// ── Enrich KHÔNG CẦN KEY (yt-dlp): like/comment/view/dur/ngày đăng cho từng video. ──
+// Dùng khi máy chưa có YouTube Data API key — không quota, không cần cấu hình Google Cloud.
+// Video lỗi (age-gate/xoá/region) bị bỏ qua — KHÔNG bịa giá trị mặc định (Luật 10).
+function _ymd(s) { const m = /^(\d{4})(\d{2})(\d{2})$/.exec(String(s || '').trim()); return m ? `${m[1]}-${m[2]}-${m[3]}` : ''; }
+
+const _ckCache = new Map();   // id → { t, entry } — cache phiên 24h: ID đã enrich gần đây dùng lại ngay, khỏi re-fetch
+const _CK_TTL = 24 * 3600 * 1000;
+
+async function enrichKeyless(ids, onProgress = () => {}, concurrency = 8) {
+  const list = (ids || []).filter(Boolean);
+  const map = {};
+  if (!list.length) return map;
+  // Lọc ID còn trong cache phiên (24h) — phần còn lại mới cần fetch.
+  const need = [];
+  for (const id of list) {
+    const c = _ckCache.get(id);
+    if (c && Date.now() - c.t < _CK_TTL) map[id] = c.entry; else need.push(id);
+  }
+  if (!need.length) { try { onProgress(100, `Like/comment ${list.length}/${list.length} (cache phiên)…`); } catch (_) {} return map; }
+  let ck = null;
+  try { if (_ck) ck = await _ck.youtubeCookiesFile().catch(() => null); } catch (_) {}
+  const queue = need.slice();
+  const doneBefore = list.length - need.length;
+  let done = 0;
+  async function worker() {
+    while (queue.length) {
+      const id = queue.shift();
+      const args = ['--skip-download', '--no-warnings',
+        '--print', '%(id)s\t%(view_count)s\t%(like_count)s\t%(comment_count)s\t%(duration)s\t%(upload_date)s\t%(channel)s\t%(channel_follower_count)s',
+        'https://www.youtube.com/watch?v=' + id];
+      if (ck) args.push('--cookies', ck);
+      try {
+        const out = await run(args, 60000);
+        const line = out.trim().split('\n').filter(Boolean).pop() || '';
+        const [vid, v, lk, cm, du, up, ch, sub] = line.split('\t');
+        if (!vid || vid !== id) throw new Error('yt-dlp trả ID không khớp: ' + String(vid).slice(0, 40));
+        const views = parseInt(v) || 0, likes = parseInt(lk) || 0, comments = parseInt(cm) || 0;
+        const dur = parseInt(du) || 0, subs = parseInt(sub) || 0;
+        const date = _ymd(up), days = daysSince(date);
+        const entry = {
+          views, likes, comments, dur, date, days,
+          channel: (ch || '').trim(),
+          subs: subs || undefined,                 // yt-dlp có khi mới cho — undefined thì caller giữ giá trị cũ
+          vel: days != null ? Math.round(views / Math.max(days, 1)) : 0,
+          engRate: views ? +(((likes + comments) / views) * 100).toFixed(2) : 0,
+          demand: views + comments * 250 + likes * 10,   // cùng công thức nhu cầu như nhánh API
+        };
+        map[id] = entry;
+        _ckCache.set(id, { t: Date.now(), entry });
+      } catch (_) { /* lỗi 1 video → bỏ video đó, các video khác vẫn enrich */ }
+      done++;
+      try { onProgress(Math.round((doneBefore + done) * 100 / list.length), `Like/comment ${doneBefore + done}/${list.length} (yt-dlp, không cần key)…`); } catch (_) {}
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, need.length) }, worker));
+  return map;
+}
+
+module.exports = { enrich, enrichKeyless, ytKey };

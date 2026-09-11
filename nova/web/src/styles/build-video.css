@@ -75,7 +75,7 @@
       .t7-thumbwrap{position:relative;flex-shrink:0;width:54px;height:32px;border-radius:7px;overflow:visible}
       .t7-vidbtn{position:absolute;right:-6px;bottom:-6px;width:20px;height:20px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text-muted);font-size:11px;cursor:pointer;display:grid;place-items:center;padding:0;line-height:1;z-index:2}
       .t7-vidbtn:hover{border-color:var(--accent);color:var(--accent)}
-      .t7-vidbtn.on{background:var(--accent);color:#1c0f05;border-color:var(--accent)}
+      .t7-vidbtn.on{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
       .t7-sname{font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
       .t7-sdesc{font-size:10.5px;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;display:flex;align-items:center;gap:5px}
       .t7-durin{width:44px;flex-shrink:0;background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:5px 4px;font-size:11.5px;color:var(--text);text-align:center;box-sizing:border-box;-moz-appearance:textfield;appearance:textfield}
@@ -215,13 +215,15 @@
       #t7PreviewWrap{position:absolute;inset:0;will-change:opacity,transform,clip-path}
       .t7-pcap{padding:12px 20px 2px;text-align:center}
       .t7-pcap .vo{font-style:italic;font-size:14px;line-height:1.5;color:var(--text)}
-      .t7-pcap .vi{font-style:italic;font-size:13.5px;line-height:1.5;color:#6ea8dc;margin-top:5px}
+      .t7-pcap .vi{font-style:italic;font-size:13.5px;line-height:1.5;color:var(--blue);margin-top:5px}
       .t7-player img,.t7-player video{width:100%;height:100%;object-fit:contain;transform-origin:center center;will-change:transform}
       @keyframes t7fade{from{opacity:0}to{opacity:1}}
       @keyframes t7slide{from{transform:translateX(100%)}to{transform:translateX(0)}}
       @keyframes t7wipe{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0 0 0)}}
       @keyframes t7circle{from{clip-path:circle(0% at 50% 50%)}to{clip-path:circle(75% at 50% 50%)}}
       .t7-pbar{position:absolute;left:0;right:0;bottom:0;padding:8px 11px;background:linear-gradient(0deg,rgba(0,0,0,.75),transparent)}
+/* Hàng nút hành động ngay dưới preview (khôi phục từ t7-tlbar cũ) */
+.t7-actrow{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:7px 14px 1px}
       .t7-ptrack{height:4px;background:rgba(255,255,255,.25);border-radius:3px;margin-bottom:8px;position:relative;cursor:pointer;touch-action:none}
       /* vùng bắt chuột cao hơn hẳn vạch 4px — kéo không bị trượt tay */
       .t7-ptrack::before{content:'';position:absolute;left:0;right:0;top:-7px;bottom:-7px}
@@ -241,9 +243,17 @@
       .t7-tlbar{display:flex;align-items:center;gap:6px;padding:9px 13px;flex-wrap:wrap}
       .t7-tlbar .zt{margin-left:auto;display:flex;align-items:center;gap:8px;color:var(--tlmute);font-size:11px}
       .t7-tl .t7-dlab,.t7-tl .t7-dim{color:var(--tldim)}
+      /* Nút pill dùng ở 2 nơi: TRONG .t7-tl (timeline luôn tối, biến --tl* chỉ
+         tồn tại ở đó) và NGOÀI — hàng #t7ActRow dưới preview, nền theo theme.
+         Mặc định theo theme để đọc được ở light mode (trước đây nền #171e3a cứng
+         + chữ kế thừa màu tối vì --tldim rỗng ngoài .t7-tl → tối trên tối). */
       .t7-tlbtn{height:26px;min-width:26px;padding:0 10px;border-radius:20px;display:inline-flex;align-items:center;justify-content:center;gap:5px;
-        color:var(--tldim);background:#171e3a;border:1px solid var(--tlline);font-size:11.5px;font-weight:600;cursor:pointer}
-      .t7-tlbtn:hover{border-color:var(--accent);color:#fff}
+        color:var(--text-muted);background:var(--surface-3);border:1px solid var(--border);font-size:11.5px;font-weight:600;cursor:pointer}
+      .t7-tlbtn:hover{border-color:var(--accent);color:var(--text)}
+      /* Trong timeline always-dark giữ nguyên bộ màu tối nguyên bản */
+      .t7-tl .t7-tlbtn{color:var(--tldim);background:#171e3a;border-color:var(--tlline)}
+      .t7-tl .t7-tlbtn:hover{color:#fff}
+
       .t7-tlbar .lb{font-size:9.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--tlmute);margin-right:4px}
       .t7-clip{cursor:grab}
       .t7-clip.sel{outline:2px solid var(--accent);outline-offset:-1px;z-index:2}
