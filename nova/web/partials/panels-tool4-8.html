@@ -1,0 +1,474 @@
+    <!-- TOOL 4: ĐỔI TÊN ẢNH -->
+    <div class="tool" id="tool-tool4">
+      <div class="tool-head">
+        <div class="tool-title">Đổi Tên Ảnh</div>
+        <div class="tool-subtitle">Đổi tên hàng loạt ảnh theo số thứ tự (001, 002, ...) — phục vụ tool tạo video.</div>
+      </div>
+
+      <div class="info-box">
+        <span class="lbl">💡 Cách dùng:</span> Kéo thả ảnh G-Labs vào khu vực bên dưới → tự sắp xếp natural sort → đặt số bắt đầu + padding → bấm Tải ZIP.
+      </div>
+
+      <div class="grid-3 mb-24">
+        <div><label class="label">SỐ BẮT ĐẦU</label><input type="number" id="startNum" value="1" min="0"></div>
+        <div><label class="label">PADDING (số chữ số)</label><input type="number" id="padding" value="3" min="1" max="6"></div>
+        <div><label class="label">ĐUÔI FILE</label>
+          <select id="keepExt">
+            <option value="keep">Giữ nguyên</option>
+            <option value="jpg">.jpg</option>
+            <option value="png">.png</option>
+            <option value="webp">.webp</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="panel mb-16">
+        <div class="panel-head"><span>📁 Kéo thả ảnh</span><span class="count" id="fileCount">0 ảnh</span></div>
+        <div id="dropzone" class="dropzone" style="border:none;border-radius:0;min-height:180px">
+          <div class="ico">📁</div>
+          <div>Kéo thả ảnh vào đây hoặc click để chọn</div>
+          <div class="hint">Tự sắp xếp theo tên (natural sort: 1, 2, 10 chứ không phải 1, 10, 2)</div>
+        </div>
+        <input type="file" id="fileInput" multiple accept="image/*" style="display:none">
+      </div>
+
+      <div class="actions">
+        <button class="btn primary" onclick="downloadZip()">↓ Tải ZIP</button>
+        <button class="btn ghost" onclick="clearFiles()">↺ Xoá hết</button>
+        <button class="btn ghost" onclick="sortFiles()">⇅ Sắp xếp lại</button>
+        <label class="btn ghost" style="cursor:pointer;border-color:var(--teal);color:var(--teal)" title="Upload scene-list.xlsx để tự điền ảnh B">
+          📊 Load scene-list.xlsx
+          <input type="file" accept=".xlsx" style="display:none" onchange="loadXlsxForRenamer(this)">
+        </label>
+        <button class="btn ghost" style="border-color:var(--teal);color:var(--teal)" onclick="loadFromTool2ForRenamer()" title="Đọc thẳng dữ liệu từ Tool 2 — không cần upload file">⚡ Load từ Tool 2</button>
+      </div>
+
+      <div class="status-bar" id="status4">Sẵn sàng. Kéo ảnh vào khu vực trên.</div>
+
+      <div class="panel">
+        <div class="panel-head"><span>Xem trước đổi tên</span></div>
+        <div id="fileList" style="max-height:500px;overflow-y:auto">
+          <div class="empty-state">Chưa có file.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TOOL 9: YOUTUBE SEO (Title + Description + Chapters + Tags) -->
+    <div class="tool" id="tool-tool9">
+      <div class="tool-head">
+        <div class="tool-title">YouTube SEO</div>
+        <div class="tool-subtitle">Tiêu đề CTR cao, mô tả có hook, chapters theo timing, tags/hashtags. Tự lấy kịch bản từ Phân Cảnh. (Gen thumbnail đã tách sang tab Tạo Thumbnail.)</div>
+      </div>
+
+      <link rel="stylesheet" href="src/styles/tool-9.css">
+
+      <div class="t9-wrap">
+       <div class="t9-cols">
+        <div class="t9-left">
+        <!-- INPUT -->
+        <div class="t9-card">
+          <div class="t9-h">⚙️ Đầu vào <button class="btn ghost sm" style="text-transform:none;font-weight:400" onclick="t9GenTitleFromContent()">✨ Tạo tiêu đề từ nội dung</button></div>
+          <label class="t9-lbl">📌 Tiêu đề video <span style="text-transform:none">(tự lấy từ Tạo Kịch Bản — sửa được)</span></label>
+          <input type="text" id="t9Title" placeholder="Tự lấy từ tab Tạo Kịch Bản, hoặc bấm 'Tạo tiêu đề từ nội dung'" style="margin-bottom:12px" onchange="try{const v=this.value.trim();const t=document.getElementById('t10TitleInput');if(t&&!t.value.trim())t.value=v;if(typeof t9Step2Refresh==='function')t9Step2Refresh();if(typeof saveState==='function')saveState(true);}catch(e){}">
+          <label class="t9-lbl">📄 Nội dung video <span style="text-transform:none">(tự lấy từ Tạo Kịch Bản / Phân Cảnh)</span></label>
+          <textarea id="t9Script" rows="5" placeholder="Tự động lấy kịch bản từ tab Tạo Kịch Bản / Phân Cảnh, hoặc paste nội dung video vào đây..."></textarea>
+          <div id="t9TimingInfo" class="t9-hint"></div>
+          <div class="t9-actions" style="margin-top:14px">
+            <button class="btn primary" onclick="t9Generate()">✨ Tạo SEO Pack</button>
+            <button class="btn ghost sm" style="color:var(--red)" onclick="t9Reset()">🗑 Xoá kết quả</button>
+          </div>
+          <div class="status-bar" id="status9" style="margin-top:12px">Sẵn sàng — nội dung tự nạp. Bấm Tạo SEO Pack.</div>
+        </div>
+
+        <!-- SEO RESULTS -->
+        <div id="t9Results" style="display:none">
+          <div id="t9Titles" style="display:none"></div><!-- danh sách tiêu đề giờ hiện ở bảng chọn khi bấm ✨ Tạo tiêu đề -->
+          <div class="t9-card">
+            <div class="t9-h">📄 Mô tả (description)
+              <button class="btn ghost sm" onclick="copyText(document.getElementById('t9Desc').value);this.textContent='✓ Đã copy';setTimeout(()=>this.textContent='📋 Copy',1500)">📋 Copy</button>
+            </div>
+            <textarea id="t9Desc" rows="16" style="font-size:12.5px;line-height:1.6"></textarea>
+            <div class="t9-hint">Bố cục: Hook → Video này mổ xẻ gì → Topics covered → Chapters → CTA → Hashtags.</div>
+          </div>
+          <div class="t9-card">
+            <div class="t9-h">🏷 Tags
+              <button class="btn ghost sm" onclick="copyText(document.getElementById('t9Tags').value);this.textContent='✓ Đã copy';setTimeout(()=>this.textContent='📋 Copy',1500)">📋 Copy</button>
+            </div>
+            <textarea id="t9Tags" rows="3" style="font-size:12px"></textarea>
+          </div>
+        </div>
+        </div><!-- /t9-left -->
+        </div><!-- /t9-cols (thumbnail đã tách sang tool-tool10) -->
+      </div>
+    </div>
+
+    <!-- TOOL 10: TẠO THUMBNAIL (tách từ Tool 9 ngày 2026-09-10) -->
+    <div class="tool" id="tool-tool10">
+      <div class="tool-head">
+        <div class="tool-title">Tạo Thumbnail</div>
+        <div class="tool-subtitle">Gen thumbnail bằng Flow theo style kênh (Profile). Dùng ảnh mẫu để AI học bố cục (không sao chép). Tự lấy tiêu đề từ tab YouTube SEO hoặc từ Tạo Kịch Bản.</div>
+      </div>
+
+      <link rel="stylesheet" href="src/styles/tool-10.css">
+
+              <!-- THUMBNAIL (gộp từ tab Thumbnail AI) -->
+              <div class="t9-card">
+                <div class="t9-h">🖼 Thumbnail</div>
+                <span id="t10StyleState" style="display:none"></span><!-- code còn ghi vào, giữ ô ẩn -->
+                <!-- Ô Tiêu đề: LUÔN hiện như Tool 9 cũ — prefill từ Tạo Kịch Bản / YouTube SEO (t10SyncTitleInput),
+                     sửa tay được. Gõ xong nút gate tự bật (oninput → t9Step2Refresh). -->
+                <div style="margin:4px 0 12px">
+                  <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
+                    <span style="font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-dim);font-weight:700">Tiêu đề video</span>
+                    <button class="btn ghost sm" style="margin-left:auto" onclick="t10PullSeoTitle()" title="Nhận tiêu đề đã chốt ở tab YouTube SEO (nếu chưa chốt thì lấy tiêu đề đầu tiên trong SEO Pack)">📥 Nhận từ YouTube SEO</button>
+                  </div>
+                  <input type="text" id="t10TitleInput" placeholder="Tự lấy từ Tạo Kịch Bản / YouTube SEO — hoặc gõ tiêu đề vào đây" oninput="t9Step2Refresh()">
+                </div>
+                <!-- Chưa mở bước 2 → chỉ một nút. Bấm là chốt tiêu đề rồi mở phần thumbnail. -->
+                <div id="t9Step2Gate">
+                  <button class="btn primary" id="t9Step2Btn" onclick="t9OpenStep2()">🖼 Tạo Thumbnail</button>
+                  <span id="t9Step2Hint" style="display:block;margin-top:6px;font-size:11.5px;color:var(--text-dim)"></span>
+                </div>
+                <div id="t9Step2Body" style="display:none">
+      
+                <!-- ── ẢNH MẪU THUMBNAIL: chọn 1 thumbnail đang ăn khách để AI làm theo phong cách ── -->
+                <div style="border:1px solid var(--border);border-radius:11px;padding:13px;margin:0 0 14px;background:var(--surface-2)">
+                  <div style="display:flex;align-items:center;gap:9px;margin-bottom:10px">
+                    <b style="font-size:12.5px">🖼 Ảnh mẫu thumbnail</b>
+                    <span style="font-size:11.5px;color:var(--text-dim)">— chọn 1 mẫu để AI học bố cục (không sao chép)</span>
+                    <button class="btn ghost sm" style="margin-left:auto" onclick="t9RefAutofill(true)" title="Tìm lại theo tiêu đề ở trên">↻ Tìm lại</button>
+                    <button class="btn ghost sm" onclick="t9RefClear()">Bỏ mẫu</button>
+                  </div>
+                  <div style="display:flex;gap:6px;background:var(--surface-3);border-radius:9px;padding:4px;margin-bottom:11px;max-width:430px">
+                    <button id="t9RefTab1" class="btn ghost sm" style="flex:1;background:var(--surface)" onclick="t9RefTab('topic')">📈 Outlier theo chủ đề</button>
+                    <button id="t9RefTab2" class="btn ghost sm" style="flex:1" onclick="t9RefTab('url')">🔗 Dán URL video</button>
+                  </div>
+                  <div id="t9RefUrlRow" style="display:none;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+                    <input type="text" id="t9RefQuery" placeholder="Dán link video YouTube của đối thủ" style="flex:1;min-width:240px;margin:0">
+                    <button class="btn primary sm" id="t9RefBtn" onclick="t9RefSearch()">Lấy ảnh</button>
+                  </div>
+                  <div id="t9RefStatus" style="font-size:11.5px;color:var(--text-dim);margin-bottom:9px"></div>
+                  <div style="display:grid;grid-template-columns:1fr 240px;gap:14px;align-items:start">
+                    <div id="t9RefGrid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px"></div>
+                    <div>
+                      <div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-dim);font-weight:700;margin-bottom:5px">👁 Mẫu đã chọn</div>
+                      <div id="t9RefPreview" style="aspect-ratio:16/9;border:1px solid var(--border);border-radius:9px;background:var(--surface-3) center/cover no-repeat;display:flex;align-items:center;justify-content:center;font-size:11.5px;color:var(--text-dim)">chưa chọn</div>
+                      <div id="t9RefMeta" style="font-size:11px;color:var(--text-dim);margin-top:6px;line-height:1.45"></div>
+                    </div>
+                  </div>
+                </div>
+      
+                <!-- Ô tiêu đề (t10TitleInput) đã chuyển LÊN TRÊN trước gate để hiện luôn — id giữ nguyên, mọi code cũ đọc bình thường -->
+      
+                <!-- Chữ trên ảnh: AI tự quyết theo ảnh mẫu, mỗi phương án một câu khác nhau. Giữ ô ẩn cho code cũ. -->
+                <div style="display:none">
+                  <input type="checkbox" id="t10WithText" checked><input type="text" id="t10Text"><div id="t10TextWrap"></div>
+                </div>
+      
+                <div class="t9-actions" style="margin-top:16px">
+                  <span class="t9-lbl" style="margin:0">Số phương án</span>
+                  <select id="t10Count" style="width:60px"><option value="1">1</option><option value="2" selected>2</option><option value="3">3</option><option value="4">4</option><option value="6">6</option></select>
+                  <button class="btn primary" onclick="t10Generate()">✨ Gen Thumbnail</button>
+                  <button class="btn ghost sm" style="color:var(--red);margin-left:auto" onclick="t10Reset()">🗑 Xoá ảnh</button>
+                </div>
+                <div class="status-bar" id="status10" style="margin-top:12px">Sẵn sàng. Chỉ cần có tiêu đề → bấm Gen (bằng Flow).</div>
+                <div id="t10ResultPanel" style="display:none;margin-top:12px">
+                  <div id="t10Results" style="display:flex;gap:14px;flex-wrap:wrap"></div>
+                </div>
+                </div><!-- /t9Step2Body -->
+              </div>
+              </div><!-- /t9-right -->
+    </div>
+
+       </div><!-- /t9-cols -->
+      </div>
+    </div>
+
+    <!-- TOOL 5: TÌM MEDIA (PEXELS) -->
+    <div class="tool" id="tool-tool5">
+      <div class="tool-head">
+        <div class="tool-title">Tìm Ảnh & Video Stock</div>
+        <div class="tool-subtitle">Tìm ảnh và video thật từ Pexels + Pixabay phù hợp với từng cảnh. AI tự sinh từ khoá.</div>
+      </div>
+
+      <div class="info-box">
+        <span class="lbl">💡 Cách dùng:</span> Lấy API key miễn phí tại
+        <a href="https://www.pexels.com/api/" target="_blank" style="color:var(--accent);font-weight:600">pexels.com/api</a>
+        → paste vào ô bên dưới → Load cảnh từ Tool 02 → Tìm tất cả. Bạn tự tải về từ link.
+      </div>
+
+      <div class="actions mb-12">
+        <button class="btn teal" onclick="loadScenesForSearch()">📥 Load cảnh từ Tool 02</button>
+        <button class="btn primary" onclick="searchAllScenes()">🔍 Tìm tất cả</button>
+        <select id="mediaType" style="padding:8px 12px;width:auto">
+          <option value="both">Ảnh + Video</option>
+          <option value="photos">Chỉ Ảnh</option>
+          <option value="videos">Chỉ Video</option>
+        </select>
+        <span style="font-size:12px;color:var(--text-muted)" id="searchProgress"></span>
+        <button class="btn ghost" style="color:var(--red);border-color:var(--red);margin-left:auto" onclick="clearAllT5()" title="Xoá kết quả tìm media">🗑 Xoá hết</button>
+      </div>
+
+      <!-- Gom + xuất -->
+      <div class="actions mb-24" style="padding:10px 12px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px">
+        <span style="font-size:12px;color:var(--text-muted);font-weight:600">📦 Gom &amp; xuất:</span>
+        <button class="btn ghost" onclick="autoPickAll()" title="Tự chọn ứng viên đầu tiên cho mọi cảnh đã tìm (cảnh chưa chọn)">✨ Tự chọn tất cả</button>
+        <button class="btn ghost" onclick="downloadAllPicks()" title="Tải về tất cả media đã chọn, đặt tên theo số cảnh (001, 002...)">⬇ Tải tất cả đã chọn</button>
+        <button class="btn ghost" onclick="exportMediaCSV()" title="Xuất bảng timing cảnh → file → giây (mở bằng Excel / nhập CapCut)">📊 Xuất CSV timing</button>
+        <button class="btn ghost" onclick="exportMediaSRT()" title="Xuất SRT theo timeline cảnh để khớp hình với giọng đọc">📑 Xuất SRT</button>
+        <button class="btn primary" onclick="switchTool('tool7')" title="Mở Dựng Video để chỉnh sửa / xuất — cảnh + thoại đã đồng bộ sẵn">🎬 Mở ở Dựng Video</button>
+        <span style="font-size:12px;color:var(--teal);font-weight:600;margin-left:auto" id="pickCount">Đã chọn 0/0</span>
+      </div>
+
+      <div class="status-bar" id="status5">Sẵn sàng. Paste Pexels API key rồi load cảnh từ Tool 02.</div>
+
+      <div id="mediaSearchResults"></div>
+    </div>
+
+    <!-- TOOL 6: PROMPT VEO 3 -->
+    <div class="tool" id="tool-tool6">
+      <link rel="stylesheet" href="src/styles/tool-6.css">
+
+      <div class="tool-head">
+        <div class="tool-title">🎬 Tạo Video</div>
+        <div class="tool-subtitle">Ảnh/prompt → video hàng loạt. Mỗi dòng = 1 clip.</div>
+      </div>
+
+      <div id="tvAcctBar" style="display:flex;align-items:center;gap:9px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:7px 13px;margin-bottom:10px;font-size:12px;flex-wrap:wrap"><span style="color:var(--text-dim)">⏳ Kiểm tra kết nối…</span></div>
+      <!-- CARD 1: NGUỒN -->
+      <div class="fc">
+        <div class="fc-step"><span class="n">1</span> Nguồn
+          <span class="r">
+            <span style="text-transform:none;letter-spacing:0;font-size:12px;color:var(--text-muted);font-weight:600">Nguồn video:</span>
+            <select id="tvMode" onchange="tvSetMode(this.value)" style="width:auto;min-width:220px;font-weight:600">
+              <option value="scene">🎬 Từ Phân Cảnh (Tool 2)</option>
+              <option value="prompt">✍️ Từ prompt có sẵn (text→video)</option>
+              <option value="image">🖼️ Từ ảnh có sẵn (image→video)</option>
+            </select>
+          </span>
+        </div>
+        <input type="file" id="mvUploadInput" accept="image/*" multiple style="display:none" onchange="mvUpload(this.files); this.value=''">
+        <input type="file" id="tvPromptFile" accept=".txt,.csv" style="display:none" onchange="tvImportPromptFile(this.files[0]); this.value=''">
+
+        <!-- MODE: scene -->
+        <div class="tv-mbody" data-m="scene">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
+            <button class="btn primary sm" onclick="mvLoadScenes()">📥 Lấy ảnh + prompt từ Phân Cảnh</button>
+            <button class="btn ghost sm" id="mvGenBtn" onclick="mvGenerate()">✨ Sinh prompt chuyển động</button>
+            <button class="btn ghost sm" id="mvStopBtn" style="display:none;color:var(--red)" onclick="window.__mvStop=true">⏸ Dừng</button>
+            <span style="font-size:11.5px;color:var(--text-dim)">Tự lấy ảnh cảnh + prompt đã tạo ở Phân Cảnh.</span>
+          </div>
+        </div>
+        <!-- MODE: image -->
+        <div class="tv-mbody" data-m="image" style="display:none">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
+            <button class="btn primary sm" onclick="document.getElementById('mvUploadInput').click()">⬆ Tải ảnh lên</button>
+            <button class="btn ghost sm" onclick="mvGenerate()">✨ Sinh prompt tự động</button>
+            <button class="btn ghost sm" onclick="document.getElementById('tvPromptFile').click()">📄 Nhập prompt (file)</button>
+            <span style="font-size:11.5px;color:var(--text-dim)">Mỗi ảnh 1 video. Prompt trống → AI tự sinh khi tạo.</span>
+          </div>
+        </div>
+        <!-- pair table (scene + image) -->
+        <div id="tvPairWrap">
+          <div class="tv-rowh"><span title="Chọn/bỏ tất cả"><input type="checkbox" class="tv-ck" id="tvAllCk" checked onchange="tvToggleAll(this.checked)"></span><span>#</span><span>Ảnh</span><span>Prompt chuyển động</span><span></span></div>
+          <div id="tvRows"><div class="empty-state">Chưa có ảnh. Bấm nút ở trên để lấy/tải ảnh.</div></div>
+        </div>
+
+        <!-- MODE: prompt -->
+        <div class="tv-mbody" data-m="prompt" style="display:none">
+          <div style="background:var(--accent-soft);border:1px solid color-mix(in srgb,var(--accent) 38%,transparent);border-radius:10px;padding:9px 13px;font-size:12px;color:var(--text-muted);margin-bottom:12px;line-height:1.5">✍️ <b>Text → Video:</b> Veo tự dựng hình từ mô tả, <b>không cần ảnh</b>. Mỗi dòng = 1 video. (Tốn credit cao hơn image→video.)</div>
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+            <button class="btn ghost sm" onclick="document.getElementById('tvPromptFile').click()">📄 Nhập file (.txt)</button>
+            <span style="font-size:11.5px;color:var(--text-dim)"><b id="tvPromptCount">0</b> video</span>
+          </div>
+          <textarea id="tvPrompts" rows="6" oninput="tvUpdatePromptCount()" placeholder="Mỗi dòng 1 prompt video…&#10;Thêm  tên | prompt  để tự đặt tên file." style="width:100%;border:1px solid var(--border-2);background:var(--surface);border-radius:9px;padding:9px 11px;font-size:13px;font-family:inherit;color:var(--text);line-height:1.55;resize:vertical"></textarea>
+        </div>
+      </div>
+
+      <!-- CARD 2: CẤU HÌNH -->
+      <div class="fc">
+        <div class="fc-step"><span class="n">2</span> Cấu hình</div>
+        <div style="display:flex;gap:14px;flex-wrap:wrap">
+          <div style="flex:1;min-width:130px"><span class="label">Tỉ lệ khung</span>
+            <select id="mvVidAspect"><option value="VIDEO_ASPECT_RATIO_LANDSCAPE" selected>16:9 (ngang)</option><option value="VIDEO_ASPECT_RATIO_PORTRAIT">9:16 (dọc)</option></select>
+          </div>
+          <div style="flex:1;min-width:140px"><span class="label">Luồng song song</span>
+            <select id="mvVidConc"><option value="0" selected>Auto (theo số TK)</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="8">8</option><option value="10">10</option></select>
+          </div>
+          <div style="flex:1;min-width:150px"><span class="label">Model <span style="cursor:pointer;color:var(--accent);margin-left:4px" onclick="tvRefreshModels()" title="Quét lại model từ Flow">↻</span></span>
+            <select id="mvVidModel" onchange="tvOnModelChange()">
+              <option value="omni-flash" selected>Omni Flash (FREE)</option>
+              <option value="veo31-lite">Veo 3.1 - Lite</option>
+              <option value="veo31-fast">Veo 3.1 - Fast</option>
+              <option value="veo31-quality">Veo 3.1 - Quality</option>
+            </select>
+          </div>
+          <div style="flex:1;min-width:110px" id="tvDurWrap"><span class="label">Độ dài</span>
+            <select id="mvVidDur"><option value="8" selected>8s</option><option value="6">6s</option><option value="4">4s</option></select>
+          </div>
+          <div style="flex:1;min-width:150px"><span class="label">Độ nét tải về</span>
+            <select id="mvVidRes" onchange="tvOnResChange()"><option value="720p" selected>720p (gốc — nhanh)</option><option value="1080p">1080p (nâng — chậm hơn)</option></select>
+          </div>
+        </div>
+        <div id="tvUpsRow" style="display:none;align-items:center;gap:10px;flex-wrap:wrap;font-size:12px;margin-top:10px;padding:9px 11px;background:color-mix(in srgb,var(--amber) 9%,var(--surface-2));border:1px solid color-mix(in srgb,var(--amber) 30%,var(--border));border-radius:9px">
+          <span id="tvUpsStatus" style="color:var(--text-muted)">1080p cần "học" 1 lần: bấm nút bên phải → trong Flow bấm Tải xuống → 1080p trên 1 video.</span>
+          <button class="btn sm" style="margin-left:auto" onclick="tvArmUpscale()">🎓 Học nâng 1080p</button>
+          <button class="btn ghost sm" onclick="tvRefreshUpsStatus()">↻</button>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;font-size:12.5px;margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
+          <label style="display:flex;gap:6px;align-items:center;cursor:pointer;white-space:nowrap"><input type="checkbox" class="asv-enabled" onchange="autoSaveToggle(this)"> 💾 <b>Tự động lưu video về máy</b></label>
+          <select class="asv-mode" onchange="autoSaveMode(this)" style="max-width:200px"><option value="flat">Lưu thẳng vào thư mục</option><option value="perTask">Tạo thư mục theo Task</option></select>
+          <input type="text" class="asv-name" onchange="autoSaveName(this)" placeholder="Tên thư mục" style="max-width:170px">
+          <input type="text" class="asv-folder" readonly placeholder="Chưa chọn thư mục lưu" style="flex:1;min-width:160px">
+          <button class="btn sm" onclick="autoSavePickFolder()">📁 Chọn thư mục</button>
+        </div>
+      </div>
+
+      <!-- CARD 3: TẠO & KẾT QUẢ -->
+      <div class="fc">
+        <div class="fc-step"><span class="n">3</span> Tạo & Kết quả
+          <span class="r">
+            <button class="btn primary sm" id="mvVidGenBtn" onclick="tvToggleGen()">▶ Tạo tất cả</button>
+            <button class="btn ghost sm" onclick="tvGenerate(true)">🔁 Thử lại lỗi</button>
+            <button class="btn ghost sm" onclick="mvVideoDownloadAll()">⬇ Tải tất cả</button>
+          </span>
+        </div>
+        <div class="status-bar" id="statusMvVid" style="margin-bottom:12px">Chọn nguồn → chuẩn bị ảnh/prompt → bấm Tạo tất cả. Video Veo tốn credit cao.</div>
+        <div id="mvVidResultList" class="tv-grid"><div class="empty-state">Chưa có video.</div></div>
+        <span id="mvVidCount" style="display:none">0</span>
+      </div>
+    </div>
+
+    <!-- TOOL 8: CĂN TIMING & PHỤ ĐỀ (Whisper) -->
+    <div class="tool" id="tool-tool8">
+      <div class="tool-head">
+        <div class="tool-title">Căn Timing & Phụ Đề</div>
+        <div class="tool-subtitle">Khớp duration mỗi cảnh với giọng đọc THẬT bằng Whisper. Fix lỗi giọng nhanh/chậm lệch ảnh. Hoặc bỏ audio bất kỳ → ra file SRT độc lập.</div>
+      </div>
+
+      <div class="info-box">
+        <span class="lbl">💡 Quy trình:</span> Upload file VO audio (đã thu/gen) → Whisper transcribe → tự map mỗi cảnh vào timeline thật → cập nhật duration khớp 100%. Cần có cảnh ở Tool 02 trước.
+      </div>
+
+      <!-- TRANSCRIPTION SETTINGS PANEL -->
+      <div class="panel mb-24" id="t8ApiPanel" style="display:none">
+        <div class="panel-head" style="background:linear-gradient(135deg,rgba(124,58,237,.06),rgba(194,65,12,.04))">
+          <span>🔑 Cài đặt Transcribe API <span style="font-size:11px;color:var(--text-muted);font-weight:400">(riêng cho căn timing, KHÔNG dùng key Claude)</span></span>
+        </div>
+        <div class="panel-body">
+          <div class="grid-2 mb-16" style="grid-template-columns:190px 190px 1fr auto;gap:12px;align-items:end">
+            <div id="t8ProvWrap">
+              <label class="label">PROVIDER</label>
+              <select id="t8Provider" onchange="t8OnProviderChange()">
+                <option value="groq" selected>Groq (MIỄN PHÍ ★)</option>
+                <option value="openai">OpenAI Whisper (trả phí)</option>
+                <option value="local">Local Browser (free, chậm)</option>
+              </select>
+            </div>
+            <div>
+              <label class="label">🌐 NGÔN NGỮ</label>
+              <select id="t8Language" onchange="t8OnLanguageChange()">
+                <option value="">Auto-detect</option>
+                <option value="en" selected>English 🇬🇧</option>
+                <option value="vi">Tiếng Việt 🇻🇳</option>
+                <option value="es">Español 🇪🇸</option>
+                <option value="fr">Français 🇫🇷</option>
+                <option value="de">Deutsch 🇩🇪</option>
+                <option value="zh">中文 🇨🇳</option>
+                <option value="ja">日本語 🇯🇵</option>
+                <option value="ko">한국어 🇰🇷</option>
+                <option value="th">ไทย 🇹🇭</option>
+                <option value="id">Indonesia 🇮🇩</option>
+                <option value="hi">हिन्दी 🇮🇳</option>
+                <option value="ar">العربية 🇸🇦</option>
+                <option value="ru">Русский 🇷🇺</option>
+                <option value="pt">Português 🇵🇹</option>
+              </select>
+            </div>
+            <div id="t8KeyWrap">
+              <label class="label">API KEY</label>
+              <input type="password" id="t8ApiKey" placeholder="Paste Groq API key (gsk_...)" autocomplete="off">
+            </div>
+            <div id="t8KeyBtns" style="display:flex;gap:6px">
+              <button class="btn ghost" onclick="t8TestKey()">Test</button>
+              <button class="btn" onclick="t8SaveKey()">💾 Lưu</button>
+            </div>
+          </div>
+          <div id="t8ModelInfo" style="font-size:11.5px;color:var(--accent);margin-bottom:6px"></div>
+          <div id="t8ProviderHint" style="font-size:11.5px;color:var(--text-muted);line-height:1.6">
+            <strong>Groq</strong> (miễn phí): đăng ký tại <span style="color:var(--accent)">console.groq.com</span> → tạo key (không cần thẻ). Free tier 2.000 lượt/ngày, model whisper-large-v3-turbo, file tối đa 25MB.
+          </div>
+          <div id="t8KeyStatus" style="font-size:12px;margin-top:8px"></div>
+        </div>
+      </div>
+
+      <!-- UPLOAD + ACTION -->
+      <div class="grid-2 mb-24">
+        <div class="panel">
+          <div class="panel-head"><span>🎙 Audio Voiceover (cả kịch bản)</span></div>
+          <div class="panel-body">
+            <input type="file" id="t8AudioInput" accept="audio/*" style="margin-bottom:10px;width:100%" onchange="t8HandleAudio(this.files[0])">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:12px;color:var(--text-muted)">
+              🌐 Ngôn ngữ giọng đọc:
+              <select id="t8LangMini" onchange="var e=document.getElementById('t8Language'); if(e){e.value=this.value; if(typeof t8OnLanguageChange==='function')t8OnLanguageChange();}" style="width:auto;padding:5px 9px;font-size:12px">
+                <option value="">Auto-detect</option>
+                <option value="vi">Tiếng Việt 🇻🇳</option>
+                <option value="en" selected>English 🇬🇧</option>
+                <option value="es">Español</option><option value="fr">Français</option><option value="de">Deutsch</option>
+                <option value="zh">中文</option><option value="ja">日本語</option><option value="ko">한국어</option>
+              </select>
+            </div>
+            <div id="t8AudioInfo" style="font-size:11.5px;color:var(--text-muted)">Chưa có audio. Upload file VO của cả kịch bản (1 file).</div>
+            <audio id="t8AudioPlayer" controls style="width:100%;margin-top:8px;display:none"></audio>
+            <div style="border-top:1px dashed var(--border);margin:14px 0 10px"></div>
+            <div style="font-size:11.5px;font-weight:600;color:var(--text-muted);margin-bottom:6px">📄 HOẶC căn theo file SRT (không cần Groq)</div>
+            <input type="file" id="t8SrtInput" accept=".srt,.vtt,text/*" style="width:100%" onchange="t8HandleSrt(this.files[0])">
+            <div id="t8SrtInfo" style="font-size:11px;color:var(--text-muted);margin-top:6px">Upload SRT (từ CapCut, YouTube...) → bấm "Căn theo SRT". Nên sửa caption khớp kịch bản trước cho chuẩn.</div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><span>📊 Thông tin</span></div>
+          <div class="panel-body" style="font-size:12.5px;line-height:1.9">
+            <div>Số cảnh (Tool 02): <strong id="t8SceneCount">0</strong></div>
+            <div>Tổng duration ước tính: <strong id="t8EstTotal">0s</strong></div>
+            <div>Độ dài audio: <strong id="t8AudioDur">—</strong></div>
+            <div id="t8DurWarn" style="color:var(--red);font-size:11.5px;margin-top:4px"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="actions mb-24">
+        <button class="btn primary" onclick="t8WhisperAlign()">🎯 Whisper Align (căn timing)</button>
+        <button class="btn" style="background:var(--teal);border-color:var(--teal);color:var(--on-accent)" onclick="t8AlignBySRT()">📄 Căn theo SRT</button>
+        <button class="btn" onclick="t8ApplyTimings()">✓ Áp dụng timing vào cảnh</button>
+        <button class="btn ghost" onclick="t8ExportSRT()">↓ Xuất SRT</button>
+        <button class="btn" style="background:var(--violet);border-color:var(--violet);color:var(--on-accent)" onclick="t8AudioToSRT()" title="Bỏ audio bất kỳ → ra file SRT (không cần cảnh ở Tool 02)">🎙 Audio → SRT (độc lập)</button>
+        <span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--text-muted)">
+          ~<input type="number" id="srtLineSec" value="4" min="2" max="10" style="width:48px;padding:5px 6px;text-align:center">s/dòng
+        </span>
+        <button class="btn ghost" style="color:var(--red);margin-left:auto" onclick="t8Reset()">🗑 Xoá kết quả</button>
+      </div>
+
+      <div class="status-bar" id="status8">Sẵn sàng. Cài key Groq → upload audio → bấm Whisper Align.</div>
+
+      <!-- COMPARISON TABLE -->
+      <div class="panel" id="t8ResultPanel" style="display:none">
+        <div class="panel-head">
+          <span>📋 So sánh timing: ước tính → thật</span>
+          <span class="count" id="t8MatchCount">0 cảnh</span>
+        </div>
+        <div style="overflow-x:auto">
+          <table class="scene-table">
+            <thead><tr><th>#</th><th>Lời thoại</th><th style="text-align:right">Cũ (ước tính)</th><th style="text-align:right">Mới (thật)</th><th style="text-align:right">Chênh</th></tr></thead>
+            <tbody id="t8ResultBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <textarea id="t8SrtOutput" style="display:none"></textarea>
+    </div>
+
+    <!-- TOOL 7: DỰNG VIDEO (editor timeline + xuất FFmpeg) -->
+    <link rel="stylesheet" href="src/styles/build-video.css">
+    <link rel="stylesheet" href="src/styles/tool-imzic.css">
+

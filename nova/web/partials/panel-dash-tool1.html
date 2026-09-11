@@ -1,0 +1,30 @@
+    <!-- DASHBOARD -->
+    <div class="tool active" id="tool-tooldash">
+      <div id="dashBody"></div>
+
+    </div>
+
+    <div class="tool" id="tool-tool1">
+      <div class="tool-head">
+        <div class="tool-title">Profile Kênh</div>
+        <div class="tool-subtitle">Tạo và quản lý profile cho từng kênh. Style prompts được dùng cho tất cả các tool khác.</div>
+      </div>
+
+      <!-- Chọn Profile + Video đã chuyển lên topbar. Input ẩn nhập JSON giữ lại. -->
+      <input type="file" id="importProfileInput" accept=".json" style="display:none" onchange="importProfile(event)">
+
+      <div class="info-box">
+        <span class="lbl">💡 Quy trình:</span>
+        <strong>Bước 1:</strong> Bấm <em>+ Tạo mới</em> → điền thông tin kênh hoặc upload ảnh mẫu để AI phân tích style.
+        <strong>Bước 2:</strong> Copy các Style Prompts bên dưới → paste vào G-Labs để gen reference sheets.
+        <strong>Bước 3:</strong> Chuyển sang Tool 02 để phân cảnh kịch bản.
+      </div>
+
+      <div class="status-bar" id="status1">Sẵn sàng. Tạo Profile để bắt đầu.</div>
+
+      <div id="profileStylesDisplay">
+        <div class="empty-state">Chưa có Profile. Bấm <strong>+ Tạo mới</strong> ở trên.</div>
+      </div>
+    </div>
+
+    <!-- TẠO KỊCH BẢN -->

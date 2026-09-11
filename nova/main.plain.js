@@ -47,6 +47,11 @@ if (!ensureSingleInstance()) {
 // Tắt bớt log rác nội bộ của Chromium (vd "ffmpeg_common Unsupported pixel format") cho terminal sạch.
 // KHÔNG ảnh hưởng log console.log của app (Node) — vẫn thấy các dòng [flow].
 try { app.commandLine.appendSwitch('log-level', '3'); } catch (e) { /* */ }
+// GPU policy (main/gpu-policy.js): --disable-gpu tường minh — software rendering
+// là cấu hình chủ đích trên máy đích (Chromium 149 đã tự tắt GPU; MEMORY 2026-09-11j).
+try { require('./main/gpu-policy').installGpuPolicy(app); } catch (e) {
+  console.warn('[gpu-policy] lỗi nạp module:', (e && e.message) || e);
+}
 // Bắt lỗi toàn cục (uncaughtException/unhandledRejection) → thông báo thân thiện, không văng app.
 installGlobalErrorHandlers();
 

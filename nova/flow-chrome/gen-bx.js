@@ -84,6 +84,29 @@ const BX_PAGE_FN = `
   }
 `;
 
+/* ── Bản JOB của BX_PAGE_FN: evaluate khởi động fetch KHÔNG CHỜ → poll kết quả ──
+   Lý do: YhhmEf (video) trả chậm hơn timeout CDP evaluate cục bộ → 'CDP_TIMEOUT
+   Runtime.evaluate' dù trigger ĐÃ tới server & TRỪ credit (đo thật tối 11/9:
+   246→234→222 — 2 video mồ côi không lấy được mediaId). Tách bước chờ ra poll
+   → evaluate luôn về nhanh, lỗi server vẫn lộ liễu qua out.error (Luật 10). */
+const BX_JOB_START_FN = `
+  async (argsJson) => {
+    window.__bxJob = { state: 'running' };
+    (async () => {
+      try {
+        const out = await (${BX_PAGE_FN})(argsJson);
+        window.__bxJob = { state: 'done', out };
+      } catch (e) {
+        window.__bxJob = { state: 'done', out: JSON.stringify({ error: 'BX_JOB_ERR: ' + ((e && e.message) || e) }) };
+      }
+    })();
+    return 'STARTED';
+  }
+`;
+const BX_JOB_POLL_FN = `
+  async () => (window.__bxJob && window.__bxJob.state === 'done') ? window.__bxJob.out : 'BX_JOB_RUNNING'
+`;
+
 /* Eval dùng hàm arrow với tham số — evalInPage chỉ nhận expression, nên bọc call. */
 async function evalArrow(cdp, fnSrc, argJson) {
   const expr = '(' + fnSrc + ')(' + JSON.stringify(argJson) + ')';
@@ -143,11 +166,23 @@ async function ensureProjectPage(cdp, projectId) {
   throw new Error('BX_NAVIGATE: không tới được trang project ' + projectId);
 }
 
-async function bxFetch(cdp, { rpcid, freq, sourcePath }) {
-  const r = await evalArrow(cdp,BX_PAGE_FN, JSON.stringify({ rpcid, freq, sourcePath }));
-  let out; try { out = JSON.parse(r); } catch { throw new Error('BX_BAD_RESPONSE: ' + String(r).slice(0, 120)); }
-  if (out.error) throw new Error(out.error);
-  return out;
+async function bxFetch(cdp, { rpcid, freq, sourcePath, jobMs = 240000, pollMs = 2000 }) {
+  const argJson = JSON.stringify({ rpcid, freq, sourcePath });
+  // Chạy dạng JOB: evaluate khởi động fetch và trả ngay → không bao giờ CDP_TIMEOUT
+  // khi RPC trả chậm (YhhmEf video); tổng thời gian chờ do jobMs kiểm soát.
+  const started = await evalArrow(cdp, BX_JOB_START_FN, argJson).catch((e) => { throw new Error('BX_JOB_START: ' + (e.message || e)); });
+  if (started !== 'STARTED') throw new Error('BX_JOB_START: ' + String(started).slice(0, 100));
+  const t0 = Date.now();
+  for (;;) {
+    await sleep(pollMs);
+    const out = await evalArrow(cdp, BX_JOB_POLL_FN, '').catch((e) => { throw new Error('BX_JOB_POLL: ' + (e.message || e)); });
+    if (out !== 'BX_JOB_RUNNING') {
+      let r; try { r = JSON.parse(out); } catch { throw new Error('BX_BAD_RESPONSE: ' + String(out).slice(0, 120)); }
+      if (r.error) throw new Error(r.error);
+      return r;
+    }
+    if (Date.now() - t0 > jobMs) throw new Error('BX_JOB_TIMEOUT: rpcid=' + rpcid + ' không trả sau ' + Math.round(jobMs / 1000) + 's');
+  }
 }
 
 /* Trích media từ payload ogiZ0b. Schema ĐO THẬT (response 20:03 11/9, bx-bad-resp.txt):
@@ -253,7 +288,7 @@ async function genImageBX(cdp, { prompt, projectId, template, captchaToken, site
   // Mint captcha mới mỗi request (dùng-một-lần; bỏ qua nếu caller tự cấp)
   let cap = captchaToken || null;
   if (!cap) {
-    cap = await evalArrow(cdp, CAPTCHA_PAGE_FN, { siteKey: siteKey || SITE_KEY, action: 'VIDEO_GENERATION' }).catch((e) => { throw new Error('BX_CAPTCHA: ' + (e.message || e)); });
+    cap = await evalArrow(cdp, CAPTCHA_PAGE_FN, { siteKey: siteKey || SITE_KEY, action: 'IMAGE_GENERATION' }).catch((e) => { throw new Error('BX_CAPTCHA: ' + (e.message || e)); });
     if (!cap || String(cap).length < 100) throw new Error('BX_CAPTCHA_EMPTY');
   }
   const uuid = () => (require('crypto').randomUUID() || 'b-' + Date.now()).toUpperCase();
@@ -269,8 +304,11 @@ async function genImageBX(cdp, { prompt, projectId, template, captchaToken, site
   }
   const parsed = parseOgiZ0b(own.payload);
   if (!parsed) {
+    /* Lộ liễu: dump FULL response để chẩn đoán lỗi RPC server (payload "null"
+       = server từ chối; mô tả lỗi thường nằm ở entry[4]/[5] ngoài payload). */
+    try { fs.mkdirSync(path.join(require('os').tmpdir(), 'flow-gen-capture'), { recursive: true }); fs.writeFileSync(path.join(require('os').tmpdir(), 'flow-gen-capture', 'bx-rpc-error.txt'), '=== code=' + JSON.stringify(own.code) + ' kind=' + JSON.stringify(own.kind) + ' ===\n' + (res.text || ''), 'utf8'); } catch { /* sink */ }
     const errInfo = String(own.payload || '').match(/([A-Z_]{6,})/);
-    throw new Error('BX_RPC_ERROR' + (errInfo ? '_' + errInfo[1] : '') + ': ' + String(own.payload).slice(0, 200));
+    throw new Error('BX_RPC_ERROR' + (errInfo ? '_' + errInfo[1] : '') + ': payload=' + String(own.payload).slice(0, 200) + ' code=' + JSON.stringify(own.code) + ' (dump: %TEMP%\\flow-gen-capture\\bx-rpc-error.txt)');
   }
   if (!parsed.url) throw new Error('BX_NO_MEDIA: response không chứa link (mediaId=' + parsed.mediaId + ') — cần poll jwpduf?');
   return { ok: true, ...parsed };
@@ -306,17 +344,30 @@ async function genImagesBX(cdp, { prompt, projectId, count = 1, template, onEach
    Poll kết quả: as29s với payload ["<mediaId>"] → record chứa status ([2]=đang
    xử lý, [3]=xong) + URL https://flow-content.google/video/<mediaId>?…
    Chi phí: 12 credits / video (x1, 720p, 8s — đo 11/9). */
-function buildYhhmEfPayload({ prompt, projectId, captchaToken, model }) {
+function buildYhhmEfPayload({ prompt, projectId, captchaToken, model, qualitySlot, imageMediaId }) {
   if (!prompt) throw new Error('BX_NO_PROMPT');
   if (!projectId) throw new Error('BX_NO_PROJECT');
   if (!captchaToken) throw new Error('BX_NO_CAPTCHA');
+  /* Luật 10 — i2v CHƯA có shape thật trên YhhmEf (chưa capture imageMediaId nằm ở đâu trong
+     scene) → NỔ LỘ LIỄU thay vì đoán payload. Chờ capture qua nova/scripts/tmp/tmp-bx-variant-capture.js. */
+  if (imageMediaId) throw new Error('BX_I2V_SHAPE_NOT_CAPTURED: shape YhhmEf image-to-video chưa được capture thật — chạy tmp-bx-variant-capture.js khi gen i2v trong Flow UI');
+  /* Biến thể:
+     • model       = chuỗi model key server-side. Mặc định 'abra_t2v_8s' (omni-flash, E2E PASS
+                     11/9/2026). Các key đã biết tồn tại ở path aisandbox (gen.js): veo_3_1_t2v,
+                     veo_3_1_t2v_fast, veo_3_1_t2v_lite — CHƯA verify riêng trên BX YhhmEf;
+                     server trả BX_RPC_ERROR_* lộ liễu nếu sai (không fallback ngầm).
+     • qualitySlot = slot scene[2] — giá trị 2 = 720p/16:9 (đo cứng bằng settings UI,
+                     tmp-video-shape2.txt). Giá trị khác (360p…) chỉ truyền khi đã có capture thật. */
+  const slot = qualitySlot == null ? 2 : qualitySlot;
+  if (!Number.isInteger(slot) || slot < 0 || slot > 255) throw new Error('BX_BAD_QUALITY_SLOT: ' + qualitySlot);
+  if (model != null && !/^[a-z0-9_.]+$/i.test(String(model))) throw new Error('BX_BAD_MODEL: ' + model);
   const uuid = () => (typeof require('crypto').randomUUID === 'function' ? require('crypto').randomUUID() : 'b-' + Date.now()).toUpperCase();
-  /* Scene = [promptBlock, model, 2, null, uuids] — shape khớp capture thật (tmp-video-shape2.txt):
+  /* Scene = [promptBlock, model, qualitySlot, null, uuids] — shape khớp capture thật (tmp-video-shape2.txt):
      inner[0]=[scene] (A1) · scene=A5 · scene[0]=A3=[null,null,[[[PROMPT]]]] · inner[1]=ctx A11 · inner[2]=[U3,2]. */
   const scene = [
     [null, null, [[[String(prompt)]]]],
     model || 'abra_t2v_8s',
-    2,
+    slot,
     null,
     [null, null, null, null, uuid(), uuid()],
   ];
@@ -357,17 +408,18 @@ function parseAs29s(payloadStr) {
 }
 
 /* Gen 1 video qua YhhmEf + poll as29s đến khi có URL. Trả
-   { ok, mediaId, taskId, videoUrl, imageUrl, creditsAfter } hoặc NÉM lỗi có mã. */
-async function genVideoBX(cdp, { prompt, projectId, captchaToken, siteKey, model, pollMs = 15000, pollMax = 40 }) {
+   { ok, mediaId, taskId, videoUrl, imageUrl, creditsAfter } hoặc NÉM lỗi có mã.
+   Biến thể: { model, qualitySlot } (xem buildYhhmEfPayload — mặc định t2v 8s 720p đã verify). */
+async function genVideoBX(cdp, { prompt, projectId, captchaToken, siteKey, model, qualitySlot, pollMs = 15000, pollMax = 40 }) {
   if (!prompt) throw new Error('BX_NO_PROMPT');
   if (!projectId) throw new Error('BX_NO_PROJECT');
   await ensureProjectPage(cdp, projectId);
   let cap = captchaToken || null;
   if (!cap) {
-    cap = await evalArrow(cdp, CAPTCHA_PAGE_FN, { siteKey: siteKey || SITE_KEY, action: 'IMAGE_GENERATION' }).catch((e) => { throw new Error('BX_CAPTCHA: ' + (e.message || e)); });
+    cap = await evalArrow(cdp, CAPTCHA_PAGE_FN, { siteKey: siteKey || SITE_KEY, action: 'VIDEO_GENERATION' }).catch((e) => { throw new Error('BX_CAPTCHA: ' + (e.message || e)); });
     if (!cap || String(cap).length < 100) throw new Error('BX_CAPTCHA_EMPTY');
   }
-  const payload = buildYhhmEfPayload({ prompt, projectId, captchaToken: cap, model });
+  const payload = buildYhhmEfPayload({ prompt, projectId, captchaToken: cap, model, qualitySlot });
   const freq = JSON.stringify([[['YhhmEf', JSON.stringify(payload), null, 'generic']]]);
   const res = await bxFetch(cdp, { rpcid: 'YhhmEf', freq, sourcePath: '/project/' + projectId });
   const entries = parseBxResponse(res.text);

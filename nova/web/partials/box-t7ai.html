@@ -1,0 +1,16 @@
+<!-- Trợ lý dựng: đề xuất → duyệt → gắn. Đặt cấp <body> để mở được từ mọi tab. -->
+<div id="t7Ai"><div class="sheet" role="dialog" aria-label="Trợ lý dựng">
+  <div class="ph">
+    <div><b>Trợ lý dựng</b><s id="t7AiSub">Đọc lời thoại từng cảnh rồi chọn mẫu chuyển động hợp nhất trong kho có sẵn. Bạn duyệt từng cảnh trước khi gắn.</s></div>
+    <button class="x" onclick="t7AiClose()" aria-label="Đóng">✕</button>
+  </div>
+  <div class="steps" id="t7AiSteps"></div>
+  <div class="props" id="t7AiProps"></div>
+  <div class="pf">
+    <span class="cnt" id="t7AiCnt">—</span>
+    <button class="btn ghost sm" onclick="t7AiPropose(true)" style="margin-left:auto" title="Bỏ kết quả đã lưu của video này rồi cho trợ lý đọc lại từ đầu">↻ Phân tích lại</button>
+    <button class="btn ghost sm" onclick="t7AutoTransitions()" title="Chấm nhịp cả video rồi tự chọn kiểu chuyển cho từng mối nối">⚡ Tự chuyển cảnh</button>
+    <button class="btn ghost sm" id="t7AiSkipAll" onclick="window.t7AiAll(false)">Bỏ hết</button>
+    <button class="btn primary sm" id="t7AiAll" onclick="window.t7AiAll(true)">Gắn tất cả</button>
+  </div>
+</div></div>

@@ -74,6 +74,7 @@ jobs:
           npm run check:size
           npm run check:toplevel
           npm run check:docs
+          npm run check:selftest
           npm run test:foundation
 
       # check:ipc sinh lại ipc-inventory.json (generatedAt mới mỗi lần) — đối chiếu
@@ -93,3 +94,39 @@ jobs:
 
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
+
+  # Smoke app thật trên runner Windows — CHỈ chạy khi trigger thủ công (workflow_dispatch),
+  # không nằm trong gate mỗi push (npm ci + electron trên runner VM chậm và dễ flaky).
+  # Bật Auto-Fix runtime KHÔNG diễn ra ở đây — chỉ khởi app + quét lifecycle.log (§6.5).
+  windows-smoke:
+    name: windows app smoke (khoidong + lifecycle scan)
+    runs-on: windows-latest
+    timeout-minutes: 40
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Checkout full source history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Clean dependency install
+        run: npm ci
+
+      # Khởi app thật theo đúng quy trình §6.5 (khoidong.bat --silent) — tự npm install
+      # khi thiếu, đọc entry từ package.json, chờ Agent Bridge 47280–47283 tối đa 30s.
+      - name: Launch app via khoidong.bat
+        shell: cmd
+        run: .\khoidong.bat --silent
+
+      # Quét lifecycle.log của chính phiên vừa khởi: REAL crash (nhóm b §6.5) → fail job.
+      - name: Scan lifecycle.log for real crashes
+        run: npm run scan:lifecycle -- --json
+

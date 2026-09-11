@@ -83,6 +83,137 @@ File nÃ y ghi **tráº¡ng thÃ¡i dÃ i háº¡n vÃ  lá»‹ch sá»­ qu
   vulkan/d3d dllâ€¦) â€” khÃ´ng track, chá»‰ hiá»‡n trÃªn mÃ¡y dev.
 
 ## Nháº­t kÃ½ thay Ä‘á»•i
+- [2026-09-11] **Kiểm chứng + chốt xoá tàn dư `shared-consts.js` (4.250 dòng) sau đợt tách 12 module `shared/`**
+  của phiên song song: (1) Xác nhận `index.html` L106-120 đã nạp 12 module `src/toolbox/shared/*.js`
+  (shell/llm/voice/mvtv/profile/flow/t2-scenes/t2-prompts/auto-assets/t3-stock/t7/t8-t10) đúng vị trí
+  cũ của god-file (sau `shared-state.js`, trước `utility.js`) — 0 thẻ nạp `shared-consts.js` còn sót,
+  0 file HTML/JS nào tham chiếu ngoài comment lịch sử. (2) Kiểm chứng verbatim bằng
+  `tmp-verify-shared-split.js` (acorn strip comment theo AST, đã xoá theo quy ước tmp-): so sánh bản
+  `git show HEAD:` với concat 12 module theo thứ tự nạp → 3.597 dòng chuẩn hoá KHỚP TUYỆT ĐỐI, multiset
+  322 khai báo top-level khớp 1-1 → xoá `shared-consts.js` an toàn 100% (git status `D`, bản gốc vẫn
+  recoverable từ HEAD). (3) `voice-contract-test.js` quét đệ quy cây toolbox nên không phụ thuộc tên
+  file; các script one-off `dedup-*`/`promote-shared-to-peer`/`extract-index-html-toolbox` có đọc
+  `shared-consts.js` giờ NO-OP với file đã xoá — chỉ chạy lại được khi checkout lại từ git history.
+  (4) Sửa comment `index.html` L123 "SAU shared-consts.js" → "SAU khối shared/" cho đúng thực trạng.
+  (5) check:size sau xoá: 0 warn/0 error — file nguồn lớn nhất còn lại là `img-to-vid-panel.js` 2.306 dòng.
+  (6) `npm run test:voice` FAIL đầu tiên ở assert `#voicePitch` — KHÔNG phải do tách shared-consts:
+  `id="voicePitch"` đã được phiên song song chuyển vào `partials/panels-upscale-voice.html:248`
+  khi tách markup index.html → partials SSI-lite, mà `voice-contract-test.js` chưa quét cây
+  `web/partials/`. Đã sửa test: thêm `partialsBundle` (collectTree .html đệ quy) vào
+  `rendererSources` + cập nhật comment mục 4 — test PASS lại. (7) Smoke `khoidong.bat --silent`
+  23:55 local: boot sạch, Agent Bridge 47280 OK, flow token khôi phục; lifecycle log sau
+  16:55:22Z không còn entry crash nào (cụm -1 câm 16:54:51 trước đó là WARN teardown kill
+  ngoài, app trước đó của phiên song song); `scan:lifecycle` exit 1 chỉ vì lịch sử cũ 29
+  session (đã điều tra trong entry 13:55Z ở trên). `npm run check` PASS cuối: syntax 532,
+  ipc 148 kênh, exports 34, shared 19 keys, size 732→733 file 0/0, toplevel 0 xung đột,
+  docs 33, selftest 10/10.
+
+- [2026-09-11] **Hoàn thiện xác minh phiên song song + điều tra crash 13:55Z** (task kế tiếp
+  đợt tách tool-t7.js): (1) Đợt tách `utility/t7.js` → 8 file của session song song đã
+  kiểm chứng ĐỘC LẬP lần 2 bằng `tmp-verify-utility-t7-split.js` (đã xoá): multiset
+  167 hàm top-level khớp 100% so HEAD, 2296 = 2264 dòng + 32 dòng header, node --check
+  từng file OK — hội tụ với kiểm chứng AST của session kia (so working-tree). (2) Crash
+  REAL 13:55–13:56Z (exitCode=2 lặp 4 lần, render-recovery-stopped): renderer chết ngay
+  sau load index.html trong trạng thái nhất thời giữa chừng sửa file; từ boot 13:57:19Z
+  trở đi app boot sạch liên tục — không phải regression còn sống, đã tự giải quyết trước
+  giờ mọi thay đổi của đợt t7. (3) Phát hiện session song song còn tách markup:
+  `index.html` rút 3500 dòng → 15+ file `nova/web/partials/*.html` qua marker
+  `<!--#include "partials/…" -->`, server `nova/main/server.js` có SSI-lite expand
+  (fail-loud WEB_INCLUDE_*, depth ≤10, toplevel-check mở cùng marker). Instance đang
+  chạy lúc đó boot trước server.js mới nên serve shell thô 9.718 chars (nếu reload sẽ
+  hỏng) → đã đóng graceful (taskkill không /F) + `khoidong.bat --silent` boot lại:
+  bridge OK, flow token cache khôi phục, **GET /index.html = 268.098 chars, 0 directive
+  include sót, đủ 8 tag utility/t7-* + 9 tag toolbox/t7-*, panel toolscript/tool7
+  nguyên vẹn**, utility/t7-*.js HTTP 200, renderer 0 ERROR, lifecycle sau 16:38:37Z
+  không còn entry nào ngoài boot. `npm run check` chạy lại trên trạng thái partials:
+  EXIT=0 (syntax 513 file, size 732 file 0 warn/0 error, selftest 10/10). Lưu ý:
+  server.js sửa 23:27:32 — app KHÔNG hỗ trợ nạp lại server khi đang chạy, mọi thay đổi
+  server/index.html cần boot lại app mới có hiệu lực.
+
+- [2026-09-11] **Tách `nova/web/src/toolbox/utility/t7.js` (2264 dòng / 137KB) thành 8 file
+  `utility/t7-*.js`** — tách verbatim theo domain (helper `t7-core`, lớp đồ hoạ + kho fx `t7-gfx`,
+  canvas `t7-canvas`, thẻ cảnh `t7-scene`, vẽ preview `t7-draw`, cấu hình xuất + SRT `t7-export-cfg`,
+  trợ lý AI internals `t7-ai-core`, quản lý video `t7-video`); `index.html` thay 1 tag thành 8 tag
+  cùng vị trí (L3207–3214). File gốc chỉ chứa function declaration (state `_t7*` đã ở
+  `shared-consts.js`) + 1 side-effect gán `_t7SyncColHeight._pinW` (giữ cùng file với hàm đó trong
+  `t7-core.js`). Kiểm chứng script tmp: acorn AST chuẩn hoá — 167 hàm khớp 1-1, từng hàm giống hệt
+  file gốc working-tree (LƯU Ý: working tree của t7.js đã khác git HEAD 134.741 vs 137.247 bytes
+  trước khi tách — so sánh AST phải với working-tree, không phải HEAD). Đổi tên 4 file tránh trùng
+  tên với họ `toolbox/t7-*.js` (hàm public `t7*` tách từ tool-t7.js cùng ngày): t7-fx→t7-gfx,
+  t7-ai→t7-ai-core, t7-preview→t7-draw, t7-export→t7-export-cfg. `npm run check` exit 0.
+
+- [2026-09-11] **Tách `nova/web/src/toolbox/tool-t7.js` (2397 dòng / 153KB) thành 10 file** —
+  trả nợ kỹ thuật đã lên kế hoạch (entry 2026-09-10g/2151, 2168). Tách **verbatim theo dải dòng**
+  bằng script một lần `tmp-split-tool-t7.js` (đã xoá sau dùng): kiểm chứng partition 1..2397
+  không hụt/đúp, multiset 153 hàm top-level 0 mất / 0 dư, multiset dòng phi-rỗng khớp,
+  `node --check` từng file, EOL giữ nguyên từng dòng (nguồn CRLF + vài lone-\r — lưu ý:
+  PowerShell đếm dòng LỆCH so với node vì lone-\r, mọi ranh giới tách phải tính bằng node).
+  Đã liệt kê toàn bộ 47 dòng cột-0 ngoài function decl: tất cả là nội dung template literal
+  (prompt AI trong t7AiPropose/t7AiDesign) → KHÔNG có statement top-level, thứ tự nạp an toàn.
+  Kết quả: `tool-t7.js` giữ core 310 dòng (dòng 1–309 + note tách); 9 file mới cùng thư mục:
+  `t7-fx.js` (310–616), `t7-layers.js` (617–765), `t7-src.js` (766–1139), `t7-ai.js` (1140–1462),
+  `t7-engine.js` (1463–1586), `t7-preview.js` (1587–1849), `t7-overlays.js` (1850–1954),
+  `t7-playback.js` (1955–2197), `t7-export.js` (2198–2397) — mỗi file có header 3 dòng ghi
+  nhóm hàm + nguồn tách (mẫu `utility/t2-*.js`). `index.html`: thay 1 thẻ script tool-t7.js
+  bằng 10 thẻ đúng vị trí cũ (dòng 3221–3231). Không đụng IPC/export/state main-process.
+  Kiểm định: `npm run check` PASS toàn chuỗi (syntax 503 file, size budget 0 warn/0 error,
+  toplevel không xung đột let/const — các dòng "bị đè bởi t7-*.js" của shared-consts.js là
+  dead-code pre-existing, chỉ đổi attribution file); smoke `khoidong.bat --silent` app lên,
+  server 47280 serve 10/10 file HTTP 200, renderer 0 ERROR, lifecycle.log sau 16:14:30Z
+  (boot của phiên này) không có crash mới — các cảnh báo REAL 13:56Z của `scan:lifecycle`
+  là di tích phiên TRƯỚC tách (exit 1 của scan do entry cũ, không phải do thay đổi này).
+  Warn id-tham-chieu `#t7SubPrevBtn` (t7-playback.js:135) là pre-existing từ HEAD.
+  LƯU Ý cuối task: trong lúc chạy `npm run check` lần 2 để chứng nhận trạng thái hợp nhất,
+  session song song đang tách/đổi tên `utility/t7.js` → `utility/t7-{core,gfx,canvas,scene,
+  draw,export-cfg,ai-core,video}.js` (file `utility/t7-ai.js` bị rename thành `t7-ai-core.js`
+  đúng giữa walk→check của syntax-check) → check:syntax fail "Cannot find module" do RACE,
+  không phải do tách tool-t7.js. Lần check EXIT=0 ở trên chạy khi tree nhất quán. Đã chạy lại
+  `npm run check` lần cuối SAU khi session song song xong rename: EXIT=0 toàn chuỗi
+  (syntax 517 file, size 0 warn/0 error, toplevel không xung đột, selftest 10/10) —
+  trạng thái hợp nhất cả 2 đợt tách t7 (utility/ của họ + toolbox/ của task này) ĐẠT.
+  Đối chiếu checklist AGENTS.md lần cuối (23:28 local): `npm run check` EXIT=0 thêm lần nữa
+  (syntax 518 file — session song song thêm 1 file nữa); 0 `import/export` trong 10 file
+  (Luật 4.4); `khoidong.bat --silent` focus app đang chạy (bridge 47280 OK);
+  `npm run test:web-origin` WEB-ORIGIN QA OK (gồm PASS các test `_t7*` của phần
+  utility/ song song); GET t7-ai.js/tool-t7.js từ server app: 200 + nội dung hàm thật
+  (xác nhận `function t7AiPropose` trong t7-ai.js); lifecycle.log sau 16:05Z không còn
+  render/child-process-gone nào — exit 1 của `scan:lifecycle` chỉ do 4 crash REAL cũ
+  13:55Z (trước mọi thay đổi của task này, đã có từ đầu phiên).
+
+- [2026-09-11] **Tách `nova/web/img-to-vid.html` (3296 dòng) theo quy ước §8** — inline
+  `<script>` chính (dòng 874–3293, ~2420 dòng IIFE) tách thành `nova/web/img-to-vid-panel.js`
+  (2428 dòng, header `'use strict'` + IIFE, không khai báo cấp đầu), HTML chỉ còn shell
+  CSS+body + `<script src="img-to-vid-panel.js"></script>` (876 dòng) — đúng mẫu
+  `documentary.html` + `documentary-panel.js`. Trang này là iframe tool lazy-load
+  (`data-src="img-to-vid.html"`) trong `index.html` L506. Scan trước khi tách: 0 `with(`,
+  0 `arguments.callee`, `this` duy nhất nằm trong comment → thêm strict mode an toàn.
+  Verify: script tmp (`nova/scripts/tmp/tmp-split-img-to-vid.js` + `tmp-verify-...`, đã xoá
+  theo quy ước) đối chiếu logic IIFE với `git show HEAD` → **byte-identical 100%**
+  (111873 chars). Inline script nhỏ đồng bộ dark-mode (L293–304) giữ nguyên inline vì phải
+  chạy trước paint. Kiểm định: `node --check` panel OK; `npm run check` PASS 9/9 bước
+  (EXITCODE=0); `khoidong.bat --silent` exit 0 (app đang chạy → focus, iframe lazy-load sẽ
+  đọc bản mới từ đĩa khi user mở tool); `scan:lifecycle` — không có crash mới sau thay đổi
+  (REAL/WARN đều từ session cũ 09-03→09-11 15:52, trước giờ sửa). Không đổi hợp đồng
+  exports/IPC/state — không cần `--update`.
+  **Smoke runtime không gián đoạn (tiếp cùng ngày)**: Agent Bridge chỉ có
+  ping/status/focus → verify qua chính đường runtime thật: fetch HTTP từ app đang chạy
+  (`nova/main/server.js` phục vụ web qua http://localhost:47280, `Cache-Control: no-cache`,
+  `fs.readFile` từ đĩa mỗi request): GET `/img-to-vid.html` 200 = file đĩa + chứa thẻ
+  `<script src="img-to-vid-panel.js">`; GET `/img-to-vid-panel.js` 200,
+  `Content-Type: text/javascript`, byte = file đĩa, mở đầu `'use strict'` + IIFE →
+  **SMOKE HTTP PASS** — iframe tool sẽ nạp đúng bộ file đã tách. lifecycle.log phiên đang
+  chạy (khởi động sau khi tách) chỉ có `gpu-feature-status` thường lệ, 0 crash/renderer
+  error. Script smoke `tmp-smoke-img-to-vid-http.js` đã xoá theo quy ước.
+  **Probe hoàn thiện (chốt)**: (A) `git diff -U0` img-to-vid.html chỉ chạm đúng block
+  script cũ (hunk duy nhất @-874,2420) — không lỡ chỉnh chỗ khác; (B) thực thi
+  `img-to-vid-panel.js` trong sandbox VM (stub DOM/canvas/Audio, mẫu probe 09-10) →
+  nạp qua toàn bộ phase khởi tạo 0 throw; (C) đối chiếu ID: HTML giữ nguyên 128 id so
+  với git HEAD (mất 0/thêm 0), panel gọi 87 id — cả 87 tồn tại trong HTML, THIEU 0.
+  `npm run check` lần chốt EXITCODE=0 (syntax 513 file, IPC 148 kênh, exports 34 module,
+  selftest 10/10). Task tách img-to-vid HOÀN THÀNH; còn lại duy nhất 1 gap không tự
+  động hoá được: test tương tác UI trong app (cần user bấm nút, nạp ảnh+nhạc thật).
+
+
 - [2026-09-10] **QA tách file `nova/web/` — probe runtime `tmp-probe-split-load.js` PASS + đóng 2 bug pre-existing**. Probe mô phỏng renderer thật: trích 67 `<script>` từ `index.html` theo đúng thứ tự (bỏ CDN, báo THIEU FILE nếu thiếu file), stub DOM/localStorage/canvas 2D (Proxy no-op + measureText/createLinearGradient)/`window.native` preload bridge (Proxy đệ quy trả Promise), sandbox `vm.createContext` (window===globalThis), chạy từng script bắt lỗi riêng + forward `console.error` renderer. Kết quả: **67/67 nạp OK, 0 throw, 17/17 hàm then chốt (state/initAppDirect/switchTool/VEO_*/callLLM/TIER_CONFIG…), `state` cấp bởi `shared-state.js` (var, nạp đầu tiên), 0 renderer console.error khi boot** → lần tách file an toàn; ghi chú cũ "bootApp: state is not defined" bên dưới đã KHÔNG còn tái hiện. Kiểm thêm: 0 trùng tên var/let/const top-level giữa `shared-state.js` (11) ↔ `shared-consts.js` (243); CSS 18/18 tồn tại không dup; các handler "mồ côi" mà `tmp-check-index-js.js` báo (click/trim/setTimeout/toFixed/writeText/toggleSidebar/toggleApiSection/tsUpdateScale/saveFlowApiKey) đều FALSE POSITIVE (4 tên định nghĩa inline, 5 tên là native method của DOM/window/string/number). Fix kèm trong index.html: (1) **dedupe boot block** — 2 IIFE `bootApp` giống hệt nhau (pre-existing từ HEAD, `git show HEAD` xác nhận) → xoá bớt 1, tránh chạy double `initAppDirect`/`renderDashboard`/`switchTool` mỗi phiên; (2) **brand-logo.ico 404** → `<img src="brand-logo.ico">` đổi thành `brand-logo.png` (file tồn tại, `brand.js` sinh từ `build/icon.png`; 2 favicon link đầu file vốn đã dùng .png). Sự cố xử lý trong phiên: 1 lần edit dedupe vô tình chèn thừa `</script>` cắt giữa reorder script cuối → probe + tmp-check-index-js bắt đúng, đã sửa lại; file dump tạm gây fail check:syntax đã xoá. Kiểm định cuối: probe PASS, `tmp-check-index-js.js` PASS phần assets + inline parse (còn 1 fail false-positive như trên), `npm run check` PASS (411 file / IPC 162 kênh + 21 events / parity / shared / size / toplevel), `npm start` smoke PASS (splash → cửa sổ chính, không crash). Script một lần đã xoá; giữ lại `tmp-probe-split-load.js` + `tmp-check-index-js.js` làm QA dùng lại được.
 - [2026-09-10] **Probe runtime xác nhận 34 hàm trong `shared-consts.js` là DEAD CODE 100% an toàn để xóa**. Tạo 3 script Electron probe (`tmp-electron-probe.js` load đủ 18 file theo thứ tự `index.html` L5647-5664; `tmp-probe-errors.js` in console errors; `tmp-probe-winner.js` gọi 8 hàm an toàn) + 3 script Node hỗ trợ (`tmp-find-decls.js`, `tmp-search-globals.js`, `tmp-show-safe.js`, `tmp-list-tmp.js`) — tất cả đã xoá theo quy ước `tmp-`. Kết quả runtime: (a) `shared-consts.js` parse OK trong app thật (Electron thấy 888 globals; `state`/`MODELS`/`ALL_TOOLS`/`isPro` đều đúng kiểu); lỗi regex ban đầu do HTML probe thiếu `<meta charset>`. (b) 30 hàm trùng giữa shared-consts ↔ utility.js đều có comment `DEDUP-DUPLICATE` trong shared-consts với cú pháp `peer=Xc, shared=Xc` (chứng minh 2 bản body giống hệt) + cảnh báo "Peer load SAU → ghi đè bản này" — tác giả đã cố ý đánh dấu. (c) 4 hàm (`cliLogin`/`refreshTierFromCloud`/`upgSelect`/`upgToggleCompare`) đã được tách sang `tool-cli.js`/`tool-ref.js`/`tool-upg.js` (load sau utility) → bản ở shared-consts cũng dead. (d) **`_provKeyName` (const arrow) là ONLY_A**: chỉ có ở shared-consts dạng `const _provKeyName = p => ...` — `const` không vào global scope, nhưng code dùng qua closure trong cùng file → vẫn hoạt động bình thường. (e) **TOOL 6 HỎNG (P0)**: 5 tên `VEO_STYLE_PRESETS`/`VEO_SHOT_TYPES`/`VEO_ROTATIONS`/`veoUI`/`veoInit` đều `<NOT FOUND>` sau khi load đủ 18 file → mọi `onclick="veoInit()"` đều throw `ReferenceError`. Cần khôi phục 5 hằng số từ git history. `npm run check:syntax` PASS (360 file — tăng 1 do probe tạo/xoá file). Không có thay đổi code nào, chỉ là điều tra.
 - [2026-09-10] **TỔNG KẾT SESSION "tất cả" (fix Tool 6 + dead code + Tier A)**: Kết quả cuối cùng — 4 fix song song được áp dụng bởi cả agent (tôi) lẫn process khác đang chạy nền:
@@ -2982,6 +3113,7 @@ Kiểm định: `npm run check` EXIT 0 (cảnh báo C2 shadow là nhiễu đã b
 
 ## [2026-09-11m] Tinh chỉnh scan:lifecycle: cụm -1 câm cuối session → WARN (không còn REAL giả)
 
+
 - **Bằng chứng mới** (thí nghiệm kill main ngoài, entry [2026-09-11l]): Stop-Process main sinh
   đúng signature "GPU + Network + renderer chết cùng giây, exitCode=-1" KÈM `render-recovery
   auto-reload` phát trong cùng nhịp chết (+1ms) rồi log câm vĩnh viễn → classifier cũ xếp REAL
@@ -2995,8 +3127,8 @@ Kiểm định: `npm run check` EXIT 0 (cảnh báo C2 shadow là nhiễu đã b
   giữ case REAL). Quét log thật: REAL 38 (exitCode=2 thật + cụm lịch sử có bằng chứng sống),
   WARN 40 (gồm cụm kill 14:53:02.157Z giờ đúng loại), cụm kill KHÔNG còn trong REAL.
   `npm run check` EXIT 0.
-- **Cần làm theo sau**: AGENTS.md §3.2 (dòng scan:lifecycle) và §6.5(b) cần cập nhật 1 dòng phản
-  ánh phân loại mới — CHƯA sửa vì AGENTS.md đang bị phiên song song bx giữ (do-not-touch).
+- **Cần làm theo sau → ĐÃ XONG [2026-09-11n+]**: AGENTS.md §3.2 (dòng scan:lifecycle) và
+  §6.5(b) đã cập nhật đúng phân loại mới (bx nhả khoá); `npm run check` EXIT 0.
 
   (không đổi hành vi render), lifecycle.log sạch sau khi instance mới lên.
 - **ĐÍNH CHÍNH entry [2026-09-11j]**: `--disable-gpu` KHÔNG triệt tiêu GPU process — Chromium vẫn
@@ -3499,6 +3631,37 @@ Kiểm định: `npm run check` EXIT 0 (cảnh báo C2 shadow là nhiễu đã b
   utility/tier.js; `getProfile` ở utility/profiles.js) — thứ tự nạp index.html
   chuẩn: shared-consts(3203) → niche.js(3233) → tool-t10.js(3242) → tool-t9.js(3247).
   Tóm lại: fix `nav.js` là ĐỦ để khôi phục đúng hành vi bản app cũ hay dùng.
+- **[2026-09-11g] Sâu hơn: so sánh THÂN HÀM pre-split ↔ hiện tại + fix UX thiếu ô tiêu đề.**
+  User báo "thumbnail vẫn chưa hoạt động" sau khi đã restart app (lifecycle.log xác nhận
+  3 session 15:03/15:10/15:14). Viết `nova/scripts/tmp/tmp-so-sanh-t9t10.js` (gitignored)
+  trích thân hàm theo balance ngoặc, so `git show 068263fe~1:nova/web/index.html` (lưu ý:
+  PS redirection `>` ghi UTF-16 làm regex hụt — phải `Out-File -Encoding utf8`) với
+  tool-t9/tool-t10/niche/shared-consts/transcribe: **41 hàm/đối tượng GIỐNG HỆT**, khác
+  duy nhất alias có chủ đích `t9Ref→t10Ref` trong t10Generate và `t9RefRender` hiện tại
+  THÊM badge engRate (superset). Không mất hàm nào — xác nhận bằng máy, không đoán.
+  Wiring cũng đã verify đủ: preload 49-51 thumbOutliers/thumbFromUrl → handler
+  `nova/editor-pro/ipc-competitor.js` (đăng ký qua register.js:9) → ipc-inventory 2493-2494;
+  gateTool luôn false (tier.js:18); getProfile() không đối số khớp profiles.js:156.
+  **Nguyên nhân "không hoạt động" thật (UX, không phải code)**: trong tab Tạo Thumbnail,
+  `t10TitleInput` là `type="hidden"` + `t9Step2Hint` `display:none` → khi chưa từng chạy
+  SEO/Tạo Kịch Bản, `_t9ChosenTitle()` rỗng → nút gate DISABLE, không có chỗ nào gõ tiêu
+  đề, không có lời giải thích → tab nhìn như chết. Bản cũ Tool 9 có ô `t9Title` hiện rõ
+  ngay cạnh nên không bao giờ gặp tình trạng này. **Fix**: đưa `t10TitleInput` lên thành
+  ô text hiện luôn TRƯỚC gate (oninput → t9Step2Refresh tự bật nút khi gõ), bỏ
+  display:none của hint. ID giữ nguyên → mọi code đọc/ghi bình thường. `npm run check`
+  PASS (selftest 10/10). Cần restart app để thấy.
+- **[2026-09-11h] Đổi tên tool9 + nút nhận tiêu đề từ SEO trong tab Tạo Thumbnail.**
+  (1) Tool-head của tool9 đổi "YouTube SEO &amp; Thumbnail" → "YouTube SEO" (index.html
+  ~1534), subtitle bỏ cụm "và Gen thumbnail bằng Flow" (thumbnail đã tách sang tool10);
+  nav-item đã sẵn sàng đúng "YouTube SEO". Các dòng tier/upgrade modal (3049/3064/3092/3127
+  "YouTube SEO & Thumbnail AI") GIỮ NGUYÊN — đó là tên gói feature trong bảng giá, không
+  phải tên tool. (2) Thêm nút "📥 Nhận từ YouTube SEO" cạnh nhãn "Tiêu đề video" trong
+  khối Thumbnail (index.html ~1598) → gọi hàm mới `t10PullSeoTitle()` (tool-t10.js:29):
+  ưu tiên tiêu đề đã chốt ở tab SEO (`t9Title`), fallback `t9State.result.titles[0]`
+  (SEO Pack); không có thì báo lỗi hướng dẫn, có thì điền `t10TitleInput` +
+  `t9Step2Refresh()` (bật gate) + setStatus10 ok. `npm run check` PASS (exit code 1 lúc
+  đầu là artifact pipeline PS Select-String, không phải npm — xác nhận lại bằng redirect
+  `*> file`: chuỗi chạy hết, selftest 10/10, 0 dòng FAIL thật).
 
 ## 2026-09-11d — QUYẾT ĐỊNH: KHÔNG lập registry hàm riêng; AGENTS.md bổ sung §4.1 (registry tĩnh) + §8 (tiền tố renderer)
 
@@ -3584,3 +3747,338 @@ Kiểm định: `npm run check` EXIT 0 (cảnh báo C2 shadow là nhiễu đã b
 - **Còn treo**: genVideoBX mới hỗ trợ t2v 8s 720p 16:9 — biến thể (360p, 4/6/10s, i2v) cần capture thêm nếu dùng;
   re-harvest template IMAGE chỉ cần khi schema ogiZ0b dịch (bl/f.sid đã tự đọc live).
   không có dữ liệu app thật) không commit — `.gitignore` đã phủ `tmp*`.
+
+## 2026-09-11i — ĐÓNG BLOCKER gen BX: fix action captcha bị HOÁN ĐỔI → gen ảnh ACCOUNT SỐNG LẠI (live test thật PASS)
+
+## 2026-09-11j — HOÀN THIỆN gen BX: VIDEO BX sống lại (live PASS) + GEN_TEST production contract PASS + restart app nhận fix
+
+- **genVideoBX live test PASS** (sau khi đảo action L370 về `VIDEO_GENERATION` — harness `nova/scripts/tmp/tmp-run-bx-video-live.js`: mở Chrome acc-1 → session check → credits preflight → gen → tải artifact): mediaId `b3a1b169-fa5c-4f19-84ee-3d83e5712826`, taskId `4349c60d-…`, status 3, **credits 234→222 (đúng 12 credit/video)**, gen 40s. Artifact: `bx-live-video-b3a1b169-….mp4` **2.213.694 bytes, magic `ftyp isom` (MP4 hợp lệ)** + `bx-live-video-result.json` tại `%TEMP%\flow-gen-capture\`. Kết luận: **cả 2 path BX (ảnh + video) đều LIVE** sau fix hoán đổi action.
+- **GEN_TEST qua production contract PASS** (`tmp-gen-test-app.js`: `require('../../flow-chrome')` → `handle('GEN_TEST',{id:1})` → `genTest` → `genImageAccount` → `genImageBX`, đúng module main process nạp): ảnh thật `c875cf28-b9e1-47a9-9d73-6d93de601f16` từ CDN, exit 0. Lưu ý wiring: `GEN_TEST` là **lệnh bảo trì qua `handle()`, KHÔNG có nút GUI** (GUI dùng `genVideo`/`resolveVideoForApp`/`genImageAccount` — cùng lõi đã fix) → không cần smoke GUI riêng.
+- **Restart app để nhận fix**: đóng app cũ graceful (`CloseMainWindow` → `window-all-closed → quit` sạch, lifecycle không crash; dọn 3 process orphan). `khoidong.bat --silent` 23:05:21 exit 0 — Agent Bridge 47280 OK, 5 process Electron chuẩn, **instance đang chạy giờ đã nạp gen-bx.js đã fix**. Lifecycle sau boot sạch (chỉ gpu-feature-status + auto refresh token).
+- **Chốt dump chẩn đoán trong `gen-bx.js`: GIỮ** — chỉ ghi khi parse FAIL, vào `%TEMP%\flow-gen-capture\bx-rpc-error.txt` kèm `code` server trong message. Đã chứng minh giá trị (bắt được `PUBLIC_ERROR_UNUSUAL_ACTIVITY` → tìm ra root cause hoán đổi action). Không noise khi gen thành công.
+- **Kiểm định**: `node --check` PASS (cả script tmp mới); `npm run check` chạy lại toàn bộ sau mọi thay đổi — kết quả ghi ở cuối entry.
+- **Còn treo (đã hẹp hơn)**: biến thể video BX 360p/4/6/10s/i2v cần capture thêm nếu có nhu cầu dùng (giữ nguyên trạng thái `2026-09-11h`); credits hiện tại acc-1: 222/234.
+
+- **Bối cảnh**: session acc-1 đã được user đăng nhập lại (SID/SAPISID đầy đủ — đo `tmp-run-bx-live.js`: 20 cookies, home probe status 200 + SNlM0e). Blocker "mất session" của entry `2026-09-11z` đã gỡ.
+- **Live test lần 1-2** (`tmp-run-bx-live.js`, 1 phát: mở Chrome acc-1 debug → check session → gen): session OK nhưng `BX_RPC_ERROR: payload=null code=null` — server trả `PUBLIC_ERROR_UNUSUAL_ACTIVITY` (bắt được nhờ thêm dump lộ liễu, xem dưới).
+- **Root cause**: `genImageBX` mint captcha với action `VIDEO_GENERATION` trong khi `genVideoBX` lại dùng `IMAGE_GENERATION` — HOÁN ĐỔI so với giao thức đã đo (entry `2026-09-11h`: ảnh = IMAGE_GENERATION, video = VIDEO_GENERATION; sai action → server trả payload `null` không tốn credit). Cả 2 đường đều chết vì cả 2 action đều sai.
+- **Fix** (`nova/flow-chrome/gen-bx.js`, 2 dòng, giữ nguyên exports/IPC):
+  - `genImageBX` L256: action `VIDEO_GENERATION` → `IMAGE_GENERATION`;
+  - `genVideoBX` L370: action `IMAGE_GENERATION` → `VIDEO_GENERATION`.
+- **Cải tiến chẩn đoán**: nhánh lỗi `BX_RPC_ERROR` của `genImageBX` giờ dump FULL raw response (code/kind + toàn bộ body) vào `%TEMP%\flow-gen-capture\bx-rpc-error.txt` và nêu `code` trong message — không còn mù "null" (Luật 10).
+- **Live test sau fix — GEN THẬT OK**: mediaId `936ffb09-0ba9-4c40-8cba-81e10effefec`, assetId `1e88cc89-…`, CDN signed URL `flow-content.google/image/…` 1376×768, **download thật 168.997 bytes** (`%TEMP%\flow-gen-capture\bx-live-image.jpg` + `bx-live-result.json`). projectId dùng là `b063ff43-…` của chính acc-1 (chrome-accounts.json).
+- **Đường production xác nhận**: `genTest` → `genImageAccount` → `genImageBX` (gen.js L63) — đúng lõi vừa fix, tức nút GEN_TEST trong GUI dùng code đã sống. LƯU Ý: app đang chạy (main process) vẫn giữ module cũ trong bộ nhớ → phải restart app để nhận fix.
+- **Kiểm định**: `node --check` PASS; `npm run check` **EXIT 0** (syntax 478 files, ipc 148 channels, selftest 10/10); `khoidong.bat --silent` exit 0 (app đang chạy, focus, không mở instance 2); `scan:lifecycle` không có crash MỚI sau 14:53Z (các REAL/WARN đều là lịch sử đã phân loại — entry `2026-09-11n`/context GPU).
+- **Còn treo**: (1) gen VIDEO BX (YhhmEf) chưa re-test live sau khi đảo action về `VIDEO_GENERATION` (trước đây fail `BX_RPC_ERROR: null` cũng vì action sai — khả năng cao đã sống, cần 12 credit/1 video để xác nhận); (2) smoke GEN_TEST trong GUI qua app thật (cần user bấm hoặc restart app); (3) biến thể video 360p/4/6/10s/i2v — giữ nguyên trạng thái entry `2026-09-11h`.
+
+## 2026-09-11j — SSO Labs consent lần đầu: user bấm "Cho phép" TRONG CỬA SỐ Chrome hiện hành (đóng item mở cuối cùng)
+
+- **Bối cảnh**: mục mở duy nhất từ danh sách open-items — consent/ủy quyền SSO Labs lần đầu hiện chỉ fail `OAUTH_TIMEOUT` vì Chrome bị thu nhỏ sau khi mở. Giải pháp theo ghi nhận session trước: dùng lại `CO_KHUNG_DANG_NHAP` logic — chính cửa sổ Chrome mà flow-chrome đã mở.
+- **Thiết kế (không đổi exports/IPC/env)**: cờ `S.ssoConsent` (trang-thai.js) → `statusPayload()` (nen-tang.js) trả kèm qua `GET_ACCOUNTS` → renderer tf.js đọc được mà không cần kênh IPC mới.
+- **`nova/flow-chrome/tien-trinh.js`**:
+  - `_openForOperation`: gắn `cdp._accId = id` để `_taoPhienLabs` biết consent thuộc account nào.
+  - Helper `_hienCuaSoConsent(cdp)`: `Page.bringToFront` + `Browser.setWindowBounds` khôi phục `windowState:'normal'` (vì đã bị minimize ở L141) rồi đặt 1000×820 giữa `screen.getPrimaryDisplay().workArea` — thất bại chỉ LOG, không chết vòng chờ.
+  - `_taoPhienLabs` vòng poll: phát hiện URL `accounts.google.com` (trang chọn account/"Cho phép") → gắn `S.ssoConsent = {id, email, since, message}` + đưa cửa sổ ra giữa màn hình + NỚI hạn chờ 120s → **15 phút** (log tiến độ mỗi 30s). Không consent tay: giữ nguyên hành vi cũ 40×3s.
+  - Dọn `S.ssoConsent = null` ở **mọi** nhánh thoát (callback lỗi, timeout, catch ngoài) — không nuốt lỗi (Luật 10).
+- **`nova/web/src/toolbox/utility/tf.js`** (renderer, không build step, prefix `_fc*`): banner vàng `ssoConsent` trên danh sách tài khoản (fcRenderList) + helper `_fcConsentPoll()` poll GET_ACCOUNTS 2.5s/lần trong lúc chờ LOGIN_AUTO/REFRESH/RELOGIN → hiện cảnh báo "hãy bấm Cho phép" lên ô `fcStatus` thay vì đứng im.
+- **Kiểm định**: `node --check` 4 file PASS; `npm run check` **EXIT 0** (selftest 10/10); `khoidong.bat --silent` exit 0 (app đang chạy, focus — bản đang chạy CHƯA chứa code mới, cần restart để nhận).
+- **Còn treo / lưu ý**: (1) chưa test E2E consent thật — cần account Google CHƯA ủy quyền app Labs, không tự bịa dữ liệu (Luật 6) → chờ user có account mới; (2) scan:lifecycle exit 1 do REAL lịch sử (cũ nhất 09-03, mới nhất 13:56Z hôm nay — TRƯỚC thay đổi này) + WARN 14:53Z cụm -1 cuối session; log thật xác nhận các session sau 15:43Z sạch; (3) đã dọn 11 file dump `C:\Temp\nova-e2e\tt-*.txt`.
+
+## 2026-09-11k — Tool 7: hết nháy khung xem trước khi bấm Tách / ↻ Đồng bộ (fix 2: `_t7SyncColHeight` fixed-point)
+
+- **Bối cảnh**: fix 1 (khoá `data-src`/`data-mid` trong `t7RenderPreview()` — không re-set src khi media không đổi) đã chạy trên app live từ 22:06 nhưng user vẫn thấy nháy → còn nguồn nháy thứ hai.
+- **Chẩn đoán không cần thị giác**: user gửi video Bandicam `bandicam 2026-09-11 22-38-28-564.mp4` (8.37s). Trích grayscale 48×30 bằng ffmpeg-static rồi tính bản đồ diff giữa các frame liên tiếp (`nova/scripts/tmp/tmp-t7-flick-analyze.js`, script một lần, đã gitignore). Kết quả: vùng đổi sáng chỉ tập trung ở **vành đai viền khung player** (nội dung ảnh bên trong KHÔNG mất), biên trên khung nảy ~88px lặp liên tục **~1.2 giây** sau mỗi lần bấm nút (~3.2s và ~4.5s trong video) → triệu chứng là **khung player co/giật kích thước lặp lại**, không phải ảnh biến mất.
+- **Root cause** (`nova/web/src/toolbox/utility/t7.js` `_t7SyncColHeight` cũ): tính **2 lượt** — ghi `moc1 = conLai − ngoaiKhung` (mốc lớn theo viewport) → đo `du` tràn → ghi `moc2 = moc1 − du` (thu nhỏ) → player co → ResizeObserver quan sát `stage` nổ → chạy lại từ `moc1` → ... **dao động moc1↔moc2** cho tới khi RO bị throttle (~1s, đúng thời lượng nháy trên video). Biên độ = khoảng trống dưới lưới trừ mốc margin 14px mà công thức viewport không thấy.
+- **Fix** (L257–284, không đụng IPC/export/`_pinW`): bỏ toàn bộ nhánh đo-ghi-đo-lại, thay bằng **một công thức fixed-point**: `moc = max(220, ph − du)` với `ph` = chiều cao player hiện tại, `du = scrollHeight − innerHeight` (đo sau khi rút cột cảnh về 0 như cũ). Trừ đúng phần tràn (hoặc cộng đúng phần thiếu khi trang ngắn hơn viewport) → player khớp viewport sau **đúng 1 lần ghi**; vì target là điểm cố định của chính phép áp dụng, lượt RO kế tiếp tính ra CÙNG giá trị → guard `player.style.maxHeight !== moc + 'px'` bỏ ghi → vòng phản hồi RO tự tắt. Thêm guard không ghi `--t7-col-h` và `bin.style.height` khi giá trị không đổi; `_pinW` giữ nguyên hành vi (ghi width trùng giá trị cũ = không reflow).
+- **Kiểm định**: `node --check` PASS; `npm run check` **EXIT 0** (selftest 10/10); restart app thật qua kill + `khoidong.bat --silent` exit 0; web server 47280 của app đang chạy xác nhận phục vụ file đã vá (`SERVED_HAS_FIX=True`); `scan:lifecycle`: mọi bản ghi REAL là lịch sử cũ (13:51–13:56Z, trước fix), WARN 15:52:56Z là cú kill ngoài chủ đích để restart (nhóm §6.5), session mới 15:53:00Z **sạch crash**.
+- **Còn treo**: cần user bấm Tách / ↻ Đồng bộ trên app đang chạy (đã nạp fix) xác nhận hết nháy. Frame trích và `frames.raw` còn ở `%TEMP%\t7flick\` nếu cần đối chiếu lại.
+
+
+
+## 2026-09-11m — Tách `nova/web/index.html` (3.668 dòng): trích 8 khối `<script>` inline thành file riêng theo quy ước renderer
+
+- **Bối cảnh**: index.html phình ~3.668 dòng — ~3.300 dòng markup + 9 khối `<script>` inline (~370 dòng) rải giữa/cuối body. Theo AGENTS.md §4 Luật 4 (renderer KHÔNG có build step) và §4.1, hướng tách chuẩn là **trích JS inline verbatim thành file, giữ NGUYÊN thứ tự nạp** (pattern đợt tách `nguon-web.js`); markup giữ lại trong index.html (tách markup đòi fetch/iframe → đổi hành vi, không làm trong task này).
+- **Trích xuất** (script tmp một lần `nova/scripts/tmp/tmp-tach-index.js` — trích theo số dòng, dedent thụt lề chung, splice thẻ `<script src>` đúng vị trí inline cũ; đã xoá sau khi chạy):
+  1. L1061–1093 `tsUpdateScale` (Tool 1: quy mô kịch bản) → `src/toolbox/utility/ts-scale.js`
+  2. L3260–3290 collapse sidebar/API/t2 (giữ tên `toggleSidebar`/`toggleApiSection` vì markup onclick gọi trực tiếp) → `src/toolbox/utility/collapse.js`
+  3. L3302–3323 Tool 6 VEO init UI → `src/toolbox/utility/veo-init.js`
+  4. L3324–3342 mặc định desktop (MP4 FFmpeg + Whisper local) → `src/toolbox/utility/desktop-defaults.js`
+  5. L3343–3382 nav accordion → `src/toolbox/utility/nav-accordion.js`
+  6. L3487–3596 Flow API key (mask •, lưu qua `novaStore`) → `src/toolbox/utility/flow-keys.js`
+  7. L3598–3618 BOOT (initAppDirect → renderDashboard → switchTool) → `src/toolbox/utility/boot.js`
+  8. L3619–3667 reorder panel theo sidebar → `src/toolbox/utility/panel-order.js`
+- **Giữ inline 2 khối `<head>`** (đúng thiết kế): dark-mode boot L7–11 (tránh nháy) + kho persist API key L27–69 (phải chạy TRƯỚC mọi script, monkey-patch `Storage.prototype`). index.html còn **3.353 dòng** (−315 dòng JS, +8 thẻ script).
+- **Kiểm định**: `npm run check` **EXIT 0** sau tách — syntax 487 file (+8); `check:toplevel` vẫn 68 đơn vị nạp (8 inline đổi thành 8 src, tổng giữ nguyên), "✅ Không có xung đột let/const/class chéo file"; `check:ipc` 148 kênh KHÔNG đổi (chỉ danh sách sourceFiles thêm file mới — inventory quét `ipcMain.*`, renderer dùng `window.native` nên không ảnh hưởng); handler-shadow 0 lỗi; selftest 10/10.
+- **Test app thật (§6.5/6.6)**: verify qua web server 47280 của app đang chạy — `/index.html` phục vụ bản mới (8 thẻ script mới), cả 8 file JS trả 200; restart app: WM_CLOSE graceful → `khoidong.bat` → renderer log thật `[reorder] panels reordered to match sidebar order` phát từ URL `src/toolbox/utility/panel-order.js:46` = bộ file mới đã nạp và chạy. Sau đó restart lần nữa bằng WMI (khoidong chạy detached) — app sống ổn định ≥30s, port 47280 mở, lifecycle.log session mới **sạch crash/unresponsive**.
+- **Vướng khi restart (đã hiểu)**: app khởi động qua khoidong trong tool call bị môi trường agent dọn process tree giữa các lệnh → chết câm (gpu-feature-status rồi im, không log quit — đúng pattern WARN §6.5). Dùng `Invoke-CimMethod Win32_Process Create` gọi khoidong là sống bền. Các REAL/WARN trong `scan:lifecycle` (REAL cũ nhất 09-03, mới nhất 13:55Z) đều TRƯỚC thay đổi này.
+- **Còn lại**: ~3.350 dòng markup của index.html không thể tách thêm nếu không đổi kiến trúc (iframe như video-agent.html hoặc fetch-inject) — cần quyết định kiến trúc riêng nếu muốn đi tiếp.
+
+## 2026-09-11m2 — VÁ `bxFetch` chạy JOB (hết CDP_TIMEOUT bỏ lỡ mediaId) + E2E `genVideoBX` PASS THẬT
+
+- **Bệnh thật (đo tối 11/9)**: 3 lần chạy E2E video liên tiếp đều `E2E THREW: CDP_TIMEOUT Runtime.evaluate` ở `bxFetch` rpcid YhhmEf — nhưng trigger VẪN tới server & TRỪ 12 credits/lần (credits 246→234→222→210, 3 video mồ côi không lấy được mediaId). Nguyên nhân: YhhmEf (video) trả chậm hơn timeout CDP evaluate cục bộ; ảnh (ogiZ0b) trả nhanh nên không thấy bệnh.
+- **Fix `nova/flow-chrome/gen-bx.js` (không đổi exports/IPC)**: thêm `BX_JOB_START_FN`/`BX_JOB_POLL_FN` — evaluate khởi động fetch KHÔNG CHỜ, kết quả lưu `window.__bxJob`; `bxFetch` mới poll mỗi 2s, tổng chờ 240s (jobMs). Lỗi server vẫn lộ liễu qua `out.error` (BX_JOB_ERR / BX_JOB_TIMEOUT) — không fallback ngầm (Luật 10).
+- **E2E PASS thật**: GENVIDEO 44s — mediaId `d2e1a3da-10db-4836-8a69-82dc00fab2f8`, taskId `873feddc-e7a6-44e2-9a6f-5e018bfe60a9`, status 3, videoUrl+imageUrl nhận đủ; **artifact .mp4 5.044.140 B** tại `%TEMP%\flow-gen-capture\bx-live-video-d2e1a3da-10db-4836-8a69-82dc00fab2f8.mp4`; credits 210→198 (cost=12 đúng). Xác nhận fix 2026-09-11i (captcha action `VIDEO_GENERATION`) hoạt động đúng server-side.
+- **3 video mồ côi** (prompt táo / puppy của 2 lần E2E cũ + 1 lần kẹt) nằm trong project Flow `b063ff43-2616-4993-acd8-d308f13803cc` — mediaId không khôi phục được vì response mất trước fix; user xem/tải tay trong UI Flow.
+- **Vướng đã gặp**: (a) Chrome debug acc-1 tự chết giữa chừng → `ECONNREFUSED` — relaunch qua `tmp-launch-chrome.js`; (b) kill electron khi dọn harness làm chết luôn app chính → khoidong lại OK, `lifecycle.log` sau 16:00Z **0 dòng gone/unresponsive**; (c) probe tab bằng WebSocket thuần Node 24 (`tmp-probe-flow-tab.js`) — kênh chẩn đoán tốt khi harness treo.
+- **Kiểm định**: `node --check` gen-bx.js PASS; `npm run check` **EXIT 0** (selftest 10/10); app đang chạy bridge 47280 OK.
+
+## 2026-09-11p — MỞ BIẾN THỂ video BX (model/qualitySlot) + harness capture shape thật
+
+- **Mục tiêu backlog `11h/m2`**: biến thể video BX 360p / 4s / 6s / 10s / i2v. Kỷ luật: KHÔNG đoán
+  payload (Luật 10) — shape YhhmEf chỉ verify được bằng capture gen thật (12 credits/1 video).
+- **Sửa `nova/flow-chrome/gen-bx.js` (KHÔNG đổi exports/IPC — check:exports không lệch)**:
+  `buildYhhmEfPayload` + `genVideoBX` nhận thêm `qualitySlot` (slot scene[2]; mặc định `2` =
+  720p/16:9 đã đo cứng bằng settings UI — tmp-video-shape2.txt) và cho truyền `model` bất kỳ
+  theo pattern `^[a-z0-9_.]+$` — server trả `BX_RPC_ERROR_*` lộ liễu nếu sai. Model keys đã biết
+  tồn tại ở path aisandbox (gen.js, E2E 12 sảnh): `veo_3_1_t2v` / `_fast` / `_lite`,
+  `abra_t2v_8s` — CHƯA verify riêng trên BX YhhmEf. Truyền `imageMediaId` → NỔ
+  `BX_I2V_SHAPE_NOT_CAPTURED` (i2v chưa có shape thật, cấm đoán vị trí mediaId trong scene).
+- **Harness capture `nova/scripts/tmp/tmp-bx-variant-capture.js` (+ .cmd)**: bám CDP tab flow
+  acc-1, chỉ NGHE (không submit → không đốt thêm credit ngoài gen của chính user trong UI);
+  mỗi `batchexecute YhhmEf` lưu raw payload `%TEMP%\flow-gen-capture\bx-variant-<N>.json` +
+  tách shape `{model, qualitySlot, prompt, sceneLen, slots, i2vHints}` append vào
+  `%APPDATA%\AI Video Studio Independent\chrome-accounts\bx-variant-captures.json`.
+  Mặc định 15 phút (`AI_VIDEO_STUDIO_BX_CAPTURE_MIN` để đổi).
+- **Sanity PASS**: default=`abra_t2v_8s` slot 2; `veo_3_1_t2v_fast` slot 4; i2v → throw; slot/model
+  sai → `BX_BAD_QUALITY_SLOT` / `BX_BAD_MODEL`.
+- **Bước tiếp**: chạy capture → user gen thật từng biến thể trong Flow UI → đối chiếu shape →
+  mở allowlist variant trong gen-bx.js → E2E `genVideoBX` từng variant. **Kiểm định**:
+  `npm run check` **EXIT 0**.
+- **Chạy thử harness (11/9 tối)**: Chrome acc-1 debug chết lần nữa (port cũ 57417 ECONNREFUSED) →
+  relaunch `tmp-launch-chrome.js` OK (port mới, tab flow.google.com) → capture harness chạy nền qua
+  .cmd: log ra `BX_VARIANT_CAPTURE_ON` **đúng thiết kế** (setLogSink nen-tang ăn, CDP Network.enable
+  lên, chờ YhhmEf). User KHÔNG gen kịp → 0 capture (chưa có `bx-variant-captures.json`), không đốt
+  credit nào; harness kill sạch bằng taskkill theo CommandLine `*tmp-bx-variant-capture*` (không
+  ảnh hưởng app chính). Probe port/tab: `tmp-port-probe.js` (ghi kết quả ra `tmp-port-probe.txt`).
+  → Harness SẴN SÀNG: lần sau chỉ cần (1) `tmp-launch-chrome.js` nếu Chrome chết, (2) chạy .cmd,
+  (3) gen thật từng variant trong 15 phút, (4) phân tích shape.
+
+## 2026-09-11q — TÁCH MARKUP index.html thành 16 partial + include tĩnh phía server (SSI-lite)
+
+- **Mục tiêu backlog**: `index.html` sau 2026-09-11m còn ~3.370 dòng (markup panel/modal là phần
+  chính). Chọn kiến trúc **include tĩnh phía server** thay vì iframe/fetch-inject: `nova/main/server.js`
+  lắp ráp marker `<!--#include "partials/x.html" -->` (đường dẫn tương đối WEB_DIR, đệ quy ≤10 tầng,
+  guard startsWith(WEB_DIR)) khi phục vụ HTML của WEB_DIR — trình duyệt nhận HTML đầy đủ y như trước,
+  renderer giữ nguyên hành vi + thứ tự nạp; KHÔNG phải build step của renderer (lắp ráp ở main).
+  Include thiếu/thoát WEB_DIR/quá sâu → **500 lộ liễu** `WEB_INCLUDE_MISSING/ESCAPED/TOO_DEEP`,
+  không fallback ngầm (Luật 10). Bundle Remotion không bị mở include.
+- **Tách** qua `nova/scripts/tmp/tmp-tach-markup.js` (verbatim theo dải dòng, dry-run in ranh giới
+  rồi `--go`; spliced từ cuối lên đầu): 16 partial trong `nova/web/partials/` — modal-profile,
+  app-sidebar, shell-topbar, panels-small-a (toollog→toolspy), panel-dash-tool1, panel-toolscript
+  (chứa tag ts-scale.js), panels-tool2-3, panels-tool4-8, panels-tool7-anim, panels-niche-flow,
+  panels-upscale-voice, panels-admin-settings, modals-library-upgrade, modals-gate-update, box-t7ai,
+  modal-t7export. `index.html` còn **203 dòng** (head + khung app + TOÀN BỘ thẻ script theo thứ tự nạp).
+- **Checker đồng bộ**: `check:toplevel` mở cùng marker (expandIncludes) nên thứ tự nạp vẫn xét đúng cả
+  tag script nằm trong partial; `check:shadow` quét đệ quy `*.html` nên partials được quét tự nhiên;
+  `check:exports`/`check:ipc` không đổi (server.js giữ nguyên exports; 148 kênh IPC không lệch).
+- **Quan trọng — edit song song đã xảy ra**: giữa lúc chụp baseline HTML phục vụ (đầu phiên) và lúc
+  đọc file, một đợt tách T7 khác (23:11, entry 2026-09-11p) đã đổi nhóm thẻ `utility/t7-*` trong
+  index.html — khiến so sánh với baseline lệch 7 bytes tại vùng tag T7. Phép tách markup chạy TRÊN
+  trạng thái đĩa mới nhất nên vẫn verbatim. Sau restart: **HTML phục vụ == lắp ráp cục bộ
+  (268.098 bytes, byte-equal)**; mọi partial + `panel-order.js` trả 200.
+- **Kiểm định**: `npm run check` **EXIT 0** (syntax 513 files, IPC 148 kênh, exports 34 modules,
+  shared 19 keys, size 0 lỗi, toplevel ✅, docs OK, selftest 10/10). App restart qua khoidong (WMI):
+  kill cũ thoát GRACEFUL (window-all-closed→quit, không cụm -1); phiên mới 16:38–16:41Z có
+  gpu-feature-status, lifecycle **0 gone/unresponsive**. `scan:lifecycle` vẫn exit 1 do các REAL cũ
+  13:51Z/13:55Z **trước đợt này** (đã ghi 2026-09-11m) — không phải do thay đổi.
+- **AGENTS.md Luật 4 đã cập nhật** quy ước partial + marker + fail-loud.
+
+## 2026-09-11r — KIỂM CHỨNG HOÀN CHỈNH đợt tách `tool-t7.js` (2.379→310 dòng) + `utility/t7.js` (xoá) thành 17 file
+
+- **Bối cảnh**: đợt tách T7 bị gián đoạn giữa phiên (task resumption). Trạng thái đĩa: `tool-t7.js`
+  còn 310 dòng (nhóm timeline/undo/rows/detail), 9 file tool-level mới (`t7-fx`, `t7-layers`,
+  `t7-src`, `t7-ai`, `t7-engine`, `t7-preview`, `t7-overlays`, `t7-playback`, `t7-export` — 108–377
+  dòng/file, nạp NGAY SAU tool-t7.js trong index.html L156–165) + 8 file `utility/t7-*.js`
+  (t7-core, t7-gfx, t7-canvas, t7-scene, t7-draw, t7-export-cfg, t7-ai-core, t7-video — thay
+  `utility/t7.js` đã xoá, nạp L134–141). Không file nào có import/export (Luật 4 giữ nguyên).
+- **Kiểm chứng tính toàn vẹn** bằng `nova/scripts/tmp/tmp-check-t7-split.js` (so tên khai báo
+  top-level cột-0 giữa bản HEAD qua `git show` và hợp các file mới): OLD tool-t7.js **153 tên →
+  153 unique** trong bộ tool mới; OLD utility/t7.js **167 tên → 167 unique** trong bộ utility mới;
+  **0 tên mất**. Kiểm tra mạnh hơn bằng khớp **block verbatim** (chuẩn hoá whitespace): chỉ 2/320
+  block lệch — `t7RenderPreview` (t7-preview.js, 79→102 dòng) và `_t7SyncColHeight` (t7-core.js,
+  44→45 dòng) — **cả hai là fix nháy có chủ đích 2026-09-11k** (khoá invalidation URL+mediaId;
+  công thức fixed-point chống vòng lặp ResizeObserver), không phải mất mát.
+- **Kiểm định**: `npm run check` **EXIT 0** toàn chuỗi (syntax → ipc → exports → shared → shadow →
+  size → toplevel → docs → selftest); `check:size` 682 file 0 warning (không file nào còn > 5.000
+  dòng); `check:toplevel` chỉ còn danh sách "bị đè" function-decl theo thứ tự nạp (pattern legacy
+  của shared-consts.js, không FAIL).
+- **Test app thật (§6.5)**: taskkill instance cũ (đang chạy code renderer TRƯỚC tách) →
+  `khoidong.bat --silent` khởi chạy lại OK (bridge lên, renderer chạy tới panel-order.js L46 —
+  file nạp SAU toàn bộ file T7 → chuỗi script nạp trọn). Cả 9 file mới trả **HTTP 200** từ
+  server 47280 (byte count khớp dung lượng đĩa). `lifecycle.log` session mới (16:43Z+): 23 dòng,
+  duy nhất 2 sự kiện `-1` tại 16:43:16Z — đúng nhịp taskkill (WARN theo §6.5, không phân biệt
+  được); **0** render-process-gone/unresponsive/recovery-stopped sau relaunch.
+- **Lưu ý scan:lifecycle**: vẫn exit 1 do các REAL **lịch sử** 13:51–13:56Z (exitCode=2 +
+  render-recovery-stopped) — TRƯỚC cả fix nháy lẫn tách file (đã ghi 2026-09-11m / 2026-09-11q);
+  không phải do thay đổi này. Theo dõi thêm nếu tái diễn.
+- **Kết luận**: tách T7 hoàn tất, hành vi bảo toàn (verbatim trừ 2 block = fix 2026-09-11k);
+  chưa commit — working tree chờ review user.
+
+## 2026-09-11r — I-MZic: 3 FX mới từ nguồn mở Vizzy + VHS nâng cấp NTSC + vendor Butterchurn
+
+- **Phạm vi**: `nova/web/img-to-vid.html` + `nova/web/img-to-vid-panel.js` + vendor mới
+  `nova/web/vendor/` (butterchurn.min.js 2.6.7 + butterchurn-presets.min.js 2.4.7,
+  UMD MIT, jberg — README.md ghi nguồn/version/license; KHÔNG sửa tay file minified).
+- **FX mới trong `#fxSel`** (nhánh mới trong `applyFx()`):
+  - `godrays` — God rays canvas 2D (credit Vizzy: shadertoy ls2Xzd): 7 chùm tia
+    'lighter' loe từ nguồn sáng đỉnh khung, quét chậm sin theo số khung + alpha đập
+    theo bass; deterministic (Luật 8).
+  - `sharpen` — Nét & tương phản kiểu FidelityFX FSR: unsharp mask bằng 2 buffer
+    (A gốc, B blur; `difference` → `lighter` + filter contrast/saturate).
+  - `milkdrop` — Butterchurn (WebGL2) composite 'screen' đè lên khung, alpha theo
+    fxLevel; tap vào `sourceNode` (không qua delay). Visualizer tạo lại khi canvas
+    đổi kích thước (butterchurn 2.6.7 không có setCanvasSize). Preset qua dropdown
+    mới `#bcPresetSel` (đã vào SETTINGS_SELECT_IDS → tự lưu/khôi phục).
+- **VHS nâng cấp**: thêm bước 4 chroma crawl dọc 2 bản sao lệch ngược pha (tinh thần
+  NTSC composite MAME hlsl/ntsc.fx) + bước 5 tracking-jitter ngang theo sin-hash.
+- **Fail-loud (Luật 10)**: thiếu lib → `IMZIC_BUTTERCHURN_UNAVAILABLE` (FX tự trả về
+  Tắt + status lộ liễu); thiếu WebGL2 → `IMZIC_NO_WEBGL2`; không có preset →
+  `IMZIC_BUTTERCHURN_NO_PRESET`; Milkdrop bị chặn với "⚡ Xuất nhanh" (render offline
+  không có audio realtime — giới hạn khai báo rõ, dùng 2 nút ghi realtime thay thế).
+- **Kiểm định**: `npm run check` EXIT 0 toàn chuỗi (size 0 warning; vendor minified
+  1–2 dòng không đụng ngân sách; toplevel chỉ quét index.html nên vendor không ảnh
+  hưởng; mọi code mới nằm trong IIFE panel). `node --check` từng vendor OK.
+- **Test app thật (§6.5)**: taskkill instance cũ → `khoidong.bat --silent` OK (bridge
+  47280 lên). 4 URL HTTP 200 byte-khớp đĩa: img-to-vid.html, img-to-vid-panel.js,
+  vendor/butterchurn.min.js (192.520), vendor/butterchurn-presets.min.js (653.572).
+  lifecycle session 16:56:10Z+ sạch (0 REAL/WARN mới; cụm -1 16:54:51Z = taskkill
+  ngoài, WARN đúng §6.5). scan:lifecycle vẫn exit 1 do REAL lịch sử 13:51–13:56Z
+  (đã ghi 2026-09-11m/q — không phải thay đổi này).
+- **Hạn chế máy này**: app chạy `--disable-gpu` (software rendering, MEMORY
+  2026-09-11j) → `webgl: disabled_off` — Milkdrop có thể báo `IMZIC_NO_WEBGL2` trên
+  chính máy dev này; god-rays/sharpen/vhs là canvas 2D nên không ảnh hưởng. Cần test
+  Milkdrop bằng tay trên máy có WebGL2.
+- **Bổ sung FX thứ 5 cùng phiên — `chromakey` (gỡ phông xanh)**: khi đối chiếu bundle
+  production vizzy.io (tải chunk JS về grep — trang open-source là SPA đọc trực tiếp
+  không được) xác nhận đủ danh sách FX có nguồn mở của Vizzy: godrays (shadertoy
+  ls2Xzd), sharpen (AMD FSR → agyild → goingdigital), NTSC (MAME ntsc.fx),
+  Butterchurn, và **chromakey/despill (otdavies/UnityChromakey)** — webgl-noise /
+  glsl-blend / glea / GLSL-Color-Spaces chỉ là thư viện tiện ích GLSL, không phải FX.
+  Đã thêm nhánh `chromakey` trong `applyFx()` (`nova/web/src/imzic/imzic-fx.js` —
+  lưu ý: panel đã tách module src/imzic/*, KHÔNG còn img-to-vid-panel.js): RGB→YCbCr,
+  khoá xanh (0,1,0) theo khoảng cách chroma, feather viền + despill (hút g > max(r,b)),
+  vùng khoá lấp đen bằng 'destination-over' (alpha MediaRecorder không đáng tin —
+  khai báo rõ trong hint + comment). fxLevel = ngưỡng khoá + lực despill.
+  Deterministic (Luật 8), canvas 2D → không cần chặn xuất nhanh. Option
+  "🟩 Gỡ phông xanh (Chromakey)" thêm vào `#fxSel` (imzic-controls.js không cần sửa —
+  handler generic). `npm run check` EXIT 0; server 47280 phục vụ HTML + imzic-fx.js
+  mới (HTTP 200 chứa 'chromakey'/'UnityChromakey').
+- **Chưa làm**: test tương tác đầy đủ (chọn từng FX + phát nhạc xem preview) — cần
+  user bấm thử trong tool I-MZic; chưa commit.
+
+## 2026-09-11s — Tách god-file `shared-consts.js` (4.799 dòng) thành 12 module `nova/web/src/toolbox/shared/`
+
+- **Bối cảnh**: god-file cuối cùng còn lại của toolbox (sau `utility.js` 2026-09-10g,
+  `tool-t7.js`/`utility/t7.js` 2026-09-11r) — nguyên nhân warning `check:size` duy nhất.
+- **Phân tích** (script tmp `tmp-analyze-shared-consts.js`, đã xoá): 293 decl top-level —
+  241 sống (const/let/var state + table dùng chéo) + **52 fn chết bị peer shadow**
+  (~2.999 dòng: `_runPipeline`, `t2StoryboardAI`, `doGenerateScenePrompts`, `tsGenerate`,
+  `mvGenerate`, `tvGenerate`, `genSingleVeoPrompt`, `t10Generate`… bị
+  `utility/*.js`, `tool-*.js`, `t7-*.js` load sau ghi đè — pattern đã chấp nhận từ P0a).
+- **Tách verbatim theo dải dòng liền kề** (mẫu `utility/`), engine
+  `tmp-split-shared-consts.js` + `tmp-acorn-helpers.js` (đã xoá, quy ước tmp-):
+  build in-memory → verify (1) partition 1..N đúng thứ tự, (2) gate acorn per-group —
+  top-level ref nhóm k không được trỏ tới def chỉ có ở nhóm >k (**danger 0/12**),
+  (3) node --check 12/12 — mới ghi disk; sau ghi so khớp verbatim từng dòng +
+  multiset **4.250 dòng phi-rỗng 0 mất / 0 dư** (header 3 dòng/file ngoài phép cộng).
+- **12 file**: `shared/shell.js`(132d nguồn) `llm.js`(430) `voice.js`(177) `mvtv.js`(251)
+  `profile.js`(350) `flow.js`(230) `t2-scenes.js`(592) `t2-prompts.js`(702)
+  `auto-assets.js`(148) `t3-stock.js`(562) `t7.js`(975) `t8-t10.js`(250).
+  `index.html`: 1 thẻ `shared-consts.js` → 12 thẻ `shared/*.js` **đúng vị trí cũ**
+  (sau `shared-state.js`, trước `utility.js`) — ngữ nghĩa load-order/override bất biến.
+  Marker DEDUP-DUPLICATE/fn chết giữ nguyên — **dọn dead code vẫn là task riêng**
+  (2026-09-10f). `var VEO_STYLE_PRESETS`/`var _capModeCache` giữ keyword `var`.
+- **Sửa kèm**: `nova/scripts/dedup-refcheck.js` quét toàn khối `shared/` thay vì 1 file
+  (giữ hợp đồng exit 0/1 — PASS: 322 shared defs, 7 refs, 0 danger). Bổ sung
+  `logLifecycle(app,'e2e-results',…)` vào harness `NOVA_E2E=1` sẵn có trong
+  `main/window.js` để smoke E2E kiểm chứng được từ artifact do app ghi ra (§6.6),
+  không phụ thuộc stdout console tách rời.
+- **Kiểm định**: `npm run check` EXIT 0 toàn chuỗi (syntax 530 file, exports 34 module,
+  shared 19 keys, size 750 file **0 warning 0 error** — god-file rời ngân sách,
+  toplevel không xung đột let/const/class, docs-sync + selftest PASS).
+- **Test app thật (§6.5)**: kill instance cũ (WARN cụm -1 đúng §6.5) →
+  `NOVA_E2E=1 khoidong.bat --silent` → `e2e-results` trong `lifecycle.log`: init
+  `hasState/hasLangVoice/hasSceneTypes/hasFlowBridge/hasT7State/hasT2Export` **all true**
+  (renderer thực thi trọn khối `shared/`), 23/23 tool panel switch OK, export-import OK,
+  quit sạch. Lỗi `blob:fake` là artifact chủ đích của harness E2E (fake
+  `URL.createObjectURL`), không phải lỗi thật.
+- **Đồng bộ docs**: `nova/ARCHITECTURE.md` thêm section `web/src/toolbox/shared/` +
+  sửa đoạn thứ tự nạp.
+- **Lưu ý**: các script dedup dùng-một-lần của đợt 2026-09-10
+  (`ast-dedup-*`, `dedup-same-ast`, `dedup-shared-consts`, `promote-shared-to-peer`,
+  `extract-index-html-toolbox`) hardcode path `shared-consts.js` — không còn đối tượng
+  xử lý sau khi file xoá; không nằm trong check chain nên vô hại, đã để nguyên git.
+  REAL 13:51–13:56Z trong scan:lifecycle là sự cố renderer exitCode=2 lịch sử
+  (đã ghi 2026-09-11m/q), không liên quan thay đổi này.
+- **Chưa làm / nợ**: (1) dọn 52 fn chết ~2.999 dòng trong `shared/` — task riêng
+  "Điều tra & dọn dead code shared-consts.js" (2026-09-10f), giờ dễ hơn nhiều vì đã
+  cô lập theo feature; (2) chưa commit (repo đang có session song song — commit
+  pathspec riêng các file của task này).
+
+- [2026-09-11r] **Capture payload BX video-gen cho mọi biến thể UI (t2v 360p/720p × 4/8/10s + i2v) bằng UI driving thật, phục vụ `genVideoBX`**. Chi phí: ~6 gen thật bằng credit Flow. Kết quả slot map (nguồn `%TEMP%\flow-gen-capture\ui-variant-*-{req,res}.json`, driver `nova/scripts/tmp/tmp-bx-variant-ui.js` — đã patch lưu TẤT CẢ batchexecute rpcid):
+  - **t2v luôn qua rpcid `YhhmEf`**. Model key = `abra_t2v_<dur>s` + hậu tố `_360p` khi chọn 360p (720p không hậu tố): chứng minh thực nghiệm `abra_t2v_8s_360p` (360p·8s, 6cr), `abra_t2v_4s` (720p·4s, 7cr), `abra_t2v_10s` (720p·10s), `abra_t2v_4s_360p` (360p·4s). 6s suy ra `abra_t2v_6s`/`abra_t2v_6s_360p` (chưa đốt credit capture).
+  - **Slot `[4]` cuối call = cờ 360p** (không phải "extra scene" như suy đoán đầu): 360p·8s và 360p·4s đều có `[4]`; 720p·4s và 720p·10s đều không.
+  - Skeleton t2v: `[[[[null,null,[[[PROMPT]]]],"MODEL_KEY",2,null,[null,null,null,null,"UUID_A","UUID_B"],null,null(,[4])]],[null,22,null,null,null,PROJECT_ID,null,null,null,null,["TOKEN"]],…]` (2 = 16:9; captcha slot rỗng — UI KHÔNG gửi captcha token khi gen).
+  - **i2v (ingredient video) KHÔNG dùng YhhmEf** — rpcid `jIps6`: slot đầu `[null,"MEDIA_ID",0,96]` (0..96 = range %), model key **`abra_edit_360p`** (không có hậu tố duration — chip 720p·4s bị bỏ qua với ingredient), vẫn có `[4]`. Kèm rpcid `WuwhI` = telemetry (`FLOW_CONTEXT_MENU` action `ADD_TO_PROMPT` + `ADD_REFERENCE_INGREDIENT` source `VIDEO_TILE_REFERENCE`, có `MEDIA_ID`).
+  - UX gắn ingredient: nút `+` (aria "Add ingredients to the prompt box") → picker → hover tile video → **More options → "Add to prompt"** (click thẳng tile chỉ mở detail view; image còn phải chọn vùng Box/Lasso cho Nano Banana).
+  - Gotcha driver ops: script driver tự thoát ở mốc 1200s (20 phút) — heartbeat đứng im cuối phiên là hết giờ, KHÔNG phải crash; `Start-Process npx.cmd electron <script>` mất quoting → chạy nhầm `electron .` — start thẳng `node_modules\electron\dist\electron.exe <script>`; 2 driver UI + capture chạy đồng thời chung Chrome acc-1 làm chết nhau — chạy tuần tự.
+  - **Chưa làm**: fold slot map vào `genVideoBX` (chờ session song song commit `gen-bx.js`); chưa capture 6s (chi phí thấp, làm khi cần).
+
+- [2026-09-11s] **Tách `nova/web/img-to-vid-panel.js` (IIFE 2.612 dòng — file web lớn nhất còn lại) thành 12 module top-level `nova/web/src/imzic/*.js`**. File gốc là bản untrack do session song song bung từ inline `<script>` của `img-to-vid.html` — xoá không để lại git-trace. Khác shared-consts (global script tách verbatim được): panel là **1 IIFE đóng**, 227 statement chia sẻ biến closure (`state`, `ctx`, `audioCtx`, `particles`…) → tách = bỏ wrapper, đưa nội dung lên top-level của trang standalone (iframe `img-to-vid.html` chỉ nạp butterchurn vendors + 12 file này). Tiền điều kiện kiểm chứng AST (`nova/scripts/tmp/tmp-analyze-imzic-split.js`, đã dọn):
+  - (a) KHÔNG lệnh chạy ngay nào đọc ĐỒNG BỘ tên khai báo SAU nó — 36 match ban đầu đều nằm trong callback `addEventListener` (chạy lúc event, sau khi mọi file nạp xong) → tách giữ nguyên thứ tự gốc an toàn;
+  - (b) 157 tên top-level duy nhất, không đụng window built-in / JSZip / Butterchurn;
+  - (c) mọi template literal 1 dòng → de-indent 2 spaces thuần whitespace; (d) `this`/`arguments` không được dùng ở tầng IIFE (chỉ trong comment).
+  Cắt theo ranh giới section comment: `imzic-{core,particles,wave,lyrics,draw,slideshow,analysis,fx,render,controls,presets,export}.js` (86–448 dòng/file, mỗi file `'use strict'` + header ghi "THỨ TỰ NẠP = NGỮ NGHĨA"). Kiểm chứng đẳng thức: `tmp-verify-imzic-split.js` so khớp AST sâu từng statement **227/227** giữa thân IIFE gốc và nối 12 file theo thứ tự nạp → PASS tuyệt đối + 0 trùng khai báo let/const. `img-to-vid.html`: 1 thẻ script → 12 thẻ `src/imzic/*.js` đúng thứ tự + comment cảnh báo.
+- **Kiểm định**: `npm run check` toàn chuỗi PASS (syntax 541 file, exports 34, shared 19 keys, shadow 21 HTML × 115 JS — 0 lỗi shadowing, size 760 file 0/0, toplevel không xung đột, docs 33, selftest 10/10); `nova/ipc-inventory.json` tái sinh (lấy thêm file mới, đồng thời phản ánh thay đổi của session song song: gpu-policy, lifecycle-log-scan, dọn tmp-*). Smoke §6.5: `khoidong.bat --silent` EXIT 0, Agent Bridge 47280 OK, lifecycle session 17:12:33Z sạch. **Artifact thật**: GET `http://localhost:47280/img-to-vid.html` chứa đủ 12 thẻ; 12 file `src/imzic/*.js` HTTP 200 (5.2–25 KB). Giới hạn: chưa test tương tác trong tool (chọn ảnh/nhạc/ghi/xuất) — không tự sinh dữ liệu giả (§6.6/Luật 10); bảo đảm runtime = đẳng thức AST + thứ tự nạp giữ nguyên.
+- **Quy ước mới ghi AGENTS.md §8**: pattern tách panel IIFE trang standalone — điều kiện kiểm chứng AST (không hoisting-dep, tên duy nhất, không đụng built-in/vendor) + cấm đổi thứ tự nạp/tên file.
+- **File web lớn nhất còn lại**: `handdraw-studio-panel.js` 1.310 dòng, `video-agent-panel.js` 1.266 — không còn file nguồn renderer nào >2.000 dòng. Lệch ngưỡng `check:size` (script 5000/15000 vs AGENTS §4.1 ghi 2000/5000) vẫn chưa xử lý — quyết định để user.
+
+## 2026-09-11t — Dọn dead code khối `shared/`: xoá 52 fn chết bị peer shadow (~3.455 dòng) + guard `check:shared-shadow`
+
+- **Hoàn tất nợ "dọn dead code" từ 2026-09-10f/2026-09-11s.** Engine
+  `nova/scripts/tmp/tmp-clean-shared-dead.js` (quy ước tmp-, đã xoá sau verify):
+  phân tích AST (acorn) toàn toolbox theo **thứ tự nạp index.html** → ứng viên xoá =
+  fn top-level trong `shared/` bị def cùng tên ở file nạp SAU (runtime luôn gọi bản
+  peer → bản shared là dead code).
+- **Luật an toàn xoá**: với mọi file Y có top-level ref (ngoài thân fn) tới tên N bị
+  xoá, phải tồn tại definer của N nạp trước Y (không tính bản shared bị xoá), hoặc Y
+  tự khai báo fn hoisted. Kết quả: **0 load-time ref phụ thuộc bản shared** → 52/52
+  fn xoá được, không KEEP nào.
+- **52 fn chết**: llm.js 5 (`_runPipeline`, `testApi`, `_withRetry`, `callLLM`,
+  `tsGenerate`), mvtv.js 6, profile.js 4, flow.js 2, t2-scenes.js 3 (`t2StoryboardAI`),
+  t2-prompts.js 10 (`doSplit`, `doPrescan`, `doAssign`, `doGenerateScenePrompts`…),
+  auto-assets.js 1, t3-stock.js 8 (`genAllAssetPrompts`, `genSingleVeoPrompt`…),
+  t7.js 10 (`t7AiPropose`, `t7AiDesign`…), t8-t10.js 3 (`t10Generate`…);
+  shell.js/voice.js 0 (fn chết của voice đã xoá từ P0a — chỉ còn tombstone).
+- **Xoá 3.455 dòng** (3.403 thân fn + marker `// === L?: …` + dòng trắng đính kèm),
+  khối `shared/` **4.799 → 1.090 dòng** (Measure-Object; tombstone `[P0a]` giữ nguyên).
+  Verify: multiset **chỉ trừ không thêm**, `node --check` 12/12, parse lại OK, sau ghi
+  shadow còn lại = 0; `dedup-refcheck.js` PASS (270 shared defs, 0 danger);
+  header 12 file cập nhật "(đã dọn N fn chết — 2026-09-11)".
+- **Guard vĩnh viễn**: checker mới `nova/scripts/shared-shadow-check.js` — fn
+  FunctionDeclaration top-level trong `shared/` bị def peer nạp sau → **exit 1** kèm
+  tên file:dòng + peer shadow. Wire vào chuỗi check: `check:shared-shadow` chèn sau
+  `check:shared` (package.json + AGENTS.md §3.1). Test 2 chiều: gắn probe fn shadow
+  tạm → FAIL đúng (file:dòng, tên peer); khôi phục hash trùng khít → PASS.
+- **Xoá 6 script dedup mồ côi** (đợt 2026-09-10f, hardcode `shared-consts.js` không
+  còn tồn tại, không nằm trong check chain): `ast-dedup-classify.js`, `ast-dedup-diff.js`,
+  `dedup-same-ast.js`, `promote-shared-to-peer.js`, `test-ast-equal.js`,
+  `dedup-shared-consts.js`. Lịch sử còn trong git.
+- **Kiểm định**: `npm run check` EXIT 0 **10 bước** (syntax 534 file, exports 34
+  module, shared 19 keys, shared-shadow 0 fn chết, size 754 file **0 warning**,
+  toplevel sạch, docs-sync 34 script ↔ AGENTS.md, selftest 10 PASS).
+- **Test app thật (§6.5)**: taskkill instance cũ → `NOVA_E2E=1 khoidong.bat --silent`
+  → `e2e-results` vào `lifecycle.log`: init has* **all true** (giờ thêm `hasNovaStore`,
+  `hasGiongTaiDS` từ harness đã mở rộng), **26 tool panels** (harness quét thêm), 23
+  panel OK + export-import OK, quit sạch, BAT_EXIT=0. `blob:fake` = artifact chủ đích
+  của harness. `scan:lifecycle`: không entry mới nào từ session này (REAL 13:51–13:56Z
+  exitCode=2 lịch sử đã ghi 2026-09-11m/q; các WARN = taskkill ngoài — đúng §6.5).
+- **Commit**: user chọn **checkpoint 1 commit toàn bộ working tree** (đã validate
+  chung: npm run check EXIT 0 + E2E PASS) — bao gồm work chưa commit của các session
+  trước: tách `tool-t7.js`/`utility/t7.js` → `t7-*.js` (2026-09-11r), markup
+  `index.html` → `partials/` (2026-09-11q), I-MZic FX/vendor (2026-09-11r), flow-chrome
+  follow-up (gen-bx, nen-tang…), gpu-policy, checker-fixture-test, lifecycle-log-scan,
+  cùng task này (shared/ + dead code + guard). Commit đơn lẻ theo pathspec là bất khả
+  thi vì `index.html` working copy reference chéo file của nhiều session (HEAD còn
+  reference `shared-consts.js` sắp xoá) → commit thiếu một phần nào đó đều cho
+  commit-tree không nhất quán (CI fail khi checkout đúng commit đó).

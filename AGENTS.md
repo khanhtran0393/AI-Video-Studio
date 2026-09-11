@@ -35,7 +35,7 @@ dựng video (Remotion + FFmpeg) → đăng YouTube đa kênh.
 | `nova/chrome-extension/` | **OUTPUT runtime** do IPC `flow-ext-export` sinh | ❌ Không edit tay |
 | `nova/flow-chrome/`, `nova/flow-native/` | 2 engine Flow khác nhau (Chrome đa profile / BrowserWindow đa profile) — không phải bản sao nhau | ✅ Giữ hợp đồng `module.exports` nguyên vẹn |
 | `nova/voice-studio/`, `nova/voice-native*` | OmniVoice TTS | ✅ |
-| `nova/scripts/` | Script kiểm định: syntax-check, ipc-inventory, exports-contract-check, shared-names-check, handler-shadow-check, size-budget-check, toplevel-check, docs-sync-check… (file `tmp-*` là script dùng một lần, không phải kiểm định chính thức) | ✅ |
+| `nova/scripts/` | Script kiểm định: syntax-check, ipc-inventory, exports-contract-check, shared-names-check, handler-shadow-check, size-budget-check, toplevel-check, docs-sync-check, lifecycle-log-scan, checker-fixture-test… (script dùng một lần `tmp-*` đặt trong `nova/scripts/tmp/`, xem §8) | ✅ |
 | `auto-fix/` | Hệ sinh thái self-healing độc lập (agent, reproduction-lab, regression-engine, rollback…) | ✅ Riêng — có rulebook riêng |
 | `build/`, `dist/`, `output/`, `node_modules/`, `*-bin/` | Build artifact / runtime binary tự tải | ❌ Không track, không sửa tay |
 
@@ -51,10 +51,12 @@ Chuỗi tuần tự, bước nào FAIL thì dừng cả chuỗi:
 | `npm run check:ipc` | sinh `nova/ipc-inventory.json` — mọi kênh IPC main + renderer |
 | `npm run check:exports` | **Luật 1**: tên/thứ tự `module.exports` của shim `nova/*.js` + module `nova/main/*.js` khớp baseline `nova/exports-contract.json`. Đổi hợp đồng CÓ CHỦ ĐÍCH: `npm run check:exports -- --update` + ghi MEMORY.md |
 | `npm run check:shared` | hợp đồng tên dùng chung (xem §4 Luật 3) |
+| `npm run check:shared-shadow` | khối `shared/` không chứa fn chết bị peer load sau shadow (dead code — xem MEMORY 2026-09-11t) |
 | `npm run check:shadow` | handler IPC không bị ghi đè lặng lẽ |
 | `npm run check:size` | ngân sách kích thước file |
 | `npm run check:toplevel` | xung đột khai báo top-level renderer theo thứ tự nạp index.html |
 | `npm run check:docs` | AGENTS.md ↔ package.json đồng bộ: mọi script được nhắc phải tồn tại, mọi script phải được nhắc ở đây (chống drift tài liệu) |
+| `npm run check:selftest` | "kiểm định của kiểm định": chạy fixture trong %TEMP% khẳng định `check:exports`/`check:docs` FAIL đúng vi phạm, PASS đúng nguồn sạch (`nova/scripts/checker-fixture-test.js`) |
 
 `npm run dev` / `npm start` — chạy app qua Electron (kiểm thử thật vẫn PHẢI qua
 `khoidong.bat`, xem §6.5).
@@ -78,6 +80,7 @@ Chuỗi tuần tự, bước nào FAIL thì dừng cả chuỗi:
 | `npm run test:maintenance` | nova/core maintenance |
 | `npm run test:auto-fix` | toàn bộ test auto-fix |
 | `npm run check:bundle` | Remotion bundle self-check |
+| `npm run scan:lifecycle` | quét `lifecycle.log` theo §6.5(b): REAL (exitCode≠-1 / cụm GPU+Network+renderer có bằng chứng main sống ≥10s sau / render-recovery-stopped / unresponsive) → exit 1; WARN (crash đơn lẻ, reason=killed, cụm -1 câm cuối session — kill main ngoài/crash treo không phân biệt được) chỉ cảnh báo; NOISE teardown vô hại (`--json` cho CI, `--self-test` chạy fixture) |
 
 ### 3.3 Build & release
 
@@ -97,8 +100,10 @@ Chuỗi tuần tự, bước nào FAIL thì dừng cả chuỗi:
 
 CI: `.github/workflows/m1-validation.yml` — check:syntax → check:ipc (+ đối chiếu
 inventory đã commit với HEAD) → check:exports → check:shared → check:shadow →
-check:size → check:toplevel → check:docs → test:foundation → auto-fix policy/test +
-readiness fail-closed + `npm audit`. `windows-package.yml` build package.
+check:size → check:toplevel → check:docs → check:selftest → test:foundation →
+auto-fix policy/test + readiness fail-closed + `npm audit`; kèm job `windows-smoke`
+(chỉ chạy khi trigger thủ công `workflow_dispatch`: `khoidong.bat --silent` +
+`npm run scan:lifecycle`). `windows-package.yml` build package.
 
 ## 4. MƯỜI LUẬT CỨNG
 
@@ -117,7 +122,12 @@ readiness fail-closed + `npm audit`. `windows-package.yml` build package.
    - `process.env.<TÊN>` phải theo tiền tố `AI_VIDEO_STUDIO_` / `NOVA_` / `ELECTRON_` / `NODE_`.
 4. **Renderer không có build step.** File trong `nova/web/` là script thường —
    tên cấp đầu dùng chung toàn cục, ràng buộc duy nhất là **thứ tự nạp trong HTML**.
-   Cấm import/export ở đây.
+   Cấm import/export ở đây. Markup dài của `index.html` tách thành partial trong
+   `nova/web/partials/*.html`, lắp ráp bằng include tĩnh phía server qua marker
+   `<!--#include "partials/x.html" -->` (`nova/main/server.js` mở khi phục vụ;
+   `nova/scripts/toplevel-check.js` mở cùng marker để giữ đúng thứ tự nạp).
+   Include thiếu/thoát WEB_DIR/quá sâu → 500 lộ liễu `WEB_INCLUDE_*`, không
+   fallback ngầm. Partial vẫn là HTML tĩnh — không chứa script logic mới.
 5. **Đồ thị require phải TUYẾN TÍNH.** Vòng require với destructuring sẽ nạp
    module chưa hoàn chỉnh. Khi cần 2 chiều, dùng lazy-`require` bên trong hàm
    (pattern `ensureWindow` trong `flow-native/tien-trinh.js`).
@@ -135,6 +145,28 @@ readiness fail-closed + `npm audit`. `windows-package.yml` build package.
     (vd `VA_RENDERER_UNAVAILABLE`, `VA_S3_NO_CREDS`). Cấm `try…catch` nuốt lỗi
     rồi trả giá trị mặc định để "cho nó chạy". Degrade có chủ đích phải khai báo
     rõ (`unavailable: true`) và ghi nhận trong event/QA.
+
+### 4.1 Registry tĩnh — hợp đồng được cưỡng chế bởi máy (KHÔNG lập registry hàm riêng)
+
+"Registry" của dự án là 3 file hợp đồng đã có, mỗi file gắn với 1 checker tự động.
+KHÔNG thêm registry thứ 4 cho từng hàm:
+
+| Registry | Nội dung | Checker |
+|---|---|---|
+| `nova/exports-contract.json` | tên + thứ tự `module.exports` của shim `nova/*.js` + module `nova/main/*.js` | `check:exports` |
+| `nova/ipc-inventory.json` | mọi kênh IPC main + renderer | `check:ipc` |
+| `nova/main/state.js` | mọi `state.<key>` dùng chung main process | `check:shared` |
+
+- Độ chi tiết (granularity) đúng là **đường ranh giới module** (export / IPC /
+  state), KHÔNG phải từng hàm. Hàm nội bộ của module không vào registry — registry
+  hàm gây drift + noise ở mọi lần rename mà không tăng an toàn nào.
+- Renderer `nova/web/` không có module system → ranh giới là **tiền tố tên theo
+  feature** (xem §8) + `check:toplevel` bắt xung đột khai báo cấp đầu.
+- Cải tiến / thêm tính năng = thêm module mới vào registry hiện có (chạy
+  `check:exports -- --update` / `check:ipc` khi checker báo lệch + ghi MEMORY.md),
+  KHÔNG tự chế cơ chế đăng ký mới.
+- File quá ngưỡng = tín hiệu tách module tiếp theo (`check:size`: > 2000 dòng
+  WARN, > 5000 dòng ERROR; chỉ file auto-generated mới được `@size-budget-ignore`).
 
 ## 5. Nova Video Agent — điểm nhấn khi can thiệp
 
@@ -182,9 +214,17 @@ COMPLETED | FAILED | CANCELLED`.
    `window-unresponsive`… Khi đọc, phân biệt 2 nhóm:
    (a) noise teardown lúc ĐÓNG app — renderer/Network Service `crashed
    exitCode=-1` rồi `window-all-closed → quit` ngay sau → vô hại;
-   (b) crash thật giữa phiên — GPU + Network Service + renderer chết CÙNG MỘT
-   GIÂY (đã gặp nhiều lần 2026-09-11) → cửa sổ trắng/treo, phải mở lại app.
+   (b) crash thật giữa phiên — exitCode ≠ -1, hoặc cụm GPU + Network Service +
+   renderer chết CÙNG MỘT GIÂY mà main process CÒN SỐNG ≥10s sau đó, hoặc
+   render-recovery-stopped / window-unresponsive không hồi phục → cửa sổ trắng/treo.
+   LƯU Ý (thí nghiệm 2026-09-11): kill main process TỪ NGOÀI (taskkill/shutdown/harness)
+   sinh đúng cụm -1 cùng giây kèm auto-reload trong nhịp chết rồi log câm → cụm -1
+   câm cuối session KHÔNG phân biệt được với crash treo → chỉ là WARN, mở lại app
+   và quét lại; không kết luận crash thật từ nó.
    Log sạch (hoặc chỉ có nhóm a) mới được kết luận test đạt.
+   Chuẩn hoá bước đọc này bằng `npm run scan:lifecycle` (REAL = nhóm b → exit 1;
+   WARN = crash đơn lẻ/reason=killed/cụm -1 câm cuối session cần xem thêm;
+   NOISE = nhóm a — xem §3.2).
 6. **Test bằng dữ liệu THẬT đã lưu trong app (BẮT BUỘC)**: mọi lần kiểm thử quy
    trình (kịch bản → storyboard → gen ảnh/video → TTS → dựng video → upload…) phải
    dùng dữ liệu app đã lưu từ quá trình làm việc thật — state tại
@@ -215,11 +255,26 @@ COMPLETED | FAILED | CANCELLED`.
 - Tài liệu và comment kiến trúc viết bằng **tiếng Việt** (đúng hiện trạng repo).
 - Tên mã/biến/hàm: tiếng Anh; kênh IPC theo namespace `videoAgent:`, `flow*`,
   `voice-*`, `wm-*`, `documentary:*`.
-- File script dùng một lần phải có tiền tố `tmp-` (như `nova/scripts/tmp-*.js`)
-  để phân biệt với script kiểm định chính thức. Các file này đã bị `.gitignore`
-  (`tmp*`, `.tmp*`) — không commit, không để chúng thay thế script kiểm định
-  chính thức. Muốn "chính thức hoá" một script tmp: đổi tên bỏ tiền tố, mô tả
-  trong §3 (`check:docs` sẽ bắt nếu thiếu).
+- Renderer `nova/web/` (không build step → mọi khai báo cấp đầu là global): hàm/biến
+  cấp đầu PHẢI có tiền tố theo feature — ví dụ `vaPanel*` (video-agent-panel),
+  `docu*` (documentary-panel), `srt*`, `wb*` (whiteboard) — đây là "module system"
+  thay thế của renderer. `check:toplevel` bắt trùng khai báo; khi tạo file panel
+  mới, chọn tiền tố chưa bị dùng và nạp vào index.html đúng thứ tự phụ thuộc.
+- Trang tool standalone (iframe riêng — `img-to-vid.html`, `documentary.html`…:
+  mỗi trang có HTML + panel JS riêng, không nạp vào index.html) được tách panel
+  IIFE thành nhiều file top-level **giữ nguyên verbatim** chỉ khi đã kiểm chứng
+  bằng AST: (a) mọi lệnh chạy ngay chỉ đọc tên khai báo TRƯỚC nó (không
+  hoisting-dep chéo file), (b) tên top-level duy nhất và không đụng window
+  built-in hay vendor script cùng trang. Thứ tự thẻ `<script>` = ngữ nghĩa —
+  cấm đổi thứ tự/tên file. Mẫu hiện hành: `nova/web/src/imzic/*.js` (12 file,
+  tách 2026-09-11 từ IIFE 2612 dòng, mỗi file có header ghi ràng buộc này).
+- File script dùng một lần phải có tiền tố `tmp-` và đặt trong `nova/scripts/tmp/`
+  (di dời 2026-09-11 khỏi `nova/scripts/` — 204 file, đã sửa kèm `require('../`
+  → `require('../../` trong .js và đường cd/log trong .cmd) để phân biệt với
+  script kiểm định chính thức. Các file này đã bị `.gitignore` (`tmp*`, `.tmp*`)
+  — không commit, không để chúng thay thế script kiểm định chính thức. Muốn
+  "chính thức hoá" một script tmp: đổi tên bỏ tiền tố, đưa về `nova/scripts/`,
+  mô tả trong §3 (`check:docs` sẽ bắt nếu thiếu).
 
 ## 9. MỘT NGUỒN RULE CHO MỌI CÔNG CỤ AI
 

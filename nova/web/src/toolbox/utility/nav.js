@@ -36,8 +36,12 @@ function switchTool(name){
   if (name === 'tool7' && typeof t7Build === 'function') t7Build();
   if (name === 'toolanim' && typeof animInit === 'function') animInit();   // tab Hoạt Ảnh — nạp kho hiệu ứng chuyển động
   if (name === 'tool9' && typeof t9Init === 'function') t9Init();
-  if (name === 'tool9' && typeof t10Init === 'function') t10Init();   // phần Thumbnail giờ nằm trong tab SEO
+  if (name === 'tool9' && typeof t10Init === 'function') t10Init();   // khởi tạo state thumbnail (ảnh mẫu profile…) dùng chung với tab Tạo Thumbnail
   if (name === 'tool9' && typeof t9Step2Refresh === 'function') setTimeout(t9Step2Refresh, 200);   // bước 2 (thumbnail) chỉ mở khi đã có tiêu đề
+  if (name === 'tool10'){
+    if (typeof t10Init === 'function') t10Init();                     // nạp ảnh mẫu từ Profile + prefill tiêu đề + sync nhãn style kênh
+    if (typeof t9Step2Refresh === 'function') setTimeout(t9Step2Refresh, 200);   // gate "Tạo Thumbnail" nằm trong tool-tool10 → refresh như tool9
+  }
   if (name === 'toolniche' && typeof nicheInit === 'function') nicheInit();
   if (name === 'toolflow'){ if (typeof tfInit === 'function') tfInit(); if (typeof _autoSaveSyncUI === 'function') _autoSaveSyncUI(); }
   if (name === 'tool2'){ try { t2RenderNguon(); } catch (e) {} }

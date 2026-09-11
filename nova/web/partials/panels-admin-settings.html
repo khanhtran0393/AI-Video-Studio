@@ -1,0 +1,111 @@
+    <!-- ============================================================
+         TOOL ADMIN — QUẢN LÝ GÓI PRO (chỉ hiện với tài khoản admin)
+    ============================================================ -->
+    <div class="tool" id="tool-tooladmin">
+      <div class="tool-head">
+        <div class="tool-title">👑 Quản lý gói · Admin</div>
+        <div class="tool-subtitle">Người dùng, license và doanh thu — số liệu thật từ Firestore.</div>
+      </div>
+
+      <link rel="stylesheet" href="src/styles/admin-dash.css">
+      <div id="admDash" style="margin-bottom:20px"><div style="color:var(--text-muted);font-size:12px;padding:12px">Đang tải số liệu…</div></div>
+
+      <div class="info-box">
+        <span class="lbl">💳 Cách cấp:</span> Khách CK xong gửi <strong>UID</strong> → dán UID vào ô dưới, chọn thời hạn → <strong>Cấp Pro</strong>. Hết hạn tự về Free. ⚠️ Cần cấu hình <strong>Firestore Rules</strong> cho admin (xem hướng dẫn tôi gửi).
+      </div>
+
+      <div class="panel mb-16" style="border:1.5px solid var(--accent);border-radius:12px">
+        <div class="panel-head"><span>➕ Cấp / gia hạn gói</span></div>
+        <div class="panel-body">
+          <div class="grid-2" style="grid-template-columns:1fr 150px 150px auto auto;gap:12px;align-items:end">
+            <div>
+              <label class="label">UID NGƯỜI DÙNG</label>
+              <input type="text" id="admUid" placeholder="Dán UID khách gửi" autocomplete="off">
+            </div>
+            <div>
+              <label class="label">GÓI</label>
+              <select id="admTier">
+                <option value="pro">Pro (Sáng tạo)</option>
+                <option value="max">Max (Studio)</option>
+              </select>
+            </div>
+            <div>
+              <label class="label">THỜI HẠN</label>
+              <select id="admMonths">
+                <option value="1">1 tháng</option>
+                <option value="3">3 tháng</option>
+                <option value="6">6 tháng</option>
+                <option value="12">12 tháng</option>
+                <option value="0">Vĩnh viễn</option>
+              </select>
+            </div>
+            <button class="btn primary" onclick="admGrant()">✓ Cấp gói</button>
+            <button class="btn" style="color:var(--red);border-color:var(--red)" onclick="admRevoke()">✗ Thu hồi</button>
+          </div>
+          <div class="status-bar" id="statusadm" style="margin-top:12px">Sẵn sàng.</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <span>👥 Danh sách người dùng</span>
+          <button class="btn ghost sm" onclick="admListUsers()">🔄 Tải danh sách</button>
+        </div>
+        <div class="panel-body">
+          <div id="admUserTable" style="overflow-x:auto"><div style="color:var(--text-muted);font-size:12px">Bấm "Tải danh sách" để xem.</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TOOL SETTINGS: CÀI ĐẶT (gom API + tài khoản Flow) -->
+    <div class="tool" id="tool-toolsettings">
+      <div class="tool-head">
+        <div class="tool-title">Cài đặt · API &amp; Tài khoản</div>
+        <div class="tool-subtitle">Cấu hình AI (Claude/GPT/Gemini/CLI), tài khoản Google Flow, và API căn timing — gom về một chỗ.</div>
+      </div>
+      <div class="settings-grid">
+        <section class="settings-col">
+          <div class="settings-h">🤖 AI Provider (sinh prompt / kịch bản)</div>
+          <div id="settingsApiSlot"></div>
+
+          <div class="settings-h" style="margin-top:22px">🔎 Phân tích đối thủ (YouTube)</div>
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:16px 18px">
+            <label style="display:block;font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.3px;margin:0 0 4px">YouTube Data API v3 <span style="text-transform:none;color:var(--green);font-weight:600">(tùy chọn — không cần key vẫn chạy đủ)</span>
+              <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener" style="float:right;font-size:11px;color:var(--accent);font-weight:600;text-decoration:none;text-transform:none">Lấy Key ↗</a></label>
+            <div style="display:flex;gap:8px"><input type="password" id="t11YtKey" placeholder="Paste key… (không bắt buộc)" style="flex:1"><button class="btn ghost sm" onclick="t11SaveKeys()" style="white-space:nowrap">💾 Lưu</button></div>
+            <div style="font-size:11px;color:var(--text-dim);margin-top:7px"><b style="color:var(--green)">Không dán key vẫn chạy đủ:</b> app tự lấy view/like/comment qua yt-dlp (đã đóng gói sẵn) — không quota, không cần Google Cloud. Dán key chỉ để dữ liệu nhanh hơn và thêm sub/engagement chính xác: Bước 1 <a href="https://console.cloud.google.com/apis/library/youtube.googleapis.com" target="_blank" rel="noopener" style="color:var(--accent);font-weight:600;text-decoration:none">Enable YouTube Data API v3 ↗</a> · Bước 2 <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener" style="color:var(--accent);font-weight:600;text-decoration:none">Create Credentials → API key ↗</a> rồi dán vào ô trên. Phần tổng hợp / đẻ tiêu đề dùng luôn <b>AI provider chính</b> (ở mục trên) — không cần key riêng.</div>
+            <div id="t11KeyState" style="margin-top:9px;font-size:11.5px"></div>
+          </div>
+
+          <div class="settings-h" style="margin-top:22px">🎤 Whisper (căn timing giọng đọc)</div>
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:16px 18px">
+            <label style="display:block;font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.3px;margin:0 0 4px">Groq Whisper API key <span style="text-transform:none;color:var(--accent)">(khuyên dùng — free 2.000/ngày)</span>
+              <a href="https://console.groq.com/keys" target="_blank" rel="noopener" style="float:right;font-size:11px;color:var(--accent);font-weight:600;text-decoration:none;text-transform:none">Lấy Key ↗</a></label>
+            <div style="display:flex;gap:8px"><input type="password" id="setWhisperKey" placeholder="gsk_… (tuỳ chọn)" style="flex:1"><button class="btn ghost sm" onclick="saveWhisperKey()" style="white-space:nowrap">💾 Lưu</button></div>
+            <label style="display:block;font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.3px;margin:14px 0 4px">OpenAI Whisper API key <span style="text-transform:none;color:var(--text-dim)">(tuỳ chọn, trả phí)</span>
+              <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener" style="float:right;font-size:11px;color:var(--accent);font-weight:600;text-decoration:none;text-transform:none">Lấy Key ↗</a></label>
+            <div style="display:flex;gap:8px"><input type="password" id="setWhisperKeyOpenai" placeholder="sk-… (tuỳ chọn)" style="flex:1"><button class="btn ghost sm" onclick="saveWhisperKeyOpenai()" style="white-space:nowrap">💾 Lưu</button></div>
+            <div id="setWhisperState" style="margin-top:9px;font-size:11.5px"></div>
+          </div>
+
+          <div class="settings-h" style="margin-top:22px">🎞 Nguồn ảnh/video stock (Xen video stock)</div>
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:16px 18px">
+            <label style="display:block;font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.3px;margin:0 0 4px">Pexels API key <span style="text-transform:none;color:var(--accent)">(miễn phí)</span>
+              <a href="https://www.pexels.com/api/" target="_blank" rel="noopener" style="float:right;font-size:11px;color:var(--accent);font-weight:600;text-decoration:none;text-transform:none">Lấy Key ↗</a></label>
+            <div style="display:flex;gap:8px"><input type="password" id="pexelsKey" placeholder="Paste Pexels API key…" style="flex:1"><button class="btn ghost sm" onclick="savePexelsKey()" style="white-space:nowrap">💾 Lưu</button><button class="btn ghost sm" onclick="t2TestStockAll()" style="white-space:nowrap" title="Thử cả ba nguồn">⚡ Thử</button></div>
+            <label style="display:block;font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.3px;margin:14px 0 4px">Pixabay API key <span style="text-transform:none;color:var(--text-dim)">(miễn phí, tuỳ chọn)</span>
+              <a href="https://pixabay.com/api/docs/" target="_blank" rel="noopener" style="float:right;font-size:11px;color:var(--accent);font-weight:600;text-decoration:none;text-transform:none">Lấy Key ↗</a></label>
+            <div style="display:flex;gap:8px"><input type="password" id="pixabayKey" placeholder="Paste Pixabay API key…" style="flex:1"><button class="btn ghost sm" onclick="savePixabayKey()" style="white-space:nowrap">💾 Lưu</button><button class="btn ghost sm" onclick="t2TestStockKey('pixabay')" style="white-space:nowrap">⚡ Thử</button></div>
+            <label style="display:block;font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.3px;margin:14px 0 4px">Unsplash access key <span style="text-transform:none;color:var(--text-dim)">(ảnh, tuỳ chọn)</span>
+              <a href="https://unsplash.com/developers" target="_blank" rel="noopener" style="float:right;font-size:11px;color:var(--accent);font-weight:600;text-decoration:none;text-transform:none">Lấy Key ↗</a></label>
+            <div style="display:flex;gap:8px"><input type="password" id="unsplashKey" placeholder="Paste Unsplash Access Key…" style="flex:1"><button class="btn ghost sm" onclick="saveUnsplashKey()" style="white-space:nowrap">💾 Lưu</button><button class="btn ghost sm" onclick="t2TestStockKey('unsplash')" style="white-space:nowrap">⚡ Thử</button></div>
+            <div id="t2StockRows" style="font-size:11px;color:var(--text-dim);margin-top:8px"></div>
+          </div>
+        </section>
+        <section class="settings-col">
+          <div class="settings-h">🎬 Tài khoản Google Flow (tạo ảnh + video)</div>
+          <div id="settingsFlowSlot"></div>
+        </section>
+      </div>
+    </div>
+

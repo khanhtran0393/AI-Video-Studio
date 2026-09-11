@@ -1,0 +1,63 @@
+    <!-- NHẬT KÝ -->
+    <div class="tool" id="tool-toollog">
+      <div style="margin-bottom:14px"><h1 style="margin:0 0 4px">📋 Nhật ký</h1><p style="margin:0;color:var(--text-muted);font-size:13px">Theo dõi tạo ảnh/video theo từng tài khoản — account nào chạy, thành công/hết quota (429), tải về.</p></div>
+      <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center">
+        <button class="btn ghost sm" onclick="novaLogClear()">🗑 Xoá</button>
+        <button class="btn ghost sm" onclick="novaLogCopy()">📋 Sao chép</button>
+        <label style="font-size:12px;display:flex;align-items:center;gap:5px;color:var(--text-muted)"><input type="checkbox" id="novaLogAuto" checked> Tự cuộn</label>
+      </div>
+      <div id="novaLogBox" style="background:#0d0f1a;color:#cdd6e4;font-size:11.5px;line-height:1.65;padding:14px;border-radius:10px;height:62vh;overflow:auto;white-space:pre-wrap;word-break:break-all;font-family:ui-monospace,Menlo,monospace"></div>
+    </div>
+
+    <!-- VIDEO AGENT TOOL -->
+    <div class="tool" id="tool-toolvideoagent">
+      <div class="tool-head">
+        <div class="tool-title">🎬 Video Agent</div>
+        <div class="tool-subtitle">Tạo phim tài liệu từng bước — viết lời thoại, Agent tự dựng cảnh và render MP4. Chế độ Nâng cao chạy pipeline đầy đủ (17 bước) trên thư mục dự án chuẩn.</div>
+      </div>
+      <link rel="stylesheet" href="src/styles/video-agent.css">
+      <div id="videoAgentRoot"></div>
+    </div>
+
+    <!-- I-MZic TOOL -->
+    <div class="tool" id="tool-toolimzic">
+      <iframe id="imzicFrame" title="I-MZic" data-src="img-to-vid.html" src="" style="width:100%;border:0" loading="lazy"></iframe>
+    </div>
+
+    <!-- WHITEBOARD STUDIO TOOL (srt-whiteboard-animation: SRT → cảnh → ảnh → stream-ink → MP4) -->
+    <div class="tool" id="tool-toolwhiteboard">
+      <div class="tool-head">
+        <div class="tool-title">🖊 Whiteboard Studio</div>
+        <div class="tool-subtitle">Video whiteboard từ SRT + ảnh (mỗi cảnh 1 ảnh) — vẽ stream-ink bàn tay như srt-whiteboard-animation, ghép voice, xuất MP4</div>
+      </div>
+      <div id="whiteboardRoot"></div>
+    </div>
+
+    <!-- VẼ TAY ẢNH TOOL (tách từ Whiteboard Studio: 1 ảnh tĩnh → stream-ink bàn tay vẽ lại → MP4, không SRT/voice) -->
+    <div class="tool" id="tool-toolhanddraw">
+      <div class="tool-head">
+        <div class="tool-title">✏️ Vẽ Tay Ảnh</div>
+        <div class="tool-subtitle">Biến ảnh tĩnh (PNG line-art) thành video vẽ tay — nét mực chạy dần theo từng vùng như bàn tay đang vẽ lại ảnh, tô màu dần, xuất MP4. Không cần SRT hay giọng đọc.</div>
+      </div>
+      <div id="handdrawRoot"></div>
+    </div>
+
+    <!-- DỊCH SRT TOOL (port "AI Translate Subtitles": SRT thật → AI dịch → ghi SRT giữ timestamp) -->
+    <div class="tool" id="tool-toolsrttranslate">
+      <div class="tool-head">
+        <div class="tool-title">🌐 Dịch SRT</div>
+        <div class="tool-subtitle">Dịch phụ đề SRT sang ngôn ngữ khác bằng AI — chọn file SRT thật trên đĩa, dịch qua API AI đã cấu hình ở Cài đặt, xem trước rồi lưu file SRT mới (giữ nguyên timestamp).</div>
+      </div>
+      <div id="srtTranslateRoot"></div>
+    </div>
+
+    <!-- SPY STORYBOARD TOOL (P4.4 roadmap VEO3): yt-dlp tải video YouTube → frame đều → tile grid storyboard.jpg -->
+    <div class="tool" id="tool-toolspy">
+      <div class="tool-head">
+        <div class="tool-title">🕵 Spy Storyboard</div>
+        <div class="tool-subtitle">Soi nhịp cảnh của video đối thủ trên YouTube — tải ≤720p bằng yt-dlp (bundled), trích N frame đều theo thời lượng, ghép lưới storyboard để tham khảo trước khi viết kịch bản.</div>
+      </div>
+      <div id="spyToolRoot"></div>
+    </div>
+
+    <!-- TOOL 1: PROFILE KÊNH -->

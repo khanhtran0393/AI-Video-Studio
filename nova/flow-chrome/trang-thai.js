@@ -9,5 +9,6 @@ const S = {
   _lastTokenExpiry: null, // hạn thật của token vừa bắt (từ field expires của session, ~24h)
   _captchaId: null,
   tokens: new Map(),      // id -> { token, at, expiry }
+  ssoConsent: null,       // OAuth Labs đang chờ user bấm consent/ủy quyền lần đầu: { id, email, since, message } | null
 };
 module.exports = S;

@@ -59,6 +59,26 @@ function serveLocalMedia(req, res) {
 
 function startLocalServer() {
   return new Promise((resolve) => {
+    // ── Include tĩnh phía server (SSI-lite) cho HTML của nova/web ──
+    // Marker: <!--#include "partials/ten.html" --> — đường dẫn tương đối WEB_DIR,
+    // đệ quy tối đa 10 tầng. Lắp ráp diễn ra ở main process (KHÔNG phải build step
+    // của renderer — trình duyệt vẫn nhận HTML đầy đủ y như khi index.html còn
+    // nguyên một file; toplevel-check.js mở cùng marker để giữ đúng thứ tự nạp).
+    // Include thiếu / thoát ra ngoài WEB_DIR / quá sâu → 500 lộ liễu WEB_INCLUDE_*,
+    // KHÔNG fallback ngầm (Luật 10).
+    const INCLUDE_MAX_DEPTH = 10;
+    const INCLUDE_RE = /<!--#include\s+"([^"]+)"\s*-->/g;
+    function expandIncludes(html, depth) {
+      if (depth > INCLUDE_MAX_DEPTH) throw new Error('WEB_INCLUDE_TOO_DEEP');
+      return String(html).replace(INCLUDE_RE, (m, rel) => {
+        const inc = path.join(WEB_DIR, rel);
+        if (!inc.startsWith(WEB_DIR)) throw new Error('WEB_INCLUDE_ESCAPED: ' + rel);
+        let incHtml;
+        try { incHtml = fs.readFileSync(inc, 'utf8'); }
+        catch (e) { throw new Error('WEB_INCLUDE_MISSING: ' + rel); }
+        return expandIncludes(incHtml, depth + 1);
+      });
+    }
     const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.json': 'application/json', '.ico': 'image/x-icon', '.wasm': 'application/wasm', '.map': 'application/json', '.mp4': 'video/mp4', '.gif': 'image/gif', '.webp': 'image/webp', '.woff2': 'font/woff2' };
     // CHỈ CÒN bundle Nova Scene. Bundle Remotion cũ (remotion-bundle, kèm 77 MB
     // public/ toàn tài sản demo) chỉ phục vụ bàn dựng Editor Pro — đã gỡ, xem
@@ -114,6 +134,16 @@ function startLocalServer() {
       if (!filePath.startsWith(root)) { res.writeHead(403); return res.end(); }
       fs.readFile(filePath, (err, data) => {
         if (err) { res.writeHead(404); return res.end('not found'); }
+        // HTML của nova/web: lắp ráp include tĩnh trước khi trả (xem expandIncludes).
+        // Chỉ áp dụng cho WEB_DIR — index.html của bundle Remotion giữ nguyên.
+        if (root === WEB_DIR && path.extname(filePath).toLowerCase() === '.html') {
+          try { data = Buffer.from(expandIncludes(data.toString('utf8'), 0), 'utf8'); }
+          catch (e) {
+            console.error('[server] ' + e.message + ' (khi phục vụ ' + p + ')');
+            res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
+            return res.end(e.message);
+          }
+        }
         // no-cache: Chromium luôn kiểm tra lại — tránh renderer chạy JS cũ sau khi
         // dev sửa file (lỗi "panel chết vì cache" đã xảy ra với handdraw panel).
         res.writeHead(200, {

@@ -1,0 +1,311 @@
+    <!-- TOOL 11: PHÂN TÍCH BÌNH LUẬN ĐỐI THỦ -->
+    <!-- ============================================================
+         NGHIÊN CỨU NGÁCH — gộp "Tìm Ngách" + "Phân tích đối thủ" cũ.
+         Chỉ số kênh (VPS/VPH/longform/ổn định/xu hướng) + thang đen–trắng học từ video-creator Fractal.
+    ============================================================ -->
+
+    <div class="tool" id="tool-toolniche">
+      <link rel="stylesheet" href="src/styles/tool-niche.css">
+      <div class="tool-head">
+        <h1>🔎 Nghiên cứu Ngách <span style="font-size:13px;color:var(--text-muted,#a29a90);font-weight:400">— dữ liệu YouTube thật + Claude · gộp cả phân tích đối thủ</span></h1>
+        <div style="margin-top:8px;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-muted)">
+          <span>🌐 Khu vực (trending/tìm kiếm):</span>
+          <select id="nfGl" style="max-width:210px;padding:5px 8px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:inherit">
+            <option value="">Tất cả (theo vị trí hiện tại)</option>
+            <option value="US">🇺🇸 Hoa Kỳ</option>
+            <option value="GB">🇬🇧 Anh</option>
+            <option value="CA">🇨🇦 Canada</option>
+            <option value="AU">🇦🇺 Úc</option>
+            <option value="DE">🇩🇪 Đức</option>
+            <option value="FR">🇫🇷 Pháp</option>
+            <option value="ES">🇪🇸 Tây Ban Nha</option>
+            <option value="IT">🇮🇹 Ý</option>
+            <option value="JP">🇯🇵 Nhật Bản</option>
+            <option value="KR">🇰🇷 Hàn Quốc</option>
+            <option value="BR">🇧🇷 Brazil</option>
+            <option value="IN">🇮🇳 Ấn Độ</option>
+            <option value="MX">🇲🇽 Mexico</option>
+            <option value="ID">🇮🇩 Indonesia</option>
+            <option value="VN">🇻🇳 Việt Nam</option>
+            <option value="TH">🇹🇭 Thái Lan</option>
+            <option value="PH">🇵🇭 Philippines</option>
+            <option value="SG">🇸🇬 Singapore</option>
+            <option value="RU">🇷🇺 Nga</option>
+            <option value="NL">🇳🇱 Hà Lan</option>
+            <option value="PL">🇵🇱 Ba Lan</option>
+            <option value="TR">🇹🇷 Thổ Nhĩ Kỳ</option>
+            <option value="SA">🇸🇦 Ả Rập Xê Út</option>
+            <option value="EG">🇪🇬 Ai Cập</option>
+            <option value="ZA">🇿🇦 Nam Phi</option>
+            <option value="NG">🇳🇬 Nigeria</option>
+          </select>
+        </div>
+      </div>
+      <div class="nf-wrap">
+        <div class="nf-sidebar">
+          <div class="nf-tile" id="nf-tile-hot" onclick="nfOpen('hot')">
+            <span class="nf-ico">🏷️</span>
+            <h4>Phân tích chủ đề</h4>
+          </div>
+          <div class="nf-tile" id="nf-tile-keywords" onclick="nfOpen('keywords')">
+            <span class="nf-ico">🔍</span>
+            <h4>Phân tích từ khóa</h4>
+          </div>
+          <div class="nf-tile" id="nf-tile-attention" onclick="nfOpen('attention')">
+            <span class="nf-ico">🎯</span>
+            <h4>Tìm ngách</h4>
+          </div>
+          <div class="nf-tile" id="nf-tile-scorecard" onclick="nfOpen('scorecard')">
+            <span class="nf-ico">👥</span>
+            <h4>Phân tích đối thủ</h4>
+          </div>
+          <div class="nf-tile" id="nf-tile-forecast" onclick="nfOpen('forecast')">
+            <span class="nf-ico">📈</span>
+            <h4>Dự đoán xu hướng</h4>
+          </div>
+          <div class="nf-tile" id="nf-tile-spike" onclick="nfOpen('spike')">
+            <span class="nf-ico">🔥</span>
+            <h4>Thịnh hành</h4>
+          </div>
+          
+          <!-- Các panel ẩn không hiện ở Sidebar -->
+          <div style="display:none">
+            <div class="nf-tile" id="nf-tile-similar" onclick="nfOpen('similar')"></div>
+            <div class="nf-tile" id="nf-tile-bw" onclick="nfOpen('bw')"></div>
+            <div class="nf-tile" id="nf-tile-pain" onclick="nfOpen('pain')"></div>
+            <div class="nf-tile" id="nf-tile-breakdown" onclick="nfOpen('breakdown')"></div>
+          </div>
+        </div>
+
+        <!-- 🔥 Chủ đề Hot — quét nhiều góc, chấm theo bội số trung vị, tách 2 cửa sổ thời gian -->
+        <div class="nf-panel" id="nf-panel-hot">
+          <div class="nf-row"><input type="text" id="nfHotSeed" placeholder="Ngách/từ khoá (VD: kể chuyện lịch sử, AI tools, nấu ăn eat clean)"><button class="nf-btn" id="nfHotBtn" onclick="nfRun('hot')">🔥 Tìm chủ đề đang lên</button><button class="nf-btn ghost" onclick="nfRun('hot',true)" title="Bỏ cache, quét mới">↻</button><button class="nf-btn ghost" onclick="nfCopy('hot')" title="Copy toàn bộ kết quả ra clipboard (Markdown)">📋</button></div>
+          <div class="nf-state" id="nfHotState"></div>
+          <div id="nfHotOut"></div>
+        </div>
+
+        <!-- 🩺 Thẻ điểm kênh — 5 chỉ số + outlier + kênh giống -->
+        <div class="nf-panel" id="nf-panel-scorecard">
+          <div class="nf-row">
+            <input type="text" id="nfScSeed" placeholder="Kênh đối thủ: @tenkenh hoặc https://youtube.com/@tenkenh">
+            <button class="nf-btn" id="nfScBtn" onclick="nfRun('scorecard')">🩺 Soi kênh</button>
+            <button class="nf-btn ghost" onclick="nfRun('scorecard',true)" title="Bỏ cache, quét mới">↻</button>
+            <button class="nf-btn ghost" onclick="nfCopy('scorecard')" title="Copy toàn bộ kết quả ra clipboard (Markdown)">📋</button>
+          </div>
+          <div class="nf-state" id="nfScState"></div>
+          <div id="nfScOut"></div>
+          <div id="nfScAiOut"></div>
+          <!-- 🧠 Phân tích sâu — wire bridge nova:analyzeCompetitor (quét 20 video → outlier + Eng% → Claude 5 mục) -->
+          <div class="nf-row" style="margin-top:-4px">
+            <button class="nf-btn" id="nfDeepBtn" onclick="nfDeepRun()">🧠 Phân tích sâu (AI)</button>
+            <button class="nf-btn ghost" onclick="nfCopyDeep()" title="Copy kết quả phân tích sâu ra clipboard (Markdown)">📋</button>
+          </div>
+          <div class="nf-state" id="nfDeepState">Quét ~20 video + tab Shorts gần nhất → outlier + Eng% → AI (API đã cấu hình trong Cài đặt): công thức tiêu đề, độ dài ưu tiên, tín hiệu tương tác, 6 ý tưởng video. Kênh lấy từ ô phía trên.</div>
+          <div id="nfDeepOut"></div>
+        </div>
+
+        <!-- 👥 Kênh giống — từng là hàng ẩn trong panel Soi kênh, giờ là ô độc lập (cùng tệp khán giả) -->
+        <div class="nf-panel" id="nf-panel-similar">
+          <div class="nf-row"><input type="text" id="nfSimSeed" placeholder="Kênh gốc: @tenkenh hoặc https://youtube.com/@tenkenh"><button class="nf-btn" id="nfSimBtn" onclick="nfRun('similar')">👥 Tìm kênh giống</button><button class="nf-btn ghost" onclick="nfRun('similar',true)" title="Bỏ cache, quét mới">↻</button><button class="nf-btn ghost" onclick="nfCopy('similar')" title="Copy danh sách kênh ra clipboard (Markdown)">📋</button></div>
+          <div class="nf-state" id="nfSimState">Chậm (mỗi ứng viên 1 lần yt-dlp, ~1-2 phút) · so kênh xong ở ô Thẻ điểm sẽ tự điền kênh vào đây.</div>
+          <div id="nfSimOut"></div>
+        </div>
+
+        <!-- ⚖️ Chấm ý tưởng theo thang đen–trắng -->
+        <div class="nf-panel" id="nf-panel-bw">
+          <div class="nf-row"><input type="text" id="nfBwTitle" placeholder="Dán tiêu đề video của bạn vào đây"><button class="nf-btn" id="nfBwBtn" onclick="nfRun('bw')">⚖️ Chấm tiêu đề</button><button class="nf-btn ghost" onclick="nfCopy('bw')" title="Copy kết quả chấm ra clipboard (Markdown)">📋</button></div>
+          <div class="nf-row" style="margin-top:-4px"><input type="text" id="nfBwNiche" placeholder="Ngách (tuỳ chọn — giúp AI viết lại sát chủ đề hơn)"></div>
+          <div class="nf-state" id="nfBwState"></div>
+          <div id="nfBwOut"></div>
+        </div>
+
+        <!-- 🧠 Pain Point Mining — phân tích bình luận tìm nhu cầu, khoảng trống -->
+        <div class="nf-panel" id="nf-panel-pain">
+          <div class="nf-row"><input type="text" id="nfPainSeed" placeholder="Ngách/từ khoá (VD: luyện thi IELTS, làm chủ TikTok, đầu tư crypto)"><button class="nf-btn" id="nfPainBtn" onclick="nfRun('pain')">🧠 Tìm pain point</button><button class="nf-btn ghost" onclick="nfRun('pain',true)" title="Bỏ cache, quét mới">↻</button><button class="nf-btn ghost" onclick="nfCopy('pain')" title="Copy kết quả ra clipboard (Markdown)">📋</button></div>
+          <div class="nf-state" id="nfPainState">Quét 10 video + 200 bình luận gần nhất · phân tích AI.</div>
+          <div id="nfPainOut"></div>
+        </div>
+
+        <!-- 📈 Dự báo xu hướng — đánh giá tăng trưởng ngách -->
+        <div class="nf-panel" id="nf-panel-forecast">
+          <div class="nf-row"><input type="text" id="nfForecastSeed" placeholder="Ngách cần dự báo (VD: trí tuệ nhân tạo, faceless shorts)"><button class="nf-btn" id="nfForecastBtn" onclick="nfRun('forecast')">📈 Dự báo xu hướng</button><button class="nf-btn ghost" onclick="nfRun('forecast',true)" title="Bỏ cache, quét mới">↻</button><button class="nf-btn ghost" onclick="nfCopy('forecast')" title="Copy kết quả ra clipboard (Markdown)">📋</button></div>
+          <div class="nf-state" id="nfForecastState"></div>
+          <div id="nfForecastOut"></div>
+        </div>
+
+        <!-- 🔑 Từ khoá SEO — phân cụm + đánh giá cạnh tranh -->
+        <div class="nf-panel" id="nf-panel-keywords">
+          <div class="nf-row"><input type="text" id="nfKeywordsSeed" placeholder="Ngách/từ khoá gốc (VD: keto diet, minimalist living)"><button class="nf-btn" id="nfKeywordsBtn" onclick="nfRun('keywords')">🔑 Phân cụm từ khoá</button><button class="nf-btn ghost" onclick="nfRun('keywords',true)" title="Bỏ cache, quét mới">↻</button><button class="nf-btn ghost" onclick="nfCopy('keywords')" title="Copy kết quả ra clipboard (Markdown)">📋</button></div>
+          <div class="nf-state" id="nfKeywordsState"></div>
+          <div id="nfKeywordsOut"></div>
+        </div>
+
+        <!-- 🎬 Phân tích video hiệu suất cao -->
+        <div class="nf-panel" id="nf-panel-breakdown">
+          <div class="nf-row"><input type="text" id="nfBreakdownSeed" placeholder="Ngách để phân tích video vượt trội (VD: thiết kế nội thất, digital painting)"><button class="nf-btn" id="nfBreakdownBtn" onclick="nfRun('breakdown')">🎬 Tách lẻ video</button><button class="nf-btn ghost" onclick="nfRun('breakdown',true)" title="Bỏ cache, quét mới">↻</button><button class="nf-btn ghost" onclick="nfCopy('breakdown')" title="Copy kết quả ra clipboard (Markdown)">📋</button></div>
+          <div class="nf-state" id="nfBreakdownState"></div>
+          <div id="nfBreakdownOut"></div>
+        </div>
+
+        <!-- Thị trường chú ý -->
+        <div class="nf-panel" id="nf-panel-attention">
+          <div class="nf-row"><input type="text" id="nfAttSeed" placeholder="Ngách/từ khoá để dò nhu cầu khán giả"><button class="nf-btn" id="nfAttBtn" onclick="nfRun('attention')">❤️ Dò thị trường chú ý</button><button class="nf-btn ghost" onclick="nfRun('attention',true)" title="Bỏ cache, quét mới">↻</button><button class="nf-btn ghost" onclick="nfCopy('attention')" title="Copy toàn bộ kết quả ra clipboard (Markdown)">📋</button></div>
+          <div class="nf-state" id="nfAttState"></div>
+          <div id="nfAttOut"></div>
+        </div>
+
+        <!-- ⚡ Đột phá view — so 2 ảnh chụp: video/kênh nào nhảy view mạnh nhất giữa 2 lần quét + video vừa lên sóng -->
+        <div class="nf-panel" id="nf-panel-spike">
+          <div class="nf-row"><input type="text" id="nfSpSeed" placeholder="Ngách cần theo dõi view (VD: truyện ma, review điện thoại, kết hôn trớt quớt)"><button class="nf-btn" id="nfSpBtn" onclick="nfRun('spike')">⚡ Đột phá view</button><button class="nf-btn ghost" onclick="nfCopy('spike')" title="Copy kết quả ra clipboard (Markdown)">📋</button></div>
+          <div class="nf-state" id="nfSpState">Bức tốc theo ngày đăng (mốc YouTube) có ngay lần đầu · mỗi lần bấm = 1 phép đo (không cache) · quét lại sau ≥1 giờ để so thêm mốc riêng của app.</div>
+          <div id="nfSpOut"></div>
+          <div id="nfSpAiOut"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================
+         TOOL FLOW — TẠO ẢNH HÀNG LOẠT QUA GOOGLE FLOW (extension)
+    ============================================================ -->
+    <div class="tool" id="tool-toolflow">
+      <div class="tool-head">
+        <div class="tool-title">🖼️ Tạo Ảnh Hàng Loạt</div>
+        <div class="tool-subtitle">Nhập danh sách prompt → tạo ảnh loạt (đa tài khoản, chạy song song, tự lưu). Hợp làm thumbnail, ảnh minh hoạ, test prompt số lượng lớn.</div>
+      </div>
+
+      <div id="bulkAcctBar" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:11px 15px;margin-bottom:14px;font-size:12.5px"></div>
+
+      <div id="flowAuthBlock">
+      <!-- CHẾ ĐỘ XÁC THỰC -->
+      <div class="panel mb-16">
+        <div class="panel-head"><span>🔐 Chế độ xác thực Flow</span></div>
+        <div class="panel-body">
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <label id="tfModeCard_builtin" style="flex:1;min-width:230px;border:1.5px solid var(--border);border-radius:10px;padding:10px 12px;cursor:pointer;display:block">
+              <input type="radio" name="tfAuthMode" value="builtin" onchange="tfSetMode('builtin')"> <b>Tích hợp sẵn</b>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Trình duyệt nhúng trong app. Không cài gì thêm. Tốn RAM/CPU hơn.</div>
+            </label>
+            <label id="tfModeCard_extension" style="flex:1;min-width:230px;border:1.5px solid var(--border);border-radius:10px;padding:10px 12px;cursor:pointer;display:block">
+              <input type="radio" name="tfAuthMode" value="extension" onchange="tfSetMode('extension')"> <b>Chrome Extension</b> <span style="color:var(--accent);font-size:11px">(khuyến nghị)</span>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Dùng Chrome thật + extension nhỏ. Nhẹ, nhanh, ít bị Google ban hơn.</div>
+            </label>
+          </div>
+          <div id="tfExtStatus" style="font-size:12px;margin-top:10px"></div>
+        </div>
+      </div>
+
+      <!-- KẾT NỐI -->
+      <div class="panel mb-16" style="border:1.5px solid var(--accent);border-radius:12px">
+        <div class="panel-head" style="background:linear-gradient(135deg,rgba(124,58,237,.06),rgba(194,65,12,.04))">
+          <span>🔌 Tài khoản Flow</span>
+        </div>
+        <div class="panel-body">
+          <div id="tfConn" style="font-size:13px;line-height:1.7">Đang kiểm tra extension…</div>
+          <!-- API key cho Flow dùng trong các trường hợp khác -->
+          <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+            <label style="display:block;font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.3px;margin:0 0 4px">
+              API Key Flow (dùng chung)
+              <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="float:right;font-size:11px;color:var(--accent);font-weight:600;text-decoration:none;text-transform:none">Lấy Key ↗</a>
+            </label>
+            <div style="display:flex;gap:8px">
+              <textarea id="flowApiKey" rows="4" placeholder="Mỗi key một dòng…" autocomplete="off" spellcheck="false" style="flex:1;resize:vertical;min-height:64px"></textarea>
+              <div style="display:flex;flex-direction:column;gap:6px">
+                <button class="btn ghost sm" onclick="saveFlowApiKey()" style="white-space:nowrap">💾 Lưu</button>
+                <button class="btn ghost sm" id="flowApiKeyToggle" onclick="toggleFlowApiKeyVisibility()" title="Hiện/Ẩn API key" style="white-space:nowrap">👁 Hiện</button>
+              </div>
+            </div>
+            <div id="flowApiKeyStatus" style="margin-top:6px;font-size:11.5px;color:var(--text-muted)"></div>
+          </div>
+          <!-- Thêm tài khoản mới (1 danh sách gọn, kiểu tool tham chiếu) -->
+          <div style="margin-top:12px;padding:12px 13px;border:1px solid var(--border);border-radius:10px">
+            <div style="font-weight:600;margin-bottom:9px">➕ Thêm tài khoản mới</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div style="padding:11px;border:1px solid var(--border);border-radius:8px">
+                <div style="font-weight:600;font-size:12.5px">🌐 Đăng nhập trình duyệt</div>
+                <div style="font-size:11.5px;color:var(--text-muted);margin:5px 0 9px">Mở Chrome for Testing đăng nhập Google. App tự nhận biết & lưu cookie+token, tự làm mới hằng ngày.</div>
+                <button class="btn primary sm" style="width:100%" onclick="fcAddAccount()">＋ Thêm tài khoản</button>
+              </div>
+              <div style="padding:11px;border:1px solid var(--border);border-radius:8px">
+                <div style="font-weight:600;font-size:12.5px">🍪 Nhập Cookie thủ công</div>
+                <div style="font-size:11.5px;color:var(--text-muted);margin:5px 0 6px">Dán cookie xuất từ extension Cookie Exporter (labs.google/fx).</div>
+                <textarea id="tfCookieInput2" placeholder="Dán chuỗi cookie…" style="width:100%;height:42px;padding:6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:11px;box-sizing:border-box;resize:vertical"></textarea>
+                <button class="btn sm" style="width:100%;margin-top:6px;background:var(--amber);color:#111" onclick="tfAddCookie2()">＋ Thêm bằng Cookie</button>
+              </div>
+            </div>
+            <div id="fcStatus" style="margin-top:8px;color:var(--text-muted);font-size:12px"></div>
+          </div>
+          <!-- Xoá watermark Nano-Banana/Gemini — thuần JS/Canvas. Tạo ảnh xong tự xoá dấu ✦ rồi hiển thị + lưu. -->
+          <div id="wmRow" style="margin-top:10px;padding:10px 12px;border:1px solid var(--border);border-radius:9px;background:var(--surface-2);display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <span style="font-weight:600;font-size:12.5px">🧽 Xoá watermark Nano-Banana</span>
+            <label style="display:flex;gap:6px;align-items:center;cursor:pointer;white-space:nowrap;font-size:12px"><input type="checkbox" id="wmToggle" onchange="window.wmToggle(this)"> Tự xoá dấu ✦ khi tạo ảnh</label>
+            <span id="wmStatus" style="color:var(--text-dim);font-size:11.5px"></span>
+          </div>
+          <div id="fcList" style="margin-top:12px"></div>
+        </div>
+      </div>
+      </div><!-- /flowAuthBlock -->
+
+      <link rel="stylesheet" href="src/styles/tool-flow.css">
+
+      <!-- ① DANH SÁCH PROMPT -->
+      <div class="fc">
+        <div class="fc-step"><span class="n">1</span> Danh sách prompt
+          <span class="r">
+            <span id="bulkCount" style="font-size:12px;color:var(--text-muted)">0 ảnh</span>
+            <label class="btn ghost sm" style="cursor:pointer">📄 Nhập file<input type="file" accept=".txt,.csv,text/*" style="display:none" onchange="bulkImportFile(this)"></label>
+            <button class="btn ghost sm" style="color:var(--red)" onclick="var t=document.getElementById('bulkPrompts');if(t){t.value='';bulkUpdateCount();}">🗑 Xoá</button>
+          </span>
+        </div>
+        <textarea id="bulkPrompts" oninput="bulkUpdateCount()" placeholder="Mỗi dòng 1 prompt = 1 ảnh.&#10;Muốn đặt tên file:  ten-file | prompt" style="width:100%;min-height:150px;background:var(--surface-2);line-height:1.6;border:1px solid var(--border);border-radius:11px;padding:12px 14px"></textarea>
+        <div style="font-size:11.5px;color:var(--text-dim);margin-top:8px">💡 1 dòng = 1 ảnh. Thêm <code style="background:var(--surface-3);padding:1px 5px;border-radius:4px">tên | prompt</code> để tự đặt tên file. Dòng trống bỏ qua.</div>
+      </div>
+
+      <!-- ② CẤU HÌNH -->
+      <div class="fc">
+        <div class="fc-step"><span class="n">2</span> Cấu hình</div>
+        <div id="genCfgBlock">
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;align-items:end">
+          <div><label class="label">Model</label><select id="tfModel" style="width:100%"><option value="GEM_PIX_2" selected>Nano Banana Pro</option><option value="NARWHAL">Nano Banana 2</option></select></div>
+          <div><label class="label">Tỷ lệ</label><select id="tfAspect" style="width:100%"><option value="IMAGE_ASPECT_RATIO_LANDSCAPE" selected>16:9 (ngang)</option><option value="IMAGE_ASPECT_RATIO_PORTRAIT">9:16 (dọc)</option><option value="IMAGE_ASPECT_RATIO_SQUARE">1:1 (vuông)</option></select></div>
+          <div><label class="label">Chất lượng</label><select id="tfQuality" style="width:100%"><option value="orig" selected>Gốc</option><option value="2048">2K</option><option value="3840">4K</option></select></div>
+          <div><label class="label">Luồng song song</label><select id="tfConc" style="width:100%"><option value="1">1</option><option value="2" selected>2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="8">8</option><option value="10">10</option></select></div>
+          <div><label class="label" title="Nghỉ giữa mỗi lần gọi ảnh để tránh Google nghi spam.">Độ trễ</label><select id="tfDelay" style="width:100%"><option value="0">Không</option><option value="600">0.6s</option><option value="1200">1.2s</option><option value="2500">2.5s</option><option value="5000">5s</option><option value="6000">6s</option><option value="8000">8s</option><option value="10000">10s ✋ (né chặn)</option><option value="rand510" selected>🎲 5–10s ngẫu nhiên ★ (né chặn tốt nhất)</option></select></div>
+        </div>
+        </div><!-- /genCfgBlock -->
+        <div style="display:none;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap;font-size:11.5px">
+          <span id="bulkUpsStatus" style="color:var(--green)">✓ 2K/4K: upscale thật (Flow super-res, sẵn có)</span>
+          <button id="bulkUpsBtn" class="btn ghost sm" onclick="bulkLearnUpscale()" style="display:none" title="Chỉ dùng khi Flow đổi API và 2K báo lỗi: bấm Tải xuống → 2K trên Flow để cập nhật.">🔄 Cập nhật request 2K</button>
+          <span id="bulkUpsHint" style="color:var(--text-dim);display:none"></span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:16px;flex-wrap:wrap">
+          <span class="label" style="margin:0">🖼 Ảnh tham chiếu (tuỳ chọn — giữ phong cách/nhân vật):</span>
+          <span id="bulkRefThumbs" style="display:flex;gap:6px;flex-wrap:wrap"></span>
+          <label class="btn ghost sm" style="cursor:pointer">＋ Thêm ref<input type="file" accept="image/*" multiple style="display:none" onchange="bulkAddRefs(this.files);this.value=''"></label>
+        </div>
+        <div style="font-size:11px;color:var(--text-dim);margin-top:6px">💡 Không gõ gì → mọi ảnh dùng tất cả ref. Gõ <code>[tên-ref]</code> trong dòng prompt → dòng đó chỉ đính đúng ref đó (đặt tên ref ở ô dưới mỗi ảnh).</div>
+        <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;font-size:12px;margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
+          <label style="display:flex;gap:6px;align-items:center;cursor:pointer;white-space:nowrap"><input type="checkbox" class="asv-enabled" onchange="autoSaveToggle(this)"> 💾 <b>Tự động lưu ảnh về máy</b></label>
+          <select class="asv-mode" onchange="autoSaveMode(this)" style="max-width:210px"><option value="perTask">Tạo thư mục theo Task</option><option value="flat">Lưu thẳng vào thư mục</option></select>
+          <input type="text" class="asv-name" onchange="autoSaveName(this)" placeholder="Tên thư mục" style="max-width:170px">
+          <input type="text" class="asv-folder" readonly placeholder="Chưa chọn thư mục lưu" style="flex:1;min-width:160px">
+          <button class="btn ghost sm" onclick="autoSavePickFolder()">📁 Chọn thư mục</button>
+        </div>
+        <input type="checkbox" id="tfUseRefs" checked style="display:none"><!-- giữ ẩn: Tool 2 đọc để khoá mặt -->
+      </div>
+
+      <div class="status-bar" id="statusflow" style="margin-bottom:14px">Sẵn sàng.</div>
+
+      <!-- ③ TẠO & KẾT QUẢ -->
+      <div class="fc">
+        <div class="fc-step"><span class="n">3</span> Tạo &amp; Kết quả
+          <span class="r">
+            <button class="btn primary sm" id="bulkGenBtn" onclick="bulkToggle()">▶ Tạo tất cả</button>
+            <button class="btn ghost sm" onclick="bulkRetryFailed()">🔁 Thử lại lỗi</button>
+            <button class="btn ghost sm" onclick="bulkDownloadAll()">⤓ Tải tất cả</button>
+          </span>
+        </div>
+        <div id="bulkInfo" style="font-size:12px;color:var(--text-muted);margin-bottom:10px"></div>
+        <div id="bulkGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px"><div class="empty-state">Nhập prompt ở trên → bấm ▶ Tạo tất cả.</div></div>
+      </div>
+    </div>
+

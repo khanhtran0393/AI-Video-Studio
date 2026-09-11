@@ -92,6 +92,35 @@ Thứ tự nạp: nen-tang → ve-1 → ve-2 → chuyen. Trang render ghi đè `
 khi nạp (thay nền gradient bằng ảnh thật) — function declaration là global
 nên ghi đè xuyên file vẫn đúng, đừng đổi thành `const`.
 
+### `web/src/toolbox/shared/` (từ god-file `shared-consts.js` 4.799 dòng, nạp trong `index.html`)
+
+Tách verbatim theo dải dòng liền kề (2026-09-11, mẫu `utility/`): partition 1..N +
+multiset dòng phi-rỗng **0 mất / 0 dư** (4.250 dòng), gate acorn theo nhóm (top-level
+ref của nhóm k không được trỏ tới def chỉ có ở nhóm >k — danger 0/12), `node --check`
+12/12, `dedup-refcheck.js` PASS (script quét toàn khối `shared/`). **Dọn dead code
+ngay trong đợt tách (2026-09-11, MEMORY 2026-09-11t)**: xoá 52 fn chết bị peer load
+sau shadow (~3.400 dòng thân + marker — runtime luôn gọi bản peer nên bản shared là
+dead code; an toàn vì phân tích AST toàn toolbox theo thứ tự nạp index.html xác nhận
+**0 load-time ref phụ thuộc bản shared**), khối 4.799 → ~1.100 dòng. Guard vĩnh viễn:
+`check:shared-shadow` (fn chết mới trong `shared/` → FAIL). Tombstone marker `[P0a]`
+(fn đã xoá từ đợt dedup 2026-09-10f) giữ nguyên. `var VEO_STYLE_PRESETS` /
+`var _capModeCache` giữ keyword `var`.
+
+| File | Nội dung chính |
+|---|---|
+| `shared/shell.js` | `KEY_URLS`, admin/upgrade, `PROD_STEPS`, `_prodQueue`, `_T2_FIELDS`, `_VOICE_FIELDS`. |
+| `shared/llm.js` | `_QRUN`, `PROVIDER_LABEL`, `LLM_*`, `_llm*`, `_k`, `_novaLog`, `upState`. |
+| `shared/voice.js` | `VOICE_URL`, `_voice*`, `_giong*`, `_TTS_*` — state giọng đọc. |
+| `shared/mvtv.js` | Tool 6: `mvScenes`, `tvState`, `TV_*`, `var VEO_STYLE_PRESETS`. |
+| `shared/profile.js` | `IDB`, `PRESET`, `STYLE_PRESETS`, `_LANG_VOICE`, `_PF_ICONS`, `_libTab`. |
+| `shared/flow.js` | `flowBridge`, `tfState`, `bulkState`, `_tf*`, `var _capModeCache`, `setStatus1/2`. |
+| `shared/t2-scenes.js` | `SCENE_TYPES`, `_T2_NGUON_*`. |
+| `shared/t2-prompts.js` | `VISUAL_METAPHOR_RULE`, `_laThuc`, `T2_TUY_CHON`. |
+| `shared/auto-assets.js` | `AUTO_STEPS`, `FLOW_STEPS`, `FS_*`, `SCENE_TYPE_VI`, `_t2Regen*`, `ASSET_*`, `setStatus3`. |
+| `shared/t3-stock.js` | `assetRenamer`, `renamer`, `setStatus4/5/6`, `_KHO_CAM`, `_kho*`. |
+| `shared/t7.js` | `t7State`, `_T7_*`, `T7_*`, `NOVA_*_PRESETS`, `setStatus8`. |
+| `shared/t8-t10.js` | `t8State`, `T8_PROVIDERS`, `t9State`, `T9_REF_RULE`, `t10State`, `setStatus9/10`. |
+
 ### `web/src/toolbox/utility/` (từ god-file `utility.js` 13.780 dòng / 889 hàm, nạp trong `index.html`)
 
 Tách verbatim theo dải dòng (không sửa thân hàm), kiểm chứng bằng partition
@@ -130,11 +159,12 @@ Tách verbatim theo dải dòng (không sửa thân hàm), kiểm chứng bằng
 | `utility/transcribe.js` | `_t8TranscribeBlob`, wav 16k, `groupWordsIntoLines`, `_t9SnapChapters`, `_t11*` keys. |
 | `utility/niche.js` | Ngách (`nf*`), t9 ref topic, `_giongCloud`. |
 
-Thứ tự nạp trong `index.html`: `shared-consts.js` → kernel `utility.js` → 27 file
-`utility/*.js` → các `tool-*.js`. Cả 28 file đều chỉ chứa function declaration
-hoisted (0 lệnh chạy lúc nạp) nên thứ tự GIỮA chúng không quan trọng; ràng buộc
-duy nhất là nạp **sau `shared-consts.js`** — 74 hàm trùng tên peer trong đó vẫn
-được utility override đúng như thời god-file. EOL chuẩn hoá LF khi tách.
+Thứ tự nạp trong `index.html`: khối `shared/` (12 file — đúng thứ tự dải dòng gốc
+của `shared-consts.js` cũ) → kernel `utility.js` → 27 file `utility/*.js` → các
+`tool-*.js`. Cả 28 file utility đều chỉ chứa function declaration hoisted (0 lệnh
+chạy lúc nạp) nên thứ tự GIỮA chúng không quan trọng; ràng buộc duy nhất là nạp
+**sau khối `shared/`** — các hàm trùng tên peer (trong `shared/` lẫn giữa
+utility/tool) vẫn được override đúng như thời god-file. EOL chuẩn hoá LF khi tách.
 
 ### `web/src/styles/` (từ 18 khối `<style>` inline trong `index.html`, nạp ngay tại vị trí cũ)
 

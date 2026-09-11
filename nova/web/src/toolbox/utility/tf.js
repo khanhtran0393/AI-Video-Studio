@@ -513,6 +513,17 @@ function tfCftCancel(){ try { window.native?.flowCftCancel?.(); } catch (e) {} s
 
 function _fcStatus(html, col){ const el = document.getElementById('fcStatus'); if (el){ el.innerHTML = html; el.style.color = col || 'var(--text-muted)'; } }
 
+/* Poll trong lúc chờ thao tác Chrome dài (LOGIN_AUTO/REFRESH/RELOGIN): main đang chờ user bấm
+   consent ủy quyền Google Labs lần đầu (cờ ssoConsent từ GET_ACCOUNTS) → hiện cảnh báo vàng
+   lên ô trạng thái thay vì để ô đứng im ở "⏳…". Trả về hàm stop() gọi sau khi thao tác xong. */
+function _fcConsentPoll(){
+  const t = setInterval(async () => {
+    const s = await window.native.flowChrome('GET_ACCOUNTS').catch(() => null);
+    if (s?.ssoConsent) _fcStatus('⚠️ <b>' + escapeHtml(s.ssoConsent.message) + '</b>' + (s.ssoConsent.email ? ' (' + escapeHtml(s.ssoConsent.email) + ')' : ''), 'var(--amber)');
+  }, 2500);
+  return () => clearInterval(t);
+}
+
 function wmRefreshStatus(){
   const el = document.getElementById('fcWmStatus');
   if (el){ el.textContent = 'sẵn sàng — bấm để tắt'; el.style.color = 'var(--text-muted)'; }
@@ -529,8 +540,9 @@ async function fcRenderList(){
   if (typeof wmRefreshStatus === 'function') wmRefreshStatus();   // cập nhật trạng thái ô Watermark
   const s = await window.native.flowChrome('GET_ACCOUNTS').catch(() => null);
   const accs = s?.accounts || [];
+  const canhBao = s?.ssoConsent ? `<div style="margin:0 0 9px;padding:8px 10px;border:1px solid var(--amber);border-radius:8px;background:rgba(255,170,0,.08);color:var(--amber);font-size:12.5px">⚠️ <b>${escapeHtml(s.ssoConsent.message)}</b>${s.ssoConsent.email ? ' (' + escapeHtml(s.ssoConsent.email) + ')' : ''}</div>` : '';
   const activeN = accs.filter(a => a.enabled !== false && a.hasToken && !a.needLogin).length;
-  let h = `<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:9px">
+  let h = canhBao + `<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:9px">
       <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" ${accs.length && accs.every(a=>a.enabled!==false)?'checked':''} onchange="fcSetAllEnabled(this.checked)"> Bật tất cả</label>
       <span style="font-size:12px;color:var(--text-muted)">Tài khoản hoạt động: <b style="color:var(--green)">${activeN}</b>/${accs.length}</span>
       <select id="capModeSel" onchange="fcSetCapMode(this.value)" title="Máy giải reCAPTCHA. Guest (như đối thủ): Chrome trống dùng-1-lần, xoay profile+proxy mới liên tục → né 'unusual activity', KHÔNG đụng tài khoản thật. Account: xoay giữa các tài khoản." style="margin-left:auto;font-size:11.5px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)">
@@ -571,7 +583,9 @@ async function fcRenderList(){
 
 async function fcAddAccount(){
   _fcStatus('⏳ Đang mở Chrome for Testing… Hãy <b>đăng nhập Google</b> trong cửa sổ vừa mở. App sẽ <b>tự nhận biết & lưu</b> — không cần bấm gì thêm.', 'var(--violet)');
+  const stop = _fcConsentPoll();
   const r = await window.native.flowChrome('LOGIN_AUTO').catch(e=>({error:String(e)}));
+  stop();
   if (r?.error){ _fcStatus('❌ ' + r.error, 'var(--red)'); fcRenderList(); return; }
   _fcStatus('✅ <b>Đã thêm tài khoản</b>' + (r.email ? ' — ' + escapeHtml(r.email) : '') + '.', 'var(--green)');
   fcRenderList();
@@ -605,7 +619,7 @@ async function tfAddCookie2(){
 
 async function fcSetEnabled(id, en){ await window.native.flowChrome('SET_ENABLED', { id, enabled: en }).catch(()=>{}); }
 
-async function fcRefresh(id){ _fcStatus('⏳ Làm mới account #' + id + '… (mở Chrome điều khiển, ~10s)', 'var(--violet)'); const r = await window.native.flowChrome('REFRESH', { id }).catch(e=>({error:String(e)}));
+async function fcRefresh(id){ _fcStatus('⏳ Làm mới account #' + id + '… (mở Chrome điều khiển, ~10s)', 'var(--violet)'); const stop = _fcConsentPoll(); const r = await window.native.flowChrome('REFRESH', { id }).catch(e=>({error:String(e)})); stop();
   if (r?.error){ _fcStatus('❌ ' + r.error, 'var(--red)'); }
   else {
     const ten = tfTierName(r.tier);
@@ -619,7 +633,9 @@ async function fcRemove(id){ if (!confirm('Xoá account Chrome #' + id + '? (xo�
 
 async function fcRelogin(id){
   _fcStatus('⏳ Đang mở Chrome for Testing… Hãy <b>đăng nhập Google</b> trong cửa sổ vừa mở. App sẽ <b>tự nhận biết & hoàn tất</b> — không cần bấm gì thêm.', 'var(--violet)');
+  const stop = _fcConsentPoll();
   const r = await window.native.flowChrome('RELOGIN', { id }).catch(e=>({error:String(e)}));
+  stop();
   if (r?.error){ _fcStatus('❌ ' + r.error, 'var(--red)'); fcRenderList(); return; }
   _fcStatus('✅ <b>Đã đăng nhập lại tự động</b>' + (r.email ? ' — ' + escapeHtml(r.email) : ' #' + id) + ' (Chrome for Testing).', 'var(--green)');
   fcRenderList();

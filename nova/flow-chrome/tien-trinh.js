@@ -126,6 +126,7 @@ async function _openForOperation(id) {
     try { await cdp.send('Page.addScriptToEvaluateOnNewDocument', { source: JS_GIAU_WEBDRIVER }); } catch {}
     const rec = { proc, port, cdp, videoUrls: [] };
     cdp._proxy = (accounts.get(id) && accounts.get(id).proxy) || null;   // HTTP thuần (apiFetch) đi CÙNG proxy của account
+    cdp._accId = id;   // đánh dấu account sở hữu phiên — _taoPhienLabs dùng để gắn ssoConsent cho đúng account
     // Gắn listener TỪ TRƯỚC khi navigate → bắt luôn: (a) URL file video cho resolve, (b) token ya29 ngay LẦN TẢI ĐẦU (captureToken khỏi phải reload lần nữa + chờ 3.5s).
     cdp.on((m) => {
       if (m.method !== 'Network.requestWillBeSent') return;
@@ -167,6 +168,24 @@ function _xinThuan(url, opt = {}) {
     req.end();
   });
 }
+/* Đưa cửa sổ Chrome consent ra GIỮA MÀN HÌNH + focus để user bấm "Cho phép" (ủy quyền Labs lần đầu).
+   _openForOperation thu nhỏ cửa sổ ngay sau khi mở → bắt buộc khôi phục 'normal' trước khi định vị.
+   Thất bại chỉ là hình ảnh (user vẫn có thể tự bấm vào cửa sổ) → LOG, không chết vòng chờ. */
+async function _hienCuaSoConsent(cdp) {
+  try { await cdp.send('Page.bringToFront', {}); } catch { /* */ }
+  try {
+    const { screen } = require('electron');
+    const wa = screen.getPrimaryDisplay().workArea;
+    const w = await cdp.send('Browser.getWindowForTarget', {});
+    if (w && w.windowId) {
+      await cdp.send('Browser.setWindowBounds', { windowId: w.windowId, bounds: { windowState: 'normal' } });
+      await cdp.send('Browser.setWindowBounds', {
+        windowId: w.windowId,
+        bounds: { left: wa.x + Math.max(0, Math.round((wa.width - 1000) / 2)), top: wa.y + Math.max(0, Math.round((wa.height - 820) / 2)), width: 1000, height: 820 },
+      });
+    }
+  } catch (e) { LOG('không đưa được cửa sổ consent ra giữa màn hình:', e && e.message); }
+}
 /* Thiết lập PHIÊN labs.google cho profile đã đăng nhập flow.google.com (giao thức mới).
    Trả { token, expiry, email } khi thành công, { error } khi thất bại — không nuốt lỗi. */
 async function _taoPhienLabs(cdp) {
@@ -192,17 +211,34 @@ async function _taoPhienLabs(cdp) {
     for (const [name, value] of Object.entries(jar)) {
       try { await cdp.send('Network.setCookie', { name, value, url: 'https://labs.google/', secure: true, httpOnly: true, sameSite: 'Lax' }); } catch { /* */ }
     }
-    // 3) Chrome đi qua consent (auto với account đã ủy quyền app Labs) → callback → phiên
+    // 3) Chrome đi qua consent (auto với account đã ủy quyền app Labs) → callback → phiên.
+    //    LẦN ĐẦU ỦY QUYỀN: Google hiện trang chọn account + "Cho phép" → BẮT BUỘC user bấm tay.
+    //    Phát hiện đứng ở accounts.google.com → đưa cửa sổ ra giữa màn hình + gắn cờ S.ssoConsent
+    //    (panel Tài khoản đọc qua GET_ACCOUNTS) + NỚI thời hạn chờ 120s → 15 phút cho user thao tác.
     try { await cdp.send('Page.bringToFront', {}); } catch { /* */ }
     await cdp.send('Page.navigate', { url: oauthUrl });
-    let ok = false;
-    for (let i = 0; i < 40; i++) {
+    let ok = false, consentBat = false;
+    const t0 = Date.now();
+    for (let i = 0; ; i++) {
       await sleep(3000);
       let u = '';
       try { const r2 = await cdp.send('Runtime.evaluate', { expression: 'location.href', returnByValue: true }); u = (r2.result && r2.result.value) || ''; } catch { /* */ }
       if (/labs\.google/.test(u) && !/error=/.test(u)) { ok = true; break; }
-      if (/error=OAuthCallback|error=access_denied/.test(u)) return { error: 'OAUTH_CALLBACK_LOI' };
+      if (/error=OAuthCallback|error=access_denied/.test(u)) { S.ssoConsent = null; return { error: 'OAUTH_CALLBACK_LOI' }; }
+      const canConsent = /accounts\.google\.com/.test(u);
+      if (canConsent && !consentBat) {
+        consentBat = true;
+        const a = accounts.get(cdp._accId);
+        S.ssoConsent = { id: cdp._accId || null, email: (a && a.email) || null, since: Date.now(), message: 'Cần ủy quyền Google Labs lần đầu — hãy bấm "Cho phép" trong cửa sổ Chrome vừa mở.' };
+        LOG('⚠️ OAuth Labs cần ủy quyền lần đầu — đã đưa cửa sổ Chrome ra giữa màn hình, chờ user bấm "Cho phép"…');
+        await _hienCuaSoConsent(cdp);
+      }
+      if (consentBat) {
+        if (Date.now() - t0 > 15 * 60 * 1000) { S.ssoConsent = null; return { error: 'OAUTH_TIMEOUT (user không kịp bấm ủy quyền Labs trong 15 phút)' }; }
+        if (i % 10 === 9) LOG('…vẫn chờ user ủy quyền Labs trong cửa sổ Chrome (' + Math.round((Date.now() - t0) / 1000) + 's)');
+      } else if (i >= 40) break;   // consent tự động (đã ủy quyền): giữ đúng hành vi cũ 40×3s = 120s
     }
+    S.ssoConsent = null;
     if (!ok) return { error: 'OAUTH_TIMEOUT (consent có thể cần bấm tay trong cửa sổ Chrome)' };
     // 4) đọc lại cookie labs.google → Bearer
     const cks = await readCookies(cdp);
@@ -213,7 +249,7 @@ async function _taoPhienLabs(cdp) {
     const t = await http.layToken(phan.join('; '), { proxy: (cdp && cdp._proxy) || null });
     if (t.error) return { error: 'OAUTH_SESSION_' + t.error };
     return { token: t.token, expiry: t.expiry, email: t.email };
-  } catch (e) { return { error: e.message || 'OAUTH_FAILED' }; }
+  } catch (e) { S.ssoConsent = null; return { error: e.message || 'OAUTH_FAILED' }; }
 }
 async function captureToken(cdp, ms = 22000) {
   // Token bắt SỚM lúc openForOperation tải trang lần đầu (dùng 1 lần) → khỏi reload + chờ 3.5s.

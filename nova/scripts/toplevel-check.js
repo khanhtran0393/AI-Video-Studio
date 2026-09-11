@@ -10,7 +10,28 @@
 const fs = require('fs');
 const path = require('path');
 const ROOT = path.join(__dirname, '..', 'web');
-const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+
+// Mở include tĩnh phía server (marker do main/server.js lắp ráp khi phục vụ) để
+// thẻ <script> nằm trong nova/web/partials/*.html vẫn được xét đúng thứ tự nạp.
+// Include thiếu → dừng lộ liễu, không bỏ qua ngầm.
+const INCLUDE_RE = /<!--#include\s+"([^"]+)"\s*-->/g;
+function expandIncludes(text, depth) {
+  if (depth > 10) throw new Error('include sâu quá 10 tầng');
+  return String(text).replace(INCLUDE_RE, (m, rel) => {
+    let s;
+    try { s = fs.readFileSync(path.join(ROOT, rel), 'utf8'); }
+    catch (e) { throw new Error('THIẾU INCLUDE: ' + rel); }
+    return expandIncludes(s, depth + 1);
+  });
+}
+
+let html;
+try {
+  html = expandIncludes(fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8'), 0);
+} catch (e) {
+  console.error('LỖI INCLUDE HTML: ' + e.message);
+  process.exit(1);
+}
 
 // 1) Lấy thứ tự nạp: script src cục bộ + inline script
 const loadOrder = [];

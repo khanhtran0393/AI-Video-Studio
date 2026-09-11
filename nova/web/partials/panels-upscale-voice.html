@@ -1,0 +1,328 @@
+    <!-- ============================================================
+         TOOL VOICE — TẠO GIỌNG NÓI (OmniVoice, nhúng Voice Studio backend)
+    ============================================================ -->
+    <div class="tool" id="tool-toolupscale">
+      <link rel="stylesheet" href="src/styles/tool-upscale.css">
+
+      <div class="up-head">
+        <div>
+          <div class="tool-title">⬆ Nâng cấp ảnh</div>
+          <div class="up-sub">Phóng to &amp; làm nét ảnh bằng AI (Real-ESRGAN) chạy ngay trong máy — miễn phí, offline, không giới hạn.</div>
+        </div>
+        <span class="up-pill" id="upStatus" style="margin-left:auto;color:var(--text-muted)"><span class="dot"></span><span class="up-st-text">Đang kiểm tra…</span></span>
+      </div>
+
+      <!-- ① THIẾT LẬP -->
+      <div class="up-card">
+        <div class="up-eyebrow"><span class="n">1</span> Thiết lập</div>
+        <div class="up-grid">
+          <div class="up-fld">
+            <span class="up-lbl">Mô hình AI</span>
+            <select id="upModel" onchange="upOnModelChange()">
+              <option value="remacri-4x">Remacri — ảnh thật, chi tiết tự nhiên (khuyên dùng)</option>
+              <option value="ultrasharp-4x">UltraSharp — siêu nét, chi tiết cao</option>
+              <option value="ultramix-balanced-4x">UltraMix — cân bằng, ít nhiễu</option>
+              <option value="digital-art-4x">Digital Art — tranh vẽ / hoạt hình 2D</option>
+            </select>
+          </div>
+          <div class="up-fld">
+            <span class="up-lbl">Độ phân giải</span>
+            <select id="upScale">
+              <option value="1920">1080p — Full HD</option>
+              <option value="2560" selected>2K — QHD</option>
+              <option value="3840">4K — UHD</option>
+              <option value="7680">8K (rất nặng)</option>
+            </select>
+          </div>
+          <div class="up-fld">
+            <span class="up-lbl">Định dạng</span>
+            <select id="upFormat">
+              <option value="source" selected>Theo ảnh gốc</option>
+              <option value="png">PNG (chất lượng cao)</option>
+              <option value="jpg">JPG (nhẹ)</option>
+              <option value="webp">WEBP</option>
+            </select>
+          </div>
+          <div class="up-fld">
+            <span class="up-lbl">Thư mục lưu</span>
+            <div class="with-btn">
+              <input type="text" id="upOutDir" placeholder="(để trống = lưu cạnh ảnh gốc)" readonly>
+              <button class="btn ghost" onclick="upPickOutdir()">📁 Chọn</button>
+            </div>
+          </div>
+          <div class="up-fld">
+            <span class="up-lbl">Đuôi tên tệp</span>
+            <input type="text" id="upSuffix" value="_upscaled">
+          </div>
+          <div class="up-fld">
+            <span class="up-lbl">Kích thước ô xử lý</span>
+            <select id="upTile" title="Ô nhỏ = tốn ít VRAM hơn (máy yếu), chậm hơn chút">
+              <option value="0" selected>Tự động</option>
+              <option value="512">512</option>
+              <option value="256">256</option>
+              <option value="128">128 (máy yếu)</option>
+            </select>
+          </div>
+        </div>
+        <div class="up-chips">
+          <label class="up-chip" title="Sau khi nâng cấp, thay ảnh cảnh trong Phân Cảnh bằng bản HD → Dựng Video/xuất video dùng ảnh mới"><input type="checkbox" id="upPushBack" checked> Đẩy về Dựng Video</label>
+          <label class="up-chip" title="Xoá dấu ✦ Nano-Banana bằng AI (MI-GAN) TRƯỚC, rồi mới nâng cấp. Ảnh gốc không bị đụng."><input type="checkbox" id="upWm" onchange="if(this.checked){const o=document.getElementById('upWmOnly'); if(o) o.checked=false;} const b=document.getElementById('upRunBtn'); if(b) b.textContent='⬆ NÂNG CẤP';"> 🧽 Xoá watermark ✦ (AI) trước khi nâng</label>
+          <label class="up-chip" title="CHỈ xoá dấu ✦ Nano-Banana bằng AI (MI-GAN), KHÔNG nâng cấp — giữ nguyên độ phân giải gốc."><input type="checkbox" id="upWmOnly" onchange="if(this.checked){const w=document.getElementById('upWm'); if(w) w.checked=false;} const b=document.getElementById('upRunBtn'); if(b) b.textContent=this.checked?'🧽 XOÁ WATERMARK':'⬆ NÂNG CẤP';"> 🧽 Chỉ xoá watermark (không nâng)</label>
+        </div>
+      </div>
+
+      <!-- thanh hành động -->
+      <div class="up-actions">
+        <button class="btn ghost" onclick="upAddImages()">＋ Thêm ảnh</button>
+        <button class="btn ghost" onclick="upAddFolder()">📁 Thêm thư mục</button>
+        <button class="btn ghost" onclick="upFromTool2()" title="Lấy toàn bộ ảnh cảnh đang có ở tab Phân Cảnh (Tool 2)">🎬 Lấy ảnh từ Phân Cảnh</button>
+        <span class="up-spacer"></span>
+        <button class="btn ghost" onclick="upClear()" style="color:var(--red)">🗑 Xoá danh sách</button>
+        <button class="btn" id="upRunBtn" onclick="upRun()">⬆ NÂNG CẤP</button>
+        <button class="btn ghost" id="upStopBtn" onclick="upStop()" style="display:none;color:var(--red)">■ DỪNG</button>
+      </div>
+
+      <!-- ② DANH SÁCH -->
+      <div class="up-card">
+        <div class="up-eyebrow"><span class="n">2</span> Danh sách ảnh <span class="up-count" id="upSummary"></span></div>
+        <div class="up-batchbar" id="upBatchBar" style="display:none">
+          <button class="btn ghost" id="upRetryBtn" onclick="upRetryErrors()" style="display:none">↻ Thử lại ảnh lỗi</button>
+          <button class="btn ghost" id="upClearDoneBtn" onclick="upClearDone()" style="display:none">🧹 Xoá ảnh đã xong</button>
+        </div>
+        <div id="upEmpty" class="up-empty">Chưa có ảnh nào. Bấm <b>＋ Thêm ảnh</b> hoặc <b>📁 Thêm thư mục</b> để bắt đầu.</div>
+        <div class="up-rows" id="upRows"></div>
+        <div class="up-note" id="upNote" style="display:none">Nút “🔍 So sánh” mở thanh trượt trước/sau · “Mở” mở ảnh đã nâng trong máy</div>
+      </div>
+    </div>
+
+    <div class="tool" id="tool-toolvoice">
+      <link rel="stylesheet" href="src/styles/tool-voice.css">
+
+       <div class="tool-head">
+         <div class="tool-title">🎙 Giọng nói</div>
+         <div class="tool-subtitle">Clone giọng, thiết kế giọng, đọc kịch bản thành tiếng. OmniVoice · VieNeu · XTTS — tất cả chạy trong máy, không cần key.</div>
+       </div>
+
+      <div id="voiceBackendStatus" style="font-size:12.5px;margin-bottom:14px;color:var(--text-muted)">Đang chuẩn bị…</div>
+
+      <!-- ── THƯ VIỆN GIỌNG ── -->
+      <div class="panel mb-16">
+        <div class="panel-head"><span>Thư viện giọng</span><span id="giongDem" style="text-transform:none;letter-spacing:0;font-weight:500;color:var(--text-dim);font-size:12px">…</span></div>
+        <div class="panel-body">
+          <!-- Dropdown chọn giọng — thay lưới thẻ cho gọn. Lưới thẻ cũ vẫn mở được qua nút dưới. -->
+          <div class="be-dd" id="giongLibDD">
+            <button type="button" class="be-btn" id="giongLibBtn" onclick="giongLibMo(event)"
+              aria-haspopup="listbox" aria-expanded="false">
+              <span class="be-ten" id="giongLibTen">chưa chọn giọng</span>
+              <span class="be-mo" id="giongLibNote"></span>
+              <span class="be-caret">▾</span>
+            </button>
+            <div class="be-menu" id="giongLibMenu" role="listbox" style="max-height:320px;overflow:auto"></div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px">
+            <button type="button" class="btn ghost sm" onclick="giongThemBat()">＋ Thêm giọng</button>
+            <button type="button" class="btn ghost sm" id="giongLuoiBtn" onclick="giongLuoiBat()">▦ Xem dạng lưới thẻ</button>
+            <span style="font-size:11.5px;color:var(--text-dim)">Mở danh sách ▾ rồi bấm ▶ để nghe thử 4 giây trước khi chọn.</span>
+          </div>
+          <div id="giongLuoiWrap" style="display:none;margin-top:12px">
+            <div class="gchips" id="giongChips"></div>
+            <div class="gluoi" id="giongLuoi"></div>
+            <div class="ghint">Bấm vào thẻ để nghe 4 giây mẫu — bấm lần nữa để dừng. Giọng clone có nút Xóa góc phải (giọng có sẵn thì giữ nguyên). Nhãn dưới mỗi thẻ dùng để lọc khi thư viện đông.</div>
+          </div>
+
+          <div id="giongThemBox" style="display:none;margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+            <div class="grid-2" style="gap:12px">
+                <select id="giongThemCach" onchange="giongThemDoi()">
+                  <option value="clone">Clone từ file mẫu 5–15 giây</option>
+                  <option value="design">Thiết kế từ mô tả bằng chữ</option>
+                </select>
+              </div>
+              <div><label class="label">TÊN GIỌNG</label><input type="text" id="gtTen" placeholder="vd: Nam trầm kể chuyện" autocomplete="off"></div>
+
+              <div id="gtClone" style="margin-top:12px">
+              <label class="label">FILE GIỌNG MẪU (5–15 giây, wav/mp3)</label>
+              <input type="file" id="gtFile" accept="audio/*,.mp3,.wav,.m4a,.ogg">
+            </div>
+            <div id="gtDesign" style="display:none;margin-top:12px">
+              <label class="label">MÔ TẢ GIỌNG</label>
+              <input type="text" id="gtMoTa" placeholder="vd: giọng nam trầm ấm, kể chuyện chậm rãi, cảm xúc" autocomplete="off">
+            </div>
+            <div id="gtDesignInfo" class="gt-tt" style="display:none">
+              Thiết kế giọng bằng mô tả chữ — OmniVoice áp dụng mô tả đầy đủ; VieNeu / XTTS sẽ đọc giọng này bằng giọng mặc định của engine.
+            </div>
+
+            <div style="display:flex;gap:10px;margin-top:14px">
+              <button class="btn primary" onclick="giongThemLuu()">Lưu giọng</button>
+              <button class="btn ghost" onclick="giongThemBat()">Huỷ</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── ĐỌC THÀNH GIỌNG ── -->
+      <div class="panel mb-16">
+        <div class="panel-head"><span>Đọc thành giọng</span><span id="giongDangChon" style="text-transform:none;letter-spacing:0;font-weight:500;color:var(--text-dim);font-size:12px">chưa chọn giọng</span></div>
+        <div class="gtts">
+          <div class="gl">
+            <textarea id="voiceText" oninput="window.giongDemChu()" placeholder="Nhập nội dung, hoặc bấm 'Lấy từ kịch bản' để đọc kịch bản video này."></textarea>
+            <div class="gbar">
+              <span id="giongDemChu" style="font-size:12px;color:var(--text-dim);font-variant-numeric:tabular-nums">0 từ · 0 ký tự</span>
+              <div style="display:flex;gap:9px">
+                <button class="btn ghost" onclick="voiceLoadScript()">📥 Lấy từ kịch bản</button>
+                <button class="btn primary" id="voiceGenBtn" onclick="voiceGenerate()">🎙 Tạo giọng</button>
+              </div>
+            </div>
+            <div id="voiceGenStatus" style="font-size:13px;margin-top:12px"></div>
+          </div>
+
+          <div class="gr">
+            <div class="rhead">Backend tạo giọng</div>
+            <div class="be-dd" id="voiceBackendDD">
+              <button type="button" class="be-btn" id="voiceBackendBtn" onclick="voiceBackendMo(event)"
+                aria-haspopup="listbox" aria-expanded="false">
+                <span class="gdot" id="voiceBackendDot"></span>
+                <span class="be-ten" id="voiceBackendTen">OmniVoice</span>
+                <span class="be-mo" id="voiceBackendNote">trên máy · đa ngôn ngữ</span>
+                <span class="be-caret">▾</span>
+              </button>
+              <div class="be-menu" id="voiceBackendMenu" role="listbox">
+                <div class="be-item" data-eng="omni" role="option" onclick="voiceBackendChon('omni')">
+                  <span class="gdot" id="beDotOmni"></span><span class="be-ten">OmniVoice</span><span class="be-mo">trên máy · đa ngôn ngữ</span>
+                </div>
+                <div class="be-item" data-eng="vieneu" role="option" onclick="voiceBackendChon('vieneu')">
+                  <span class="gdot" id="beDotVieneu"></span><span class="be-ten">VieNeu</span><span class="be-mo">trên máy · tiếng Việt</span>
+                </div>
+                <div class="be-item" data-eng="xtts" role="option" onclick="voiceBackendChon('xtts')">
+                  <span class="gdot" id="beDotXtts"></span><span class="be-ten">XTTS</span><span class="be-mo">trên máy · clone giọng</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="rhead" style="margin-top:18px">Ngôn ngữ</div>
+            <div class="sl" id="slNgonNgu">
+              <select id="voiceLang" onchange="try { giongDDVe(); } catch (_){}">
+                <option value="all">Tất cả ngôn ngữ</option>
+                <option value="vi" selected>Tiếng Việt</option>
+                <option value="en">English (Anh)</option>
+                <option value="zh">中文 (Trung)</option>
+                <option value="ja">日本語 (Nhật)</option>
+                <option value="ko">한국어 (Hàn)</option>
+                <option value="es">Español (TBN)</option>
+                <option value="fr">Français (Pháp)</option>
+                <option value="de">Deutsch (Đức)</option>
+                <option value="it">Italiano (Ý)</option>
+                <option value="pt">Português (BĐN)</option>
+                <option value="ru">Русский (Nga)</option>
+                <option value="pl">Polski (Ba Lan)</option>
+                <option value="tr">Türkçe (Thổ)</option>
+                <option value="nl">Nederlands (Hà Lan)</option>
+                <option value="cs">Čeština (Séc)</option>
+                <option value="ar">العربية (Ả Rập)</option>
+                <option value="hu">Magyar (Hungary)</option>
+                <option value="hi">हिन्दी (Hindi)</option>
+              </select>
+              <div class="why" id="whyNgonNgu"></div>
+            </div>
+
+            <div class="rhead" style="margin-top:18px">Giọng đọc</div>
+            <div class="be-dd" id="voiceGiongDD">
+              <button type="button" class="be-btn" id="voiceGiongBtn" onclick="giongDDMo(event)"
+                aria-haspopup="listbox" aria-expanded="false">
+                <span class="be-ten" id="voiceGiongTen">chưa chọn giọng</span>
+                <span class="be-mo" id="voiceGiongNote"></span>
+                <span class="be-caret">▾</span>
+              </button>
+              <div class="be-menu" id="voiceGiongMenu" role="listbox" style="max-height:280px;overflow:auto"></div>
+            </div>
+            <div id="whyGiong" style="font-size:11.5px;color:var(--text-dim);margin-top:8px;line-height:1.55"></div>
+
+            <div class="rhead" style="margin-top:18px">Tinh chỉnh</div>
+            <div class="sl" id="slTocDo">
+              <div class="slh"><b>Tốc độ</b><span id="vSpeedVal">1.00×</span></div>
+              <input type="range" id="voiceSpeed" min="0.5" max="1.5" step="0.05" value="1"
+                oninput="document.getElementById('vSpeedVal').textContent=(+this.value).toFixed(2)+'×'">
+              <div class="why" id="whyTocDo"></div>
+            </div>
+            <div class="sl" id="slCaoDo">
+              <div class="slh" title="±12 nửa cung (st) — trầm hơn hay cao hơn giọng gốc. Áp dụng cho mọi engine (xử lý hậu kỳ, giữ nguyên tốc độ)."><b>Cao độ</b><span id="vPitchVal">0 st</span></div>
+              <input type="range" id="voicePitch" min="-12" max="12" step="1" value="0"
+                oninput="document.getElementById('vPitchVal').textContent=(+this.value>0?'+':'')+this.value+' st'">
+              <div class="why" id="whyCaoDo">Trầm/cao hơn giọng gốc</div>
+            </div>
+            <div class="sl" id="slGap">
+              <div class="slh"><b>Nghỉ giữa câu</b><span id="vGapVal">300 ms</span></div>
+              <input type="range" id="voiceGap" min="0" max="1000" step="50" value="300"
+                oninput="document.getElementById('vGapVal').textContent=this.value+' ms'">
+            </div>
+
+            <!-- Cài đặt nâng cao (gập lại) — PHẢI nằm TRONG .gr, nếu là con trực tiếp
+                 của .gtts (grid 2 cột) nó sẽ thành item thứ 3, bị đẩy xuống dưới cột
+                 trái dài → tưởng như "invisible". Xem MEMORY.md 2026-09-08. -->
+            <details style="margin-top:18px;border-top:1px solid var(--border);padding-top:14px">
+            <summary style="cursor:pointer;font-weight:600;font-size:13.5px;color:var(--text-muted);user-select:none">⚙️ Cài đặt nâng cao</summary>
+            <div style="margin-top:12px;display:flex;flex-direction:column;gap:12px">
+              <div class="sl" id="slTopP" data-engines="vieneu">
+                <div class="slh" title="VieNeu (LM-based). Giảm để giọng đọc ngẫu hứng, có hồn hơn (giống ElevenLabs). Tăng để ổn định."><b>Top P — VieNeu</b><span id="vTopPVal">0.85</span></div>
+                <input type="range" id="voiceTopP" min="0" max="1" step="0.01" value="0.85"
+                  oninput="document.getElementById('vTopPVal').textContent=(+this.value).toFixed(2)">
+                <div class="why">Thấp = có hồn · cao = ổn định</div>
+              </div>
+              <div class="sl" id="slTopK" data-engines="vieneu">
+                <div class="slh" title="VieNeu (LM-based). Độ đa dạng của âm thanh. Giá trị cao hơn cho giọng tự nhiên hơn."><b>Top K — VieNeu</b><span id="vTopKVal">50</span></div>
+                <input type="range" id="voiceTopK" min="1" max="100" step="1" value="50"
+                  oninput="document.getElementById('vTopKVal').textContent=this.value">
+                <div class="why">Cao = tự nhiên hơn</div>
+              </div>
+              <div class="sl" id="slRepPen" data-engines="vieneu">
+                <div class="slh" title="VieNeu. Tăng để tránh AI bị lắp bắp hoặc lặp chữ."><b>Repetition — VieNeu</b><span id="vRepPenVal">2.0</span></div>
+                <input type="range" id="voiceRepPen" min="1.0" max="3.0" step="0.1" value="2.0"
+                  oninput="document.getElementById('vRepPenVal').textContent=(+this.value).toFixed(1)">
+                <div class="why">Tránh lặp chữ, lắp bắp</div>
+              </div>
+              <div class="sl" id="slGenSpeed" data-engines="omni">
+                <div class="slh" title="OmniVoice (diffusion-based). Điều chỉnh tốc độ sinh âm thanh (ảnh hưởng guidance_scale)."><b>Tốc độ sinh — OmniVoice</b><span id="vGenSpeedVal">0.9×</span></div>
+                <input type="range" id="voiceGenSpeed" min="0.5" max="1.5" step="0.05" value="0.9"
+                  oninput="document.getElementById('vGenSpeedVal').textContent=(+this.value).toFixed(2)+'×'">
+                <div class="why">Cao = nhanh hơn</div>
+              </div>
+              <div class="sl" id="slDiffSteps" data-engines="omni">
+                <div class="slh" title="OmniVoice. Số càng cao âm thanh càng trong nhưng tạo chậm hơn (ảnh hưởng num_step)."><b>Sắc nét — OmniVoice</b><span id="vDiffStepsVal">16</span></div>
+                <input type="range" id="voiceDiffSteps" min="4" max="32" step="2" value="16"
+                  oninput="document.getElementById('vDiffStepsVal').textContent=this.value">
+                <div class="why">Cao = trong hơn, chậm hơn</div>
+              </div>
+            </div>
+            </details>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── ĐÃ TẠO ── -->
+      <div class="panel mb-16">
+        <div class="panel-head"><span>Đã tạo</span><span style="text-transform:none;letter-spacing:0;font-weight:500;color:var(--text-dim);font-size:12px">lưu trên máy — còn đó khi mở lại app</span></div>
+        <div class="panel-body" style="padding:10px">
+          <button class="btn primary sm" id="giongGhepBtn" style="display:none;width:100%;margin-bottom:8px" onclick="giongSuGhep()">🔗 Ghép các đoạn đã xong</button>
+          <div id="giongSu"><div class="empty-state">Chưa tạo bản nào. Bản đã tạo được lưu trên máy — còn đó khi mở lại app.</div></div>
+        </div>
+      </div>
+
+      <!-- ── ENGINE ── -->
+      <div class="panel mb-16">
+        <div class="panel-head"><span>Engine</span><span id="giongEngineDem" style="text-transform:none;letter-spacing:0;font-weight:500;color:var(--text-dim);font-size:12px">…</span></div>
+        <div class="panel-body">
+          <div class="geng" id="giongEngine"></div>
+          <div class="ghint">Chấm xanh = sẵn sàng · xám = chưa chạy · đỏ = lỗi lần đọc gần nhất. Chọn engine ở khối "Đọc thành giọng".</div>
+        </div>
+      </div>
+
+      <details style="margin-top:4px">
+        <summary style="cursor:pointer;font-size:12px;color:var(--text-muted)">📋 Nhật ký backend (log) — mở khi cần xem tiến trình / lỗi</summary>
+        <pre id="voiceLog" style="max-height:240px;overflow:auto;background:var(--surface-2);color:var(--text-muted);border:1px solid var(--border);font-size:11px;line-height:1.5;padding:10px;border-radius:8px;margin-top:6px;white-space:pre-wrap"></pre>
+      </details>
+      <div style="margin-top:14px;font-size:11px;color:var(--text-dim);border-top:1px solid var(--border);padding-top:10px">
+        Giọng đọc chạy trong máy: <b>OmniVoice</b> (k2-fsa · Apache-2.0) · <b>VieNeu</b> · <b>XTTS</b> (Coqui) — không tốn phí API, không gửi dữ liệu lên đám mây.
+      </div>
+    </div>
+
+
+

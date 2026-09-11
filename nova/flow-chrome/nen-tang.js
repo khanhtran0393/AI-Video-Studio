@@ -94,7 +94,8 @@ function statusPayload() {
     const a = accounts.get(id); const tk = S.tokens.get(id);
     return { id: a.id, email: a.email || ('Chrome ' + a.id), tier: a.tier, credits: a.credits, cookieExpiry: a.cookieExpiry || null,
       tokenExpiry: tk ? (tk.expiry || (tk.at + 55 * 60 * 1000)) : null, enabled: a.enabled !== false, proxy: a.proxy || null,
-      hasToken: !!tk, needLogin: a.needLogin === true, useImage: a.useImage !== false, useVideo: a.useVideo !== false };
+      hasToken: !!tk, needLogin: a.needLogin === true, useImage: a.useImage !== false, useVideo: a.useVideo !== false,
+      ssoConsent: S.ssoConsent || null };
   }) };
 }
 function setUse(id, kind, val) {

@@ -1,0 +1,27 @@
+<!-- ============ GATE NOTICE (thông báo giới hạn gói) ============ -->
+<link rel="stylesheet" href="src/styles/gate-modal.css">
+<div id="gateModal" onclick="if(event.target===this)closeGate()">
+  <div class="gm-card">
+    <button class="gm-x" onclick="closeGate()" title="Đóng">✕</button>
+    <div class="gm-title">THÔNG BÁO</div>
+    <div class="gm-msg" id="gateMsg">—</div>
+    <div class="gm-btns" id="gateBtns"></div>
+  </div>
+</div>
+
+<!-- ============ UPDATE MODAL (thông báo cập nhật lúc mở app) ============ -->
+<link rel="stylesheet" href="src/styles/update-modal.css">
+<div id="updateModal">
+  <div class="um-card">
+    <button class="um-x" onclick="updateLater()" title="Đóng">✕</button>
+    <div class="um-h"><span class="ic">⬆️</span><span>Thông báo cập nhật</span></div>
+    <div class="um-new">Phiên bản mới <b id="umNewVer">—</b> đã có sẵn.</div>
+    <div class="um-cur">Phiên bản hiện tại: <span id="umCurVer">—</span></div>
+    <div class="um-q" id="umQuestion">Bạn có muốn cập nhật ngay không?</div>
+    <div class="um-prog" id="umProg"><div class="bar"><div class="fill" id="umFill"></div></div><div class="txt" id="umProgTxt">Đang tải… 0%</div></div>
+    <div class="um-btns">
+      <button class="um-btn um-later" id="umLaterBtn" onclick="updateLater()">Để sau</button>
+      <button class="um-btn um-now" id="umNowBtn" onclick="updateNow()">Cập nhật ngay</button>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,80 @@
+<!-- Hộp Xuất Video đặt ở cấp <body>: nằm trong #tool-tool7 thì hộp không mở được,
+     vì .tool{display:none} ẩn toàn bộ con cháu, kể cả position:fixed. -->
+<div id="t7ExportModal" class="t7-modal" style="display:none">
+        <div class="t7-modal-card">
+          <div class="t7-modal-head">
+            <div style="font-size:19px;font-weight:700">Xuất video</div>
+            <button class="t7-modal-x" onclick="t7CloseExport()" aria-label="Đóng">✕</button>
+          </div>
+          <div class="t7-modal-body">
+            <div class="t7-modal-thumb"><img id="t7ExpThumbPick" alt=""><div id="t7ExpThumbEmpty" style="color:var(--text-dim);font-size:12px">Chưa có ảnh</div></div>
+            <div class="t7-modal-fields">
+              <label class="t7-mlab">Tên</label>
+              <input id="t7ExpName" class="t7-mfield" type="text" placeholder="Tên file video">
+              <label class="t7-mlab">Xuất sang</label>
+              <div style="display:flex;gap:8px">
+                <input id="t7ExpDir" class="t7-mfield" type="text" style="flex:1" readonly>
+                <button class="btn ghost sm" onclick="t7ExportChooseFolder()">📁 Chọn</button>
+              </div>
+              <div class="t7-mlabel-sec">VIDEO</div>
+              <div style="margin-bottom:12px">
+                <!-- Nova Scene hiện lại vì đã có mẫu đồ hoạ + ghép giọng đọc sau khi render.
+                     Vẫn CHỈ chạy được trên máy có Remotion+Chromium (xem chú thích dưới ô chọn). -->
+                <label class="t7-mlab">Bộ dựng</label>
+                <select id="t7ExpEngine" class="t7-mfield" onchange="t7ExportEngineChange()">
+                  <option value="ffmpeg" selected>Chuẩn (ffmpeg) — nhanh, không có lớp đồ hoạ AI</option>
+                  <option value="nova">Nova Scene — có lớp đồ hoạ AI, chậm hơn</option>
+                </select>
+                <div id="t7ExpEngineNote" style="font-size:11px;color:var(--text-muted);margin-top:5px"></div>
+              </div>
+              <div class="t7-mgrid">
+                <div><label class="t7-mlab">Độ phân giải</label>
+                  <select id="t7ExpRes" class="t7-mfield" onchange="t7ExportEstimate()">
+                    <option value="720">720p (HD)</option>
+                    <option value="1080" selected>1080p (Full HD)</option>
+                    <option value="1440">2K (1440p)</option>
+                    <option value="2160">4K (2160p)</option>
+                  </select></div>
+                <div><label class="t7-mlab">Tốc độ bit</label>
+                  <select id="t7ExpBitrate" class="t7-mfield" onchange="t7ExportEstimate()">
+                    <option value="auto" selected>Được đề xuất</option>
+                    <option value="high">Cao (nét hơn)</option>
+                    <option value="low">Thấp (nhẹ file)</option>
+                  </select></div>
+                <div><label class="t7-mlab">Bộ mã hoá</label>
+                  <select id="t7ExpCodec" class="t7-mfield">
+                    <option value="h264" selected>H.264 (tương thích rộng)</option>
+                    <option value="h265">H.265 / HEVC (nhẹ hơn)</option>
+                  </select></div>
+                <div><label class="t7-mlab">Định dạng</label>
+                  <select id="t7ExpFormat" class="t7-mfield"><option value="mp4" selected>MP4</option></select></div>
+                <div><label class="t7-mlab">Tốc độ khung hình</label>
+                  <select id="t7ExpFps" class="t7-mfield" onchange="t7ExportEstimate()">
+                    <option value="24">24 fps</option>
+                    <option value="30" selected>30 fps</option>
+                    <option value="60">60 fps</option>
+                  </select></div>
+                <div><label class="t7-mlab">Không gian màu</label>
+                  <input class="t7-mfield" type="text" value="Rec. 709 SDR" readonly style="color:var(--text-dim)"></div>
+              </div>
+              <label class="t7-mlab" style="display:flex;align-items:center;gap:9px;margin-top:14px;cursor:pointer">
+                <input type="checkbox" id="t7ExpSubs" onchange="if(typeof t7RenderPreview==='function')t7RenderPreview()" style="accent-color:var(--accent);width:16px;height:16px"> 📝 Ghi phụ đề vào video (burn — hiện chữ trực tiếp trên hình · xem trước hiện y hệt). Mặc định TẮT → video xuất KHÔNG có chữ.
+              </label>
+              <div style="margin-top:10px">
+                <label class="t7-mlab" style="display:block;margin-bottom:7px">Kiểu phụ đề</label>
+                <div id="t7SubStyleChips" style="display:flex;gap:7px;flex-wrap:wrap"></div>
+              </div>
+                     <label id="t7ExpGpuRow" class="t7-mlab" style="display:none;align-items:center;gap:9px;margin-top:10px;cursor:pointer">
+                <input type="checkbox" id="t7ExpGpu" checked style="accent-color:var(--accent);width:16px;height:16px"> <span id="t7ExpGpuLab">⚡ Tăng tốc GPU</span>
+              </label>
+            </div>
+          </div>
+          <div class="t7-modal-foot">
+            <div id="t7ExpEstimate" style="font-size:12.5px;color:var(--text-muted)">—</div>
+            <div style="display:flex;gap:10px">
+              <button class="btn ghost" onclick="t7CloseExport()">Hủy</button>
+              <button class="btn primary" id="t7ExpGo" onclick="t7DoExport()">⬆ Xuất</button>
+            </div>
+          </div>
+        </div>
+      </div>

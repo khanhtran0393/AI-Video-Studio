@@ -1,0 +1,512 @@
+    <link rel="stylesheet" href="src/styles/tool-script.css">
+    <div class="tool" id="tool-toolscript">
+      <div class="tool-head">
+        <div class="tool-title">Tạo Kịch Bản</div>
+        <div class="tool-subtitle">Nhập chủ đề + số từ → AI viết kịch bản sạch theo phong cách kênh (Prompt kịch bản ở Profile), sẵn sàng đưa vào giọng nói / phân cảnh.</div>
+      </div>
+      <div class="ts-grid">
+        <!-- INPUT -->
+        <div class="ts-card">
+          <label class="ts-lbl">Chủ đề / Tiêu đề video</label>
+          <div style="display:flex;gap:8px;margin-bottom:8px">
+            <select class="ts-field" style="flex:1;font-size:12px;padding:7px 10px;" onchange="let m=this.value, s=this.nextElementSibling.value; document.getElementById('tsTopic').value = m ? (m + (s ? ' - ' : '') + s) : '';">
+              <option value="" selected>-- Chọn Chủ Đề --</option>
+              <optgroup label="1. CHỦ ĐỀ">
+                <option value="Xuyên Không">Xuyên Không</option>
+                <option value="Trùng Sinh">Trùng Sinh</option>
+                <option value="Hệ Thống">Hệ Thống</option>
+                <option value="Sinh Tồn">Sinh Tồn</option>
+                <option value="Võ Hiệp">Võ Hiệp</option>
+                <option value="Trinh Thám">Trinh Thám</option>
+                <option value="Dị Năng">Dị Năng</option>
+                <option value="Linh Khí Khôi Phục">Linh Khí Khôi Phục</option>
+                <option value="Kinh Dị">Kinh Dị</option>
+                <option value="Hài Hước">Hài Hước</option>
+                <option value="Cơ Giáp / Mecha">Cơ Giáp / Mecha</option>
+                <option value="Ngôn Tình">Ngôn Tình</option>
+                <option value="Báo Thù">Báo Thù</option>
+                <option value="Phản Công">Phản Công</option>
+                <option value="Nông Trường">Nông Trường</option>
+                <option value="Thương Chiến">Thương Chiến</option>
+                <option value="Quân Sự">Quân Sự</option>
+                <option value="Cung Đấu">Cung Đấu</option>
+                <option value="Học Đường">Học Đường</option>
+                <option value="Thể Thao">Thể Thao</option>
+                <option value="Ẩm Thực">Ẩm Thực</option>
+                <option value="Y Học">Y Học</option>
+                <option value="Game / Võng Du">Game / Võng Du</option>
+                <option value="Kỳ Ảo Mạo Hiểm">Kỳ Ảo Mạo Hiểm</option>
+                <option value="Thần Thoại">Thần Thoại</option>
+                <option value="Đồng Nhân">Đồng Nhân</option>
+                <option value="Đạo Tặc / Heist">Đạo Tặc / Heist</option>
+                <option value="Chính Trị">Chính Trị</option>
+                <option value="Tình Báo">Tình Báo</option>
+                <option value="Du Hành / Di Cư">Du Hành / Di Cư</option>
+                <option value="Trộm Mộ / Thám Hiểm Cổ Mộ">Trộm Mộ / Thám Hiểm Cổ Mộ</option>
+                <option value="Xuyên Sách / Phản Diện">Xuyên Sách / Phản Diện</option>
+                <option value="Giải Trí / Showbiz">Giải Trí / Showbiz</option>
+                <option value="Điền Viên / Chữa Lành">Điền Viên / Chữa Lành</option>
+                <option value="Mạt Thế / Xác Sống">Mạt Thế / Xác Sống</option>
+                <option value="Binh Vương / Đặc Chủng">Binh Vương / Đặc Chủng</option>
+                <option value="Sống Trùng Lặp (Time Loop)">Sống Trùng Lặp (Time Loop)</option>
+                <option value="Triệu Hoán / Ngự Thú">Triệu Hoán / Ngự Thú</option>
+                <option value="Xây Dựng Tông Môn">Xây Dựng Tông Môn</option>
+                <option value="Nữ Cường / Quyền Lực">Nữ Cường / Quyền Lực</option>
+                <option value="Hào Môn Thế Gia">Hào Môn Thế Gia</option>
+                <option value="Thần Bí / Cthulhu">Thần Bí / Cthulhu</option>
+                <option value="Tâm Cơ / Trí Đấu">Tâm Cơ / Trí Đấu</option>
+                <option value="Đa Vũ Trụ">Đa Vũ Trụ</option>
+                <option value="Khoa Kỹ / Xây Dựng Căn Cứ">Khoa Kỹ / Xây Dựng Căn Cứ</option>
+                <option value="Nghệ Thuật / Âm Nhạc">Nghệ Thuật / Âm Nhạc</option>
+                <option value="Tâm Trí / Hack Não">Tâm Trí / Hack Não</option>
+                <option value="Quái Vật Khổng Lồ (Kaiju)">Quái Vật Khổng Lồ (Kaiju)</option>
+                <option value="Sứ Giả Thần Linh">Sứ Giả Thần Linh</option>
+                <option value="Người Ngoài Hành Tinh">Người Ngoài Hành Tinh</option>
+                <option value="Truy Tìm Kho Báu">Truy Tìm Kho Báu</option>
+                <option value="Thần Đồng / Thiên Tài">Thần Đồng / Thiên Tài</option>
+                <option value="Khảo Cổ Viễn Tưởng">Khảo Cổ Viễn Tưởng</option>
+                <option value="Đấu Sủng (Trận Chiến Thú Cưng)">Đấu Sủng (Trận Chiến Thú Cưng)</option>
+                <option value="Dưỡng Thành (Nuôi Dưỡng Trưởng Thành)">Dưỡng Thành (Nuôi Dưỡng Trưởng Thành)</option>
+                <option value="Nghề Nghiệp Đặc Thù">Nghề Nghiệp Đặc Thù (Pháp Y, Tâm Lý...)</option>
+                <option value="Trộm Mệnh / Đổi Đời">Trộm Mệnh / Đổi Đời</option>
+                <option value="Giấu Giếm Thân Phận (Ẩn Nhẫn)">Giấu Giếm Thân Phận (Ẩn Nhẫn)</option>
+                <option value="Nhặt Nhạnh Đồng Nát">Nhặt Nhạnh Đồng Nát (Nhặt ve chai)</option>
+                <option value="Phục Sinh / Hồi Sinh">Phục Sinh / Hồi Sinh</option>
+                <option value="Siêu Trí Tuệ Ái Nhân (AI Romance)">Siêu Trí Tuệ Ái Nhân (AI Romance)</option>
+                <option value="Đấu Trí Phòng Kín (Escape Room)">Đấu Trí Phòng Kín (Escape Room)</option>
+                <option value="Phá Mộng / Xuyên Mộng">Phá Mộng / Xuyên Mộng</option>
+                <option value="Thế Giới Ngầm (Underworld)">Thế Giới Ngầm (Underworld)</option>
+                <option value="Cuộc Chiến Băng Đảng">Cuộc Chiến Băng Đảng</option>
+                <option value="Bảo Tiêu / Lính Đánh Thuê">Bảo Tiêu / Lính Đánh Thuê</option>
+                <option value="Ma Pháp Sư / Phù Thủy Học Việc">Ma Pháp Sư / Phù Thủy Học Việc</option>
+                <option value="Đọa Lạc / Sa Ngã (Corruption Arc)">Đọa Lạc / Sa Ngã (Corruption Arc)</option>
+                <option value="Thay Trời Hành Đạo">Thay Trời Hành Đạo</option>
+                <option value="Diệt Thần (Godslayer)">Diệt Thần (Godslayer)</option>
+                <option value="Săn Lùng Quái Vật (Monster Hunter)">Săn Lùng Quái Vật (Monster Hunter)</option>
+                <option value="Thức Tỉnh Cột Mốc">Thức Tỉnh Cột Mốc (Awakening Event)</option>
+                <option value="Sinh Sinh Diệt Diệt">Sinh Sinh Diệt Diệt (Reincarnation Cycle)</option>
+                <option value="Trốn Tìm Sinh Tử">Trốn Tìm Sinh Tử (Deadly Hide & Seek)</option>
+                <option value="Cấm Thuật / Huyết Tế">Cấm Thuật / Huyết Tế</option>
+                <option value="Nghịch Thiên Cải Mệnh">Nghịch Thiên Cải Mệnh</option>
+                <option value="Cờ Bạc / Xúc Xắc Sinh Tử">Cờ Bạc / Xúc Xắc Sinh Tử</option>
+                <option value="Sinh Tồn Nơi Hoang Dã">Sinh Tồn Nơi Hoang Dã</option>
+                <option value="Chinh Phục Ngọn Núi">Chinh Phục Ngọn Núi</option>
+                <option value="Thám Hiểm Đáy Biển">Thám Hiểm Đáy Biển Mảnh Vỡ</option>
+                <option value="Phiêu Lưu Trên Bầu Trời">Phiêu Lưu Trên Bầu Trời (Sky Islands)</option>
+                <option value="Sát Thủ Bàn Phím (Cyber Hacker)">Sát Thủ Bàn Phím (Cyber Hacker)</option>
+                <option value="Truy Ký Hiệp Khách">Truy Ký Hiệp Khách</option>
+                <option value="Giới Thượng Lưu / Gia Tộc">Giới Thượng Lưu / Gia Tộc Bí Ẩn</option>
+                <option value="Đảo Ngược Thời Gian (Rewind)">Đảo Ngược Thời Gian (Rewind)</option>
+                <option value="Cây Sinh Mệnh / Thần Mộc">Cây Sinh Mệnh / Thần Mộc</option>
+                <option value="Hồi Ức Chắp Vá (Amnesia)">Hồi Ức Chắp Vá (Amnesia)</option>
+                <option value="Sinh Vật Biến Đổi Gen">Sinh Vật Biến Đổi Gen</option>
+                <option value="Kho Tàng Thư Viện">Kho Tàng Thư Viện Chứa Bí Mật</option>
+                <option value="Tội Phạm Hoàn Hảo">Tội Phạm Hoàn Hảo</option>
+                <option value="Lãnh Chúa / Lãnh Địa">Lãnh Chúa / Lãnh Địa Khai Hoang</option>
+                <option value="Nhà Thám Hiểm / Phiêu Lưu Giả">Nhà Thám Hiểm / Phiêu Lưu Giả</option>
+                <option value="Truy Tìm Dấu Tích">Truy Tìm Dấu Tích Chủng Tộc Cũ</option>
+                <option value="Giả Tưởng Học Đường">Giả Tưởng Học Đường (Magic School)</option>
+                <option value="Giới Trẻ Lạc Lối">Giới Trẻ Lạc Lối (Youth Rebellion)</option>
+                <option value="Nuôi Con / Papa/Mama">Nuôi Con / Papa/Mama (Parenting)</option>
+                <option value="Nhập Vai Kháng Địch">Nhập Vai Kháng Địch (Tower Defense)</option>
+                <option value="Cảnh Sát Hình Sự">Cảnh Sát Hình Sự / Thám Tử Tư</option>
+                <option value="Bậc Thầy Sân Khấu / Ảo Thuật">Bậc Thầy Sân Khấu / Ảo Thuật</option>
+                <option value="Giao Dịch Ác Quỷ">Giao Dịch Ác Quỷ (Devil's Bargain)</option>
+              </optgroup>
+            </select>
+            <select class="ts-field" style="flex:1;font-size:12px;padding:7px 10px;" onchange="let m=this.previousElementSibling.value, s=this.value; document.getElementById('tsTopic').value = (m && s) ? (m + ' - ' + s) : (m || '');">
+              <option value="" selected>-- Phong Cách --</option>
+              <optgroup label="2. PHONG CÁCH">
+                <option value="Tu Tiên / Tiên Hiệp">Tu Tiên / Tiên Hiệp</option>
+                <option value="Huyền Huyễn">Huyền Huyễn</option>
+                <option value="Đô Thị">Đô Thị</option>
+                <option value="Viễn Tưởng">Viễn Tưởng</option>
+                <option value="Dystopia">Dystopia</option>
+                <option value="Cổ Đại">Cổ Đại</option>
+                <option value="Cyberpunk">Cyberpunk</option>
+                <option value="Steampunk">Steampunk</option>
+                <option value="Hắc Ám">Hắc Ám</option>
+                <option value="Đồng Nhân">Đồng Nhân</option>
+                <option value="Kiếm Hiệp">Kiếm Hiệp</option>
+                <option value="Huyền Nghi">Huyền Nghi</option>
+                <option value="Tâm Lý Tội Phạm">Tâm Lý Tội Phạm</option>
+                <option value="Siêu Anh Hùng">Siêu Anh Hùng</option>
+                <option value="Western">Western</option>
+                <option value="Hải Tặc">Hải Tặc</option>
+                <option value="Không Gian">Không Gian</option>
+                <option value="Xây Dựng Thế Giới">Xây Dựng Thế Giới</option>
+                <option value="Đông Phương Kỳ Ảo">Đông Phương Kỳ Ảo</option>
+                <option value="Phương Tây Kỳ Ảo">Phương Tây Kỳ Ảo</option>
+                <option value="LitRPG">LitRPG</option>
+                <option value="Military Sci-Fi">Military Sci-Fi</option>
+                <option value="Romantasy">Romantasy</option>
+                <option value="Slice of Life">Slice of Life</option>
+                <option value="Epic / Sử Thi">Epic / Sử Thi</option>
+                <option value="Gothic">Gothic</option>
+                <option value="Thriller">Thriller</option>
+                <option value="Hard Sci-Fi">Hard Sci-Fi</option>
+                <option value="Noir">Noir</option>
+                <option value="Biopunk">Biopunk</option>
+                <option value="Post-Apocalyptic">Post-Apocalyptic (Hậu Tận Thế)</option>
+                <option value="Lovecraftian">Lovecraftian / Cosmic Horror</option>
+                <option value="Dark Comedy">Dark Comedy (Hài Đen)</option>
+                <option value="Magical Realism">Magical Realism (Hiện Thực Huyền Ảo)</option>
+                <option value="Grimdark">Grimdark</option>
+                <option value="Urban Legend">Urban Legend (Truyền Thuyết Đô Thị)</option>
+                <option value="Dark Fairy Tale">Dark Fairy Tale (Cổ Tích Đen)</option>
+                <option value="Alternate History">Alternate History (Lịch Sử Giả Định)</option>
+                <option value="Whodunit">Whodunit (Phá Án Suy Luận)</option>
+                <option value="Space Opera">Space Opera</option>
+                <option value="Solar Punk">Solar Punk</option>
+                <option value="Atompunk">Atompunk</option>
+                <option value="Giallo">Giallo / Án mạng kinh dị</option>
+                <option value="Isekai">Isekai</option>
+                <option value="Wuxia Truyền Thống">Wuxia Truyền Thống</option>
+                <option value="Xianxia Cổ Điển">Xianxia Cổ Điển</option>
+                <option value="Low Fantasy">Low Fantasy</option>
+                <option value="High Fantasy">High Fantasy</option>
+                <option value="Surrealism">Surrealism (Siêu Thực)</option>
+                <option value="Psychological Horror">Psychological Horror (Kinh Dị Tâm Lý)</option>
+                <option value="Mythopoeia">Mythopoeia (Kiến tạo Thần Thoại)</option>
+                <option value="Urban Fantasy">Urban Fantasy (Kỳ Ảo Đô Thị)</option>
+                <option value="Dark Academia">Dark Academia</option>
+                <option value="Light Academia">Light Academia</option>
+                <option value="Sword and Sorcery">Sword and Sorcery (Kiếm & Ma Thuật)</option>
+                <option value="Flintlock Fantasy">Flintlock Fantasy (Kỳ Ảo Súng Hỏa Mai)</option>
+                <option value="Gaslamp Fantasy">Gaslamp Fantasy (Kỳ Ảo Đèn Khí Đá)</option>
+                <option value="Weird West">Weird West (K Kỳ Ảo Viễn Tây)</option>
+                <option value="Space Western">Space Western (Viễn Tây Vũ Trụ)</option>
+                <option value="Cassette Futurism">Cassette Futurism</option>
+                <option value="Raypunk">Raypunk (Sci-Fi Thập niên 50)</option>
+                <option value="Nanopunk">Nanopunk (Công nghệ Nano)</option>
+                <option value="Splatterpunk">Splatterpunk (Bạo lực máu me)</option>
+                <option value="Bizarro Fiction">Bizarro Fiction (Viễn Tưởng Kỳ Dị)</option>
+                <option value="Slipstream">Slipstream (Giả Tưởng Đa Tầng)</option>
+                <option value="Paranormal Romance">Paranormal Romance (Lãng Mạn Siêu Nhiên)</option>
+                <option value="Apocalyptic">Apocalyptic (Hủy Diệt Đồng Loạt)</option>
+                <option value="Cli-Fi">Cli-Fi (Viễn Tưởng Khí Hậu)</option>
+                <option value="Solarpunk Cổ Điển">Solarpunk Cổ Điển</option>
+                <option value="Decopunk">Decopunk (Nghệ thuật & Công nghệ)</option>
+                <option value="Mythic Fiction">Mythic Fiction (Tiểu Thuyết Huyền Đam)</option>
+                <option value="Fairy Tale Retelling">Fairy Tale Retelling (Kể Lại Cổ Tích)</option>
+                <option value="Grimms' Fairy Tales">Grimms' Fairy Tales (Phong cách Grimm)</option>
+                <option value="Arthurian Legend">Arthurian Legend (Huyền thoại vua Arthur)</option>
+                <option value="Ninja / Samurai Fiction">Ninja / Samurai Fiction</option>
+                <option value="Mecha-Musume">Mecha-Musume (Cơ Giáp Nữ Sinh)</option>
+                <option value="Sentai / Tokusatsu">Sentai / Tokusatsu</option>
+                <option value="Magical Girl">Magical Girl (Mahou Shoujo)</option>
+                <option value="B-Movie Horror">B-Movie Horror (Kinh Dị Bình Dân)</option>
+                <option value="Slasher">Slasher (Sát Nhân Hàng Loạt)</option>
+                <option value="Found Footage">Found Footage (Phim Tài Liệu Giả)</option>
+                <option value="Gothic Romance">Gothic Romance</option>
+                <option value="Southern Gothic">Southern Gothic</option>
+                <option value="Suburban Gothic">Suburban Gothic</option>
+                <option value="Hard-boiled Detective">Hard-boiled Detective (Thám Tử Gai Góc)</option>
+                <option value="Cozy Mystery">Cozy Mystery (Trinh Thám Ấm Áp)</option>
+                <option value="Legal Thriller">Legal Thriller (Giật Gân Tòa Án)</option>
+                <option value="Medical Thriller">Medical Thriller (Giật Gân Y Khoa)</option>
+                <option value="Techno-Thriller">Techno-Thriller (Giật Gân Công Nghệ)</option>
+                <option value="Spy Fiction">Spy Fiction (Tiểu Thuyết Gián Điệp)</option>
+                <option value="Heist / Caper">Heist / Caper (Siêu Trộm)</option>
+                <option value="Picaresque">Picaresque (Lãng Tử / Giang Hồ)</option>
+                <option value="Bildungsroman">Bildungsroman (Trưởng Thành qua Thử Thách)</option>
+                <option value="Epistolary">Epistolary (Viết Dưới Dạng Thư Từ)</option>
+                <option value="Metafiction">Metafiction (Tiểu Thuyết Siêu Cấu Trúc)</option>
+                <option value="Satire / Trào Phúng">Satire / Trào Phúng</option>
+                <option value="Absurdist Fiction">Absurdist Fiction (Phi Lý)</option>
+                <option value="Utopian">Utopian (Xã Hội Không Tưởng)</option>
+                <option value="Speculative Evolution">Speculative Evolution (Tiến Hóa Giả Định)</option>
+                <option value="New Weird">New Weird (Tân Kỳ Dị)</option>
+              </optgroup>
+            </select>
+          </div>
+          <input id="tsTopic" class="ts-field" placeholder="Hoặc tự nhập: Bí ẩn sự sụp đổ của Đế chế La Mã">
+
+          <div class="ts-card" style="margin-top:16px;padding:12px 16px;">
+            <label class="ts-lbl" style="margin-bottom:10px;font-weight:700;letter-spacing:0.5px">QUY MÔ</label>
+            <div style="display:flex;gap:12px;flex-wrap:wrap">
+              <div style="flex:1;min-width:120px">
+                <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px;font-weight:600">CHƯƠNG</label>
+                <input type="number" id="tsChapters" class="ts-field" style="padding:6px 10px" value="1" min="1" oninput="tsUpdateScale()">
+              </div>
+              <div style="flex:1;min-width:120px">
+                <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px;font-weight:600">TỪ / CHƯƠNG</label>
+                <input type="number" id="tsWordsPerChapter" class="ts-field" style="padding:6px 10px" value="1200" min="100" step="100" oninput="tsUpdateScale()">
+              </div>
+              <div style="flex:1;min-width:120px">
+                <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px;font-weight:600">NGÔN NGỮ</label>
+                <select id="tsLang" class="ts-field" style="padding:6px 10px">
+                  <option>Tiếng Việt</option>
+                  <option>English</option>
+                  <option>Español (Tây Ban Nha)</option>
+                  <option>Français (Pháp)</option>
+                  <option>Deutsch (Đức)</option>
+                  <option>Italiano (Ý)</option>
+                  <option>Português (Bồ Đào Nha)</option>
+                  <option>Русский (Nga)</option>
+                  <option>中文 (Trung Quốc)</option>
+                  <option>日本語 (Nhật Bản)</option>
+                  <option>한국어 (Hàn Quốc)</option>
+                  <option>हिन्दी (Hindi)</option>
+                  <option>العربية (Ả Rập)</option>
+                  <option>Türkçe (Thổ Nhĩ Kỳ)</option>
+                  <option>Bahasa Indonesia</option>
+                  <option>ภาษาไทย (Thái Lan)</option>
+                  <option>Bahasa Melayu (Malaysia)</option>
+                  <option>Tagalog (Philippines)</option>
+                  <option>Nederlands (Hà Lan)</option>
+                  <option>Polski (Ba Lan)</option>
+                  <option>Svenska (Thụy Điển)</option>
+                  <option>Dansk (Đan Mạch)</option>
+                  <option>Suomi (Phần Lan)</option>
+                  <option>Norsk (Na Uy)</option>
+                  <option>Ελληνικά (Hy Lạp)</option>
+                  <option>Čeština (Séc)</option>
+                  <option>Magyar (Hungary)</option>
+                </select>
+              </div>
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-top:10px;font-size:11.5px;font-weight:600">
+              <span id="tsScaleTotalEst" style="color:var(--accent)">Tổng dự tính: ~34 phút</span>
+              <span id="tsScalePerEst" style="color:var(--teal)">≈ 11 phút/chương</span>
+            </div>
+            
+            <input type="hidden" id="tsWords" value="4800">
+          </div>
+
+          <div class="ts-card" style="margin-top:16px;padding:12px 16px;">
+            <label class="ts-lbl" style="margin-bottom:10px;font-weight:700;letter-spacing:0.5px">PHONG CÁCH KỊCH BẢN</label>
+            <select id="tsTone" class="ts-field" style="padding:8px 12px;margin-bottom:12px">
+              <option value="Hài hước và kể chuyện">Hài hước và kể chuyện</option>
+              <option value="Hài hước và phân tích">Hài hước và phân tích</option>
+              <option value="Hài hước và phỏng vấn">Hài hước và phỏng vấn</option>
+              <option value="Hài hước và báo cáo">Hài hước và báo cáo</option>
+              <option value="Hài hước và tâm tình">Hài hước và tâm tình</option>
+              <option value="Hài hước và đối thoại">Hài hước và đối thoại</option>
+              <option value="Hài hước và tường thuật">Hài hước và tường thuật</option>
+              <option value="Hài hước và tranh luận">Hài hước và tranh luận</option>
+              <option value="Hài hước và hướng dẫn">Hài hước và hướng dẫn</option>
+              <option value="Hài hước và chiêm nghiệm">Hài hước và chiêm nghiệm</option>
+              <option value="Hài hước và châm biếm">Hài hước và châm biếm</option>
+              <option value="Hài hước và diễn giảng">Hài hước và diễn giảng</option>
+              <option value="Hài hước và hùng biện">Hài hước và hùng biện</option>
+              <option value="Hài hước và trò chuyện">Hài hước và trò chuyện</option>
+              <option value="Hài hước và tự sự">Hài hước và tự sự</option>
+              <option value="Hài hước và đúc kết">Hài hước và đúc kết</option>
+              <option value="Hài hước và bình luận">Hài hước và bình luận</option>
+              <option value="Hài hước và trần thuật">Hài hước và trần thuật</option>
+              <option value="Hài hước và gợi mở">Hài hước và gợi mở</option>
+              <option value="Hài hước và tóm tắt">Hài hước và tóm tắt</option>
+              <option value="Kịch tính và kể chuyện">Kịch tính và kể chuyện</option>
+              <option value="Kịch tính và phân tích">Kịch tính và phân tích</option>
+              <option value="Kịch tính và phỏng vấn">Kịch tính và phỏng vấn</option>
+              <option value="Kịch tính và báo cáo">Kịch tính và báo cáo</option>
+              <option value="Kịch tính và tâm tình">Kịch tính và tâm tình</option>
+              <option value="Kịch tính và đối thoại">Kịch tính và đối thoại</option>
+              <option value="Kịch tính và tường thuật">Kịch tính và tường thuật</option>
+              <option value="Kịch tính và tranh luận">Kịch tính và tranh luận</option>
+              <option value="Kịch tính và hướng dẫn">Kịch tính và hướng dẫn</option>
+              <option value="Kịch tính và chiêm nghiệm">Kịch tính và chiêm nghiệm</option>
+              <option value="Kịch tính và châm biếm">Kịch tính và châm biếm</option>
+              <option value="Kịch tính và diễn giảng">Kịch tính và diễn giảng</option>
+              <option value="Kịch tính và hùng biện">Kịch tính và hùng biện</option>
+              <option value="Kịch tính và trò chuyện">Kịch tính và trò chuyện</option>
+              <option value="Kịch tính và tự sự">Kịch tính và tự sự</option>
+              <option value="Kịch tính và đúc kết">Kịch tính và đúc kết</option>
+              <option value="Kịch tính và bình luận">Kịch tính và bình luận</option>
+              <option value="Kịch tính và trần thuật">Kịch tính và trần thuật</option>
+              <option value="Kịch tính và gợi mở">Kịch tính và gợi mở</option>
+              <option value="Kịch tính và tóm tắt">Kịch tính và tóm tắt</option>
+              <option value="Bí ẩn và kể chuyện">Bí ẩn và kể chuyện</option>
+              <option value="Bí ẩn và phân tích">Bí ẩn và phân tích</option>
+              <option value="Bí ẩn và phỏng vấn">Bí ẩn và phỏng vấn</option>
+              <option value="Bí ẩn và báo cáo">Bí ẩn và báo cáo</option>
+              <option value="Bí ẩn và tâm tình">Bí ẩn và tâm tình</option>
+              <option value="Bí ẩn và đối thoại">Bí ẩn và đối thoại</option>
+              <option value="Bí ẩn và tường thuật">Bí ẩn và tường thuật</option>
+              <option value="Bí ẩn và tranh luận">Bí ẩn và tranh luận</option>
+              <option value="Bí ẩn và hướng dẫn">Bí ẩn và hướng dẫn</option>
+              <option value="Bí ẩn và chiêm nghiệm">Bí ẩn và chiêm nghiệm</option>
+              <option value="Bí ẩn và châm biếm">Bí ẩn và châm biếm</option>
+              <option value="Bí ẩn và diễn giảng">Bí ẩn và diễn giảng</option>
+              <option value="Bí ẩn và hùng biện">Bí ẩn và hùng biện</option>
+              <option value="Bí ẩn và trò chuyện">Bí ẩn và trò chuyện</option>
+              <option value="Bí ẩn và tự sự">Bí ẩn và tự sự</option>
+              <option value="Bí ẩn và đúc kết">Bí ẩn và đúc kết</option>
+              <option value="Bí ẩn và bình luận">Bí ẩn và bình luận</option>
+              <option value="Bí ẩn và trần thuật">Bí ẩn và trần thuật</option>
+              <option value="Bí ẩn và gợi mở">Bí ẩn và gợi mở</option>
+              <option value="Bí ẩn và tóm tắt">Bí ẩn và tóm tắt</option>
+              <option value="Nhẹ nhàng và kể chuyện">Nhẹ nhàng và kể chuyện</option>
+              <option value="Nhẹ nhàng và phân tích">Nhẹ nhàng và phân tích</option>
+              <option value="Nhẹ nhàng và phỏng vấn">Nhẹ nhàng và phỏng vấn</option>
+              <option value="Nhẹ nhàng và báo cáo">Nhẹ nhàng và báo cáo</option>
+              <option value="Nhẹ nhàng và tâm tình">Nhẹ nhàng và tâm tình</option>
+              <option value="Nhẹ nhàng và đối thoại">Nhẹ nhàng và đối thoại</option>
+              <option value="Nhẹ nhàng và tường thuật">Nhẹ nhàng và tường thuật</option>
+              <option value="Nhẹ nhàng và tranh luận">Nhẹ nhàng và tranh luận</option>
+              <option value="Nhẹ nhàng và hướng dẫn">Nhẹ nhàng và hướng dẫn</option>
+              <option value="Nhẹ nhàng và chiêm nghiệm">Nhẹ nhàng và chiêm nghiệm</option>
+              <option value="Nhẹ nhàng và châm biếm">Nhẹ nhàng và châm biếm</option>
+              <option value="Nhẹ nhàng và diễn giảng">Nhẹ nhàng và diễn giảng</option>
+              <option value="Nhẹ nhàng và hùng biện">Nhẹ nhàng và hùng biện</option>
+              <option value="Nhẹ nhàng và trò chuyện">Nhẹ nhàng và trò chuyện</option>
+              <option value="Nhẹ nhàng và tự sự">Nhẹ nhàng và tự sự</option>
+              <option value="Nhẹ nhàng và đúc kết">Nhẹ nhàng và đúc kết</option>
+              <option value="Nhẹ nhàng và bình luận">Nhẹ nhàng và bình luận</option>
+              <option value="Nhẹ nhàng và trần thuật">Nhẹ nhàng và trần thuật</option>
+              <option value="Nhẹ nhàng và gợi mở">Nhẹ nhàng và gợi mở</option>
+              <option value="Nhẹ nhàng và tóm tắt">Nhẹ nhàng và tóm tắt</option>
+              <option value="Chuyên sâu và kể chuyện">Chuyên sâu và kể chuyện</option>
+              <option value="Chuyên sâu và phân tích">Chuyên sâu và phân tích</option>
+              <option value="Chuyên sâu và phỏng vấn">Chuyên sâu và phỏng vấn</option>
+              <option value="Chuyên sâu và báo cáo">Chuyên sâu và báo cáo</option>
+              <option value="Chuyên sâu và tâm tình">Chuyên sâu và tâm tình</option>
+              <option value="Chuyên sâu và đối thoại">Chuyên sâu và đối thoại</option>
+              <option value="Chuyên sâu và tường thuật">Chuyên sâu và tường thuật</option>
+              <option value="Chuyên sâu và tranh luận">Chuyên sâu và tranh luận</option>
+              <option value="Chuyên sâu và hướng dẫn">Chuyên sâu và hướng dẫn</option>
+              <option value="Chuyên sâu và chiêm nghiệm">Chuyên sâu và chiêm nghiệm</option>
+              <option value="Chuyên sâu và châm biếm">Chuyên sâu và châm biếm</option>
+              <option value="Chuyên sâu và diễn giảng">Chuyên sâu và diễn giảng</option>
+              <option value="Chuyên sâu và hùng biện">Chuyên sâu và hùng biện</option>
+              <option value="Chuyên sâu và trò chuyện">Chuyên sâu và trò chuyện</option>
+              <option value="Chuyên sâu và tự sự">Chuyên sâu và tự sự</option>
+              <option value="Chuyên sâu và đúc kết">Chuyên sâu và đúc kết</option>
+              <option value="Chuyên sâu và bình luận">Chuyên sâu và bình luận</option>
+              <option value="Chuyên sâu và trần thuật">Chuyên sâu và trần thuật</option>
+              <option value="Chuyên sâu và gợi mở">Chuyên sâu và gợi mở</option>
+              <option value="Chuyên sâu và tóm tắt">Chuyên sâu và tóm tắt</option>
+              <option value="Trào phúng và kể chuyện">Trào phúng và kể chuyện</option>
+              <option value="Trào phúng và phân tích">Trào phúng và phân tích</option>
+              <option value="Trào phúng và phỏng vấn">Trào phúng và phỏng vấn</option>
+              <option value="Trào phúng và báo cáo">Trào phúng và báo cáo</option>
+              <option value="Trào phúng và tâm tình">Trào phúng và tâm tình</option>
+              <option value="Trào phúng và đối thoại">Trào phúng và đối thoại</option>
+              <option value="Trào phúng và tường thuật">Trào phúng và tường thuật</option>
+              <option value="Trào phúng và tranh luận">Trào phúng và tranh luận</option>
+              <option value="Trào phúng và hướng dẫn">Trào phúng và hướng dẫn</option>
+              <option value="Trào phúng và chiêm nghiệm">Trào phúng và chiêm nghiệm</option>
+              <option value="Trào phúng và châm biếm">Trào phúng và châm biếm</option>
+              <option value="Trào phúng và diễn giảng">Trào phúng và diễn giảng</option>
+              <option value="Trào phúng và hùng biện">Trào phúng và hùng biện</option>
+              <option value="Trào phúng và trò chuyện">Trào phúng và trò chuyện</option>
+              <option value="Trào phúng và tự sự">Trào phúng và tự sự</option>
+              <option value="Trào phúng và đúc kết">Trào phúng và đúc kết</option>
+              <option value="Trào phúng và bình luận">Trào phúng và bình luận</option>
+              <option value="Trào phúng và trần thuật">Trào phúng và trần thuật</option>
+              <option value="Trào phúng và gợi mở">Trào phúng và gợi mở</option>
+              <option value="Trào phúng và tóm tắt">Trào phúng và tóm tắt</option>
+              <option value="Truyền cảm và kể chuyện">Truyền cảm và kể chuyện</option>
+              <option value="Truyền cảm và phân tích">Truyền cảm và phân tích</option>
+              <option value="Truyền cảm và phỏng vấn">Truyền cảm và phỏng vấn</option>
+              <option value="Truyền cảm và báo cáo">Truyền cảm và báo cáo</option>
+              <option value="Truyền cảm và tâm tình">Truyền cảm và tâm tình</option>
+              <option value="Truyền cảm và đối thoại">Truyền cảm và đối thoại</option>
+              <option value="Truyền cảm và tường thuật">Truyền cảm và tường thuật</option>
+              <option value="Truyền cảm và tranh luận">Truyền cảm và tranh luận</option>
+              <option value="Truyền cảm và hướng dẫn">Truyền cảm và hướng dẫn</option>
+              <option value="Truyền cảm và chiêm nghiệm">Truyền cảm và chiêm nghiệm</option>
+              <option value="Truyền cảm và châm biếm">Truyền cảm và châm biếm</option>
+              <option value="Truyền cảm và diễn giảng">Truyền cảm và diễn giảng</option>
+              <option value="Truyền cảm và hùng biện">Truyền cảm và hùng biện</option>
+              <option value="Truyền cảm và trò chuyện">Truyền cảm và trò chuyện</option>
+              <option value="Truyền cảm và tự sự">Truyền cảm và tự sự</option>
+              <option value="Truyền cảm và đúc kết">Truyền cảm và đúc kết</option>
+              <option value="Truyền cảm và bình luận">Truyền cảm và bình luận</option>
+              <option value="Truyền cảm và trần thuật">Truyền cảm và trần thuật</option>
+              <option value="Truyền cảm và gợi mở">Truyền cảm và gợi mở</option>
+              <option value="Truyền cảm và tóm tắt">Truyền cảm và tóm tắt</option>
+              <option value="Căng thẳng và kể chuyện">Căng thẳng và kể chuyện</option>
+              <option value="Căng thẳng và phân tích">Căng thẳng và phân tích</option>
+              <option value="Căng thẳng và phỏng vấn">Căng thẳng và phỏng vấn</option>
+              <option value="Căng thẳng và báo cáo">Căng thẳng và báo cáo</option>
+              <option value="Căng thẳng và tâm tình">Căng thẳng và tâm tình</option>
+              <option value="Căng thẳng và đối thoại">Căng thẳng và đối thoại</option>
+              <option value="Căng thẳng và tường thuật">Căng thẳng và tường thuật</option>
+              <option value="Căng thẳng và tranh luận">Căng thẳng và tranh luận</option>
+              <option value="Căng thẳng và hướng dẫn">Căng thẳng và hướng dẫn</option>
+              <option value="Căng thẳng và chiêm nghiệm">Căng thẳng và chiêm nghiệm</option>
+              <option value="Căng thẳng và châm biếm">Căng thẳng và châm biếm</option>
+              <option value="Căng thẳng và diễn giảng">Căng thẳng và diễn giảng</option>
+              <option value="Căng thẳng và hùng biện">Căng thẳng và hùng biện</option>
+              <option value="Căng thẳng và trò chuyện">Căng thẳng và trò chuyện</option>
+              <option value="Căng thẳng và tự sự">Căng thẳng và tự sự</option>
+              <option value="Căng thẳng và đúc kết">Căng thẳng và đúc kết</option>
+              <option value="Căng thẳng và bình luận">Căng thẳng và bình luận</option>
+              <option value="Căng thẳng và trần thuật">Căng thẳng và trần thuật</option>
+              <option value="Căng thẳng và gợi mở">Căng thẳng và gợi mở</option>
+              <option value="Căng thẳng và tóm tắt">Căng thẳng và tóm tắt</option>
+              <option value="U ám và kể chuyện">U ám và kể chuyện</option>
+              <option value="U ám và phân tích">U ám và phân tích</option>
+              <option value="U ám và phỏng vấn">U ám và phỏng vấn</option>
+              <option value="U ám và báo cáo">U ám và báo cáo</option>
+              <option value="U ám và tâm tình">U ám và tâm tình</option>
+              <option value="U ám và đối thoại">U ám và đối thoại</option>
+              <option value="U ám và tường thuật">U ám và tường thuật</option>
+              <option value="U ám và tranh luận">U ám và tranh luận</option>
+              <option value="U ám và hướng dẫn">U ám và hướng dẫn</option>
+              <option value="U ám và chiêm nghiệm">U ám và chiêm nghiệm</option>
+              <option value="U ám và châm biếm">U ám và châm biếm</option>
+              <option value="U ám và diễn giảng">U ám và diễn giảng</option>
+              <option value="U ám và hùng biện">U ám và hùng biện</option>
+              <option value="U ám và trò chuyện">U ám và trò chuyện</option>
+              <option value="U ám và tự sự">U ám và tự sự</option>
+              <option value="U ám và đúc kết">U ám và đúc kết</option>
+              <option value="U ám và bình luận">U ám và bình luận</option>
+              <option value="U ám và trần thuật">U ám và trần thuật</option>
+              <option value="U ám và gợi mở">U ám và gợi mở</option>
+              <option value="U ám và tóm tắt">U ám và tóm tắt</option>
+              <option value="Mộc mạc và kể chuyện">Mộc mạc và kể chuyện</option>
+              <option value="Mộc mạc và phân tích">Mộc mạc và phân tích</option>
+              <option value="Mộc mạc và phỏng vấn">Mộc mạc và phỏng vấn</option>
+              <option value="Mộc mạc và báo cáo">Mộc mạc và báo cáo</option>
+              <option value="Mộc mạc và tâm tình">Mộc mạc và tâm tình</option>
+              <option value="Mộc mạc và đối thoại">Mộc mạc và đối thoại</option>
+              <option value="Mộc mạc và tường thuật">Mộc mạc và tường thuật</option>
+              <option value="Mộc mạc và tranh luận">Mộc mạc và tranh luận</option>
+              <option value="Mộc mạc và hướng dẫn">Mộc mạc và hướng dẫn</option>
+              <option value="Mộc mạc và chiêm nghiệm">Mộc mạc và chiêm nghiệm</option>
+              <option value="Mộc mạc và châm biếm">Mộc mạc và châm biếm</option>
+              <option value="Mộc mạc và diễn giảng">Mộc mạc và diễn giảng</option>
+              <option value="Mộc mạc và hùng biện">Mộc mạc và hùng biện</option>
+              <option value="Mộc mạc và trò chuyện">Mộc mạc và trò chuyện</option>
+              <option value="Mộc mạc và tự sự">Mộc mạc và tự sự</option>
+              <option value="Mộc mạc và đúc kết">Mộc mạc và đúc kết</option>
+              <option value="Mộc mạc và bình luận">Mộc mạc và bình luận</option>
+              <option value="Mộc mạc và trần thuật">Mộc mạc và trần thuật</option>
+              <option value="Mộc mạc và gợi mở">Mộc mạc và gợi mở</option>
+              <option value="Mộc mạc và tóm tắt">Mộc mạc và tóm tắt</option>
+            </select>
+            
+            <label class="ts-lbl" style="margin-top:0">📋 Prompt kịch bản (từ Profile) <span id="tsProfName" style="color:var(--accent)"></span></label>
+            <div id="tsProfPrompt" class="ts-prof">—</div>
+          </div>
+
+          <script src="src/toolbox/utility/ts-scale.js"></script>
+
+          <div style="display:flex;gap:10px;margin-top:16px">
+            <button class="btn ghost" id="tsNovelBtn" style="white-space:nowrap" onclick="tsToggleNovel()">📖 Chế độ Novel</button>
+            <button class="btn primary" id="tsGenBtn" style="flex:1" onclick="tsGenerate()">✍️ Viết kịch bản</button>
+            <button class="btn ghost" onclick="tsGenerate(true)" title="Viết lại bản khác">↻ Viết lại</button>
+          </div>
+          <div id="tsNovelHint" style="font-size:11.5px;color:var(--text-dim);display:none;margin-top:8px">Bật: viết theo <b>chương</b> — điều kiện: khối <b>QUY MÔ</b> bên trên đặt <b>tối thiểu 2 chương</b> (số chương &amp; số từ/chương lấy đúng theo QUY MÔ) — AI giữ bộ nhớ nhân vật · biến cố · tuyến nội dung xuyên suốt kịch bản, mỗi chương 1 lượt viết + 1 lượt ghi nhớ. Chậm hơn chế độ thường.</div>
+          <div style="font-size:11px;color:var(--text-dim);margin-top:8px">💡 Kịch bản “sạch” cho TTS: không tiêu đề, không chú thích, không emoji — chỉ lời đọc liền mạch.</div>
+          <div class="status-bar" id="statusScript" style="margin-top:10px">Sẵn sàng. Nhập chủ đề rồi bấm Viết kịch bản.</div>
+        </div>
+
+        <!-- OUTPUT -->
+        <div class="ts-card">
+          <div class="ts-bar">
+            <div style="font-size:13px;font-weight:600">Kịch bản <span id="tsOutMeta" class="text-muted" style="font-weight:400;color:var(--text-dim)"></span></div>
+            <div style="display:flex;gap:7px;flex-wrap:wrap">
+              <button class="btn ghost sm" onclick="tsCopy()">📋 Copy</button>
+              <button class="btn ghost sm" style="border-color:var(--teal);color:var(--teal)" onclick="tsToVoice()">🎙 Đưa vào Giọng nói</button>
+              <button class="btn ghost sm" onclick="tsToScenes()">🎬 Sang Phân Cảnh</button>
+            </div>
+          </div>
+          <textarea id="tsOutput" class="ts-out" placeholder="Kịch bản sẽ hiện ở đây…" oninput="window.tsOutMeta()"></textarea>
+        </div>
+      </div>
+    </div>
+

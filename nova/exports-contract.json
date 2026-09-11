@@ -248,6 +248,16 @@
         ]
       }
     ],
+    "nova/main/gpu-policy.js": [
+      {
+        "kind": "object",
+        "entries": [
+          {
+            "name": "installGpuPolicy"
+          }
+        ]
+      }
+    ],
     "nova/main/identity.js": [
       {
         "kind": "object",

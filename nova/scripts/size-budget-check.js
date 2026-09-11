@@ -37,11 +37,12 @@ const SCAN_ROOTS = ['nova', 'auto-fix'];
 
 // Ngưỡng cố định — chỉnh ở đây nếu cần.
 // Thiết kế: WARN để biết, ERROR để chặn file MỚI phình quá mức.
-// File lịch sử đã > 15000 dòng sẽ từ từ được tách (Bước 3 kế hoạch); trong
-// thời gian đó ta không phá CI. Mỗi khi một file lịch sử được tách xong,
-// ngưỡng sẽ được hạ xuống.
-const THRESHOLD_WARN = 5000;
-const THRESHOLD_ERROR = 15000;
+// Lịch sử: khởi điểm WARN 5000 / ERROR 15000 để không phá CI trong lúc các file
+// khổng lồ (> 15.000 dòng) chưa kịp tách; tới 2026-09-11 mọi file đó đã được tách
+// xong (img-to-vid-panel 2612 → 12 file imzic-*, toolbox, handdraw…) nên hạ về
+// đúng chuẩn đã ghi trong AGENTS.md §4.1: WARN > 2000, ERROR > 5000.
+const THRESHOLD_WARN = 2000;
+const THRESHOLD_ERROR = 5000;
 
 const IGNORE_DIR = /(?:[\\/](?:node_modules|dist|output|build|coverage|smoke-results|chrome-extension|.*-bin|\.venv[^\\/]*|venv[^\\/]*|__pycache__|remotion-browser|app\.asar\.unpacked)(?:[\\/]|$)|[\\/]nova-remotion[\\/]bundle(?:[\\/]|$))/i;
 const IGNORE_FILE = /\.bundle\.js$/i;

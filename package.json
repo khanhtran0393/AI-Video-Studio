@@ -14,9 +14,11 @@
     "check:shared": "node nova/scripts/shared-names-check.js",
     "check:size": "node nova/scripts/size-budget-check.js",
     "check:toplevel": "node nova/scripts/toplevel-check.js",
-    "check": "npm run check:syntax && npm run check:ipc && npm run check:exports && npm run check:shared && npm run check:shadow && npm run check:size && npm run check:toplevel && npm run check:docs",
+    "check": "npm run check:syntax && npm run check:ipc && npm run check:exports && npm run check:shared && npm run check:shared-shadow && npm run check:shadow && npm run check:size && npm run check:toplevel && npm run check:docs && npm run check:selftest",
     "check:exports": "node nova/scripts/exports-contract-check.js",
     "check:docs": "node nova/scripts/docs-sync-check.js",
+    "check:selftest": "node nova/scripts/checker-fixture-test.js",
+    "scan:lifecycle": "node nova/scripts/lifecycle-log-scan.js",
     "check:all": "npm run check && npm run test:foundation && npm run test:video-agent && npm run test:voice && npm run test:auto-fix",
     "test:foundation": "node nova/scripts/foundation-test.js",
     "test:agent-bridge": "node nova/scripts/agent-bridge-test.js",
@@ -37,7 +39,8 @@
     "build:smoke": "npm run build:win && npm run smoke:packaged",
     "check:shadow": "node nova/scripts/handler-shadow-check.js",
     "check:bundle": "node nova/scripts/bundle-selfcheck.js",
-    "test:maintenance": "node nova/core/test-maintenance.js"
+    "test:maintenance": "node nova/core/test-maintenance.js",
+    "check:shared-shadow": "node nova/scripts/shared-shadow-check.js"
   },
   "dependencies": {
     "@remotion/bundler": "4.0.518",

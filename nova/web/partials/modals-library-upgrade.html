@@ -1,0 +1,173 @@
+<!-- ============ ASSET LIBRARY MODAL ============ -->
+<div id="libraryModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(4px)" onclick="if(event.target===this)closeAssetLibrary()">
+  <div style="background:var(--surface);border-radius:14px;padding:26px;max-width:960px;width:100%;max-height:88vh;overflow-y:auto;position:relative;border:1px solid var(--border);box-shadow:0 20px 60px rgba(0,0,0,.3)">
+    <button onclick="closeAssetLibrary()" style="position:absolute;top:14px;right:14px;background:none;border:none;font-size:24px;cursor:pointer;color:var(--text-muted);width:32px;height:32px;border-radius:6px" title="Đóng">×</button>
+    <h2 style="margin:0 0 6px;font-size:22px">📚 Asset Library</h2>
+    <p style="color:var(--text-muted);font-size:13px;margin:0 0 18px;line-height:1.6">
+      Lưu & tái sử dụng <strong>nhân vật + bối cảnh</strong> qua các video. Mỗi video sau, AI sẽ tự pull asset từ Library (không gen lại) → đảm bảo character giống nhau xuyên suốt series.
+    </p>
+    <div style="display:flex;gap:0;margin-bottom:14px;border-bottom:1px solid var(--border)">
+      <button class="lib-tab" data-tab="chars" onclick="switchLibTab('chars')" style="padding:10px 16px;background:none;border:none;border-bottom:2px solid var(--accent);cursor:pointer;font-size:14px;color:var(--text);font-weight:600">👤 Nhân vật <span id="libCharCount" style="background:var(--accent);color:var(--on-accent);padding:1px 7px;border-radius:10px;font-size:11px;margin-left:4px">0</span></button>
+      <button class="lib-tab" data-tab="bgs" onclick="switchLibTab('bgs')" style="padding:10px 16px;background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;font-size:14px;color:var(--text-muted)">🏛 Bối cảnh <span id="libBgCount" style="background:var(--text-muted);color:#fff;padding:1px 7px;border-radius:10px;font-size:11px;margin-left:4px">0</span></button>
+    </div>
+    <input id="libSearch" placeholder="🔍 Tìm theo tên..." style="margin-bottom:14px;width:100%;padding:9px 12px" oninput="renderAssetLibrary()">
+    <div id="libContent" style="min-height:200px"></div>
+  </div>
+</div>
+
+<!-- ============ UPGRADE MODAL ============ -->
+<link rel="stylesheet" href="src/styles/upgrade-modal.css">
+<div id="upgradeModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(4px)" onclick="if(event.target===this)closeUpgradeModal()">
+  <div class="upg-shell">
+    <button class="upg-x" onclick="closeUpgradeModal()" title="Đóng">×</button>
+
+    <div class="upg-head">
+      <div class="upg-t">Nâng cấp AI Video Studio</div>
+      <div class="upg-s">Dùng thử miễn phí, nâng gói khi cần — thanh toán xong mở khoá ngay.</div>
+    </div>
+    <div id="upgradeReason" class="upg-reason" style="display:none"></div>
+
+    <div class="upg-cards">
+      <!-- FREE -->
+      <div class="upc free">
+        <div class="upc-plan"><span>⚡</span><span class="upc-nm">Khởi đầu</span><span class="upc-tag ok">Miễn phí</span></div>
+        <div class="upc-who">Người mới, thử làm video AI đầu tiên</div>
+        <div class="upc-price"><span class="upc-amt">0đ</span><span class="upc-per">trọn đời</span></div>
+        <button class="upc-cta" onclick="upgSelect('free')">Đang dùng</button>
+        <ul class="upc-feats">
+          <li><span class="ck">✓</span><span><b>Dùng gói Claude / ChatGPT</b> của bạn — không cần API key</span></li>
+          <li><span class="ck">✓</span><span><b>1 kênh</b> · 10 cảnh / video</span></li>
+          <li><span class="ck">✓</span><span>Tạo Kịch Bản · Phân Cảnh · Prompt Nhân vật &amp; Bối cảnh</span></li>
+          <li><span class="ck">✓</span><span><b>Giữ nhân vật nhất quán</b> cả video</span></li>
+          <li><span class="ck">✓</span><span>Dựng Video &amp; xuất (thủ công)</span></li>
+          <li class="off"><span class="ck">✕</span><span>Chưa có Tạo Ảnh Flow &amp; Tạo giọng nói</span></li>
+          <li class="off"><span class="ck">✕</span><span>Chưa có tự động 1 nút &amp; hàng đợi</span></li>
+          <li class="off"><span class="ck">✕</span><span>Chưa có YouTube SEO &amp; Thumbnail AI</span></li>
+        </ul>
+      </div>
+
+      <!-- SÁNG TẠO -->
+      <div class="upc pop">
+        <div class="upc-rib">★ ĐƯỢC CHỌN NHIỀU NHẤT</div>
+        <div class="upc-plan"><span>🚀</span><span class="upc-nm">Sáng tạo</span><span class="upc-tag">Plus</span></div>
+        <div class="upc-who">Creator, KOC, freelancer làm video đều tay</div>
+        <div class="upc-price"><span class="upc-amt">299.000đ</span><span class="upc-per">/tháng</span><span class="upc-strike">599.000đ</span></div>
+        <button class="upc-cta" onclick="upgSelect('plus')">Chọn Sáng tạo</button>
+        <ul class="upc-feats">
+          <li><span class="ck">✓</span><span><b>3 kênh</b> · cảnh <b>không giới hạn</b></span></li>
+          <li><span class="ck">✓</span><span><b>3 tài khoản Flow</b> chạy song song</span></li>
+          <li><span class="ck">✓</span><span>+ <b>Dashboard tự động</b> (1 nút) · hàng đợi 5 video</span></li>
+          <li><span class="ck">✓</span><span>+ <b>YouTube SEO &amp; Thumbnail AI</b> · đào ý tưởng từ bình luận</span></li>
+          <li><span class="ck">✓</span><span>+ <b>Tạo Video</b> (Image→Video) · Tìm Media · Căn Timing</span></li>
+          <li><span class="ck">✓</span><span>Hỗ trợ ưu tiên</span></li>
+        </ul>
+      </div>
+
+      <!-- STUDIO -->
+      <div class="upc">
+        <div class="upc-plan"><span>👑</span><span class="upc-nm">Studio</span><span class="upc-tag">Max</span></div>
+        <div class="upc-who">Agency, team sản xuất video AI quy mô lớn</div>
+        <div class="upc-price"><span class="upc-amt">399.000đ</span><span class="upc-per">/tháng</span><span class="upc-strike">799.000đ</span></div>
+        <button class="upc-cta" onclick="upgSelect('max')">Chọn Studio</button>
+        <ul class="upc-feats">
+          <li><span class="ck">✓</span><span><b>Mọi thứ ở Sáng tạo</b>, và:</span></li>
+          <li><span class="ck">✓</span><span>Kênh · hàng đợi · tài khoản Flow <b>không giới hạn</b></span></li>
+          <li><span class="ck">✓</span><span>+ <b>Chạy nhiều video song song</b> trong hàng đợi</span></li>
+          <li><span class="ck">✓</span><span>Ưu tiên tài nguyên tạo ảnh &amp; giọng nói</span></li>
+          <li><span class="ck">✓</span><span>Hỗ trợ 1-1 qua Zalo · cập nhật hàng tuần</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- DEMO BAND -->
+    <div class="upg-demo">
+      <div class="dl">
+        <span class="dtag">🎟 DEMO 1 NGÀY</span>
+        <div>
+          <div class="dh">Chỉ muốn thử? Mở <b>full gói Sáng tạo trong 24 giờ</b></div>
+          <div class="dd">Tự động 1 nút · YouTube SEO · Thumbnail AI · Tạo Video… — hết 1 ngày tự về Free</div>
+        </div>
+      </div>
+      <div class="dr">
+        <span class="damt">30.000đ</span>
+        <button class="dbtn" onclick="upgSelect('demo')">Mua demo 30k</button>
+      </div>
+    </div>
+
+    <!-- COMPARE TABLE (bung/gập) -->
+    <button class="upg-cmp-btn" id="upgCmpBtn" onclick="upgToggleCompare()">📊 Bảng so sánh chi tiết <span id="upgCmpCaret">▾</span></button>
+    <div class="upg-cmp" id="upgCompare" style="display:none">
+      <table class="upg-cmp-tbl">
+        <thead><tr>
+          <th>Tính năng</th>
+          <th class="f"><span>Khởi đầu · 0đ</span></th>
+          <th class="p"><span>Sáng tạo</span></th>
+          <th class="m"><span>Studio</span></th>
+        </tr></thead>
+        <tbody>
+          <tr class="g"><td colspan="4">Nền tảng AI</td></tr>
+          <tr><td>Dùng gói Claude / ChatGPT của bạn (không cần mua API key)</td><td class="y">Có</td><td class="y cp">Có</td><td class="y">Có</td></tr>
+          <tr class="g"><td colspan="4">Giới hạn sản xuất</td></tr>
+          <tr><td>Kênh (Profile Kênh)</td><td class="v">1</td><td class="v cp">3</td><td class="v">Không giới hạn</td></tr>
+          <tr><td>Cảnh mỗi video</td><td class="v">10</td><td class="v cp">Không giới hạn</td><td class="v">Không giới hạn</td></tr>
+          <tr><td>Tài khoản Google Flow (chạy song song)</td><td class="v">1</td><td class="v cp">3</td><td class="v">Không giới hạn</td></tr>
+          <tr class="g"><td colspan="4">Viết &amp; tạo nội dung</td></tr>
+          <tr><td>Tạo Kịch Bản (AI viết kịch bản)</td><td class="y">Có</td><td class="y cp">Có</td><td class="y">Có</td></tr>
+          <tr><td>Phân Cảnh + Prompt Nhân vật &amp; Bối cảnh</td><td class="y">Có</td><td class="y cp">Có</td><td class="y">Có</td></tr>
+          <tr><td>Giữ nhân vật nhất quán cả video</td><td class="y">Có</td><td class="y cp">Có</td><td class="y">Có</td></tr>
+          <tr><td>Tạo Ảnh Flow (Google)</td><td class="n">—</td><td class="y cp">Có</td><td class="y">Có</td></tr>
+          <tr><td>Tạo giọng nói (clone / TTS)</td><td class="n">—</td><td class="y cp">Có</td><td class="y">Có</td></tr>
+          <tr><td>Tạo Video (Image → Video, prompt Veo/Kling)</td><td class="n">—</td><td class="y cp">Có</td><td class="y">Có</td></tr>
+          <tr><td>Tìm Media · Đổi Tên Ảnh · Căn Timing</td><td class="n">—</td><td class="y cp">Có</td><td class="y">Có</td></tr>
+          <tr class="g"><td colspan="4">Tăng trưởng kênh</td></tr>
+          <tr><td>YouTube SEO + Thumbnail AI</td><td class="n">—</td><td class="y cp">Có</td><td class="y">Có</td></tr>
+          <tr><td>Đào ý tưởng chủ đề từ bình luận đối thủ</td><td class="n">—</td><td class="y cp">Có</td><td class="y">Có</td></tr>
+          <tr class="g"><td colspan="4">Dựng &amp; tự động hoá</td></tr>
+          <tr><td>Dựng Video + phụ đề SRT + xuất file</td><td class="y">Thủ công</td><td class="y cp">Có</td><td class="y">Có</td></tr>
+          <tr><td>Dashboard tự động — 1 nút chạy cả quy trình</td><td class="n">—</td><td class="y cp">Có</td><td class="y">Có</td></tr>
+          <tr><td>Hàng đợi nhiều video</td><td class="n">—</td><td class="v cp">5 video</td><td class="v">Không giới hạn</td></tr>
+          <tr><td>Chạy nhiều video song song</td><td class="n">—</td><td class="n cp">—</td><td class="y">Có</td></tr>
+          <tr><td>Hỗ trợ 1-1 qua Zalo</td><td class="n">—</td><td class="n cp">—</td><td class="y">Có</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- PAYMENT PANEL -->
+    <div class="upg-pay" id="upgPay" style="display:none">
+      <!-- Trạng thái chờ + đã thanh toán -->
+      <div id="upgPayMain">
+        <div class="upg-pay-h">Thanh toán gói <b id="upgPayPlan">Sáng tạo</b> · <b id="upgPayAmount">299.000đ</b></div>
+        <div class="upg-pay-status" id="upgPayStatus"><span class="upg-spin"></span><span>Hệ thống đang tự động kiểm tra…</span><b id="upgCountdown">10:00</b></div>
+        <div class="upg-pay-grid">
+          <div class="upg-bank">
+            <div class="lbl">🏦 Chuyển khoản ngân hàng</div>
+            <div style="font-weight:700;margin-bottom:2px" id="payBankName">Vietcombank</div>
+            <div class="num" id="payBankNum">1034579759</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:2px" id="payBankOwner">CHU KHẮC KIÊN</div>
+            <div class="row"><span class="k">Số tiền:</span><code id="upgPayAmount2">—</code></div>
+            <div class="row"><span class="k">Nội dung CK:</span><code id="upgOrderCode" style="color:var(--accent)">—</code>
+              <button class="upg-copy" onclick="navigator.clipboard.writeText(document.getElementById('upgOrderCode').textContent);this.textContent='✓'">Copy</button></div>
+          </div>
+          <div class="upg-qr">
+            <img id="upgQr" src="" alt="QR chuyển khoản" onerror="this.style.display='none'">
+            <small>Quét QR bằng app ngân hàng</small>
+          </div>
+        </div>
+        <div class="upg-note">
+          Chuyển <b>đúng số tiền</b> và <b>giữ nguyên nội dung CK</b> để được nâng cấp tự động trong ~1 phút.<br>
+          Cần hỗ trợ: Zalo <b id="payZalo">0901234567</b> · Email <b id="payEmail">support@novastudio.app</b>.
+        </div>
+      </div>
+      <!-- Thành công -->
+      <div id="upgPayOk" style="display:none;text-align:center;padding:10px 6px">
+        <div class="upg-ok-ring">✓</div>
+        <div style="font-size:19px;font-weight:800;margin-top:12px;color:var(--text)">Thanh toán thành công!</div>
+        <div style="font-size:13.5px;color:var(--text-muted);margin-top:5px" id="upgPayOkSub">Tài khoản của bạn đã được nâng cấp.</div>
+        <button class="gm-btn gm-up" style="margin-top:16px" onclick="closeUpgradeModal()">Bắt đầu dùng</button>
+      </div>
+    </div>
+
+    <button class="upg-later" onclick="closeUpgradeModal()">Để sau</button>
+  </div>
+</div>
+

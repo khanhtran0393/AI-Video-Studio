@@ -1,0 +1,121 @@
+<!-- ===== PROFILE MODAL ===== -->
+<div class="modal-bg" id="profileModal" onclick="if(event.target===this)closeProfile()">
+  <div class="modal" style="position:relative;width:820px">
+    <button class="modal-close" onclick="closeProfile()">×</button>
+    <h2 id="modalProfileTitle">Sửa Profile</h2>
+    <p style="margin-bottom:18px">Cấu hình kênh — style prompts được dùng tự động ở Tool 02 và Tool 03.</p>
+
+    <!-- Thông tin kênh: ẩn UI nhưng GIỮ ô ngầm để Tool 2 đọc (số phần, target, ngôn ngữ, POV, cấu trúc…). -->
+    <div style="display:none" id="pChannelInfoBox">
+    <h3>📺 Thông tin kênh</h3>
+    <div class="grid-2 mb-16">
+      <div><label class="label">TÊN KÊNH</label><input type="text" id="pTenKenh" placeholder="Ancient Curiosities"></div>
+      <div><label class="label">NGÁCH</label><input type="text" id="pNgach" placeholder="Dark educational, mysteries"></div>
+    </div>
+    <div class="grid-3 mb-16">
+      <div><label class="label">VISUAL STYLE</label><input type="text" id="pVisualStyle" value="Crayon Capital — Dark"></div>
+      <div><label class="label">NGÔN NGỮ</label><input type="text" id="pNgonNgu" value="Tiếng Việt"></div>
+      <div><label class="label">POV STYLE</label><input type="text" id="pPovStyle" value="Ngôi thứ 2 (Bạn)"></div>
+    </div>
+    <div class="grid-3 mb-16">
+      <div><label class="label">CẤU TRÚC</label><input type="text" id="pCauTruc" value="Levels / Escalation / POV"></div>
+      <div><label class="label">SỐ PHẦN</label><input type="number" id="pSoPhan" value="8"></div>
+      <div><label class="label">TARGET PHÚT</label><input type="number" id="pTargetPhut" value="12"></div>
+    </div>
+    <div class="mb-16">
+      <label class="label" style="color:var(--accent)">📋 PROMPT KỊCH BẢN <span style="font-weight:400;opacity:.7">— cách viết kịch bản của kênh (hook, xưng hô, độ dài câu, cách kết…). Dùng ở tab "Tạo Kịch Bản".</span></label>
+      <textarea id="pScriptPrompt" style="min-height:90px" placeholder="VD: Kể chuyện theo mạch thời gian, mở đầu bằng hook gây tò mò, xưng 'chúng ta', câu ngắn dễ đọc cho TTS, mỗi đoạn 2–4 câu, tránh số liệu khô, kết bằng câu hỏi mở…"></textarea>
+    </div>
+    </div>
+
+    <h3>📷 Phân tích ảnh mẫu (Vision AI)</h3>
+    <p>Upload 1-4 ảnh mẫu style của kênh → AI sẽ phân tích và tự điền Character/Background/Scene Style bên dưới. <strong style="color:var(--accent)">📌 Ảnh ĐẦU TIÊN còn là Style Anchor</strong> — Tool 3 sẽ đính ảnh này khi tạo prompt nhân vật để AI bám đúng cách dựng cơ thể (người-que, tay chân mảnh, bàn tay mitten...).</p>
+    <div class="grid-2 mb-12" style="grid-template-columns:auto 1fr;gap:14px;align-items:center">
+      <div>
+        <input type="file" id="pStyleImgInput" accept="image/png,image/jpeg,image/webp" multiple style="display:none">
+        <button class="btn" onclick="document.getElementById('pStyleImgInput').click()">📷 Chọn ảnh</button>
+        <button class="btn ghost sm" onclick="clearStyleImages()" style="margin-left:6px">Xoá</button>
+      </div>
+      <div style="color:var(--text-muted);font-size:11.5px">
+        <span id="pStyleImgCount">0 ảnh</span> · ảnh lớn OK (tự nén)
+      </div>
+    </div>
+    <div id="pStyleImgGallery" class="img-gallery mb-12"></div>
+    <button class="btn violet" id="btnAnalyzeStyle" onclick="analyzeStyleImages()">🔍 AI phân tích style từ ảnh</button>
+    <div id="styleAnalysisStatus" style="margin-top:10px;font-size:12px"></div>
+
+    <h3 style="margin-top:20px">✍️ Hoặc: mô tả kênh bằng chữ (AI tự điền)</h3>
+    <p>Không có ảnh mẫu? Gõ 1-2 câu mô tả <strong>ngách + phong cách</strong> → AI viết cả 4 ô style bên dưới. Hợp mọi chủ đề (đời sống, mẹo vặt, kể chuyện…).</p>
+    <div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap">
+      <textarea id="pStyleDesc" style="flex:1;min-width:300px;min-height:64px" placeholder="Vd: Kênh mẹo vặt nhà bếp, ẢNH THẬT tươi sáng, bối cảnh bếp hiện đại sạch sẽ.  —hoặc—  Kênh kể chuyện lịch sử, tranh vẽ tay 2D tối màu kiểu storybook."></textarea>
+      <button class="btn violet" id="btnGenStyleText" onclick="genStyleFromText()">✨ AI tự điền style</button>
+    </div>
+    <div id="styleDescStatus" style="margin-top:8px;font-size:12px"></div>
+
+    <!-- Trích xuất từ tài liệu: ẩn UI, giữ ô ngầm (pStyleGuide/pDnaKenh/pChuDe) để code không lỗi. -->
+    <div style="display:none" id="pExtractBox">
+    <h3>📄 Hoặc: trích xuất từ tài liệu</h3>
+    <p>Paste Style Guide / DNA Kênh / Chủ đề → AI tự điền profile.</p>
+    <div class="grid-3 mb-12">
+      <div><label class="label">STYLE GUIDE</label><textarea id="pStyleGuide" placeholder="Paste style guide..."></textarea></div>
+      <div><label class="label">DNA KÊNH</label><textarea id="pDnaKenh" placeholder="Paste DNA kênh..."></textarea></div>
+      <div><label class="label">CHỦ ĐỀ</label><textarea id="pChuDe" placeholder="Paste chủ đề..."></textarea></div>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center">
+      <button class="btn violet" id="btnAutoExtract" onclick="autoExtract()">⚡ AI tự trích xuất</button>
+      <button class="btn ghost" onclick="quickFill()">🎲 Điền mẫu</button>
+      <div id="extractStatus" style="font-size:12px"></div>
+    </div>
+    </div>
+
+    <h3>🎨 Style Prompts ảnh</h3>
+    <div class="mb-12" style="padding:12px;background:rgba(124,58,237,.06);border:1px solid var(--border);border-radius:8px">
+      <label class="label" style="color:var(--violet)">⚡ STYLE PRESET <span style="font-weight:400;color:var(--text-muted);font-size:11px">(chọn để điền nhanh 4 ô dưới — dùng cho mọi loại kênh)</span></label>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <select id="pStylePreset" onchange="applyStylePreset(this.value)" style="max-width:340px">
+          <option value="">— Chọn preset style —</option>
+          <option value="cartoon2d">🎨 Cartoon 2D (flat vector)</option>
+          <option value="realistic">📷 Ảnh thực (photorealistic)</option>
+          <option value="anime">🌸 Anime / Manga</option>
+          <option value="render3d">🧊 3D Render (Pixar-like)</option>
+          <option value="watercolor">🖌 Màu nước (watercolor)</option>
+          <option value="lineart">✏️ Line art tối giản</option>
+          <option value="lifestyle">🏡 Đời sống (ảnh thật sáng)</option>
+          <option value="infographic">📊 Mẹo vặt / Infographic phẳng</option>
+          <option value="whiteboard">🖊 Whiteboard doodle</option>
+        </select>
+        <span style="font-size:11px;color:var(--text-muted)">hoặc upload ảnh mẫu để AI tự phân tích (chuẩn nhất)</span>
+      </div>
+    </div>
+    <div class="grid-2 mb-12">
+      <div>
+        <label class="label green">CHARACTER STYLE <span style="font-weight:400;opacity:.7">(chính)</span></label>
+        <textarea id="pCharStyle" style="min-height:100px" placeholder="Chọn preset, upload ảnh mẫu, hoặc tự viết..."></textarea>
+        <label class="label" style="margin-top:8px">ĐẶC ĐIỂM NHẬN DẠNG (1 dòng) <span style="font-weight:400;opacity:.7">— lặp ở MỖI prompt cảnh để giữ nhất quán; giữ thật ngắn gọn</span></label>
+        <input type="text" id="pCharIdentity" placeholder="VD: clothed-torso stickman, thin black stick limbs, white mitten hands, pale shaded face">
+      </div>
+      <div>
+        <label class="label" style="color:var(--blue)">BACKGROUND STYLE</label>
+        <textarea id="pBgStyle" style="min-height:100px" placeholder="Chọn preset, upload ảnh mẫu, hoặc tự viết..."></textarea>
+      </div>
+    </div>
+    <div class="grid-2 mb-12">
+      <div>
+        <label class="label rose">SCENE STYLE / AESTHETIC (~40 từ, cố định cả video)</label>
+        <textarea id="pSceneStyle" style="min-height:70px" placeholder="AI sẽ điền..."></textarea>
+      </div>
+      <div>
+        <label class="label" style="color:var(--red)">PROMPT RULES / NEGATIVE</label>
+        <textarea id="pPromptRules" style="min-height:70px" placeholder="No text, no watermark, consistent character..."></textarea>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn ghost danger" onclick="deleteProfile()" style="margin-right:auto">🗑 Xoá Profile</button>
+      <button class="btn ghost" onclick="renameProfile()">✏️ Đổi tên</button>
+      <button class="btn ghost" onclick="exportProfile()">↓ Xuất JSON</button>
+      <button class="btn ghost" onclick="closeProfile()">Huỷ</button>
+      <button class="btn primary" onclick="saveProfile()">💾 Lưu Profile</button>
+    </div>
+  </div>
+</div>

@@ -26,6 +26,21 @@ function t10SyncTitleInput(){
   }
 }
 
+function t10PullSeoTitle(){
+  // Nhận kết quả từ tab YouTube SEO: ưu tiên tiêu đề ĐÃ CHỐT (t9Title),
+  // fallback tiêu đề đầu tiên trong SEO Pack (t9State.result.titles[0]).
+  const t = (document.getElementById('t9Title')?.value || '').trim()
+    || (t9State?.result?.titles?.[0] || '').trim();
+  if (!t){
+    setStatus10('Chưa có tiêu đề nào ở tab YouTube SEO — bấm Tạo SEO Pack / chọn tiêu đề ở đó trước, hoặc gõ tay vào ô bên dưới.', 'error');
+    return;
+  }
+  const el = document.getElementById('t10TitleInput');
+  if (el) el.value = t;
+  if (typeof t9Step2Refresh === 'function') t9Step2Refresh();   // bật nút gate nếu đang khoá
+  setStatus10('✓ Đã nhận tiêu đề từ YouTube SEO: "' + (t.length > 80 ? t.slice(0, 80) + '…' : t) + '"', 'ok');
+}
+
 function t10SyncStyleState(){
   const el = document.getElementById('t10StyleState'); if (!el) return;
   const p = getProfile();

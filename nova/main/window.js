@@ -175,9 +175,13 @@ function createWindow(startUrl) {
             results.push('export-import: ' + r);
           } catch (e) { results.push('export-import-ERR: ' + e.message); }
           process.stdout.write('\n========== E2E RESULTS ==========\n' + results.join('\n') + '\n================================\n');
+          // Ghi kết quả vào lifecycle.log để smoke E2E kiểm chứng được từ artifact
+          // do app ghi ra (không phụ thuộc stdout của console tách rời — §6.5/§6.6).
+          try { logLifecycle(app, 'e2e-results', results.join(' | ')); } catch (_) {}
           try { require('electron').app.quit(); } catch (_) { try { state.app.quit(); } catch (_) {} }
         } catch (e) {
           process.stdout.write('[e2e] CRASH: ' + e.message + '\n' + (e.stack || '') + '\n');
+          try { logLifecycle(app, 'e2e-crash', e.message); } catch (_) {}
           try { require('electron').app.exit(1); } catch (_) { try { state.app.exit(1); } catch (_) {} }
         }
       }, 5000);

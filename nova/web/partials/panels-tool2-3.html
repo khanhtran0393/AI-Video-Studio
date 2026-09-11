@@ -1,0 +1,356 @@
+    <!-- TOOL 2: PHÂN CẢNH -->
+    <div class="tool" id="tool-tool2">
+      <div class="tool-head">
+        <div class="tool-title">Phân Cảnh</div>
+        <div class="tool-subtitle">Kịch bản → nhân vật/bối cảnh → cảnh + prompt ảnh, một mạch.</div>
+      </div>
+      <link rel="stylesheet" href="src/styles/tool-2.css">
+
+      <!-- Ẩn UI (giữ input cho logic) -->
+      <div style="display:none">
+        <input type="text" id="visualStyle2" readonly>
+        <input type="number" id="minChars" value="30">
+        <input type="number" id="maxChars" value="150">
+        <div id="previewBox"></div><span id="previewCount"></span>
+      </div>
+
+      <!-- CARD 1: NGUỒN -->
+      <div class="sbc">
+        <div class="sbc-step"><span class="n">1</span> Nguồn</div>
+        <div class="sbc-src">
+          <div>
+            <div class="panel-head" style="padding:0 0 6px;border:none;background:none">
+              <span style="font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-dim);font-weight:600">KỊCH BẢN · <span id="scriptCount">0 ký tự</span></span>
+              <label class="btn ghost sm" style="cursor:pointer;border-color:var(--accent);color:var(--accent)" title="Tải file .txt/.md/.srt">📄 Tải file<input type="file" accept=".txt,.md,.text,.srt,.vtt,text/*" onchange="loadScriptFile(this)" style="display:none"></label>
+            </div>
+            <textarea id="scriptInput" placeholder="Paste kịch bản vào đây — hoặc bấm 📄 Tải file" style="min-height:200px;background:var(--surface-2);border:1px solid var(--border);border-radius:11px;padding:12px 14px" oninput="state.script=this.value;updateScriptCount();if(typeof t2UpdateCost==='function')t2UpdateCost();if(typeof t2UpdateAnalyzeBtn==='function')t2UpdateAnalyzeBtn()"></textarea>
+          </div>
+          <div class="sbc-side">
+            <label id="t2AudioPill" style="display:flex;align-items:center;gap:8px;cursor:pointer;background:var(--surface-2);border:1px solid var(--border-2);border-radius:10px;padding:9px 12px;font-size:12.5px;font-weight:600;color:var(--text-muted)" title="Đính MP3 giọng đọc → căn timing khớp audio thật.">🎵 <span id="t2AudioName">Đính MP3 căn timing</span><input type="file" accept="audio/*,.mp3,.m4a,.wav,.ogg" style="display:none" onchange="t2AudioInfo(this.files[0]);loadAutoAudio(this)"></label>
+            <div>
+              <div style="font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-dim);font-weight:600;margin-bottom:4px">Giây / ảnh</div>
+              <div title="Khoảng giây/ảnh: min (gộp cảnh ngắn) – max (tách cảnh dài)" style="display:flex;align-items:center;gap:6px;background:var(--surface-2);border:1px solid var(--border-2);border-radius:9px;padding:8px 12px;font-weight:600"><input type="number" id="minSecPerImg" value="3" min="1" max="20" style="width:38px;border:none;background:transparent;text-align:center;font-weight:700;padding:0">–<input type="number" id="maxSecPerImg" value="8" min="3" max="30" style="width:38px;border:none;background:transparent;text-align:center;font-weight:700;padding:0"><span style="color:var(--text-dim)">s</span></div>
+            </div>
+            <div>
+              <div style="font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-dim);font-weight:600;margin-bottom:6px">Nguồn hình cho cảnh</div>
+              <div id="t2NguonChips" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+              <!-- Thanh tỉ lệ: ảnh AI ↔ nguồn ngoài. Ẩn khi chưa bật nguồn nào (khi đó 100% ảnh AI). -->
+              <div id="t2TiLeBox" style="display:none;margin-top:9px;background:var(--surface-2);border:1px solid var(--border-2);border-radius:9px;padding:9px 10px">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:7px">
+                  <span style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--text-dim);font-weight:600">Tỉ lệ nguồn</span>
+                  <button type="button" id="t2TiLeAuto" onclick="t2ToggleTiLeAuto()"
+                    title="Tự động: AI tự cân theo số cảnh được đánh dấu tư liệu thật (kẹp trong 35–80%)"
+                    style="border-radius:7px;padding:3px 9px;font-size:10.5px;font-weight:650;cursor:pointer;border:1px solid var(--border-2);background:var(--surface);color:var(--text-muted)">Tự động</button>
+                </div>
+                <input type="range" id="t2TiLeSlider" min="0" max="100" step="5" value="50"
+                  oninput="t2SetTiLe(this.value)" style="width:100%;accent-color:var(--accent);cursor:pointer">
+                <div id="t2TiLeDoc" style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;font-size:10.5px;margin-top:6px;white-space:nowrap"></div>
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:9px;padding-top:9px;border-top:1px solid var(--border)">
+                  <span title="Số cảnh lấy tư liệu cùng lúc. Cao hơn = nhanh hơn, nhưng dễ bị trang chặn IP và ngốn CPU (mỗi clip còn phải cắt bằng ffmpeg)."
+                    style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--text-dim);font-weight:600;cursor:help">Luồng tải ⓘ</span>
+                  <select id="t2SoLuong" onchange="t2SetLuong(this.value)"
+                    style="font-size:11.5px;padding:3px 6px;border-radius:7px;background:var(--surface);color:var(--text);border:1px solid var(--border-2);cursor:pointer">
+                    <option value="1">1 · tuần tự</option>
+                    <option value="2">2 luồng</option>
+                    <option value="3">3 luồng</option>
+                    <option value="4">4 luồng</option>
+                    <option value="6">6 luồng</option>
+                  </select>
+                </div>
+              </div>
+              <div id="t2NguonNote" style="font-size:10.5px;color:var(--text-dim);margin-top:6px;line-height:1.5"></div>
+            </div>
+            <div id="t2TimingInfo" style="display:none"></div>
+            <button id="t2AnalyzeBtn" class="btn primary" style="background:linear-gradient(180deg,var(--accent-2),var(--accent));border:none;font-size:15px;font-weight:750;padding:12px" onclick="t2AnalyzeToggle()" title="Cần kịch bản + MP3 giọng đọc mới chạy. AI chia cảnh + nhân vật/bối cảnh + kiểu cảnh + prompt, khớp timing theo MP3. Đang chạy → bấm để Dừng.">✨ Phân tích kịch bản</button>
+            <span id="t2AnalyzeHint" style="font-size:11px;text-align:center;color:var(--text-dim)"></span>
+          </div>
+        </div>
+        <div id="t2CostLine" style="margin-top:12px;font-size:12.5px;color:var(--text-muted);background:var(--surface-2);border-radius:8px;padding:7px 12px;display:inline-block"></div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+          <span style="font-size:11.5px;color:var(--text-muted);font-weight:600" title="AI tự chọn kiểu ảnh phù hợp cho mỗi cảnh (mở màn, cận cảnh, giải thích…). Bật thêm các loại đặc biệt dưới đây nếu video cần.">🎬 Kiểu ảnh cảnh — AI tự chọn. Bật thêm loại đặc biệt nếu cần:</span>
+          <span id="sceneTypeToggles" style="display:flex;gap:6px;flex-wrap:wrap"></span>
+          <!-- 🚫👤 "Kênh không người": ẩn UI — tự bật theo preset/ngách (infographic, whiteboard, mẹo vặt…). Giữ input để code đọc + auto-tick. -->
+          <label style="display:none">
+            <input type="checkbox" id="noCharMode" onchange="try{syncTool2();saveState(true);}catch(e){}"> Kênh không người
+          </label>
+        </div>
+      </div>
+
+
+      <div class="status-bar" id="status2">Sẵn sàng. Dán kịch bản và bấm ✨ Phân tích kịch bản.</div>
+
+      <!-- prescan ẩn (giữ ô cho logic doPrescan/doAssign) -->
+      <div class="prescan" style="display:none">
+        <textarea id="charsInputV"></textarea>
+        <textarea id="bgInputV"></textarea>
+      </div>
+
+      <!-- CARD 2: NHÂN VẬT & BỐI CẢNH -->
+      <div class="sbc">
+        <div class="sbc-step"><span class="n">2</span> Nhân vật &amp; Bối cảnh
+          <span class="sbc-acts">
+            <select id="t2BgLayout" onchange="state.t3BgLayout=this.value;var e=document.getElementById('t3BgLayout');if(e)e.value=this.value;" title="Ảnh THAM CHIẾU bối cảnh: 1 ảnh/nơi hoặc 4 góc trong 1 ảnh (sheet). Chỉ là ảnh tham chiếu nên không cần nét căng." style="width:auto;flex:0 0 auto;font-size:12px;padding:6px 9px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:var(--text)">
+              <option value="single">🖼 Bối cảnh: 1 ảnh / nơi</option>
+              <option value="grid">🔲 Bối cảnh: 4 góc / 1 ảnh (sheet)</option>
+            </select>
+            <button class="btn ghost sm" onclick="t2RewriteDescs()" title="Viết LẠI mô tả nhân vật/bối cảnh (xoá mô tả cũ → AI viết mới; Phân tích kịch bản đã tự làm — chỉ dùng khi muốn làm lại)">🔄 Viết lại mô tả</button>
+            <button class="btn primary sm" onclick="t2GenAllAssetImages()" title="Chỉ tạo ảnh nhân vật + bối cảnh CÒN THIẾU qua Flow (cái đã có ảnh được bỏ qua)">✨ Tạo ảnh</button>
+          </span>
+        </div>
+        <span id="t2AssetInfo" style="display:none"></span>
+        <div id="t2AssetGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(122px,1fr));gap:9px"></div>
+      </div>
+
+      <!-- CARD 3: STORYBOARD -->
+      <div class="sbc">
+        <div class="sbc-step"><span class="n">3</span> Storyboard</div>
+        <div class="stats">
+          <div class="stat"><div class="k">Cảnh</div><div class="v" id="statScenes">0</div></div>
+          <div class="stat"><div class="k">Nhân vật</div><div class="v dim" id="statChars">—</div></div>
+          <div class="stat"><div class="k">Bối cảnh</div><div class="v dim" id="statBgs">—</div></div>
+          <div class="stat"><div class="k">Thời lượng</div><div class="v" id="statDur">0:00</div></div>
+          <div class="stat"><div class="k">Ảnh cảnh</div><div class="v" id="statSceneImg" style="color:var(--green)">0</div></div>
+        </div>
+        <span id="statAssigned" style="display:none">0</span>
+        <div id="sceneTimeline" style="display:none"></div>
+        <div id="t2TimingWarn" style="display:none;align-items:center;gap:8px;font-size:12.5px;font-weight:600;color:var(--amber);background:color-mix(in srgb,var(--amber) 12%,transparent);border:1px solid color-mix(in srgb,var(--amber) 34%,transparent);border-radius:9px;padding:8px 12px;margin-top:12px"></div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:14px 0 4px">
+          <button class="btn primary sm" id="t2GenSceneBtn" style="background:var(--accent);border-color:transparent" onclick="t2GenSceneImages()" title="Chỉ tạo ảnh cảnh CÒN THIẾU qua Flow (cảnh đã có ảnh A/B được bỏ qua, tự thử lại lỗi)">🖼 Tạo ảnh<span id="t2GenSceneMiss"></span></button>
+          <button class="btn ghost sm" onclick="t2MergeShortNow()" title="Gộp các cảnh quá ngắn (dưới số giây tối thiểu) vào cảnh liền trước — dùng khi storyboard đã chia mà còn cảnh 1-2s, khỏi phân tích lại">🔗 Gộp cảnh ngắn</button>
+          <button class="btn ghost sm" onclick="t2SplitLongNow()" title="Cảnh vượt số giây tối đa/ảnh → thêm ẢNH B (prompt AI khác, cùng nhân vật/bối cảnh) trên CÙNG cảnh. Dựng Video tự chia đôi thời lượng A→B. Bỏ qua infographic.">✂️ Cảnh dài → 2 ảnh (A/B)</button>
+          <span id="t2RegenQInfo" style="display:none;font-size:12px;font-weight:600;color:var(--accent);align-self:center"></span>
+                    <button class="btn ghost sm" onclick="t2LayTuLieu()" title="Lấy tư liệu cho mọi cảnh đã đánh dấu — kho ảnh/video sẵn, YouTube và các nền tảng web, tuỳ bảng ⚙">🌐 Lấy tư liệu</button>  <button class="btn ghost sm" id="t2RegenAllBtn" style="border-color:var(--amber);color:var(--amber)" onclick="t2RegenAllPrompts()" title="Viết LẠI prompt ảnh cho TẤT CẢ cảnh theo luật mới, GIỮ NGUYÊN chia cảnh/timing/lời đọc/nhân vật-bối cảnh. Không phải Phân tích lại.">🔧 Tạo lại tất cả prompt</button>
+          <button class="btn ghost sm" onclick="copyAllScenePrompts()">📋 Copy prompt</button>
+        </div>
+
+      <!-- Đã bỏ thanh subtab: bảng cảnh (đã có sẵn prompt) hiện thẳng; SRT bật/tắt bằng nút 🎬 SRT ở trên. Giữ badge ẩn cho code. -->
+      <span id="badge-list" style="display:none">0</span><span id="badge-assets" style="display:none">0</span><span id="badge-prompts" style="display:none">0</span>
+      <div class="subtab-content">
+        <div id="sub-list">
+          <div class="empty-state" id="emptyList">Chưa có cảnh nào.</div>
+          <table class="scene-table" id="sceneTable" style="display:none">
+            <thead><tr><th>#</th><th>Time</th><th>Dài</th><th>Kiểu</th><th style="text-align:center">Ảnh</th><th>Lời đọc · Prompt</th></tr></thead>
+            <tbody id="sceneBody"></tbody>
+          </table>
+          <div id="addSceneRow" style="display:none;padding:14px;border-top:1px solid var(--border);text-align:center;display:flex;gap:10px;justify-content:center;align-items:center;flex-wrap:wrap">
+            <button class="btn ghost sm" onclick="addSceneAtEnd()">+ Thêm cảnh thủ công</button>
+            <span style="color:var(--text-muted);font-size:11px">|</span>
+            <label class="btn ghost sm" style="cursor:pointer">📷 Upload ảnh storyboard hàng loạt
+              <input type="file" multiple accept="image/*" style="display:none" onchange="t2BulkUploadSceneImages(this.files);this.value='';">
+            </label>
+            <button class="btn ghost sm" style="color:var(--red)" onclick="if(confirm('Xoá hết ảnh storyboard?')){state.sceneImages={};renderTable();saveState(true);setStatus2('✓ Đã xoá ảnh storyboard.','ok');}" title="Xoá hết ảnh storyboard">🗑 Xoá ảnh storyboard</button>
+          </div>
+        </div>
+        <div id="sub-prompts" style="display:none">
+          <div style="padding:12px 14px;border-bottom:1px solid var(--border);display:flex;gap:10px;flex-wrap:wrap">
+            <button class="btn primary sm" onclick="copyAllScenePrompts()">📋 Sao chép tất cả prompt</button>
+            <button class="btn ghost sm" style="border-color:var(--teal);color:var(--teal)" onclick="autoAddPromptBForLongScenes()" title="Tự động thêm Prompt B (ảnh B) cho mọi cảnh vượt số giây tối đa/ảnh — 2 ảnh/1 cảnh, Dựng Video chia đôi thời lượng">✂️ Tự thêm ảnh B cho cảnh dài</button>
+            <span style="color:var(--text-muted);font-size:11px;align-self:center" id="copyAllInfo"></span>
+          </div>
+          <div style="padding:14px;border-bottom:1px solid var(--border);display:none">
+            <label class="label">📦 Tất cả prompt ảnh (gộp — chọn All rồi Copy)</label>
+            <textarea id="allPromptsV" readonly placeholder="Chưa có prompt. Bấm Tạo Prompt ảnh trước." style="min-height:220px;background:var(--surface-2);font-size:12px;line-height:1.6"></textarea>
+          </div>
+          <div class="prompts-list" id="promptsListV">
+            <div class="empty-state">Chưa có prompt. Bấm Tạo Prompt ảnh.</div>
+          </div>
+        </div>
+        <div id="sub-srt" style="display:none">
+          <div style="padding:16px">
+            <div style="display:flex;gap:10px;margin-bottom:12px">
+              <button class="btn primary sm" onclick="generateSRT()">Tạo SRT</button>
+              <button class="btn ghost sm" onclick="downloadSRT()">↓ Tải .srt</button>
+              <button class="btn ghost sm" onclick="copySRT()">Sao chép</button>
+            </div>
+            <textarea id="srtOutput" style="min-height:400px;background:var(--surface-2);font-size:11.5px;line-height:1.6"></textarea>
+          </div>
+        </div>
+      </div>
+      </div><!-- /Card 3 -->
+    </div>
+
+    <!-- TOOL 3: ASSET PROMPTS -->
+    <div class="tool" id="tool-tool3">
+      <div class="tool-head">
+        <div class="tool-title">Prompt Nhân vật & Bối cảnh</div>
+        <div class="tool-subtitle">Tạo prompt ảnh cho reference sheets nhân vật + bối cảnh. Dữ liệu từ Tool 02, style từ Profile.</div>
+      </div>
+
+      <div id="loadBanner" style="background:color-mix(in srgb,var(--teal) 12%,var(--surface));border:1px solid color-mix(in srgb,var(--teal) 32%,var(--border));border-radius:8px;padding:12px 16px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between">
+        <span style="color:var(--teal);font-weight:500">📦 Nhân vật & bối cảnh từ Tool 02</span>
+        <button class="btn teal sm" onclick="loadAssetsFromTool2()">Load Assets từ Tool 02</button>
+      </div>
+
+      <div class="grid-3 mb-24" style="display:none">
+        <div><label class="label">VISUAL STYLE</label><input type="text" id="t3VisualStyle" readonly style="opacity:.7"></div>
+        <div><label class="label">NGÁCH</label><input type="text" id="t3Ngach" readonly style="opacity:.7"></div>
+        <div><label class="label">POV STYLE</label><input type="text" id="t3PovStyle" readonly style="opacity:.7"></div>
+      </div>
+
+      <div class="panel mb-24" style="display:none">
+        <div class="panel-head"><span><span class="led"></span>STYLE PROMPTS (TỪ PROFILE)</span></div>
+        <div class="panel-body">
+          <div class="grid-2 mb-12">
+            <div><label class="label green">CHARACTER STYLE <span style="opacity:.6;font-weight:400">(chính)</span></label><textarea id="t3CharStyle" style="min-height:80px;background:var(--surface-2)" readonly></textarea></div>
+            <div><label class="label" style="color:var(--blue)">BACKGROUND STYLE</label><textarea id="t3BgStyle" style="min-height:80px;background:var(--surface-2)" readonly></textarea></div>
+          </div>
+          <div class="mb-12">
+            <label class="label green">CHARACTER STYLE B <span style="opacity:.6;font-weight:400">— nhân vật có tag bất kỳ VD: [stick], [realistic], [b] → dùng style này</span></label>
+            <textarea id="t3CharStyleB" style="min-height:60px;background:var(--surface-2)" readonly></textarea>
+          </div>
+          <div class="grid-2">
+            <div><label class="label rose">SCENE STYLE</label><textarea id="t3SceneStyle" style="min-height:50px;background:var(--surface-2)" readonly></textarea></div>
+            <div><label class="label" style="color:var(--red)">PROMPT RULES / NEGATIVE</label><textarea id="t3PromptRules" style="min-height:50px;background:var(--surface-2)" readonly></textarea></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid-2 mb-24">
+        <div class="panel">
+          <div class="panel-head">
+            <span><span class="led" style="background:var(--teal);box-shadow:0 0 8px var(--teal)"></span>NHÂN VẬT</span>
+            <span class="count" id="t3CharCount">0</span>
+          </div>
+          <div class="panel-body">
+            <textarea id="t3Characters" style="min-height:100px;background:var(--surface-2)" placeholder="Bấm Load Assets từ Tool 02"></textarea>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-head">
+            <span><span class="led" style="background:var(--rose);box-shadow:0 0 8px var(--rose)"></span>BỐI CẢNH</span>
+            <span class="count" id="t3BgCount">0</span>
+          </div>
+          <div class="panel-body">
+            <textarea id="t3Backgrounds" style="min-height:100px;background:var(--surface-2)" placeholder="Bấm Load Assets từ Tool 02"></textarea>
+          </div>
+        </div>
+      </div>
+
+      <!-- Vision API panel: ảnh tham chiếu cho từng nhân vật -->
+      <div class="panel mb-24">
+        <div class="panel-head">
+          <span>📷 Ảnh tham chiếu nhân vật (Vision AI)</span>
+          <span class="count" id="t3ImgCount">0 ảnh</span>
+          <button class="btn ghost sm" onclick="clearAllCharImages()">Xoá hết</button>
+        </div>
+        <div class="panel-body">
+          <div class="info-box" style="margin-bottom:14px">
+            Upload ảnh nhân vật → AI Vision <strong>phân tích visual</strong> để gen prompt chính xác. Chọn tên nhân vật từ list → upload ảnh tương ứng. <strong>PNG/JPG/WEBP, max 5MB</strong>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px">
+            <select id="t3CharSelect" style="flex:1">
+              <option value="">— Chọn từ danh sách nhân vật —</option>
+            </select>
+            <input type="file" id="t3ImgInput" accept="image/png,image/jpeg,image/webp" style="display:none">
+            <button class="btn" onclick="uploadCharImage()">📷 Upload ảnh</button>
+          </div>
+          <div id="t3ImgGallery" style="display:flex;flex-wrap:wrap;gap:12px"></div>
+        </div>
+      </div>
+
+      <div id="eraBox" style="background:linear-gradient(120deg,color-mix(in srgb,var(--accent) 11%,var(--surface)),var(--surface));border:1px solid color-mix(in srgb,var(--accent) 30%,var(--border));border-radius:10px;padding:11px 13px;margin-bottom:14px">
+        <label class="label" style="color:var(--accent)">🏺 BỐI CẢNH & THỜI ĐẠI <span style="font-weight:400;opacity:.75">— để AI chọn TRANG PHỤC đúng thời (tự điền từ kịch bản; sửa lại nếu cần)</span></label>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="text" id="t3Era" oninput="state.t3Era=this.value" placeholder="VD: Ancient Egypt, New Kingdom — linen kilts/robes, wesekh collars; hair: shaved heads or black bob wigs; no modern clothes/hairstyles" style="flex:1">
+          <button class="btn ghost sm" style="white-space:nowrap;border-color:var(--accent);color:var(--accent)" onclick="autoFillEra(true)" title="Đọc kịch bản Tool 02 và tự suy bối cảnh + thời đại">✨ Tự điền</button>
+        </div>
+        <label class="label" style="color:var(--accent);margin-top:10px">🖼 KIỂU ẢNH BỐI CẢNH</label>
+        <select id="t3BgLayout" onchange="state.t3BgLayout=this.value" style="width:auto;padding:7px 10px">
+          <option value="single">1 ảnh / mỗi bối cảnh — nét căng, ít lỗi ★</option>
+          <option value="grid">4 góc trong 1 ảnh — sheet tham chiếu</option>
+        </select>
+      </div>
+
+      <div class="actions">
+        <button class="btn" id="autoT3Btn" style="background:linear-gradient(180deg,var(--accent-2),var(--accent));border:none;color:var(--on-accent);font-weight:700" onclick="runAutoTool3()" title="1 bấm: Load Assets từ Tool 02 → tự điền thời đại → tạo tất cả prompt">🚀 Auto</button>
+        <button class="btn primary" onclick="genAllAssetPrompts()">⚡ Generate All Prompts</button>
+        <button class="btn violet" onclick="genStyleReference()">🎨 Style Reference</button>
+        <button class="btn" onclick="copyAllAssetPrompts()">📋 Sao chép tất cả</button>
+        <button class="btn ghost" onclick="exportAssetPrompts()">↓ Xuất JSON</button>
+        <button class="btn ghost" style="color:var(--red);border-color:var(--red);margin-left:auto" onclick="clearAllT3()" title="Xoá toàn bộ prompt asset">🗑 Xoá hết</button>
+      </div>
+
+      <div class="status-bar" id="status3">Sẵn sàng. Load Assets từ Tool 02 rồi bấm Generate.</div>
+
+      <div class="grid-2 mb-24">
+        <div>
+          <div class="panel-head" style="border-radius:8px 8px 0 0;border:1px solid var(--border);border-bottom:none">
+            <span>PROMPT NHÂN VẬT</span><span class="count" id="t3CharPromptCount">0</span>
+          </div>
+          <div id="t3CharPromptsList" style="background:var(--surface);border:1px solid var(--border);border-radius:0 0 8px 8px;padding:14px;min-height:150px;max-height:500px;overflow-y:auto">
+            <div class="empty-state">Chưa có prompt.</div>
+          </div>
+        </div>
+        <div>
+          <div class="panel-head" style="border-radius:8px 8px 0 0;border:1px solid var(--border);border-bottom:none">
+            <span>PROMPT BỐI CẢNH</span><span class="count" id="t3BgPromptCount">0</span>
+          </div>
+          <div id="t3BgPromptsList" style="background:var(--surface);border:1px solid var(--border);border-radius:0 0 8px 8px;padding:14px;min-height:150px;max-height:500px;overflow-y:auto">
+            <div class="empty-state">Chưa có prompt.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel mb-24" id="styleRefPanel" style="display:none">
+        <div class="panel-head">
+          <span>🎨 Style Reference Prompt</span>
+          <div style="display:flex;gap:6px">
+            <button class="btn ghost sm" onclick="copyText(state.styleRefPrompt||'')">📋 Sao chép</button>
+            <button class="btn ghost sm" onclick="startEditPrompt('styleRef', null)">✏️ Sửa</button>
+          </div>
+        </div>
+        <div class="panel-body">
+          <div id="t3StyleRefBody"></div>
+        </div>
+      </div>
+
+      <div class="panel mb-24">
+        <div class="panel-head">
+          <span>📦 Tất cả prompt (gộp — chọn All rồi Copy)</span>
+          <button class="btn ghost sm" onclick="copyAllAssetPrompts()">📋 Sao chép</button>
+        </div>
+        <div class="panel-body">
+          <textarea id="allAssetPromptsBox" readonly placeholder="Chưa có prompt. Bấm Generate All Prompts trước." style="min-height:260px;background:var(--surface-2);font-size:12px;line-height:1.6"></textarea>
+        </div>
+      </div>
+
+      <!-- Đổi tên ảnh theo tên asset -->
+      <h3 style="margin:32px 0 14px;font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);font-weight:700">📁 Đổi tên ảnh theo tên asset</h3>
+      <div class="info-box teal" style="margin-bottom:16px">
+        <span class="lbl">Flow:</span> Gen reference sheets trong G-Labs theo thứ tự prompts → Download ảnh → Kéo vào đây → Tự đổi tên theo danh sách assets → Download ZIP → Bỏ vào folder tham chiếu G-Labs
+      </div>
+
+      <div class="grid-2 mb-16" style="grid-template-columns:1fr 280px;align-items:start">
+        <div class="panel">
+          <div class="panel-head">
+            <span>Danh sách tên assets</span>
+            <button class="btn ghost sm" onclick="autoFillAssetNames()">Auto-fill từ prompts</button>
+          </div>
+          <div class="panel-body">
+            <textarea id="t3AssetNames" style="min-height:120px;background:var(--surface-2)" placeholder="Protagonist&#10;Location01&#10;BanLamViec"></textarea>
+            <div style="color:var(--teal);font-size:11px;margin-top:6px" id="t3AssetCount">0 assets</div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><span>Ảnh G-Labs</span></div>
+          <div id="assetDropzone" class="dropzone" style="min-height:130px;border:none;border-radius:0;padding:20px">
+            <div class="ico">📁</div>
+            <div style="font-size:12px">Kéo thả ảnh</div>
+          </div>
+          <input type="file" id="assetFileInput" multiple accept="image/*" style="display:none">
+          <div style="padding:8px 14px;color:var(--teal);font-size:11px" id="t3AssetImgCount">0 ảnh đã chọn</div>
+        </div>
+      </div>
+
+      <div class="panel mb-16" id="assetPreviewPanel" style="display:none">
+        <div class="panel-head"><span>Xem trước đổi tên</span></div>
+        <div class="panel-body" id="assetPreviewList" style="padding:0"></div>
+      </div>
+
+      <div class="actions">
+        <button class="btn primary" onclick="downloadAssetZip()">↓ Tải ZIP assets</button>
+        <button class="btn ghost" onclick="clearAssetFiles()">↺ Xoá ảnh</button>
+        <div id="assetZipStatus" style="font-size:12px"></div>
+      </div>
+    </div>
+

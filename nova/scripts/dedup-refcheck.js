@@ -1,6 +1,7 @@
 'use strict';
 // scripts/dedup-refcheck.js
-// Kiểm định sau dedup: xác bảo shared-consts.js KHÔNG còn statement TOP-LEVEL
+// Kiểm định sau dedup: xác bảo khối shared (nova/web/src/toolbox/shared/*.js —
+// tách verbatim từ shared-consts.js 2026-09-11) KHÔNG còn statement TOP-LEVEL
 // nào tham chiếu định nghĩa chỉ tồn tại ở file per-tool. Peer load SAU shared
 // nên mọi tham chiếu chạy-ngay-lúc-load tới định nghĩa chỉ có ở peer sẽ
 // ReferenceError ngay khi renderer boot (dạng lỗi mà smoke test dễ bỏ sót).
@@ -13,7 +14,7 @@ const path = require('path');
 const acorn = require(path.resolve(__dirname, '../../node_modules/acorn'));
 
 const TOOLBOX = path.resolve(__dirname, '..', 'web', 'src', 'toolbox');
-const SHARED = path.join(TOOLBOX, 'shared-consts.js');
+const SHARED_DIR = path.join(TOOLBOX, 'shared');
 const OPTS = { ecmaVersion: 'latest', sourceType: 'script', allowReturnOutsideFunction: true, allowImportExportEverywhere: true, allowAwaitOutsideFunction: true };
 
 // ---- Thu thập tên ĐỊNH NGHĨA top-level (function/var/const/class/gán global) ----
@@ -73,24 +74,40 @@ const BUILTIN = new Set(('document window navigator location history screen loca
   'globalThis undefined NaN Infinity arguments indexedDB caches self top parent frames opener name status closed innerWidth innerHeight ' +
   'outerWidth outerHeight screenX screenY pageXOffset pageYOffset scrollX scrollY event chrome Node NodeList Notification CSS').split(/\s+/));
 
-const sharedAst = acorn.parse(fs.readFileSync(SHARED, 'utf8'), OPTS);
-const sharedDefs = topLevelDefs(sharedAst);
+// Parse TOÀN BỘ khối shared/ (file .js trong SHARED_DIR, sort tên để ổn định).
+// Refs gộp từ mọi file — đích đến của một ref khi renderer boot là global scope,
+// nên vị trí tương đối giữa các file shared/ không đổi ngữ nghĩa so với god-file cũ.
+const sharedAsts = [];
+{
+  const files = fs.readdirSync(SHARED_DIR).filter(f => f.endsWith('.js')).sort();
+  if (!files.length) { console.error('dedup-refcheck: KHÔNG có file .js nào trong ' + SHARED_DIR); process.exit(1); }
+  for (const f of files) {
+    const full = path.join(SHARED_DIR, f);
+    try { sharedAsts.push({ file: f, ast: acorn.parse(fs.readFileSync(full, 'utf8'), OPTS) }); }
+    catch (e) { console.error('dedup-refcheck: KHÔNG parse được shared file: ' + full + ' — ' + e.message); process.exit(1); }
+  }
+}
+const sharedDefs = new Set();
+for (const s of sharedAsts) for (const d of topLevelDefs(s.ast)) sharedDefs.add(d);
 const refs = [];
-for (const n of sharedAst.body) {
-  if (n.type === 'FunctionDeclaration') continue; // định nghĩa, thân chạy sau
-  collectRefs(n, refs);
+for (const s of sharedAsts) {
+  for (const n of s.ast.body) {
+    if (n.type === 'FunctionDeclaration') continue; // định nghĩa, thân chạy sau
+    collectRefs(n, refs);
+  }
 }
 
 const peerDefs = new Set();
 let peerFileCount = 0;
-// Đệ quy TOÀN BỘ toolbox (gồm thư mục con như utility/) — mọi peer load SAU
-// shared trong index.html, nên def chỉ có ở peer vẫn là nguy cơ ReferenceError
+// Đệ quy TOÀN BỘ toolbox (gồm thư mục con như utility/) TRỪ khối shared/ — mọi peer
+// load SAU shared trong index.html, nên def chỉ có ở peer vẫn là nguy cơ ReferenceError
 // khi shared chạy top-level ref tới nó. Parse lỗi phải fail lộ liễu (Luật 10).
 (function collectPeerDefs(dir) {
   for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, ent.name);
+    if (full === SHARED_DIR) continue;
     if (ent.isDirectory()) { collectPeerDefs(full); continue; }
-    if (!ent.name.endsWith('.js') || full === SHARED) continue;
+    if (!ent.name.endsWith('.js')) continue;
     let past;
     try { past = acorn.parse(fs.readFileSync(full, 'utf8'), OPTS); } catch (e) {
       console.error('dedup-refcheck: KHÔNG parse được peer file: ' + full + ' — ' + e.message);
