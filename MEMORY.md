@@ -2554,6 +2554,16 @@ Kiểm định: `npm run check` EXIT 0 (cảnh báo C2 shadow là nhiễu đã b
 - **Artifacts**: `output/gen-e2e/results-retry.json` + `native-video-veo31-lite.mp4` + `native-video-veo31-quality.mp4` + step9-lite/step10-quality/probe-link/sniff-link/resolve2-link logs. tmp đã dọn (tmp-step.js, tmp-probe-link.js, tmp-t.js, e2e-runner.exe, tmp-e2e-app/). Kiểm định: `npm run check` EXIT 0.
 - **Next**: (1) SSO Labs trong cửa sổ hiện cho consent lần đầu; (2) nếu muốn linkVideoRedirect: sniff request thật khi bấm download trong Flow UI (không đoán shape); (3) VEO3 roadmap P1–P4.
 
+### 2026-09-11y — SNIFF CDP bắt được request Download THẬT của Flow UI → linkVideoRedirect KHÔNG cần port
+
+- **Harness** (tmp-sniff-app, đã xoá): electron app nhỏ spawn Chrome for Testing profile acc-1, CDP **browser-level** `Target.setAutoAttach(flatten:true)` + `Network.enable` cho MỌI target + lắng nghe `Browser.downloadWillBegin/downloadProgress`. Bài học v1→v2: gắn CDP vào 1 tab duy nhất thì MẤT sự kiện khi UI mở/đổi target (log v1 đứt hẳn sau khi user vào project); v2 browser-wide bắt mọi tab, kèm sự kiện download của trình duyệt. Lưu ý vận hành: xoá `DevToolsActivePort` trước launch (port CŨ = sai), strip `CHROME_CRASHPAD_PIPE_NAME`, kill chrome giữ profile trước khi mở.
+- **Kết quả (bấm Tải xuống thật trong Flow, acc-1, video lite `53250d6d`, project `e9c862f6`…, 2026-09-11 ~21:54):** UI KHÔNG gọi bất kỳ tRPC nào khi download — request duy nhất phát sinh là GET thẳng signed URL:
+  `https://flow-content.google/video/<mediaId>?Expires=<unixSec>&KeyName=labs-flow-prod-cdn-key&Signature=<hmac>` (4 GET streaming player/redirect).
+  → `linkVideoRedirect` không phải endpoint tRPC gọi trực tiếp được (khớp probe 14 shape → 400 ở 11x): nút Download của UI chỉ MỞ URL ký ĐÃ CÓ sẵn trong client (lấy từ projectInitialData lúc tải trang).
+- **Kết luận kiến trúc:** đường `resolveVideoForApp`/projectInitialData (exact-match mediaId trong JSON) CHÍNH LÀ đường link chuẩn — shape URL khớp 100% với thứ UI thực dùng. KHÔNG port thêm gì (chống fallback ngầm — Luật 10), hủy vĩnh viễn ý định port linkVideoRedirect. (Chữ ký trong log bị cắt ở 300 ký tự do logger truncate, nhưng host + path + KeyName đủ để khẳng định shape.)
+- **Dọn dẹp & kiểm định:** harness tắt (electron + chrome về 0), tmp-sniff-app xoá; log giữ tại `C:\Temp\nova-e2e\sniff-ui-1.log` + `sniff-console.log`. `npm run check` EXIT 0 (chạy sau khi đã dọn tmp ở repo root — tmp tại root từng làm check EXIT 1).
+
+
   `results.merged` + `results.srt`, SRT là sản phẩm phụ thiếu không cản audio). Cổng đọc lại từ
   `voice-native.URL` (lazy-require, một nguồn — không hardcode 8771 thứ hai); env `VA_TTS_BACKEND_URL`.
 - `autoSynthesizeTts` hook vào `orchestrator/analyze.js` (CẢ `runAnalysis` lẫn `runAnalysisFromData`):
