@@ -6,7 +6,8 @@ const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const { findChrome } = require('../flow-cft');
-const { profileDir, restore, accounts, FLOW_URL, LOG, sleep, readDevToolsPort, flowPageWs, cdpConnect, evalInPageT, evalInPage } = require('./nen-tang');
+const http = require('./http');
+const { profileDir, restore, accounts, FLOW_URL, LOG, sleep, readDevToolsPort, flowPageWs, cdpConnect, evalInPageT, evalInPage, CO_GIAU_TU_DONG, CO_KHONG_NGU, JS_GIAU_WEBDRIVER } = require('./nen-tang');
 
 // ── Tiến trình Chrome ─────────────────────────────────────────────────
 const running = new Map();   // id -> { proc, port, cdp }
@@ -23,11 +24,12 @@ function launchChrome(id, { debug }) {
     // Vì app TẮT CỨNG Chrome (để không còn tab dưới dock) → Chrome coi là "thoát không đúng cách".
     // Các cờ này ẩn bong bóng "Khôi phục trang" + KHÔNG khôi phục tab cũ (tránh tab dồn lại).
     '--hide-crash-restore-bubble', '--disable-session-crashed-bubble', '--no-restore-session-state',
+    ...CO_GIAU_TU_DONG,   // giấu navigator.webdriver — Google chặn "trình duyệt không an toàn" nếu thiếu
   ];
   // Proxy RIÊNG từng account (như đối thủ): mỗi account đi 1 IP, tránh Google liên kết cùng IP.
   const a = accounts.get(id); const proxy = a && a.proxy;
   if (proxy) args.push('--proxy-server=' + proxy);
-  if (debug) args.push('--remote-debugging-port=0');
+  if (debug) args.push('--remote-debugging-port=0', ...CO_KHONG_NGU);
   args.push('--new-window', FLOW_URL);
   const chrome = findChrome();
   if (!chrome) return null;
@@ -117,7 +119,10 @@ async function _openForOperation(id) {
     await cdp.send('Page.enable', {});
     await cdp.send('Network.enable', {});
     await cdp.send('Runtime.enable', {});
+    // Giấu navigator.webdriver trên mọi trang của phiên điều khiển (kể cả trang đăng nhập lại).
+    try { await cdp.send('Page.addScriptToEvaluateOnNewDocument', { source: JS_GIAU_WEBDRIVER }); } catch {}
     const rec = { proc, port, cdp, videoUrls: [] };
+    cdp._proxy = (accounts.get(id) && accounts.get(id).proxy) || null;   // HTTP thuần (apiFetch) đi CÙNG proxy của account
     // Gắn listener TỪ TRƯỚC khi navigate → bắt luôn: (a) URL file video cho resolve, (b) token ya29 ngay LẦN TẢI ĐẦU (captureToken khỏi phải reload lần nữa + chờ 3.5s).
     cdp.on((m) => {
       if (m.method !== 'Network.requestWillBeSent') return;
@@ -167,6 +172,25 @@ async function captureToken(cdp, ms = 22000) {
   }
   // Token từ endpoint /fx/api/auth/session — field access_token + expires (~24h, đúng như đối thủ).
   S._lastTokenExpiry = null;
+  /* Flow mới (flow.google.com): fetch session NGAY TRONG TRANG là chéo origin (trang không
+     còn origin labs.google) → luôn "Failed to fetch". Đường CHÍNH: cookie → token bằng
+     HTTP thuần từ tiến trình chính (mô hình flow-http.js của đối thủ), cookie lấy từ
+     CHÍNH Chrome của account. Vòng fetch trong trang giữ lại làm dự phòng (layout cũ). */
+  try {
+    const cks = await readCookies(cdp);
+    const hop = (cks || []).filter((c) => { const d = String(c.domain || '').replace(/^\./, '').toLowerCase(); return d && ('labs.google' === d || 'labs.google'.endsWith('.' + d)); });
+    if (hop.length) {
+      const seen = new Set(); const phan = [];
+      for (const c of hop) { if (seen.has(c.name)) continue; seen.add(c.name); phan.push(c.name + '=' + c.value); }
+      const t = await http.layToken(phan.join('; '), { proxy: (cdp && cdp._proxy) || null });
+      if (!t.error && t.token) {
+        S._lastTokenExpiry = t.expiry ? (Date.parse(t.expiry) || null) : null;
+        LOG('✓ token (cookie→HTTP) len', t.token.length, '· hết hạn', S._lastTokenExpiry ? new Date(S._lastTokenExpiry).toISOString() : '?');
+        return t.token;
+      }
+      LOG('layToken (cookie→HTTP):', t.error || 'rỗng');
+    }
+  } catch (e) { LOG('cookie→HTTP lỗi', e && e.message); }
   for (let i = 0; i < 2; i++) {   // 2 lần đủ: treo lần 1 mà có ya29 là bail luôn; vòng ngoài (loginAuto/reloginAuto) còn retry verifyAccount → khỏi phí 3×10s
     try {
       // FAIL NHANH 10s: treo là bỏ, thử lại ngay (không đứng chờ 45s).
@@ -182,14 +206,28 @@ async function captureToken(cdp, ms = 22000) {
       if (/WS_CLOSED/.test(String(e && e.message))) break;   // kết nối chết → khỏi cố, dùng ya29 nếu có
     }
     // Đã bắt được ya29 từ network + session vừa lỗi 1 lần → dùng ya29 luôn (Windows session hay treo, ya29 vẫn gen tốt).
-    if (ya29 && i >= 0) { LOG('dùng token ya29 (webRequest) len', ya29.length, '— session chập chờn, khỏi đợi thêm'); return ya29; }
+    if (ya29 && i >= 0) { LOG('dùng token ya29 (webRequest) len', ya29.length, '— session chập chờn, khỏi đợi thêm'); return await ganHanChoYa29(ya29); }
     await sleep(1500);
   }
   // Fallback cuối: chờ ya29 xuất hiện.
   const t0 = Date.now();
   while (!ya29 && Date.now() - t0 < Math.min(ms, 8000)) await sleep(300);
   if (ya29) LOG('token ya29 (webRequest) len', ya29.length);
-  return ya29 || null;
+  return ya29 ? await ganHanChoYa29(ya29) : null;
+}
+/* ── HẠN THẬT CỦA TOKEN ya29 (mô hình bản gốc) ──────────────────────────────
+   `_lastTokenExpiry` chỉ được điền khi đọc được endpoint phiên. Khi đường phiên
+   hỏng, token bắt bằng webRequest không được để hạn NULL — hạn null bị coi là
+   không có token → MỖI LẦN MỞ APP lại mint lại cả kho account. Hỏi Google
+   (tokeninfo) lấy hạn thật; hỏng nữa thì đặt mức dè dặt 20 phút. */
+const _DU_PHONG_HAN_MS = 20 * 60 * 1000;
+async function ganHanChoYa29(tok) {
+  if (!tok) return tok;
+  if (S._lastTokenExpiry) return tok;              // đường phiên đã điền hạn thật
+  const han = await http.hanToken(tok, { proxy: null });
+  if (han) { S._lastTokenExpiry = han; LOG('hạn token (hỏi Google):', new Date(han).toISOString(), '· còn', Math.round((han - Date.now()) / 60000), 'phút'); }
+  else { S._lastTokenExpiry = Date.now() + _DU_PHONG_HAN_MS; LOG('không hỏi được hạn token → tạm ghi 20 phút'); }
+  return tok;
 }
 async function readCookies(cdp) { try { const r = await cdp.send('Network.getAllCookies', {}); return (r && r.cookies) || []; } catch { return []; } }
 function cookieExpiryOf(cookies) {
@@ -200,9 +238,45 @@ function cookieExpiryOf(cookies) {
   return pick.length ? Math.round(Math.min(...pick.map((c) => c.expires)) * 1000) : null;
 }
 // Gọi API Flow bằng fetch TRONG trang (đúng origin/cookie, vân tay Chrome thật).
+/* Gọi API Flow bằng HTTP thuần từ tiến trình chính (mô hình flow-http.js của đối thủ).
+   Flow mới (flow.google.com): fetch NGAY TRONG TRANG luôn hỏng — tab không còn origin
+   labs.google, gọi tRPC/aisandbox là chéo origin → "Failed to fetch". Lời gọi ở đây mang
+   cookie đúng host lấy từ CHÍNH Chrome của account (jar CDP) + header do caller truyền
+   (Bearer…). URL/body/headers của caller GIỮ NGUYÊN — chỉ đổi phương tiện vận chuyển.
+   Trả { ok, status, text } như fetch trong trang cũ. */
+function _chonCookie(jar, host) {
+  const h = String(host).replace(/^\./, '').toLowerCase();
+  const hop = (jar || []).filter((c) => { const d = String(c.domain || '').replace(/^\./, '').toLowerCase(); return d && (h === d || h.endsWith('.' + d)); });
+  const seen = new Set(); const phan = [];
+  for (const c of hop) { if (seen.has(c.name)) continue; seen.add(c.name); phan.push(c.name + '=' + c.value); }
+  return phan.join('; ');
+}
+function _headerMacDinh(url, headers, ua) {
+  const host = new URL(url).hostname.toLowerCase();
+  const h = { ...headers };
+  h['User-Agent'] = (h['User-Agent'] != null && h['User-Agent'] !== '') ? h['User-Agent'] : (ua || http.UA);
+  if (h['Accept-Language'] == null && h['accept-language'] == null) h['Accept-Language'] = 'vi,en-US;q=0.8,en;q=0.6';
+  let goc = null, chieu = null, site = null;
+  if (host === 'labs.google' || host.endsWith('.labs.google')) { goc = 'https://labs.google'; chieu = 'https://labs.google/fx/tools/flow'; site = 'same-origin'; }
+  else if (host === 'aisandbox-pa.googleapis.com') { goc = 'https://labs.google'; chieu = 'https://labs.google/'; site = 'cross-site'; }   // aisandbox chỉ cần Bearer — cookie google.com KHÔNG khớp host này
+  else if (host === 'flow.google.com' || host.endsWith('.flow.google.com')) { goc = 'https://flow.google.com'; chieu = 'https://flow.google.com/'; site = 'same-origin'; }
+  if (goc && h['Origin'] == null && h['origin'] == null) h['Origin'] = goc;
+  if (chieu && h['Referer'] == null && h['referer'] == null) h['Referer'] = chieu;
+  if (site && h['Sec-Fetch-Site'] == null && h['sec-fetch-site'] == null) { h['Sec-Fetch-Site'] = site; h['Sec-Fetch-Dest'] = 'empty'; h['Sec-Fetch-Mode'] = 'cors'; }
+  return h;
+}
 async function apiFetch(cdp, { url, method = 'GET', headers = {}, body = null }) {
-  const expr = `(async()=>{try{const r=await fetch(${JSON.stringify(url)},{method:${JSON.stringify(method)},headers:${JSON.stringify(headers)},body:${body == null ? 'null' : JSON.stringify(body)},credentials:'include'});const t=await r.text();return{ok:r.ok,status:r.status,text:t};}catch(e){return{ok:false,status:0,text:String(e&&e.message||e)};}})()`;
-  return await evalInPage(cdp, expr);
+  let cookie = '', ua = null;
+  try { cookie = _chonCookie(await readCookies(cdp), new URL(url).hostname); }
+  catch (e) { LOG('apiFetch đọc cookie lỗi', e && e.message); }
+  try {
+    if (!cdp._ua) cdp._ua = await evalInPageT(cdp, 'navigator.userAgent', 3000);
+    if (typeof cdp._ua === 'string' && cdp._ua) ua = cdp._ua;   // UA thật của profile này — khớp phiên đã đăng nhập
+  } catch (e) { /* giữ UA dự phòng */ }
+  const hh = _headerMacDinh(url, headers, ua);
+  if (cookie) hh['Cookie'] = hh['Cookie'] != null ? hh['Cookie'] : cookie;
+  const r = await http.xin({ url, method, headers: hh, body, proxy: (cdp && cdp._proxy) || null });
+  return { ok: r.status >= 200 && r.status < 300, status: r.status, text: r.text, headers: r.headers };
 }
 
 module.exports = { running, launchChrome, killProfileChrome, markCleanExit, wipeSessions, closeChrome, freeProfile, openForOperation, captureToken, readCookies, cookieExpiryOf, apiFetch };

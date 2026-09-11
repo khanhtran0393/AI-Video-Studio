@@ -180,15 +180,101 @@ async function refreshOne(id) {
   if (v.email) a.email = v.email; if (v.tier) a.tier = v.tier;
   if (v.credits != null) a.credits = v.credits; if (v.cookieExpiry) a.cookieExpiry = v.cookieExpiry;
   persist();
-  return { ok: true, id, email: a.email, credits: a.credits };
+  return { ok: true, id, email: a.email, tier: a.tier, credits: a.credits, creditsStatus: v.creditsStatus ?? null };
+}
+
+// ── Verify giao thức MỚI (flow.google.com — AiSandboxAngularFrontend) ─────
+// Trang mới dùng batchexecute (auth cookie) + gRPC-Web, KHÔNG cấp token ya29,
+// REST /v1/credits 401 với mọi kiểu auth. Cách đọc duy nhất khả thi: để CHÍNH
+// TRANG tự gọi rpc (đủ XSRF `at` + cookie) rồi nghe lén response qua CDP Network:
+//   nzlxg  = /VideoFxService.GetCredits → inner JSON "[remaining,?,?,?,null,total]"
+//   o30O0e = person info → email
+//   DOM flow-user-tier-chip → tier hiển thị ("PRO"/"ULTRA"/"FREE")
+function _batchInner(body, rpcid) {
+  if (!body || body.indexOf(")]}'") !== 0) return null;
+  const marker = '["wrb.fr","' + rpcid + '","';
+  const i = body.indexOf(marker); if (i < 0) return null;
+  const start = i + marker.length;
+  let j = start, esc = false;
+  while (j < body.length) { const ch = body[j]; if (esc) esc = false; else if (ch === '\\') esc = true; else if (ch === '"') break; j++; }
+  try { return JSON.parse(JSON.parse('"' + body.slice(start, j) + '"')); } catch { return null; }
+}
+const MIGRATED_TIER_MAP = { PRO: 'PAYGATE_TIER_ONE', ULTRA: 'PAYGATE_TIER_TWO', FREE: 'PAYGATE_TIER_FREE', AI_PRO: 'PAYGATE_TIER_ONE', AI_ULTRA: 'PAYGATE_TIER_TWO' };
+async function _verifyMigrated(id, cdp) {
+  LOG('acc', id, 'verify theo giao thức MỚI flow.google.com (batchexecute)…');
+  const reqIds = { nzlxg: null, o30O0e: null };   // rpcid → requestId (null=chưa thấy, true=đã lấy body)
+  let stopped = false;
+  const onMsg = (m) => {
+    if (stopped || !m || m.method !== 'Network.responseReceived') return;
+    const u = (m.params && m.params.response && m.params.response.url) || '';
+    const rpc = (u.match(/rpcids=([^&]+)/) || [])[1] || '';
+    if ((rpc === 'nzlxg' || rpc === 'o30O0e') && !reqIds[rpc]) reqIds[rpc] = m.params.requestId;
+  };
+  try { cdp.on(onMsg); } catch {}
+  try { await cdp.send('Network.enable', {}); } catch {}
+  try { await cdp.send('Page.navigate', { url: 'https://flow.google.com/' }); } catch {}
+  const deadline = Date.now() + 40000;
+  let tierText = '', credits = null, email = null;
+  while (Date.now() < deadline && (!tierText || credits == null || !email)) {
+    await sleep(1500);
+    if (!tierText) {
+      try {
+        const t = await cdp.send('Runtime.evaluate', { expression: '(document.querySelector("flow-user-tier-chip")||{}).textContent||""', returnByValue: true });
+        tierText = ((t.result && t.result.value) || '').trim();
+      } catch {}
+    }
+    for (const rpc of Object.keys(reqIds)) {
+      const rid = reqIds[rpc];
+      if (!rid || rid === true) continue;
+      try {
+        const b = await cdp.send('Network.getResponseBody', { requestId: rid });
+        const body = b.base64Encoded ? Buffer.from(b.body, 'base64').toString('utf8') : b.body;
+        const inner = _batchInner(body, rpc);
+        if (!inner) { reqIds[rpc] = true; continue; }
+        if (rpc === 'nzlxg' && Array.isArray(inner)) {
+          const num = (v) => (typeof v === 'number' && isFinite(v)) ? v : null;
+          credits = num(inner[0]) != null ? inner[0] : num(inner[5]);   // remaining, dự phòng total
+        } else if (rpc === 'o30O0e') {
+          const em = JSON.stringify(inner).match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/);
+          if (em) email = em[0];
+        }
+        reqIds[rpc] = true;
+      } catch {}   // body chưa sẵn sàng → thử vòng sau
+    }
+  }
+  stopped = true;
+  const a = accounts.get(id);
+  if (credits == null && !tierText) {
+    // Không đọc được gì → nhiều khả năng profile chưa đăng nhập flow.google.com (phiên mới là sub-session riêng)
+    if (a) { a.needLogin = true; persist(); }
+    S.tokens.delete(id);
+    return { error: 'FLOW_MIGRATED: Không đọc được tier/credits từ flow.google.com (batchexecute) — profile có thể chưa đăng nhập, hoặc trang không tải xong trong 40s. Thử bấm ↻ lại; nếu vẫn lỗi nghĩa là Google đổi rpcid → cần probe lại.', needLogin: true, migrated: true };
+  }
+  const tier = tierText ? (MIGRATED_TIER_MAP[tierText.toUpperCase()] || 'PAYGATE_TIER_FREE') : null;
+  if (a) { a.needLogin = false; a.migrated = true; if (tier) a.tier = tier; if (credits != null) a.credits = credits; if (email) a.email = email; persist(); }
+  LOG('acc', id, '→ ✓ (giao thức mới) tier', tierText || '?', '· credits', credits, '· email', email);
+  return { ok: true, id, hasToken: false, token: null, credits, tier, email, cookieExpiry: null, creditsStatus: 'batchexecute', migrated: true };
 }
 
 // ── Verify (GĐ1): mở có debug → token + cookie + credits + email ───────
 // Thân chung: đã có cdp (dù mở mới hay gắn vào cửa sổ đang mở) → bắt token + email + credits.
 async function _verifyBody(id, cdp) {
   LOG('acc', id, 'đang bắt token…');
+  // Phát hiện Google đã chuyển Flow sang flow.google.com (AiSandboxAngularFrontend):
+  // session endpoint labs.google cũ trả {} rỗng, trang mới KHÔNG phát ya29 → captureToken
+  // chắc chắn thất bại. Với trang mới → verify theo giao thức mới (batchexecute).
+  const hostNow = async () => {
+    try {
+      const loc = await cdp.send('Runtime.evaluate', { expression: 'location.host', returnByValue: true });
+      return (loc.result && loc.result.value) || '';
+    } catch { return ''; }
+  };
+  // Đọc host TRƯỚC khi captureToken (tránh chờ ~22s bắt token vô ích khi trang đã là flow mới).
+  if (/flow\.google\.com$/.test(await hostNow())) return await _verifyMigrated(id, cdp);
   const token = await captureToken(cdp);
   if (!token) {
+    // captureToken có thể là chính nó đã điều hướng qua flow.google.com → đọc LẠI host lúc này.
+    if (/flow\.google\.com$/.test(await hostNow())) return await _verifyMigrated(id, cdp);
     // Mở được Chrome điều khiển nhưng KHÔNG ra token → profile đã ĐĂNG XUẤT (Flow bắt đăng nhập lại).
     // Bật needLogin + BỎ token cache cũ để UI báo "CẦN ĐN LẠI" thay vì "HOẠT ĐỘNG" ảo.
     const a = accounts.get(id); if (a) { a.needLogin = true; persist(); }
@@ -209,7 +295,7 @@ async function _verifyBody(id, cdp) {
   try {
     const cr = await apiFetch(cdp, { url: FLOW_API_BASE + '/v1/credits?key=' + encodeURIComponent(FLOW_API_KEY), method: 'GET', headers: { authorization: 'Bearer ' + token } });
     crStatus = cr.status;
-    if (cr.ok) { try { const d = JSON.parse(cr.text); if (typeof d.credits === 'number') credits = d.credits; if (d.userPaygateTier === 'PAYGATE_TIER_ONE' || d.userPaygateTier === 'PAYGATE_TIER_TWO') tier = d.userPaygateTier; if (!email && (d.email || d.userEmail)) email = d.email || d.userEmail; } catch {} }
+    if (cr.ok) { try { const d = JSON.parse(cr.text); if (typeof d.credits === 'number') credits = d.credits; if (typeof d.userPaygateTier === 'string' && d.userPaygateTier) tier = d.userPaygateTier; if (!email && (d.email || d.userEmail)) email = d.email || d.userEmail; } catch {} }
     if (!email) { const ui = await apiFetch(cdp, { url: 'https://www.googleapis.com/oauth2/v2/userinfo', method: 'GET', headers: { authorization: 'Bearer ' + token } }); if (ui.ok) { try { const d = JSON.parse(ui.text); if (d.email) email = d.email; } catch {} } }
   } catch (e) { LOG('acc', id, 'credits/email (bỏ qua):', e && e.message); }
   LOG('acc', id, '→ ✓ token OK · credits', credits, '· tier', tier, '· email', email, '· creditsHTTP', crStatus);

@@ -1,17 +1,17 @@
-/* ── Tách từ flow-chrome.js — gen ảnh (test) + pipeline video học request + upscale + watermark + genVideo + getAllTokens (getAccountData chuyển từ 683–709 cuối file — hạ gợi chu trình với các hằng).
-     State dùng chung (order, nextId, _busy, _lastTokenExpiry, _captchaId, tokens) nằm
-     trong ./trang-thai (S) vì bị gán lại xuyên file — destructuring require chỉ snapshot giá trị cũ. ── */
+﻿/* â”€â”€ TÃ¡ch tá»« flow-chrome.js â€” gen áº£nh (test) + pipeline video há»c request + upscale + watermark + genVideo + getAllTokens (getAccountData chuyá»ƒn tá»« 683â€“709 cuá»‘i file â€” háº¡ gá»£i chu trÃ¬nh vá»›i cÃ¡c háº±ng).
+     State dÃ¹ng chung (order, nextId, _busy, _lastTokenExpiry, _captchaId, tokens) náº±m
+     trong ./trang-thai (S) vÃ¬ bá»‹ gÃ¡n láº¡i xuyÃªn file â€” destructuring require chá»‰ snapshot giÃ¡ trá»‹ cÅ©. â”€â”€ */
 const S = require('./trang-thai');
 const { app, net } = require('electron');
 const fs = require('fs');
 const path = require('path');
-const { FLOW_API_BASE, accounts, LOG, evalInPage, FLOW_URL, sleep, evalInPageT, persist } = require('./nen-tang');
-const { ensureLive } = require('./token-captcha');
+const { FLOW_API_BASE, FLOW_API_KEY, accounts, LOG, evalInPage, FLOW_URL, sleep, evalInPageT, persist, SITE_KEY } = require('./nen-tang');
+const { ensureLive, pageEval } = require('./token-captcha');
 const { closeChrome, apiFetch, running, readCookies } = require('./tien-trinh');
 
-// ── Hàm thuần (copy từ flow-native để test độc lập, không đụng engine cũ) ──
+// â”€â”€ HÃ m thuáº§n (copy tá»« flow-native Ä‘á»ƒ test Ä‘á»™c láº­p, khÃ´ng Ä‘á»¥ng engine cÅ©) â”€â”€
 const TRPC_CREATE_PROJECT = 'https://labs.google/fx/api/trpc/project.createProject';
-const SITE_KEY = '6LdsFiUsAAAAAIjVDZcuLhaHiDn5nnHVXVRQGeMV';
+/* SITE_KEY — định nghĩa một nguồn ở ./nen-tang (cùng nhóm hằng Flow) */
 function genImageUrl(projectId) { return `${FLOW_API_BASE}/v1/projects/${projectId}/flowMedia:batchGenerateImages`; }
 function cryptoRandomUUID() { try { return require('crypto').randomUUID(); } catch { return 'b-' + Date.now(); } }
 function deepFindProjectId(o, d = 0) { if (!o || typeof o !== 'object' || d > 8) return null; if (typeof o.projectId === 'string' && o.projectId) return o.projectId; for (const k of Object.keys(o)) { const v = deepFindProjectId(o[k], d + 1); if (v) return v; } return null; }
@@ -32,49 +32,53 @@ function captchaCode(action) {
     var key=null; try{ if(typeof ___grecaptcha_cfg!=='undefined'&&___grecaptcha_cfg.clients){ var cs=___grecaptcha_cfg.clients,ids=Object.keys(cs); outer:for(var i=0;i<ids.length;i++){var c=cs[ids[i]];for(var k in c){var o=c[k];if(o&&typeof o==='object')for(var k2 in o){var v=o[k2];if(v&&typeof v==='object'&&v.sitekey){key=v.sitekey;break outer;}}}} } }catch(e){}
     if(!key){ try{ var sc=document.querySelectorAll('script[src*="recaptcha"]'); for(var j=0;j<sc.length;j++){ var m=sc[j].src.match(/[?&]render=([^&]+)/); if(m&&m[1]&&m[1]!=='explicit'){ key=m[1]; break; } } }catch(e){} }
     if(!key)key=${JSON.stringify(SITE_KEY)};
-    await new Promise(function(res){ try{ window.grecaptcha.enterprise.ready(res); }catch(e){ res(); } });   // chờ grecaptcha init xong
+    await new Promise(function(res){ try{ window.grecaptcha.enterprise.ready(res); }catch(e){ res(); } });   // chá» grecaptcha init xong
     return await Promise.race([
       window.grecaptcha.enterprise.execute(key,{action:${JSON.stringify(action)}}),
-      new Promise(function(_,rej){ setTimeout(function(){ rej(new Error('CAPTCHA_TIMEOUT')); }, 25000); })   // chống treo vô hạn
+      new Promise(function(_,rej){ setTimeout(function(){ rej(new Error('CAPTCHA_TIMEOUT')); }, 25000); })   // chá»‘ng treo vÃ´ háº¡n
     ]);
   })()`;
 }
 
-// Test tạo 1 ảnh trên 1 account Chrome (chứng minh gen qua CDP chạy).
+// Test táº¡o 1 áº£nh trÃªn 1 account Chrome (chá»©ng minh gen qua CDP cháº¡y).
 async function genTest(id, prompt, tokenId) {
   if (!accounts.has(id)) return { error: 'NO_ACC' };
-  let live; try { live = await ensureLive(id); } catch (e) { return { error: 'Mở Chrome lỗi: ' + (e.message || e) }; }
+  let live; try { live = await ensureLive(id); } catch (e) { return { error: 'Má»Ÿ Chrome lá»—i: ' + (e.message || e) }; }
   const { cdp } = live; let token = live.token; let a = accounts.get(id);
-  // TEST token-only: dùng Chrome của account `id` (chỉ để giải captcha) + TOKEN của account `tokenId`.
+  // TEST token-only: dÃ¹ng Chrome cá»§a account `id` (chá»‰ Ä‘á»ƒ giáº£i captcha) + TOKEN cá»§a account `tokenId`.
   if (tokenId && tokenId !== id && accounts.has(tokenId)) {
     try { const t2 = await ensureLive(tokenId); token = t2.token; await closeChrome(tokenId); a = accounts.get(tokenId); LOG('TEST token-only: Chrome acc', id, '+ token acc', tokenId); }
-    catch (e) { return { error: 'Lấy token acc ' + tokenId + ' lỗi: ' + (e.message || e) }; }
+    catch (e) { return { error: 'Láº¥y token acc ' + tokenId + ' lá»—i: ' + (e.message || e) }; }
   }
   try {
-    LOG('acc', id, 'genTest: tạo project…');
+    LOG('acc', id, 'genTest: táº¡o projectâ€¦');
     const pr = await apiFetch(cdp, { url: TRPC_CREATE_PROJECT, method: 'POST', headers: { 'content-type': 'application/json', accept: '*/*', authorization: 'Bearer ' + token }, body: JSON.stringify({ json: { projectTitle: 'Nova Chrome', toolName: 'PINHOLE' } }) });
     let pd; try { pd = JSON.parse(pr.text); } catch { pd = pr.text; }
     if (!pr.ok) return { error: 'PROJECT_' + pr.status + ': ' + (extractApiError(pd) || String(pr.text).slice(0, 150)) };
     const projectId = deepFindProjectId(pd);
     if (!projectId) return { error: 'NO_PROJECT_ID' };
-    LOG('acc', id, 'genTest: giải captcha…');
-    let capToken; try { capToken = await evalInPage(cdp, captchaCode('IMAGE_GENERATION')); } catch (e) { return { error: 'CAPTCHA: ' + (e.message || e) }; }
+    LOG('acc', id, 'genTest: giáº£i captchaâ€¦');
+    // Mint qua MÁY CAPTCHA (pageEval): trang account giờ là flow.google.com — không còn grecaptcha
+    // như labs.google cũ; mode guest mint trên máy guest, mode machine đi cửa sổ captcha riêng.
+    let capToken; try { capToken = await pageEval(id, captchaCode('IMAGE_GENERATION')); } catch (e) { return { error: 'CAPTCHA: ' + (e.message || e) }; }
     if (!capToken) return { error: 'CAPTCHA_EMPTY' };
     const body = buildImageBody({ prompt, projectId, aspect: 'IMAGE_ASPECT_RATIO_LANDSCAPE', modelName: 'GEM_PIX_2', tier: a.tier || null, variantCount: 1 });
     body.clientContext.recaptchaContext.token = capToken;
     for (const rq of body.requests) { if (rq.clientContext && rq.clientContext.recaptchaContext) rq.clientContext.recaptchaContext.token = capToken; }
-    LOG('acc', id, 'genTest: gọi batchGenerateImages…');
+    LOG('acc', id, 'genTest: gá»i batchGenerateImagesâ€¦');
     const gr = await apiFetch(cdp, { url: genImageUrl(projectId), method: 'POST', headers: { 'content-type': 'text/plain;charset=UTF-8', accept: '*/*', authorization: 'Bearer ' + token }, body: JSON.stringify(body) });
     let gd; try { gd = JSON.parse(gr.text); } catch { gd = gr.text; }
     if (!gr.ok) return { error: 'GEN_' + gr.status + ': ' + (extractApiError(gd) || String(gr.text).slice(0, 150)) };
     const entries = extractMediaEntries(gd);
-    if (!entries.length) LOG('acc', id, 'genTest 0 ảnh — Flow trả:', String(gr.text).slice(0, 500));
-    LOG('acc', id, 'genTest → ✓', entries.length, 'ảnh; url0', entries[0] && String(entries[0].url).slice(0, 60));
-    return { ok: entries.length > 0, count: entries.length, url: entries[0] && entries[0].url, raw: entries.length ? undefined : String(gr.text).slice(0, 300) };
-  } catch (e) { return { error: 'genTest lỗi: ' + (e.message || e) }; }
+    if (!entries.length) LOG('acc', id, 'genTest 0 áº£nh â€” Flow tráº£:', String(gr.text).slice(0, 500));
+    LOG('acc', id, 'genTest â†’ âœ“', entries.length, 'áº£nh; url0', entries[0] && String(entries[0].url).slice(0, 60));
+    // Gen áº£nh trá»« tÃ­n dá»¥ng nhÆ°ng API generate khÃ´ng tráº£ sá»‘ dÆ° â†’ chá»§ Ä‘á»™ng há»i /v1/credits rá»“i ghi ngÆ°á»£c (giá»‘ng nhÃ¡nh video poll).
+    try { const cr = await apiFetch(cdp, { url: FLOW_API_BASE + '/v1/credits?key=' + encodeURIComponent(FLOW_API_KEY), method: 'GET', headers: { authorization: 'Bearer ' + token } }); if (cr.ok) { const cd = JSON.parse(cr.text); if (typeof cd.credits === 'number' && a && a.credits !== cd.credits) { a.credits = cd.credits; persist(); LOG('acc', id, 'genTest â†’ credits', cd.credits); } } } catch (e) { LOG('acc', id, 'genTest credits (bá» qua):', e && e.message); }
+    return { ok: entries.length > 0, count: entries.length, url: entries[0] && entries[0].url, credits: a && a.credits, raw: entries.length ? undefined : String(gr.text).slice(0, 300) };
+  } catch (e) { return { error: 'genTest lá»—i: ' + (e.message || e) }; }
 }
 
-// ═══════════ VIDEO — công thức bê từ extension (đã "học" request thật) ═══════════
+// â•â•â•â•â•â•â•â•â•â•â• VIDEO â€” cÃ´ng thá»©c bÃª tá»« extension (Ä‘Ã£ "há»c" request tháº­t) â•â•â•â•â•â•â•â•â•â•â•
 const UPLOAD_IMAGE_URL = `${FLOW_API_BASE}/v1/flow/uploadImage`;
 const DEFAULT_VIDEO = { "genText": { "url": "https://aisandbox-pa.googleapis.com/v1/video:batchAsyncGenerateVideoText", "body": "{\"mediaGenerationContext\":{\"batchId\":\"\",\"audioFailurePreference\":\"BLOCK_SILENCED_VIDEOS\"},\"clientContext\":{\"projectId\":\"\",\"tool\":\"PINHOLE\",\"userPaygateTier\":\"PAYGATE_TIER_ONE\",\"sessionId\":\"\",\"recaptchaContext\":{\"token\":\"\",\"applicationType\":\"RECAPTCHA_APPLICATION_TYPE_WEB\"}},\"requests\":[{\"aspectRatio\":\"VIDEO_ASPECT_RATIO_LANDSCAPE\",\"textInput\":{\"structuredPrompt\":{\"parts\":[{\"text\":\"\"}]}},\"videoModelKey\":\"veo_3_1_t2v\",\"seed\":0,\"metadata\":{}}],\"useV2ModelConfig\":true}" }, "genImage": { "url": "https://aisandbox-pa.googleapis.com/v1/video:batchAsyncGenerateVideoReferenceImages", "body": "{\"mediaGenerationContext\":{\"batchId\":\"\",\"audioFailurePreference\":\"BLOCK_SILENCED_VIDEOS\"},\"clientContext\":{\"projectId\":\"\",\"tool\":\"PINHOLE\",\"userPaygateTier\":\"PAYGATE_TIER_ONE\",\"sessionId\":\"\",\"recaptchaContext\":{\"token\":\"\",\"applicationType\":\"RECAPTCHA_APPLICATION_TYPE_WEB\"}},\"requests\":[{\"aspectRatio\":\"VIDEO_ASPECT_RATIO_LANDSCAPE\",\"textInput\":{\"structuredPrompt\":{\"parts\":[{\"text\":\"\"}]}},\"videoModelKey\":\"veo_3_1_r2v_lite\",\"seed\":0,\"metadata\":{},\"referenceImages\":[{\"mediaId\":\"\",\"imageUsageType\":\"IMAGE_USAGE_TYPE_ASSET\"}]}],\"useV2ModelConfig\":true}" }, "poll": { "url": "https://aisandbox-pa.googleapis.com/v1/video:batchCheckAsyncVideoGenerationStatus", "body": "{\"media\":[{\"name\":\"\",\"projectId\":\"\"}]}" }, "modelKeys": { "omni-flash": "abra_t2v_8s", "veo31-fast": "veo_3_1_t2v_fast", "veo31-lite": "veo_3_1_t2v_lite", "veo31-quality": "veo_3_1_t2v" } };
 function _vDeepSet(o, pred, val) { if (!o || typeof o !== 'object') return; for (const k of Object.keys(o)) { if (pred(k)) o[k] = val; else if (o[k] && typeof o[k] === 'object') _vDeepSet(o[k], pred, val); } }
@@ -82,8 +86,8 @@ function _vDeepSet2(o, pred, fn) { if (!o || typeof o !== 'object') return; for 
 function _vSetPrompt(o, prompt) { (function w(x) { if (!x || typeof x !== 'object') return; if (x.structuredPrompt && Array.isArray(x.structuredPrompt.parts)) x.structuredPrompt.parts.forEach((p) => { if (p && 'text' in p) p.text = prompt; }); for (const k of Object.keys(x)) if (x[k] && typeof x[k] === 'object') w(x[k]); })(o); }
 function _vAnyUrl(data) { const out = []; (function w(v) { if (!v) return; if (typeof v === 'string') { if (/^https?:\/\/\S{8,}/.test(v)) out.push(v); } else if (Array.isArray(v)) v.forEach(w); else if (typeof v === 'object') for (const k in v) w(v[k]); })(data); return out; }
 const _VID_URL_RE = /(flow-content\.google|\/video\/|videoplayback|\.mp4)/i;
-// Tìm ĐÚNG link video của mediaId trong cây JSON projectInitialData.
-// URL phục vụ (fife/serving) KHÔNG chứa mediaId, nên phải khớp theo ENTRY (name===mediaId) rồi lấy URL trong entry đó.
+// TÃ¬m ÄÃšNG link video cá»§a mediaId trong cÃ¢y JSON projectInitialData.
+// URL phá»¥c vá»¥ (fife/serving) KHÃ”NG chá»©a mediaId, nÃªn pháº£i khá»›p theo ENTRY (name===mediaId) rá»“i láº¥y URL trong entry Ä‘Ã³.
 function _findVideoUrlForMedia(d, mediaId) {
   if (!d || !mediaId) return null;
   const mid = String(mediaId);
@@ -149,7 +153,7 @@ async function vUploadImage(id, token, projectId, { base64, mime, fileName }) {
 }
 async function vSubmit(id, { token, prompt, projectId, imageMediaId, modelKey, durationSecs }) {
   const { cdp } = await ensureLive(id);
-  let capToken; try { capToken = await evalInPage(cdp, captchaCode('VIDEO_GENERATION')); } catch (e) { return { error: 'CAPTCHA: ' + (e.message || e) }; }
+  let capToken; try { capToken = await pageEval(id, captchaCode('VIDEO_GENERATION')); } catch (e) { return { error: 'CAPTCHA: ' + (e.message || e) }; }   // mint qua máy captcha — xem genTest
   if (!capToken) return { error: 'CAPTCHA_EMPTY' };
   const body = _vBodyFromLearned({ prompt, projectId, imageMediaId, capToken, modelKey, durationSecs });
   if (!body) return { error: 'VIDEO_BODY_NULL' };
@@ -178,7 +182,7 @@ async function vPoll(id, { token, projectId, mediaId }) {
   const credits = (d && typeof d.remainingCredits === 'number') ? d.remainingCredits : null;
   return { status, done, failed, credits, videoUrl };
 }
-// Tải video ở tiến trình chính (né CORS) — như ảnh.
+// Táº£i video á»Ÿ tiáº¿n trÃ¬nh chÃ­nh (nÃ© CORS) â€” nhÆ° áº£nh.
 async function fetchVideoData(id, url) {
   let cookieHeader = '';
   try { const rec = running.get(id); if (rec && rec.cdp) { const cks = await readCookies(rec.cdp); cookieHeader = (cks || []).filter((c) => /google/.test(c.domain || '')).map((c) => c.name + '=' + c.value).join('; '); } } catch {}
@@ -190,14 +194,14 @@ async function fetchVideoData(id, url) {
     req.end();
   });
 }
-// Lấy link video: mở trang project trong Chrome, phát video, chộp URL /video/<id> (CDP Network) hoặc <video>.currentSrc.
+// Láº¥y link video: má»Ÿ trang project trong Chrome, phÃ¡t video, chá»™p URL /video/<id> (CDP Network) hoáº·c <video>.currentSrc.
 let _vResolveChain = Promise.resolve();
 function resolveVideo(id, opts) { const run = () => _resolveVideo(id, opts); const p = _vResolveChain.then(run, run); _vResolveChain = p.catch(() => {}); return p; }
 async function _resolveVideo(id, { projectId, mediaId, withData }) {
   const { cdp } = await ensureLive(id);
   const rec = running.get(id); if (rec) rec.videoUrls = (rec.videoUrls || []).filter((r) => !r.url.includes(mediaId));
   const setWin = async (st) => { try { const w = await cdp.send('Browser.getWindowForTarget', {}); if (w && w.windowId) await cdp.send('Browser.setWindowBounds', { windowId: w.windowId, bounds: { windowState: st } }); } catch {} };
-  // TỐI ƯU: bắt THẲNG response projectInitialData (chứa link video, chạy bằng cookie phiên) → khỏi phát video + cào, giữ cửa sổ ẩN.
+  // Tá»I Æ¯U: báº¯t THáº²NG response projectInitialData (chá»©a link video, cháº¡y báº±ng cookie phiÃªn) â†’ khá»i phÃ¡t video + cÃ o, giá»¯ cá»­a sá»• áº©N.
   let _piaUrl = null; const _piaReq = new Set();
   const _piaCatch = async (m) => {
     try {
@@ -208,30 +212,30 @@ async function _resolveVideo(id, { projectId, mediaId, withData }) {
         if (b && b.body) {
           const raw = b.base64Encoded ? Buffer.from(b.body, 'base64').toString('utf8') : String(b.body);
           let d; try { d = JSON.parse(raw); } catch { d = null; }
-          // 1) Khớp CHÍNH XÁC theo entry mediaId (đáng tin nhất — tránh lấy nhầm video cũ trong project).
+          // 1) Khá»›p CHÃNH XÃC theo entry mediaId (Ä‘Ã¡ng tin nháº¥t â€” trÃ¡nh láº¥y nháº§m video cÅ© trong project).
           const exact = d ? _findVideoUrlForMedia(d, mediaId) : null;
           if (exact) { _piaUrl = exact; return; }
-          // 2) Không có mediaId → mới được phép lấy video mới nhất trong response.
+          // 2) KhÃ´ng cÃ³ mediaId â†’ má»›i Ä‘Æ°á»£c phÃ©p láº¥y video má»›i nháº¥t trong response.
           if (!mediaId) {
             const urls = d ? _vAnyUrl(d) : (raw.match(/https?:\\?\/\\?\/[^"'\\ ]+/g) || []).map((u) => u.replace(/\\\//g, '/'));
             const vids = urls.filter((u) => _VID_URL_RE.test(u));
             if (vids.length) _piaUrl = vids[vids.length - 1];
           }
-          // Có mediaId nhưng chưa khớp → KHÔNG lấy bừa; để vòng lặp chờ/response sau khớp đúng.
+          // CÃ³ mediaId nhÆ°ng chÆ°a khá»›p â†’ KHÃ”NG láº¥y bá»«a; Ä‘á»ƒ vÃ²ng láº·p chá»/response sau khá»›p Ä‘Ãºng.
         }
       }
     } catch {}
   };
   cdp.on(_piaCatch);
-  await setWin('minimized');   // lấy link từ API → không cần bung cửa sổ/phát video
+  await setWin('minimized');   // láº¥y link tá»« API â†’ khÃ´ng cáº§n bung cá»­a sá»•/phÃ¡t video
   try { await cdp.send('Page.navigate', { url: `${FLOW_URL}/project/${projectId}` }); } catch {}
-  for (let i = 0; i < 24 && !_piaUrl; i++) await sleep(500);   // chờ projectInitialData trả về (tối đa ~12s)
-  if (!_piaUrl && mediaId) {   // chưa khớp mediaId → reload 1 lần (video vừa tạo có thể chưa vào projectInitialData) rồi thử lại khớp chính xác
+  for (let i = 0; i < 24 && !_piaUrl; i++) await sleep(500);   // chá» projectInitialData tráº£ vá» (tá»‘i Ä‘a ~12s)
+  if (!_piaUrl && mediaId) {   // chÆ°a khá»›p mediaId â†’ reload 1 láº§n (video vá»«a táº¡o cÃ³ thá»ƒ chÆ°a vÃ o projectInitialData) rá»“i thá»­ láº¡i khá»›p chÃ­nh xÃ¡c
     try { await cdp.send('Page.navigate', { url: `${FLOW_URL}/project/${projectId}?_r=1` }); } catch {}
     for (let i = 0; i < 20 && !_piaUrl; i++) await sleep(500);
   }
   let vurl = _piaUrl;
-  // FALLBACK: API không ra link → cách cũ (bung cửa sổ, phát video, cào URL).
+  // FALLBACK: API khÃ´ng ra link â†’ cÃ¡ch cÅ© (bung cá»­a sá»•, phÃ¡t video, cÃ o URL).
   if (!vurl) {
     await setWin('normal'); await sleep(3000);
     const grab = () => { const arr = (rec && rec.videoUrls) || []; const hit = arr.filter((r) => r.url && /\/video\//.test(r.url) && (!mediaId || r.url.includes(mediaId))); return hit.length ? hit[hit.length - 1].url : null; };
@@ -245,38 +249,38 @@ async function _resolveVideo(id, { projectId, mediaId, withData }) {
       await sleep(2200);
     }
     await setWin('minimized');
-  } else { LOG('acc', id, 'lấy link video nhanh từ projectInitialData ✓'); }
+  } else { LOG('acc', id, 'láº¥y link video nhanh tá»« projectInitialData âœ“'); }
   if (!vurl) return { videoUrl: null };
   let vid = null;
   if (withData && !/^blob:/.test(vurl)) { try { vid = await fetchVideoData(id, vurl); } catch (e) { vid = { fetchError: e.message }; } }
   return { videoUrl: /^blob:/.test(vurl) ? null : vurl, video: vid };
 }
 
-// ── UPSCALE VIDEO 1080p (học request 1 lần trên Flow → replay hàng loạt) ─────────
-// Video 1080p/4K của Flow là bước NÂNG ĐỘ PHÂN GIẢI riêng (như ảnh 2K/4K). App học request khi
-// user bấm Tải xuống → 1080p 1 lần, rồi tự replay cho các video khác. Sạch: phiên thật, không giả header.
+// â”€â”€ UPSCALE VIDEO 1080p (há»c request 1 láº§n trÃªn Flow â†’ replay hÃ ng loáº¡t) â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Video 1080p/4K cá»§a Flow lÃ  bÆ°á»›c NÃ‚NG Äá»˜ PHÃ‚N GIáº¢I riÃªng (nhÆ° áº£nh 2K/4K). App há»c request khi
+// user báº¥m Táº£i xuá»‘ng â†’ 1080p 1 láº§n, rá»“i tá»± replay cho cÃ¡c video khÃ¡c. Sáº¡ch: phiÃªn tháº­t, khÃ´ng giáº£ header.
 const VUP_FILE = () => path.join(app.getPath('userData'), 'flow-video-upscale.json');
 let vUpTpl = null;   // { url, body, at }
-let _vUpArm = null;  // { id } đang chờ user bấm 1080p
+let _vUpArm = null;  // { id } Ä‘ang chá» user báº¥m 1080p
 try { const _d = JSON.parse(fs.readFileSync(VUP_FILE(), 'utf8')); if (_d && _d.url) vUpTpl = _d; } catch {}
 function _saveVUp() { try { fs.writeFileSync(VUP_FILE(), JSON.stringify(vUpTpl)); } catch {} }
-// Nhận diện request NÂNG độ phân giải video (endpoint tên chưa biết chắc → xét cả url lẫn body).
+// Nháº­n diá»‡n request NÃ‚NG Ä‘á»™ phÃ¢n giáº£i video (endpoint tÃªn chÆ°a biáº¿t cháº¯c â†’ xÃ©t cáº£ url láº«n body).
 function _looksVUp(u, pd) {
   if (!u) return false;
-  if (/(projectInitialData|auth\/session|recaptcha|batchCheckAsync|CheckAsyncVideoGenerationStatus)/i.test(u)) return false;   // loại poll/session/captcha
-  if (/(upsampl|upscal|superres|super_res|enhanc|highres|increaseresolution|highResolution)/i.test(u)) return true;           // endpoint upscale rõ ràng
-  // dự phòng: body nhắc 1080/upscale mà KHÔNG phải submit gen 720p thường
+  if (/(projectInitialData|auth\/session|recaptcha|batchCheckAsync|CheckAsyncVideoGenerationStatus)/i.test(u)) return false;   // loáº¡i poll/session/captcha
+  if (/(upsampl|upscal|superres|super_res|enhanc|highres|increaseresolution|highResolution)/i.test(u)) return true;           // endpoint upscale rÃµ rÃ ng
+  // dá»± phÃ²ng: body nháº¯c 1080/upscale mÃ  KHÃ”NG pháº£i submit gen 720p thÆ°á»ng
   if (pd && /(1080|UPSAMPLE|UPSCALE|SUPER_?RES|HIGH_?RES|ENHANCE|RECONSTRUCT)/i.test(pd) && !/VIDEO_RESOLUTION_720P/i.test(pd)) return true;
   return false;
 }
 function videoUpscaleStatus() { return { learned: !!vUpTpl, url: vUpTpl && vUpTpl.url, at: vUpTpl && vUpTpl.at }; }
 function videoUpscaleDump() { return vUpTpl ? { url: vUpTpl.url, body: String(vUpTpl.body || '').slice(0, 4000), at: vUpTpl.at } : null; }
-// Bật học: mở CfT của account (hiện cửa sổ), chờ user bấm 1080p → CDP chộp POST request.
+// Báº­t há»c: má»Ÿ CfT cá»§a account (hiá»‡n cá»­a sá»•), chá» user báº¥m 1080p â†’ CDP chá»™p POST request.
 function _firstEnabledId() { return S.order.find((x) => { const a = accounts.get(x); return a && a.enabled !== false; }) || null; }
 async function armVideoUpscale(id) {
-  // id chỉ định → dùng nếu đang BẬT; không thì lấy tài khoản BẬT đầu tiên (không mở account đã tắt).
+  // id chá»‰ Ä‘á»‹nh â†’ dÃ¹ng náº¿u Ä‘ang Báº¬T; khÃ´ng thÃ¬ láº¥y tÃ i khoáº£n Báº¬T Ä‘áº§u tiÃªn (khÃ´ng má»Ÿ account Ä‘Ã£ táº¯t).
   let realId = (id != null && accounts.has(id) && accounts.get(id).enabled !== false) ? id : _firstEnabledId();
-  if (!realId) return { error: 'Chưa có tài khoản nào ĐANG BẬT. Bật 1 tài khoản trước rồi thử lại.' };
+  if (!realId) return { error: 'ChÆ°a cÃ³ tÃ i khoáº£n nÃ o ÄANG Báº¬T. Báº­t 1 tÃ i khoáº£n trÆ°á»›c rá»“i thá»­ láº¡i.' };
   const { cdp } = await ensureLive(realId);
   try { const w = await cdp.send('Browser.getWindowForTarget', {}); if (w && w.windowId) await cdp.send('Browser.setWindowBounds', { windowId: w.windowId, bounds: { windowState: 'normal' } }); } catch {}
   try { await cdp.send('Page.navigate', { url: FLOW_URL }); } catch {}
@@ -290,22 +294,22 @@ async function armVideoUpscale(id) {
         if (m.method === 'Network.requestWillBeSent' && m.params.request && m.params.request.method === 'POST') {
           const u = m.params.request.url; const pd = m.params.request.postData;
           if (!u || !/googleapis\.com|labs\.google/i.test(u)) return;
-          if (/(auth\/session|recaptcha|projectInitialData|batchCheckAsync)/i.test(u)) return;   // bỏ nhiễu
-          LOG('  [học 1080p] POST', u.replace(/\?.*$/, ''));   // ghi mọi request để soi nếu bắt hụt
+          if (/(auth\/session|recaptcha|projectInitialData|batchCheckAsync)/i.test(u)) return;   // bá» nhiá»…u
+          LOG('  [há»c 1080p] POST', u.replace(/\?.*$/, ''));   // ghi má»i request Ä‘á»ƒ soi náº¿u báº¯t há»¥t
           if (pd && _looksVUp(u, pd)) {
             vUpTpl = { url: u, body: pd, at: Date.now() }; _saveVUp(); _vUpArm = null;
-            LOG('acc', realId, '✔ ĐÃ HỌC upscale video:', u);
+            LOG('acc', realId, 'âœ” ÄÃƒ Há»ŒC upscale video:', u);
             LOG('  BODY:', String(pd).slice(0, 1500));
           }
         }
       } catch {}
     });
   }
-  return { ok: true, note: 'Đã mở Chrome. Trong Flow, bấm ⋮ (hoặc nút Tải xuống) → chọn 1080p trên 1 video bất kỳ. App sẽ tự HỌC và lưu lại.' };
+  return { ok: true, note: 'ÄÃ£ má»Ÿ Chrome. Trong Flow, báº¥m â‹® (hoáº·c nÃºt Táº£i xuá»‘ng) â†’ chá»n 1080p trÃªn 1 video báº¥t ká»³. App sáº½ tá»± Há»ŒC vÃ  lÆ°u láº¡i.' };
 }
 
-// ── TẮT WATERMARK (nhìn thấy) hàng loạt: học request Google gửi khi gạt "Visible watermarking" → phát lại cho mọi tài khoản.
-// Chỉ tắt watermark HIỂN THỊ (Google cho phép tắt sẵn trong menu); SynthID ẩn của Google KHÔNG đụng tới.
+// â”€â”€ Táº®T WATERMARK (nhÃ¬n tháº¥y) hÃ ng loáº¡t: há»c request Google gá»­i khi gáº¡t "Visible watermarking" â†’ phÃ¡t láº¡i cho má»i tÃ i khoáº£n.
+// Chá»‰ táº¯t watermark HIá»‚N THá»Š (Google cho phÃ©p táº¯t sáºµn trong menu); SynthID áº©n cá»§a Google KHÃ”NG Ä‘á»¥ng tá»›i.
 const WM_FILE = () => path.join(app.getPath('userData'), 'flow-watermark.json');
 let wmTpl = null;   // { url, method, body, at }
 let _wmArm = null;
@@ -313,17 +317,17 @@ try { const _d = JSON.parse(fs.readFileSync(WM_FILE(), 'utf8')); if (_d && _d.ur
 function _saveWM() { try { fs.writeFileSync(WM_FILE(), JSON.stringify(wmTpl)); } catch {} }
 function _looksWM(u, pd) {
   const url = u || ''; const s = url + ' ' + (pd || '');
-  if (/(auth\/session|recaptcha|projectInitialData|batchCheckAsync|GenerateVideo|GenerateImage|AsyncGenerate)/i.test(url)) return false;   // loại gen/poll/session/captcha
+  if (/(auth\/session|recaptcha|projectInitialData|batchCheckAsync|GenerateVideo|GenerateImage|AsyncGenerate)/i.test(url)) return false;   // loáº¡i gen/poll/session/captcha
   return /(watermark|synth ?id|visible.?mark|imagewatermark|mediawatermark|showwatermark|disablewatermark|mark_?visib)/i.test(s);
 }
-// Endpoint tắt/bật watermark hiển thị đã xác định (KHÔNG phụ thuộc tài khoản — chỉ 1 cờ, account theo phiên).
+// Endpoint táº¯t/báº­t watermark hiá»ƒn thá»‹ Ä‘Ã£ xÃ¡c Ä‘á»‹nh (KHÃ”NG phá»¥ thuá»™c tÃ i khoáº£n â€” chá»‰ 1 cá», account theo phiÃªn).
 const WM_URL = 'https://aisandbox-pa.googleapis.com/v1/flow/userSettings';
 function _wmBody(enabled) { return JSON.stringify({ userSettings: { isWatermarkEnabledByUser: !!enabled }, updateMask: 'isWatermarkEnabledByUser' }); }
-function watermarkStatus() { return { learned: true, url: WM_URL, at: (wmTpl && wmTpl.at) || null }; }   // luôn sẵn (bake sẵn request), khách khỏi học
+function watermarkStatus() { return { learned: true, url: WM_URL, at: (wmTpl && wmTpl.at) || null }; }   // luÃ´n sáºµn (bake sáºµn request), khÃ¡ch khá»i há»c
 function watermarkDump() { return wmTpl ? { url: wmTpl.url, method: wmTpl.method, body: String(wmTpl.body || '').slice(0, 3000), at: wmTpl.at } : null; }
 async function armWatermarkLearn(id) {
   let realId = (id != null && accounts.has(id) && accounts.get(id).enabled !== false) ? id : _firstEnabledId();
-  if (!realId) return { error: 'Chưa có tài khoản nào ĐANG BẬT. Bật 1 tài khoản rồi thử lại.' };
+  if (!realId) return { error: 'ChÆ°a cÃ³ tÃ i khoáº£n nÃ o ÄANG Báº¬T. Báº­t 1 tÃ i khoáº£n rá»“i thá»­ láº¡i.' };
   const { cdp } = await ensureLive(realId);
   try { const w = await cdp.send('Browser.getWindowForTarget', {}); if (w && w.windowId) await cdp.send('Browser.setWindowBounds', { windowId: w.windowId, bounds: { windowState: 'normal' } }); } catch {}
   try { await cdp.send('Page.navigate', { url: FLOW_URL }); } catch {}
@@ -338,44 +342,44 @@ async function armWatermarkLearn(id) {
           const u = m.params.request.url; const pd = m.params.request.postData;
           if (!u || !/googleapis\.com|labs\.google/i.test(u)) return;
           if (/(auth\/session|recaptcha|projectInitialData|batchCheckAsync)/i.test(u)) return;
-          LOG('  [học watermark] ' + m.params.request.method + ' ' + u.replace(/\?.*$/, ''));   // ghi mọi request để soi nếu bắt hụt
+          LOG('  [há»c watermark] ' + m.params.request.method + ' ' + u.replace(/\?.*$/, ''));   // ghi má»i request Ä‘á»ƒ soi náº¿u báº¯t há»¥t
           if (_looksWM(u, pd)) {
             wmTpl = { url: u, method: m.params.request.method, body: pd || '', at: Date.now() }; _saveWM(); _wmArm = null;
-            LOG('acc', realId, '✔ ĐÃ HỌC tắt watermark:', u);
+            LOG('acc', realId, 'âœ” ÄÃƒ Há»ŒC táº¯t watermark:', u);
             LOG('  BODY:', String(pd || '').slice(0, 1200));
           }
         }
       } catch {}
     });
   }
-  return { ok: true, id: realId, note: 'Đã mở Chrome. Bấm avatar (góc phải Flow) → gạt "Visible watermarking" sang ĐANG TẮT. App sẽ tự HỌC (chỉ cần làm 1 lần).' };
+  return { ok: true, id: realId, note: 'ÄÃ£ má»Ÿ Chrome. Báº¥m avatar (gÃ³c pháº£i Flow) â†’ gáº¡t "Visible watermarking" sang ÄANG Táº®T. App sáº½ tá»± Há»ŒC (chá»‰ cáº§n lÃ m 1 láº§n).' };
 }
 async function applyWatermarkOne(id, off) {
-  const live = await ensureLive(id);   // mở phiên RIÊNG của account → request áp đúng account đó
-  const r = await apiFetch(live.cdp, { url: WM_URL, method: 'PATCH', headers: { 'content-type': 'application/json', accept: '*/*', authorization: 'Bearer ' + live.token }, body: _wmBody(off === false) });   // off (mặc định) → isWatermarkEnabledByUser=false
-  if (id !== S._captchaId) { try { await closeChrome(id); } catch {} }   // đóng lại cho gọn (giữ máy captcha)
+  const live = await ensureLive(id);   // má»Ÿ phiÃªn RIÃŠNG cá»§a account â†’ request Ã¡p Ä‘Ãºng account Ä‘Ã³
+  const r = await apiFetch(live.cdp, { url: WM_URL, method: 'PATCH', headers: { 'content-type': 'application/json', accept: '*/*', authorization: 'Bearer ' + live.token }, body: _wmBody(off === false) });   // off (máº·c Ä‘á»‹nh) â†’ isWatermarkEnabledByUser=false
+  if (id !== S._captchaId) { try { await closeChrome(id); } catch {} }   // Ä‘Ã³ng láº¡i cho gá»n (giá»¯ mÃ¡y captcha)
   return { ok: !!(r && r.ok), status: r && r.status };
 }
 async function applyWatermarkAll() {
   const ids = S.order.filter((x) => { const a = accounts.get(x); return a && a.enabled !== false; });
-  if (!ids.length) return { error: 'Chưa có tài khoản nào đang bật.' };
+  if (!ids.length) return { error: 'ChÆ°a cÃ³ tÃ i khoáº£n nÃ o Ä‘ang báº­t.' };
   const out = [];
   for (const id of ids) {
-    try { const r = await applyWatermarkOne(id); out.push({ id, ok: r.ok, status: r.status }); LOG('acc', id, r.ok ? '✔ đã tắt watermark hiển thị' : ('⚠️ tắt watermark trả HTTP ' + (r.status || '?'))); }
-    catch (e) { out.push({ id, ok: false, error: e && e.message }); LOG('acc', id, '❌ tắt watermark lỗi:', e && e.message); }
+    try { const r = await applyWatermarkOne(id); out.push({ id, ok: r.ok, status: r.status }); LOG('acc', id, r.ok ? 'âœ” Ä‘Ã£ táº¯t watermark hiá»ƒn thá»‹' : ('âš ï¸ táº¯t watermark tráº£ HTTP ' + (r.status || '?'))); }
+    catch (e) { out.push({ id, ok: false, error: e && e.message }); LOG('acc', id, 'âŒ táº¯t watermark lá»—i:', e && e.message); }
   }
   return { ok: true, results: out, done: out.filter((x) => x.ok).length, total: ids.length };
 }
 function _uuid() { try { return require('crypto').randomUUID(); } catch { return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => { const r = Math.floor(Math.random() * 16); const v = c === 'x' ? r : (r & 0x3) | 0x8; return v.toString(16); }); } }
-// Replay upscale 1080p cho 1 video (endpoint đã học: video:batchAsyncGenerateVideoUpsampleVideo).
-// Body: requests[0].videoInput.mediaId = video nguồn, clientContext.projectId, recaptchaContext.token.
+// Replay upscale 1080p cho 1 video (endpoint Ä‘Ã£ há»c: video:batchAsyncGenerateVideoUpsampleVideo).
+// Body: requests[0].videoInput.mediaId = video nguá»“n, clientContext.projectId, recaptchaContext.token.
 async function upsampleVideo(id, { mediaId, projectId, aspect, withData }) {
-  if (!vUpTpl) return { error: 'CHƯA_HỌC_UPSCALE' };
+  if (!vUpTpl) return { error: 'CHÆ¯A_Há»ŒC_UPSCALE' };
   const { cdp, token } = await ensureLive(id);
-  let capToken = ''; try { capToken = await evalInPage(cdp, captchaCode('VIDEO_GENERATION')); } catch {}
+  let capToken = ''; try { capToken = await pageEval(id, captchaCode('VIDEO_GENERATION')); } catch {}   // mint qua máy captcha — xem genTest
   if (!capToken) return { error: 'CAPTCHA_EMPTY' };
   let body; try { body = JSON.parse(vUpTpl.body); } catch { return { error: 'TPL_BODY_BAD' }; }
-  // Điền đúng cấu trúc đã học.
+  // Äiá»n Ä‘Ãºng cáº¥u trÃºc Ä‘Ã£ há»c.
   if (body.clientContext) { body.clientContext.projectId = String(projectId); if (body.clientContext.recaptchaContext) body.clientContext.recaptchaContext.token = capToken; }
   else { _vDeepSet(body, (k) => k === 'projectId', String(projectId)); _vDeepSet(body, (k) => k === 'token', capToken); }
   if (body.mediaGenerationContext) body.mediaGenerationContext.batchId = _uuid();
@@ -387,14 +391,14 @@ async function upsampleVideo(id, { mediaId, projectId, aspect, withData }) {
       if (rq.metadata && typeof rq.metadata === 'object') rq.metadata.workflowId = _uuid();
     }
   }
-  if (!reqs.length) _vDeepSet(body, (k) => k === 'mediaId', String(mediaId));   // dự phòng nếu cấu trúc khác
+  if (!reqs.length) _vDeepSet(body, (k) => k === 'mediaId', String(mediaId));   // dá»± phÃ²ng náº¿u cáº¥u trÃºc khÃ¡c
   const r = await apiFetch(cdp, { url: vUpTpl.url, method: 'POST', headers: { 'content-type': 'text/plain;charset=UTF-8', accept: '*/*', authorization: 'Bearer ' + token }, body: JSON.stringify(body) });
   let d; try { d = JSON.parse(r.text); } catch { d = r.text; }
   if (!r.ok) return { error: extractApiError(d) || ('UPSCALE_HTTP_' + r.status) };
   const ie = extractApiError(d); if (ie) return { error: ie };
   const first = d && Array.isArray(d.media) && d.media[0]; const opName = (first && first.name) || (d && d.name) || null;
   if (!opName) return { error: 'NO_UPSCALE_MEDIA_ID' };
-  // Poll như video thường tới khi bản 1080p xong → lấy link. (nâng 1080p hay ~5-6 phút → chờ tới 8 phút)
+  // Poll nhÆ° video thÆ°á»ng tá»›i khi báº£n 1080p xong â†’ láº¥y link. (nÃ¢ng 1080p hay ~5-6 phÃºt â†’ chá» tá»›i 8 phÃºt)
   let vurl = null; const started = Date.now();
   while (Date.now() - started < 480000) {
     await sleep(5000);
@@ -410,10 +414,10 @@ async function upsampleVideo(id, { mediaId, projectId, aspect, withData }) {
   return { mediaId: opName || mediaId, videoUrl: vurl, video: vid };
 }
 
-// Tạo 1 video trên 1 account Chrome (mirror runVideoOnToken của extension). Trả {ok,...}|{error}.
+// Táº¡o 1 video trÃªn 1 account Chrome (mirror runVideoOnToken cá»§a extension). Tráº£ {ok,...}|{error}.
 async function genVideo(id, params) {
   if (!accounts.has(id)) return { error: 'NO_ACC' };
-  let token; try { token = (await ensureLive(id)).token; } catch (e) { return { error: 'Mở Chrome lỗi: ' + (e.message || e) }; }
+  let token; try { token = (await ensureLive(id)).token; } catch (e) { return { error: 'Má»Ÿ Chrome lá»—i: ' + (e.message || e) }; }
   let projectId; try { projectId = await vEnsureProject(id, token); } catch (e) { return { error: e.message || 'NO_PROJECT' }; }
   let imageMediaId = null;
   if (params.image && params.image.base64) {
@@ -427,99 +431,99 @@ async function genVideo(id, params) {
   while (Date.now() - started < 360000) {
     await sleep(6000);
     const p = await vPoll(id, { token, projectId: sub.projectId, mediaId: sub.mediaId });
-    if (p.credits != null) credits = p.credits;
+    if (p.credits != null){ credits = p.credits; const _a = accounts.get(id); if (_a && _a.credits !== credits){ _a.credits = credits; persist(); } }   // ghi ngÆ°á»£c tÃ­n dá»¥ng má»›i nháº¥t vÃ o account â†’ báº£ng hiá»‡n sá»‘ tháº­t, khá»i báº¥m â†»
     if (p.error) return { error: p.error, mediaId: sub.mediaId };
-    if (p.failed) return { error: 'Flow báo tạo video THẤT BẠI (' + (p.status || '?') + ')', mediaId: sub.mediaId };
+    if (p.failed) return { error: 'Flow bÃ¡o táº¡o video THáº¤T Báº I (' + (p.status || '?') + ')', mediaId: sub.mediaId };
     if (p.done) { videoUrl = p.videoUrl; done = true; break; }
   }
-  if (!done) return { error: 'TIMEOUT chờ video', mediaId: sub.mediaId };
+  if (!done) return { error: 'TIMEOUT chá» video', mediaId: sub.mediaId };
   let vid = null;
-  // Poll trả link theo ĐÚNG mediaId → tải bytes THẲNG từ đó (tránh cào projectInitialData lấy nhầm video cũ trong project).
+  // Poll tráº£ link theo ÄÃšNG mediaId â†’ táº£i bytes THáº²NG tá»« Ä‘Ã³ (trÃ¡nh cÃ o projectInitialData láº¥y nháº§m video cÅ© trong project).
   if (videoUrl && !/^blob:/.test(videoUrl) && params.withData) {
     try { vid = await fetchVideoData(id, videoUrl); } catch (e) { vid = null; }
   }
-  // Chưa có link, hoặc tải thẳng lỗi → resolve qua projectInitialData (đã khớp mediaId chính xác trong JSON).
+  // ChÆ°a cÃ³ link, hoáº·c táº£i tháº³ng lá»—i â†’ resolve qua projectInitialData (Ä‘Ã£ khá»›p mediaId chÃ­nh xÃ¡c trong JSON).
   if (!videoUrl || (params.withData && (!vid || vid.fetchError))) {
     const rv = await resolveVideo(id, { projectId: sub.projectId, mediaId: sub.mediaId, withData: params.withData });
     if (!videoUrl) videoUrl = rv.videoUrl;
     if (!vid || vid.fetchError) vid = rv.video || vid;
   }
-  // NÂNG 1080p (tuỳ chọn) — video gốc là 720p; nếu user chọn 1080p và đã học request thì nâng độ phân giải.
+  // NÃ‚NG 1080p (tuá»³ chá»n) â€” video gá»‘c lÃ  720p; náº¿u user chá»n 1080p vÃ  Ä‘Ã£ há»c request thÃ¬ nÃ¢ng Ä‘á»™ phÃ¢n giáº£i.
   let resolution = '720p';
   if (/1080/.test(String(params.resolution || ''))) {
-    if (!vUpTpl) { LOG('acc', id, '⚠️ chưa học nâng 1080p — giữ 720p (vào Tạo Video → "Học nâng 1080p")'); }
+    if (!vUpTpl) { LOG('acc', id, 'âš ï¸ chÆ°a há»c nÃ¢ng 1080p â€” giá»¯ 720p (vÃ o Táº¡o Video â†’ "Há»c nÃ¢ng 1080p")'); }
     else {
-      LOG('acc', id, '⬆ nâng 1080p…');
+      LOG('acc', id, 'â¬† nÃ¢ng 1080pâ€¦');
       try {
         const up = await upsampleVideo(id, { mediaId: sub.mediaId, projectId: sub.projectId, aspect: params.aspect, withData: params.withData });
-        if (up && !up.error && (up.videoUrl || up.video?.b64)) { videoUrl = up.videoUrl || videoUrl; if (up.video) vid = up.video; resolution = '1080p'; LOG('acc', id, '✔ đã nâng 1080p'); }
-        else { LOG('acc', id, '⚠️ nâng 1080p lỗi (' + ((up && up.error) || '?') + ') — giữ 720p'); }
-      } catch (e) { LOG('acc', id, '⚠️ nâng 1080p lỗi: ' + (e.message || e) + ' — giữ 720p'); }
+        if (up && !up.error && (up.videoUrl || up.video?.b64)) { videoUrl = up.videoUrl || videoUrl; if (up.video) vid = up.video; resolution = '1080p'; LOG('acc', id, 'âœ” Ä‘Ã£ nÃ¢ng 1080p'); }
+        else { LOG('acc', id, 'âš ï¸ nÃ¢ng 1080p lá»—i (' + ((up && up.error) || '?') + ') â€” giá»¯ 720p'); }
+      } catch (e) { LOG('acc', id, 'âš ï¸ nÃ¢ng 1080p lá»—i: ' + (e.message || e) + ' â€” giá»¯ 720p'); }
     }
   }
   return { ok: true, mediaId: sub.mediaId, projectId: sub.projectId, videoUrl, video: vid, credits, resolution };
 }
 
-// Extension mode: video gen ở extension nhưng KHÔNG tải được file (phiên trình duyệt ≠ chủ project).
-// → App resolve giúp: mở Chrome for Testing của CHÍNH tài khoản đó (đúng phiên) để lấy link + tải file.
+// Extension mode: video gen á»Ÿ extension nhÆ°ng KHÃ”NG táº£i Ä‘Æ°á»£c file (phiÃªn trÃ¬nh duyá»‡t â‰  chá»§ project).
+// â†’ App resolve giÃºp: má»Ÿ Chrome for Testing cá»§a CHÃNH tÃ i khoáº£n Ä‘Ã³ (Ä‘Ãºng phiÃªn) Ä‘á»ƒ láº¥y link + táº£i file.
 async function resolveVideoForApp({ email, projectId, mediaId, resolution, aspect, withData }) {
   let id = null;
   for (const aid of S.order) { const a = accounts.get(aid); if (a && a.email && email && a.email.toLowerCase() === String(email).toLowerCase()) { id = aid; break; } }
-  if (id == null) return { error: 'Không tìm thấy tài khoản CfT khớp email ' + email + ' để resolve video.' };
+  if (id == null) return { error: 'KhÃ´ng tÃ¬m tháº¥y tÃ i khoáº£n CfT khá»›p email ' + email + ' Ä‘á»ƒ resolve video.' };
   try {
-    // Chọn 1080p (chế độ Extension) → NÂNG trước khi tải (nếu đã học request).
+    // Chá»n 1080p (cháº¿ Ä‘á»™ Extension) â†’ NÃ‚NG trÆ°á»›c khi táº£i (náº¿u Ä‘Ã£ há»c request).
     if (/1080/.test(String(resolution || ''))) {
-      if (!vUpTpl) LOG('acc', id, '⚠️ chưa học nâng 1080p — giữ 720p');
+      if (!vUpTpl) LOG('acc', id, 'âš ï¸ chÆ°a há»c nÃ¢ng 1080p â€” giá»¯ 720p');
       else {
-        LOG('acc', id, '⬆ nâng 1080p…');
+        LOG('acc', id, 'â¬† nÃ¢ng 1080pâ€¦');
         const up = await upsampleVideo(id, { mediaId, projectId, aspect, withData: withData !== false });
-        if (up && !up.error && (up.videoUrl || up.video?.b64)) { LOG('acc', id, '✔ đã nâng 1080p'); return { ok: true, videoUrl: up.videoUrl || null, video: up.video || null, resolution: '1080p' }; }
-        LOG('acc', id, '⚠️ nâng 1080p lỗi (' + ((up && up.error) || '?') + ') — giữ 720p');
+        if (up && !up.error && (up.videoUrl || up.video?.b64)) { LOG('acc', id, 'âœ” Ä‘Ã£ nÃ¢ng 1080p'); return { ok: true, videoUrl: up.videoUrl || null, video: up.video || null, resolution: '1080p' }; }
+        LOG('acc', id, 'âš ï¸ nÃ¢ng 1080p lá»—i (' + ((up && up.error) || '?') + ') â€” giá»¯ 720p');
       }
     }
     const rv = await resolveVideo(id, { projectId, mediaId, withData: withData !== false });
     return { ok: true, videoUrl: rv.videoUrl || null, video: rv.video || null, resolution: '720p' };
-  } catch (e) { return { error: 'RESOLVE lỗi: ' + (e.message || e) }; }
+  } catch (e) { return { error: 'RESOLVE lá»—i: ' + (e.message || e) }; }
 }
 
-// Gom token TƯƠI của tất cả account (mở Chrome từng cái 1 nhịp) → để bơm sang extension.
+// Gom token TÆ¯Æ I cá»§a táº¥t cáº£ account (má»Ÿ Chrome tá»«ng cÃ¡i 1 nhá»‹p) â†’ Ä‘á»ƒ bÆ¡m sang extension.
 async function getAllTokens(force) {
-  if (S._busy) { LOG('bỏ qua làm mới token: đang bận thao tác khác'); return []; }   // không xen vào đăng nhập lại
+  if (S._busy) { LOG('bá» qua lÃ m má»›i token: Ä‘ang báº­n thao tÃ¡c khÃ¡c'); return []; }   // khÃ´ng xen vÃ o Ä‘Äƒng nháº­p láº¡i
   S._busy = true;
   try {
     const out = [];
     for (const id of S.order) {
       const a = accounts.get(id);
       if (!a || a.enabled === false) continue;
-      if (force) S.tokens.delete(id);   // ép mint token MỚI
-      // Token cache CÒN HẠN THẬT (24h) + đã có project + email → DÙNG LẠI, KHỎI mở Chrome (chuyển chế độ/refresh không mở Chrome vô ích).
+      if (force) S.tokens.delete(id);   // Ã©p mint token Má»šI
+      // Token cache CÃ’N Háº N THáº¬T (24h) + Ä‘Ã£ cÃ³ project + email â†’ DÃ™NG Láº I, KHá»ŽI má»Ÿ Chrome (chuyá»ƒn cháº¿ Ä‘á»™/refresh khÃ´ng má»Ÿ Chrome vÃ´ Ã­ch).
       const tk = S.tokens.get(id);
-      if (!force && tk && tk.token && tk.expiry && Date.now() < tk.expiry - 5 * 60 * 1000 && a.projectId) {   // bỏ yêu cầu email (Windows hay null) → cache vẫn dùng lại được
+      if (!force && tk && tk.token && tk.expiry && Date.now() < tk.expiry - 5 * 60 * 1000 && a.projectId) {   // bá» yÃªu cáº§u email (Windows hay null) â†’ cache váº«n dÃ¹ng láº¡i Ä‘Æ°á»£c
         a.needLogin = false;
         out.push({ email: a.email, token: tk.token, project_id: a.projectId, tier: a.tier || null, credits: a.credits ?? null });
-        LOG('acc', id, 'dùng token cache (còn hạn) — khỏi mở Chrome');
+        LOG('acc', id, 'dÃ¹ng token cache (cÃ²n háº¡n) â€” khá»i má»Ÿ Chrome');
         continue;
       }
       try {
         const d = await getAccountData(id);
         if (d.token) { a.needLogin = false; out.push({ email: a.email || ('Chrome ' + id), token: d.token, project_id: d.projectId || null, tier: a.tier || null, credits: a.credits ?? null }); }
-        LOG('cho extension: acc', id, d.token ? 'token OK' : 'rỗng', 'proj', d.projectId || '-');
+        LOG('cho extension: acc', id, d.token ? 'token OK' : 'rá»—ng', 'proj', d.projectId || '-');
       } catch (e) {
-        a.needLogin = true;   // profile không ra token → cần đăng nhập lại (thường do đổi trình duyệt)
-        LOG('⚠️ acc', id, (a.email || '') + ': chưa đăng nhập bằng Chrome for Testing — bấm "Đăng nhập lại" cho tài khoản này (1 lần).');
+        a.needLogin = true;   // profile khÃ´ng ra token â†’ cáº§n Ä‘Äƒng nháº­p láº¡i (thÆ°á»ng do Ä‘á»•i trÃ¬nh duyá»‡t)
+        LOG('âš ï¸ acc', id, (a.email || '') + ': chÆ°a Ä‘Äƒng nháº­p báº±ng Chrome for Testing â€” báº¥m "ÄÄƒng nháº­p láº¡i" cho tÃ i khoáº£n nÃ y (1 láº§n).');
       }
     }
     return out;
   } finally { S._busy = false; }
 }
 
-// ── (hoán vị từ flow-chrome.js gốc dòng 683–709 — hạ gợi chu trình require) ──
+// â”€â”€ (hoÃ¡n vá»‹ tá»« flow-chrome.js gá»‘c dÃ²ng 683â€“709 â€” háº¡ gá»£i chu trÃ¬nh require) â”€â”€
 async function getAccountData(id) {
   if (!accounts.has(id)) throw new Error('NO_ACC');
   const a = accounts.get(id);
-  const live = await ensureLive(id);   // Chrome của CHÍNH account id → phiên riêng của nó
+  const live = await ensureLive(id);   // Chrome cá»§a CHÃNH account id â†’ phiÃªn riÃªng cá»§a nÃ³
   const token = live.token;
-  // Lấy EMAIL từ session endpoint (trả user.email) để hiện tên account thật thay "Chrome N".
+  // Láº¥y EMAIL tá»« session endpoint (tráº£ user.email) Ä‘á»ƒ hiá»‡n tÃªn account tháº­t thay "Chrome N".
   if (a && !a.email) {
     try {
       const em = await evalInPageT(live.cdp, `(async()=>{try{const c=new AbortController();const t=setTimeout(()=>c.abort(),6000);const r=await fetch('https://labs.google/fx/api/auth/session',{credentials:'include',signal:c.signal});clearTimeout(t);const d=await r.json();return (d&&d.user&&d.user.email)||null;}catch(e){return null;}})()`, 9000);
@@ -532,13 +536,14 @@ async function getAccountData(id) {
       const pr = await apiFetch(live.cdp, { url: TRPC_CREATE_PROJECT, method: 'POST', headers: { 'content-type': 'application/json', accept: '*/*', authorization: 'Bearer ' + token }, body: JSON.stringify({ json: { projectTitle: 'Nova pool', toolName: 'PINHOLE' } }) });
       let pd; try { pd = JSON.parse(pr.text); } catch { pd = null; }
       projectId = pd ? deepFindProjectId(pd) : null;
-      if (projectId && a) { a.projectId = projectId; persist(); LOG('acc', id, 'project riêng', projectId); }
-      else LOG('acc', id, 'tạo project lỗi:', String(pr.text).slice(0, 120));
-    } catch (e) { LOG('acc', id, 'createProject lỗi', e && e.message); }
+      if (projectId && a) { a.projectId = projectId; persist(); LOG('acc', id, 'project riÃªng', projectId); }
+      else LOG('acc', id, 'táº¡o project lá»—i:', String(pr.text).slice(0, 120));
+    } catch (e) { LOG('acc', id, 'createProject lá»—i', e && e.message); }
   }
   S.tokens.set(id, { token, at: Date.now(), expiry: S._lastTokenExpiry });
-  persist();   // lưu token + hạn xuống đĩa → tắt/mở app còn hạn thì xài lại, khỏi mở Chrome
-  try { await closeChrome(id); } catch {}   // lấy xong ĐÓNG HẲN — không giữ cửa sổ nào (gen chạy ở extension)
+  persist();   // lÆ°u token + háº¡n xuá»‘ng Ä‘Ä©a â†’ táº¯t/má»Ÿ app cÃ²n háº¡n thÃ¬ xÃ i láº¡i, khá»i má»Ÿ Chrome
+  try { await closeChrome(id); } catch {}   // láº¥y xong ÄÃ“NG Háº²N â€” khÃ´ng giá»¯ cá»­a sá»• nÃ o (gen cháº¡y á»Ÿ extension)
   return { token, projectId };
 }
 module.exports = { TRPC_CREATE_PROJECT, SITE_KEY, genImageUrl, cryptoRandomUUID, deepFindProjectId, extractApiError, extractApiError, extractMediaEntries, buildImageBody, captchaCode, genTest, UPLOAD_IMAGE_URL, DEFAULT_VIDEO, vEnsureProject, vUploadImage, vSubmit, vPoll, fetchVideoData, resolveVideo, VUP_FILE, vUpTpl, videoUpscaleStatus, videoUpscaleDump, armVideoUpscale, WM_FILE, wmTpl, WM_URL, watermarkStatus, watermarkDump, armWatermarkLearn, applyWatermarkOne, applyWatermarkAll, upsampleVideo, genVideo, resolveVideoForApp, getAllTokens, getAccountData };
+

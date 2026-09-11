@@ -32,6 +32,29 @@ const LOG = (...a) => { try { console.log('[flow-chrome]', ...a); } catch {} try
 const FLOW_URL = 'https://labs.google/fx/tools/flow';
 const FLOW_API_BASE = 'https://aisandbox-pa.googleapis.com';
 const FLOW_API_KEY = 'AIzaSyBtrm0o5ab1c-Ec8ZuLcGt3oJAA5VWt3pY';
+/* Flow đã dời sang domain mới flow.google.com (đo 9–11/9/2026):
+   - labs.google/fx/tools/flow chỉ còn redirect sang flow.google.com — khách vào bị đá
+     về /about và KHÔNG trang nào còn tự nạp reCAPTCHA cho khách nữa.
+   - Trang chủ domain mới cũng KHÔNG nạp reCAPTCHA; chỉ /project/<id> mới nạp (id giả
+     vẫn được — trang 404 vẫn tải enterprise.js), nhưng khách vào /project lại bị đá
+     về /about → trang project chỉ dùng cho máy captcha ACCOUNT (đã đăng nhập).
+   - Cách mint GUEST còn sống (đo 11/9/2026, 3/3 lần OK): đứng ở /about (khách không bị
+     bắt login), chèn thẳng recaptcha/enterprise.js với SITE_KEY của Flow (bypass CSP qua
+     CDP) → grecaptcha.enterprise.execute ra token ~2.400 ký tự, đúng chuẩn. */
+const GUEST_CAPTCHA_URL = 'https://flow.google.com/about';
+const FLOW_CAPTCHA_URL = 'https://flow.google.com/project/00000000-0000-0000-0000-000000000000';
+const SITE_KEY = '6LdsFiUsAAAAAIjVDZcuLhaHiDn5nnHVXVRQGeMV';
+/* Giấu cờ debug trước mắt Google: mở Chrome kèm --remote-debugging-* thì
+   navigator.webdriver === true → Google trả "Trình duyệt hoặc ứng dụng này có thể
+   không an toàn". Cờ + script dưới đây đưa webdriver về undefined (bóc từ binary
+   G-Labs; bản gốc Nova Studio dùng y hệt ở MỌI lần mở Chrome). */
+const CO_GIAU_TU_DONG = ['--disable-blink-features=AutomationControlled', '--disable-infobars'];
+/* Khung cửa sổ NỀN (máy captcha): góc phải-màn hình, cỡ tối thiểu — không nhảy vào mặt user. */
+const CO_KHUNG_NEN = ['--window-size=200,200', '--window-position=9999,9999'];
+/* Cửa sổ nền bị che/thu nhỏ thì Chrome hạ priority → trang "ngủ", Runtime.evaluate treo
+   (Windows càng rõ). Bốn cờ này giữ trang luôn tỉnh + tắt tiếng. */
+const CO_KHONG_NGU = ['--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows', '--mute-audio'];
+const JS_GIAU_WEBDRIVER = "(() => { Object.defineProperty(navigator, 'webdriver', { get: () => undefined }); })();";
 
 const profilesRoot = () => path.join(app.getPath('userData'), 'chrome-accounts');
 const profileDir = (id) => path.join(profilesRoot(), 'acc-' + id);
@@ -146,4 +169,4 @@ function evalInPageT(cdp, expr, ms = 10000) {
   return Promise.race([p, timeout]).finally(() => clearTimeout(timer));
 }
 
-module.exports = { sleep, setLogSink, LOG, FLOW_URL, FLOW_API_BASE, FLOW_API_KEY, profilesRoot, profileDir, storeFile, accounts, persist, restore, statusPayload, setUse, profileLoggedIn, readDevToolsPort, httpJSON, flowPageWs, cdpConnect, evalInPage, evalInPageT };
+module.exports = { sleep, setLogSink, LOG, FLOW_URL, FLOW_API_BASE, FLOW_API_KEY, GUEST_CAPTCHA_URL, FLOW_CAPTCHA_URL, SITE_KEY, CO_GIAU_TU_DONG, CO_KHUNG_NEN, CO_KHONG_NGU, JS_GIAU_WEBDRIVER, profilesRoot, profileDir, storeFile, accounts, persist, restore, statusPayload, setUse, profileLoggedIn, readDevToolsPort, httpJSON, flowPageWs, cdpConnect, evalInPage, evalInPageT };

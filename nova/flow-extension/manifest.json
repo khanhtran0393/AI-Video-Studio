@@ -28,7 +28,8 @@
     {
       "matches": [
         "https://labs.google/fx/tools/flow*",
-        "https://labs.google/fx/*/tools/flow*"
+        "https://labs.google/fx/*/tools/flow*",
+        "https://flow.google.com/*"
       ],
       "js": ["content.js"],
       "run_at": "document_start"
@@ -47,7 +48,7 @@
   "web_accessible_resources": [
     {
       "resources": ["injected.js", "icon16.png", "icon48.png", "icon128.png"],
-      "matches": ["https://labs.google/*"]
+      "matches": ["https://labs.google/*", "https://flow.google.com/*"]
     }
   ],
   "declarative_net_request": {

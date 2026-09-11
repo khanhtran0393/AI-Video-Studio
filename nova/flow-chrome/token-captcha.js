@@ -8,7 +8,7 @@ const fs = require('fs');
 const path = require('path');
 const { findChrome } = require('../flow-cft');
 const { running, captureToken, openForOperation, closeChrome, readCookies } = require('./tien-trinh');
-const { accounts, LOG, restore, FLOW_URL, sleep, readDevToolsPort, flowPageWs, cdpConnect, evalInPageT, evalInPage } = require('./nen-tang');
+const { accounts, LOG, restore, sleep, readDevToolsPort, flowPageWs, cdpConnect, evalInPageT, evalInPage, GUEST_CAPTCHA_URL, FLOW_CAPTCHA_URL, SITE_KEY, CO_GIAU_TU_DONG, CO_KHUNG_NEN, CO_KHONG_NGU, JS_GIAU_WEBDRIVER } = require('./nen-tang');
 
 
 // ── Giữ Chrome sống + token (cho gen) ─────────────────────────────────
@@ -24,7 +24,19 @@ function ensureLive(id) {
     }
     rec = await openForOperation(id);
     const tok = await captureToken(rec.cdp);
-    if (!tok) { await closeChrome(id); throw new Error('Không bắt được token (profile chưa đăng nhập?)'); }
+    if (!tok) {
+      // Fail lộ liễu (Luật 10): phân biệt Google migrate Flow vs profile chưa đăng nhập.
+      let pageHost = '';
+      try {
+        const loc = await rec.cdp.send('Runtime.evaluate', { expression: 'location.host', returnByValue: true });
+        pageHost = (loc.result && loc.result.value) || '';
+      } catch {}
+      await closeChrome(id);
+      if (/flow\.google\.com$/.test(pageHost)) {
+        throw new Error('FLOW_MIGRATED: Google đã chuyển Flow sang flow.google.com (giao thức mới) — engine flow-chrome cần nâng cấp sang giao thức batchexecute/gRPC-Web; gen/verify không hoạt động với giao thức labs.google cũ. Đăng nhập lại KHÔNG giải quyết được.');
+      }
+      throw new Error('Không bắt được token (profile chưa đăng nhập?)');
+    }
     S.tokens.set(id, { token: tok, at: Date.now(), expiry: S._lastTokenExpiry });
     return { cdp: rec.cdp, token: tok };
   })();
@@ -75,9 +87,9 @@ let _guest = null, _guestRotatePending = false, _guestProxyIdx = 0, _guestOpenin
 function _guestProxies() { const ps = []; for (const id of S.order) { const a = accounts.get(id); if (a && a.proxy) ps.push(a.proxy); } return ps; }
 function _launchGuest(dir) {
   fs.mkdirSync(dir, { recursive: true });
-  const args = [`--user-data-dir=${dir}`, '--no-first-run', '--no-default-browser-check', '--no-service-autorun', '--disable-sync', '--hide-crash-restore-bubble', '--disable-session-crashed-bubble', '--no-restore-session-state', '--remote-debugging-port=0'];
+  const args = [`--user-data-dir=${dir}`, '--no-first-run', '--no-default-browser-check', '--no-service-autorun', '--disable-sync', '--hide-crash-restore-bubble', '--disable-session-crashed-bubble', '--no-restore-session-state', '--remote-debugging-port=0', ...CO_GIAU_TU_DONG, ...CO_KHUNG_NEN, ...CO_KHONG_NGU];
   const ps = _guestProxies(); if (ps.length) { const p = ps[_guestProxyIdx++ % ps.length]; args.push('--proxy-server=' + p); LOG('máy captcha guest đi proxy', p); }
-  args.push('--new-window', FLOW_URL);
+  args.push('--new-window', GUEST_CAPTCHA_URL);
   const chrome = findChrome(); if (!chrome) return null;
   return spawn(chrome, args, { detached: false });
 }
@@ -98,9 +110,29 @@ async function _openGuest() {
     const cdp = await cdpConnect(await flowPageWs(port));
     await cdp.send('Page.enable', {}); await cdp.send('Runtime.enable', {});
     g.port = port; g.cdp = cdp;
-    try { await cdp.send('Page.navigate', { url: FLOW_URL }); } catch {}
-    // Chờ grecaptcha sẵn sàng (guest không login vẫn có — đã test).
-    try { await evalInPageT(cdp, `(async()=>{const s=Date.now();while(!(window.grecaptcha&&window.grecaptcha.enterprise&&window.grecaptcha.enterprise.execute)){if(Date.now()-s>20000)return false;await new Promise(r=>setTimeout(r,300));}return true;})()`, 22000); } catch {}
+    // Giấu webdriver TRƯỚC khi trang nào chạy (Google chặn navigator.webdriver=true).
+    try { await cdp.send('Page.setBypassCSP', { enabled: true }); } catch {}
+    try { await cdp.send('Page.addScriptToEvaluateOnNewDocument', { source: JS_GIAU_WEBDRIVER }); } catch {}
+    try { await evalInPageT(cdp, JS_GIAU_WEBDRIVER, 4000); } catch {}
+    try { await cdp.send('Page.navigate', { url: GUEST_CAPTCHA_URL }); } catch {}
+    /* Flow mới (flow.google.com, đo 11/9/2026): khách bị đá về /about — trang này KHÔNG nạp
+       reCAPTCHA. Mint bằng cách chèn thẳng recaptcha/enterprise.js với SITE_KEY của Flow
+       (bypass CSP đã bật) → grecaptcha.enterprise.execute ra token ~2.400 ký tự.
+       Hỏi NHIỀU câu NGẮN từ phía Node — KHÔNG một câu awaitPromise dài: câu hỏi gửi vào
+       lúc đang chuyển trang sẽ chết theo trang cũ và treo tới hết giờ. Không thấy grecaptcha
+       thì BÁO HỎNG ngay để pageEval lùi về tài khoản (không nuốt lỗi — Law 10). */
+    const JS_NAP_CAP = "(function(){ var s = document.createElement('script'); s.onerror = function(){ window.__capLoi = 'SCRIPT_LOAD_ERROR'; }; s.src = 'https://www.google.com/recaptcha/enterprise.js?render=" + SITE_KEY + "'; (document.head || document.documentElement).appendChild(s); })()";
+    let daChen = false, _coCap = false;
+    for (let i = 0; i < 40 && !_coCap; i++) {
+      await sleep(500);
+      if (!daChen) {
+        const coHead = await evalInPageT(cdp, '!!document.head', 3000).catch(() => false);
+        if (coHead === true) { try { await evalInPageT(cdp, JS_NAP_CAP, 4000); daChen = true; LOG('máy captcha GUEST: đã chèn enterprise.js'); } catch {} }
+        continue;
+      }
+      _coCap = await evalInPageT(cdp, '!!(window.grecaptcha&&window.grecaptcha.enterprise&&window.grecaptcha.enterprise.execute)', 3000).catch(() => false);
+    }
+    if (!_coCap) throw new Error('trang khách không nạp grecaptcha (' + GUEST_CAPTCHA_URL + ')');
     try { const w = await cdp.send('Browser.getWindowForTarget', {}); if (w && w.windowId) await cdp.send('Browser.setWindowBounds', { windowId: w.windowId, bounds: { windowState: 'minimized' } }); } catch {}
     LOG('máy captcha GUEST sẵn sàng');
     return g;
@@ -136,7 +168,19 @@ async function pageEval(id, code) {   // gen chạy trên MÁY CAPTCHA; đếm t
     catch (e) { LOG('máy captcha GUEST lỗi → rơi về account:', e && e.message); }   // fallback an toàn
   }
   const { cdp } = await ensureCaptcha();
-  if (isCap) _capTokenCount++;
+  /* Flow mới: trang chủ flow.google.com KHÔNG nạp reCAPTCHA — chỉ /project/<id> mới nạp
+     (id giả cũng được). Cửa sổ tài khoản mở ở trang gốc (labs.google) để bắt token, nên
+     trước khi chạy grecaptcha phải đưa nó sang trang project. Đo 5/9/2026 (bản gốc). */
+  if (isCap) {
+    try {
+      const u = await evalInPageT(cdp, 'location.href', 4000).catch(() => '');
+      if (!/\/project\//.test(String(u || ''))) {
+        await cdp.send('Page.navigate', { url: FLOW_CAPTCHA_URL });
+        for (let i = 0; i < 24; i++) { await sleep(500); const ok = await evalInPageT(cdp, '!!(window.grecaptcha&&window.grecaptcha.enterprise&&window.grecaptcha.enterprise.execute)', 3000).catch(() => false); if (ok) break; }
+      }
+    } catch {}
+    _capTokenCount++;
+  }
   return evalInPage(cdp, code);
 }
 // Tải ảnh ở TIẾN TRÌNH CHÍNH (né CORS/referer của trang). URL flow-content.google đã ký sẵn
