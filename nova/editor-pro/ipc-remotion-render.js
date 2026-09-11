@@ -1,6 +1,6 @@
 // Render Remotion ĐẦY ĐỦ (text/motion/composition) bằng @remotion/renderer + bundle tĩnh + chrome vendored.
 // Bundle tĩnh: editor-pro/remotion-bundle. Compositor đã ký ad-hoc (gỡ hardened) → set DYLD cho ffmpeg con.
-const { dialog, BrowserWindow } = require('electron');
+const { dialog, BrowserWindow, app } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -24,8 +24,8 @@ const COMPOSITOR = path.join(DIR, 'node_modules', '@remotion', 'compositor-darwi
 const TMP = path.join(os.tmpdir(), 'nova-editor-pro');
 try { fs.mkdirSync(TMP, { recursive: true }); } catch (_) {}
 
-function findBrowser() {
-  const root = onDisk('remotion-browser');
+function findBrowser(rootOverride) {
+  const root = rootOverride || onDisk('remotion-browser');
   const stack = [root];
   while (stack.length) {
     const d = stack.pop();
@@ -33,12 +33,48 @@ function findBrowser() {
     for (const e of ents) {
       const p = path.join(d, e.name);
       if (e.isDirectory()) stack.push(p);
-      else if (e.name === 'chrome-headless-shell') return p;
+      else if (e.name === 'chrome-headless-shell' || e.name === 'chrome-headless-shell.exe') return p;
     }
   }
   return null;
 }
 const BROWSER = findBrowser();
+
+/* Bản đóng gói: .remotion trong node_modules bị loại khỏi package (nhẹ bản cài)
+   → render Remotion không còn browser. Lần render đầu: tự bảo đảm chrome-headless-shell
+   bằng ensureBrowser() của Remotion. Đích tải do getDownloadsCacheDir() quyết định:
+   nó đi ngược từ process.cwd() tìm package.json gần nhất rồi nối node_modules/.remotion
+   (không thấy package.json nào thì rơi về cwd/.remotion). Để chắc chắn rơi vào nơi GHI
+   được, tạo userData/.remotion/package.json rỗng và chdir vào đúng đó khi tải; tải xong
+   HOÀN LẠI cwd (đừng để main process đổi cwd vĩnh viễn — các spawn khác kế thừa cwd). */
+async function resolveBrowserExecutable() {
+  if (BROWSER) return BROWSER;                                   // dev/browser vendored (nếu có)
+  const packaged = String(DIR).includes('app.asar');
+  if (!packaged) return undefined;                               // dev: Remotion tự tìm node_modules/.remotion như cũ
+  let ud = null;
+  try { ud = app.getPath('userData'); } catch (_) { return undefined; }
+  if (!ud) return undefined;
+  const remDir = path.join(ud, '.remotion');
+  try {
+    fs.mkdirSync(remDir, { recursive: true });
+    if (!fs.existsSync(path.join(remDir, 'package.json'))) {
+      fs.writeFileSync(path.join(remDir, 'package.json'), '{\n}\n');   // neo đích tải → remDir/node_modules/.remotion
+    }
+  } catch (_) {}
+  const have = findBrowser(remDir);
+  if (have) return have;
+  const prevCwd = process.cwd();
+  try { process.chdir(remDir); } catch (_) {}
+  try {
+    const { ensureBrowser } = require('@remotion/renderer');
+    await ensureBrowser();
+  } catch (e) {
+    console.warn('[remotion] không tải được chrome-headless-shell (cần Internet lần đầu render):', e && e.message);
+  } finally {
+    try { process.chdir(prevCwd); } catch (_) {}
+  }
+  return findBrowser(remDir) || undefined;
+}
 
 // Trong app đóng gói, binary @remotion/compositor-* nằm trong app.asar → Remotion gọi
 // execa (child_process.spawn) không chạy được (Electron KHÔNG patch spawn cho asar).
@@ -67,7 +103,7 @@ async function renderRemotionFull({ composition, outputPath, onProgress }) {
   }
   const { selectComposition, renderMedia } = require('@remotion/renderer');
   const inputProps = { composition };
-  const browserExecutable = BROWSER || undefined;
+  const browserExecutable = await resolveBrowserExecutable();
   const comp = await selectComposition({ serveUrl: BUNDLE, id: 'VideoShuffleComposition', inputProps, browserExecutable, binariesDirectory: REMOTION_BIN_DIR });
   const out = outputPath || path.join(TMP, `nova-export-${Date.now()}.mp4`);
   try {
@@ -226,7 +262,7 @@ async function renderNovaScenes({ scenes, globals, outputPath, onProgress, voice
     else signal.addEventListener('abort', abort, { once: true });
   }
   const inputProps = { scenes: Array.isArray(scenes) ? scenes : [], globals: Array.isArray(globals) ? globals : [] };
-  const browserExecutable = BROWSER || undefined;
+  const browserExecutable = await resolveBrowserExecutable();
   const out = outputPath || path.join(TMP, `nova-scene-${Date.now()}.mp4`);
   let comp;
   try {
@@ -346,6 +382,18 @@ function vendoredRendererExes() {
     if (FFMPEG) out.push({ exe: FFMPEG, tag: 'ffmpeg (mux/nova-scene)' });
   } catch (_) {}
   if (BROWSER) out.push({ exe: BROWSER, tag: 'chrome-headless-shell (remotion)' });
+  else {
+    // Bản đóng gói: browser nằm ở userData/.remotion (tải bằng ensureBrowser — xem
+    // resolveBrowserExecutable). Cần đưa vào danh sách để janitor kill đúng tiến trình
+    // mồ côi theo đường dẫn exe. Chỉ QUÉT, không tạo gì (chưa tải → rỗng là bình thường).
+    if (String(DIR).includes('app.asar')) {
+      try {
+        const ud = app.getPath('userData');
+        const ub = ud && findBrowser(path.join(ud, '.remotion'));
+        if (ub) out.push({ exe: ub, tag: 'chrome-headless-shell (remotion, userData)' });
+      } catch (_) {}
+    }
+  }
   return out;
 }
 

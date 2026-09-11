@@ -10,6 +10,7 @@ const image = require('./image');
 const video = require('./video');
 const pool = require('./pool');
 const learn = require('./learn');
+const ledger = require('./ledger');
 
 
 
@@ -23,12 +24,15 @@ module.exports = {
   poolAccounts: pool.poolAccounts,
   poolGen: pool.poolGen,
   genVideoPool: pool.genVideoPool,
+  setPoolConfig: pool.setPoolConfig,
+  poolLedgerStats: ledger.stats,
   // video
   armVideoLearn: video.armVideoLearn,
   videoLearnStatus: video.videoLearnStatus,
   videoLearnDump: video.videoLearnDump,
   videoModels: video.videoModels,
   videoModelStatus: video.videoModelStatus,
+  submitVideoEdit: video.submitVideoEdit,
   // learn
   armUpscaleLearn: learn.armUpscaleLearn,
   upscaleLearnStatus: learn.upscaleLearnStatus,

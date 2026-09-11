@@ -6,7 +6,7 @@
 const S = {
   order: [],              // id -> thứ tự account (từng là let, gán lại trong restore()/syncChromeAccounts())
   nextId: 1,              // id kế tiếp (từng là let, gán lại trong restore())
-  pool: { cursor: 0, projects: {}, uploads: {}, _proj: {}, _up: {}, exhausted: new Set(), exhDay: {}, busy: new Set() },
+  pool: { cursor: 0, projects: {}, uploads: {}, _proj: {}, _up: {}, exhausted: new Set(), exhDay: {}, busy: new Set(), slots: { perAccount: 1, machine: 2 }, _busyCount: {}, _activeGens: 0 },
   _poolAbort: false,      // bấm Dừng ở app → bật cờ này để poolGen BỎ NGAY, khỏi xoay hết account × captcha (mỗi lượt có thể vài phút).
   _capChain: Promise.resolve(),
   _autoTimer: null,

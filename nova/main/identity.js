@@ -17,6 +17,10 @@ function applyAppIdentity() {
   const novaUserData = path.join(app.getPath('appData'), 'AI Video Studio Independent');
   app.setPath('userData', novaUserData);
   fs.mkdirSync(novaUserData, { recursive: true });
+  // Cổng chẩn đoán CDP tùy chọn: chỉ bật khi env được đặt rõ (NOVA_CDP_PORT=9334).
+  // Không đặt → app chạy y hệt trước kia, không mở port nào thêm.
+  const cdpPort = parseInt(process.env.NOVA_CDP_PORT || '', 10);
+  if (cdpPort > 0) app.commandLine.appendSwitch('remote-debugging-port', String(cdpPort));
 }
 
 module.exports = { NOVA_APP_ID, NOVA_PARTITION, applyAppIdentity };

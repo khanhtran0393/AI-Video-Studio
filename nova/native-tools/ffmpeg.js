@@ -44,4 +44,20 @@ function ffmpegInfo() {
   let enc = null; try { enc = gpuEncoder('h264'); } catch (_) {}
   return { ffmpeg: !!FFMPEG, ffprobe: !!FFPROBE, ffmpegPath: FFMPEG, gpuEncoder: enc, gpuLabel: gpuLabel(enc), gpu: !!enc };
 }
-module.exports = { FFMPEG, FFPROBE, run, probeDur, ffmpegInfo };
+// ── trimVideo (P4.3, học từ VEO3 smart-trim): cắt 1 đoạn [startSec, endSec] không
+// re-encode (-c copy) khi có thể → nhanh, không mất chất. KHÔNG fallback ngầm:
+// ffmpeg thiếu/tham số sai → reject lộ liễu cho caller.
+function trimVideo({ inputPath, outputPath, startSec = 0, endSec }) {
+  return new Promise((resolve, reject) => {
+    if (!inputPath || !outputPath) return reject(new Error('VA_TRIM_INPUT: cần inputPath + outputPath'));
+    if (!(Number(endSec) > Number(startSec))) return reject(new Error('VA_TRIM_RANGE: endSec phải > startSec'));
+    const args = ['-y', '-ss', String(Number(startSec))];
+    if (Number.isFinite(Number(endSec))) args.push('-to', String(Number(endSec)));
+    args.push('-i', inputPath, '-c', 'copy', '-avoid_negative_ts', 'make_zero', outputPath);
+    run(FFMPEG, args)
+      .then(() => resolve({ ok: true, path: outputPath, startSec: Number(startSec), endSec: Number(endSec) }))
+      .catch(reject);
+  });
+}
+
+module.exports = { FFMPEG, FFPROBE, run, probeDur, ffmpegInfo, trimVideo };

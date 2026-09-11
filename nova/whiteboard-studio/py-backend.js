@@ -20,10 +20,59 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { spawn } = require('child_process');
+let _wbApp = null; try { _wbApp = require('electron').app; } catch (_) {}
 const { FFMPEG, FFPROBE, ffmpegAvailable } = require('./ff-runtime');
 const Annotation = require('../web/whiteboard-annotation.js');
 
-const REPO_DIR = path.join(__dirname, 'srt-whiteboard-animation');
+const REPO_SRC = path.join(__dirname, 'srt-whiteboard-animation');
+let REPO_DIR = REPO_SRC;
+/* Bản đóng gói (asar): REPO nằm trong app.asar — chỉ đọc được, KHÔNG tạo được .venv
+   (đã thấy .venv 400MB bị nhầm packaged theo app). Đổng bộ: đồng bộ CODE repo (~12MB,
+   loại .venv/.git/__pycache__) sang userData/whiteboard-repo một lần theo stamp
+   (hash size+mtime của file code) — .venv đã dựng ở đó được GIỮ nguyên qua các lần
+   copy. Dev (npm start) không đụng vào, vẫn chạy thẳng repo nguồn. */
+function _wbStamp(src) {
+  let h = 0;
+  (function walk(p) {
+    let es = [];
+    try { es = fs.readdirSync(p, { withFileTypes: true }); } catch (_) { return; }
+    es.sort((a, b) => (a.name < b.name ? -1 : 1));
+    for (const e of es) {
+      const f = path.join(p, e.name);
+      if (e.isDirectory()) { if (!/^(\.venv|\.git|__pycache__)$/i.test(e.name)) walk(f); }
+      else {
+        try { const st = fs.statSync(f); h = (h + st.size + st.mtimeMs + f.length) | 0; } catch (_) {}
+      }
+    }
+  })(src);
+  return String(h);
+}
+function _ensureRepoWritable() {
+  const dest = path.join(_wbApp.getPath('userData'), 'whiteboard-repo', 'srt-whiteboard-animation');
+  const marker = path.join(dest, '.nova-repo-stamp');
+  const stamp = _wbStamp(REPO_SRC);
+  try { if (fs.existsSync(marker) && fs.readFileSync(marker, 'utf8') === stamp) return dest; } catch (_) {}
+  const SKIP = /(^|[\\/])(\.venv|\.git|__pycache__|\.nova-repo-stamp)$/i;
+  (function copy(s, d) {
+    fs.mkdirSync(d, { recursive: true });
+    for (const e of fs.readdirSync(s, { withFileTypes: true })) {
+      if (SKIP.test(e.name)) continue;
+      const sp = path.join(s, e.name), dp = path.join(d, e.name);
+      if (e.isDirectory()) copy(sp, dp);
+      else { try { fs.copyFileSync(sp, dp); } catch (_) {} }
+    }
+  })(REPO_SRC, dest);
+  try { fs.writeFileSync(marker, stamp); } catch (_) {}
+  return dest;
+}
+if (String(__dirname).includes('app.asar') && _wbApp && typeof _wbApp.getPath === 'function') {
+  try {
+    REPO_DIR = _ensureRepoWritable();
+    console.log('[whiteboard] repo code đã đồng bộ (bản ghi được) →', REPO_DIR);
+  } catch (e) {
+    console.warn('[whiteboard] không đồng bộ được repo sang userData — dùng bản trong app.asar (.venv sẽ không dựng được):', e && e.message);
+  }
+}
 const SCRIPTS_DIR = path.join(REPO_DIR, 'scripts');
 const RENDER_SCRIPT = path.join(SCRIPTS_DIR, 'render_stream_whiteboard.py');
 const BRIDGE_SCRIPT = path.join(__dirname, 'render-progress-bridge.py');  // chạy vendored script + đếm khung WBPROG (file của Nova, KHÔNG thuộc repo vendored)

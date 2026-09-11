@@ -195,6 +195,7 @@ async function pageFetchImage(id, url) {
     let done = false; const fin = (fn, v) => { if (!done) { done = true; fn(v); } };
     const req = net.request(url);
     if (cookieHeader) { try { req.setHeader('cookie', cookieHeader); } catch {} }
+    req.setTimeout(120000, () => { try { req.destroy(); } catch { /* */ } fin(reject, new Error('IMG_TIMEOUT_120s')); });   // không treo vô hạn khi mạng stall
     req.on('response', (res) => {
       if (res.statusCode >= 400) { fin(reject, new Error('IMG_HTTP_' + res.statusCode)); return; }
       const chunks = [];

@@ -17,6 +17,26 @@ const { claude, _KHO } = require('./niche/loi');
 // (đã gộp vào niche/loi.js — hết nhân bản máy gọi API)
 const normChannel = (u) => { u = String(u || '').trim(); if (!/^https?:/.test(u)) u = u.startsWith('@') ? 'https://www.youtube.com/' + u : 'https://www.youtube.com/@' + u; return u.replace(/\/(videos|featured|streams)?\/?$/, '') + '/videos'; };
 
+// Quét tab Shorts của kênh (yt-dlp flat — KHÔNG CẦN KEY). Lỗi/trống → ghi chú qua shortsNote,
+// KHÔNG làm chết phân tích (dữ liệu bổ sung, lỗi lộ liễu: Luật 10).
+async function fetchShorts(channelUrl, count, ck) {
+  let u = String(channelUrl || '').trim();
+  if (!/^https?:/i.test(u)) u = 'https://www.youtube.com/' + (u.startsWith('@') ? u : '@' + u);
+  const base = u.replace(/\/(videos|shorts|featured|streams)?\/?$/, '');
+  const args = [base + '/shorts', '--flat-playlist', '--no-warnings',
+    '--playlist-items', '1-' + Math.max(8, Math.min(30, count)),
+    '--print', '%(id)s\t%(view_count)s\t%(duration)s\t%(title)s'];
+  if (ck) args.push('--cookies', ck);
+  try {
+    const out = await run(args, 90000);
+    const vids = out.trim().split('\n').filter(Boolean).map(l => {
+      const [id, v, d, ...t] = l.split('\t');
+      return { id: (id || '').trim(), views: parseInt(v) || 0, dur: parseInt(d) || 0, title: (t.join('\t') || '').trim(), url: id ? 'https://www.youtube.com/shorts/' + (id || '').trim() : '' };
+    }).filter(x => x.title && x.views > 0);
+    return { ok: true, vids };
+  } catch (e) { return { ok: false, error: String((e && e.message) || e).slice(0, 120) }; }
+}
+
 async function analyzeCompetitor(channelUrl, onProgress = () => {}, count = 20) {
   onProgress(10, 'Lấy video của kênh…');
   const ck = _ck ? await _ck.youtubeCookiesFile().catch(() => null) : null;
@@ -42,6 +62,17 @@ async function analyzeCompetitor(channelUrl, onProgress = () => {}, count = 20) 
       }
     } catch (_) {}
   }
+  onProgress(66, 'Quét tab Shorts…');
+  const shortsRes = await fetchShorts(channelUrl, count, ck);
+  const shorts = shortsRes.ok ? shortsRes.vids : [];
+  const shortsNote = shortsRes.ok ? (shorts.length ? '' : 'tab Shorts trống hoặc ẩn view') : 'không đọc được tab Shorts: ' + shortsRes.error;
+  const shortsMed = shorts.length >= 5 ? (() => { const s = shorts.map(x => x.views).sort((a, b) => a - b); return s[Math.floor(s.length / 2)] || 1; })() : 0;
+  const shortsOutliers = shortsMed ? shorts
+    .map(x => ({ ...x, ratio: +(x.views / shortsMed).toFixed(2) }))
+    .filter(x => x.ratio >= 1.5).sort((a, b) => b.ratio - a.ratio).slice(0, 5) : [];
+  const shortsBlock = shortsOutliers.length
+    ? `\n\nSHORTS gần đây (x = so với trung vị Shorts ${Math.round(shortsMed)} view; tổng ${shorts.length} shorts):\n${shortsOutliers.map(x => `x${x.ratio} · ${(x.views / 1000).toFixed(0)}k views · ${x.title}`).join('\n')}`
+    : '';
   onProgress(70, 'AI phân tích…');
   const list = vids.slice(0, count).map(x => `${(x.views / 1000).toFixed(0)}k views (x${x.ratio}${x.engRate != null ? ', eng ' + x.engRate + '%' : ''}) | ${x.dur ? Math.round(x.dur / 60) + 'p' : '?'} | ${x.title}`).join('\n');
   let analysis = '', analysisError = '';
@@ -49,10 +80,10 @@ async function analyzeCompetitor(channelUrl, onProgress = () => {}, count = 20) 
   try {
     analysis = await claude(
       'Bạn là chuyên gia phân tích kênh YouTube, trả lời tiếng Việt, thẳng và thực chiến.',
-      `Đây là ${vids.length} video gần đây của 1 kênh đối thủ (x = số lần view so với trung bình kênh; eng% = (like+comment)/view — cao bất thường = nội dung chạm đúng tệp):\n${list}\n\nPhân tích giúp tôi:\n1. VIDEO ĐỘT PHÁ (outlier, x cao) — chủ đề/kiểu tiêu đề nào đang ăn nhất, VÌ SAO. Chú ý video vừa view cao VỪA eng cao — đó là tín hiệu nội dung thật sự chạm.\n2. CÔNG THỨC TIÊU ĐỀ họ dùng (cấu trúc, từ khóa hook).\n3. Độ dài video ưu tiên.\n4. TÍN HIỆU TƯƠNG TÁC (nếu có eng%): video nào eng cao lệch hẳn — học cái gì.\n5. 6 Ý TƯỞNG VIDEO + tiêu đề gợi ý cho tôi làm theo hướng đang ăn.\nNgắn gọn, gạch đầu dòng.`, { noBridge: true });
+      `Đây là ${vids.length} video gần đây của 1 kênh đối thủ (x = số lần view so với trung bình kênh; eng% = (like+comment)/view — cao bất thường = nội dung chạm đúng tệp):\n${list}${shortsBlock}\n\nPhân tích giúp tôi:\n1. VIDEO ĐỘT PHÁ (outlier, x cao) — chủ đề/kiểu tiêu đề nào đang ăn nhất, VÌ SAO. Chú ý video vừa view cao VỪA eng cao — đó là tín hiệu nội dung thật sự chạm.\n2. CÔNG THỨC TIÊU ĐỀ họ dùng (cấu trúc, từ khóa hook).\n3. Độ dài video ưu tiên.\n4. TÍN HIỆU TƯƠNG TÁC (nếu có eng%): video nào eng cao lệch hẳn — học cái gì.\n5. SHORTS (nếu có): Shorts có đang ăn khác longform không.\n6. 6 Ý TƯỞNG VIDEO + tiêu đề gợi ý cho tôi làm theo hướng đang ăn.\nNgắn gọn, gạch đầu dòng.`, { noBridge: true, noRetry: true });
   } catch (err) { analysisError = String((err && err.message) || err).slice(0, 160); }   // lỗi lộ liễu, giữ outlier cho UI (Luật 10)
   onProgress(100, 'Xong');
-  return { ok: true, channel: channelUrl, count: vids.length, avgViews: Math.round(avg), enrichedVia, outliers: outliers.slice(0, 8), topVideos: vids.slice(0, 10), analysis, analysisError };
+  return { ok: true, channel: channelUrl, count: vids.length, avgViews: Math.round(avg), enrichedVia, outliers: outliers.slice(0, 8), topVideos: vids.slice(0, 10), analysis, analysisError, aiProvider: _kAI.api_provider || '', aiModel: _kAI.api_model || '', shortsCount: shorts.length, shortsMedian: Math.round(shortsMed), shortsNote, shortsOutliers: shortsOutliers.map(x => ({ title: x.title, views: x.views, ratio: x.ratio, url: x.url, thumb: x.id ? `https://i.ytimg.com/vi/${x.id}/mqdefault.jpg` : '' })) };
 }
 // 📈 Tìm thumbnail ĐANG ĂN theo CHỦ ĐỀ (không cần kênh cụ thể).
 // ytsearch → lấy id/view/kênh → tính bội số so với TRUNG VỊ (median chịu nhiễu tốt hơn trung bình khi có video triệu view).

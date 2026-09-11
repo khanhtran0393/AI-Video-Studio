@@ -176,6 +176,14 @@ def _worker() -> None:
             task["error"] = str(e)
         finally:
             _QUEUE.task_done()
+            # /api/asr: file upload chỉ là input của task này (save_voice COPY vào
+            # voicebank nên không tham chiếu lâu dài) → xoá ngay khi task xong
+            # (kể cả khi lỗi) để data/uploads không tích tụ trong phiên dài.
+            if task["kind"] == "asr":
+                try:
+                    Path(task["payload"]["audio_path"]).unlink(missing_ok=True)
+                except OSError:
+                    pass
 
 
 def _resolve_voice(payload: dict) -> tuple[Optional[str], Optional[str], dict]:

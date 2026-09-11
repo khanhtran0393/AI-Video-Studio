@@ -7,7 +7,7 @@ const fs = require('fs');
 const { accounts, storeFile } = require('./nen-tang');
 const { startAutoRefresh, withGen } = require('./token-captcha');
 const { primary, statusPayload, addAccount, addAccountByCookie, refreshOne, setEnabled, removeAccount, setProxy, scanAll } = require('./dang-nhap');
-const { createProject, uploadImage, genImage, poolReset, poolAccounts, poolGen, genVideoPool, armVideoLearn, videoLearnStatus, videoLearnDump, armUpscaleLearn, upscaleLearnStatus, upscaleLearnDump, videoModels, videoModelStatus } = require('./gen');
+const { createProject, uploadImage, genImage, poolReset, poolAccounts, poolGen, genVideoPool, setPoolConfig, poolLedgerStats, submitVideoEdit, armVideoLearn, videoLearnStatus, videoLearnDump, armUpscaleLearn, upscaleLearnStatus, upscaleLearnDump, videoModels, videoModelStatus } = require('./gen');
 const { ensureWindow } = require('./tien-trinh');
 
 function restore() {
@@ -51,6 +51,11 @@ async function handle(action, payload = {}) {
       case 'POOL_ABORT':     S._poolAbort = !!payload.on; return { ok: true, aborting: S._poolAbort };
       case 'POOL_GEN':       return await withGen(() => poolGen(payload));
       case 'POOL_GEN_VIDEO': return await withGen(() => genVideoPool(payload));
+      // Slot/concurrency/nick_strategy — cùng kênh 'flow', không thêm IPC mới (P1 roadmap).
+      case 'SET_POOL_CONFIG':    return setPoolConfig(payload);
+      case 'POOL_LEDGER_STATS':  return { ok: true, ledger: poolLedgerStats(), file: require('./gen/ledger').ledgerFile() };
+      // V2V (video→video edit) — chỉ sẵn sàng sau khi học template Flow thật (Luật 10).
+      case 'GEN_VIDEO_EDIT': return await withGen(() => submitVideoEdit(primary(), payload));
       // Parity giao thức với extension router + bridge whitelist (UI app chỉ gọi POOL_GEN_VIDEO; 2 action này để builtin mode không rơi vào UNKNOWN_MESSAGE — native chạy qua pool = 1 scene/1 account rảnh).
       case 'GEN_VIDEO':
       case 'GEN_VIDEO_FROM_IMAGE': return await withGen(() => genVideoPool(payload));

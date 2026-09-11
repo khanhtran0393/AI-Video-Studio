@@ -53,6 +53,9 @@ module.exports = {
   unregisterErrorBridge: null,
   reporterShutdownPromise: null,
   reporterQuitReady: false,
+  // Scheduler (main/scheduler.js): danh sách job tự động, cache bộ nhớ của file
+  // nova-schedules.json — null = chưa nạp từ đĩa.
+  schedules: null,
   // electron.app handle — dùng trong test runner (window.js e2e) làm fallback
   // khi require('electron') không khả dụng (chạy ngoài Electron, vd CI script).
   // Ở runtime thật require('electron') luôn thành công nên nhánh này chỉ chạy

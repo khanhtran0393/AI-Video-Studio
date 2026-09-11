@@ -5,6 +5,8 @@
 // khai báo tường minh qua mode='yt-dlp' trong kết quả — không phải fallback ngầm.
 let _nk = null; try { _nk = require('./nova-keys'); } catch (_) {}
 let _ck = null; try { _ck = require('./nova-cookies'); } catch (_) {}
+const fs = require('fs');
+const path = require('path');
 const YT = 'https://www.googleapis.com/youtube/v3/';
 const { spawn } = require('child_process');
 const { YTDLP } = require('./ytdlp-path');   // ưu tiên bản đóng gói theo app (ytdlp-bin/)
@@ -81,6 +83,36 @@ function _ymd(s) { const m = /^(\d{4})(\d{2})(\d{2})$/.exec(String(s || '').trim
 
 const _ckCache = new Map();   // id → { t, entry } — cache phiên 24h: ID đã enrich gần đây dùng lại ngay, khỏi re-fetch
 const _CK_TTL = 24 * 3600 * 1000;
+/* Cache 24h TRÊN ĐĨA (userData/nova-cache/yt-enrich.json): qua các phiên không phải
+   re-fetch like/comment cho cùng video (tiết kiệm vài chục giây yt-dlp/lần phân tích).
+   Chỉ ghi khi chạy trong Electron (require('electron') ở plain Node/test trả chuỗi → bỏ qua). */
+const _CK_FILE = (() => {
+  try {
+    const app = require('electron').app;
+    return path.join(app.getPath('userData'), 'nova-cache', 'yt-enrich.json');
+  } catch (_) { return null; }
+})();
+try {
+  if (_CK_FILE) {
+    const saved = JSON.parse(fs.readFileSync(_CK_FILE, 'utf8'));
+    const now = Date.now();
+    for (const [id, c] of Object.entries(saved || {})) if (c && c.entry && now - c.t < _CK_TTL) _ckCache.set(id, c);
+  }
+} catch (_) {}
+let _ckSaveTimer = null;
+function _persistCkCache() {
+  if (!_CK_FILE || _ckSaveTimer) return;
+  _ckSaveTimer = setTimeout(() => {
+    _ckSaveTimer = null;
+    try {
+      fs.mkdirSync(path.dirname(_CK_FILE), { recursive: true });
+      const now = Date.now(), out = {};
+      for (const [id, c] of _ckCache) if (c && c.entry && now - c.t < _CK_TTL) out[id] = c;
+      fs.writeFileSync(_CK_FILE, JSON.stringify(out));
+    } catch (_) {}
+  }, 5000);
+  if (_ckSaveTimer.unref) _ckSaveTimer.unref();   // không giữ process sống chỉ để ghi cache
+}
 
 async function enrichKeyless(ids, onProgress = () => {}, concurrency = 8) {
   const list = (ids || []).filter(Boolean);
@@ -123,6 +155,7 @@ async function enrichKeyless(ids, onProgress = () => {}, concurrency = 8) {
         };
         map[id] = entry;
         _ckCache.set(id, { t: Date.now(), entry });
+        _persistCkCache();
       } catch (_) { /* lỗi 1 video → bỏ video đó, các video khác vẫn enrich */ }
       done++;
       try { onProgress(Math.round((doneBefore + done) * 100 / list.length), `Like/comment ${doneBefore + done}/${list.length} (yt-dlp, không cần key)…`); } catch (_) {}

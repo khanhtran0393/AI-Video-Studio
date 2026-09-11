@@ -15,6 +15,7 @@ const { createWatermarkProvider } = require('../qa/watermark');
 const { PROGRESS, hashMap, styleVer } = require('./states');
 const { viError, cleanupArtifacts, removeDirIfEmpty } = require('../errors');
 const { collectPreflightIssues, firstBlocking } = require('./preflight');
+const { collectCreditIssues } = require('./credits');
 
 function createVideoJob({ projectDir, adapters = {}, options = {} }) {
   // Renderer inject từ ngoài (IPC/test/adapter riêng) được coi là hợp lệ — preflight
@@ -103,6 +104,20 @@ function createVideoJob({ projectDir, adapters = {}, options = {} }) {
         A = await step('DISCOVERING', () => runAnalysis(projectDir, { step, adapters, options, signal: abortController.signal }));
       }
       const { project, tts, manifest, versions, validate } = A;
+      // Credit gate (học từ VEO3): chặn TRƯỚC khi đốt credit Flow. Chỉ chạy khi
+      // orchestrator được cấp probe (IPC thật cung cấp); test/adapter không cấp → bỏ qua,
+      // KHÔNG gọi mạng ngầm từ preflight (Luật 10).
+      if (typeof options.flowCreditsProbe === 'function') {
+        const creditIssues = await collectCreditIssues({
+          spec: A.spec, getCredits: options.flowCreditsProbe, costTable: options.flowCostTable,
+          minCredits: options.minFlowCredits,
+        });
+        if (creditIssues.length) {
+          out.preflight = (out.preflight || []).concat(creditIssues);
+          const cb = firstBlocking(creditIssues);
+          if (cb) { const e = new Error(cb.message); e.code = cb.code; e.details = creditIssues; throw e; }
+        }
+      }
       out.chapterId = project.chapterId;
       timeline = await step('BUILDING_TIMELINE', () => buildTimeline(A.spec));
       spec = A.spec; out.specVersion = A.specVersion;
@@ -155,7 +170,9 @@ function createVideoJob({ projectDir, adapters = {}, options = {} }) {
         if (qaReport.status === 'fail') {
           setState('AUTO_FIX');
           const fixed = await autoFix({ spec, validate, qa: doQA, maxAttempts: options.maxAutoFixAttempts || 5,
+            perScene: options.perSceneAutoFix !== false,   // P2: checkpoint theo scene — mỗi attempt chỉ sửa 1 scene (tối ưu thay đổi nhỏ)
             onAttempt: (a) => emit('AUTO_FIX', a) });
+          if (fixed.checkpoints) out.autoFixCheckpoints = fixed.checkpoints;
           if (fixed.spec !== spec) { spec = fixed.spec; timeline = buildTimeline(spec); out.specVersion = versions.commitVideoSpec(spec); qaReport = fixed.qa; versions.commitQA(qaReport); }
           if (fixed.status === 'needs_review') { state = 'NEEDS_REVIEW'; await persist(); return result('NEEDS_REVIEW'); }
         }

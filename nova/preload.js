@@ -126,6 +126,20 @@ contextBridge.exposeInMainWorld('native', {
       return () => ipcRenderer.removeListener('videoAgent:event', listener);
     },
   },
+  // Scheduler (P3): CRUD job tự động + event `schedule:fire` khi job đến giờ
+  // (renderer tự quyết định chạy gì với payload — main chỉ phát sự kiện).
+  schedule: {
+    list: () => ipcRenderer.invoke('schedule:list'),
+    add: (payload) => ipcRenderer.invoke('schedule:add', payload),
+    remove: (id) => ipcRenderer.invoke('schedule:remove', { id }),
+    setPaused: (id, paused) => ipcRenderer.invoke('schedule:set-paused', { id, paused }),
+    runNow: (id) => ipcRenderer.invoke('schedule:run-now', { id }),
+    onFire: (cb) => {
+      const listener = (_e, update) => cb && cb(update);
+      ipcRenderer.on('schedule:fire', listener);
+      return () => ipcRenderer.removeListener('schedule:fire', listener);
+    },
+  },
   // Whiteboard Studio (port TPL Studio Stories v1.0.2) — chọn media
   // thật, đo thời lượng thật (ffprobe nội bộ), export MP4 thật
   // (ffmpeg nội bộ). KHÔNG nhận đường dẫn repo ngoài từ GUI.
@@ -194,6 +208,7 @@ contextBridge.exposeInMainWorld('native', {
   saveFile: (payload) => ipcRenderer.invoke('save-file', payload),
   // I-MZic (Ảnh & Nhạc): ghép video câm + nhạc gốc bằng FFmpeg (copy stream).
   imzicMux: (payload) => ipcRenderer.invoke('imzic-mux', payload),
+  imzicOfflineExport: (payload) => ipcRenderer.invoke('imzic-offline-export', payload),
   exportDir: () => ipcRenderer.invoke('export-dir'),
   flowCftAdd: () => ipcRenderer.invoke('flow-cft-add'),
   flowCftCancel: () => ipcRenderer.invoke('flow-cft-cancel'),
@@ -207,6 +222,7 @@ contextBridge.exposeInMainWorld('native', {
   // Voice native (OmniVoice) — khởi động backend giọng nói.
   voiceStart: () => ipcRenderer.invoke('voice-start'),
   voiceStatus: () => ipcRenderer.invoke('voice-status'),
+  voiceEngines: () => ipcRenderer.invoke('voice-engines'),
   voiceProbe: () => ipcRenderer.invoke('voice-probe'),
   voicePickRoot: () => ipcRenderer.invoke('voice-pick-root'),
   voiceInstallBackend: () => ipcRenderer.invoke('voice-install-backend'),

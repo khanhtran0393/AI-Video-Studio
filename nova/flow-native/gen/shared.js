@@ -53,6 +53,13 @@ function isTransientErr(e) { return /\b(5\d\d)\b|TIMEOUT|ETIMEDOUT|ECONNRESET|EC
 // Lỗi "tài khoản này hết lượt" → XOAY account khác: quota/429 (giới hạn ngày ảnh) HOẶC hết credit (video).
 function isQuotaErr(e) { return /QUOTA|EXHAUSTED|RESOURCE_EXHAUSTED|PER_MODEL_DAILY|API_429|INSUFFICIENT|NO_CREDIT|OUT_OF_CREDIT|NOT_ENOUGH|CREDIT_|PAYGATE|DAILY_LIMIT|LIMIT_EXCEEDED|RATE_LIMIT/i.test(String(e || '')); }
 
+// Lỗi content-filter phía upstream (học từ VEO3 `_is_upstream_content_filter`): Flow chặn
+// prompt vì an toàn/nhân vật nổi tiếng. Đặc điểm: KHÔNG đáng retry account khác (đốt vô ích),
+// nhưng CÓ THỂ sửa được bằng cách viết lại prompt (prompt-fix.js) rồi gen lại.
+function isContentFilterErr(e) {
+  return /CONTENT_FILTER|UPSTREAM_CONTENT|PROMINENT_PEOPLE|SAFETY|PROHIBITED|POLICY_VIOLAT|SENSITIVE_CONTENT|BLOCKED_BY/i.test(String(e || ''));
+}
+
 // Đi sâu tìm mọi chuỗi khớp regex (operation name / video url) trong phản hồi.
 function deepCollect(obj, test, out = [], depth = 0) {
   if (out.length > 40 || depth > 10 || !obj) return out;
@@ -84,4 +91,4 @@ function _setVideoPrompt(obj, prompt) {
   return done;
 }
 
-module.exports = { cryptoRandomUUID, extractMediaEntries, sizedUrl, _isAuthErr, isRetryable, _isCaptchaErr, _qualityToRes, isTransientErr, isQuotaErr, deepCollect, _deepSet, _setVideoPrompt };
+module.exports = { cryptoRandomUUID, extractMediaEntries, sizedUrl, _isAuthErr, isRetryable, _isCaptchaErr, _qualityToRes, isTransientErr, isQuotaErr, isContentFilterErr, deepCollect, _deepSet, _setVideoPrompt };

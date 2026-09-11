@@ -155,6 +155,8 @@ function nfRenderScorecard(r){
   document.getElementById('nfScState').textContent = `✅ Xong — ${r.videoCount} video · trung vị kênh ${_t11oNum(r.median||0)} view`
     + (r.enrichedVia ? ' · 📊 ' + (r.enrichedVia === 'api' ? 'like/comment/sub (API)' : 'like/comment (yt-dlp, không cần key)') : '')
     + (r.commentsNote ? ' · 💬 ' + r.commentsNote : '')
+    + (r.shortsCount != null ? ' · 🩳 ' + r.shortsCount + ' shorts' : '')
+    + (r.shortsNote ? ' · ⚠️ ' + r.shortsNote : '')
     + (r.fromCache?' · ⚡cache':'');
   const m = r.metrics || {};
   const ini = (r.channel||'?').replace(/[^\p{L}\p{N} ]/gu,'').trim().split(/\s+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase() || 'YT';
@@ -182,6 +184,15 @@ function nfRenderScorecard(r){
         <td class="n" style="color:var(--text-muted)">${o.days!=null?o.days+'n':'?'}</td></tr>`).join('')}
     </table></div>`;
   }
+  if ((r.shortsOutliers || []).length){
+    h += `<div class="nf-card" style="padding:8px 12px;margin-top:10px"><table class="nf-tbl">
+      <tr><th>🩳 Shorts vượt trội (trung vị Shorts ${_t11oNum(r.shortsMedian||0)})</th><th class="n">View</th><th class="n">Bội số</th></tr>
+      ${r.shortsOutliers.map(o => `<tr>
+        <td><a href="${_nfEsc(o.url||'#')}" target="_blank" style="color:inherit;text-decoration:none">${_nfEsc(o.title)}</a></td>
+        <td class="n">${_nfEsc(o.viewsFmt || _t11oNum(o.views||0))}</td>
+        <td class="n" style="color:var(--accent);font-weight:800">${o.ratio}×</td></tr>`).join('')}
+    </table></div>`;
+  } else if (r.shortsNote) h += `<div class="nf-state" style="margin-top:8px">🩳 ${_nfEsc(r.shortsNote)}</div>`;
   _nfSet('nfScOut', h);
   _nfSet('nfSimOut', '');
   // Soi xong → tự điền kênh vừa so vào ô "Kênh giống" để chạy tiếp (không đè nếu người dùng đang nhập kênh khác).
@@ -599,7 +610,7 @@ function _giongCloud(){ try { return JSON.parse(localStorage.getItem('_giongClou
 function _giongCloudLuu(ds){ try { localStorage.setItem('_giongCloudCache', JSON.stringify(ds || [])); } catch(_){} }
 
 /* === 🧠 Phân tích sâu đối thủ — wire bridge `nova:analyzeCompetitor` (preload: window.native.analyzeCompetitor + onCompetitorProgress) ===
-   Quét ~20 video gần nhất → outlier + Eng% (yt-dlp không cần key) → Claude trả 5 mục: video đột phá, công thức tiêu đề,
+   Quét ~20 video gần nhất → outlier + Eng% (yt-dlp không cần key) → AI (API đã cấu hình trong Cài đặt) trả 5 mục: video đột phá, công thức tiêu đề,
    độ dài ưu tiên, tín hiệu tương tác, 6 ý tưởng video. Kênh dùng chung ô nhập của Thẻ điểm kênh (nfScSeed). */
 let _nfDeepBusy = false;
 let _nfDeepLast = null;
@@ -625,7 +636,8 @@ async function nfDeepRun(){
     if (!r || !r.ok) { st.textContent = '❌ ' + ((r && r.error) || 'lỗi không rõ'); return; }
     _nfDeepLast = r;
     st.textContent = `✅ Xong — ${r.count} video · TBV ${_t11oNum(r.avgViews || 0)} view`
-      + (r.enrichedVia ? ' · 📊 ' + (r.enrichedVia === 'api' ? 'like/comment (API)' : 'like/comment (yt-dlp, không cần key)') : '');
+      + (r.enrichedVia ? ' · 📊 ' + (r.enrichedVia === 'api' ? 'like/comment (API)' : 'like/comment (yt-dlp, không cần key)') : '')
+      + (r.aiProvider ? ' · 🧠 ' + r.aiProvider + (r.aiModel ? ' · ' + r.aiModel : '') : '');
     nfRenderDeep(r);
   } catch (err) { st.textContent = '❌ ' + String((err && err.message) || err).slice(0, 160); }
   finally {
@@ -651,8 +663,15 @@ function nfRenderDeep(r){
       }).join('')}
     </table></div>`;
   }
+  if ((r.shortsOutliers || []).length) {
+    h += `<div class="nf-card" style="padding:8px 12px;margin-top:10px"><table class="nf-tbl">
+      <tr><th>🩳 Shorts vượt trội${r.shortsMedian ? ' (trung vị Shorts ' + _t11oNum(r.shortsMedian) + ')' : ''}</th><th class="n">View</th><th class="n">Bội số</th></tr>
+      ${r.shortsOutliers.map(o => `<tr><td><a href="${esc(o.url || '#')}" target="_blank" style="color:inherit;text-decoration:none">${esc(o.title || '')}</a></td><td class="n">${_t11oNum(o.views || 0)}</td><td class="n" style="color:var(--accent);font-weight:800">${o.ratio}×</td></tr>`).join('')}
+    </table></div>`;
+  }
   if (r.analysis) h += `<div class="nf-title-ex" style="margin-top:10px;white-space:pre-wrap">${esc(r.analysis)}</div>`;
   if (r.analysisError && !r.analysis) h += `<div class="nf-state" style="margin-top:10px">⚠️ Phân tích AI lỗi: ${esc(r.analysisError)}</div>`;
+  if (r.shortsNote && !(r.shortsOutliers || []).length) h += `<div class="nf-state" style="margin-top:8px">🩳 ${esc(r.shortsNote)}</div>`;
   _nfSet('nfDeepOut', h);
 }
 
@@ -660,7 +679,10 @@ function nfCopyDeep(){
   const r = _nfDeepLast;
   if (!r) { const st = document.getElementById('nfDeepState'); if (st) st.textContent = '⚠️ Chưa có kết quả để copy — bấm "Phân tích sâu" trước.'; return; }
   const rows = (r.outliers || []).map(o => `| ${(o.title || '').replace(/\|/g, '/')} | ${_t11oNum(o.views || 0)} | ${o.ratio}× | ${o.engRate != null ? o.engRate + '%' : '—'} |`).join('\n');
-  const md = `# Phân tích sâu — ${r.channel || ''}\n\n${r.count} video · TBV ${_t11oNum(r.avgViews || 0)} view\n\n## Video ăn nhất\n\n| Video | View | Bội số | Eng |\n|---|---|---|---|\n${rows}\n\n## Phân tích Claude\n\n${r.analysis || ''}`;
+  const srows = (r.shortsOutliers || []).map(o => `| ${(o.title || '').replace(/\|/g, '/')} | ${_t11oNum(o.views || 0)} | ${o.ratio}× |`).join('\n');
+  const md = `# Phân tích sâu — ${r.channel || ''}\n\n${r.count} video${r.shortsCount != null ? ' + ' + r.shortsCount + ' shorts' : ''} · TBV ${_t11oNum(r.avgViews || 0)} view\n\n## Video ăn nhất\n\n| Video | View | Bội số | Eng |\n|---|---|---|---|\n${rows}\n`
+    + (srows ? `\n## Shorts vượt trội\n\n| Shorts | View | Bội số |\n|---|---|---|\n${srows}\n` : '')
+    + `\n## Phân tích AI\n\n${r.analysis || ''}`;
   navigator.clipboard.writeText(md).then(() => {
     const st = document.getElementById('nfDeepState'); if (st) st.textContent = '📋 Đã copy Markdown.';
   }).catch(() => {});

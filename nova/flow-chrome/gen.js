@@ -7,7 +7,8 @@ const fs = require('fs');
 const path = require('path');
 const { FLOW_API_BASE, FLOW_API_KEY, accounts, LOG, evalInPage, FLOW_URL, sleep, evalInPageT, persist, SITE_KEY } = require('./nen-tang');
 const { ensureLive, pageEval } = require('./token-captcha');
-const { closeChrome, apiFetch, running, readCookies } = require('./tien-trinh');
+const { closeChrome, apiFetch, running, readCookies, openForOperation } = require('./tien-trinh');
+const { genImageBX } = require('./gen-bx');
 
 // â”€â”€ HÃ m thuáº§n (copy tá»« flow-native Ä‘á»ƒ test Ä‘á»™c láº­p, khÃ´ng Ä‘á»¥ng engine cÅ©) â”€â”€
 const TRPC_CREATE_PROJECT = 'https://labs.google/fx/api/trpc/project.createProject';
@@ -41,41 +42,35 @@ function captchaCode(action) {
 }
 
 // Test táº¡o 1 áº£nh trÃªn 1 account Chrome (chá»©ng minh gen qua CDP cháº¡y).
-async function genTest(id, prompt, tokenId) {
+// Gen 1 ảnh trên 1 account Chrome — QUA GIAO THỨC MỚI ogiZ0b (flow.google.com, đo 11/9/2026).
+// Đường REST cũ (tRPC createProject + captcha + aisandbox batchGenerateImages) ĐÃ CHẾT:
+// flow.google.com không còn origin labs.google, aisandbox trả lỗi → thay bằng
+// batchexecute chạy ngay trong page (gen-bx.js — cùng origin, tự mang cookie session).
+async function genImageAccount(id, prompt, modelName, tokenId) {
   if (!accounts.has(id)) return { error: 'NO_ACC' };
-  let live; try { live = await ensureLive(id); } catch (e) { return { error: 'Má»Ÿ Chrome lá»—i: ' + (e.message || e) }; }
-  const { cdp } = live; let token = live.token; let a = accounts.get(id);
-  // TEST token-only: dÃ¹ng Chrome cá»§a account `id` (chá»‰ Ä‘á»ƒ giáº£i captcha) + TOKEN cá»§a account `tokenId`.
-  if (tokenId && tokenId !== id && accounts.has(tokenId)) {
-    try { const t2 = await ensureLive(tokenId); token = t2.token; await closeChrome(tokenId); a = accounts.get(tokenId); LOG('TEST token-only: Chrome acc', id, '+ token acc', tokenId); }
-    catch (e) { return { error: 'Láº¥y token acc ' + tokenId + ' lá»—i: ' + (e.message || e) }; }
+  let live; try { live = await ensureLive(id); } catch (e) {
+    // BX (ogiZ0b) KHÔNG cần token labs.google — chỉ cần CDP + page flow.google.com.
+    // ensureLive chết ở captureToken (giao thức cũ) → mở Chrome trực tiếp, không-token (lộ liễu).
+    LOG('acc', id, 'genBX: ensureLive fail (' + (e.message || e) + ') — mở Chrome không-token');
+    try { const rec = await openForOperation(id); live = { cdp: rec.cdp }; }
+    catch (e2) { return { error: 'Mở Chrome lỗi: ' + (e2.message || e2) }; }
   }
+  const { cdp } = live; const a = accounts.get(id);
+  const projectId = (a && a.projectId) || null;
+  if (!projectId) return { error: 'BX_NO_PROJECT: account chưa có projectId Flow (mở 1 project trên flow.google.com bằng account này rồi REFRESH app)' };
   try {
-    LOG('acc', id, 'genTest: táº¡o projectâ€¦');
-    const pr = await apiFetch(cdp, { url: TRPC_CREATE_PROJECT, method: 'POST', headers: { 'content-type': 'application/json', accept: '*/*', authorization: 'Bearer ' + token }, body: JSON.stringify({ json: { projectTitle: 'Nova Chrome', toolName: 'PINHOLE' } }) });
-    let pd; try { pd = JSON.parse(pr.text); } catch { pd = pr.text; }
-    if (!pr.ok) return { error: 'PROJECT_' + pr.status + ': ' + (extractApiError(pd) || String(pr.text).slice(0, 150)) };
-    const projectId = deepFindProjectId(pd);
-    if (!projectId) return { error: 'NO_PROJECT_ID' };
-    LOG('acc', id, 'genTest: giáº£i captchaâ€¦');
-    // Mint qua MÁY CAPTCHA (pageEval): trang account giờ là flow.google.com — không còn grecaptcha
-    // như labs.google cũ; mode guest mint trên máy guest, mode machine đi cửa sổ captcha riêng.
-    let capToken; try { capToken = await pageEval(id, captchaCode('IMAGE_GENERATION')); } catch (e) { return { error: 'CAPTCHA: ' + (e.message || e) }; }
-    if (!capToken) return { error: 'CAPTCHA_EMPTY' };
-    const body = buildImageBody({ prompt, projectId, aspect: 'IMAGE_ASPECT_RATIO_LANDSCAPE', modelName: 'GEM_PIX_2', tier: a.tier || null, variantCount: 1 });
-    body.clientContext.recaptchaContext.token = capToken;
-    for (const rq of body.requests) { if (rq.clientContext && rq.clientContext.recaptchaContext) rq.clientContext.recaptchaContext.token = capToken; }
-    LOG('acc', id, 'genTest: gá»i batchGenerateImagesâ€¦');
-    const gr = await apiFetch(cdp, { url: genImageUrl(projectId), method: 'POST', headers: { 'content-type': 'text/plain;charset=UTF-8', accept: '*/*', authorization: 'Bearer ' + token }, body: JSON.stringify(body) });
-    let gd; try { gd = JSON.parse(gr.text); } catch { gd = gr.text; }
-    if (!gr.ok) return { error: 'GEN_' + gr.status + ': ' + (extractApiError(gd) || String(gr.text).slice(0, 150)) };
-    const entries = extractMediaEntries(gd);
-    if (!entries.length) LOG('acc', id, 'genTest 0 áº£nh â€” Flow tráº£:', String(gr.text).slice(0, 500));
-    LOG('acc', id, 'genTest â†’ âœ“', entries.length, 'áº£nh; url0', entries[0] && String(entries[0].url).slice(0, 60));
-    // Gen áº£nh trá»« tÃ­n dá»¥ng nhÆ°ng API generate khÃ´ng tráº£ sá»‘ dÆ° â†’ chá»§ Ä‘á»™ng há»i /v1/credits rá»“i ghi ngÆ°á»£c (giá»‘ng nhÃ¡nh video poll).
-    try { const cr = await apiFetch(cdp, { url: FLOW_API_BASE + '/v1/credits?key=' + encodeURIComponent(FLOW_API_KEY), method: 'GET', headers: { authorization: 'Bearer ' + token } }); if (cr.ok) { const cd = JSON.parse(cr.text); if (typeof cd.credits === 'number' && a && a.credits !== cd.credits) { a.credits = cd.credits; persist(); LOG('acc', id, 'genTest â†’ credits', cd.credits); } } } catch (e) { LOG('acc', id, 'genTest credits (bá» qua):', e && e.message); }
-    return { ok: entries.length > 0, count: entries.length, url: entries[0] && entries[0].url, credits: a && a.credits, raw: entries.length ? undefined : String(gr.text).slice(0, 300) };
-  } catch (e) { return { error: 'genTest lá»—i: ' + (e.message || e) }; }
+    LOG('acc', id, 'genBX: ogiZ0b qua page project', projectId.slice(0, 8) + '…');
+    const r = await genImageBX(cdp, { prompt, projectId });
+    LOG('acc', id, 'genBX OK', r.mediaId, String(r.url).slice(0, 60));
+    return { ok: true, count: 1, url: r.url, mediaId: r.mediaId, assetId: r.assetId, media_entries: [{ url: r.url, media_id: r.mediaId }], projectId, width: r.width, height: r.height };
+  } catch (e) { return { error: 'genBX: ' + (e.message || e) }; }
+}
+
+// Wrapper hợp đồng cũ GEN_TEST (model ảnh mặc định GEM_PIX_2) trên lõi genImageAccount mới.
+async function genTest(id, prompt, tokenId) {
+  const r = await genImageAccount(id, prompt, 'GEM_PIX_2', tokenId);
+  if (r.error) return { error: r.error };
+  return { ok: r.ok, count: r.count, url: r.url, credits: r.credits, raw: r.raw };
 }
 
 // â•â•â•â•â•â•â•â•â•â•â• VIDEO â€” cÃ´ng thá»©c bÃª tá»« extension (Ä‘Ã£ "há»c" request tháº­t) â•â•â•â•â•â•â•â•â•â•â•
@@ -134,6 +129,7 @@ function _vBodyFromLearned({ prompt, projectId, imageMediaId, capToken, modelKey
 const _vProjects = new Map();   // id -> projectId (cache/account)
 async function vEnsureProject(id, token) {
   if (_vProjects.has(id)) return _vProjects.get(id);
+  LOG('acc', id, 'genVideo: tạo project…');
   const { cdp } = await ensureLive(id);
   const r = await apiFetch(cdp, { url: TRPC_CREATE_PROJECT, method: 'POST', headers: { 'content-type': 'application/json', accept: '*/*', authorization: 'Bearer ' + token }, body: JSON.stringify({ json: { projectTitle: 'Nova Chrome video', toolName: 'PINHOLE' } }) });
   let d; try { d = JSON.parse(r.text); } catch { d = r.text; }
@@ -152,6 +148,7 @@ async function vUploadImage(id, token, projectId, { base64, mime, fileName }) {
   return { media_id: mediaId };
 }
 async function vSubmit(id, { token, prompt, projectId, imageMediaId, modelKey, durationSecs }) {
+  LOG('acc', id, 'genVideo: mint captcha…');
   const { cdp } = await ensureLive(id);
   let capToken; try { capToken = await pageEval(id, captchaCode('VIDEO_GENERATION')); } catch (e) { return { error: 'CAPTCHA: ' + (e.message || e) }; }   // mint qua máy captcha — xem genTest
   if (!capToken) return { error: 'CAPTCHA_EMPTY' };
@@ -159,6 +156,7 @@ async function vSubmit(id, { token, prompt, projectId, imageMediaId, modelKey, d
   if (!body) return { error: 'VIDEO_BODY_NULL' };
   const tpl = _vLearnedFor(imageMediaId);
   const r = await apiFetch(cdp, { url: tpl.url, method: 'POST', headers: { 'content-type': 'text/plain;charset=UTF-8', accept: '*/*', authorization: 'Bearer ' + token }, body: JSON.stringify(body) });
+  LOG('acc', id, 'genVideo: submit → HTTP', r.status);
   let d; try { d = JSON.parse(r.text); } catch { d = r.text; }
   if (!r.ok) return { error: extractApiError(d) || 'VIDEO_' + r.status };
   const ie = extractApiError(d); if (ie) return { error: ie };
@@ -178,7 +176,7 @@ async function vPoll(id, { token, projectId, mediaId }) {
   const done = /SUCCESSFUL/i.test(status), failed = /FAIL|ERROR|REJECT|BLOCK/i.test(status);
   const vf = first && first.video; let videoUrl = null;
   if (vf && typeof vf === 'object') { videoUrl = vf.fifeUrl || vf.servingUri || vf.servingUrl || vf.url || vf.downloadUri || (vf.generatedVideo && (vf.generatedVideo.fifeUrl || vf.generatedVideo.servingUri || vf.generatedVideo.servingUrl || vf.generatedVideo.url)) || null; if (!videoUrl) { const u = _vAnyUrl(vf); if (u.length) videoUrl = u[u.length - 1]; } }
-  if (!videoUrl) { const u = _vAnyUrl(d); if (u.length) videoUrl = u[u.length - 1]; }
+  if (!videoUrl) { const u = _vAnyUrl(first || {}); if (u.length) videoUrl = u[u.length - 1]; }   // chỉ trong ENTRY của mediaId này — tránh nhặt nhầm URL video khác trong response
   const credits = (d && typeof d.remainingCredits === 'number') ? d.remainingCredits : null;
   return { status, done, failed, credits, videoUrl };
 }
@@ -189,6 +187,7 @@ async function fetchVideoData(id, url) {
   return new Promise((resolve, reject) => {
     let done = false; const fin = (fn, v) => { if (!done) { done = true; fn(v); } };
     const req = net.request(url); if (cookieHeader) { try { req.setHeader('cookie', cookieHeader); } catch {} }
+    req.setTimeout(180000, () => { try { req.destroy(); } catch { /* */ } fin(reject, new Error('VID_TIMEOUT_180s')); });   // không treo vô hạn khi mạng stall
     req.on('response', (res) => { if (res.statusCode >= 400) { fin(reject, new Error('VID_HTTP_' + res.statusCode)); return; } const chunks = []; res.on('data', (c) => chunks.push(c)); res.on('end', () => { const buf = Buffer.concat(chunks); let mime = res.headers['content-type'] || 'video/mp4'; if (Array.isArray(mime)) mime = mime[0]; fin(resolve, { b64: buf.toString('base64'), mime, size: buf.length }); }); res.on('error', (e) => fin(reject, new Error(e.message || 'VID_READ'))); });
     req.on('error', (e) => fin(reject, new Error(e.message || 'VID_FETCH_FAILED')));
     req.end();
@@ -242,7 +241,7 @@ async function _resolveVideo(id, { projectId, mediaId, withData }) {
     for (let i = 0; i < 20; i++) {
       vurl = grab(); if (vurl) break;
       try {
-        const s = await evalInPage(cdp, `(async()=>{const nap=ms=>new Promise(r=>setTimeout(r,ms));for(const v of document.querySelectorAll('video')){try{v.muted=true;v.preload='auto';const p=v.play();if(p&&p.catch)p.catch(()=>{});}catch(e){}}const cards=Array.from(document.querySelectorAll('img,video,[role="button"]')).filter(el=>(el.clientWidth||0)>150).slice(0,6);for(const c of cards){try{['mouseover','mouseenter','pointerover'].forEach(ev=>c.dispatchEvent(new MouseEvent(ev,{bubbles:true})));}catch(e){}}await nap(400);for(const c of cards){try{c.click();}catch(e){}}await nap(600);for(const v of document.querySelectorAll('video')){try{v.muted=true;v.play&&v.play().catch(()=>{});}catch(e){}}await nap(500);const MID=${JSON.stringify(mediaId || '')};for(const v of document.querySelectorAll('video')){const u=v.currentSrc||v.src;if(u&&/^https?:/.test(u)&&(MID?(u.includes(MID)||/\\/video\\//.test(u)):/\\/video\\//.test(u)))return u;}return null;})()`);
+        const s = await evalInPage(cdp, `(async()=>{const nap=ms=>new Promise(r=>setTimeout(r,ms));for(const v of document.querySelectorAll('video')){try{v.muted=true;v.preload='auto';const p=v.play();if(p&&p.catch)p.catch(()=>{});}catch(e){}}const cards=Array.from(document.querySelectorAll('img,video,[role="button"]')).filter(el=>(el.clientWidth||0)>150).slice(0,6);for(const c of cards){try{['mouseover','mouseenter','pointerover'].forEach(ev=>c.dispatchEvent(new MouseEvent(ev,{bubbles:true})));}catch(e){}}await nap(400);for(const c of cards){try{c.click();}catch(e){}}await nap(600);for(const v of document.querySelectorAll('video')){try{v.muted=true;v.play&&v.play().catch(()=>{});}catch(e){}}await nap(500);const MID=${JSON.stringify(mediaId || '')};for(const v of document.querySelectorAll('video')){const u=v.currentSrc||v.src;if(u&&/^https?:/.test(u)&&(MID?u.includes(MID):/\\/video\\//.test(u)))return u;}return null;})()`);
         if (s) { vurl = s; break; }
       } catch {}
       vurl = grab(); if (vurl) break;
@@ -428,13 +427,19 @@ async function genVideo(id, params) {
   const sub = await vSubmit(id, { token, prompt: params.prompt, projectId, imageMediaId, modelKey: params.modelKey || params.modelName, durationSecs: params.durationSecs });
   if (sub.error) return { error: sub.error };
   const started = Date.now(); let videoUrl = null, credits = null, done = false;
+  let _extraLinkWait = 0;   // done mà chưa có link → Flow đôi khi trả status trước link → poll thêm (~60s)
   while (Date.now() - started < 360000) {
     await sleep(6000);
     const p = await vPoll(id, { token, projectId: sub.projectId, mediaId: sub.mediaId });
     if (p.credits != null){ credits = p.credits; const _a = accounts.get(id); if (_a && _a.credits !== credits){ _a.credits = credits; persist(); } }   // ghi ngÆ°á»£c tÃ­n dá»¥ng má»›i nháº¥t vÃ o account â†’ báº£ng hiá»‡n sá»‘ tháº­t, khá»i báº¥m â†»
     if (p.error) return { error: p.error, mediaId: sub.mediaId };
     if (p.failed) return { error: 'Flow bÃ¡o táº¡o video THáº¤T Báº I (' + (p.status || '?') + ')', mediaId: sub.mediaId };
-    if (p.done) { videoUrl = p.videoUrl; done = true; break; }
+    if (p.done) {
+      LOG('acc', id, 'genVideo: done, link', p.videoUrl ? 'OK' : 'chưa có (chờ thêm)');
+      if (p.videoUrl) { videoUrl = p.videoUrl; done = true; break; }
+      if (++_extraLinkWait <= 10) continue;   // chờ link ĐÚNG của mediaId này thay vì resolve nhầm video khác trong project
+      done = true; break;
+    }
   }
   if (!done) return { error: 'TIMEOUT chá» video', mediaId: sub.mediaId };
   let vid = null;
@@ -545,5 +550,5 @@ async function getAccountData(id) {
   try { await closeChrome(id); } catch {}   // láº¥y xong ÄÃ“NG Háº²N â€” khÃ´ng giá»¯ cá»­a sá»• nÃ o (gen cháº¡y á»Ÿ extension)
   return { token, projectId };
 }
-module.exports = { TRPC_CREATE_PROJECT, SITE_KEY, genImageUrl, cryptoRandomUUID, deepFindProjectId, extractApiError, extractApiError, extractMediaEntries, buildImageBody, captchaCode, genTest, UPLOAD_IMAGE_URL, DEFAULT_VIDEO, vEnsureProject, vUploadImage, vSubmit, vPoll, fetchVideoData, resolveVideo, VUP_FILE, vUpTpl, videoUpscaleStatus, videoUpscaleDump, armVideoUpscale, WM_FILE, wmTpl, WM_URL, watermarkStatus, watermarkDump, armWatermarkLearn, applyWatermarkOne, applyWatermarkAll, upsampleVideo, genVideo, resolveVideoForApp, getAllTokens, getAccountData };
+module.exports = { TRPC_CREATE_PROJECT, SITE_KEY, genImageUrl, cryptoRandomUUID, deepFindProjectId, extractApiError, extractApiError, extractMediaEntries, buildImageBody, captchaCode, genImageAccount, genTest, UPLOAD_IMAGE_URL, DEFAULT_VIDEO, vEnsureProject, vUploadImage, vSubmit, vPoll, fetchVideoData, resolveVideo, VUP_FILE, vUpTpl, videoUpscaleStatus, videoUpscaleDump, armVideoUpscale, WM_FILE, wmTpl, WM_URL, watermarkStatus, watermarkDump, armWatermarkLearn, applyWatermarkOne, applyWatermarkAll, upsampleVideo, genVideo, resolveVideoForApp, getAllTokens, getAccountData };
 

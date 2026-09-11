@@ -146,6 +146,72 @@ async function _openForOperation(id) {
 
 // Lấy token. Ưu tiên token ĐẦY ĐỦ từ endpoint /fx/api/auth/session (dài ~2000, như đối thủ —
 // chạy được createProject cross-account); fallback token ya29 ngắn bắt từ webRequest.
+const UA_HTTP = http.UA;
+function _xinThuan(url, opt = {}) {
+  return new Promise((resolve) => {
+    const u = new URL(url);
+    const mod = u.protocol === 'http:' ? require('http') : require('https');
+    const req = mod.request({
+      method: opt.method || 'GET', hostname: u.hostname, path: u.pathname + u.search,
+      headers: Object.assign({ 'User-Agent': UA_HTTP, Accept: '*/*' }, opt.headers || {}),
+    }, (res) => {
+      const chunks = []; res.on('data', (d) => chunks.push(d));
+      res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, setCookie: [].concat(res.headers['set-cookie'] || []), text: Buffer.concat(chunks).toString('utf8') }));
+    });
+    req.setTimeout(30000, () => { try { req.destroy(); } catch { /* */ } resolve({ status: 0, text: 'TIMEOUT' }); });
+    req.on('error', (e) => resolve({ status: 0, text: String(e) }));
+    if (opt.body) req.write(opt.body);
+    req.end();
+  });
+}
+/* Thiết lập PHIÊN labs.google cho profile đã đăng nhập flow.google.com (giao thức mới).
+   Trả { token, expiry, email } khi thành công, { error } khi thất bại — không nuốt lỗi. */
+async function _taoPhienLabs(cdp) {
+  try {
+    const jar = {};
+    const themCookie = (setCookie) => { for (const c of setCookie || []) { const m = c.match(/^([^=]+)=([^;]*)/); if (m) { const n = m[1].trim(); if (!/^(expires|path|domain|samesite|secure|httponly|max-age)$/i.test(n)) jar[n] = m[2]; } } };
+    const layCookie = () => Object.entries(jar).map(([k, v]) => k + '=' + v).join('; ');
+    // 1) csrf → POST signin/google → OAuth URL + cookie state/pkce
+    const rCsrf = await _xinThuan('https://labs.google/fx/api/auth/csrf', { headers: { Referer: 'https://labs.google/fx' } });
+    themCookie(rCsrf.setCookie);
+    const csrf = (() => { try { return JSON.parse(rCsrf.text).csrfToken; } catch { return null; } })();
+    if (!csrf) return { error: 'OAUTH_CSRF_' + rCsrf.status };
+    const body = 'csrfToken=' + encodeURIComponent(csrf) + '&callbackUrl=' + encodeURIComponent('https://labs.google/fx') + '&json=true';
+    const rSi = await _xinThuan('https://labs.google/fx/api/auth/signin/google', {
+      method: 'POST', headers: { Cookie: layCookie(), 'Content-Type': 'application/x-www-form-urlencoded', Referer: 'https://labs.google/fx', Origin: 'https://labs.google' }, body,
+    });
+    themCookie(rSi.setCookie);
+    let oauthUrl = (rSi.headers && rSi.headers.location) || null;
+    if (!oauthUrl) { try { oauthUrl = JSON.parse(rSi.text).url; } catch { /* */ } }
+    if (!oauthUrl || !/accounts\.google\.com/.test(oauthUrl)) return { error: 'OAUTH_URL_' + rSi.status };
+    // 2) bơm cookie state vào Chrome (callback của next-auth đối chiếu state từ cookie)
+    await cdp.send('Network.enable', {});
+    for (const [name, value] of Object.entries(jar)) {
+      try { await cdp.send('Network.setCookie', { name, value, url: 'https://labs.google/', secure: true, httpOnly: true, sameSite: 'Lax' }); } catch { /* */ }
+    }
+    // 3) Chrome đi qua consent (auto với account đã ủy quyền app Labs) → callback → phiên
+    try { await cdp.send('Page.bringToFront', {}); } catch { /* */ }
+    await cdp.send('Page.navigate', { url: oauthUrl });
+    let ok = false;
+    for (let i = 0; i < 40; i++) {
+      await sleep(3000);
+      let u = '';
+      try { const r2 = await cdp.send('Runtime.evaluate', { expression: 'location.href', returnByValue: true }); u = (r2.result && r2.result.value) || ''; } catch { /* */ }
+      if (/labs\.google/.test(u) && !/error=/.test(u)) { ok = true; break; }
+      if (/error=OAuthCallback|error=access_denied/.test(u)) return { error: 'OAUTH_CALLBACK_LOI' };
+    }
+    if (!ok) return { error: 'OAUTH_TIMEOUT (consent có thể cần bấm tay trong cửa sổ Chrome)' };
+    // 4) đọc lại cookie labs.google → Bearer
+    const cks = await readCookies(cdp);
+    const hop = (cks || []).filter((c) => { const d = String(c.domain || '').replace(/^\./, '').toLowerCase(); return d && ('labs.google' === d || 'labs.google'.endsWith('.' + d)); });
+    const seen = new Set(); const phan = [];
+    for (const c of hop) { if (seen.has(c.name)) continue; seen.add(c.name); phan.push(c.name + '=' + c.value); }
+    if (!phan.length) return { error: 'OAUTH_KHONG_CO_COOKIE' };
+    const t = await http.layToken(phan.join('; '), { proxy: (cdp && cdp._proxy) || null });
+    if (t.error) return { error: 'OAUTH_SESSION_' + t.error };
+    return { token: t.token, expiry: t.expiry, email: t.email };
+  } catch (e) { return { error: e.message || 'OAUTH_FAILED' }; }
+}
 async function captureToken(cdp, ms = 22000) {
   // Token bắt SỚM lúc openForOperation tải trang lần đầu (dùng 1 lần) → khỏi reload + chờ 3.5s.
   let ya29 = (cdp && cdp._earlyYa29) || null;
@@ -189,6 +255,21 @@ async function captureToken(cdp, ms = 22000) {
         return t.token;
       }
       LOG('layToken (cookie→HTTP):', t.error || 'rỗng');
+    } else {
+      /* Đăng nhập flow.google.com MỚI không tạo phiên labs.google (labs.google/fx 308 →
+         flow.google.com, không còn nút sign-in) → không bao giờ có cookie labs.google.
+         Đo thật 11/9/2026: thiết lập phiên bằng next-auth OAuth của Labs — csrf + POST
+         signin/google (HTTP thuần) → bơm cookie state/pkce vào Chrome (CDP) → Chrome đi
+         qua consent (auto với account đã ủy quyền app Labs) → callback khớp state →
+         phiên + session-token xuất hiện trong jar → layToken ra Bearer. */
+      LOG('không có cookie labs.google → thiết lập phiên Labs qua OAuth…');
+      const t = await _taoPhienLabs(cdp);
+      if (t && t.token) {
+        S._lastTokenExpiry = t.expiry ? (Date.parse(t.expiry) || null) : null;
+        LOG('✓ token (OAuth Labs) len', t.token.length, '· hết hạn', S._lastTokenExpiry ? new Date(S._lastTokenExpiry).toISOString() : '?');
+        return t.token;
+      }
+      if (t && t.error) LOG('OAuth Labs:', t.error);
     }
   } catch (e) { LOG('cookie→HTTP lỗi', e && e.message); }
   for (let i = 0; i < 2; i++) {   // 2 lần đủ: treo lần 1 mà có ya29 là bail luôn; vòng ngoài (loginAuto/reloginAuto) còn retry verifyAccount → khỏi phí 3×10s

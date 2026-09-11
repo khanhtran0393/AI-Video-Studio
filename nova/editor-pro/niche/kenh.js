@@ -79,6 +79,27 @@ async function mineComments(videoId, maxComments = 80) {
     .slice(0, 60);
 }
 
+// Quét tab Shorts của kênh (yt-dlp flat — KHÔNG CẦN KEY). Kênh không có Shorts / tab lỗi
+// → trả { ok:false, error } + lý do, KHÔNG làm chết scorecard (Shorts là dữ liệu bổ sung,
+// ghi chú ra UI — lỗi lộ liễu, không nuốt: Luật 10).
+async function fetchShorts(channelUrl, count, ck) {
+  let u = String(channelUrl || '').trim();
+  if (!/^https?:/i.test(u)) u = 'https://www.youtube.com/' + (u.startsWith('@') ? u : '@' + u);
+  const base = u.replace(/\/(videos|shorts|featured|streams)?\/?$/, '');
+  const args = [base + '/shorts', '--flat-playlist', '--no-warnings',
+    '--playlist-items', '1-' + Math.max(8, Math.min(30, count)),
+    '--print', '%(id)s\t%(view_count)s\t%(duration)s\t%(title)s'];
+  if (ck) args.push('--cookies', ck);
+  try {
+    const out = await run(args, 90000);
+    const vids = out.trim().split('\n').filter(Boolean).map(l => {
+      const [id, v, d, ...t] = l.split('\t');
+      return { id: (id || '').trim(), views: parseInt(v) || 0, dur: parseInt(d) || 0, title: (t.join('\t') || '').trim(), url: id ? 'https://www.youtube.com/shorts/' + (id || '').trim() : '' };
+    }).filter(x => x.title && x.views > 0);
+    return { ok: true, vids };
+  } catch (e) { return { ok: false, error: String((e && e.message) || e).slice(0, 120) }; }
+}
+
 async function channelScorecard(channelUrl, onProgress = () => {}, opts = {}) {
   const count = Math.max(8, Math.min(30, Number(opts.count) || 20));
   // Key cache gộp cả count + cờ analyze: soi 20 video rồi đổi sang 30 (hoặc gọi
@@ -106,8 +127,20 @@ async function channelScorecard(channelUrl, onProgress = () => {}, opts = {}) {
     vids.forEach(x => x.ratio = +(x.views / med).toFixed(2));
     const outliers = vids.filter(x => x.ratio >= 1.5).sort((a, b) => b.ratio - a.ratio).slice(0, 8);
 
+    // Tab Shorts: mô-típ ăn riêng của kênh — quét flat (không cần key), outlier so với TRUNG VỊ Shorts
+    // (không trộn vào median longform — feed Shorts khác feed longform, trộn sẽ bẻ cong cả 5 chỉ số).
+    onProgress(50, 'Quét tab Shorts…');
+    const shortsRes = opts.shorts === false ? { ok: false, error: 'đã tắt' } : await fetchShorts(channelUrl, count, ck);
+    const shorts = shortsRes.ok ? shortsRes.vids : [];
+    const shortsNote = shortsRes.ok ? (shorts.length ? '' : 'tab Shorts trống hoặc ẩn view') : 'không đọc được tab Shorts: ' + shortsRes.error;
+    const shortsMed = shorts.length >= 5 ? (median(shorts.map(x => x.views)) || 1) : 0;
+    const shortsOutliers = shortsMed ? shorts
+      .map(x => ({ ...x, ratio: +(x.views / shortsMed).toFixed(2) }))
+      .filter(x => x.ratio >= 1.5).sort((a, b) => b.ratio - a.ratio).slice(0, 5) : [];
+
     let analysis = ''; let analysisError = '';
     let enrichedVia = '';
+    let commentsBlock = ''; let commentsNote = '';   // scope producer — return luôn tham chiếu kể cả khi analyze:false
     if (opts.analyze !== false && outliers.length) {
       // Enrich like/comment cho outlier (≤8 video): có key Nova → YouTube API nhanh;
       // không key → yt-dlp chế độ KHÔNG CẦN KEY (song song 8, có cache phiên 24h).
@@ -121,10 +154,9 @@ async function channelScorecard(channelUrl, onProgress = () => {}, opts = {}) {
           }
         } catch (_) {}
       }
-      onProgress(70, 'Claude đọc mô-típ…');
+      onProgress(70, 'AI đọc mô-típ…');
       // Đào bình luận của outlier #1 (tùy chọn, tắt bằng opts.mineComments === false):
       // demand thật từ người xem — view/like không cho được. Lỗi lộ liễu qua commentsNote, không chặn.
-      let commentsBlock = ''; let commentsNote = '';
       if (opts.mineComments !== false) {
         try {
           onProgress(58, 'Đọc bình luận khán giả…');
@@ -135,12 +167,14 @@ async function channelScorecard(channelUrl, onProgress = () => {}, opts = {}) {
       }
       try {
         const ds = outliers.map(x => `x${x.ratio} · ${kfmt(x.views)} view · ${Math.round(x.dur / 60)}p · ${x.engRate != null ? `eng ${x.engRate}% · ` : ''}${x.title}`).join('\n');
+        const shortsBlock = shortsOutliers.length ? `\n\nSHORTS VƯỢT TRỘI (bội số so với trung vị ${kfmt(shortsMed)} view của ${shorts.length} Shorts gần đây):\n${shortsOutliers.map(x => `x${x.ratio} · ${kfmt(x.views)} view · ${x.title}`).join('\n')}` : '';
         const ask = 'Viết 3-5 câu: mô-típ nào đang ăn ở kênh này (chú ý video vừa view cao VỪA eng cao — đó là tín hiệu nội dung thật sự chạm)'
           + (commentsBlock ? ', và khán giả đang ĐÒI NHỌC GÌ/lặp lại điều gì trong bình luận (gợi 1 hướng khai thác)' : '')
+          + (shortsOutliers.length ? ', Shorts có đang ăn khác longform không (nhắc 1 câu)' : '')
           + ', người mới chen vào bằng cách nào. Bám số liệu, không nói chung chung.';
         analysis = await claude(
           'Bạn là chuyên gia nội dung YouTube, trả lời tiếng Việt, ngắn gọn.',
-          `Kênh "${name}" (${kfmt(subs)} sub). Trung vị kênh ${kfmt(med)} view.\nChỉ số: VPS ${m.vps}× · longform ${Math.round(m.longform * 100)}% · độ ổn định (CV) ${m.cv} · xu hướng ${m.trend > 0 ? '+' : ''}${Math.round(m.trend * 100)}%/tháng.\n\nVIDEO VƯỢT TRỘI (eng% = (like+comment)/view — cao bất thường = nội dung chạm đúng tệp):\n${ds}${commentsBlock}\n\n${ask}`);
+          `Kênh "${name}" (${kfmt(subs)} sub). Trung vị kênh ${kfmt(med)} view.\nChỉ số: VPS ${m.vps}× · longform ${Math.round(m.longform * 100)}% · độ ổn định (CV) ${m.cv} · xu hướng ${m.trend > 0 ? '+' : ''}${Math.round(m.trend * 100)}%/tháng.\n\nVIDEO VƯỢT TRỘI (eng% = (like+comment)/view — cao bất thường = nội dung chạm đúng tệp):\n${ds}${commentsBlock}${shortsBlock}\n\n${ask}`, { noBridge: true, noRetry: true });
       } catch (err) { analysisError = String((err && err.message) || err).slice(0, 160); }   // lỗi lộ liễu ra UI, không nuốt (Luật 10)
     }
     onProgress(100, 'Xong');
@@ -148,8 +182,10 @@ async function channelScorecard(channelUrl, onProgress = () => {}, opts = {}) {
       ok: true, channel: name, subs, subsFmt: kfmt(subs), videoCount: vids.length, median: Math.round(med),
       metrics: m, health: healthScore(m), monetized: monetizedGuess(subs, m), analysis, analysisError, enrichedVia, commentsNote,
       outliers: outliers.map(x => ({ title: x.title, views: x.views, viewsFmt: kfmt(x.views), ratio: x.ratio, dur: x.dur, days: x.days, url: x.url, id: x.id, likes: x.likes, comments: x.comments, engRate: x.engRate })),
+      shortsCount: shorts.length, shortsMedian: Math.round(shortsMed), shortsNote,
+      shortsOutliers: shortsOutliers.map(x => ({ title: x.title, views: x.views, viewsFmt: kfmt(x.views), ratio: x.ratio, dur: x.dur, url: x.url })),
     };
-  }, 'v3-n' + count + (opts.analyze === false ? '-noan' : '') + (opts.mineComments === false ? '-noc' : ''));
+  }, 'v4-n' + count + (opts.analyze === false ? '-noan' : '') + (opts.mineComments === false ? '-noc' : '') + (opts.shorts === false ? '-nos' : ''));
 }
 
 // KÊNH GIỐNG — không có API key nên bỏ tín hiệu featuredChannels (YouTube đã gỡ tab này ở nhiều kênh),
@@ -222,7 +258,7 @@ async function channelScorecardAi(opts) {
     const { claude, kfmt } = require('./loi');
     const analysis = await claude(
       'Bạn là chuyên gia nội dung YouTube, trả lời tiếng Việt, ngắn gọn.',
-      `Kênh "${channel}" (${kfmt(subs)} sub). Trung vị kênh ${kfmt(med)} view.\nChỉ số: VPS ${m.vps}× · longform ${Math.round(m.longform * 100)}% · độ ổn định (CV) ${m.cv} · xu hướng ${m.trend > 0 ? '+' : ''}${Math.round(m.trend * 100)}%/tháng.\n\nVIDEO VƯỢT TRỘI:\n${outliers.map(x => `x${x.ratio} · ${kfmt(x.views)} view · ${Math.round(x.dur / 60)}p · ${x.title}`).join('\n')}\n\nViết 3-5 câu: mô-típ nào đang ăn ở kênh này, và người mới chen vào bằng cách nào. Bám số liệu, không nói chung chung.`);
+      `Kênh "${channel}" (${kfmt(subs)} sub). Trung vị kênh ${kfmt(med)} view.\nChỉ số: VPS ${m.vps}× · longform ${Math.round(m.longform * 100)}% · độ ổn định (CV) ${m.cv} · xu hướng ${m.trend > 0 ? '+' : ''}${Math.round(m.trend * 100)}%/tháng.\n\nVIDEO VƯỢT TRỘI:\n${outliers.map(x => `x${x.ratio} · ${kfmt(x.views)} view · ${Math.round(x.dur / 60)}p · ${x.title}`).join('\n')}\n\nViết 3-5 câu: mô-típ nào đang ăn ở kênh này, và người mới chen vào bằng cách nào. Bám số liệu, không nói chung chung.`, { noBridge: true, noRetry: true });
     return { ok: true, analysis };
   } catch (err) {
     return { ok: false, error: String((err && err.message) || err).slice(0, 160) };

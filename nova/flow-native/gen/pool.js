@@ -5,14 +5,75 @@ const flowChrome = require('../../flow-chrome');   // engine Chrome thật (gen 
 const { sleep, accounts } = require('../nen-tang');
 const { ensurePoolTokens } = require('../token-captcha');
 const { syncChromeAccounts } = require('../dang-nhap');
-const { isQuotaErr, isTransientErr } = require('./shared');
+const { isQuotaErr, isTransientErr, isContentFilterErr, cryptoRandomUUID } = require('./shared');
+const ledger = require('./ledger');
+const { maybeFixPrompt } = require('./prompt-fix');
 const { createProject, uploadImage, genImage } = require('./image');
 const { submitVideo, pollVideo, resolveVideoData, upsampleVideoNative, _vResolveModelKey } = require('./video');
 
 // ── POOL round-robin nhiều tài khoản ───────────────────────────────────
 
-function poolReset() { S.pool = { cursor: 0, projects: {}, uploads: {}, _proj: {}, _up: {}, exhausted: new Set(), exhDay: {}, busy: new Set() }; }
+function poolReset() { S.pool = { cursor: 0, projects: {}, uploads: {}, _proj: {}, _up: {}, exhausted: new Set(), exhDay: {}, busy: new Set(), slots: { perAccount: 1, machine: 2 }, _busyCount: {}, _activeGens: 0 }; }
 function poolAccounts() { return S.order.filter((id) => { const a = accounts.get(id); return a && a.token && a.enabled !== false; }); }
+
+// ── Slot & least-loaded & nick_strategy (học từ VEO3 slot manager) ──
+// Cấu hình qua action SET_POOL_CONFIG (cùng kênh 'flow' — KHÔNG thêm IPC mới ở P1).
+function setPoolConfig(cfg = {}) {
+  if (!S.pool || !S.pool.slots) return { error: 'POOL_NOT_INITIALIZED' };
+  const perAccount = Number(cfg.perAccount);
+  const machine = Number(cfg.machine);
+  if (cfg.perAccount !== undefined && (!Number.isInteger(perAccount) || perAccount < 1 || perAccount > 8)) return { error: 'INVALID_POOL_CONFIG', field: 'perAccount' };
+  if (cfg.machine !== undefined && (!Number.isInteger(machine) || machine < 1 || machine > 32)) return { error: 'INVALID_POOL_CONFIG', field: 'machine' };
+  if (Number.isInteger(perAccount)) S.pool.slots.perAccount = perAccount;
+  if (Number.isInteger(machine)) S.pool.slots.machine = machine;
+  return { ok: true, slots: { ...S.pool.slots } };
+}
+
+// busy Set (tương thích code cũ) ↔ đếm slot thật trong _busyCount: 1 account có thể chạy
+// `slots.perAccount` job song song; Set chỉ đánh dấu "đang dùng ít nhất 1 slot".
+function _busyBump(id, delta) {
+  const c = ((S.pool._busyCount && S.pool._busyCount[id]) || 0) + delta;
+  if (!S.pool._busyCount) S.pool._busyCount = {};
+  if (c > 0) { S.pool._busyCount[id] = c; S.pool.busy.add(id); }
+  else { delete S.pool._busyCount[id]; S.pool.busy.delete(id); }
+}
+
+// Giới hạn số job gen chạy ĐỒNG THỜI trên cả máy (machine slots) — tránh dội request
+// khiến Flow co cụm/captcha. Trả false khi bị hủy (POOL_ABORT) trong lúc chờ.
+async function _acquireMachineSlot() {
+  const machine = Math.max(1, (S.pool.slots && S.pool.slots.machine) || 2);
+  while ((S.pool._activeGens || 0) >= machine) {
+    if (S._poolAbort) return false;
+    await sleep(400);
+  }
+  S.pool._activeGens = (S.pool._activeGens || 0) + 1;
+  return true;
+}
+function _releaseMachineSlot() { S.pool._activeGens = Math.max(0, (S.pool._activeGens || 0) - 1); }
+
+// Chọn account: ưu tiên RẢNH, trong đó chọn ÍT TẢI NHẤT (least-loaded), hoà thì xoay
+// cursor (giữ hành vi round-robin cũ). nickStrategy='fixed' ghim 1 account (hợp nhất
+// seed/style giữa các cảnh) — không dùng được thì trả lỗi lộ liễu, KHÔNG xoay im lặng.
+function _pickAccount(avail, params = {}) {
+  if (params.nickStrategy === 'fixed') {
+    const fixedId = params.fixedId || S.order.find((x) => avail.includes(x)) || null;
+    if (!fixedId || !avail.includes(fixedId)) return { error: 'NICK_FIXED_UNAVAILABLE', fixedId: fixedId || null };
+    return { id: fixedId };
+  }
+  const limit = Math.max(1, (S.pool.slots && S.pool.slots.perAccount) || 1);
+  const loadOf = (id) => ((S.pool._busyCount && S.pool._busyCount[id]) || 0) / limit;
+  const free = avail.filter((x) => !S.pool.busy.has(x));
+  if (params.requireFree && !free.length) return { wait: true };       // video: phải chờ rảnh thật
+  const list = free.length ? free : avail;
+  let best = null, bestScore = Infinity;
+  for (let i = 0; i < list.length; i++) {
+    const id = list[(S.pool.cursor + i) % list.length];
+    const score = loadOf(id) + (S.pool.busy.has(id) ? 1 : 0);
+    if (score < bestScore - 1e-9) { bestScore = score; best = id; }
+  }
+  S.pool.cursor++;
+  return { id: best };
+}
 
 // #1 — Quota Flow reset lúc nửa đêm giờ Thái Bình Dương. Đánh dấu account hết quota kèm "ngày PT";
 // qua ngày mới thì TỰ bỏ đánh dấu → sáng hôm sau pool tự chạy lại, khỏi bấm reset tay.
@@ -59,27 +120,41 @@ async function poolGen(params) {
   syncChromeAccounts();                                        // gộp account Chrome vào pool
   await ensurePoolTokens();                                    // account chưa có token (kể cả Chrome) → mở + bắt token
   if (!poolAccounts().length) return { error: 'NO_ACCOUNTS' };
-  let lastErr = 'UNKNOWN'; const rotated = []; let transient = 0;
+  // ChargeLedger: 1 clientRequestId = 1 lần charge. Caller retry với CÙNG id → nếu đã
+  // charge thành công trước đó thì KHÔNG gen lại tốn credit, trả vết cũ (Luật 10).
+  const clientRequestId = params.clientRequestId || cryptoRandomUUID();
+  const prev = ledger.lookup(clientRequestId);
+  if (prev && prev.status === 'charged') return { error: 'FLOW_ALREADY_CHARGED', alreadyCharged: true, mediaId: prev.mediaId || null, clientRequestId };
+  let lastErr = 'UNKNOWN'; const rotated = []; let transient = 0; let promptAutoFix = null;
   // Thử lần lượt account còn dùng được; hết quota → đánh dấu, lỗi tạm → thử account khác, lỗi content → trả luôn.
   for (let attempt = 0; attempt < poolAccounts().length + 3; attempt++) {
-    if (S._poolAbort) return { error: 'ĐÃ DỪNG', aborted: true, rotated };   // user bấm Dừng → thoát ngay, không thử account tiếp
+    if (S._poolAbort) return { error: 'ĐÃ DỪNG', aborted: true, rotated, clientRequestId };   // user bấm Dừng → thoát ngay, không thử account tiếp
     const avail = poolAvailable();
-    if (!avail.length) return { error: 'ALL_ACCOUNTS_EXHAUSTED · tất cả tài khoản đã hết giới hạn hôm nay', lastError: lastErr, rotated };
-    // #4 — ưu tiên account đang RẢNH (chia đều tải); hết rảnh mới dùng account bận (không kẹt).
-    const free = avail.filter((x) => !S.pool.busy.has(x));
-    const useList = free.length ? free : avail;
-    const id = useList[S.pool.cursor % useList.length];
-    S.pool.cursor++;
+    if (!avail.length) return { error: 'ALL_ACCOUNTS_EXHAUSTED · tất cả tài khoản đã hết giới hạn hôm nay', lastError: lastErr, rotated, clientRequestId };
+    // #4 — least-loaded: ưu tiên account rảnh, trong đó chọn ít tải nhất (xem _pickAccount).
+    const pick = _pickAccount(avail, params);
+    if (pick.error) return { ...pick, lastError: lastErr, rotated, clientRequestId };
+    const id = pick.id;
     const a = accounts.get(id);
-    S.pool.busy.add(id);                                         // #4 — giữ chỗ (pick+mark đồng bộ, không await xen giữa)
+    if (!a) continue;
+    if (!(await _acquireMachineSlot())) return { error: 'ĐÃ DỪNG', aborted: true, rotated, clientRequestId };
+    _busyBump(id, +1);                                         // giữ chỗ (đếm slot, hỗ trợ perAccount > 1)
     try {
+      // Account engine Chrome thật → delegate về flow-chrome (HTTP thuần, cùng mô hình video);
+      // native genImage chạy fetch trong trang — chết trên flow.google.com (chéo origin).
+      if (a.engine === 'chrome') {
+        const r = await flowChrome.genImageAccount(a.chromeId, params.prompt, params.modelName);
+        if (r.error) return isQuotaErr(r.error) ? { quota: true, error: r.error } : { ...r, account: a.email || a.id };
+        ledger.recordCharged(clientRequestId, a.id, (r && (r.mediaId || (Array.isArray(r.mediaIds) && r.mediaIds[0]))) || null);
+        return { ...r, account: a.email || a.id, clientRequestId };
+      }
       let projectId;
       try { projectId = await poolEnsureProject(a); }
       catch (e) {
         lastErr = 'PROJECT: ' + (e.message || e);
         if (isQuotaErr(lastErr)) { _markExhausted(id); rotated.push(a.email || id); continue; }               // hết quota → account khác
         if (isTransientErr(lastErr) && transient++ < 3) { rotated.push('(lỗi tạm) ' + (a.email || id)); continue; }  // #2 lỗi tạm → account khác
-        return { error: lastErr, account: a.email || id, rotated };
+        return { error: lastErr, account: a.email || id, rotated, clientRequestId };
       }
 
       const refMediaIds = [];
@@ -91,39 +166,61 @@ async function poolGen(params) {
         }
       }
 
-      if (S._poolAbort) return { error: 'ĐÃ DỪNG', aborted: true, rotated };   // vừa xong ref/project mà user bấm Dừng → khỏi tốn 1 lượt gen nữa
-      const res = await genImage(a, {
-        prompt: params.prompt, projectId, aspect: params.aspect, modelName: params.modelName,
+      if (S._poolAbort) return { error: 'ĐÃ DỪNG', aborted: true, rotated, clientRequestId };   // vừa xong ref/project mà user bấm Dừng → khỏi tốn 1 lượt gen nữa
+      ledger.recordSubmit(clientRequestId, a.id);
+      const genOnce = (prompt) => genImage(a, {
+        prompt, projectId, aspect: params.aspect, modelName: params.modelName,
         tier: a.tier, variantCount: params.variantCount || 1, quality: params.quality,
         withData: params.withData, refMediaIds,
       });
-      if (!res.error) return { ...res, account: a.email || id, rotated };
+      let res = await genOnce(params.prompt);
+      if (res.error && isContentFilterErr(res.error) && !promptAutoFix) {
+        // Auto-fix prompt (học từ VEO3): fixer inject từ caller (có cấu hình AI mới chạy).
+        // Không có fixer / fixer không sửa được → GIỮ lỗi gốc nguyên vẹn (Luật 10).
+        const fx = await maybeFixPrompt(params.prompt, params.autoFixPrompt, res.error);
+        promptAutoFix = fx.meta;
+        if (fx.fixed) {
+          ledger.recordRefund(clientRequestId, 'filter: ' + String(res.error).slice(0, 120));
+          ledger.recordSubmit(clientRequestId, a.id);
+          res = await genOnce(fx.prompt);
+        }
+      }
+      if (!res.error) {
+        ledger.recordCharged(clientRequestId, a.id, (res && (res.mediaId || (Array.isArray(res.mediaIds) && res.mediaIds[0]))) || null);
+        return { ...res, account: a.email || id, rotated, clientRequestId, ...(promptAutoFix ? { promptAutoFix } : {}) };
+      }
+      ledger.recordRefund(clientRequestId, res.error);
       lastErr = res.error;
+      const cf = isContentFilterErr(lastErr) ? { contentFilter: true } : {};
       if (isQuotaErr(res.error)) { _markExhausted(id); rotated.push(a.email || id); continue; }                 // hết quota → account khác
       if (isTransientErr(res.error) && transient++ < 3) { rotated.push('(lỗi tạm) ' + (a.email || id)); continue; }  // #2 lỗi tạm → account khác
-      return { ...res, account: a.email || id, rotated };      // lỗi content/filter → trả luôn, khỏi đốt account khác
+      return { ...res, account: a.email || id, rotated, clientRequestId, ...(promptAutoFix ? { promptAutoFix } : {}), ...cf };      // lỗi content/filter → trả luôn, khỏi đốt account khác
     } finally {
-      S.pool.busy.delete(id);                                    // #4 — luôn nhả account sau mỗi lượt
+      _busyBump(id, -1);                                         // #4 — luôn nhả account sau mỗi lượt
+      _releaseMachineSlot();
     }
   }
-  return { error: 'ALL_ACCOUNTS_EXHAUSTED', lastError: lastErr, rotated };
+  return { error: 'ALL_ACCOUNTS_EXHAUSTED', lastError: lastErr, rotated, clientRequestId };
 }
 
 // Chờ 1 account rảnh (chưa hết quota, chưa bận) → đặt trước (busy) để chạy SONG SONG.
-async function acquireAccount() {
+async function acquireAccount(params) {
   const start = Date.now();
   while (Date.now() - start < 900000) {   // chờ tối đa 15 phút
     _pruneExhausted();   // #1 — qua ngày PT thì mở lại account đã hết quota
-    const free = poolAccounts().filter((id) => !S.pool.exhausted.has(id) && !S.pool.busy.has(id));
-    if (free.length) { const id = free[S.pool.cursor % free.length]; S.pool.cursor++; S.pool.busy.add(id); return accounts.get(id); }
-    if (poolAccounts().every((id) => S.pool.exhausted.has(id))) return null;   // tất cả hết quota
+    const avail = poolAvailable();
+    if (!avail.length || poolAccounts().every((id) => S.pool.exhausted.has(id))) return null;   // tất cả hết quota
+    const pick = _pickAccount(avail, params || {});
+    if (pick.error) return null;              // nick fixed không dùng được → hết chờ (lỗi trả ở genVideoPool)
+    if (pick.wait) { await sleep(1500); continue; }
+    if (pick.id) { const a = accounts.get(pick.id); if (a) { _busyBump(pick.id, +1); return a; } }
     await sleep(1500);
   }
   return null;
 }
 
 // Chạy tạo video 1 cảnh trên 1 account cụ thể. Trả {ok|error, quota?}.
-async function runVideoOnAccount(a, params) {
+async function runVideoOnAccount(a, params, clientRequestId) {
   if (a.engine === 'chrome') {   // engine Chrome thật → dùng công thức video bê từ extension
     const r = await flowChrome.genVideo(a.chromeId, params);
     if (r && r.error && isQuotaErr(r.error)) return { quota: true, error: r.error };
@@ -141,9 +238,23 @@ async function runVideoOnAccount(a, params) {
     imageMediaId = up.media_id;
   }
 
+  // Morph A→B (học từ VEO3): khung cuối là ảnh thứ 2 — upload riêng, submitVideo chặn sớm
+  // bằng VA_MORPH_TEMPLATE_UNAVAILABLE nếu template chưa có 2 slot (không đoán shape — Luật 10).
+  let endMediaId = null;
+  if (params.endImage && params.endImage.base64) {
+    const up2 = await uploadImage(a, { projectId, base64: params.endImage.base64, mime: params.endImage.mime || 'image/png', fileName: (params.sceneId || 'frame') + '-end.png' });
+    if (up2.error) return isQuotaErr(up2.error) ? { quota: true, error: 'UPLOAD_END: ' + up2.error } : { error: 'UPLOAD_END: ' + up2.error };
+    endMediaId = up2.media_id;
+  }
+
   const modelKey = _vResolveModelKey(params.modelKey || params.modelName) || null;   // nhận modelKey (đã resolve) hoặc modelName (slug) — mirror extension/flow-chrome; null → model mặc định veo_3_1 (r2v_lite nếu có ảnh, t2v nếu không)
-  const sub = await submitVideo(a, { prompt: params.prompt, projectId, aspect: params.aspect || 'VIDEO_ASPECT_RATIO_LANDSCAPE', modelKey, tier: a.tier, imageMediaId, durationSecs: params.durationSecs });
-  if (sub.error) return isQuotaErr(sub.error) ? { quota: true, error: sub.error } : { ...sub };
+  // ChargeLedger: charge thật sự khi video DONE; fail/timeout → ghi refunded (thống kê).
+  ledger.recordSubmit(clientRequestId, a.id);
+  const sub = await submitVideo(a, { prompt: params.prompt, projectId, aspect: params.aspect || 'VIDEO_ASPECT_RATIO_LANDSCAPE', modelKey, tier: a.tier, imageMediaId, endMediaId, durationSecs: params.durationSecs });
+  if (sub.error) {
+    ledger.recordRefund(clientRequestId, sub.error);
+    return isQuotaErr(sub.error) ? { quota: true, error: sub.error } : { ...sub };
+  }
 
   const started = Date.now();
   let doneOk = false, videoUrl = null, credits = null;
@@ -151,11 +262,12 @@ async function runVideoOnAccount(a, params) {
     await sleep(6000);
     const p = await pollVideo(a, { projectId: sub.projectId, mediaId: sub.mediaId });
     if (p.credits != null) credits = p.credits;
-    if (p.error) return isQuotaErr(p.error) ? { quota: true, error: p.error, mediaId: sub.mediaId } : { error: p.error, mediaId: sub.mediaId };
-    if (p.failed) { const fe = 'Flow báo tạo video THẤT BẠI (' + (p.status || '?') + ')'; return isQuotaErr(p.status || fe) ? { quota: true, error: fe, mediaId: sub.mediaId } : { error: fe, mediaId: sub.mediaId }; }
+    if (p.error) { ledger.recordRefund(clientRequestId, p.error); return isQuotaErr(p.error) ? { quota: true, error: p.error, mediaId: sub.mediaId } : { error: p.error, mediaId: sub.mediaId }; }
+    if (p.failed) { const fe = 'Flow báo tạo video THẤT BẠI (' + (p.status || '?') + ')'; ledger.recordRefund(clientRequestId, fe); return isQuotaErr(p.status || fe) ? { quota: true, error: fe, mediaId: sub.mediaId } : { error: fe, mediaId: sub.mediaId }; }
     if (p.done) { doneOk = true; videoUrl = p.videoUrl || null; break; }
   }
-  if (!doneOk) return { error: 'TIMEOUT chờ video', mediaId: sub.mediaId };
+  if (!doneOk) { ledger.recordRefund(clientRequestId, 'TIMEOUT chờ video'); return { error: 'TIMEOUT chờ video', mediaId: sub.mediaId }; }
+  ledger.recordCharged(clientRequestId, a.id, sub.mediaId);
 
   // F3 — tôn trọng resolution 1080p (mirror flow-chrome/gen.js:441–452; account chrome đã xử ở nhánh engine phía trên): chỉ nâng khi khách chọn 1080p; thiếu template/hỏng → giữ 720p, không fail cả video.
   let upscaled = false;
@@ -179,20 +291,29 @@ async function genVideoPool(params) {
   syncChromeAccounts();
   if (!poolAccounts().length) { await ensurePoolTokens(); }
   if (!poolAccounts().length) return { error: 'NO_ACCOUNTS' };
+  // ChargeLedger: 1 clientRequestId = 1 video. Retry với cùng id khi đã charge → trả vết cũ.
+  const clientRequestId = params.clientRequestId || cryptoRandomUUID();
+  const prev = ledger.lookup(clientRequestId);
+  if (prev && prev.status === 'charged') return { error: 'FLOW_ALREADY_CHARGED', alreadyCharged: true, mediaId: prev.mediaId || null, clientRequestId };
   while (true) {
-    const a = await acquireAccount();
-    if (!a) return { error: 'ALL_ACCOUNTS_EXHAUSTED · tất cả tài khoản đã hết giới hạn hôm nay' };
-    const id = a.id;
+    if (S._poolAbort) return { error: 'ĐÃ DỪNG', aborted: true, clientRequestId };
+    if (!(await _acquireMachineSlot())) return { error: 'ĐÃ DỪNG', aborted: true, clientRequestId };
+    let a = null;
     try {
-      const r = await runVideoOnAccount(a, params);
+      a = await acquireAccount(params);
+      if (!a) return { error: 'ALL_ACCOUNTS_EXHAUSTED · tất cả tài khoản đã hết giới hạn hôm nay', clientRequestId };
+      const id = a.id;
+      const r = await runVideoOnAccount(a, params, clientRequestId);
       if (r.quota) { _markExhausted(id); continue; }   // account này hết quota → thử account khác (qua ngày tự mở lại)
-      return { ...r, account: a.email || id };
+      return { ...r, account: a.email || id, clientRequestId };
     } catch (e) {
-      return { error: e.message || 'VIDEO_FAILED', account: a.email || id };
+      ledger.recordRefund(clientRequestId, (e && e.message) || 'VIDEO_FAILED');
+      return { error: e.message || 'VIDEO_FAILED', account: a ? (a.email || a.id) : null, clientRequestId };
     } finally {
-      S.pool.busy.delete(id);
+      if (a) _busyBump(a.id, -1);
+      _releaseMachineSlot();
     }
   }
 }
 
-module.exports = { poolReset, poolAccounts, poolGen, genVideoPool };
+module.exports = { poolReset, poolAccounts, poolGen, genVideoPool, setPoolConfig };

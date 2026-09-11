@@ -3,7 +3,7 @@
      trong ./trang-thai (S) vì bị gán lại xuyên file — destructuring require chỉ snapshot giá trị cũ. ── */
 const S = require('./trang-thai');
 const { statusPayload, accounts, setUse, setLogSink, restore } = require('./nen-tang');
-const { getAllTokens, genTest, resolveVideoForApp, armVideoUpscale, videoUpscaleStatus, videoUpscaleDump, armWatermarkLearn, watermarkStatus, watermarkDump, applyWatermarkAll, upsampleVideo, genVideo } = require('./gen');
+const { getAllTokens, genTest, genImageAccount, resolveVideoForApp, armVideoUpscale, videoUpscaleStatus, videoUpscaleDump, armWatermarkLearn, watermarkStatus, watermarkDump, applyWatermarkAll, upsampleVideo, genVideo } = require('./gen');
 const { loginStart, loginCancel, loginFinish, loginAuto, reloginAuto, reloginStart, reloginFinish, refreshOne, setEnabled, setProxy, removeAccount } = require('./dang-nhap');
 const { setCaptchaMode, getCaptchaMode, ensureLive, rotateCaptcha, ensureCaptcha, _closeGuest, getTokenFresh, pageEval, pageFetchImage, getToken } = require('./token-captcha');
 
@@ -40,4 +40,4 @@ async function handle(action, payload = {}) {
 }
 
 function listAccounts() { return S.order.map((id) => accounts.get(id)).filter(Boolean); }
-module.exports = { handle, restore, setLogSink, ensureLive, ensureCaptcha, getTokenFresh, pageEval, pageFetchImage, getToken, listAccounts, setEnabled, setProxy, removeAccount, refreshOne, genVideo, videoUpscaleStatus, upsampleVideo, rotateCaptcha, setCaptchaMode, getCaptchaMode, closeGuestCaptcha: _closeGuest };
+module.exports = { handle, restore, setLogSink, ensureLive, ensureCaptcha, getTokenFresh, pageEval, pageFetchImage, getToken, listAccounts, setEnabled, setProxy, removeAccount, refreshOne, genVideo, genImageAccount, videoUpscaleStatus, upsampleVideo, rotateCaptcha, setCaptchaMode, getCaptchaMode, closeGuestCaptcha: _closeGuest };

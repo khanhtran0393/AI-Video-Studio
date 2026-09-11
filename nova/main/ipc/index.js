@@ -19,6 +19,7 @@ const { registerVoiceIpc } = require('./voice');
 const { registerSystemIpc } = require('./system');
 const { registerSecretVaultIpc } = require('./secret-vault');
 const { registerImzicIpc } = require('./imzic');
+const { registerScheduleIpc } = require('./schedule');
 const { registerWhiteboardIpc } = require('../../whiteboard-studio/ipc');
 const { registerSrtTranslateIpc } = require('../../srt-translate/ipc');
 
@@ -32,6 +33,7 @@ function registerAllIpc() {
   registerSystemIpc();
   registerSecretVaultIpc();
   registerImzicIpc();
+  registerScheduleIpc();
 
   // ── Whiteboard Studio (port TPL Studio Stories) — module độc lập,
   //    runtime ffmpeg nội bộ riêng, không phụ thuộc app cũ ──

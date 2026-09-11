@@ -108,7 +108,7 @@ function buildVideoBody({ prompt, projectId, aspect, modelKey, tier, imageMediaI
 }
 
 // Dựng body từ template (request đã học HOẶC DEFAULT_VIDEO) → thay prompt/ảnh/token/seed/project/model.
-function _bodyFromLearnedGen({ prompt, projectId, imageMediaId, capToken, modelKey, durationSecs }) {
+function _bodyFromLearnedGen({ prompt, projectId, imageMediaId, endMediaId, capToken, modelKey, durationSecs }) {
   const tpl = _videoGenTpl(imageMediaId);
   if (!tpl || !tpl.body) return null;
   let body; try { body = JSON.parse(tpl.body); } catch { return null; }
@@ -135,16 +135,52 @@ function _bodyFromLearnedGen({ prompt, projectId, imageMediaId, capToken, modelK
     if (Array.isArray(o.referenceImages)) o.referenceImages.forEach(ri => { if (ri && typeof ri === 'object' && 'mediaId' in ri) ri.mediaId = imageMediaId; });
     for (const k of Object.keys(o)) if (o[k] && typeof o[k] === 'object') walk(o[k]);
   })(body);
+  // Morph A→B: slot [0] = khung đầu (imageMediaId), slot [1] = khung cuối (endMediaId).
+  // Chỉ đặt khi template có ĐỦ 2 slot — submitVideo đã chặn sớm bằng VA_MORPH_TEMPLATE_UNAVAILABLE.
+  if (endMediaId) (function walk(o) {
+    if (!o || typeof o !== 'object') return;
+    if (Array.isArray(o.referenceImages) && o.referenceImages[1] && typeof o.referenceImages[1] === 'object') o.referenceImages[1].mediaId = endMediaId;
+    for (const k of Object.keys(o)) if (o[k] && typeof o[k] === 'object') walk(o[k]);
+  })(body);
   return body;
 }
 
-async function submitVideo(a, { prompt, projectId, aspect, modelKey, tier, imageMediaId, durationSecs }) {
+// Đếm tổng slot referenceImages trong template sẽ dùng (đã học hoặc DEFAULT) — dùng để
+// chặn morph sớm khi template chưa có 2 slot (không đoán shape — Luật 10).
+function _countRefSlots() {
+  const tpl = _videoGenTpl(true);
+  if (!tpl || !tpl.body) return 0;
+  try {
+    const b = JSON.parse(tpl.body);
+    let n = 0;
+    (function walk(o) { if (!o || typeof o !== 'object') return; if (Array.isArray(o.referenceImages)) n += o.referenceImages.length; for (const k of Object.keys(o)) if (o[k] && typeof o[k] === 'object') walk(o[k]); })(b);
+    return n;
+  } catch { return 0; }
+}
+
+// V2V (video→video edit) — CHƯA CÓ template Flow thật. Không đoán shape (Luật 10):
+// trả lỗi lộ liễu kèm hướng dẫn học template. Khi đã học xong qua VIDEO_LEARN sẽ bật chức năng thật.
+async function submitVideoEdit(a, payload) {
+  void a; void payload;
+  return {
+    error: 'VA_V2V_TEMPLATE_UNAVAILABLE', unavailable: true,
+    fixHint: 'V2V (sửa video bằng prompt) cần template request Flow thật. Bật VIDEO_LEARN trên Flow, mở tính năng edit video và tạo 1 lần để app học body rồi thử lại.',
+  };
+}
+
+async function submitVideo(a, { prompt, projectId, aspect, modelKey, tier, imageMediaId, endMediaId, durationSecs }) {
   let capToken;
   try { capToken = await solveCaptcha(a, CAPTCHA_VIDEO); }
   catch (e) { return { error: 'CAPTCHA_FAILED: ' + (e.message || 'unknown') }; }
+  // Morph A→B (học từ VEO3): chỉ chạy khi template dùng cho lần gọi có ĐỦ 2 slot ảnh
+  // (first + last frame). Không có → lỗi lộ liễu, hướng dẫn học template qua VIDEO_LEARN.
+  if (endMediaId && _countRefSlots() < 2) {
+    return { error: 'VA_MORPH_TEMPLATE_UNAVAILABLE', unavailable: true,
+      fixHint: 'Chưa có template Flow thật với 2 slot ảnh (first→last frame). Bật VIDEO_LEARN trên Flow, tạo 1 video morph first→last frame cho app học request rồi thử lại.' };
+  }
   // Dùng template (đã học HOẶC DEFAULT_VIDEO veo_3_1); chỉ khi template hỏng mới rơi về body hardcode cũ.
   let url = GEN_VIDEO_URL;
-  let body = _bodyFromLearnedGen({ prompt, projectId, imageMediaId, capToken, modelKey, durationSecs });
+  let body = _bodyFromLearnedGen({ prompt, projectId, imageMediaId, endMediaId, capToken, modelKey, durationSecs });
   if (body) { url = _videoGenTpl(imageMediaId).url || GEN_VIDEO_URL; }
   else { body = buildVideoBody({ prompt, projectId, aspect, modelKey, tier, imageMediaId, seed: Date.now() % 100000 }); body.clientContext.recaptchaContext.token = capToken; }
   try {
@@ -345,4 +381,4 @@ async function videoModels() {
 // Bản đồ model key mặc định — trả cho UI (VIDEO_MODEL_STATUS) để builtin mode khớp giao thức extension.
 function videoModelStatus() { return { modelKeys: DEFAULT_VIDEO.modelKeys }; }
 
-module.exports = { submitVideo, pollVideo, resolveVideoData, upsampleVideoNative, _vResolveModelKey, hookVideoLearn, armVideoLearn, videoLearnStatus, videoLearnDump, videoModels, videoModelStatus };
+module.exports = { submitVideo, pollVideo, resolveVideoData, upsampleVideoNative, _vResolveModelKey, submitVideoEdit, _countRefSlots, hookVideoLearn, armVideoLearn, videoLearnStatus, videoLearnDump, videoModels, videoModelStatus };

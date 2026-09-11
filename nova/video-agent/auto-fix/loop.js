@@ -34,25 +34,43 @@ function applyFixes(spec, errors) {
 
 const meanScore = (qa) => Object.values(qa.scores || {}).reduce((a, b) => a + b, 0) / Math.max(1, Object.keys(qa.scores || {}).length);
 
-async function autoFix({ spec, validate, qa, maxAttempts = 5, onAttempt }) {
+// Chọn bộ lỗi của scene "tệ nhất" (nhiều lỗi nhất) — dùng khi perScene=true:
+// mỗi attempt chỉ sửa 1 scene → thay đổi nhỏ, bản tốt của scene khác không bị
+// kéo xuống trong cùng một version (học từ VEO3 per-scene checkpoint).
+function worstSceneErrors(errors) {
+  const byScene = {};
+  for (const e of errors || []) { const k = e && e.scene ? e.scene : '_global'; (byScene[k] || (byScene[k] = [])).push(e); }
+  const groups = Object.values(byScene);
+  if (!groups.length) return [];
+  groups.sort((a, b) => b.length - a.length);
+  return groups[0];
+}
+
+async function autoFix({ spec, validate, qa, maxAttempts = 5, onAttempt, perScene = false }) {
   let current = spec;
   let currentQA = await qa(current);
   const history = [{ version: 1, status: currentQA.status, scores: currentQA.scores, strategies: summarizeStrategies(currentQA.errors) }];
+  const checkpoints = {};   // sceneId → version giữ được sau Auto-Fix (perScene checkpoint)
   let attempt = 0;
   while (currentQA.status === 'fail' && attempt < maxAttempts) {
     attempt++;
-    const candidate = applyFixes(current, currentQA.errors);
+    const errorSet = perScene ? worstSceneErrors(currentQA.errors) : currentQA.errors;
+    const candidate = applyFixes(current, errorSet);
     const v = validate(candidate);
     if (!v.ok) break; // spec hỏng → dừng, giữ bản hiện tại (rollback §1.6)
     const candQA = await qa(v.spec);
     const strategies = summarizeStrategies(candQA.errors);
     if (onAttempt) { try { await onAttempt({ attempt, status: candQA.status, scores: candQA.scores, strategies }); } catch (_) {} }
-    history.push({ version: attempt + 1, status: candQA.status, scores: candQA.scores, strategies });
-    if (meanScore(candQA) >= meanScore(currentQA)) { current = v.spec; currentQA = candQA; }
+    history.push({ version: attempt + 1, status: candQA.status, scores: candQA.scores, strategies, ...(perScene ? { sceneErrors: worstSceneErrors(currentQA.errors).map(e => e.scene) } : {}) });
+    if (meanScore(candQA) >= meanScore(currentQA)) {
+      current = v.spec; currentQA = candQA;
+      // Checkpoint: scene nào được sửa thành công trong version này → đánh dấu.
+      for (const e of errorSet) if (e && e.scene) checkpoints[e.scene] = attempt + 1;
+    }
     else break; // bản mới tệ hơn → không nhận (§22: không overwrite bản tốt)
   }
   const status = currentQA.status === 'fail' ? 'needs_review' : currentQA.status;
-  return { spec: current, qa: currentQA, attempts: attempt, status, history };
+  return { spec: current, qa: currentQA, attempts: attempt, status, history, ...(perScene && Object.keys(checkpoints).length ? { checkpoints } : {}) };
 }
 
 // §21.1 Retake protocol (học hỏi seedance-2.0 "retake-protocol"): phân loại chiến lược fix
@@ -78,4 +96,4 @@ function summarizeStrategies(errors) {
   return counts;
 }
 
-module.exports = { autoFix, applyFixes, meanScore, classifyFixStrategy, summarizeStrategies };
+module.exports = { autoFix, applyFixes, meanScore, classifyFixStrategy, summarizeStrategies, worstSceneErrors };

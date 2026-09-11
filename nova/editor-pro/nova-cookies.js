@@ -36,4 +36,15 @@ async function youtubeCookiesFile() {
   console.log('[nova-cookies] xuất', best.list.length, 'cookie từ', best.part, '→', OUT);
   return OUT;
 }
+// Dọn file cookie tạm: xoá phiên cũ NGAY khi nạp module và xoá hẳn khi app thoát.
+// File chứa cookie đăng nhập Google/YouTube (Netscape) — không để lại trên đĩa
+// qua các phiên; yt-dlp chạy song song dùng chung file nên chỉ xoá lúc nạp/thoát.
+try { fs.unlinkSync(OUT); } catch (_) {}
+try {
+  const electron = require('electron');
+  if (electron && electron.app && typeof electron.app.on === 'function') {
+    electron.app.on('will-quit', () => { try { fs.unlinkSync(OUT); } catch (_) {} });
+  }
+} catch (_) {}
+
 module.exports = { youtubeCookiesFile };

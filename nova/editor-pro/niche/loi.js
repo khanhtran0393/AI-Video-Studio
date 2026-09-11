@@ -137,7 +137,8 @@ async function claude(sys, content, opts) {
   }
   let aiErr = null;
   try {
-    const r = await _goiApi(sys, content, kho);
+    // noRetry:true → gọi ĐÚNG 1 lần, KHÔNG retry/backoff ngầm (user chốt: không chờ, lỗi báo thẳng).
+    const r = (opts && opts.noRetry) ? await _goiApiMot(sys, content, kho) : await _goiApi(sys, content, kho);
     if (r != null && String(r).trim()) return r;
     aiErr = new Error('AI chưa cấu hình (api_provider trống) — mở Cài đặt → API.');
   } catch (e) {

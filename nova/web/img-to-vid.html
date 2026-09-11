@@ -276,6 +276,19 @@
     background:var(--surface-3); padding:2px 6px; border-radius:5px; color:var(--accent-2);
     font-size:11.5px; word-break:break-all;
   }
+  /* hàng tuỳ chọn xuất (fps + chất lượng) — hiện khi đủ ảnh/nhạc */
+  .export-opts{
+    display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+    font-size:12px; margin:2px 0 4px;
+  }
+  .export-opts .sel{ padding:6px 10px; }
+  /* marker nhịp trên thanh seek (dot mờ nhỏ, không cản tương tác) */
+  #beatMarks span{
+    position:absolute; top:-3px; width:2px; height:6px;
+    background:rgba(255,255,255,0.28); border-radius:1px;
+    transform:translateX(-1px);
+  }
+  #beatMarks span.strong{ background:rgba(255,255,255,0.55); }
 </style>
 <script>
   // Đồng bộ light/dark với app gốc: shell.js toggle html.dark + lưu localStorage['darkMode'] ('1'/'0').
@@ -341,6 +354,24 @@
       <div class="field" id="slideSecsField" style="display:none;">
         <div class="field-row"><label>Mỗi ảnh hiển thị</label><span class="val" id="v-ssecs">4s</span></div>
         <input type="range" id="slideSecs" min="1" max="20" step="0.5" value="4">
+      </div>
+      <div class="field" id="slideLookField" style="display:none;">
+        <div class="field-row"><label>Chuyển cảnh giữa ảnh</label></div>
+        <select class="sel" id="transSel">
+          <option value="fade">🌫 Crossfade (mờ dần sang ảnh mới)</option>
+          <option value="black">⬛ Chớp đen</option>
+          <option value="slide">➡ Đẩy ngang</option>
+          <option value="none">Cắt cứng</option>
+        </select>
+        <div style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5;">Mỗi ảnh tự chạy một chuyển động Ken Burns (zoom/lia chậm) xen kẽ với zoom nhịp bass.</div>
+      </div>
+      <div class="field" id="slideFitField" style="display:none;">
+        <div class="field-row"><label>Ảnh lệch khung hiển thị thế nào</label></div>
+        <select class="sel" id="fitSel">
+          <option value="cover">Lấp đầy khung (cắt bớt — như cũ)</option>
+          <option value="blur">Nền blur từ chính ảnh (không cắt nội dung)</option>
+          <option value="contain">Vừa đủ ảnh, viền đen 2 bên</option>
+        </select>
       </div>
       <button class="btn" id="slidesClearBtn" style="display:none;width:100%;justify-content:center;margin-bottom:10px;">🗑 Xoá slideshow (về 1 ảnh nền)</button>
       <div style="font-size:11px;color:var(--muted);margin-top:8px;line-height:1.5;">
@@ -543,9 +574,48 @@
 
     <hr class="sep">
 
+    <details class="section" id="secTrim">
+      <summary class="section-title">
+        <span>6. Cắt &amp; đổ dần nhạc</span>
+        <span class="hgroup">
+          <span class="hint2" id="secTrimHint">Nguyên bài</span>
+          <span class="cv">⌄</span>
+        </span>
+      </summary>
+      <div class="section-body">
+      <div class="row2">
+        <div class="field">
+          <div class="field-row"><label>Bắt đầu (giây)</label></div>
+          <input type="number" id="trimStart" min="0" max="3600" step="0.5" value="0"
+            style="width:100%;background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:9px;padding:8px 10px;font-size:13px;font-family:inherit;">
+        </div>
+        <div class="field">
+          <div class="field-row"><label>Kết thúc (0 = hết bài)</label></div>
+          <input type="number" id="trimEnd" min="0" max="3600" step="0.5" value="0"
+            style="width:100%;background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:9px;padding:8px 10px;font-size:13px;font-family:inherit;">
+        </div>
+      </div>
+      <div class="row2">
+        <div class="field">
+          <div class="field-row"><label>Fade-in (giây)</label></div>
+          <input type="number" id="fadeIn" min="0" max="30" step="0.5" value="0"
+            style="width:100%;background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:9px;padding:8px 10px;font-size:13px;font-family:inherit;">
+        </div>
+        <div class="field">
+          <div class="field-row"><label>Fade-out (giây)</label></div>
+          <input type="number" id="fadeOut" min="0" max="30" step="0.5" value="0"
+            style="width:100%;background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:9px;padding:8px 10px;font-size:13px;font-family:inherit;">
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5;">Áp cho cả xem trước lẫn file xuất. "Xuất nhanh" ghép nhạc gốc bằng FFmpeg (có fade) — nếu cắt/đổ dần thì âm thanh được mã hoá lại AAC 192k, còn không thì copy nguyên bản gốc.</div>
+      </div>
+    </details>
+
+    <hr class="sep">
+
     <details class="section" id="secFx">
       <summary class="section-title">
-        <span>6. Hiệu ứng FX toàn khung</span>
+        <span>7. Hiệu ứng FX toàn khung</span>
         <span class="hgroup">
           <span class="hint2" id="secFxHint">Tắt</span>
           <span class="cv">⌄</span>
@@ -577,7 +647,7 @@
 
     <details class="section" id="secFrame">
       <summary class="section-title">
-        <span>7. Khung hình</span>
+        <span>8. Khung hình</span>
         <span class="hgroup">
           <span class="hint2" id="secFrameHint">▯ Dọc • 9:16</span>
           <span class="cv">⌄</span>
@@ -610,7 +680,7 @@
 
     <details class="section" id="secLyric">
       <summary class="section-title">
-        <span>8. Lời bài hát (.srt)</span>
+        <span>9. Lời bài hát (.srt)</span>
         <span class="hgroup">
           <span class="hint2" id="secLyricHint">Chưa có</span>
           <span class="cv">⌄</span>
@@ -690,6 +760,27 @@
         </div>
       </div>
 
+      <div class="field">
+        <div class="field-row"><label>Hiệu ứng dòng lời</label></div>
+        <select class="sel" id="lyricAnimSel">
+          <option value="fade">Mờ dần nhẹ nhàng (như cũ)</option>
+          <option value="pop">✦ Pop — chữ nảy nhẹ khi vào</option>
+          <option value="slideup">⬆ Trượt lên khi vào</option>
+        </select>
+      </div>
+
+      <div class="row2">
+        <div class="field">
+          <div class="field-row"><label>Preset đã lưu</label></div>
+          <select class="sel" id="presetSel"><option value="">— chưa có preset nào —</option></select>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;justify-content:flex-end;">
+          <button class="btn" id="savePresetBtn" style="justify-content:center;">⭐ Lưu preset hiện tại</button>
+          <button class="btn" id="delPresetBtn" style="justify-content:center;">🗑 Xoá preset đang chọn</button>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5;">Preset lưu toàn bộ cài đặt hiệu ứng + lời hát trong máy này (không gồm ảnh/nhạc/SRT).</div>
+
       <div class="row2">
         <div class="field">
           <div class="field-row"><label>Vị trí ngang</label><span class="val" id="v-lposx">50%</span></div>
@@ -726,8 +817,26 @@
 
     <div class="seek">
       <span id="tCur">0:00</span>
-      <input type="range" id="seekBar" min="0" max="100" value="0" step="0.1" disabled>
+      <div style="position:relative;flex:1;display:flex;flex-direction:column;">
+        <input type="range" id="seekBar" min="0" max="100" value="0" step="0.1" disabled>
+        <div id="beatMarks" style="position:absolute;left:0;right:0;top:50%;height:0;pointer-events:none;"></div>
+      </div>
       <span id="tDur">0:00</span>
+    </div>
+
+    <div class="export-opts" id="exportOpts" style="display:none;">
+      <span style="color:var(--muted);">Tốc độ khung:</span>
+      <select class="sel" id="exportFpsSel" style="width:auto;">
+        <option value="24">24 fps</option>
+        <option value="30" selected>30 fps</option>
+        <option value="60">60 fps</option>
+      </select>
+      <span style="color:var(--muted);margin-left:10px;">Chất lượng:</span>
+      <select class="sel" id="qualitySel" style="width:auto;">
+        <option value="std">Vừa (≈8 Mbps)</option>
+        <option value="high" selected>Cao (≈14 Mbps)</option>
+        <option value="ultra">Siêu nét (≈20 Mbps)</option>
+      </select>
     </div>
 
     <div class="transport">
@@ -769,6 +878,9 @@
   // ---- state ----
   const state = {
     img:null, imgFile:null,
+    slides:[],                    // slideshow nhiều ảnh [{img,name}]
+    slideMode:'time', slideSecs:4,
+    fitMode:'cover', transition:'fade',
     audioFile:null,
     effect:'none', direction:'random', dirTouched:false,
     zoomMin:1.00, zoomMax:1.18, sensitivity:1.0, smoothness:0.55,
@@ -779,6 +891,9 @@
     orientation:'portrait',
     lyricsCues:[], lyricFont:"'Inter',system-ui,sans-serif", lyricColor:'#ffffff', lyricSize:32,
     lyricShadow:true, lyricPosX:50, lyricPosY:88,
+    lyricKaraoke:'off', lyricStyle:'plain', lyricAccent:'#ffd166', lyricAnim:'fade',
+    trimStart:0, trimEnd:0, fadeIn:0, fadeOut:0,
+    exportFps:30, exportQuality:'high',
     _lastLyricIdx:-2, _lyricFadeStart:0,
     colorTouched:false, audioReady:false,
     playing:false
@@ -804,7 +919,7 @@
   // spectrum) and particle pulse (treble) from the SAME FFT scan, so the visuals
   // react to audio content before it's actually heard)
   //            -> delayNode (leadMs) -> speakers + recording stream (what's actually heard/exported)
-  let audioCtx = null, analyser = null, sourceNode = null, streamDest = null, delayNode = null;
+  let audioCtx = null, analyser = null, sourceNode = null, streamDest = null, delayNode = null, fadeGain = null;
   let audioEl = new Audio();
   audioEl.crossOrigin = "anonymous";
   let freqData = null;
@@ -830,11 +945,27 @@
     delayNode = audioCtx.createDelay(2.0);
     delayNode.delayTime.value = state.leadMs/1000;
     streamDest = audioCtx.createMediaStreamDestination();
+    // gain fade in/out (mục "Cắt & đổ dần nhạc") — đặt SAU delayNode để áp cho
+    // cả loa lẫn bản ghi, KHÔNG đụng nhánh analyser (zoom/sóng vẫn đọc tín hiệu gốc)
+    fadeGain = audioCtx.createGain();
+    fadeGain.gain.value = 1;
 
     sourceNode.connect(analyser);         // undelayed tap, feeds the visuals
     sourceNode.connect(delayNode);        // delayed path, feeds what's actually heard
-    delayNode.connect(audioCtx.destination);
-    delayNode.connect(streamDest);
+    delayNode.connect(fadeGain);
+    fadeGain.connect(audioCtx.destination);
+    fadeGain.connect(streamDest);
+  }
+  // giá trị gain 0..1 theo thời điểm t (giây) — dùng chung xem trước & suy ra từ
+  // cùng công thức cho FFmpeg khi "xuất nhanh" (afade)
+  function fadeGainAt(t){
+    const dur = isFinite(audioEl.duration) ? audioEl.duration : 0;
+    const end = (state.trimEnd > state.trimStart && state.trimEnd > 0) ? state.trimEnd : dur;
+    const fi = Math.max(0, state.fadeIn), fo = Math.max(0, state.fadeOut);
+    let g = 1;
+    if(fi > 0 && t < fi) g = Math.min(g, t/fi);
+    if(fo > 0 && end > 0 && t > end - fo) g = Math.min(g, Math.max(0, (end - t)/fo));
+    return Math.max(0, Math.min(1, g));
   }
 
   // ---- particles ----
@@ -1351,9 +1482,9 @@
     return null;
   }
 
-  function drawLyrics(){
+  function drawLyrics(timeOverride){
     if(!state.lyricsCues.length) return;
-    const t = audioEl.currentTime || 0;
+    const t = timeOverride !== undefined ? timeOverride : (audioEl.currentTime || 0);
     const found = findActiveCue(t);
     if(!found) return;
     const { cue } = found;
@@ -1369,9 +1500,18 @@
 
     const w = logicW, h = logicH;
     const size = state.lyricSize;
+    // hiệu ứng dòng lời (lyricAnim): pop nảy nhẹ / trượt lên — ngoài fade sẵn có
+    let dyOff = 0, scl = 1;
+    const ease = x => 1 - Math.pow(1 - Math.min(1, Math.max(0, x)), 3);
+    if(state.lyricAnim === 'pop'){
+      scl = 1 + 0.12 * (1 - ease(inT/0.28));
+    } else if(state.lyricAnim === 'slideup'){
+      dyOff = (1 - ease(inT/0.35)) * size * 0.9;
+    }
+
     ctx.save();
     ctx.font = `700 ${size}px ${state.lyricFont}`;
-    ctx.textAlign = 'center';
+    ctx.textAlign = 'left';           // karaoke tô từng chữ cần đo width — căn trái rồi tự centre
     ctx.textBaseline = 'middle';
     ctx.globalAlpha = alpha;
     if(state.lyricShadow){
@@ -1379,16 +1519,76 @@
       ctx.shadowBlur = size*0.22;
       ctx.shadowOffsetY = size*0.05;
     }
-    ctx.fillStyle = state.lyricColor;
 
     const maxWidth = w*0.86;
     const lines = wrapLyricTextCached(cue, found.idx, maxWidth);
     const lineHeight = size*1.25;
-    const x = w * (state.lyricPosX/100);
+    const anchorX = w * (state.lyricPosX/100);
+    const anchorY = h * (state.lyricPosY/100) + dyOff;
     const totalH = lines.length*lineHeight;
-    let y = h*(state.lyricPosY/100) - totalH/2 + lineHeight/2;
+    const centerY = anchorY - totalH/2 + lineHeight/2;
+    // pop: scale quanh tâm khối chữ
+    if(scl !== 1){
+      ctx.translate(anchorX, centerY);
+      ctx.scale(scl, scl);
+      ctx.translate(-anchorX, -centerY);
+    }
+
+    const karaokeOn = state.lyricKaraoke === 'word' && cue.end > cue.start;
+    // tiến trình karaoke: ước lượng theo độ dài chữ trong câu (đúng như mô tả UI)
+    let karaokeX = -Infinity;
+    if(karaokeOn){
+      const p = Math.min(1, Math.max(0, inT / (cue.end - cue.start)));
+      // tổng chiều rộng mọi chữ của câu → mốc X mà chữ trước đó đã hát
+      let totalW = 0;
+      for(const line of lines){
+        for(const word of line.split(' ')) totalW += ctx.measureText(word + ' ').width;
+      }
+      karaokeX = anchorX - totalW/2 + totalW * p;
+    }
+
+    let y = centerY;
     for(const line of lines){
-      ctx.fillText(line, x, y);
+      const lineW = ctx.measureText(line).width;
+      let x = anchorX - lineW/2;
+      // badge: khung nền mờ sau từng dòng
+      if(state.lyricStyle === 'badge'){
+        ctx.save();
+        ctx.shadowColor = 'transparent';
+        ctx.fillStyle = 'rgba(0,0,0,0.42)';
+        roundRectPath(ctx, x - size*0.35, y - lineHeight*0.42, lineW + size*0.7, lineHeight*0.84, size*0.32);
+        ctx.fill();
+        ctx.restore();
+      }
+      if(karaokeOn){
+        // từng chữ: đã hát → màu accent, chưa → màu thường (vẽ stroke trước nếu kiểu viền)
+        for(const word of line.split(' ')){
+          const ww = ctx.measureText(word + ' ').width;
+          const sung = x + ww*0.5 <= karaokeX;
+          if(state.lyricStyle === 'outline'){
+            ctx.save();
+            ctx.lineWidth = size*0.16;
+            ctx.strokeStyle = 'rgba(0,0,0,0.9)';
+            ctx.lineJoin = 'round';
+            ctx.strokeText(word, x, y);
+            ctx.restore();
+          }
+          ctx.fillStyle = sung ? state.lyricAccent : state.lyricColor;
+          ctx.fillText(word, x, y);
+          x += ww;
+        }
+      } else {
+        if(state.lyricStyle === 'outline'){
+          ctx.save();
+          ctx.lineWidth = size*0.16;
+          ctx.strokeStyle = 'rgba(0,0,0,0.9)';
+          ctx.lineJoin = 'round';
+          ctx.strokeText(line, anchorX - lineW/2, y);
+          ctx.restore();
+        }
+        ctx.fillStyle = state.lyricColor;
+        ctx.fillText(line, anchorX - lineW/2, y);
+      }
       y += lineHeight;
     }
     ctx.restore();
@@ -1515,6 +1715,307 @@
     octx.drawImage(img, 0, 0, rw, rh);
     imgRaster = oc; imgRasterKey = key;
     return oc;
+  }
+
+  // ---- #slideshow: raster + nền blur cho TỪNG ảnh của slideshow ----
+  // Raster giữ tối đa 3 ảnh gần nhất (1080×1920×4B ≈ 8MB/ảnh → giới hạn bộ nhớ);
+  // ảnh chuyển cảnh vẽ trực tiếp từ Image gốc (chỉ ~0.6s nên không ảnh hưởng hiệu năng).
+  const slideRasterCache = new Map(); // idx → {key, canvas}
+  const slideBlurCache  = new Map(); // idx → {key, canvas}
+  function rasterKeyFor(img, zq){
+    return [img.src, img.width, img.height, canvas.width, canvas.height, zq.toFixed(3)].join('|');
+  }
+  function buildRaster(img, zq){
+    const cover = Math.max(canvas.width/img.width, canvas.height/img.height) * zq;
+    const oc = document.createElement('canvas');
+    oc.width  = Math.max(1, Math.round(img.width * cover));
+    oc.height = Math.max(1, Math.round(img.height * cover));
+    const octx = oc.getContext('2d');
+    octx.imageSmoothingEnabled = true;
+    octx.imageSmoothingQuality = 'high';
+    octx.drawImage(img, 0, 0, oc.width, oc.height);
+    return oc;
+  }
+  function getSlideRaster(idx, zq){
+    const img = state.slides[idx] && state.slides[idx].img;
+    if(!img || !img.width) return null;
+    const key = rasterKeyFor(img, zq);
+    const hit = slideRasterCache.get(idx);
+    if(hit && hit.key === key) return hit.canvas;
+    const oc = buildRaster(img, zq);
+    slideRasterCache.set(idx, {key, canvas: oc});
+    // dọn cache giữ tối đa 3 phần tử (idx hiện tại + 2 hàng xóm khi chuyển cảnh)
+    while(slideRasterCache.size > 3){
+      const first = slideRasterCache.keys().next().value;
+      if(first === idx) break;
+      slideRasterCache.delete(first);
+    }
+    return oc;
+  }
+  // nền blur: cover-phóng ảnh để lấp khung, blur 1 LẦN vào offscreen rồi dùng lại
+  function getSlideBlurBg(idx){
+    const img = state.slides[idx] && state.slides[idx].img;
+    if(!img || !img.width) return null;
+    const key = [img.src, img.width, img.height, canvas.width, canvas.height].join('|');
+    const hit = slideBlurCache.get(idx);
+    if(hit && hit.key === key) return hit.canvas;
+    const w = canvas.width, h = canvas.height;
+    const small = document.createElement('canvas');
+    small.width = Math.max(16, Math.round(w/24));   // thu nhỏ → blur rẻ mà nhìn giống hệt
+    small.height = Math.max(16, Math.round(h/24));
+    const sctx = small.getContext('2d');
+    const cover = Math.max(small.width/img.width, small.height/img.height);
+    const dw = img.width*cover, dh = img.height*cover;
+    sctx.filter = 'blur(6px)';
+    sctx.drawImage(img, (small.width-dw)/2, (small.height-dh)/2, dw, dh);
+    sctx.filter = 'none';
+    // làm tối nhẹ để ảnh chính nổi lên
+    sctx.fillStyle = 'rgba(0,0,0,0.35)';
+    sctx.fillRect(0, 0, small.width, small.height);
+    slideBlurCache.set(idx, {key, canvas: small});
+    while(slideBlurCache.size > 4){
+      const first = slideBlurCache.keys().next().value;
+      if(first === idx) break;
+      slideBlurCache.delete(first);
+    }
+    return small;
+  }
+  // vẽ 1 ảnh slide (raster hoặc gốc) với zoom bass + Ken Burns + kiểu vừa khung
+  function drawSlideLayer(slide, idx, zq, scale, kb, fitMode){
+    const w = logicW, h = logicH;
+    const raster = getSlideRaster(idx, zq) || slide.img;
+    if(fitMode !== 'cover'){
+      // nền: blur (từ chính ảnh) hoặc đen (contain)
+      if(fitMode === 'blur'){
+        const bg = getSlideBlurBg(idx);
+        if(bg) ctx.drawImage(bg, 0, 0, w, h);
+      } else {
+        ctx.fillStyle = '#050508';
+        ctx.fillRect(0, 0, w, h);
+      }
+      // ảnh chính: vừa đủ (contain) — chỉ chạy Ken Burns nhẹ, không nhân zoom bass
+      // (zoom bass toàn khung làm viền phập phồng, nhìn khó chịu)
+      const kbOnly = kb.scale / Math.max(0.0001, scale);
+      const s2 = Math.min(w/slide.img.width, h/slide.img.height) * kbOnly;
+      const dw2 = slide.img.width * s2, dh2 = slide.img.height * s2;
+      ctx.drawImage(raster, (w-dw2)/2 + kb.px*w, (h-dh2)/2 + kb.py*h, dw2, dh2);
+      return;
+    }
+    // cover: zoom bass + Ken Burns, lấp đầy khung
+    const cover = Math.max(w/slide.img.width, h/slide.img.height) * scale * kb.scale;
+    const dw = slide.img.width*cover, dh = slide.img.height*cover;
+    const dx = (w-dw)/2 + kb.px*w*cover, dy = (h-dh)/2 + kb.py*h*cover;
+    ctx.drawImage(raster, dx, dy, dw, dh);
+  }
+  // Ken Burns: deterministic theo (idx ảnh, lần phát thứ k) — Luật 8, không Math.random
+  function kenBurnsAt(idx, entry, p){
+    const h1 = fxH01(idx*7.61 + 13.7);
+    const h2 = fxH01(idx*3.17 + 71.3);
+    const h3 = fxH01(idx*9.77 + entry*5.31);
+    const e = p*p*(3-2*p);                       // smoothstep — chậm dần về cuối
+    const zoomIn = h1 < 0.5;                     // nửa ảnh zoom to, nửa zoom lùi
+    const z0 = 1.04, z1 = 1.14;
+    const kbScale = zoomIn ? (z0 + (z1-z0)*e) : (z1 - (z1-z0)*e);
+    const px = (h2 - 0.5) * 0.10 * (zoomIn ? e : 1-e) * (h3 < 0.5 ? 1 : -1);
+    const py = (fxH01(idx*5.13 + entry*2.9) - 0.5) * 0.06 * (zoomIn ? e : 1-e);
+    return {scale: kbScale, px, py};
+  }
+  // ---- lịch phát slideshow: mảng {start,end,idx,entry} phủ hết bài ----
+  // 'time': mỗi ảnh slideSecs giây, xoay vòng; 'cue': đổi ảnh theo từng câu SRT
+  let slideSchedule = { key:'', list:[] };
+  function getSlideSchedule(){
+    const n = state.slides.length;
+    if(!n) return {list:[], key:''};
+    const dur = isFinite(audioEl.duration) ? audioEl.duration : 0;
+    const key = [n, state.slideMode, state.slideSecs, dur.toFixed(3), state.lyricsCues.length, lyricsVersion].join('|');
+    if(slideSchedule.key === key) return slideSchedule;
+    const list = [];
+    if(state.slideMode === 'cue' && state.lyricsCues.length){
+      // ranh giới: 0 + các mốc bắt đầu câu + hết bài
+      const bounds = [0];
+      state.lyricsCues.forEach(c => { if(c.start > 0.05 && c.start < dur) bounds.push(c.start); });
+      bounds.push(dur);
+      for(let i=0;i<bounds.length-1;i++){
+        if(bounds[i+1] - bounds[i] < 0.25) continue;
+        list.push({start:bounds[i], end:bounds[i+1], idx:i%n, entry:i});
+      }
+    } else {
+      const len = Math.max(0.5, state.slideSecs);
+      const total = dur > 0 ? Math.max(1, Math.ceil(dur/len)) : 1;
+      for(let i=0;i<total;i++){
+        list.push({start:i*len, end:(i+1)*len, idx:i%n, entry:i});
+      }
+    }
+    slideSchedule = {key, list};
+    return slideSchedule;
+  }
+
+  // ---- #offline-analysis: phân tích nhạc OFFLINE cho "⚡ Xuất nhanh" + marker nhịp ----
+  // Decode AudioBuffer → FFT (radix-2 tự viết, không thêm dependency) từng khung
+  // phân tích → 128 dải tần (map logarit 40Hz..11kHz cho giống hình dạng phổ FFT
+  // 256 của xem trước) + năng lượng bass/treble + vị trí nhịp (đỉnh envelope bass).
+  // Kết quả deterministic (Luật 8): render lại ra cùng file.
+  let offlineAnalysis = null;         // {file, frameDur, nFrames, bins, bass, treble, beats}
+  let offlineAnalysisPromise = null;
+  function fftRadix2(re, im){
+    const n = re.length;
+    for(let i=1,j=0;i<n;i++){
+      let bit = n>>1;
+      for(; j & bit; bit >>= 1) j ^= bit;
+      j |= bit;
+      if(i < j){ let t=re[i]; re[i]=re[j]; re[j]=t; t=im[i]; im[i]=im[j]; im[j]=t; }
+    }
+    for(let len=2; len<=n; len<<=1){
+      const ang = -2*Math.PI/len;
+      const wr = Math.cos(ang), wi = Math.sin(ang);
+      for(let i=0;i<n;i+=len){
+        let cr = 1, ci = 0;
+        for(let k=0;k<len/2;k++){
+          const ur = re[i+k], ui = im[i+k];
+          const vr = re[i+k+len/2]*cr - im[i+k+len/2]*ci;
+          const vi = re[i+k+len/2]*ci + im[i+k+len/2]*cr;
+          re[i+k] = ur+vr; im[i+k] = ui+vi;
+          re[i+k+len/2] = ur-vr; im[i+k+len/2] = ui-vi;
+          const ncr = cr*wr - ci*wi; ci = cr*wi + ci*wr; cr = ncr;
+        }
+      }
+    }
+  }
+  async function analyzeAudioOffline(){
+    if(!state.audioFile) return null;
+    if(offlineAnalysis && offlineAnalysis.file === state.audioFile) return offlineAnalysis;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    const tmpCtx = new AC();
+    try{
+      const buf = await tmpCtx.decodeAudioData(await state.audioFile.arrayBuffer());
+      // trộn về mono, hạ mẫu về ~22050 để FFT rẻ hơn
+      const ch0 = buf.getChannelData(0);
+      const ch1 = buf.numberOfChannels > 1 ? buf.getChannelData(1) : null;
+      const ratio = Math.max(1, Math.round(buf.sampleRate / 22050));
+      const nSmp = Math.floor(buf.length / ratio);
+      const mono = new Float32Array(nSmp);
+      for(let i=0;i<nSmp;i++){
+        const j = i*ratio;
+        mono[i] = ch1 ? (ch0[j]+ch1[j])*0.5 : ch0[j];
+      }
+      const rate = buf.sampleRate / ratio;
+      const N = 1024;                                  // ~46ms @22kHz
+      const hopSec = 1/30;                             // bước phân tích 30 lần/giây (60fps export nội suy tuyến tính)
+      const hop = Math.max(1, Math.round(hopSec*rate));
+      const nFrames = Math.max(1, Math.floor((nSmp - N)/hop));
+      // map logarit 128 dải: 40Hz..11kHz — gần hình dạng phổ nghe được của FFT 256
+      const FMIN = 40, FMAX = Math.min(11000, rate/2);
+      const bandLo = new Int32Array(128), bandHi = new Int32Array(128);
+      for(let b=0;b<128;b++){
+        const f0 = FMIN * Math.pow(FMAX/FMIN, b/128);
+        const f1 = FMIN * Math.pow(FMAX/FMIN, (b+1)/128);
+        bandLo[b] = Math.max(1, Math.floor(f0/(rate/2)*N/2));
+        bandHi[b] = Math.min(N/2-1, Math.max(bandLo[b]+1, Math.ceil(f1/(rate/2)*N/2)));
+      }
+      const win = new Float32Array(N);
+      for(let i=0;i<N;i++) win[i] = 0.5 - 0.5*Math.cos(2*Math.PI*i/N); // Hann
+      const bins = new Array(nFrames);
+      const bass = new Float32Array(nFrames), treble = new Float32Array(nFrames);
+      const re = new Float32Array(N), im = new Float32Array(N);
+      // bass/treble theo dải tần THẬT như FFT xem trước: bass 0..~690Hz, treble ~4.1k..11kHz
+      const bassHiBin = Math.floor(690/(rate/2)*N/2);
+      const treLoBin = Math.max(1, Math.floor(4100/(rate/2)*N/2));
+      let treCount = 0;
+      for(let b=0;b<128;b++) if(bandLo[b] >= treLoBin) treCount++;
+      for(let f=0; f<nFrames; f++){
+        const off = f*hop;
+        for(let i=0;i<N;i++){ re[i] = mono[off+i]*win[i]; im[i] = 0; }
+        fftRadix2(re, im);
+        const arr = new Uint8Array(128);
+        let bassSum = 0, treSum = 0;
+        for(let b=0;b<128;b++){
+          let sum = 0;
+          for(let k=bandLo[b];k<bandHi[b];k++){
+            const m = Math.sqrt(re[k]*re[k] + im[k]*im[k]) / N;
+            sum += m*m;
+          }
+          const avg = Math.sqrt(sum / Math.max(1, bandHi[b]-bandLo[b]));
+          const v = Math.min(255, Math.round(avg*900)); // chuẩn hoá thực nghiệm cho sáng tương đương FFT byte
+          arr[b] = v;
+          if(bandLo[b] < bassHiBin) bassSum += v;
+          if(bandLo[b] >= treLoBin) treSum += v;
+        }
+        bins[f] = arr;
+        bass[f] = Math.min(1, (bassSum/Math.max(1, bassHiBin))/70);
+        treble[f] = Math.min(1, (treSum/Math.max(1, treCount))/45);
+      }
+      // tìm nhịp: đỉnh cục bộ của envelope bass vượt trung bình trượt ×1.35, cách nhau ≥0.28s
+      const beats = [];
+      {
+        const winN = Math.round(0.6*30);
+        for(let f=2; f<nFrames-2; f++){
+          let s=0, c=0;
+          for(let k=Math.max(0,f-winN); k<Math.min(nFrames,f+winN); k++){ s+=bass[k]; c++; }
+          const avg = s/c;
+          if(bass[f] > 0.18 && bass[f] >= avg*1.35 && bass[f] >= bass[f-1] && bass[f] >= bass[f+1]){
+            const t = f*hopSec;
+            if(!beats.length || t - beats[beats.length-1] > 0.28) beats.push(t);
+          }
+        }
+      }
+      tmpCtx.close();
+      offlineAnalysis = { file: state.audioFile, frameDur: hopSec, nFrames, bins, bass, treble, beats };
+      drawBeatMarkers();
+      return offlineAnalysis;
+    }catch(err){
+      tmpCtx.close();
+      offlineAnalysis = null;
+      throw err; // Luật 10: lỗi phân tích phải lộ rõ, không nuốt
+    }
+  }
+  // gọi đúng 1 lần mỗi file — kết quả cache; lỗi báo qua status, trả null
+  function ensureOfflineAnalysis(){
+    if(offlineAnalysis) return Promise.resolve(offlineAnalysis);
+    if(!offlineAnalysisPromise){
+      setStatus('Đang phân tích nhạc (một lần duy nhất mỗi file) — chờ chút nhé...', true);
+      offlineAnalysisPromise = analyzeAudioOffline()
+        .then(res => { setStatus('Phân tích nhạc xong — đủ dữ liệu nhịp cho "⚡ Xuất nhanh".', false); return res; })
+        .catch(err => {
+          setStatus('Không phân tích được file nhạc (decoder không đọc được file này): ' + (err && err.message ? err.message : String(err)), true);
+          return null;
+        })
+        .finally(() => { offlineAnalysisPromise = null; });
+    }
+    return offlineAnalysisPromise;
+  }
+  // đọc envelope tại thời điểm t (giây) — nội suy tuyến tính giữa 2 khung phân tích
+  function offlineEnvAt(t){
+    const A = offlineAnalysis;
+    if(!A) return {energy:0, treble:0, bins:null};
+    const fi = Math.max(0, Math.min(A.nFrames-1.001, t / A.frameDur));
+    const i0 = Math.floor(fi), fr = fi - i0, i1 = Math.min(A.nFrames-1, i0+1);
+    const b0 = A.bass[i0], b1 = A.bass[i1], t0 = A.treble[i0], t1 = A.treble[i1];
+    const energy = b0 + (b1-b0)*fr;
+    const treble = t0 + (t1-t0)*fr;
+    // bins cho sóng nhạc: nội suy 128 dải (chỉ khi sóng đang bật để tiết kiệm CPU)
+    let bins = null;
+    if(state.waveOn){
+      const a0 = A.bins[i0], a1 = A.bins[i1];
+      const out = new Uint8Array(128);
+      for(let b=0;b<128;b++) out[b] = Math.round(a0[b] + (a1[b]-a0[b])*fr);
+      bins = out;
+    }
+    return {energy, treble, bins};
+  }
+  function drawBeatMarkers(){
+    const wrap = $('beatMarks');
+    if(!wrap) return;
+    wrap.innerHTML = '';
+    const A = offlineAnalysis;
+    if(!A || !A.beats.length || !isFinite(audioEl.duration) || audioEl.duration <= 0) return;
+    const dur = audioEl.duration;
+    const frag = document.createDocumentFragment();
+    for(const t of A.beats){
+      const s = document.createElement('span');
+      s.style.left = (t/dur*100).toFixed(2) + '%';
+      frag.appendChild(s);
+    }
+    wrap.appendChild(frag);
   }
 
   // ---- FX toàn khung (vizzy-style: glitch / vhs / zoom mờ / motion blur / hạt / nhịp) ----
@@ -1647,9 +2148,81 @@
     }
   }
 
+  // ---- vẽ nền: 1 ảnh hoặc slideshow (chuyển cảnh + Ken Burns + fit-mode) ----
+  // scale = zoom bass (như cũ); KB = Ken Burns per-slide deterministic.
+  const KB_HEADROOM = 1.15;   // raster đủ cho zoom bass × Ken Burns đỉnh (1.18×1.14)
+  function drawBackground(scale, t){
+    const w = logicW, h = logicH;
+    if(state.slides.length){
+      const sched = getSlideSchedule().list;
+      if(!sched.length){
+        ctx.fillStyle = '#050508'; ctx.fillRect(0,0,w,h);
+        return;
+      }
+      let seg = sched[sched.length-1];
+      for(const s of sched){ if(t >= s.start && t < s.end){ seg = s; break; } }
+      const segIdx = sched.indexOf(seg);
+      const durSeg = Math.max(0.001, seg.end - seg.start);
+      const p = Math.max(0, Math.min(1, (t - seg.start) / durSeg));
+      const kb = kenBurnsAt(seg.idx, seg.entry, p);
+      const zq = Math.max(0.05, Math.ceil((state.zoomMax * KB_HEADROOM - 1e-9) / RASTER_ZOOM_STEP) * RASTER_ZOOM_STEP);
+      const TRANS = 0.6; // giây
+      const inTrans = state.transition !== 'none' && segIdx > 0 && (t - seg.start) < TRANS;
+      if(!inTrans){
+        drawSlideLayer(state.slides[seg.idx], seg.idx, zq, scale, kb, state.fitMode);
+        return;
+      }
+      const mix = (t - seg.start) / TRANS;        // 0 → 1
+      const prev = sched[segIdx-1];
+      const kbPrev = kenBurnsAt(prev.idx, prev.entry, 1);
+      if(state.transition === 'black'){
+        // chớp đen: ảnh cũ mờ đi nửa đầu, ảnh mới hiện dần nửa sau
+        ctx.fillStyle = '#050508'; ctx.fillRect(0,0,w,h);
+        if(mix < 0.5){
+          ctx.globalAlpha = 1 - mix*2;
+          drawSlideLayer(state.slides[prev.idx], prev.idx, zq, scale, kbPrev, state.fitMode);
+        } else {
+          ctx.globalAlpha = (mix-0.5)*2;
+          drawSlideLayer(state.slides[seg.idx], seg.idx, zq, scale, kb, state.fitMode);
+        }
+        ctx.globalAlpha = 1;
+      } else if(state.transition === 'slide'){
+        // đẩy ngang: ảnh cũ trượt sang trái, ảnh mới trượt vào từ phải
+        ctx.save();
+        ctx.beginPath(); ctx.rect(0,0,w,h); ctx.clip();
+        ctx.translate(-w*mix, 0);
+        drawSlideLayer(state.slides[prev.idx], prev.idx, zq, scale, kbPrev, state.fitMode);
+        ctx.translate(w, 0);
+        drawSlideLayer(state.slides[seg.idx], seg.idx, zq, scale, kb, state.fitMode);
+        ctx.restore();
+      } else {
+        // fade: crossfade mượt
+        drawSlideLayer(state.slides[prev.idx], prev.idx, zq, scale, kbPrev, state.fitMode);
+        ctx.globalAlpha = mix;
+        drawSlideLayer(state.slides[seg.idx], seg.idx, zq, scale, kb, state.fitMode);
+        ctx.globalAlpha = 1;
+      }
+      return;
+    }
+    if(state.img){
+      // #perf: vẽ từ raster đã quét sẵn (luôn ≥ khổ hiển thị) thay vì resample
+      // ảnh gốc độ phân giải đầy đủ mỗi frame — vị trí/kích thước giữ nguyên.
+      const raster = getImageRaster();
+      const iw = state.img.width, ih = state.img.height;
+      const cover = Math.max(w/iw, h/ih) * scale;
+      const dw = iw*cover, dh = ih*cover;
+      const dx = (w-dw)/2, dy = (h-dh)/2;
+      ctx.drawImage(raster || state.img, dx, dy, dw, dh);
+    } else {
+      ctx.fillStyle = '#050508';
+      ctx.fillRect(0,0,w,h);
+    }
+  }
+
   // ---- render loop ----
   let rafId = null;
   let lastT = performance.now();
+  let offlineRendering = false; // "⚡ Xuất nhanh" đang tự render từng khung — rAF tạm nghỉ
   // #perf: DOM refs + throttle 100ms cho UI tiến trình (#2) — thanh chạy vẫn
   // mượt mắt, còn hoàn toàn nằm NGOÀI canvas nên không dính gì tới file xuất.
   const progEls = { wrap:$('progWrap'), bar:$('progBar'), text:$('progText') };
@@ -1662,6 +2235,12 @@
     // but still catches particles/zoom back up to real time quickly
     dtMs = Math.min(dtMs, 250);
     const dt = dtMs / 16.67; // 1.0 == normal 60fps frame
+
+    // offline render ("⚡ Xuất nhanh") tự vẽ theo đồng hồ logic — rAF chỉ đợi
+    if(offlineRendering){
+      rafId = requestAnimationFrame(render);
+      return;
+    }
 
     const w = logicW, h = logicH;
     // canvas vật lý to hơn khi đang ghi xuất (#9) — phóng hệ toạ độ logic bằng transform
@@ -1694,23 +2273,25 @@
     smoothedTreble += (targetTreble - smoothedTreble) * (1 - trebleFactor);
     const scale = state.zoomMin + (state.zoomMax - state.zoomMin) * smoothedEnergy;
 
-    if(state.img){
-      // #perf: vẽ từ raster đã quét sẵn (luôn ≥ khổ hiển thị) thay vì resample
-      // ảnh gốc độ phân giải đầy đủ mỗi frame — vị trí/kích thước giữ nguyên.
-      const raster = getImageRaster();
-      const iw = state.img.width, ih = state.img.height;
-      const cover = Math.max(w/iw, h/ih) * scale;
-      const dw = iw*cover, dh = ih*cover;
-      const dx = (w-dw)/2, dy = (h-dh)/2;
-      ctx.drawImage(raster || state.img, dx, dy, dw, dh);
-    } else {
-      ctx.fillStyle = '#050508';
-      ctx.fillRect(0,0,w,h);
+    // fade in/out (mục 6): áp lên nhánh ra tiếng (loa + bản ghi), không đụng analyser
+    if(fadeGain) fadeGain.gain.value = fadeGainAt(audioEl.currentTime || 0);
+
+    // cắt nhạc: tới điểm kết thúc (hoặc hết bài) thì dừng như 'ended' — cả xem
+    // trước lẫn bản ghi realtime (bản ghi offline tự bó trong khoảng trim)
+    const tNow = audioEl.currentTime || 0;
+    const effEnd = (state.trimEnd > state.trimStart && state.trimEnd > 0) ? state.trimEnd : Infinity;
+    if(state.playing && tNow >= effEnd){
+      try { audioEl.currentTime = isFinite(effEnd) ? effEnd : 0; } catch(e){}
+      audioEl.pause();
+      state.playing = false; $('playBtn').textContent = '▶ Phát thử';
+      if(activeExportRecorder){ try { activeExportRecorder.stop(); } catch(e){} }
     }
+
+    drawBackground(scale, tNow);
 
     drawWave(dt);
     drawParticles(dt, smoothedTreble); // #bands: hạt nhịp theo dải treble
-    drawLyrics();
+    drawLyrics(tNow);
     applyFx(smoothedEnergy); // FX toàn khung phủ trên cùng (như z:90 của Nova)
 
     glowRing.style.setProperty('--pulse', (0.10 + smoothedEnergy*0.55).toFixed(3));
@@ -1775,6 +2356,7 @@
     }
     state.audioFile = f;
     state.audioReady = false;
+    offlineAnalysis = null; offlineAnalysisPromise = null; // file mới → phân tích lại
     $('audName').textContent = f.name;
     if(audObjUrl) URL.revokeObjectURL(audObjUrl);
     audObjUrl = URL.createObjectURL(f);
@@ -1787,6 +2369,8 @@
       $('tDur').textContent = fmtTime(audioEl.duration);
       state.audioReady = true;
       checkReady();
+      // phân tích offline (marker nhịp + envelope cho "⚡ Xuất nhanh") chạy nền
+      ensureOfflineAnalysis();
     };
     audioEl.onerror = ()=>{
       state.audioReady = false;
@@ -1795,12 +2379,15 @@
   });
 
   function checkReady(){
-    if(state.img && state.audioFile && state.audioReady){
+    const hasVisual = state.img || state.slides.length;
+    if(hasVisual && state.audioFile && state.audioReady){
       emptyState.style.display = 'none';
       $('playBtn').disabled = false;
       $('restartBtn').disabled = false;
       $('exportAudioBtn').disabled = false;
       $('exportSilentBtn').disabled = false;
+      $('exportOfflineBtn').disabled = false;
+      $('exportOpts').style.display = 'flex';
     }
   }
 
@@ -1833,7 +2420,8 @@
       setStatus('Đang ghi video — không tua lúc này (sẽ làm lệch đồng bộ bản ghi).', true);
       return;
     }
-    audioEl.currentTime = +e.target.value; isSeeking = false;
+    audioEl.currentTime = Math.max(state.trimStart || 0, Math.min((state.trimEnd > 0 && state.trimEnd > state.trimStart) ? state.trimEnd : (+e.target.value), +e.target.value));
+    isSeeking = false;
   });
 
   // ---- controls ----
@@ -1907,6 +2495,112 @@
   $('waveHeight').addEventListener('input', e=>{ state.waveHeight = +e.target.value; $('v-wamp').textContent = e.target.value+'px'; });
   $('waveWidth').addEventListener('input', e=>{ state.waveWidth = +e.target.value; $('v-wwidth').textContent = e.target.value+'%'; });
   $('waveColor').addEventListener('input', e=>{ state.waveColor = e.target.value; });
+
+  // ---- slideshow nhiều ảnh (#slideshow) ----
+  // đổi ảnh giữa lúc ghi bị chặn ở input gốc (imgInput/slidesInput) — đảm bảo
+  // canvas không resize, raster cache không bị phá giữa chừng
+  let slideLoadToken = 0;
+  function updateSlideFields(){
+    const on = state.slides.length > 0;
+    $('slideModeField').style.display = on ? '' : 'none';
+    $('slideSecsField').style.display = (on && state.slideMode === 'time') ? '' : 'none';
+    $('slideLookField').style.display = on ? '' : 'none';
+    $('slideFitField').style.display = on ? '' : 'none';
+    $('slidesClearBtn').style.display = on ? '' : 'none';
+  }
+  $('slidesInput').addEventListener('change', async e=>{
+    const files = [...e.target.files];
+    if(!files.length) return;
+    if(isExporting){ setStatus('Đang ghi video — không đổi slideshow giữa chừng (bản ghi sẽ hỏng).', true); e.target.value=''; return; }
+    const token = ++slideLoadToken;
+    setStatus('Đang nạp ' + files.length + ' ảnh cho slideshow...', true);
+    const loaded = [];
+    for(const f of files){
+      const looksImage = (f.type && f.type.startsWith('image')) || /\.(png|jpe?g|gif|webp|bmp|avif)$/i.test(f.name);
+      if(!looksImage) continue;
+      try{
+        const url = URL.createObjectURL(f);
+        const im = new Image();
+        await new Promise((resolve, reject)=>{ im.onload = resolve; im.onerror = reject; im.src = url; });
+        loaded.push({img: im, name: f.name});
+      }catch(err){
+        setStatus('Bỏ qua 1 ảnh không đọc được: ' + f.name, true);
+      }
+    }
+    if(token !== slideLoadToken) return; // người dùng vừa chọn bộ khác — bỏ kết quả cũ
+    if(!loaded.length){
+      setStatus('Không có ảnh nào đọc được — chọn lại file png/jpg/webp nhé.', true);
+      e.target.value = '';
+      return;
+    }
+    state.slides = loaded;
+    state.img = null; state.imgFile = null;      // slideshow thay thế ảnh nền đơn
+    $('imgName').textContent = '(dùng slideshow: ' + loaded.length + ' ảnh)';
+    $('slidesHint').textContent = loaded.length + ' ảnh';
+    slideRasterCache.clear(); slideBlurCache.clear(); slideSchedule = {key:'', list:[]};
+    updateSlideFields();
+    checkReady();
+    if(typeof refreshSectionHints === 'function') refreshSectionHints();
+    setStatus('Slideshow đã nạp: ' + loaded.length + ' ảnh. Mỗi ảnh chạy Ken Burns riêng, đổi ảnh theo lựa chọn của bạn.', false);
+    e.target.value = '';
+  });
+  $('slidesClearBtn').addEventListener('click', ()=>{
+    if(isExporting){ setStatus('Đang ghi video — không xoá slideshow giữa chừng.', true); return; }
+    state.slides = [];
+    slideRasterCache.clear(); slideBlurCache.clear(); slideSchedule = {key:'', list:[]};
+    $('slidesHint').textContent = '';
+    updateSlideFields();
+    setStatus('Đã xoá slideshow — trở lại dùng ảnh nền đơn.', false);
+  });
+  setupSel('slideModeSel','slideMode', ()=>{ updateSlideFields(); slideSchedule = {key:'', list:[]}; });
+  $('slideSecs').addEventListener('input', e=>{
+    state.slideSecs = +e.target.value;
+    $('v-ssecs').textContent = e.target.value + 's';
+    slideSchedule = {key:'', list:[]};
+  });
+  setupSel('transSel','transition');
+  setupSel('fitSel','fitMode', ()=>{ slideRasterCache.clear(); slideBlurCache.clear(); });
+
+  // ---- lyric: karaoke / kiểu chữ / hiệu ứng dòng (bổ sung cho section 9) ----
+  setupSel('lyricKaraokeSel','lyricKaraoke');
+  setupSel('lyricStyleSel','lyricStyle');
+  setupSel('lyricAnimSel','lyricAnim');
+  $('lyricAccent').addEventListener('input', e=>{ state.lyricAccent = e.target.value; });
+
+  // ---- cắt & đổ dần nhạc (mục 6) ----
+  function refreshTrimHint(){
+    const el = $('secTrimHint'); if(!el) return;
+    const s = Math.max(0, state.trimStart||0);
+    const e = (state.trimEnd > s && state.trimEnd > 0) ? state.trimEnd : null;
+    el.textContent = (s > 0 || e !== null) ? (fmtTime(s) + ' – ' + (e !== null ? fmtTime(e) : 'hết bài')) : 'Nguyên bài';
+  }
+  ['trimStart','trimEnd','fadeIn','fadeOut'].forEach(id=>{
+    $(id).addEventListener('change', e=>{
+      if(isExporting){
+        setStatus('Đang ghi video — không đổi cắt/fade giữa chừng (âm thanh bản ghi sẽ lệch).', true);
+        return;
+      }
+      let v = Math.max(0, +e.target.value || 0);
+      if(id === 'trimEnd' && v > 0){
+        const dur = isFinite(audioEl.duration) ? audioEl.duration : 0;
+        if(dur && v > dur) v = Math.floor(dur);
+        if(v <= state.trimStart){ setStatus('Điểm kết thúc phải SAU điểm bắt đầu (' + state.trimStart.toFixed(1) + 's) — chưa áp.', true); v = 0; }
+      }
+      if(id === 'trimStart'){
+        const dur = isFinite(audioEl.duration) ? audioEl.duration : 0;
+        if(dur && v >= dur - 0.5){ setStatus('Điểm bắt đầu phải trước hết bài — chưa áp.', true); v = 0; }
+        if(v > 0 && state.trimEnd > 0 && v >= state.trimEnd){ setStatus('Điểm bắt đầu phải TRƯỚC điểm kết thúc (' + state.trimEnd.toFixed(1) + 's) — chưa áp.', true); v = 0; }
+      }
+      state[id] = v;
+      e.target.value = v;
+      refreshTrimHint();
+      saveSettingsSoon();
+    });
+  });
+
+  // ---- tuỳ chọn xuất: fps + chất lượng ----
+  $('exportFpsSel').addEventListener('change', e=>{ state.exportFps = +e.target.value; saveSettingsSoon(); });
+  $('qualitySel').addEventListener('change', e=>{ state.exportQuality = e.target.value; saveSettingsSoon(); });
 
   // ---- lead / early-sync ----
   $('leadMs').addEventListener('input', e=>{
@@ -1998,21 +2692,24 @@
   // Khôi phục bằng cách set giá trị rồi dispatch lại event — listener sẵn có
   // sẽ tự cập nhật state + nhãn + rebuild, nên không phải nhân bản logic.
   const SETTINGS_KEY = 'imzic:settings:v1';
-  const SETTINGS_RANGE_IDS = ['zoomMin','zoomMax','sensitivity','smoothness','density','pspeed','sizeMin','sizeMax','alpha','wavePos','waveSize','waveHeight','waveWidth','leadMs','fxLevel','lyricSize','lyricPosX','lyricPosY'];
-  const SETTINGS_COLOR_IDS = ['pcolor','waveColor','lyricColor'];
-  const SETTINGS_SELECT_IDS = ['lyricFont','effectSel','dirSel','waveOnSel','waveStyleSel','ratioSel','lyricShadowSel','fxSel'];
-  const SETTINGS_NUMBER_IDS = ['customW','customH'];
+  const SETTINGS_RANGE_IDS = ['zoomMin','zoomMax','sensitivity','smoothness','density','pspeed','sizeMin','sizeMax','alpha','wavePos','waveSize','waveHeight','waveWidth','leadMs','fxLevel','lyricSize','lyricPosX','lyricPosY','slideSecs'];
+  const SETTINGS_COLOR_IDS = ['pcolor','waveColor','lyricColor','lyricAccent'];
+  const SETTINGS_SELECT_IDS = ['lyricFont','effectSel','dirSel','waveOnSel','waveStyleSel','ratioSel','lyricShadowSel','fxSel','slideModeSel','transSel','fitSel','lyricKaraokeSel','lyricStyleSel','lyricAnimSel','exportFpsSel','qualitySel'];
+  const SETTINGS_NUMBER_IDS = ['customW','customH','trimStart','trimEnd','fadeIn','fadeOut'];
   // chip-group đã gom thành dropdown — bản lưu cũ có {chips:{}} được đổi tên ở loadSettings
   const LEGACY_CHIP_TO_SEL = { effectChips:'effectSel', dirChips:'dirSel', waveChips:'waveOnSel', waveStyleChips:'waveStyleSel', ratioChips:'ratioSel', lyricShadowChips:'lyricShadowSel' };
 
+  function collectSettingsInputs(){
+    const inputs = {};
+    SETTINGS_RANGE_IDS.concat(SETTINGS_COLOR_IDS, SETTINGS_SELECT_IDS, SETTINGS_NUMBER_IDS).forEach(id=>{
+      const el = $(id); if(el) inputs[id] = el.value;
+    });
+    const srtBox = $('srtPaste'); if(srtBox) inputs.srtPaste = srtBox.value.slice(0, 20000);
+    return inputs;
+  }
   function saveSettings(){
     try{
-      const inputs = {};
-      SETTINGS_RANGE_IDS.concat(SETTINGS_COLOR_IDS, SETTINGS_SELECT_IDS, SETTINGS_NUMBER_IDS).forEach(id=>{
-        const el = $(id); if(el) inputs[id] = el.value;
-      });
-      const srtBox = $('srtPaste'); if(srtBox) inputs.srtPaste = srtBox.value.slice(0, 20000);
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify({v:1, inputs}));
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify({v:1, inputs: collectSettingsInputs()}));
     }catch(e){
       // tiện ích best-effort: localStorage có thể bị khoá theo origin — không để chết tool
       console.warn('[I-MZic] Không lưu được cài đặt:', e && e.message);
@@ -2023,33 +2720,39 @@
     if(saveSettingsTimer) clearTimeout(saveSettingsTimer);
     saveSettingsTimer = setTimeout(saveSettings, 400);
   }
+  // áp một object inputs (từ localStorage hoặc preset) vào UI + state bằng cách
+  // set giá trị rồi dispatch event — listener sẵn có tự cập nhật, không nhân bản logic
+  function applySettingsInputs(inp){
+    // 1) giá trị số phải vào TRƯỚC — select khổ ngang đổi sẽ đọc customW/H ngay
+    SETTINGS_NUMBER_IDS.forEach(id=>{ if(inp[id] !== undefined && $(id)) $(id).value = inp[id]; });
+    // 2) chips bản cũ (trước khi gom dropdown) — đổi tên sang select rồi dispatch
+    //    change để listener sẵn có tự chạy callback (đổi khổ, màu mặc định…)
+    if(inp.chips){
+      Object.keys(LEGACY_CHIP_TO_SEL).forEach(gid=>{
+        const v = inp.chips[gid];
+        const el = v !== undefined ? $(LEGACY_CHIP_TO_SEL[gid]) : null;
+        if(el && el.value !== String(v)){ el.value = String(v); el.dispatchEvent(new Event('change')); }
+      });
+    }
+    // 3) khổ ngang: áp kích thước tuỳ chỉnh đã lưu
+    if(state.orientation === 'landscape'){
+      ['customW','customH'].forEach(id=>{ if(inp[id] !== undefined && $(id)) $(id).dispatchEvent(new Event('change')); });
+    }
+    // 4) range + màu + select — dispatch để listener cũ tự cập nhật state/nhãn
+    SETTINGS_RANGE_IDS.forEach(id=>{ if(inp[id] !== undefined && $(id)){ $(id).value = inp[id]; $(id).dispatchEvent(new Event('input')); } });
+    SETTINGS_COLOR_IDS.forEach(id=>{ if(inp[id] !== undefined && $(id)){ $(id).value = inp[id]; $(id).dispatchEvent(new Event('input')); } });
+    SETTINGS_SELECT_IDS.forEach(id=>{ if(inp[id] !== undefined && $(id)){ $(id).value = inp[id]; $(id).dispatchEvent(new Event('change')); } });
+    // 5) ô dán SRT: chỉ điền lại nội dung — không tự nạp lời
+    if(inp.srtPaste && $('srtPaste')) $('srtPaste').value = inp.srtPaste;
+  }
   function loadSettings(){
     let data = null;
     try{ data = JSON.parse(localStorage.getItem(SETTINGS_KEY) || 'null'); }catch(e){ return; }
     if(!data || data.v !== 1 || !data.inputs) return;
     try{
-      const inp = data.inputs;
-      // 1) giá trị số phải vào TRƯỚC — select khổ ngang đổi sẽ đọc customW/H ngay
-      SETTINGS_NUMBER_IDS.forEach(id=>{ if(inp[id] !== undefined && $(id)) $(id).value = inp[id]; });
-      // 2) chips bản cũ (trước khi gom dropdown) — đổi tên sang select rồi dispatch
-      //    change để listener sẵn có tự chạy callback (đổi khổ, màu mặc định…)
-      if(data.chips){
-        Object.keys(LEGACY_CHIP_TO_SEL).forEach(gid=>{
-          const v = data.chips[gid];
-          const el = v !== undefined ? $(LEGACY_CHIP_TO_SEL[gid]) : null;
-          if(el && el.value !== String(v)){ el.value = String(v); el.dispatchEvent(new Event('change')); }
-        });
-      }
-      // 3) khổ ngang: áp kích thước tuỳ chỉnh đã lưu
-      if(state.orientation === 'landscape'){
-        ['customW','customH'].forEach(id=>{ if(inp[id] !== undefined && $(id)) $(id).dispatchEvent(new Event('change')); });
-      }
-      // 4) range + màu + select — dispatch để listener cũ tự cập nhật state/nhãn
-      SETTINGS_RANGE_IDS.forEach(id=>{ if(inp[id] !== undefined && $(id)){ $(id).value = inp[id]; $(id).dispatchEvent(new Event('input')); } });
-      SETTINGS_COLOR_IDS.forEach(id=>{ if(inp[id] !== undefined && $(id)){ $(id).value = inp[id]; $(id).dispatchEvent(new Event('input')); } });
-      SETTINGS_SELECT_IDS.forEach(id=>{ if(inp[id] !== undefined && $(id)){ $(id).value = inp[id]; $(id).dispatchEvent(new Event('change')); } });
-      // 5) ô dán SRT: chỉ điền lại nội dung — không tự nạp lời
-      if(inp.srtPaste && $('srtPaste')) $('srtPaste').value = inp.srtPaste;
+      // bản lưu rất cũ có chips ở cấp data — chuyển xuống inputs cho apply chung
+      if(data.chips && data.inputs.chips === undefined) data.inputs.chips = data.chips;
+      applySettingsInputs(data.inputs);
     }catch(e){
       console.warn('[I-MZic] Cài đặt đã lưu bị hỏng, bỏ qua:', e && e.message);
     }
@@ -2085,9 +2788,11 @@
   // vì Chromium throttle canvas trong iframe ẩn → video xuất ra bị đứng hình.
   Object.defineProperty(window, '__imzicExporting', { get(){ return isExporting === true; } });
   let activeExportCancel = null; // hàm huỷ bản ghi đang chạy — gọi từ nút "✕ Huỷ ghi"
+  let activeExportRecorder = null; // recorder realtime đang chạy — render loop chốt file khi tới điểm trim kết thúc
   let lastSilentBlob = null;     // blob video câm vừa xuất — cho nút "⚡ Ghép nhạc tự động"
   function finishExportUI(){
     isExporting = false;
+    activeExportRecorder = null;
     activeExportCancel = null;
     $('cancelExportBtn').style.display = 'none';
     $('progWrap').style.display = 'none';
@@ -2162,6 +2867,76 @@
     });
   })();
 
+  // ---- #11: preset lưu/nạp nhanh toàn bộ cài đặt (localStorage, mỗi máy) ----
+  const PRESETS_KEY = 'imzic:presets:v1';
+  function readPresets(){ try{ return JSON.parse(localStorage.getItem(PRESETS_KEY) || '{}'); }catch(e){ return {}; } }
+  function writePresets(p){ try{ localStorage.setItem(PRESETS_KEY, JSON.stringify(p)); }catch(e){ console.warn('[I-MZic] Không lưu được preset:', e && e.message); } }
+  function refreshPresetSel(selected){
+    const sel = $('presetSel'); if(!sel) return;
+    const presets = readPresets();
+    const names = Object.keys(presets).sort();
+    sel.innerHTML = '';
+    if(!names.length){
+      const o = document.createElement('option');
+      o.value = ''; o.textContent = '— chưa có preset nào —';
+      sel.appendChild(o);
+      return;
+    }
+    names.forEach(n=>{ const o = document.createElement('option'); o.value = n; o.textContent = n; sel.appendChild(o); });
+    if(selected && presets[selected]) sel.value = selected;
+  }
+  $('savePresetBtn').addEventListener('click', ()=>{
+    const name = (window.prompt('Tên preset:', 'Preset ' + new Date().toLocaleString()) || '').trim();
+    if(!name) return;
+    const presets = readPresets();
+    presets[name] = collectSettingsInputs();
+    writePresets(presets);
+    refreshPresetSel(name);
+    setStatus('Đã lưu preset "' + name + '" — chọn trong danh sách để nạp lại bất cứ lúc nào.', false);
+  });
+  $('delPresetBtn').addEventListener('click', ()=>{
+    const sel = $('presetSel');
+    const name = sel && sel.value;
+    if(!name){ setStatus('Chưa chọn preset nào để xoá.', true); return; }
+    const presets = readPresets();
+    delete presets[name];
+    writePresets(presets);
+    refreshPresetSel();
+    setStatus('Đã xoá preset "' + name + '".', false);
+  });
+  $('presetSel').addEventListener('change', ()=>{
+    const name = $('presetSel').value;
+    if(!name) return;
+    const p = readPresets()[name];
+    if(!p) return;
+    applySettingsInputs(p);
+    refreshTrimHint();
+    updateSlideFields();
+    setStatus('Đã nạp preset "' + name + '".', false);
+  });
+  refreshPresetSel();
+
+  // ---- #13: phím tắt ----
+  // Space: phát/dừng · ←/→: lùi/tiến 5s · F: phóng to khung xem trước
+  window.addEventListener('keydown', e=>{
+    const tag = e.target && e.target.tagName;
+    if(tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    if(isExporting) return;
+    if(e.code === 'Space'){
+      e.preventDefault();
+      $('playBtn').click();
+    } else if(e.code === 'ArrowLeft' && state.audioFile){
+      e.preventDefault();
+      audioEl.currentTime = Math.max(0, audioEl.currentTime - 5);
+    } else if(e.code === 'ArrowRight' && state.audioFile){
+      e.preventDefault();
+      audioEl.currentTime = Math.min(audioEl.duration || 1e9, audioEl.currentTime + 5);
+    } else if(e.key === 'f' || e.key === 'F'){
+      if(document.fullscreenElement) document.exitFullscreen();
+      else if(stageWrap.requestFullscreen) stageWrap.requestFullscreen();
+    }
+  });
+
   // ---- #3: nút huỷ ghi giữa chừng ----
   $('cancelExportBtn').addEventListener('click', ()=>{
     if(typeof activeExportCancel === 'function') activeExportCancel();
@@ -2231,7 +3006,8 @@
     if(!MediaRecorder.isTypeSupported(mime)) mime = 'video/webm;codecs=vp8,opus';
     if(!MediaRecorder.isTypeSupported(mime)) mime = 'video/webm';
 
-    const recorder = new MediaRecorder(mixedStream, { mimeType: mime, videoBitsPerSecond: (up > 1.001 ? 14_000_000 : 8_000_000) });
+    const recorder = new MediaRecorder(mixedStream, { mimeType: mime, videoBitsPerSecond: QUALITY_BITRATE[state.exportQuality] || 14_000_000 });
+    activeExportRecorder = recorder;
     const chunks = [];
     let aborted = false;   // huỷ chủ động: không phát được nhạc HOẶC người dùng bấm "✕ Huỷ ghi"
     let abortMsg = null;   // thông điệp hiển thị khi onstop thấy aborted (phân biệt 2 nguyên nhân)
@@ -2297,8 +3073,8 @@
       setTimeout(()=>{ URL.revokeObjectURL(url); if(aurl) URL.revokeObjectURL(aurl); }, 60000);
     };
 
-    // play from start, record until it ends
-    audioEl.currentTime = 0;
+    // play from start (theo khoảng trim đang đặt), record until it ends
+    audioEl.currentTime = state.trimStart || 0;
     rebuildParticles();
     await new Promise(r=>setTimeout(r,60));
     try {
@@ -2327,7 +3103,11 @@
     };
     // watchdog: nếu sự kiện 'ended' không bao giờ đến (metadata webm lỗi…),
     // vẫn chốt recorder để isExporting không kẹt vĩnh viễn
-    const capMs = isFinite(audioEl.duration) ? audioEl.duration*1000 + 15000 : 7200000;
+    const capMs = isFinite(audioEl.duration)
+      ? ((state.trimEnd > state.trimStart && state.trimEnd > 0)
+          ? (state.trimEnd - state.trimStart) * 1000 + 15000
+          : audioEl.duration*1000 + 15000)
+      : 7200000;
     watchdog = setTimeout(()=>{ try { recorder.stop(); } catch(e){} }, capMs);
     setStatus('Đang ghi video theo thời lượng nhạc — giữ tab này đang mở & hiển thị, đừng chuyển tab hay thu nhỏ cửa sổ...', true);
     try {
@@ -2355,11 +3135,153 @@
     };
   }
 
+  // ---- #1: "⚡ XUẤT NHANH" — render offline từng khung theo đồng hồ logic ----
+  // Không rớt khung khi máy yếu, không cần giữ tab hiển thị, kết quả deterministic
+  // (Luật 8). Encode H.264 bằng WebCodecs (có sẵn trong Chromium/Electron, không
+  // thêm dependency) → ghép nhạc GỐC bằng FFmpeg trong app (IPC imzic-offline-export,
+  // kênh mới đã khai báo trong preload + ipc-inventory).
+  const QUALITY_BITRATE = { std: 8_000_000, high: 14_000_000, ultra: 20_000_000 };
+  async function exportOffline(){
+    if(isExporting){ setStatus('Đang có một lần xuất chạy rồi — chờ xong (hoặc bấm ✕ Huỷ ghi) đã nhé.', true); return; }
+    const hasVisual = state.img || state.slides.length;
+    if(!hasVisual || !state.audioFile){ setStatus('Chưa đủ ảnh (hoặc slideshow) + nhạc — chọn đủ ở panel bên trái trước đã.', true); return; }
+    if(!state.audioReady){ setStatus('Nhạc chưa nạp xong metadata — chờ một nhịp rồi bấm xuất lại.', true); return; }
+    if(!('VideoEncoder' in window)){
+      setStatus('Môi trường này không có WebCodecs VideoEncoder — "⚡ Xuất nhanh" cần Electron/Chromium mới. Hãy dùng 2 nút ghi realtime thay thế.', true);
+      return;
+    }
+    // tool chạy trong iframe cùng origin → mượn bridge native của trang cha (như muxBtn)
+    const nat = (typeof window.native === 'object' && window.native) ||
+                (window.parent && typeof window.parent.native === 'object' && window.parent.native) || null;
+    if(!nat || typeof nat.imzicOfflineExport !== 'function'){
+      setStatus('Cần app Nova có IPC "imzic-offline-export" (bản mới) — mở tool này trong app để dùng "⚡ Xuất nhanh". Trên trình duyệt thường hãy dùng 2 nút ghi realtime.', true);
+      return;
+    }
+    // dữ liệu nhịp offline: cần envelope bass/treble + bins cho sóng/hạt/zoom
+    const ana = await ensureOfflineAnalysis();
+    if(!ana){ setStatus('Chưa phân tích được nhạc — "⚡ Xuất nhanh" cần dữ liệu nhịp. Dùng 2 nút ghi realtime, hoặc thử file nhạc khác.', true); return; }
+
+    isExporting = true;
+    const fps = Math.max(24, Math.min(60, state.exportFps || 30));
+    const baseW = canvas.width, baseH = canvas.height;
+    const up = Math.max(1, Math.min(EXPORT_UPSCALE, MAX_EXPORT_DIM/baseW, MAX_EXPORT_DIM/baseH));
+    if(up > 1.001){
+      canvas.width  = Math.round(baseW * up);
+      canvas.height = Math.round(baseH * up);
+    }
+    const dur0 = isFinite(audioEl.duration) ? audioEl.duration : 0;
+    const start = state.trimStart || 0;
+    const end = (state.trimEnd > start && state.trimEnd > 0) ? Math.min(state.trimEnd, dur0 || state.trimEnd) : dur0;
+    const total = Math.max(1, Math.ceil((end - start) * fps));
+
+    offlineRendering = true;
+    $('progWrap').style.display = 'flex';
+    $('cancelExportBtn').style.display = '';
+    let cancelled = false;
+    activeExportCancel = ()=>{ cancelled = true; };
+
+    // giữ/bản hoàn state driver của render loop để trả lại nguyên vẹn sau khi xuất
+    const saveFreq = freqData;
+    const saveSmoothed = smoothedEnergy, saveTreble = smoothedTreble, saveFxFrame = fxFrame;
+    try{
+      let chosen = null;
+      const bitrate = QUALITY_BITRATE[state.exportQuality] || 14_000_000;
+      for(const codec of ['avc1.640033','avc1.640032','avc1.640031','avc1.4d0034','avc1.42E03C']){
+        const cfg = { codec, width: canvas.width, height: canvas.height, bitrate, framerate: fps, avc: { format: 'annexb' } };
+        try{
+          const sup = await VideoEncoder.isConfigSupported(cfg);
+          if(sup && sup.supported){ chosen = cfg; break; }
+        }catch(e){ /* codec bị từ chối — thử cấu hình kế tiếp trong danh sách khai báo */ }
+      }
+      if(!chosen){
+        throw Object.assign(new Error('Không có cấu hình H.264 nào được hỗ trợ ở khổ ' + canvas.width + '×' + canvas.height), { code: 'IMZIC_NO_H264' });
+      }
+      const chunks = [];
+      let encError = null;
+      const encoder = new VideoEncoder({
+        output: chunk => { const b = new Uint8Array(chunk.byteLength); chunk.copyTo(b); chunks.push(b); },
+        error: e => { encError = e; }
+      });
+      encoder.configure(chosen);
+      smoothedEnergy = 0; smoothedTreble = 0; fxFrame = 0;
+      rebuildParticles();
+      const sm = state.smoothness;
+      const dtUnits = 60 / fps; // drawWave/drawParticles dùng đơn vị "khung @60fps"
+      for(let i=0; i<total; i++){
+        if(cancelled) throw Object.assign(new Error('Đã huỷ xuất nhanh.'), { code: 'IMZIC_EXPORT_CANCELLED' });
+        if(encError) throw Object.assign(new Error('Encoder lỗi giữa chừng: ' + (encError.message || encError)), { code: 'IMZIC_ENCODER_ERROR' });
+        const t = start + i / fps;
+        const env = offlineEnvAt(t);
+        freqData = env.bins || new Uint8Array(128);
+        // smoothing y hệt render loop (theo thời gian, không phụ thuộc tốc độ máy)
+        const sf = Math.pow(sm, 1/fps);
+        smoothedEnergy += (Math.min(1, env.energy * state.sensitivity) - smoothedEnergy) * (1 - sf);
+        const tf = Math.pow(0.72, 1/fps);
+        smoothedTreble += (Math.min(1, env.treble * 1.4) - smoothedTreble) * (1 - tf);
+        const scale = state.zoomMin + (state.zoomMax - state.zoomMin) * smoothedEnergy;
+        const w = logicW, h = logicH;
+        ctx.setTransform(canvas.width/logicW, 0, 0, canvas.height/logicH, 0, 0);
+        ctx.clearRect(0, 0, w, h);
+        drawBackground(scale, t);
+        drawWave(dtUnits);
+        drawParticles(dtUnits, smoothedTreble);
+        drawLyrics(t);
+        applyFx(smoothedEnergy);
+        const frame = new VideoFrame(canvas, { timestamp: Math.round(i * 1e6 / fps), duration: Math.round(1e6 / fps) });
+        encoder.encode(frame, { keyFrame: i % (fps * 2) === 0 });
+        frame.close();
+        while(encoder.encodeQueueSize > 6) await new Promise(r=>setTimeout(r, 4));
+        if(i % 10 === 0){
+          const p = (i / total) * 100;
+          progEls.bar.style.width = p.toFixed(1) + '%';
+          progEls.text.textContent = fmtTime(i/fps) + ' / ' + fmtTime(total/fps) + '  ·  ' + Math.floor(p) + '%  ·  còn ~' + fmtTime((total - i)/fps);
+          await new Promise(r=>setTimeout(r, 0)); // nhường UI thở, không đóng băng cửa sổ
+        }
+      }
+      await encoder.flush();
+      encoder.close();
+      freqData = saveFreq;
+      if(!chunks.length) throw Object.assign(new Error('Encoder không trả khung nào.'), { code: 'IMZIC_EMPTY_ENCODE' });
+      let size = 0; chunks.forEach(c => { size += c.length; });
+      const video = new Uint8Array(size);
+      let off = 0; chunks.forEach(c => { video.set(c, off); off += c.length; });
+
+      setStatus('Đã encode xong ' + fmtTime(total/fps) + ' video H.264 — đang ghép nhạc gốc bằng FFmpeg...', true);
+      const audioBuf = await state.audioFile.arrayBuffer();
+      const res = await nat.imzicOfflineExport({
+        video, fps,
+        width: canvas.width, height: canvas.height,
+        audio: new Uint8Array(audioBuf), audioName: state.audioFile.name,
+        trimStart: start, trimEnd: (end > 0 && end < dur0) ? end : 0,
+        fadeIn: state.fadeIn || 0, fadeOut: state.fadeOut || 0,
+        totalDur: total / fps
+      });
+      if(res && res.canceled) setStatus('Bạn đã bỏ qua hộp thoại lưu — không tạo file. Bấm "⚡ Xuất nhanh" lại để xuất (phần encode sẽ chạy lại).', false);
+      else if(res && res.ok) setStatus('Xuất nhanh xong! File .mp4 đã lưu tại: ' + res.path, false);
+      else setStatus('Ghép FFmpeg thất bại [' + ((res && res.code) || 'IMZIC_UNKNOWN') + ']: ' + ((res && res.message) || 'lỗi không xác định'), true);
+    }catch(err){
+      freqData = saveFreq;
+      if(err && err.code === 'IMZIC_EXPORT_CANCELLED') setStatus('Đã huỷ xuất nhanh — không tạo file nửa vời, bấm xuất lại khi sẵn sàng.', true);
+      else setStatus('Xuất nhanh thất bại [' + ((err && err.code) || 'IMZIC_EXPORT_FAILED') + ']: ' + (err && err.message ? err.message : String(err)) + ' — có thể dùng 2 nút ghi realtime thay thế.', true);
+    }finally{
+      offlineRendering = false;
+      activeExportCancel = null;
+      smoothedEnergy = saveSmoothed; smoothedTreble = saveTreble; fxFrame = saveFxFrame;
+      if(canvas.width !== baseW || canvas.height !== baseH){
+        canvas.width = baseW; canvas.height = baseH;
+      }
+      rebuildParticles();
+      finishExportUI();
+    }
+  }
+  $('exportOfflineBtn').addEventListener('click', exportOffline);
+
   // warn loudly if the user tabs away mid-export — that's what causes a
   // frozen/missing-effect segment in the exported file, since the browser
   // throttles canvas repaints on hidden tabs
   document.addEventListener('visibilitychange', ()=>{
     if(!isExporting) return;
+    if(offlineRendering) return; // render offline theo đồng hồ logic — tab ẩn KHÔNG ảnh hưởng
     if(document.hidden){
       setStatus('⚠️ Tab đang bị ẩn — trình duyệt sẽ làm chậm hiệu ứng ở đoạn này! Quay lại tab ngay để video không bị đứng hình.', true);
     } else {

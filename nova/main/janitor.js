@@ -166,6 +166,26 @@ function runStartupJanitor(app, logger) {
       }
     } catch (_) {}
   }
+  // Output purge (P3 roadmap) — OPT-IN: chỉ chạy khi nova-settings.json có
+  // "autoPurgeOutput": true (MẶC ĐỊNH TẮT — tuyệt đối không tự xoá video của user).
+  try {
+    stats.outputPurge = purgeOutputIfEnabled(app, log);
+  } catch (e) { try { log.warn && log.warn('[janitor] output purge lỗi:', e && e.message); } catch (_) {} }
+  return stats;
+}
+
+// Đọc opt-in + dọn `<userData>/output` (bản render tạm của agent/smokey) —
+// file cũ hơn 14 ngày hoặc khi tổng vượt 2 GiB (xoá cũ trước).
+function purgeOutputIfEnabled(app, log) {
+  let settings = null;
+  try { settings = JSON.parse(fs.readFileSync(path.join(app.getPath('userData'), 'nova-settings.json'), 'utf8')); }
+  catch { return { skipped: 'settings_unreadable' }; }   // không đọc được settings → KHÔNG xoá gì
+  if (!settings || settings.autoPurgeOutput !== true) return { skipped: 'opt_out' };
+  const { purgeDir } = require('./fs-utils');
+  const outDir = path.join(app.getPath('userData'), 'output');
+  if (!fs.existsSync(outDir)) return { skipped: 'no_output_dir' };
+  const stats = purgeDir(outDir, { maxAgeSeconds: 14 * 24 * 3600, maxTotalBytes: 2 * 1024 * 1024 * 1024 });
+  try { log.log('[janitor] output purge:', stats.removed, 'file,', (stats.bytesFreed / 1024 / 1024).toFixed(1), 'MB'); } catch (_) {}
   return stats;
 }
 

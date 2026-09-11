@@ -37,6 +37,7 @@ function registerVoiceIpc() {
   // ── Voice native: khởi động backend giọng nói (OmniVoice) khi mở tab Tạo giọng nói ──
   ipcMain.handle('voice-start', () => voiceNative.start());
   ipcMain.handle('voice-status', () => voiceNative.status());
+ipcMain.handle('voice-engines', () => require('../../voice-native/engines').listEngines());
   ipcMain.handle('voice-probe', () => { try { return voiceNative.probe(); } catch (e) { return { hasRoot: false, hasPython: false }; } });
   ipcMain.handle('voice-pick-root', async () => {
     try {

@@ -63,6 +63,10 @@ function createWindow(startUrl) {
   };
   // Transparent splash window handles the branded loading screen.
   state.mainWindow.webContents.on('did-finish-load', reveal);
+  // Scheduler (P3): chỉ bắt đầu tick khi cửa sổ chính đã tải xong — đảm bảo
+  // event `schedule:fire` có renderer nhận. Lỗi khởi động không văng app.
+  try { require('./scheduler').start(); }
+  catch (e) { console.warn('[scheduler] không khởi động được:', (e && e.message) || e); }
   state.mainWindow.webContents.on('did-fail-load', (_event, _code, _description, _validatedURL, isMainFrame) => {
     if (isMainFrame) reveal();
   });
