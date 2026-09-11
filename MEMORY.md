@@ -43,12 +43,12 @@ File nÃ y ghi **tráº¡ng thÃ¡i dÃ i háº¡n vÃ  lá»‹ch sá»­ qu
   hai kiá»ƒu tÃ¡ch KHÃ”NG trá»™n láº«n.
 
 ## Äang treo / ná»£ ká»¹ thuáº­t
-- **ACCOUNT image gen flow.google.com — reverse-engineer protocol** (2026-09-11, đang dở):
-  - Kết luận chắc chắn (netlog network-stack + hook fetch/XHR + CDP multi-target, 6 lần thử): trong cửa sổ Chrome for Testing acc-1, khi user bấm Generate KHÔNG hề có request mạng nào tới backend gen (aisandbox-pa/batchexecute) — chỉ thấy PAGE_VIEW telemetry rpcid `WuwhI` (POST batchexecute body ~2KB, auth = cookies + `at=AIQ-...` trong body, KHÔNG Bearer). → user gần như chắc chắn generate ở browser/window KHÁC; cần soi lại với user.
-  - Gotcha đã verify: process spawn từ probe electron (kể cả `cmd /c npx`) bị kill theo job object khi parent exit → chrome giữa chừng bị giết. Chỉ chrome khởi động qua **schtasks** mới sống độc lập (nhớ quote path có dấu cách trong cmd file!).
-  - Cách sniff bền vững đã chạy OK: launch chrome với `--log-net-log --net-log-capture-mode=IncludeSensitive --remote-debugging-port=0` qua schtasks; hook fetch/XHR cài bằng `Page.addScriptToEvaluateOnNewDocument` + `Page.reload` (app Angular bind fetch lúc init → hook cài sau bị bypass); thu hoạch localStorage `__flowGenLog` qua debug port (fallback dò port netstat vì DevToolsActivePort có khi stale); parse netlog bằng `tmp-parse-netlog.js` (map số→tên từ constants.logEventTypes; netlog KHÔNG chứa POST body). KHÔNG bật CDP Network.enable nặng — network service CfT 149 crash (exit_code=-1) khi generate.
-  - Tools còn lại `nova/scripts/`: tmp-launch-netlog.js, tmp-harvest-hook.js, tmp-live-monitor.js, tmp-parse-netlog.js, tmp-hook-src.js, tmp-flow-netlog2.json, tmp-flow-hooklog.json; tasks schtasks `sniffflow`/`snifflaunch`/`launchchrome` cần dọn.
-  - Next: (1) xác minh với user window thực sự chứa generation (đối chiếu ảnh mới với prompt độc nhất); (2) khi bắt được 1 lần generate thật (POST batchexecute khác boot + response), so f.req → port vào `flow-chrome/gen.js`, xoá cờ FLOW_MIGRATED; (3) dọn tmp-* + schtasks; (4) `npm run check`.
+- ~~**ACCOUNT image gen flow.google.com — reverse-engineer protocol**~~ **ĐÃ GIẢI QUYẾT (2026-09-11)**:
+  chi tiết tại nhật ký `[2026-09-11]` — protocol = batchexecute rpcid `ogiZ0b`, đã port vào
+  `gen-bx.js` + `gen.js` (genBX), template `flow-bx-template.json` đã thu hoạch, **E2E_GEN_OK live
+  2 lần** (11z/11ac + regression buổi chiều 11/9: mediaId 3b2dd3c0-9bcf-4ebf-b3fc-1ed1d4fd05a3,
+  37s qua `genTest` chính thức). Mục còn lại chỉ là việc vận hành (xem 3224–3229).
+
 - **Niche Finder hỗ trợ trending theo khu vực (gl)** (2026-09-07 → 2026-09-08): Đã sửa `searchVideos` trong `loi.js` để khi `query` rỗng, dùng `https://www.youtube.com/feed/trending` và thêm tham số `gl` từ `opts.gl`; đồng thời de-duplicate hàm `searchVideos` (bản merge cũ còn sót 2 định nghĩa). `ipc-niche.js` truyền `gl` từ payload vào `opt()`. Frontend `nova/web/index.html`: thêm dropdown `<select id="nfGl">` (26 mã quốc gia: US/GB/CA/AU/DE/FR/ES/IT/JP/KR/BR/IN/MX/ID/VN/TH/PH/SG/RU/NL/PL/TR/SA/EG/ZA/NG) vào header tool Niche Finder; `nfRun()` đọc giá trị dropdown rồi gán `payload.gl` khi khác rỗng. Kiểm định `npm run check` PASS (syntax 374 file, IPC 158 kênh, parity 0, shared 17 state keys). Script tạm `tmp-fix-loi.js`/`tmp-fix-emoji.js` đã xoá.
 - **UI Flow model refresh** (2026-09-06): ThÃªm nÃºt `â†»` cáº¡nh dropdown Model trong tab Video (Tool 6) vÃ  hÃ m `tvRefreshModels()` gá»i `VIDEO_MODEL_STATUS` Ä‘á»ƒ cáº­p nháº­t danh sÃ¡ch model tá»« extension/native. `tvRenderModelOptions()` gá»™p model built-in + model há»c Ä‘Æ°á»£c tá»« Flow. Kiá»ƒm Ä‘á»‹nh `npm run check` PASS (syntax 367, IPC 154/20, parity 0). ChÆ°a test runtime vá»›i Flow cÃ³ nhiá»u model thá»±c táº¿.
 - **`shared-consts.js` 21.648 dòng chứa ~21k dòng dead code + 28 hàm trùng y hệt với `utility.js`** (2026-09-10). File gốc là bản "khôi phục từ worktree" (commit revert ngầm hoặc worktree chưa strip sau lần tách 2026-09-09) → dẫn đến: (a) `utility.js` (load sau) ghi đè 28 hàm tier/CLI/api-key/upgrade của `shared-consts.js` — hành vi runtime chỉ đúng nếu 2 bản giống 100% (đã verify 28/28 giống hệt phần đầu 60 dòng, CHƯA verify toàn bộ), (b) `shared-consts.js` dòng 20472-21648 chứa code tool 8/9/10/11/niche, bị bản mới ở `tool-t8.js`/`tool-t9.js`/`tool-t10.js`/`tool-t11.js` (load sau) ghi đè tương tự, (c) `VEO_STYLE_PRESETS` tham chiếu ở `index.html:5725` không còn khai báo (theo MEMORY dòng 77 đã strip ở lần tách trước). **(2026-09-10 update)**: VEO_STYLE_PRESETS/VEO_SHOT_TYPES/VEO_ROTATIONS/VEO_ROTATION/veoUI đã KHÔI PHỤC vào shared-consts.js (offset 327023, dùng `var` vì const/let top-level KHÔNG vào globalThis trong renderer — q[BOOT] phía dưới). Probe xác nhận 5/5 tồn tại trong global scope. Verify cuối: file local binary size = 1.524.926 bytes = HEAD (git diff empty), nhưng `node -e` thấy `VEO_STYLE_PRESETS` ở byte offset 329285 của UTF-8 string. Cần làm theo thứ tự ưu tiên: (1) Diff toàn bộ 28 hàm trùng — xác nhận giống 100%, (2) Diff 17 hàm tool 8/9/10/11/niche trùng giữa `shared-consts.js` cuối file và `tool-t*.js`, (3) ~~Khôi phục VEO_*~~ ĐÃ XONG, (4) Sau khi xác nhận giống 100%, XÓA phần dead code khỏi `shared-consts.js` (chỉ giữ `const state = {...}` + const tables cần cho file khác dùng: `MODELS`, `KEY_URLS`, `BRIDGE_FILES`, `PRICING`, `PAYMENT_INFO`, `TIER_CONFIG`, `TOOL_LABELS`, `ALL_TOOLS`, `TOOL_MIN_TIER`, `VISION_PROVIDERS`), (5) Chạy `npm run check` + smoke. KHÔNG làm trong task refactor file lớn — tách thành task riêng "Điều tra & dọn dead code shared-consts.js".
@@ -3230,3 +3230,18 @@ Kiểm định: `npm run check` EXIT 0 (cảnh báo C2 shadow là nhiễu đã b
 - Kiểm định: `npm run check` EXIT 0 (sau khi sửa tmp-test-bx/tmp-launch-chrome + thêm tmp-open-acc1).
   Dọn dẹp: Chrome acc-1 đã tắt sạch, log tmp ở gốc repo đã xoá; giữ tmp-open-acc1.js,
   tmp-launch-chrome.js, tmp-test-bx.js, tmp-test-parse-bx.js làm bộ probe tiêu chuẩn cho gen BX.
+- [2026-09-11 chiều] Regression gen ACCOUNT + dọn dẹp cuối — E2E_GEN_OK lần 2 (bất kể Chrome
+  sniff chết liên tục): (1) Hook XHR xác nhận lại giao thức `ogiZ0b` khớp gen-bx.js (batchexecute
+  `/_/AiSandboxAngularFrontend/data/batchexecute`, f.req + `at=XSRF`, X-Same-Domain, cookie session);
+  (2) **root cause mới của "Chrome chết ~3-5 phút" trong các buổi sniff**: `tmp-launch-netlog.js`
+  THIẾU bộ cờ chống-crash mà engine `launchChrome` đã có (`--disable-gpu` +
+  `--disable-software-rasterizer` + `--disable-accelerated-video-decode`, bài học 11y) — CfT 149
+  crash Network Service/GPU khi bật GPU trên máy này (lifecycle.log app Electron cũng crash cùng
+  kiểu exitCode=-1 → lỗi hệ thống, không phải ai tắt window). Đã vá tmp-launch-netlog.js;
+  (3) chạy `tmp-e2e-gen-account.js` qua `genTest` chính thức → gen thật ogiZ0b OK 37s
+  (mediaId 3b2dd3c0-9bcf-4ebf-b3fc-1ed1d4fd05a3, link CDN flow-content.google, acc-1 còn 426
+  credit); (4) xoá schtasks `launchchrome` + `snifflaunch` (dự phòngfire 23:57/23:58, dư thừa);
+  (5) `npm run check` PASS toàn bộ 7 sub-check (chỉ warning C2 có sẵn, không error); (6) template
+  `chrome-accounts/flow-bx-template.json` xác nhận còn nguyên (13KB). Không xoá các tmp-* probe
+  (giữ làm bộ sniff/điều tra chuẩn); capture %TEMP%\flow-gen-capture\ giữ nguyên làm bằng chứng.
+
