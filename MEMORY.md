@@ -84,6 +84,8 @@ File nÃ y ghi **tráº¡ng thÃ¡i dÃ i háº¡n vÃ  lá»‹ch sá»­ qu
 
 ## Nháº­t kÃ½ thay Ä‘á»•i
 ## Nhật ký thay đổi
+- [2026-09-12] **Công cụ FFmpeg — gói ổn định + hiệu quả (spawnRun & toàn bộ chức năng)**: (1) `spawnRun` hardening: `-nostdin`/`-hide_banner` toàn cục, stderr cap ~8KB (opt `keepFullLog` cho detectScenes/showinfo — loudnorm JSON nằm cuối vẫn giữ được nhờ cap giữ tail), watchdog stderr im lặng > 3 phút → kill + `FFX_STALL` (đĩa mạng/ổ treo không treo app), output ATOMIC `a.mp4` → `a.ffx-tmp.mp4` + rename khi xong (huỷ/lỗi tự dọn file nửa vời, output cũ không bao giờ bị thay bằng file lỗi; học từ smoke: bắt buộc giữ đuôi gốc cho muxer), lỗi exit gắn `e.code='FFX_RUN'` + `e.exitCode` + `e.tail`; (2) `assertOutput(p, inputs)` chặn input == output (`FFX_SAME_PATH`, 20 site) + preflight ổ đĩa đích ≥ 1 GiB (`FFX_DISK_FULL` — advisory, không đo được thì bỏ qua, có khai báo); (3) hiệu quả: `concatAuto` chuẩn hoá bằng GPU khi máy có (result khai báo `encoder`, không fallback ngầm), `convertMedia`/`addFades` thêm `encoder` vào result, `compressVideo` nhận `preset` whitelist (UI Nén thêm select "Tốc độ mã hoá" `#ffxCompressPresetSel` — payload/batch/lock-list đồng bộ); (4) sửa message `FFX_SUBS` faststartRemux còn dẫn tới tính năng đã gỡ (Đóng Phụ Đề); (5) sửa 3 bug có sẵn của `insertAds` (phiên song song để lại, chưa từng qua smoke): `args.push(mảng lồng)` dính tham số thành 1 chuỗi, input `anullsrc` phần câm bị đẩy SAU `-map` (ffmpeg gán nhầm option cho input kế), nhánh bed music map cả `0:v:0` lẫn `[sv]` → 2 stream video trong .ts → concat copy lệch cấu trúc. Smoke thật **75 bước, 0 FAIL, exit 0**; `npm run check` EXIT=0; restart app + scan lifecycle phiên mới 0 findings (1 WARN 12:46Z do đóng terminal gắn console — kill ngoài, không phải crash app). Không đổi export/IPC nào.
+- [2026-09-12] **Sửa vỡ layout tool FFmpeg + hoàn thiện panel-order**: các partial của panel Công cụ FFmpeg chứa `</div>` thừa đẩy tool cuối ("Âm Thanh Nâng Cao" `tool-toolffxaudiofx`) ra ngoài `<main>` — cân bằng lại tag, thuần HTML, không đổi logic; tăng cường `nova/web/src/toolbox/utility/panel-order.js`: bổ sung 9 panel còn thiếu vào ORDER đúng thứ tự sidebar (tool3, tool8, tool5 — cả hai gộp vào Tool 2 ẩn nav, tool10, toolviralcut, toolffxaudiofx, toolffxads, toolffxhistory, toolspy) — trước đây ORDER chỉ chứa panel có tên nên bug trượt qua đến khi một tool ngoài danh sách hỏng; dọn sạch `nova/scripts/tmp/` (0 file); t7-ai.js có đuôi hàm mồ côi gây lỗi syntax (đã hết hiệu lực trên đĩa) — `npm run check` XANH toàn bộ; `khoidong.bat --silent` + `scan:lifecycle`: session hiện tại sạch, các REAL còn lại đều là crash cũ session 2026-09-11 13:55–13:56.
 - [2026-09-12] **Gỡ bỏ hoàn toàn 2 tool FFmpeg "Shorts 9:16" & "Đóng Phụ Đề" (UI + logic + IPC)** theo yêu cầu user: xoá `shortsVideo`/`burnSubs`/`previewBurnSubs` + helpers (`subsFilterPath`, `subStyleArgs`, `subEncoding`, `subVideoFilter`, `shortsOutArgs`, `SHORTS_W/H`) khỏi `nova/native-tools/media-tools.js`; xoá IPC `ffx:shorts-video`, `ffx:burn-subs`, `ffx:sub-preview`, `ffx:pick-sub` (+ const `SUB_FILTERS`) khỏi `nova/main/ipc/ffmpeg-tools.js`; preload bỏ `pickSub/shortsVideo/burnSubs/subPreview`; xoá 2 panel `#tool-toolffxshorts`/`#tool-toolffxsubs` + 2 mục sidebar (còn 11 tool); `tool-ffx.js` bỏ `ffxRunShorts/ffxRunSubs/ffxSubsStyle/ffxSubsPreviewRun/ffxPickSubFile/ffxEnqueueShorts/ffxEnqueueSubs`, state `shorts/subs/subsFile`, `FFX_SUB_EXT`, nhánh drop `'subs'`. GIỮ: `shortsVArgs` (đổi tên `h264VArgs` — `addFades` vẫn dùng), `mp4MoovFirst` (faststartRemux), `ffxConvertSubs`/`keepSubs` ở Đổi Định Dạng (tính năng khác, không liên quan). Smoke gỡ 11 bước shorts/subs → **65 bước, 0 FAIL, exit 0**; `npm run check` EXIT=0 (inventory regen: mất 4 kênh ffx trên). Hoàn tất nốt — theo yêu cầu user, phần đuôi `insertAds` trong `media-tools.js` mà phiên song song (Chèn Quảng Cáo) để dở causing check:syntax FAIL: normalize từng phần đúng thiết kế comment 17) (`audioMode` own/muteAd/silent khai báo rõ, progress tỉ trọng theo thời lượng, file .ts trung gian cùng chuẩn → concat demuxer `-c copy` 1 lần, temp self-clean, không fallback ngầm); thêm `insertAds` vào `module.exports` (IPC/UI Chèn Quảng Cáo vẫn thuộc phiên kia). Lưu ý working tree còn nhiều thay đổi chưa commit của các phiên song song (viral-cut, voice, templates.js…) — commit batch này chỉ lấy đúng file của nhóm gỡ tool + docs.
 - [2026-09-12] **Thư viện giọng — tách "chọn" khỏi "nghe thử" + giữ cache mẫu**: thẻ
   giọng (`.gcard`) giờ chỉ CHỌN giọng (`giongChon`, thay `giongBam` đã bỏ); nghe thử
@@ -4756,4 +4758,60 @@ Trợ lý dựng báo đang chạy ngay + sửa preview 9:16/1:1 bị co nhỏ +
 - **Phát hiện cần lưu ý**: video app-generated chỉ có keyframe mỗi 2s và audio liền mạch → `detectSilence` 0 gap, `VC_TIERA_SILENCE` bật đúng thực tế (thiết kế: chỉ nhận gap ≥1.5s). `probeDur` trả `0` cho `output/asar-debug/.../full-va_mtl29ola854.mp4` — luồng analyze CHẶN SỚM bằng `VC_PROBE` trước khi vào Tier A, nên `durationMs` ở `snapWindowEdges` không bao giờ là `Infinity` (không có rìa hở "snap tràn cuối video" khi probe hỏng).
 - **Còn treo**: (1) **CHƯA thao tác tay trên GUI** — `viralCut:analyze` mở `dialog.showOpenDialog` nên cần user tự chọn video + tick Tier A để xác nhận dòng diagnostics render đúng (app instance 11:27:45Z đã nạp code mới: mọi sửa đổi cuối 11:26:57Z trở về trước; `scan:lifecycle` exit 1 CHỈ do REAL/WARN lịch sử 2026-09-11/08:27Z, KHÔNG có entry mới trong phiên này). (2) `nova/ipc-inventory.json` regen hiện chứa thêm đường dẫn `scripts/tmp/*` của **cả session song song** (`tmp-ads-*`, `tmp-ffx-id-check-goiE.js`) trong khi các file đó bị gitignore → chưa commit inventory để tránh drift cho người khác; CI chỉ so sánh `channels` nên không FAIL. (3) `.ads-context.txt`/`.anchor.txt` ở gốc repo là sản phẩm session khác — không xoá. (4) Harness tạm còn giữ để tái sử dụng cho smoke tay: `nova/scripts/tmp/tmp-tiera-{real,join,ui-check,html-check,bench}.js` (đều gitignore, KHÔNG phải script kiểm định chính thức — muốn chính thức hoá thì đổi tên bỏ tiền tố `tmp-`, đưa về `nova/scripts/` và ghi §3).
 
+
+- [2026-09-12] **Lưu giữ tiến trình làm dở (session snapshot + Video Agent resume)** — yêu cầu
+  "mở lại app là tiếp tục công việc dở". 2 lớp:
+  (1) **GUI session snapshot** — file mới `nova/web/src/toolbox/utility/session-snapshot.js`
+  (tiền tố `sessSnap*`, nạp trước `boot.js`): chụp input/checkbox/select có id + scroll +
+  tool đang mở vào localStorage **và** file bền `nova-settings.json` (qua `window.novaStore`
+  — cùng kho API key, không dính origin/port); ghi khi pagehide/beforeunload/visibility
+  hidden + debounce 2s theo input; khôi phục qua 2 hook trong `profiles.js`
+  (`initAppDirect` sớm 1 lần + cuối `loadCloudState` để thắng render đè). API mở rộng:
+  `sessSnapPatch/sessSnapGet` cho panel khác nhét dữ liệu riêng.
+  (2) **Video Agent resume** — `applyAdvInspect` + `runEasyPipeline` giờ lưu
+  `vaProjectDir`/`vaEasyProjectDir` vào snapshot; `vaResumeCheck` (va-advanced.js, gọi từ
+  `va-main.js init()`) đọc projectDir gần nhất → `videoAgent:inspect` → job.json: completed →
+  hiện kết quả; khác → banner "công việc dang dở - trạng thái X" + bật nút chạy lại, tự nhảy
+  tab Nâng cao. Dự án mất trên đĩa → dọn key, không hỏi lại. KHÔNG thêm IPC/export/state mới
+  (dùng kênh `videoAgent:inspect` có sẵn; main không đổi). Kiểm định: `npm run check` EXIT 0,
+  `test:video-agent` EXIT 0, `check:ipc` regen chỉ lệch timestamp/danh sách file → đã
+  `git checkout` inventory về HEAD (kênh không đổi). Lưu ý: resume hiện tại = **chạy lại từ
+  đầu** trên nguyên liệu đã lưu trong dự án (main chưa có checkpoint giữa-giếng); tự tiếp tục
+  batch gen ảnh/TTS bị đứt giữa chừng vẫn chưa có — nếu cần thì là task thiết kế mới.
+
+
+## 2026-09-12q — Tăng tốc voice-cloning TTS (Gói 2): block cache + prewarm + transcribe-once + port pitch sang voice-studio
+
+- **Gói 2 đã hoàn tất ở CẢ HAI backend** (canonical `voice-backend/backend/` + mirror
+  `voice-studio/backend/`):
+  (1) **TTS block cache** trong `_run_tts`: key sha1(engine, language, speed, text, ref_audio,
+  mtime_ns, ref_text, attributes, device_preference) → hit thì `shutil.copyfile` từ cache,
+  đếm `timings.cache_hits`; cache lưu WAV GỐC (key KHÔNG chứa pitch/gap_ms — pitch là hậu kỳ
+  ffmpeg sau cache nên đổi pitch/khoảng lặng không vô hiệu cache); ref_audio đổi (re-record)
+  → mtime_ns tự vô hiệu hoá; mọi thao tác cache best-effort, không làm sập backend.
+  (2) **`_prewarm_default_engine`** daemon thread: nạp sẵn engine mặc định lúc backend lên
+  (bỏ qua engine mock), giữ `_MODEL_LOCK` trong lúc nạp; lỗi chỉ log, gen đầu vẫn lazy-load.
+  (3) **`torch.set_num_threads`** trong `omnivoice.load()` theo env `VOICE_TORCH_THREADS`,
+  mặc định = số core vật lý (psutil, graceful nếu thiếu).
+  (4) **Transcribe-once** `_ref_text_auto()` + `_REF_TEXT_CACHE` (key path:mtime_ns:language):
+  ref_text rỗng → Whisper chép mẫu MỘT lần rồi dùng lại cho mọi generate() thay vì model
+  tự Whisper trong từng block; ASR lỗi → WARN lộ liễu + fallback model tự transcribe (Luật 10).
+- **PORT pitch sang runtime copy**: `pitch_shift_wav` (asetrate+aresample+atempo, giữ tempo)
+  từng chỉ có ở canonical → `voice-studio/backend/audio_utils.py` + áp trong `_run_tts`
+  studio (thay cho khối WARN bỏ-qua); `voice-drift-check.js` giờ EXIT 0 (còn 3 cảnh báo
+  có sẵn: `engines/tts_patch.py`, `test_vieneu_direct.py` chỉ có ở canonical + `PrewarmBody`
+  dev-only ở studio).
+- **Đo thật (backend port 8799, engine omnivoice CPU, giọng clone thật `spk_5a5afe11`, 1 khối)**:
+  task 1 lạnh (gồm load model lần đầu trong worker) `synth_total_ms` ≈ 163 786 → task 2
+  Y HỆT: `cache_hits:1`, `synth_total_ms` **3.01**, tổng **121 ms** (~1355×); task 3 cùng
+  text + `pitch:2.0`: vẫn cache hit (222 ms tổng, gồm ffmpeg pitch), output.wav khác bytes
+  → pitch áp đúng SAU cache. `[prewarm] đã nạp sẵn engine omnivoice trong 31.0s` xác nhận.
+- **Kiểm định**: `npm run check` EXIT 0; `test:voice` PASS; `test:voice:integration` 3/3 PASS;
+  AST/py_compile 4 file (bằng ast, `-X dont_write_bytecode` — LƯU Ý: py_compile thường sinh
+  `__pycache__` trong source làm `test:voice` FAIL assertion không-commit-pycache; đã dọn).
+- **Đang treo**: Whisper ASR trong `.venv-omni` hỏng `cublas64_12.dll` (pre-existing, môi
+  trường) → pre-transcribe rơi WARN + fallback model tự chép (vẫn hoạt động); muốn bật
+  transcribe-once thật thì phải sửa venv/env CUDA cho whisper. **Gói 3** chưa quyết:
+  benchmark VieNeu v3 Turbo (zero-install, khuyến nghị) vs CUDA torch trên 1050 Ti
+  (Pascal fp16 yếu, 4GB VRAM, D: ít chỗ trống).
 

@@ -275,6 +275,14 @@
             </select>
           </div>
           <div>
+                        <label class="label">Tốc độ mã hoá</label>
+            <select id="ffxCompressPresetSel" style="max-width:200px">
+              <option value="veryfast">Rất nhanh — file hơi to hơn</option>
+              <option value="fast" selected>Nhanh (mặc định)</option>
+              <option value="medium">Chậm — nén tốt hơn</option>
+              <option value="slow">Rất chậm — nén tốt nhất</option>
+            </select>
+          </div>
             <label class="label" style="display:flex;gap:6px;align-items:center;cursor:pointer">
               <input type="checkbox" id="ffxCompressGpu" checked> Dùng GPU (nếu có)
             </label>
@@ -287,8 +295,7 @@
           <span id="ffxCompressEst" style="font-size:11.5px;color:var(--text-muted)"></span>
           <span id="ffxCompressStatus" style="font-size:11.5px"></span>
         </div>
-      </div>
-    </div>
+      </div><!-- /tool-toolffxcompress -->
 
     <!-- 6. TRÍCH FRAME -->
     <div class="tool" id="tool-toolffxframes">
@@ -685,6 +692,81 @@
             <span id="ffxFadeStatus" style="font-size:11.5px"></span>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- 13. CHÈN QUẢNG CÁO (cắt nguồn tại N điểm + ghép clip quảng cáo vào) -->
+    <div class="tool" id="tool-toolffxads">
+      <div class="tool-head">
+        <div class="tool-title">📢 Chèn Quảng Cáo</div>
+        <div class="tool-subtitle">Chèn 1–20 clip quảng cáo vào video nguồn tại các điểm chọn trước (hoặc chia đều theo thời lượng). Mỗi phần được chuẩn hoá về cùng W×H/fps rồi nối bằng concat — không méo hình (letterbox), không upscale. Kéo-thả video nguồn vào panel.</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px;max-width:720px">
+        <div>
+          <label class="label">Video nguồn</label>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <button class="btn ghost sm" onclick="ffxAdsPickInput()">📁 Chọn video</button>
+            <span id="ffxAdsInput" style="font-size:11.5px;color:var(--text-muted);word-break:break-all">Chưa chọn</span>
+            <button class="btn ghost sm" onclick="ffxAdsDetectScenes()" title="Dò cảnh chuyển rồi thêm các điểm chèn gần giữa mỗi cảnh">🎬 Dò cảnh → điểm chèn</button>
+          </div>
+        </div>
+        <div style="border:1px solid var(--border,#2a2d3a);border-radius:8px;padding:10px">
+          <div style="font-size:12.5px;font-weight:600;margin-bottom:8px">1 · Clip quảng cáo (bất kỳ video/ảnh nào, mỗi điểm chèn dùng hết danh sách này)</div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
+            <button class="btn ghost sm" onclick="ffxAdsPickClips()">📁 Chọn clip quảng cáo</button>
+            <span id="ffxAdsClipCount" style="font-size:11.5px;color:var(--text-muted)">Chưa chọn clip nào</span>
+          </div>
+          <div id="ffxAdsClipList" style="font-size:11.5px;color:var(--text-muted)"></div>
+        </div>
+        <div style="border:1px solid var(--border,#2a2d3a);border-radius:8px;padding:10px">
+          <div style="font-size:12.5px;font-weight:600;margin-bottom:8px">2 · Điểm chèn (giây — nhập "90" hoặc "1:30")</div>
+          <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:6px">
+            <div><label class="label">Tại giây</label><input type="text" id="ffxAdsAt" placeholder="90" style="max-width:120px"></div>
+            <button class="btn ghost sm" onclick="ffxAdsAddBreak()">＋ Thêm điểm</button>
+            <span style="font-size:11px;color:var(--text-muted);padding-bottom:6px">hoặc</span>
+            <div><label class="label">Chia đều</label><input type="text" id="ffxAdsEven" placeholder="0" style="max-width:70px"></div>
+            <span style="font-size:11px;color:var(--text-muted);padding-bottom:6px">điểm (0 = dùng danh sách tay)</span>
+          </div>
+          <div id="ffxAdsBreakList" style="font-size:11.5px;color:var(--text-muted)"></div>
+        </div>
+        <div style="border:1px solid var(--border,#2a2d3a);border-radius:8px;padding:10px">
+          <div style="font-size:12.5px;font-weight:600;margin-bottom:8px">3 · Âm thanh &amp; màn đệm</div>
+          <div style="display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap">
+            <div>
+              <label class="label">Âm thanh</label>
+              <select id="ffxAdsAudioMode" style="max-width:300px">
+                <option value="own" selected>Giữ tiếng riêng từng phần (quảng cáo có tiếng của nó)</option>
+                <option value="muteAd">Nguồn giữ tiếng — quảng cáo + màn đệm câm</option>
+                <option value="silent">Câm toàn bộ (để lồng tiếng/nhạc mới sau)</option>
+              </select>
+            </div>
+            <div><label class="label">Đệm trước/sau (giây)</label><input type="text" id="ffxAdsGap" placeholder="0" style="max-width:80px"></div>
+            <div>
+              <label class="label">Màu màn đệm</label>
+              <select id="ffxAdsGapColor" style="max-width:120px"><option value="black" selected>Đen</option><option value="white">Trắng</option></select>
+            </div>
+            <div>
+              <label class="label">Encode</label>
+              <select id="ffxAdsEncode" style="max-width:180px"><option value="cpu" selected>CPU H.264 (an toàn)</option><option value="gpu">GPU nếu máy hỗ trợ</option></select>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px">
+            <button class="btn ghost sm" onclick="ffxAdsPickMusic()">🎵 Nhạc nền under quảng cáo</button>
+            <span id="ffxAdsMusic" style="font-size:11.5px;color:var(--text-muted)">Không dùng</span>
+            <div><label class="label">Âp lượng nhạc</label><input type="text" id="ffxAdsMusicVol" placeholder="0.25" style="max-width:70px"></div>
+            <button class="btn ghost sm" onclick="ffxAdsClearMusic()" title="Bỏ nhạc nền">✕</button>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px">
+            <label class="label" style="margin:0">Chất lượng (CRF)</label><input type="text" id="ffxAdsCrf" placeholder="20" style="max-width:70px">
+            <label class="label" style="margin:0">FPS (trống = theo nguồn)</label><input type="text" id="ffxAdsFps" placeholder="" style="max-width:70px">
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <button class="btn primary" onclick="ffxAdsRun()">📢 Chèn quảng cáo</button>
+          <button class="btn ghost sm" onclick="ffxCancel()" title="Dừng tác vụ FFmpeg đang chạy">⏹ Huỷ</button>
+          <span id="ffxAdsSummary" style="font-size:11.5px;color:var(--text-muted)"></span>
+        </div>
+        <div><span id="ffxAdsStatus" style="font-size:11.5px"></span></div>
       </div>
     </div>
 

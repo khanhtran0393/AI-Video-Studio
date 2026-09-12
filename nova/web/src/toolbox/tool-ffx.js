@@ -12,7 +12,7 @@ var ffxState = {
   audio: '', cut: '', loop: '', loopAudio: '', join: [],
   compress: '', frames: '', mute: '', convert: '',
   music: '', musicFile: '', gif: '',
-  audiofx: '',
+  audiofx: '', ads: '',
 };
 
 
@@ -419,11 +419,12 @@ function ffxDone(statusId, r) {
     if (typeof ffxHistoryPush === 'function') ffxHistoryPush(statusId, r.path);
     ffxHideProgress(statusId);
     const note = r.count > 1 ? ' (' + r.count + ' ảnh)' : '';
+    const encNote = (r.encoder || r.gpu) ? ' · ' + (r.encoder || r.gpu) : '';
     const escPath = String(r.path).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     const escDir = ffxDirOf(r.path).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     const open = ' <a href="#" onclick="ffxOpen(\'' + escPath + '\');return false" style="color:var(--accent)">Mở</a>';
     const openDir = ' <a href="#" onclick="ffxOpen(\'' + escDir + '\');return false" style="color:var(--text-muted)">Mở thư mục</a>';
-    ffxSetStatus(statusId, '✅ Xong: ' + ffxShort(r.path) + note + open + openDir, false);
+    ffxSetStatus(statusId, '✅ Xong: ' + ffxShort(r.path) + note + encNote + open + openDir, false);
     // Probe output: nối thêm "· 0:16 · 12.4 MB" (Trích Frame trả outputDir → probe lỗi, bỏ qua im lặng).
     (async () => {
       try {
@@ -707,6 +708,7 @@ async function ffxRunCompress() {
       payload.crf = Number((document.getElementById('ffxCompressCrf') || {}).value) || 28;
     }
     payload.maxHeight = Number((document.getElementById('ffxCompressHeight') || {}).value) || 0;
+    payload.preset = (document.getElementById('ffxCompressPresetSel') || {}).value || 'fast';
     ffxActiveStatus = id; ffxShowProgress(id);
     ffxSetStatus(id, mode === 'size' ? '⏳ Đang nén 2-pass… (0%)' : '⏳ Đang nén… (0%)', false);
     const out = await ffxPickOutput(ffxStripExt(ffxBaseName(ffxState.compress)) + '-nen.mp4', id);
@@ -738,6 +740,7 @@ async function ffxBatchCompress() {
       cfg.crf = Number((document.getElementById('ffxCompressCrf') || {}).value) || 28;
     }
     cfg.maxHeight = Number((document.getElementById('ffxCompressHeight') || {}).value) || 0;
+    cfg.preset = (document.getElementById('ffxCompressPresetSel') || {}).value || 'fast';
     const outDir = dir.path.replace(/[\\/]+$/, '') + '/nen-hang-loat-' + Date.now();
     const files = r.paths;
     ffxActiveStatus = id; ffxShowProgress(id);
@@ -991,6 +994,7 @@ function ffxToolName(statusId) {
     ffxJoinStatus: 'Ghép video', ffxLoopStatus: 'Loop', ffxCompressStatus: 'Nén',
     ffxFramesStatus: 'Trích frame', ffxMuteStatus: 'Xoá tiếng', ffxConvertStatus: 'Đổi định dạng',
     ffxMusicStatus: 'Ghép nhạc', ffxGifStatus: 'Xuất GIF', ffxHistoryStatus: 'Tách MP3 nhanh',
+    ffxAdsStatus: 'Chèn Quảng Cáo',
   };
   return map[statusId] || 'FFmpeg';
 }
@@ -1158,6 +1162,208 @@ async function ffxRunFades() {
   } catch (e) { ffxFail(id, e); }
 }
 
+/* ── 12) CHÈN QUẢNG CÁO (panel tool-toolffxads → IPC ffx:insert-ads) ──
+   Nguồn: ffxState.ads. Clip quảng cáo: ffxAdsClips (mọi điểm chèn dùng chung danh sách).
+   Điểm chèn: ffxAdsBreaks (luôn tăng dần, trùng bị bỏ) HOẶC ô "Chia đều" — evenCount
+   được ưu tiên khi >= 1, khớp hợp đồng media-tools.resolveAdBreaks.
+   KHÔNG fallback ngầm (Luật 10): thiếu nguồn/clip/điểm → chặn ngay ở UI bằng đúng mã
+   lỗi main sẽ trả (FFX_ADS_*), không âm thầm chạy với cấu hình khác. ── */
+var ffxAdsClips = [];
+var ffxAdsBreaks = [];
+
+async function ffxAdsPickInput() {
+  try {
+    const r = await ffxNative().pickInput();
+    if (!r || r.error) { ffxSetStatus('ffxAdsStatus', 'Lỗi chọn file: ' + (r && r.error), true); return; }
+    if (r.canceled || !r.path) return;
+    ffxSetInput('ads', r.path);
+    ffxAdsEstimate();
+  } catch (e) { ffxSetStatus('ffxAdsStatus', 'Lỗi chọn file: ' + (e.message || e), true); }
+}
+
+async function ffxAdsPickClips() {
+  try {
+    const r = await ffxNative().pickInputs();
+    if (!r || r.error) { ffxSetStatus('ffxAdsStatus', 'Lỗi chọn clip: ' + (r && r.error), true); return; }
+    if (r.canceled || !r.paths || !r.paths.length) return;
+    ffxAdsClips = r.paths.slice();
+    ffxAdsClipRender();
+    ffxAdsEstimate();
+  } catch (e) { ffxSetStatus('ffxAdsStatus', 'Lỗi chọn clip: ' + (e.message || e), true); }
+}
+
+function ffxAdsClipRender() {
+  const cnt = document.getElementById('ffxAdsClipCount');
+  const list = document.getElementById('ffxAdsClipList');
+  if (cnt) cnt.textContent = ffxAdsClips.length ? 'Đã chọn ' + ffxAdsClips.length + ' clip' : 'Chưa chọn clip nào';
+  if (!list) return;
+  if (!ffxAdsClips.length) { list.innerHTML = ''; return; }
+  list.innerHTML = ffxAdsClips.map((p, i) =>
+    '<div style="display:flex;gap:6px;align-items:center;font-size:11.5px">' +
+    '<span style="flex:1;word-break:break-all" title="' + ffxEsc(p) + '">' + (i + 1) + '. ' + ffxEsc(ffxBaseName(p)) + '</span>' +
+    '<button class="btn ghost sm" onclick="ffxAdsClipDel(' + i + ')" title="Bỏ clip này">✕</button></div>').join('');
+}
+
+function ffxAdsClipDel(i) { ffxAdsClips.splice(i, 1); ffxAdsClipRender(); ffxAdsEstimate(); }
+
+/* Thêm 1 điểm chèn từ ô "Tại giây" (bỏ trùng, mảng luôn tăng dần, tối đa 20). */
+function ffxAdsAddBreak() {
+  const id = 'ffxAdsStatus';
+  const el = document.getElementById('ffxAdsAt');
+  const v = ffxParseTime(el ? el.value : '');
+  if (!Number.isFinite(v) || v < 0) { ffxSetStatus(id, 'FFX_ADS_AT: nhập giây hợp lệ (90 hoặc 1:30) trước khi thêm', true); return; }
+  if (ffxAdsBreaks.indexOf(v) >= 0) { ffxSetStatus(id, 'Điểm ' + v + 's đã có trong danh sách', false); return; }
+  if (ffxAdsBreaks.length >= 20) { ffxSetStatus(id, 'FFX_ADS_BREAKS: tối đa 20 điểm chèn mỗi lần', true); return; }
+  ffxAdsBreaks.push(v);
+  ffxAdsBreaks.sort((a, b) => a - b);
+  if (el) el.value = '';
+  ffxAdsBreakRender();
+  ffxAdsEstimate();
+}
+
+function ffxAdsBreakDel(i) { ffxAdsBreaks.splice(i, 1); ffxAdsBreakRender(); ffxAdsEstimate(); }
+
+function ffxAdsBreakRender() {
+  const list = document.getElementById('ffxAdsBreakList');
+  if (!list) return;
+  if (!ffxAdsBreaks.length) { list.innerHTML = '<span style="font-size:11px">Chưa có điểm chèn — thêm tay, bấm "Dò cảnh", hoặc nhập số điểm "Chia đều".</span>'; return; }
+  list.innerHTML = ffxAdsBreaks.map((t, i) =>
+    '<div style="display:flex;gap:6px;align-items:center;font-size:11.5px">' +
+    '<span style="flex:1">' + (i + 1) + '. ' + ffxFmtDur(t) + ' (' + t + 's)</span>' +
+    '<button class="btn ghost sm" onclick="ffxAdsBreakDel(' + i + ')" title="Xoá điểm này">✕</button></div>').join('');
+}
+
+/* Dò cảnh chuyển → đề xuất điểm chèn ở GIỮA mỗi cảnh (tối đa 20), không cắt sát ranh giới. */
+async function ffxAdsDetectScenes() {
+  const id = 'ffxAdsStatus';
+  try {
+    if (!ffxState.ads) { ffxSetStatus(id, 'Chưa chọn video nguồn', true); return; }
+    ffxSetStatus(id, '🎬 Đang dò cảnh…', false);
+    const sc = await ffxNative().scenes({ inputPath: ffxState.ads });
+    if (!sc || sc.error) { ffxSetStatus(id, 'Lỗi dò cảnh: ' + (sc && sc.error), true); return; }
+    const info = await ffxNative().probe(ffxState.ads);
+    const dur = info && !info.error ? (info.durationSec || 0) : 0;
+    const pts = (sc.times || []).slice().sort((a, b) => a - b);
+    const cuts = [];
+    for (let i = 0; i < pts.length && cuts.length < 20; i++) {
+      const e2 = i + 1 < pts.length ? pts[i + 1] : dur;
+      if (!(e2 > pts[i])) continue;
+      const mid = Math.round(((pts[i] + e2) / 2) * 1000) / 1000;
+      if (mid > 0 && mid < dur) cuts.push(mid);
+    }
+    if (!cuts.length) { ffxSetStatus(id, 'Không có cảnh chuyển nào đủ dài để chèn — thêm điểm thủ công', true); return; }
+    cuts.forEach((t) => { if (ffxAdsBreaks.indexOf(t) < 0 && ffxAdsBreaks.length < 20) ffxAdsBreaks.push(t); });
+    ffxAdsBreaks.sort((a, b) => a - b);
+    ffxAdsBreakRender();
+    ffxAdsEstimate();
+    ffxSetStatus(id, '🎬 Đã thêm điểm từ ' + cuts.length + ' cảnh — tổng ' + ffxAdsBreaks.length + ' điểm chèn', false);
+  } catch (e) { ffxSetStatus(id, 'Lỗi dò cảnh: ' + (e.message || e), true); }
+}
+
+async function ffxAdsPickMusic() {
+  try {
+    const r = await ffxNative().pickAudio();
+    if (!r || r.error) { ffxSetStatus('ffxAdsStatus', 'Lỗi chọn nhạc: ' + (r && r.error), true); return; }
+    if (r.canceled || !r.path) return;
+    const el = document.getElementById('ffxAdsMusic');
+    if (el) { el.textContent = ffxShort(r.path); el.title = r.path; ffxAppendInfo(el, r.path); }
+    ffxAdsEstimate();
+  } catch (e) { ffxSetStatus('ffxAdsStatus', 'Lỗi chọn nhạc: ' + (e.message || e), true); }
+}
+
+function ffxAdsClearMusic() {
+  const el = document.getElementById('ffxAdsMusic');
+  if (el) { el.textContent = 'Không dùng'; el.title = ''; }
+  ffxAdsEstimate();
+}
+
+function ffxAdsEvenCount() {
+  const v = Number(String((document.getElementById('ffxAdsEven') || {}).value || '').trim());
+  return Number.isFinite(v) && v >= 1 ? Math.floor(v) : 0;
+}
+
+function ffxAdsGapSec() {
+  const v = Number(String((document.getElementById('ffxAdsGap') || {}).value || '').trim());
+  return Number.isFinite(v) && v > 0 ? v : 0;
+}
+
+/* Ước lượng thành phẩm hiển thị cạnh nút chạy. CHỈ định hướng — main vẫn kiểm tra lại
+   mọi trần thật (FFX_ADS_TOTAL / FFX_ADS_BREAKS), UI không được tin số này để cho qua. */
+async function ffxAdsEstimate() {
+  const el = document.getElementById('ffxAdsSummary');
+  if (!el) return;
+  if (!ffxState.ads) { el.textContent = ''; return; }
+  try {
+    const info = await ffxNative().probe(ffxState.ads);
+    if (!info || info.error) { el.textContent = ''; return; }
+    const dur = info.durationSec || 0;
+    const even = ffxAdsEvenCount();
+    const nBreaks = even > 0 ? even : ffxAdsBreaks.length;
+    if (!nBreaks) { el.textContent = 'Nguồn ' + ffxFmtDur(dur) + ' — chưa có điểm chèn'; return; }
+    let adSec = 0;
+    for (const p of ffxAdsClips) {
+      const a = await ffxNative().probe(p);
+      if (a && !a.error) adSec += a.durationSec || 0;
+    }
+    const gap = ffxAdsGapSec();
+    const total = dur + adSec * nBreaks + gap * 2 * nBreaks;
+    // Số phần engine sẽ tạo: (điểm + 1) đoạn nguồn + mỗi điểm (số clip + 2 màn đệm nếu có đệm).
+    const parts = (nBreaks + 1) + nBreaks * (ffxAdsClips.length + (gap > 0 ? 2 : 0));
+    const warn = total > 4 * 3600 ? ' ⚠️ vượt trần 4 giờ' : (parts > 160 ? ' ⚠️ vượt trần 160 phần' : '');
+    el.textContent = 'Nguồn ' + ffxFmtDur(dur) + ' · ' + nBreaks + ' điểm · +' + ffxFmtDur(adSec * nBreaks) +
+      (gap > 0 ? ' + đệm ' + ffxFmtDur(gap * 2 * nBreaks) : '') + ' → ≈ ' + ffxFmtDur(total) + warn;
+  } catch (e) { el.textContent = ''; }
+}
+
+/* Chạy thật: dựng payload theo đúng hợp đồng media-tools.insertAds rồi gọi ffx:insert-ads.
+   evenCount >= 1 được ưu tiên (media-tools bỏ qua breaks khi chia đều) → UI gửi 1 trong 2. */
+async function ffxAdsRun() {
+  const id = 'ffxAdsStatus';
+  try {
+    ffxWireProgress();
+    if (!ffxState.ads) { ffxSetStatus(id, 'FFX_INPUT: chưa chọn video nguồn', true); return; }
+    if (!ffxAdsClips.length) { ffxSetStatus(id, 'FFX_ADS_AD: chưa chọn clip quảng cáo', true); return; }
+    const even = ffxAdsEvenCount();
+    if (even > 20) { ffxSetStatus(id, 'FFX_ADS_EVEN: chia đều tối đa 20 điểm (đang là ' + even + ')', true); return; }
+    if (even < 1 && !ffxAdsBreaks.length) { ffxSetStatus(id, 'FFX_ADS_BREAKS: chưa có điểm chèn — thêm tay, "Dò cảnh", hoặc nhập số điểm "Chia đều"', true); return; }
+    const rawGap = Number(String((document.getElementById('ffxAdsGap') || {}).value || '0').trim() || 0);
+    if (rawGap > 10) { ffxSetStatus(id, 'FFX_ADS_GAP: đệm trước/sau tối đa 10 giây', true); return; }
+    const payload = {
+      inputPath: ffxState.ads,
+      evenCount: even > 0 ? even : undefined,
+      breaks: even > 0 ? undefined : ffxAdsBreaks.map((t) => ({ atSec: t, adPaths: ffxAdsClips.slice() })),
+      adPaths: ffxAdsClips.slice(),
+      audioMode: (document.getElementById('ffxAdsAudioMode') || {}).value || 'own',
+      gapSec: ffxAdsGapSec(),
+      gapColor: (document.getElementById('ffxAdsGapColor') || {}).value || 'black',
+      useGpu: ((document.getElementById('ffxAdsEncode') || {}).value || 'cpu') === 'gpu',
+      musicVolume: (document.getElementById('ffxAdsMusicVol') || {}).value,
+      crf: (document.getElementById('ffxAdsCrf') || {}).value,
+      fps: (document.getElementById('ffxAdsFps') || {}).value,
+      outputPath: '',
+    };
+    const musicEl = document.getElementById('ffxAdsMusic');
+    if (musicEl && musicEl.title) payload.musicPath = musicEl.title;
+    ffxActiveStatus = id; ffxShowProgress(id);
+    ffxSetStatus(id, '⏳ Đang chuẩn hoá + chèn quảng cáo… (0%)', false);
+    const out = await ffxPickOutput(ffxStripExt(ffxBaseName(ffxState.ads)) + '-ads.mp4', id);
+    if (!out) { ffxActiveStatus = ''; ffxHideProgress(id); ffxSetStatus(id, '', false); return; }
+    payload.outputPath = out;
+    const r = await ffxNative().insertAds(payload);
+    ffxDone(id, r);
+    if (r && r.ok) {
+      const el = document.getElementById(id);
+      if (el) el.appendChild(document.createTextNode(' · ' + (r.breaks || 0) + ' điểm · ' + (r.ads || 0) +
+        ' clip · +' + (r.addedSec || 0) + 's · ' + (r.width || '?') + '×' + (r.height || '?') + '@' +
+        (r.fps || '?') + 'fps · ' + (r.encoder || 'libx264')));
+      if (r.adsNoAudio && r.adsNoAudio.length && typeof novaToast === 'function') {
+        novaToast('Quảng cáo không có tiếng → đã làm câm có chủ đích ' + r.adsNoAudio.length + ' phần: ' +
+          r.adsNoAudio.map((a) => ffxBaseName(a.file)).join(', '));
+      }
+    }
+  } catch (e) { ffxFail(id, e); }
+}
+
 /* ── Hàng đợi tác vụ nặng: chụp NGUYÊN nguồn + cấu hình form LÚC BẤM NÚT — đến lượt thì
    khôi phục đúng cấu hình đó rồi chạy tuần tự. Không bao giờ dùng nhầm cấu hình mới của user. ── */
 var ffxQueueArr = [];
@@ -1227,7 +1433,7 @@ function ffxQueueClear() { ffxQueueArr = []; ffxQueueRender(); }
 function ffxEnqueueCompress() {
   if (!ffxState.compress) { ffxSetStatus('ffxCompressStatus', 'Chưa chọn video nguồn', true); return; }
   ffxEnqueue('Nén: ' + ffxBaseName(ffxState.compress), { compress: ffxState.compress },
-    ['ffxCompressMode', 'ffxCompressCrf', 'ffxCompressTargetMb', 'ffxCompressHeight', 'ffxCompressGpu'], 'ffxRunCompress');
+    ['ffxCompressMode', 'ffxCompressCrf', 'ffxCompressTargetMb', 'ffxCompressHeight', 'ffxCompressPresetSel', 'ffxCompressGpu'], 'ffxRunCompress');
 }
 
 function ffxEnqueueConvert() {
@@ -1326,8 +1532,13 @@ function ffxInitDrops() {
   ffxEnableDrop('tool-toolffxmusic', 'music');
   ffxEnableDrop('tool-toolffxgif', 'gif');
   ffxEnableDrop('tool-toolffxaudiofx', 'audiofx');
+  ffxEnableDrop('tool-toolffxads', 'ads');
   ffxHistoryRender();
   ffxQueueRender();
+  /* Panel Chèn Quảng Cáo dựng danh sách từ mảng module (ffxAdsClips/ffxAdsBreaks) —
+     vẽ trạng thái rỗng ban đầu để user thấy hướng dẫn thay vì vùng trắng. */
+  ffxAdsClipRender();
+  ffxAdsBreakRender();
 }
 
 ffxInitDrops();
