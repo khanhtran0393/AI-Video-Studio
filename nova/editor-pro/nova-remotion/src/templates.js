@@ -303,15 +303,43 @@ function expandLayers(layers, sceneDur) {
   return out;
 }
 
+// CHÍNH SÁCH ĐIỀU PHỐI cho Trợ lý dựng — đặt ở ĐÂY (nơi định nghĩa mẫu) thay vì ba mảng
+// _T7_AMBIENT/_T7_NOTEXT/_T7_CAM rỗng nằm chờ ở renderer, mỗi lần thêm mẫu lại phải nhớ sửa.
+//   ambient: lớp phủ toàn khung không chứa chữ (hạt phim, glitch…) → tính vào trần chung.
+//   maxUse : trần số lần dùng trong MỘT video (tránh một kiểu lặp khắp nơi).
+// Mẫu có thể tự khai `ambient`/`maxUse` ngay trong khối của nó — khai báo tại chỗ thắng bảng này.
+const POLICY = {
+  'fx-glitch':      { ambient: true, maxUse: 3 },
+  'fx-vhs':         { ambient: true, maxUse: 3 },
+  'fx-zoom-blur':   { ambient: true, maxUse: 2 },
+  'fx-motion-blur': { ambient: true, maxUse: 2 },
+  'fx-noise':       { ambient: true, maxUse: 4 },
+  'fx-pulse':       { ambient: true, maxUse: 3 },
+};
+const policyOf = (k) => POLICY[k] || {};
+
 // Danh mục gọn cho AI/UI: tên mẫu + các trường điền được. Không kèm phần dựng.
+// Kèm GIÁ TRỊ MẶC ĐỊNH: giao diện suy ra kiểu ô nhập (chữ / số / màu / danh sách)
+//   ngay từ đây, khỏi phải chép tay bảng tham số của 32 mẫu ở phía renderer —
+//   thêm mẫu mới là bảng chỉnh tự có, không phải sửa hai chỗ.
+// Kèm SIÊU DỮ DỤNG ĐIỀU PHỐI (aux): nguồn ĐỘC NHẤT cho trần hạn ngạch phía Trợ lý dựng,
+//   khỏi phải bảo trì ba mảng _T7_AMBIENT/_T7_NOTEXT/_T7_CAM rỗng ở renderer.
+//   ambient: true  → lớp không khí phủ toàn khung (tính vào trần ambient chung của cả video)
+//   maxUse : N     → cả video dùng mẫu này tối đa N lần (bỏ trống = không giới hạn theo tên)
 function catalog() {
-  // Kèm GIÁ TRỊ MẶC ĐỊNH: giao diện suy ra kiểu ô nhập (chữ / số / màu / danh sách)
-  // ngay từ đây, khỏi phải chép tay bảng tham số của 32 mẫu ở phía renderer —
-  // thêm mẫu mới là bảng chỉnh tự có, không phải sửa hai chỗ.
-  return Object.keys(TEMPLATES).map((k) => ({
-    template: k, label: TEMPLATES[k].label, params: Object.keys(TEMPLATES[k].params),
-    defaults: Object.assign({}, TEMPLATES[k].params),
-  }));
+  return Object.keys(TEMPLATES).map((k) => {
+    const T = TEMPLATES[k], pol = policyOf(k);
+    const c = {
+      template: k, label: T.label, params: Object.keys(T.params),
+      defaults: Object.assign({}, T.params),
+    };
+    // Mẫu tự khai ở khối của nó → thắng; không khai thì lấy theo bảng POLICY.
+    const amb = (T.ambient != null) ? !!T.ambient : !!pol.ambient;
+    const mu  = (T.maxUse != null) ? T.maxUse : pol.maxUse;
+    if (amb) c.ambient = true;
+    if (mu != null) c.maxUse = mu;
+    return c;
+  });
 }
 
 module.exports = { TEMPLATES, expandLayers, expandOne, catalog };

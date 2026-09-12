@@ -595,6 +595,25 @@
       #t7Ai .drow .msg{font-size:11px;font-weight:600}
       #t7Ai .drow.ap .msg{color:var(--green)}
       #t7Ai .drow.sk{opacity:.55} #t7Ai .drow.sk .msg{color:var(--text-dim)}
+      /* Mục bị soi khung / tự kiểm loại: vẫn hiện, kèm lý do + nút dùng lại — không biến mất lặng lẽ */
+      #t7Ai .drow.dr{border-color:color-mix(in srgb,var(--amber,#c98a1e) 40%,transparent);background:none}
+      #t7Ai .drow.dr .msg{color:var(--text-dim);font-weight:500;flex:1;min-width:0}
+      #t7Ai .drow.dr .rst{flex:none;border:1px solid var(--border);border-radius:7px;padding:4px 9px;
+        font-size:11px;font-weight:600;color:var(--text-muted);background:var(--surface);cursor:pointer}
+      #t7Ai .drow.dr .rst:hover{color:var(--text);border-color:var(--accent)}
+      /* Nút tạo lại riêng từng thẻ — tách khỏi nhóm nút quyết định để không giành chỗ "Gắn" */
+      #t7Ai .pra .rgbtn{flex:0 0 auto;padding:6px 10px}
+      /* Khối "cảnh không lấy được đề xuất" + nút thử lại gộp */
+      #t7Ai .grp{font-size:11px;font-weight:700;color:var(--text-dim);letter-spacing:.02em;
+        padding:2px 2px 0;margin-top:4px}
+      #t7Ai .miss{border:1px solid color-mix(in srgb,var(--red,#e23d4c) 45%,transparent);
+        border-radius:10px;padding:10px 12px;background:color-mix(in srgb,var(--red,#e23d4c) 7%,transparent)}
+      #t7Ai .miss .missh{font-size:12px;font-weight:700;margin-bottom:4px}
+      #t7Ai .miss .missl{font-size:11px;color:var(--text-dim);line-height:1.5;margin-bottom:8px;
+        font-family:ui-monospace,Menlo,monospace}
+      #t7Ai .miss button{border:1px solid var(--accent);border-radius:8px;padding:6px 12px;font-size:11.5px;
+        font-weight:600;color:var(--accent);background:none;cursor:pointer}
+      #t7Ai .miss button:hover{background:var(--accent);color:var(--on-accent)}
       #t7Ai .pr.ap{border-color:color-mix(in srgb,var(--green) 45%,transparent);
         background:color-mix(in srgb,var(--green) 9%,var(--surface-2))}
       #t7Ai .pr.sk{opacity:.45}

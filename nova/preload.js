@@ -233,6 +233,8 @@ contextBridge.exposeInMainWorld('native', {
     normalizeAudio: (payload) => ipcRenderer.invoke('ffx:normalize-audio', payload),
     removeVocals: (payload) => ipcRenderer.invoke('ffx:remove-vocals', payload),
     addFades: (payload) => ipcRenderer.invoke('ffx:add-fades', payload),
+    // Chèn Quảng Cáo (gói 2026-09-12f)
+    insertAds: (payload) => ipcRenderer.invoke('ffx:insert-ads', payload),
     // Electron 43 gỡ File.path → drag-drop file vào GUI phải đi qua webUtils.getPathForFile
     // (hàm đồng bộ, chạy trong preload — KHÔNG phải kênh IPC mới).
     pathForFile: (file) => webUtils.getPathForFile(file),

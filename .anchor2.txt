@@ -1,0 +1,438 @@
+== files defining switchTool ==
+
+-- nova/web/src/toolbox/shared/llm.js --
+function switchTool ===
+// ⚠️  DEDUP-DUPLICATE: hàm này cũng ở utility.js (peer=6216c, shared=3075c). Peer load SAU → ghi đè bản này. Sửa ở peer.
+// [P0a] fn chet da xoa (shadow boi ban song nap sau: utility/nav.js)
+
+// === L?: const upState ===
+const upState = { items: [], running: false, seq: 0, wired: false };
+
+// === L?: let _upThumbBusy ===
+let _upThumbBusy = false;
+
+// === L?: function tsInit ===
+// ⚠️  DEDUP-DUPLICATE: hàm này cũng ở tool-ts.js (peer=1020c, shared=441c). Peer load SAU → ghi đè bản này. Sửa ở peer.
+// [P0a] fn chet da xoa (shadow boi ban song nap sau: tool-ts.js)
+
+// === L?: let VOICE_URL ===
+
+
+-- nova/web/src/toolbox/utility/nav.js --
+function switchTool(name){
+  if (name === 'toollog') { setTimeout(novaLogRender, 0); }
+  if (name === 'tooladmin') {
+    if (!isAdmin()) return;   // tab admin: chỉ admin
+  } else if (name === 'toolsettings') {
+    /* trang Cài đặt: luôn cho vào */
+  }
+  // Free XEM được mọi tool (không chặn ở đây); chặn ở NÚT hành động trong từng tool → hiện thông báo.
+  // I-MZic: nếu iframe đang ghi video (MediaRecorder) thì CHẶN chuyển tool —
+  // Chromium throttle canvas của iframe ẩn → video xuất ra đứng hình giữa chừng.
+  if (state.tool === 'toolimzic' && name !== 'toolimzic') {
+    const _izFrame = document.getElementById('imzicFrame');
+    let _izExporting = false;
+    try { _izExporting = !!(_izFrame && _izFrame.contentWindow && _izFrame.contentWindow.__imzicExporting === true); }
+    catch (e) { /* iframe chưa nạp / lỗi same-origin — không chặn */ }
+    if (_izExporting) {
+      if (typeof novaToast === 'function') novaToast('Đang xuất video I-MZic — chờ ghi xong rồi mới chuyển tab (chuyển sớm sẽ làm video đứng hình).');
+      return;
+    }
+  }
+  state.tool = name;
+  document.querySelectorAll('.nav-item').forEach(t =>
+    t.classList.toggle('active', t.dataset.tool === name)
+  );
+  document.querySelectorAll('.tool').forEach(t =>
+    t.classList.toggle('active', t.id === 'tool-' + name)
+  );
+  // Tool-specific init
+  if (name === 'tool2' && typeof renderSceneTypeToggles === 'function') { renderSceneTypeToggles(); if (typeof t2UpdateAnalyzeBtn === 'function') t2UpdateAnalyzeBtn(); }
+  if (name === 'tooldash' && typeof renderDashboard === 'function') renderDashboard();
+  if (name === 'tool6'){ if (typ
+
+
+== PANELS HEAD 22 ==
+    <!-- ══════ CÔNG CỤ FFMPEG (sidebar dropdown "Công cụ FFmpeg") ══════
+         13 tool: Tách MP3/M4A/WAV / Cắt / Ghép / Loop / Nén / Trích Frame / Xoá Tiếng /
+         Đổi Định Dạng / Ghép Nhạc / Xuất GIF / Shorts 9:16 / Đóng Phụ Đề / Âm Thanh Nâng Cao.
+         Logic trong src/toolbox/tool-ffx.js (tiền tố ffx*), IPC ffx:* qua window.native.ffx.
+         Progress bar + nút Huỷ được JS chèn động vào hàng hành động khi chạy. -->
+
+    <!-- 1. TÁCH MP3/M4A/WAV -->
+    <div class="tool" id="tool-toolffxaudio">
+      <div class="tool-head">
+        <div class="tool-title">🎵 Tách MP3</div>
+        <div class="tool-subtitle">Tách âm thanh từ video thành MP3 / M4A / WAV bằng FFmpeg local — không cần upload, không tốn API.</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px;max-width:640px">
+        <div>
+          <label class="label">Video nguồn</label>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <button class="btn ghost sm" onclick="ffxPickInput('audio')">📁 Chọn video</button>
+            <span id="ffxAudioInput" style="font-size:11.5px;color:var(--text-muted);word-break:break-all">Chưa chọn</span>
+          </div>
+        </div>
+        <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end">
+          <div>
+
+-- tool-toolffxaudiofx at line 721 --
+        </div>
+        <div id="ffxSubsPreview"></div>
+      </div>
+    </div>
+
+    <!-- 13. ÂM THANH SÂU (chuẩn hoá LUFS / bỏ lời / fade) -->
+    <div class="tool" id="tool-toolffxaudiofx">
+      <div class="tool-head">
+        <div class="tool-title">🎚 Âm Thanh Nâng Cao</div>
+        <div class="tool-subtitle">3 tác vụ: chuẩn hoá âm lượng EBU R128 (loudnorm 2-pass — âm lượng đều giữa các video), bỏ lời/tách giọng thô (nguồn stereo), và fade mở/khép video + âm thanh.</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px;max-width:640px">
+        <div>
+          <label class="label">Nguồn (video hoặc âm thanh)</label>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <button class="btn ghost sm" onclick="ffxPickInput('audiofx')">📁 Chọn file</button>
+            <span id="ffxAudiofxInput" style="font-size:11.5px;color:var(--text-muted);word-break:break-all">Chưa chọn</span>
+          </div>
+        </div>
+        <div style="border:1px solid var(--border,#2a2d3a);border-radius:8px;padding:10px">
+          <div style="font-size:12.5px;font-weight:600;margin-bottom:8px">1 · Chuẩn hoá âm lượng (EBU R128)</div>
+          <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end">
+            <div>
+              <label class="label">Mục tiêu</label>
+              <select id="ffxNormTarget" style="max-width:280px">
+                <option value="-16" selected>-16 LUFS — YouTube/podcast</option>
+                <option value="-14">-14 LUFS — Spotify/mạng xã hội</option>
+                <option value="-23">-23 LUFS — chuẩn phát sóng</option>
+              </select>
+            </div>
+            <div>
+              <label class="label" style="display:flex;gap:6px;align-items:center;cursor:pointer">
+                <input type="checkbox" id="ffxNormKeepVideo"> Giữ nguyên hình (chuẩn hoá trong video MP4)
+              </label>
+            </div>
+            <button class="btn primary sm" onclick="ffxRunNorm()">🎚 Chuẩn hoá</button>
+            <button class="btn ghost sm" onclick="ffxEnqueueNorm()" title="Xếp vào hàng đợi chạy tuần tự">⏳</button>
+            <span id="ffxNormStatus" style="font-size:11.5px"></span>
+          </div>
+        </div>
+        <div style="border:1px solid var(--border,#2a2d3a);border-radius:8px;padding:10px">
+          <div style="font-size:12.5px;font-weight:600;margin-bottom:8px">2 · Bỏ lời / tách giọng (thô — nguồn stereo)</div>
+          <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end">
+            <div>
+              <label class="label">Chế độ</label>
+              <select id="ffxVocalMode" style="max-width:320px">
+                <option value="instrumental" selected>Bỏ lời — giữ nhạc nền (karaoke)</option>
+                <option value="vocal">Tách giọng thô — băng trung tâm 200–3800Hz</option>
+              </select>
+            </div>
+            <div>
+              <label class="label" style="display:flex;gap:6px;align-items:center;cursor:pointer">
+                <input type="checkbox" id="ffxVocalNorm" title="Ghép loudnorm vào cùng 1 lần chạy ffmpeg — bản karaoke thường bị nhỏ tiếng"> Chuẩn hoá −16 LUFS sau khi xử lý
+              </label>
+            </div>
+            <button class="btn primary sm" onclick="ffxRunVocal()">🎤 Xử lý</button>
+            <span id="ffxVocalStatus" style="font-size:11.5px"></span>
+          </div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:6px">Center-cancel bằng FFmpeg, không phải AI tách tiếng — kết quả tách giọng chỉ tham khảo.</div>
+        </div>
+        <div style="border:1px solid var(--border,#2a2d3a);border-radius:8px;padding:10px">
+          <div style="font-size:12.5px;font-weight:600;margin-bottom:8px">3 · Fade in/out (giây — bỏ trống = không fade)</div>
+          <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end">
+            <div><label class="label">Video mở</label><input type="text" id="ffxFadeVin" placeholder="0.5" style="max-width:90px"></div>
+            <div><label class="label">Video khép</label><input type="text" id="ffxFadeVout" placeholder="0.5" style="max-width:90px"></div>
+            <div><label class="label">Tiếng mở</label><input type="text" id="ffxFadeAin" placeholder="0.5" style="max-width:90px"></div>
+            <div><label class="label">Tiếng khép</label><input type="text" id="ffxFadeAout" placeholder="0.5" style="max-width:90px"></div>
+            <button class="btn primary sm" onclick="ffxRunFades()">🌅 Thêm fade</button>
+            <span id="ffxFadeStatus" style="font-size:11.5px"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 14. KẾT QUẢ GẦN ĐÂY & HÀNG ĐỢI (FFmpeg) -->
+    <div class="tool" id="tool-toolffxhistory">
+      <div class="tool-head">
+        <div class="tool-title">🗂 Kết quả gần đây &amp; Hàng đợi</div>
+        <div class="tool-subtitle">Mọi file xuất ra từ Công cụ FFmpeg đều ghi lại ở đây (lưu tối đa 30 dòng, chỉ lưu đường dẫn — không xoá file đĩa). Tách MP3 nhanh 1 chạm, xếp việc nặng chạy tuần tự.</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px;max-width:720px">
+        <div>
+          <div style="display:flex;gap:8px;align-items:center;justify-content:space-between">
+            <label class="label">Hàng đợi (chạy tuần tự)</label>
+          </div>
+          <div id="ffxQueueList" style="margin-top:4px"></div>
+        </div>
+        <div>
+          <div style="display:flex;gap:8px;align-items:center;justify-content:space-between">
+            <label class="label">Kết quả gần đây</label>
+            <button class="btn ghost sm" onclick="ffxHistoryClear()" title="Xoá toàn bộ danh sách (không xoá file trên đĩa)">🧹 Xoá danh sách</button>
+          </div>
+          <div id="ffxHistoryList" style="margin-top:4px"></div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <span id="ffxHistoryStatus" style="font-size:11.5px"></span>
+        </div>
+      </div>
+    </div>
+
+
+
+== TOOL-FFX.JS head 1-130 ==
+/* ── tool-ffx.js — CÔNG CỤ FFMPEG (sidebar dropdown "Công cụ FFmpeg"):
+      Tách MP3/M4A/WAV / Cắt / Ghép (đổi thứ tự) / Loop / Nén / Trích Frame /
+      Xoá Tiếng / Đổi Định Dạng / Ghép Nhạc / GIF / Shorts 9:16 / Đóng Phụ Đề /
+      Âm Thanh Nâng Cao (loudnorm, bỏ lời, fade).
+      Renderer script thường (không import/export). Mọi tên cấp đầu tiền tố ffx*
+      (module system của renderer — AGENTS.md §8). Chạy qua IPC ffx:* → window.native.ffx.
+      Tiến bộ: progress % thật (parse time= phía main), nút Huỷ, probe thời lượng/dung lượng
+      sau khi chọn, nhập giờ dạng "90" hoặc "mm:ss"/"hh:mm:ss", ghi nhớ thư mục output,
+      xác nhận ghi đè file tồn tại. Dialog chọn file THẬT do main process mở. ── */
+
+/* Trạng thái nguồn đã chọn cho từng tool (đường dẫn file thật trên đĩa). */
+var ffxState = {
+  audio: '', cut: '', loop: '', loopAudio: '', join: [],
+  compress: '', frames: '', mute: '', convert: '',
+  music: '', musicFile: '', gif: '',
+  shorts: '', subs: '', subsFile: '', audiofx: '',
+};
+
+/* Tool đang chạy (statusId) — nhận sự kiện ffx:progress để cập nhật đúng progress bar. */
+var ffxActiveStatus = '';
+
+function ffxNative() {
+  const n = window.native && window.native.ffx;
+  if (!n) throw new Error('Chỉ dùng được trong app AI Video Studio (thiếu bridge ffx).');
+  return n;
+}
+
+function ffxSetStatus(id, text, isErr) {
+  const el = document.getElementById(id);
+  if (el) { el.textContent = text; el.style.color = isErr ? 'var(--danger, #e5484d)' : 'var(--accent)'; }
+}
+
+function ffxBaseName(p) {
+  const s = String(p || '');
+  const i = Math.max(s.lastIndexOf('/'), s.lastIndexOf('\\'));
+  return i >= 0 ? s.slice(i + 1) : s;
+}
+
+function ffxStripExt(name) {
+  const i = name.lastIndexOf('.');
+  return i > 0 ? name.slice(0, i) : name;
+}
+
+function ffxShort(p) { return ffxBaseName(p); }
+
+/* Thư mục cha của đường dẫn (renderer không có module path — tự tách bằng dấu \ hoặc /). */
+function ffxDirOf(p) {
+  const s = String(p || '');
+  const i = Math.max(s.lastIndexOf('\\'), s.lastIndexOf('/'));
+  return i > 0 ? s.slice(0, i) : s;
+}
+
+function ffxEsc(s) {
+  return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/* Parse giờ: "90" | "90.5" | "mm:ss" | "hh:mm:ss" → giây (NaN nếu sai). */
+function ffxParseTime(v) {
+  const s = String(v == null ? '' : v).trim();
+  if (!s) return NaN;
+  if (/^\d+(?:[.,]\d+)?$/.test(s)) return parseFloat(s.replace(',', '.'));
+  const m = /^(?:(\d+):)?(\d{1,2}):(\d{1,2}(?:\.\d+)?)$/.exec(s);
+  if (!m) return NaN;
+  return (m[1] ? (+m[1]) * 3600 : 0) + (+m[2]) * 60 + parseFloat(m[3]);
+}
+
+/* "4832 giây" → "1:20:32" gọn cho hiển thị. */
+function ffxFmtDur(sec) {
+  const t = Math.round(Number(sec) || 0);
+  if (t <= 0) return '';
+  const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = t % 60;
+  return h > 0 ? h + ':' + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0')
+    : m + ':' + String(s).padStart(2, '0');
+}
+
+function ffxFmtSize(bytes) {
+  const b = Number(bytes) || 0;
+  if (b <= 0) return '';
+  if (b >= 1073741824) return (b / 1073741824).toFixed(1) + ' GB';
+  if (b >= 1048576) return (b / 1048576).toFixed(1) + ' MB';
+  return Math.round(b / 1024) + ' KB';
+}
+
+/* ── Progress UI: chèn động thanh tiến trình + nút Huỷ vào hàng hành động của tool ── */
+function ffxProgressBox(statusId) {
+  const status = document.getElementById(statusId);
+  if (!status || !status.parentElement) return null;
+  const row = status.parentElement;
+  let box = row.querySelector('.ffx-prog');
+  if (!box) {
+    box = document.createElement('div');
+    box.className = 'ffx-prog';
+    box.style.cssText = 'flex:1;min-width:220px;display:flex;flex-direction:column;gap:3px';
+    box.innerHTML =
+      '<div class="ffx-prog-track" style="background:var(--border,#2a2d3a);border-radius:6px;height:8px;overflow:hidden">' +
+      '<div class="ffx-prog-bar" style="height:100%;width:0%;background:var(--accent);transition:width .2s"></div>' +
+      '</div>' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">' +
+      '<span class="ffx-prog-text" style="font-size:11px;color:var(--text-muted)">0%</span>' +
+      '<button class="btn ghost sm" onclick="ffxCancel()">✖ Huỷ</button>' +
+      '</div>';
+    row.appendChild(box);
+  }
+  return box;
+}
+
+function ffxShowProgress(statusId) {
+  const box = ffxProgressBox(statusId);
+  if (!box) return;
+  const bar = box.querySelector('.ffx-prog-bar');
+  const text = box.querySelector('.ffx-prog-text');
+  if (bar) bar.style.width = '0%';
+  if (text) text.textContent = '0%';
+}
+
+function ffxUpdateProgressUI(statusId, pct, extra) {
+  const box = ffxProgressBox(statusId);
+  if (!box) return;
+  const bar = box.querySelector('.ffx-prog-bar');
+  const text = box.querySelector('.ffx-prog-text');
+  if (bar) bar.style.width = pct + '%';
+  if (text) text.textContent = pct + '%' + (extra || '');
+}
+
+function ffxHideProgress(statusId) {
+  const status = document.getElementById(statusId);
+  if (!status || !status.parentElement) return;
+  const box = status.parentElement.querySelector('.ffx-prog');
+  if (box) box.remove();
+}
+
+
+== INDEX.HTML: script + partial includes ==
+72: <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+77: <!--#include "partials/modal-profile.html" -->
+83: <!--#include "partials/app-sidebar.html" -->
+85: <!--#include "partials/shell-topbar.html" -->
+88: <!--#include "partials/panels-small-a.html" -->
+89: <!--#include "partials/panel-dash-tool1.html" -->
+90: <!--#include "partials/panel-toolscript.html" -->
+91: <!--#include "partials/panels-tool2-3.html" -->
+92: <!--#include "partials/panels-tool4-8.html" -->
+93: <!--#include "partials/panels-tool7-anim.html" -->
+94: <!--#include "partials/panels-niche-flow.html" -->
+95: <!--#include "partials/panels-upscale-voice.html" -->
+96: <!--#include "partials/panels-ffmpeg-tools.html" -->
+97: <!--#include "partials/panels-admin-settings.html" -->
+102: <!--#include "partials/modals-library-upgrade.html" -->
+103: <!--#include "partials/modals-gate-update.html" -->
+106: <script src="src/toolbox/shared-state.js"></script>
+110: <script src="src/toolbox/shared/shell.js"></script>
+111: <script src="src/toolbox/shared/llm.js"></script>
+112: <script src="src/toolbox/shared/voice.js"></script>
+113: <script src="src/toolbox/shared/mvtv.js"></script>
+114: <script src="src/toolbox/shared/profile.js"></script>
+115: <script src="src/toolbox/shared/acache.js"></script>
+116: <script src="src/toolbox/shared/flow.js"></script>
+117: <script src="src/toolbox/shared/t2-scenes.js"></script>
+118: <script src="src/toolbox/shared/t2-prompts.js"></script>
+119: <script src="src/toolbox/shared/auto-assets.js"></script>
+120: <script src="src/toolbox/shared/t3-stock.js"></script>
+121: <script src="src/toolbox/shared/t7.js"></script>
+122: <script src="src/toolbox/shared/t8-t10.js"></script>
+123: <script src="src/toolbox/utility.js"></script>
+126: <script src="src/toolbox/utility/keys.js"></script>
+127: <script src="src/toolbox/utility/tier.js"></script>
+128: <script src="src/toolbox/utility/shell.js"></script>
+129: <script src="src/toolbox/utility/dashboard.js"></script>
+130: <script src="src/toolbox/utility/autopipe.js"></script>
+131: <script src="src/toolbox/utility/llm.js"></script>
+132: <script src="src/toolbox/utility/added-api.js"></script>
+133: <script src="src/toolbox/utility/nav.js"></script>
+134: <script src="src/toolbox/utility/upscale.js"></script>
+135: <script src="src/toolbox/utility/ts.js"></script>
+136: <script src="src/toolbox/utility/voice.js"></script>
+137: <script src="src/toolbox/utility/mvtv.js"></script>
+138: <script src="src/toolbox/utility/promptlib.js"></script>
+139: <script src="src/toolbox/utility/profiles.js"></script>
+140: <script src="src/toolbox/utility/tf.js"></script>
+141: <script src="src/toolbox/utility/t2-split.js"></script>
+142: <script src="src/toolbox/utility/t2-scenes.js"></script>
+143: <script src="src/toolbox/utility/t2-prompts.js"></script>
+144: <script src="src/toolbox/utility/t2-audio.js"></script>
+145: <script src="src/toolbox/utility/t2-cast.js"></script>
+146: <script src="src/toolbox/utility/t2-regen.js"></script>
+147: <script src="src/toolbox/utility/t2-edit.js"></script>
+148: <script src="src/toolbox/utility/t3-assets.js"></script>
+149: <script src="src/toolbox/utility/stock.js"></script>
+150: <script src="src/toolbox/utility/veo.js"></script>
+151: <script src="src/toolbox/utility/t7-core.js"></script>
+152: <script src="src/toolbox/utility/t7-gfx.js"></script>
+153: <script src="src/toolbox/utility/t7-canvas.js"></script>
+154: <script src="src/toolbox/utility/t7-scene.js"></script>
+155: <script src="src/toolbox/utility/t7-draw.js"></script>
+156: <script src="src/toolbox/utility/t7-export-cfg.js"></script>
+157: <script src="src/toolbox/utility/t7-ai-core.js"></script>
+158: <script src="src/toolbox/utility/t7-video.js"></script>
+159: <script src="src/toolbox/utility/transcribe.js"></script>
+160: <script src="src/toolbox/utility/niche.js"></script>
+162: <script src="src/toolbox/tool-auto.js"></script>
+163: <script src="src/toolbox/tool-cap.js"></script>
+164: <script src="src/toolbox/tool-cli.js"></script>
+165: <script src="src/toolbox/tool-mv.js"></script>
+166: <script src="src/toolbox/tool-queue.js"></script>
+167: <script src="src/toolbox/tool-ref.js"></script>
+168: <script src="src/toolbox/tool-run.js"></script>
+169: <script src="src/toolbox/tool-t10.js"></script>
+170: <script src="src/toolbox/tool-t11.js"></script>
+171: <script src="src/toolbox/tool-t2.js"></script>
+172: <script src="src/toolbox/tool-t7.js"></script>
+174: <script src="src/toolbox/t7-fx.js"></script>
+175: <script src="src/toolbox/t7-layers.js"></script>
+176: <script src="src/toolbox/t7-src.js"></script>
+177: <script src="src/toolbox/t7-ai.js"></script>
+178: <script src="src/toolbox/t7-engine.js"></script>
+179: <script src="src/toolbox/t7-preview.js"></script>
+180: <script src="src/toolbox/t7-overlays.js"></script>
+181: <script src="src/toolbox/t7-playback.js"></script>
+182: <script src="src/toolbox/t7-export.js"></script>
+183: <script src="src/toolbox/tool-t8.js"></script>
+184: <script src="src/toolbox/tool-t9.js"></script>
+185: <script src="src/toolbox/tool-ts.js"></script>
+186: <script src="src/toolbox/tool-tts.js"></script>
+187: <script src="src/toolbox/tool-upg.js"></script>
+189: <script src="src/toolbox/tool-ffx.js"></script>
+191: <script src="src/toolbox/utility/collapse.js"></script>
+196: <script src="src/va/va-core.js"></script>
+197: <script src="src/va/va-easy-ui.js"></script>
+198: <script src="src/va/va-easy-flow.js"></script>
+199: <script src="src/va/va-advanced.js"></script>
+200: <script src="src/va/va-main.js"></script>
+202: <script src="whiteboard-annotation.js?v=hdlasso6"></script>
+203: <script src="whiteboard-studio-panel.js?v=hdlasso6"></script>
+207: <script src="src/hd/hd-core.js"></script>
+208: <script src="src/hd/hd-scenes.js"></script>
+209: <script src="src/hd/hd-canvas.js"></script>
+210: <script src="src/hd/hd-ai-export.js"></script>
+211: <script src="src/hd/hd-render.js"></script>
+212: <script src="src/hd/hd-main.js"></script>
+214: <script src="srt-translate-panel.js?v=srtt1"></script>
+215: <script src="viral-cut-panel.js?v=vc1"></script>
+216: <script src="spy-panel.js?v=spy1"></script>
+218: <script src="src/toolbox/utility/veo-init.js"></script>
+219: <script src="src/toolbox/utility/desktop-defaults.js"></script>
+220: <script src="src/toolbox/utility/nav-accordion.js"></script>
+221: <script src="nguon-web/nen-tang.js"></script>
+222: <script src="nguon-web/ha-tang.js"></script>
+223: <script src="nguon-web/api.js"></script>
+224: <script src="nguon-web/tim-web.js"></script>
+225: <script src="nguon-web/bang.js"></script>
+226: <script src="nguon-web/chinh.js"></script>
+228: <!--#include "partials/box-t7ai.html" -->
+230: <!--#include "partials/modal-t7export.html" -->
+231: <script src="src/toolbox/utility/flow-keys.js"></script>
+233: <script src="src/toolbox/utility/boot.js"></script>
+234: <script src="src/toolbox/utility/panel-order.js"></script>

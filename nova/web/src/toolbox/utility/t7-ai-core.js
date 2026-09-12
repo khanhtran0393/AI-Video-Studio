@@ -11,7 +11,57 @@ function _t7AiSig(t){
 }
 
 function _t7AiSave(){
-  try { state.aiQueue = _t7AiQ; if (typeof saveState === 'function') saveState(true); } catch (e) {}
+  // Danh sách cảnh lỗi đi cùng hàng đợi: mở lại dự án vẫn thấy "cảnh nào chưa lấy được đề
+  // xuất" và bấm Thử lại được — nếu chỉ nằm trong biến tạm thì mất sạch sau mỗi lần đóng app.
+  try { state.aiQueue = _t7AiQ; state.aiHong = _t7AiHong; if (typeof saveState === 'function') saveState(true); } catch (e) {}
+}
+
+// Mọi lượt gọi AI của Trợ lý đi qua đây để đếm được SỐ LẦN + THỜI GIAN đã chờ (#7 minh bạch chi phí).
+// Không phải fallback: chỉ cộng dồn số liệu, phần còn lại giao nguyên cho callLLMJson.
+async function _t7AiJson(prompt, opts){
+  const t0 = Date.now();
+  _t7AiStat.calls++;
+  try { return await callLLMJson(prompt, opts); }
+  finally { _t7AiStat.ms += Date.now() - t0; }
+}
+
+// Đặt lại số đếm khi bắt đầu một lượt phân tích mới (không cộng dồn qua nhiều lần bấm).
+function _t7AiStatReset(){ _t7AiStat.calls = 0; _t7AiStat.ms = 0; _t7AiHong = []; }
+
+// Đọc số đếm thành một dòng ngắn cho chân sheet.
+function _t7AiStatLine(){
+  if (!_t7AiStat.calls) return '';
+  const giay = _t7AiStat.ms / 1000;
+  return `${_t7AiStat.calls} lượt gọi AI · ${giay < 60 ? giay.toFixed(1) + 's' : Math.round(giay / 60) + ' phút'} chờ`;
+}
+
+// Vân tay LỜI THOẠI làm nên đề xuất này — để đối chiếu với hiện tại khi dựng lại hàng đợi.
+// Lời đổi → vân tay đổi → đề xuất cũ hết hiệu lực (Luật 10: lộ ra bằng cách BỎ, không âm thầm giữ cái sai).
+// Mối nối phụ thuộc lời của CẢ HAI cảnh hai bên nên vân tay tính trên cả cặp.
+// Trả null khi không tìm thấy clip — nghĩa là hàng đợi đang nói về cảnh không còn tồn tại.
+function _t7AiEntrySig(q, clips){
+  const ds = clips || t7State.clips || [];
+  const i = ds.findIndex(c => c && c.sceneId === (q && q.sceneId));
+  if (i < 0) return null;
+  const sc = _t7ClipScene(ds[i]);
+  if (q.kind === 'tr'){
+    const nx = _t7ClipScene(ds[i + 1]);
+    return _t7AiSig(String((sc && sc.text) || '') + '\u241f' + String((nx && nx.text) || ''));
+  }
+  return _t7AiSig(sc && sc.text);
+}
+
+// Chỉ giữ TÊN MẪU + đúng các trường danh mục khai nhận cho mẫu đó.
+// AI (hoặc người sửa DOM) nhét trường lạ vào q.picks thì _t7AiApply không được phép đẩy thẳng
+// xuống sceneSpecs — expandOne sẽ Object.assign đè lên tham số mẫu (box/z/at/src…) → phá bố cục.
+// Custom layers ĐÃ qua _t7AiFixLayers kẹp chặt nên không đi qua đây.
+function _t7AiPrunePick(cat, pk){
+  if (!pk || !pk.template) return null;
+  const e = (cat || []).find(c => c.template === pk.template);
+  if (!e) return null;                                   // mẫu không còn trong danh mục → bỏ
+  const out = { template: pk.template };
+  (e.params || []).forEach(k => { if (pk[k] != null) out[k] = pk[k]; });
+  return out;
 }
 
 function _t7AiSteps(cur, note){
@@ -28,8 +78,13 @@ function _t7AiSteps(cur, note){
 function _t7AiTally(){
   const ap = _t7AiQ.filter(x => x.state === 'ap').length;
   const nTr = _t7AiQ.filter(x => x.kind === 'tr').length;
-  const el = document.getElementById('t7AiCnt');
-  if (el) el.textContent = ap + ' / ' + _t7AiQ.length + ' đã gắn' + (nTr ? ' · ' + nTr + ' mối nối' : '');
+  const loai = _t7AiQ.filter(x => x.state === 'dr').length;
+  const tu = _t7AiQ.length - loai;                  // KHÔNG đếm mục đã bị loại vào mẫu số —
+  const el = document.getElementById('t7AiCnt');    // "0 / 0 đã gắn" khác hẳn "0 / 12 đã gắn"
+  if (el) el.textContent = ap + ' / ' + tu + ' đã gắn' + (nTr ? ' · ' + nTr + ' mối nối' : '')
+    + (loai ? ' · đã loại ' + loai : '')
+    + (_t7AiHong.length ? ' · thiếu ' + _t7AiHong.length : '')
+    + (_t7AiStat.calls ? ' · ' + _t7AiStatLine() : '');
   const n = document.getElementById('t7GfxCount');
   if (n){ let t = 0; try { Object.values(state.sceneSpecs || {}).forEach(sp =>
     (sp && sp.layers || []).forEach(L => { if (L && L.type !== 'backdrop') t++; })); } catch (e) {}
@@ -44,14 +99,22 @@ function _t7AiApply(q){
       try { if (typeof _t7PersistClips === 'function') _t7PersistClips(); } catch (e) {} }
     return;
   }
+  // Lớp thô (custom) hay mẫu (picks) — engine đọc chung một kiểu. Custom đã bị _t7AiFixLayers
+  // kẹp chặt từng trường; picks thì chưa, nên lọc theo params của danh mục ngay tại cánh cửa
+  // DUY NHẤT này trước khi nó chạm sceneSpecs. Danh mục chưa nạp thì giữ nguyên như cũ
+  // (picks đã được `allowed.has` chặn tên lạ ở bước đề xuất) — khỏi phá luồng khôi phục hàng đợi.
+  const tuVe = !!(q.custom && q.custom.length);
+  let lay = tuVe ? q.custom.slice() : (q.picks || []).slice();
+  if (!tuVe && Array.isArray(_t7Cat) && _t7Cat.length)
+    lay = lay.map(pk => _t7AiPrunePick(_t7Cat, pk)).filter(Boolean);
+  if (!lay.length) return;                                // không còn lớp nào hợp lệ → đừng tạo spec rỗng
   if (!state.sceneSpecs) state.sceneSpecs = {};
   let sp = state.sceneSpecs[q.sceneId];
   if (!sp) sp = state.sceneSpecs[q.sceneId] = { rev: Date.now(), layers: [
     { type: 'backdrop', src: '@scene', at: 0, in: { preset: 'fade', dur: 0.4 },
       hold: { preset: _T7_HOLD[q.fx] || 'kenIn', amp: 1 }, out: { preset: 'fade', dur: 0.35 } } ] };
   if (!Array.isArray(sp.layers)) sp.layers = [];
-  const dua = (q.custom && q.custom.length) ? q.custom : q.picks;   // lớp thô hay mẫu — engine đọc chung một kiểu
-  dua.forEach(pk => sp.layers.push(JSON.parse(JSON.stringify(pk))));
+  lay.forEach(pk => sp.layers.push(JSON.parse(JSON.stringify(pk))));
   sp.rev = Date.now();
 }
 
@@ -319,7 +382,7 @@ async function _t7AiTrans(clips, map, cat, onTick){
     .map(x => `${x.id} (${x.label}) — ${x.description}`).join('\n');
   const topic = String(state.videoLogline || '').trim();
   const ra = [];
-  const CH = 40;
+  const CH = _T7_AI_CH;
 
   for (let i = 0; i < noi.length; i += CH){
     if (state.cancelRequested) break;
@@ -358,7 +421,7 @@ Return a JSON array containing ONLY the junctions that need something other than
 
     let arr = null;
     for (let thu = 0; thu < 2 && arr == null; thu++){
-      try { arr = await callLLMJson(prompt, { maxTokens: 1200, validate: (d) => Array.isArray(d) }); }
+      try { arr = await _t7AiJson(prompt, { maxTokens: 1200, validate: (d) => Array.isArray(d) }); }
       catch (e){ if (thu) novaLog && novaLog('⚡ Lô chuyển cảnh lỗi: ' + String(e.message || e).slice(0, 80), 'warn'); }
     }
     if (arr == null) continue;
@@ -372,6 +435,7 @@ Return a JSON array containing ONLY the junctions that need something other than
       _t7AiTrTake(id, idx, S);
       const e = (cat || []).find(x => x.id === id) || {};
       ra.push({ kind: 'tr', sceneId: c.sceneId, clipId: c.id, name: _t7ClipLabel(c),
+        h: _t7AiEntrySig({ kind: 'tr', sceneId: c.sceneId }, clips),   // dấu vân tay lời CẢ HAI cảnh của mối nối
         tr: id, trLabel: e.label || id, trDur: Number(e.durationSec) || 0.5,
         line: _t7Gist(_t7ClipScene(c) && _t7ClipScene(c).text, 90) || '(không lời)',
         why: String(row.why || '').trim() || 'Trợ lý không nêu lý do.', state: '', picks: [], custom: [] });
@@ -383,8 +447,20 @@ Return a JSON array containing ONLY the junctions that need something other than
 
 function _t7AiRender(){
   const box = document.getElementById('t7AiProps'); if (!box) return;
-  if (!_t7AiQ.length){ box.innerHTML = '<div class="t7-empty">Trợ lý không đề xuất gì thêm — các cảnh đang ổn.</div>'; return; }
-  box.innerHTML = _t7AiQ.map((q, i) => {
+  if (!_t7AiQ.length && !_t7AiHong.length){
+    box.innerHTML = '<div class="t7-empty">Trợ lý không đề xuất gì thêm — các cảnh đang ổn.</div>';
+    _t7AiTally(); return;
+  }
+  // VẺ THEO HAI NHÓM: đề xuất đang chờ + đã duyệt ở trên, những mục bị soi khung/tự kiểm loại
+  // gom xuống cuối thành nhóm "Đã tự loại (n)" kèm LÝ DO và nút ↩ dùng lại (#6). Trước đây chúng
+  // bị xoá lặng lẽ nên "không còn gì để duyệt" nhìn giống hệt "trợ lý đã loại 5 đề xuất".
+  // i là chỉ số TRONG _t7AiQ ở cả hai nhóm — mọi handler vẫn nhận đúng thứ tự hàng đợi.
+  const dong = (q, i) => {
+    // Mục bị loại: giữ nguyên trong hàng đợi với state='dr' → persistence miễn phí theo video.
+    if (q.state === 'dr') return `<div class="drow dr">
+      <span class="sc">${escapeHtml(q.name)}${q.kind === 'tr' ? ' →' : ''}</span>
+      <span class="msg">${escapeHtml(q.drop || 'Đã tự loại')}</span>
+      <button class="rst" onclick="t7AiRestore(${i})" title="Trả đề xuất này về hàng đợi chờ duyệt">↩ Dùng lại</button></div>`;
     // Đã quyết định thì gập lại một dòng — khỏi chiếm chỗ của những cảnh còn phải xem.
     if (q.state) return `<div class="drow ${q.state === 'ap' ? 'ap' : 'sk'}">
       <span class="sc">${escapeHtml(q.name)}${q.kind === 'tr' ? ' →' : ''}</span>
@@ -414,9 +490,21 @@ function _t7AiRender(){
       <p class="why">${escapeHtml(q.why)}</p>
       <div class="pra"><button class="yes" onclick="t7AiDecide(${i},true)">Gắn vào cảnh</button>
         <button onclick="t7AiDecide(${i},false)">Bỏ qua</button>
-        <button class="edbtn" onclick="t7AiEditToggle(${i},event)" title="Sửa chữ, vị trí, cỡ, màu của hiệu ứng này">⚙ Chỉnh</button></div>
+        <button class="edbtn" onclick="t7AiEditToggle(${i},event)" title="Sửa chữ, vị trí, cỡ, màu của hiệu ứng này">⚙ Chỉnh</button>
+        <button class="rgbtn" onclick="t7AiRegen(${i})" title="Hỏi trợ lý lại RIÊNG cảnh này rồi thay thẻ này — không đụng các cảnh khác">↻ Tạo lại</button></div>
     </div>
-  </div>`; }).join('');
+  </div>`;
+  };
+  const chinh = [], loai = [];
+  _t7AiQ.forEach((q, i) => (q.state === 'dr' ? loai : chinh).push(dong(q, i)));
+  box.innerHTML = chinh.join('')
+  + (loai.length ? `<div class="grp">🚫 Đã tự loại (${loai.length}) — bấm ↩ nếu muốn dùng lại</div>` + loai.join('') : '')
+  // Những cảnh lô AI làm hỏng (#4): chỉ một dòng + một nút gộp, vì thử lại từng cảnh lẻ = nhiều
+  // lượt gọi, trong khi lỗi kiểu này thường do mạng/API → thử cả nhóm một lần là đủ.
+  + (_t7AiHong.length ? `<div class="miss">
+      <div class="missh">⚠️ ${_t7AiHong.length} cảnh không lấy được đề xuất (lô AI hỏng)</div>
+      <div class="missl">${_t7AiHong.slice(0, 12).map(h => escapeHtml(h.name || String(h.sceneId))).join(' · ')}</div>
+      <button onclick="t7AiRetryFailed()">↻ Thử lại ${_t7AiHong.length} cảnh này</button></div>` : '');
   _t7AiTally();
   _t7AiPvHook();
 }
@@ -431,13 +519,51 @@ function _t7TplPosKey(cat, tpl){
   return e ? (e.params.includes('position') ? 'position' : (e.params.includes('pos') ? 'pos' : '')) : '';
 }
 
-function _t7AiQuota(n){
-  // Kho mẫu đang RỖNG nên không còn trần theo tên. Thêm mẫu mới thì đặt trần ở đây:
-  //   'ten-mau': 2,   → cả video tối đa 2 lần
-  return {
+// Tập hợp mẫu ambient / mẫu không-chữ đọc từ SIÊU DỮ DỤNG danh mục (#8) — không còn phải
+// bảo trì ba mảng _T7_AMBIENT/_T7_NOTEXT/_T7_CAM rỗng ở renderer. Gọi một lần mỗi lượt phân tích.
+function _t7AiPolicy(cat){
+  const a = new Set(), t = new Set();
+  (cat || []).forEach(c => {
+    if (c.ambient) a.add(c.template);
+    if (!_t7TplTextKey(cat, c.template)) t.add(c.template);
+  });
+  return { amb: a, noText: t };
+}
+
+// Dựng lại TRẠNG THÁI hạn ngạch từ những gì ĐÃ THỰC SỰ nằm trong video (state.sceneSpecs),
+// thay vì bắt đầu từ 0. Nếu không, mỗi lần "Tạo lại cảnh này" hay "Phân tích lại" một phần là
+// trần chữ / trần lớp không khí của cả video bị tính lại từ đầu → video vẫn phình chữ.
+// n = số cảnh dùng làm mẫu số cho trần tỉ lệ.
+function _t7AiSeed(cat, clips, specs, n){
+  const p = _t7AiPolicy(cat);
+  const S = { quota: _t7AiQuota(n, cat), used: {}, last: {}, amb: p.amb, ambN: 0, noText: p.noText, txt: 0 };
+  (clips || []).forEach((c, idx) => {
+    const sp = (specs || {})[c.sceneId];
+    if (!sp || !Array.isArray(sp.layers)) return;
+    let coChu = false;
+    sp.layers.forEach(L => {
+      if (!L || L.type === 'backdrop') return;
+      if (L.template){
+        S.used[L.template] = (S.used[L.template] || 0) + 1;
+        S.last[L.template] = idx;
+        if (p.amb.has(L.template)) S.ambN++;
+        if (_t7TplTextKey(cat, L.template)) coChu = true;
+      } else if (L.type === 'text'){ coChu = true; }      // lớp chữ tự thiết kế cũng chiếm trần chữ
+    });
+    if (coChu) S.txt++;
+  });
+  return S;
+}
+
+function _t7AiQuota(n, cat){
+  // Trần theo TỪNG mẫu nằm trong metadata danh mục (maxUse). Thêm mẫu mới → khai maxUse ở
+  // templates.js, không phải sửa renderer.
+  const q = {
     _ambient: Math.max(3, Math.ceil(n * 0.18)),
     _text: Math.max(3, Math.round(n * 0.12)),   // trần số cảnh ĐƯỢC đặt chữ
   };
+  (cat || []).forEach(c => { if (c.maxUse != null) q[c.template] = Number(c.maxUse); });
+  return q;
 }
 
 function _t7AiGate(tpl, idx, S, cat){
@@ -445,7 +571,8 @@ function _t7AiGate(tpl, idx, S, cat){
   // Cần toạ độ vật thể mà model không nhìn thấy khung hình → khoanh bừa. Chặn hẳn.
   if (_T7_CAM.includes(tpl)) return 'mẫu cần toạ độ, model không thấy khung hình';
   if (q[tpl] != null && (S.used[tpl] || 0) >= q[tpl]) return 'hết hạn ngạch mẫu này';
-  if (_T7_AMBIENT.includes(tpl) && S.amb >= q._ambient) return 'đủ lớp không khí cho cả video';
+  const isAmb = S.amb ? S.amb.has(tpl) : _T7_AMBIENT.includes(tpl);
+  if (isAmb && S.ambN >= q._ambient) return 'đủ lớp không khí cho cả video';
   if (_t7TplTextKey(cat, tpl) && S.txt >= q._text) return 'đã quá nhiều cảnh có chữ';
   const last = S.last[tpl];
   if (last != null && idx - last < 3) return 'vừa dùng cách đây ' + (idx - last) + ' cảnh';
@@ -454,7 +581,8 @@ function _t7AiGate(tpl, idx, S, cat){
 
 function _t7AiTake(tpl, idx, S, cat){
   S.used[tpl] = (S.used[tpl] || 0) + 1; S.last[tpl] = idx;
-  if (_T7_AMBIENT.includes(tpl)) S.amb++;
+  const isAmb = S.amb ? S.amb.has(tpl) : _T7_AMBIENT.includes(tpl);
+  if (isAmb) S.ambN++;
   if (_t7TplTextKey(cat, tpl)) S.txt++;
 }
 
@@ -465,10 +593,11 @@ function _t7AiQuotaLine(S){
     const con = q[k] - (S.used[k] || 0);
     if (con <= 0) out.push(`${k}: EXHAUSTED, do not use`);
   });
-  const ambCon = q._ambient - S.amb, txtCon = q._text - S.txt;
+  const ambCon = q._ambient - S.ambN, txtCon = q._text - S.txt;
   out.push(`ambient layers: ${Math.max(0, ambCon)} remaining`);
   out.push(`${Math.max(0, txtCon)} scenes still allowed to carry text`);
-  const kchu = _T7_NOTEXT.reduce((a2, k) => a2 + (S.used[k] || 0), 0);
+  const ktu = S.noText ? Object.keys(S.used).filter(k => S.noText.has(k)) : _T7_NOTEXT;
+  const kchu = ktu.reduce((a2, k) => a2 + (S.used[k] || 0), 0);
   out.push(`used ${S.txt} text templates and ${kchu} no-text templates` +
     (S.txt >= 3 && kchu === 0 ? ' → HEAVILY SKEWED TOWARD TEXT, prioritize no-text templates in this batch' : ''));
   return out.join(' · ');
@@ -477,7 +606,7 @@ function _t7AiQuotaLine(S){
 async function _t7AiMap(clips, onTick){
   if (!state.aiMap) state.aiMap = {};
   const map = state.aiMap;                       // kho của DỰ ÁN, không phải biến tạm
-  const CH = 70;                                 // 70 cảnh/lượt: gọn trong cửa sổ, vẫn thấy toàn cảnh
+  const CH = _T7_AI_MAP_CH;                           // bản đồ cần nhìn cả video để chấm đúng nhịp nhấn
   const topic = String(state.videoLogline || '').trim();
   // Chỉ đọc cảnh CHƯA có trong bản đồ hoặc đã bị sửa lời. Mở lại video cũ → 0 lượt gọi.
   const can = clips.filter(c => {
@@ -505,7 +634,7 @@ ${list}
 
 Return a JSON array with all ${lot.length} elements: [{"i":0,"role":"mo-dau","key":"","num":"","emp":2}]`;
     let arr = [];
-    try { arr = await callLLMJson(prompt, { maxTokens: 2600, validate: (d) => Array.isArray(d) }); }
+    try { arr = await _t7AiJson(prompt, { maxTokens: 2600, validate: (d) => Array.isArray(d) }); }
     catch (e){ novaLog && novaLog(`✨ Bản đồ cảnh ${i + 1}–${i + lot.length} lỗi: ${String(e.message || e).slice(0, 80)}`, 'warn'); }
     arr.forEach(r => {
       const k = Number(r && r.i); const c = lot[Number.isFinite(k) ? k : -1]; if (!c) return;
@@ -518,6 +647,20 @@ Return a JSON array with all ${lot.length} elements: [{"i":0,"role":"mo-dau","ke
   }
   try { if (typeof saveState === 'function') saveState(true); } catch (e) {}   // bản đồ là thứ đắt nhất, lưu ngay
   return map;
+}
+
+// Áp kết quả soi khung hình vào đề xuất. Tách ra để cả kết quả MỚI và kết quả CACHE cùng đi
+// qua một đường, không phân nhánh logic (cache chỉ tiết kiệm lượt gọi, không đổi cách áp dụng).
+function _t7AiVisApply(r, q, pk, tk, posKey){
+  if (r.ok === false){
+    q.drop = 'Khung hình không còn chỗ đặt chữ' + (r.why ? ' — ' + String(r.why).slice(0, 70) : '');
+    return;
+  }
+  if (posKey && _T7_POS.includes(String(r.pos))) pk[posKey] = String(r.pos);
+  const t2 = String(r.text || '').trim();
+  if (t2 && t2 !== pk[tk]){ pk[tk] = t2.slice(0, 70); }
+  if (String(q.why || '').indexOf('· Đã soi khung:') < 0)
+    q.why += ' · Đã soi khung: đặt ' + (posKey ? (pk[posKey] || 'mặc định') : 'vị trí mẫu') + '.';
 }
 
 async function _t7AiVision(cat, onTick){
@@ -555,26 +698,25 @@ Return JSON: {"ok":true/false,"pos":"corner","text":"edited text if needed","why
 - text: keep unchanged if fine; shorten to under 6 words if long; "" if ok=false.
   Write it in EXACTLY ${_t7AiLang()} — the same language as the script, do not translate to Vietnamese.
 Print ONLY the JSON.`;
+    // Cache theo vân tay(ảnh)+vân tay(câu hỏi): cùng khung hình + cùng chữ định đặt → trả lời
+    // như cũ, khỏi trả credit lần hai khi "Phân tích lại" hoặc khi cảnh khác trùng khung.
+    const vkey = _t7AiSig(b64) + '|' + _t7AiSig(prompt);
+    if (_t7AiVis.has(vkey)){ _t7AiVisApply(_t7AiVis.get(vkey), q, pk, tk, posKey); return; }
     let r = null;
     try {
-      r = await callLLMJson(prompt, { maxTokens: 300, tries: 2,
+      r = await _t7AiJson(prompt, { maxTokens: 300, tries: 2,
         messages: [{ role: 'user', content: [
           { type: 'image', source: { type: 'base64', media_type: mime, data: b64 } },
           { type: 'text', text: prompt } ] }],
         validate: (d) => d && typeof d === 'object' && !Array.isArray(d) });
     } catch (e){ doi++; return; }
     if (!r) { doi++; return; }
-    if (r.ok === false){
-      q.drop = 'Khung hình không còn chỗ đặt chữ' + (r.why ? ' — ' + String(r.why).slice(0, 70) : '');
-      return;
-    }
-    if (posKey && _T7_POS.includes(String(r.pos))) pk[posKey] = String(r.pos);
-    const t2 = String(r.text || '').trim();
-    if (t2 && t2 !== pk[tk]){ pk[tk] = t2.slice(0, 70); }
-    q.why += ' · Đã soi khung: đặt ' + (posKey ? (pk[posKey] || 'mặc định') : 'vị trí mẫu') + '.';
+    if (_t7AiVis.size > 400) _t7AiVis.clear();     // ảnh băm cả video → chặn phình vô hạn khi soi nhiều lượt
+    _t7AiVis.set(vkey, r);
+    _t7AiVisApply(r, q, pk, tk, posKey);
   };
-  // 4 luồng song song — nhanh gấp mấy lần chạy tuần tự mà không dội request.
-  const pool = 4; let cur = 0;
+  // Vài luồng song song — nhanh gấp mấy lần chạy tuần tự mà không dội request.
+  const pool = _T7_AI_POOL; let cur = 0;
   await Promise.all(Array.from({ length: Math.min(pool, jobs.length) }, async () => {
     while (cur < jobs.length && !state.cancelRequested){
       const qi = jobs[cur++];
@@ -606,7 +748,7 @@ ${list}
 
 Return JSON: [{"k":3,"why":"short Vietnamese reason, under 15 words"}]`;
   let arr = [];
-  try { arr = await callLLMJson(prompt, { maxTokens: 900, validate: (d) => Array.isArray(d) }); }
+  try { arr = await _t7AiJson(prompt, { maxTokens: 900, validate: (d) => Array.isArray(d) }); }
   catch (e){ return 0; }
   let n = 0;
   const tran = Math.ceil(live.length * 0.2);

@@ -35,6 +35,7 @@ var state = {
   // ✨ Trợ lý dựng — lưu THEO TỪNG VIDEO, thoát app vào lại không phải phân tích lại.
   aiMap: {},          // sceneId → {role, key, num, emp, h}. h = vân tay lời thoại: lời đổi mới đọc lại cảnh đó.
   aiQueue: [],        // đề xuất + trạng thái đã duyệt của từng cảnh
+  aiHong: [],         // cảnh KHÔNG lấy được đề xuất ở lượt phân tích cuối (lô AI hỏng) — lưu để mở lại vẫn thấy + thử lại được
   charactersV: [],
   backgroundsV: [],
   descMode: 'tag',

@@ -160,6 +160,8 @@
     /* projectDir có thể vắng ở bridge cũ → fallback project.root (giống pickProject). */
     state.advProject = { projectDir: r.projectDir || (r.project && r.project.root), project: r.project, job: r.job || null };
     if (ui.advPathInput) ui.advPathInput.value = state.advProject.projectDir;
+    // Nhớ projectDir cho lần mở app sau (resume công việc dang dở).
+    if (typeof sessSnapPatch === 'function') { try { sessSnapPatch('vaProjectDir', state.advProject.projectDir); } catch (e) {} }
     renderAdvChecklist(r.project);
     advSetRunButtons();
     refreshAdvVersions(r.projectDir);
@@ -300,6 +302,45 @@
     } catch (error) { notice(errText(error, `Khôi phục v${v}`)); }
   }
 
+  /* ════════ RESUME — phát hiện công việc dang dở khi mở app ════════
+     Nguồn: session snapshot (sessSnapGet) lưu projectDir gần nhất — cả
+     luồng Nâng cao (vaProjectDir) lẫn luồng Dễ chạy pipeline đầy đủ
+     (vaEasyProjectDir). Main trả job.json qua videoAgent:inspect. */
+  async function vaResumeCheck() {
+    const bridge = va25();
+    if (!bridge || typeof bridge.inspect !== 'function') return;
+    const key = (typeof sessSnapGet === 'function' && sessSnapGet('vaProjectDir')) ? 'vaProjectDir' : 'vaEasyProjectDir';
+    const projectDir = (typeof sessSnapGet === 'function') ? sessSnapGet(key) : null;
+    if (!projectDir) return;
+    try {
+      const r = await bridge.inspect(projectDir);
+      if (!r || r.ok === false) {
+        /* Dự án không còn trên đĩa → dọn key, không hỏi lại lần sau. */
+        if (typeof sessSnapPatch === 'function') { try { sessSnapPatch(key, null); } catch (e) {} }
+        return;
+      }
+      applyAdvInspect(r);   // tự lưu lại projectDir + bật nút Chạy nếu đủ kịch bản
+      const job = r.job || null;
+      const status = job ? String(job.status || '').toLowerCase() : '';
+      state.advJobId = (job && (job.jobId || job.id)) || state.advJobId;
+      advSetRunButtons();
+      if (!job) {
+        notice(`📂 Đã mở lại dự án gần nhất: ${fileName(r.projectDir || projectDir)} — chưa có lần chạy nào.`, 'info');
+      } else if (status === 'completed') {
+        showAdvResult(job);
+        markAdvStages('COMPLETED');
+        advSetProgress('Hoàn tất (lần chạy trước) 🎉', 100);
+        notice('📂 Dự án gần nhất đã HOÀN TẤT — video ở Bước 3. Bấm "🤖 Chạy Video Agent" nếu muốn dựng lại.', 'ok');
+      } else {
+        const vi = STAGE_VI[String(job.stage || job.state || '').toUpperCase()] || status || 'dở dang';
+        notice(`⏸ Công việc dang dở: "${fileName(projectDir)}" — lần chạy trước dừng ở trạng thái ${vi}. Nguyên liệu vẫn còn trong dự án — bấm "🤖 Chạy Video Agent" để dựng lại.`, 'info');
+        advSetProgress(`Công việc dang dở — trạng thái trước đó: ${vi}`, 0);
+      }
+      /* Nhảy sang tab Nâng cao — nơi có kết quả + nút chạy lại. */
+      if (typeof C.switchVaMode === 'function') { try { C.switchVaMode('advanced'); } catch (e) {} }
+    } catch (error) { notice(errText(error, 'Mở lại công việc dang dở')); }
+  }
+
   /* ── đăng ký ── */
   C.buildAdvanced = buildAdvanced; C.buildAdvStageList = buildAdvStageList;
   C.markAdvStages = markAdvStages; C.advSetRunButtons = advSetRunButtons;
@@ -308,4 +349,5 @@
   C.applyAdvInspect = applyAdvInspect; C.runAdv = runAdv; C.cancelAdv = cancelAdv;
   C.retryAdv = retryAdv; C.onAdvEvent = onAdvEvent; C.showAdvResult = showAdvResult;
   C.refreshAdvVersions = refreshAdvVersions; C.restoreAdvVersion = restoreAdvVersion;
+  C.vaResumeCheck = vaResumeCheck;
 })();

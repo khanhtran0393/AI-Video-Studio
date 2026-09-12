@@ -133,6 +133,29 @@ let _t7AiQ = [];
 const _T7_AI_STEP = ['Đọc kịch bản', 'Lập bản đồ vai trò cảnh', 'Đề xuất mẫu chuyển động',
                      'Soi khung hình cảnh có chữ', 'Tự kiểm cả kế hoạch', 'Chọn chuyển cảnh'];
 
+// === L?: const _T7_AI_BATCH ===
+// Ngân sách lô của Trợ lý dựng — trước đây rải rác 10/12/40/70/pool 4 ở năm hàm,
+// đổi một chỗ phải nhớ năm nơi. Gộp về một nguồn để chỉnh tốc độ/độ ổn định JSON tại một chỗ.
+const _T7_AI_BATCH = 10;      // cảnh mỗi lượt đề xuất mẫu (t7AiPropose + t7AiDesign)
+const _T7_AI_CH = 40;         // mối nối mỗi lượt chọn chuyển cảnh
+const _T7_AI_MAP_CH = 70;     // cảnh mỗi lượt lập bản đồ vai trò — LỚN hơn có chủ ý: cần thấy cả video mới chấm đúng nhấn
+const _T7_AI_POOL = 4;        // số luồng soi khung hình chạy song song
+
+// === L?: let _t7AiHong, _t7AiVis, _t7AiStat ===
+// _t7AiHong = những cảnh KHÔNG lấy được đề xuất ở lượt vừa rồi (lô AI hỏng). Giữ TÊN từng cảnh
+//           để báo thẳng trong sheet + bấm thử lại; trước đây chỉ một dòng nhật ký chung chung.
+// _t7AiVis  = cache kết quả soi khung hình theo vân tay(ảnh)+vân tay(câu hỏi). Cùng khung + cùng
+//           câu hỏi → trả lời như cũ, khỏi trả credit lần hai khi "Phân tích lại" một phần.
+// _t7AiStat = đếm lượt gọi AI và thời gian đã chờ để hiện ở chân sheet (minh bạch chi phí).
+let _t7AiHong = [];
+const _t7AiVis = new Map();
+const _t7AiStat = { calls: 0, ms: 0 };
+// Ngữ cảnh của lượt phân tích vừa chạy (danh mục + trần chữ/không khí + kho mẫu đã nạp) để
+// nút "↻ Tạo lại cảnh này" / "Thử lại cảnh lỗi" dựng đúng một câu hỏi như lúc phân tích đầy đủ.
+let _t7AiCtx = null;
+// _t7AiBusy = một lượt hỏi lẻ (tạo lại/thử lại) đang chạy → chặn bấm chồng hai lượt AI cùng lúc.
+let _t7AiBusy = false;
+
 // === L?: let _t7AiNote ===
 let _t7AiNote = {};
 
@@ -267,8 +290,8 @@ const NOVA_OUT_PRESETS  = ['none','fade','sinkL','sinkR','fall','shrink','wipeR'
 // === L?: const NOVA_HOLD_PRESETS ===
 const NOVA_HOLD_PRESETS = ['none','kenIn','kenOut','panL','panR','panU','panD','growX','growY','drift','breathe'];
 
-// === L?: let _t7AiGfxRunning ===
-let _t7AiGfxRunning = false;
+// (đã xoá _t7AiGfxRunning — lá chắn của đường tắt t7AiDesign cũ; từ 2026-09-12 t7AiDesign chỉ
+//  còn là alias của t7AiPropose nên dùng chung cơ chế chống chạy chồng của luồng duyệt.)
 
 // === L?: const _T7_SLIDESHOW_FX ===
 const _T7_SLIDESHOW_FX = { 'zoom-in':'slowZoomIn','zoom-out':'slowZoomOut','pan-left':'panLeft','pan-right':'panRight','pan-up':'panUp','pan-down':'panDown','none':'breathe' };

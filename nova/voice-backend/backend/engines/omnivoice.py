@@ -15,6 +15,33 @@ from pathlib import Path
 
 from .base import TTSEngine, TTSRequest
 
+# Cache ref_text đã transcribe: giọng clone KHÔNG có text mẫu thì model TỰ
+# transcribe ref_audio bằng Whisper BÊN TRONG mỗi lần generate() → văn bản dài
+# (nhiều khối) là N lần Whisper lặp lại cùng một file mẫu. Transcribe đúng 1 lần
+# rồi cache theo (đường dẫn + mtime + ngôn ngữ) → các khối sau miễn phí.
+_REF_TEXT_CACHE: dict[str, str] = {}
+
+
+def _ref_text_auto(ref_audio: str, language: str) -> str:
+    try:
+        mtime = Path(ref_audio).stat().st_mtime_ns
+    except OSError:
+        return ""
+    key = f"{ref_audio}:{mtime}:{language}"
+    if key in _REF_TEXT_CACHE:
+        return _REF_TEXT_CACHE[key]
+    try:
+        from engines import get_asr_engine  # lazy — tránh vòng import khi nạp module
+
+        r = get_asr_engine("whisper").transcribe(ref_audio, language=language or None)
+        text = (r.get("text") or "").strip()
+    except Exception as e:  # noqa — hỏng ASR: degrade lộ liễu, model tự transcribe như cơ chế cũ
+        print(f"[omnivoice] WARN pre-transcribe ref_audio lỗi ({e}) — model sẽ tự transcribe trong generate()")
+        return ""
+    if text:
+        _REF_TEXT_CACHE[key] = text
+    return text
+
 
 class OmniVoiceEngine(TTSEngine):
     name = "omnivoice"
@@ -28,6 +55,22 @@ class OmniVoiceEngine(TTSEngine):
             return
         import torch
         from omnivoice import OmniVoice
+
+        # TỐI ƯU CPU: torch mặc định dùng hết logical cores (hyper-thread) —
+        # chặn về số nhân VẬT LÝ thường nhanh hơn. Env VOICE_TORCH_THREADS ghi đè.
+        try:
+            threads = int(os.environ.get("VOICE_TORCH_THREADS", "0"))
+        except ValueError:
+            threads = 0
+        if threads <= 0:
+            try:
+                import psutil
+
+                threads = psutil.cpu_count(logical=False) or 0
+            except Exception:
+                threads = 0
+        if threads > 0:
+            torch.set_num_threads(threads)
 
         if torch.backends.mps.is_available():
             self._device = "mps"
@@ -100,7 +143,13 @@ class OmniVoiceEngine(TTSEngine):
             kwargs["ref_audio"] = req.ref_audio
             if req.ref_text:
                 kwargs["ref_text"] = req.ref_text
-            # không có ref_text -> OmniVoice tự transcribe bằng Whisper
+            else:
+                # Không có text mẫu: transcribe ĐÚNG 1 LẦN (cache theo file mẫu) thay
+                # vì để model tự Whisper bên trong MỖI lần generate() (mỗi khối một lần).
+                rt = _ref_text_auto(req.ref_audio, req.language)
+                if rt:
+                    kwargs["ref_text"] = rt
+                # rt rỗng → không truyền ref_text, model tự xử lý như cơ chế cũ
         elif instruct:
             kwargs["instruct"] = instruct
         # else: auto voice (không prompt)

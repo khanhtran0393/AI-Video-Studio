@@ -25,6 +25,11 @@
     sourceUrl: '',        // URL YouTube nguồn (chế độ heatmap)
     heatmap: null,        // mảng {start_time,end_time,value} "Most Replayed"
     downloading: false,   // đang tải nguồn YouTube về máy
+    tierA: null,          // diagnostics Tier A của lần phân tích gần nhất (null = không dùng)
+    pickedIdx: null,      // highlight đang chọn trong khung Tổng quan (đoạn đang phát/xem)
+    loopPreview: false,   // lặp lại đúng đoạn đã chọn khi gặp mốc dừng
+    previewStartMs: null, // mốc bắt đầu phát của lượt xem trước hiện tại (phục vụ loop)
+    videoErr: '',         // lý do <video> không phát được (codec/DOM) — báo lộ liễu, không im lặng
   };
 
   let SHELL = `
@@ -46,9 +51,19 @@
     .vc-prog { height: 8px; border-radius: 4px; background: rgba(255,255,255,.08); overflow: hidden; }
     .vc-prog > div { height: 100%; width: 0%; background: linear-gradient(90deg,#7c4dff,#e040fb); transition: width .3s; }
     .vc-log { font-size: 12px; opacity: .75; min-height: 16px; white-space: pre-wrap; }
-    .vc-hl { border: 1px solid rgba(255,255,255,.1); border-radius: 10px; padding: 10px 12px; font-size: 13px; background: rgba(0,0,0,.18); }
-    .vc-hl .vc-title { font-weight: 700; margin-bottom: 4px; }
-    .vc-hl .vc-meta { font-size: 11.5px; opacity: .7; }
+    .vc-hls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    @media (max-width: 900px) { .vc-hls { grid-template-columns: minmax(0, 1fr); } }
+    .vc-hl { border: 1px solid rgba(255,255,255,.1); border-radius: 10px; padding: 8px 10px; font-size: 12.5px; background: rgba(0,0,0,.18); min-width: 0; }
+    .vc-hl.vc-hl-active { border-color: #e040fb; background: rgba(224,64,251,.08); }
+    .vc-hl .vc-title { font-weight: 700; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .vc-hl .vc-meta { font-size: 11px; opacity: .7; line-height: 1.4; }
+    .vc-hl .vc-meta.vc-quote { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .vc-edit { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 14px; margin-top: 10px; }
+    @media (max-width: 760px) { .vc-edit { grid-template-columns: minmax(0, 1fr); } }
+    .vc-efield { display: flex; flex-direction: column; gap: 3px; font-size: 11px; opacity: .92; min-width: 0; }
+    .vc-efield .vc-erow { display: flex; align-items: center; gap: 8px; }
+    .vc-erange { flex: 1 1 auto; min-width: 0; accent-color: #a78bfa; }
+    .vc-ehint { font-size: 10.5px; opacity: .55; }
     .vc-badge { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11px; background: rgba(124,77,255,.25); border: 1px solid rgba(124,77,255,.5); }
     .vc-warn { font-size: 12px; color: #ffcc80; }
     .vc-tl { position: relative; height: 36px; background: rgba(0,0,0,.3); border-radius: 8px; margin-top: 10px; cursor: pointer; overflow: hidden; }
@@ -89,8 +104,32 @@
     el.textContent = warnings.map((w) => '⚠ ' + (w.message || w.code || '')).join('\n');
   };
 
-  /* ── TỔNG QUAN: URL media cục bộ qua scheme avs-media:// (Range/seek, bypass CSP) ── */
+  /* ── TỔNG QUAN: URL media cục bộ qua scheme avs-media:// (Range/seek, bypass CSP) ──
+     Scheme này KHÔNG whitelist thư mục (media-protocol.js): mọi path trên đĩa đều
+     được serve với Range. Vì vậy nếu khung hình vẫn đen thì thủ phạm là CODEC —
+     Chromium trong <video> chỉ hỗ trợ H.264/H.265(?), VP8/VP9/AV1 + AAC/Opus trong
+     MP4/WebM/M4V/MOV-mp4. MKV/AVI/TS/WMV/FLV/ProRes/HEVC → không phát được.
+     Engine cắt dùng FFmpeg THẬT nên export VẪN chạy được dù preview đen — phải nói rõ. */
   const vcMediaUrl = (p) => 'avs-media://m/' + encodeURIComponent(p);
+  const VC_HARD_UNSUPPORTED = ['.mkv', '.avi', '.ts', '.m2ts', '.mts', '.wmv', '.flv', '.vob', '.rmvb', '.ogv', '.mxf', '.hevc', '.265', '.divx'];
+
+  /* Báo lỗi preview LỘ LIỄU (Luật 10) — không im lặng để user đoán mò */
+  const vcSetVideoErr = (msg) => {
+    vcState.videoErr = msg || '';
+    const el = vcEl('vcVideoErr');
+    if (!el) return;
+    el.hidden = !vcState.videoErr;
+    el.textContent = vcState.videoErr;
+  };
+
+  /* Chuẩn đoán trước theo phần mở rộng: nhắc sớm, vẫn để <video> thử phát */
+  const vcDiagnoseSource = () => {
+    const p = String(vcState.videoPath || '').toLowerCase();
+    if (!p) return;
+    const hit = VC_HARD_UNSUPPORTED.find((x) => p.endsWith(x));
+    if (hit) vcSetVideoErr('Định dạng ' + hit.toUpperCase() + ' nhiều khả năng KHÔNG phát được trong Electron (Chromium chỉ hỗ trợ H.264/VP9/AV1 trong MP4/WebM). Khung hình có thể đen — bấm "Cắt & xuất" vẫn chạy bình thường vì engine cắt dùng FFmpeg. Muốn xem trước: xuất lại nguồn sang H.264 bằng Công cụ FFmpeg.');
+    else vcSetVideoErr('');
+  };
 
   const vcClearActiveSeg = () => {
     const marks = vcEl('vcTlMarks');
@@ -123,7 +162,7 @@
     const segs = [];
     vcState.highlights.forEach((h, i) => {
       const seg = document.createElement('div');
-      seg.className = 'vc-tl-seg';
+      seg.className = 'vc-tl-seg' + (vcState.pickedIdx === i ? ' vc-active' : '');
       seg.style.left = (h.startMs / durMs * 100) + '%';
       seg.style.width = Math.max(1.5, (h.endMs - h.startMs) / durMs * 100) + '%';
       seg.textContent = String(i + 1);
@@ -132,6 +171,7 @@
       marks.appendChild(seg);
       segs.push(seg);
     });
+    vcRenderPick();
     return segs;
   };
 
@@ -222,7 +262,7 @@
           </select>
         </label>
         <label class="vc-field">Số clip tối đa
-          <select id="vcMaxClips"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option><option>6</option><option>8</option><option>10</option></select>
+          <select id="vcMaxClips"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>8</option><option selected>10</option></select>
         </label>
         <label class="vc-field">Dài tối thiểu (giây)
           <input id="vcMinLen" type="number" min="5" max="180" value="15">
@@ -231,12 +271,19 @@
           <input id="vcMaxLen" type="number" min="10" max="300" value="45">
         </label>
         <label class="vc-field">Tỉ lệ xuất
-          <select id="vcAspect"><option value="keep">Giữ nguyên</option><option value="916">9:16 (dọc)</option></select>
+          <select id="vcAspect"><option value="keep">Giữ nguyên</option><option value="916">9:16 (dọc)</option><option value="169">16:9 (ngang)</option></select>
         </label>
         <label class="vc-field">Xuất
           <select id="vcMerge"><option value="1" selected>Từng clip + ghép 1 video</option><option value="0">Chỉ từng clip riêng</option></select>
         </label>
       </div>
+      <div class="vc-row" style="margin-top:10px">
+        <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;white-space:nowrap;cursor:pointer"><input type="checkbox" id="vcTierA"> 🧠 Tier A — đa tín hiệu local (không AI, không mạng)</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;white-space:nowrap;cursor:pointer;opacity:.85"><input type="checkbox" id="vcTierASnap" checked> neo biên (cảnh cắt/im lặng)</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;white-space:nowrap;cursor:pointer;opacity:.85"><input type="checkbox" id="vcTierASil" checked> nhận im lặng</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;white-space:nowrap;cursor:pointer;opacity:.85"><input type="checkbox" id="vcTierAPitch" checked> phân tích cao độ</label>
+      </div>
+      <div class="vc-file" id="vcTierAInfo" style="margin-top:6px;white-space:pre-wrap;line-height:1.5" hidden></div>
       <div class="vc-row" style="margin-top:12px">
         <button class="vc-btn vc-primary" id="vcAnalyze">⚡ Phân tích &amp; chọn highlight</button>
         <button class="vc-btn vc-danger" id="vcCancel" disabled>✕ Hủy</button>
@@ -248,16 +295,49 @@
     <div class="vc-card" id="vcOverviewCard" hidden>
       <h4>3 · Tổng quan &amp; điều chỉnh</h4>
       <video id="vcVideo" controls style="width:100%;max-height:420px;border-radius:10px;background:#000" preload="metadata"></video>
+      <div class="vc-warn" id="vcVideoErr" hidden></div>
       <div class="vc-row" style="margin-top:6px"><button class="vc-btn vc-primary" id="vcGetSrc" hidden>⬇ Tải video nguồn về máy (để xem trước &amp; cắt nhanh hơn)</button></div>
       <div class="vc-tl" id="vcTimeline" title="Click vào khối màu để xem trước đoạn cắt — click nền để tua video">
         <div id="vcTlMarks" style="position:absolute;inset:0"></div>
         <div class="vc-tl-cursor" id="vcTlCursor" style="left:0"></div>
       </div>
       <div class="vc-file" id="vcTlHint" style="margin-top:6px">Chưa có highlight — bấm "Phân tích" để chọn đoạn.</div>
+      <div class="vc-row" style="margin-top:10px">
+        <label class="vc-field" style="min-width:260px">Đoạn đang chỉnh
+          <select id="vcPickHl"></select>
+        </label>
+        <button class="vc-btn" id="vcPrevHl" title="Đoạn trước">◀</button>
+        <button class="vc-btn" id="vcNextHl" title="Đoạn sau">▶</button>
+        <button class="vc-btn vc-primary" id="vcPlaySel" disabled>▶ Phát đoạn</button>
+        <button class="vc-btn" id="vcStopSel" disabled>⏹ Dừng</button>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;white-space:nowrap;cursor:pointer"><input type="checkbox" id="vcLoopSel"> lặp đoạn</label>
+        <span class="vc-meta" id="vcSelInfo" style="font-size:12px;opacity:.7">—</span>
+      </div>
+      <div class="vc-edit">
+        <label class="vc-field">Bắt đầu (giây)
+          <span class="vc-ehint" id="vcStartHint"></span>
+          <span class="vc-erow">
+            <input class="vc-num" id="vcSelStart" type="number" min="0" step="0.5" style="width:92px">
+            <input class="vc-erange" id="vcSelStartR" type="range" min="0" max="100" step="0.1" value="0">
+          </span>
+        </label>
+        <label class="vc-field">Kết thúc (giây)
+          <span class="vc-ehint" id="vcEndHint"></span>
+          <span class="vc-erow">
+            <input class="vc-num" id="vcSelEnd" type="number" min="0" step="0.5" style="width:92px">
+            <input class="vc-erange" id="vcSelEndR" type="range" min="0" max="100" step="0.1" value="0">
+          </span>
+        </label>
+      </div>
+      <div class="vc-row" style="margin-top:8px">
+        <button class="vc-btn" id="vcMarkStart" disabled>⇤ Lấy vị trí đang phát làm Bắt đầu</button>
+        <button class="vc-btn" id="vcMarkEnd" disabled>⇥ Lấy vị trí đang phát làm Kết thúc</button>
+        <span class="vc-meta" id="vcSelDur" style="font-size:12px;opacity:.7"></span>
+      </div>
     </div>
     <div class="vc-card" id="vcResultCard" hidden>
       <h4>4 · Highlight &amp; xuất <span class="vc-badge" id="vcTier"></span></h4>
-      <div class="vc-wrap" id="vcHlList"></div>
+      <div class="vc-hls" id="vcHlList"></div>
       <div class="vc-row" style="margin-top:12px">
         <button class="vc-btn" id="vcPickOut">📁 Chọn thư mục xuất…</button>
         <button class="vc-btn vc-primary" id="vcExport" disabled>✂️ Cắt &amp; xuất tất cả</button>
@@ -266,6 +346,10 @@
     </div>
   </div>`;
 
+  /* Escape text từ engine/LLM trước khi nhét vào innerHTML (chống vỡ markup) */
+  const vcEsc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
   const vcRenderResults = () => {
     const card = vcEl('vcResultCard');
     const list = vcEl('vcHlList');
@@ -273,23 +357,24 @@
     if (!vcState.highlights.length) { card.hidden = true; return; }
     card.hidden = false;
     const tierEl = vcEl('vcTier');
-    if (tierEl) tierEl.textContent = { llm: 'tầng LLM', heuristic: 'tầng heuristic', energy: 'tầng năng lượng', heatmap: 'tầng heatmap YouTube' }[vcState.tier] || vcState.tier;
+    if (tierEl) tierEl.textContent = { llm: 'tầng LLM', heuristic: 'tầng heuristic', energy: 'tầng năng lượng', fusion: 'tầng đa tín hiệu local (Tier A)', heatmap: 'tầng heatmap YouTube' }[vcState.tier] || vcState.tier;
     list.innerHTML = '';
+    /* 1 hàng 2 khung: card gọn — title 1 dòng, meta 1 dòng, điều khiển 1 dòng */
     vcState.highlights.forEach((h, i) => {
       const div = document.createElement('div');
-      div.className = 'vc-hl';
-      const dur = Math.round((h.endMs - h.startMs) / 1000);
+      div.className = 'vc-hl' + (vcState.pickedIdx === i ? ' vc-hl-active' : '');
+      const dur = ((h.endMs - h.startMs) / 1000).toFixed(1);
       const hookIn = h.hookStartMs != null && h.hookStartMs >= h.startMs && h.hookEndMs <= h.endMs;
-      const hook = hookIn ? ' · hook ' + vcFmt(h.hookStartMs) + '–' + vcFmt(h.hookEndMs) : '';
-      div.innerHTML = '<div class="vc-title">' + (i + 1) + '. ' + (h.title || 'Clip') + '</div>' +
-        '<div class="vc-meta">' + vcFmt(h.startMs) + ' → ' + vcFmt(h.endMs) + ' (' + dur + 's)' + hook +
-        ' · điểm ' + h.score + (h.reason ? ' — ' + h.reason : '') + '</div>' +
-        (hookIn && h.hookText ? '<div class="vc-meta">🔊 "' + h.hookText + '"</div>' : '') +
-        '<div class="vc-row" style="margin-top:6px;align-items:flex-end">' +
-          '<label class="vc-field">Bắt đầu (s)<input class="vc-num" type="number" min="0" step="1" data-i="' + i + '" data-f="start" value="' + Math.round(h.startMs / 1000) + '"></label>' +
-          '<label class="vc-field">Kết thúc (s)<input class="vc-num" type="number" min="0" step="1" data-i="' + i + '" data-f="end" value="' + Math.round(h.endMs / 1000) + '"></label>' +
-          '<span class="vc-meta">Độ dài: ' + dur + 's</span>' +
-          '<button class="vc-btn" data-prev="' + i + '">▶ Xem đoạn này</button>' +
+      div.innerHTML = '<div class="vc-title" title="' + vcEsc(h.title || 'Clip') + '">' + (i + 1) + '. ' + vcEsc(h.title || 'Clip') + '</div>' +
+        '<div class="vc-meta">' + vcFmt(h.startMs) + ' → ' + vcFmt(h.endMs) + ' · ' + dur + 's · điểm ' + h.score +
+        (hookIn ? ' · hook ' + vcFmt(h.hookStartMs) + '–' + vcFmt(h.hookEndMs) : '') + '</div>' +
+        (h.reason ? '<div class="vc-meta">' + vcEsc(h.reason) + '</div>' : '') +
+        (hookIn && h.hookText ? '<div class="vc-meta vc-quote" title="' + vcEsc(h.hookText) + '">🔊 "' + vcEsc(h.hookText) + '"</div>' : '') +
+        '<div class="vc-row" style="margin-top:6px;gap:6px">' +
+          '<label class="vc-field" style="gap:2px">Bắt đầu<input class="vc-num" type="number" min="0" step="0.5" data-i="' + i + '" data-f="start" value="' + (h.startMs / 1000).toFixed(1) + '" style="width:82px"></label>' +
+          '<label class="vc-field" style="gap:2px">Kết thúc<input class="vc-num" type="number" min="0" step="0.5" data-i="' + i + '" data-f="end" value="' + (h.endMs / 1000).toFixed(1) + '" style="width:82px"></label>' +
+          '<button class="vc-btn" data-prev="' + i + '" title="Phát riêng đoạn này">▶</button>' +
+          '<button class="vc-btn" data-edit="' + i + '" title="Chọn để chỉnh chi tiết ở khung 3">✎ Chỉnh</button>' +
         '</div>';
       list.appendChild(div);
     });
@@ -324,6 +409,41 @@
     if (el) el.textContent = 'Chưa chọn SRT — chế độ Auto sẽ dùng năng lượng âm thanh khi thiếu transcript.';
   };
 
+  /* ── TIER A: tuỳ chọn gửi xuống IPC + diễn giải diagnostics (fail khai báo, không đoán mò) ── */
+  const vcTierAOptions = () => {
+    const main = (vcEl('vcTierA') || {}).checked;
+    if (!main) return null;
+    return {
+      enabled: true,
+      sceneSnap: !!((vcEl('vcTierASnap') || {}).checked),
+      silenceAware: !!((vcEl('vcTierASil') || {}).checked),
+      pitch: !!((vcEl('vcTierAPitch') || {}).checked),
+    };
+  };
+  const vcTierAShow = (ta) => {
+    vcState.tierA = ta || null;
+    const el = vcEl('vcTierAInfo');
+    if (!el) return;
+    if (!ta || !ta.enabled) { el.hidden = true; el.textContent = ''; return; }
+    const f = ta.features || {};
+    const parts = [];
+    parts.push('đã dùng: ' + (ta.used || 'không rõ'));
+    parts.push('neo ' + (ta.anchorCount || 0) + ' điểm (' + (ta.cutCount || 0) + ' cảnh cắt + ' + (ta.silenceGapCount || 0) + ' im lặng)');
+    parts.push('đã neo ' + (ta.snappedEdges || 0) + ' biên clip');
+    if (ta.weights) parts.push('trọng số năng lượng ' + ta.weights.energy + ' / cao độ ' + ta.weights.pitch + ' / giọng ' + ta.weights.voiced);
+    const st = (name, feat) => name + ': ' + (feat && feat.available ? 'OK' : 'KHÔNG (' + ((feat && feat.reason) || 'không rõ') + ')');
+    const short = (s) => (s.length > 150 ? s.slice(0, 150) + '…' : s);
+    const lines = ['🧠 Tier A — ' + parts.join(' · ')];
+    if (f.keyframe) lines.push('  • ' + short(st('cảnh cắt', f.keyframe)) + (f.keyframe.available ? ' (' + f.keyframe.count + ' keyframe)' : ''));
+    if (f.silence) lines.push('  • ' + short(st('im lặng', f.silence)) + (f.silence.available ? ' (' + f.silence.gapCount + ' khoảng, ' + f.silence.totalSec + 's)' : ''));
+    if (f.pitch) lines.push('  • ' + short(st('cao độ', f.pitch)) + (f.pitch.available ? ' (' + f.pitch.frames + ' frame, ' + f.pitch.rate + 'Hz, ' + f.pitch.ms + 'ms' + (f.pitch.truncated ? ', chặn ' + f.pitch.analyzedSec + 's' : '') + ')' : ''));
+    if (ta.adjustments && ta.adjustments.length) {
+      lines.push('  • dịch biên: ' + ta.adjustments.map((a) => vcFmt(a.fromStartMs) + '–' + vcFmt(a.fromEndMs) + ' → ' + vcFmt(a.toStartMs) + '–' + vcFmt(a.toEndMs) + ' (' + a.via + ')').join('; '));
+    }
+    el.hidden = false;
+    el.textContent = lines.join('\n');
+  };
+
   const vcAnalyze = async () => {
     if (vcState.analyzing) return;
     if (!vcState.videoPath) { vcSetLog('Hãy chọn video gốc trước.'); return; }
@@ -338,6 +458,7 @@
     vcState.previewUntilMs = null;
     vcState.previewIdx = null;
     vcWarn([]);
+    vcTierAShow(null);
     vcSetBusy();
     vcSetProg(2, 'Bắt đầu phân tích…');
     try {
@@ -345,9 +466,10 @@
         videoPath: vcState.videoPath,
         srtPath: vcState.srtPath,
         mode,
-        maxClips: Number((vcEl('vcMaxClips') || {}).value) || 3,
+        maxClips: Number((vcEl('vcMaxClips') || {}).value) || 10,
         minLen: Number((vcEl('vcMinLen') || {}).value) || 15,
         maxLen: Number((vcEl('vcMaxLen') || {}).value) || 45,
+        tierA: vcTierAOptions(),
       });
       if (!r || !r.ok) {
         vcSetProg(null, 'Lỗi: ' + ((r && r.error) || 'không rõ') + (r && r.code ? ' [' + r.code + ']' : ''));
@@ -358,6 +480,7 @@
       vcState.tier = r.tier || '';
       if (!vcState.durationMs && r.durationSec) vcState.durationMs = Math.round(r.durationSec * 1000);
       vcWarn(r.warnings);
+      vcTierAShow(r.tierA);
       vcSetProg(100, 'Xong — ' + vcState.highlights.length + ' highlight (tầng ' + vcState.tier + ', video ' + Math.round(r.durationSec) + 's). Nhấp khối màu trên timeline để xem trước.');
       vcRenderResults();
       vcRenderTimeline();
@@ -380,13 +503,14 @@
     vcState.previewUntilMs = null;
     vcState.previewIdx = null;
     vcWarn([]);
+    vcTierAShow(null);
     vcSetBusy();
     vcSetProg(3, 'Đọc metadata YouTube (heatmap + chapters)…');
     try {
       const r = await window.native.viralCut.analyzeYoutube({
         url,
         withComments: !!(vcEl('vcComments') || {}).checked,
-        maxClips: Number((vcEl('vcMaxClips') || {}).value) || 3,
+        maxClips: Number((vcEl('vcMaxClips') || {}).value) || 10,
         minLen: Number((vcEl('vcMinLen') || {}).value) || 15,
         maxLen: Number((vcEl('vcMaxLen') || {}).value) || 45,
       });
@@ -461,7 +585,8 @@
         videoPath: vcState.videoPath,
         sourceUrl: vcState.sourceUrl,
         outDir: vcState.outDir,
-        crop916: ((vcEl('vcAspect') || {}).value === '916'),
+        /* `aspect` là hợp đồng mới của IPC export ('keep'|'916'|'169') */
+        aspect: ((vcEl('vcAspect') || {}).value || 'keep'),
         mergeAll: ((vcEl('vcMerge') || {}).value || '1') !== '0',
         highlights: vcState.highlights,
       });
@@ -470,7 +595,8 @@
         vcSetProg(null, 'Lỗi cắt (đã xong ' + done + ' clip trước đó): ' + ((r && r.error) || '') + (r && r.code ? ' [' + r.code + ']' : ''));
         return;
       }
-      vcSetProg(100, 'Đã xuất ' + r.count + ' clip'
+      const aspNote = { '916': ' (khung 9:16)', '169': ' (khung 16:9)' }[r.aspect] || '';
+      vcSetProg(100, 'Đã xuất ' + r.count + ' clip' + aspNote
         + (r.mergedPath ? ' + bản ghép: ' + r.mergedPath : (r.mergeNote ? ' (' + r.mergeNote + ')' : ''))
         + ' → ' + r.outDir);
       if (window.native.openPath && r.outDir) window.native.openPath(r.outDir);

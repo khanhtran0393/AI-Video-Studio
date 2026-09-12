@@ -5,6 +5,8 @@ tải file khi completed. Model chạy tuần tự qua 1 worker + mutex (giống
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 import shutil
 import threading
@@ -132,6 +134,96 @@ try:
         print(f"[cleanup] đã dọn {_pruned_up} file mẫu cũ trong data/uploads")
 except Exception as _e:  # noqa
     print(f"[cleanup] dọn data/uploads lỗi: {_e}")
+
+
+# ---- Cache dòng giọng (tái dùng WAV đã gen cho khối giống hệt) ----
+# Workflow kịch bản thực tế: gen → nghe → sửa 1-2 câu → gen lại. Không cache thì
+# TOÀN BỘ khối phải sinh lại dù chỉ 1 câu đổi. Cache băm (engine, giọng, text, speed,
+# advanced params) → file WAV; khối trùng khớp copy tức thì, không gọi model.
+# Lưu ý: pitch/gap_ms là HẬU KỲ (áp sau khi đã có WAV) → không nằm trong key.
+TTS_CACHE_DIR = config.DATA_DIR / "tts-cache"
+TTS_CACHE_MAX_TOTAL_BYTES = 2 * 1024 * 1024 * 1024   # trần tổng 2GB
+TTS_CACHE_KEEP_ENTRIES = 2000                        # hoặc tối đa N mục mới nhất
+
+
+def _tts_cache_key(engine_name: str, lang: str, speed: float, text: str,
+                   ref_audio: Optional[str], ref_text: Optional[str],
+                   attributes: dict, device_preference: Optional[str]) -> str:
+    def _stable(v) -> str:
+        if v is None:
+            return ""
+        if isinstance(v, dict):
+            return json.dumps(v, sort_keys=True, ensure_ascii=False, default=str)
+        return str(v)
+
+    ref_sig = ""
+    if ref_audio:
+        try:
+            ref_sig = f"{ref_audio}:{Path(ref_audio).stat().st_mtime_ns}"
+        except OSError:
+            ref_sig = str(ref_audio)
+    raw = "|".join([
+        engine_name, lang, f"{speed:.4f}", text, ref_sig,
+        _stable(ref_text), _stable(attributes), _stable(device_preference),
+    ])
+    return hashlib.sha1(raw.encode("utf-8")).hexdigest()
+
+
+def _tts_cache_path(key: str) -> Path:
+    return TTS_CACHE_DIR / key[:2] / f"{key}.wav"
+
+
+def _tts_cache_get(key: str) -> Optional[Path]:
+    p = _tts_cache_path(key)
+    if p.is_file() and p.stat().st_size > 44:   # WAV trục trặc chỉ còn header 44 byte → bỏ
+        return p
+    return None
+
+
+def _tts_cache_put(key: str, wav: Path) -> None:
+    dst = _tts_cache_path(key)
+    try:
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(wav, dst)
+    except OSError as e:
+        print(f"[tts-cache] ghi cache lỗi (bỏ qua): {e}")
+
+
+def _prune_tts_cache_startup() -> int:
+    """Dọn data/tts-cache theo trần dung lượng/số mục, giữ mục mới nhất."""
+    removed = 0
+    try:
+        entries = []
+        for p in TTS_CACHE_DIR.rglob("*.wav"):
+            try:
+                st = p.stat()
+                entries.append((st.st_mtime, st.st_size, p))
+            except OSError:
+                continue
+        entries.sort(reverse=True)
+        total = 0
+        kept = 0
+        for mtime, size, p in entries:
+            if kept < TTS_CACHE_KEEP_ENTRIES and total + size <= TTS_CACHE_MAX_TOTAL_BYTES:
+                kept += 1
+                total += size
+                continue
+            try:
+                p.unlink(missing_ok=True)
+                removed += 1
+            except OSError:
+                total += size
+    except Exception:  # noqa — dọn cache không bao giờ làm sập backend
+        return removed
+    return removed
+
+
+try:
+    _pruned_cache = _prune_tts_cache_startup()
+    if _pruned_cache:
+        print(f"[cleanup] đã dọn {_pruned_cache} file cũ trong data/tts-cache")
+except Exception as _e:  # noqa
+    print(f"[cleanup] dọn data/tts-cache lỗi: {_e}")
 
 
 
@@ -358,18 +450,31 @@ def _run_tts(task: dict) -> None:
         t_synth = time.time()
         for i, sent in enumerate(sentences):
             wav = job_dir / f"line_{i:03d}.wav"
-            engine.synthesize(
-                TTSRequest(
-                    text=sent,
-                    language=lang,
-                    ref_audio=ref_audio,
-                    ref_text=ref_text,
-                    device_preference=device_preference,
-                    speed=speed,
-                    attributes=attributes,
-                ),
-                wav,
-            )
+            # TĂNG TỐC: khối giống hệt (cùng engine/giọng/text/tham số) đã gen trước
+            # đó → copy tức thì từ cache, không gọi model (workflow edit-retry).
+            ckey = _tts_cache_key(engine_name, lang, speed, sent, ref_audio,
+                                  ref_text, attributes, device_preference)
+            cached = _tts_cache_get(ckey)
+            if cached is not None:
+                try:
+                    shutil.copyfile(cached, wav)
+                    task["timings"]["cache_hits"] = task["timings"].get("cache_hits", 0) + 1
+                except OSError:
+                    cached = None
+            if cached is None:
+                engine.synthesize(
+                    TTSRequest(
+                        text=sent,
+                        language=lang,
+                        ref_audio=ref_audio,
+                        ref_text=ref_text,
+                        device_preference=device_preference,
+                        speed=speed,
+                        attributes=attributes,
+                    ),
+                    wav,
+                )
+                _tts_cache_put(ckey, wav)
             futs.append((sent, wav, post.submit(_post, wav, pitch)))
             task["progress"] = i + 1
         task["timings"]["synth_total_ms"] = round((time.time() - t_synth) * 1000, 2)
@@ -416,6 +521,28 @@ def _run_asr(task: dict) -> None:
 
 
 threading.Thread(target=_worker, daemon=True).start()
+
+
+def _prewarm_default_engine() -> None:
+    """Nạp sẵn model của engine mặc định ngay khi backend lên → lần gen đầu
+    không phải chờ thêm 30-60s load model. Chạy nền và GIỮ _MODEL_LOCK trong lúc
+    nạp để không tranh chấp với task thật (task tới sớm sẽ chờ lock như cơ chế
+    chờ load cũ). Lỗi chỉ in log — gen lần đầu vẫn tự nạp theo cơ chế lazy."""
+    try:
+        time.sleep(0.3)
+        eng_name = (config.TTS_ENGINE or "").strip().lower()
+        if not eng_name or eng_name == "mock":
+            return
+        t0 = time.time()
+        with _MODEL_LOCK:
+            _, engine = _resolve_tts_engine({"engine": eng_name})
+            engine.load()
+        print(f"[prewarm] đã nạp sẵn engine {eng_name} trong {time.time() - t0:.1f}s")
+    except Exception as _e:  # noqa — prewarm chỉ là tối ưu, không làm sập backend
+        print(f"[prewarm] nạp sẵn engine lỗi (gen lần đầu sẽ tự nạp): {_e}")
+
+
+threading.Thread(target=_prewarm_default_engine, daemon=True).start()
 
 
 # ---- Schemas ----

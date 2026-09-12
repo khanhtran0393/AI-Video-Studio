@@ -347,4 +347,210 @@ t('blendCommentBoost: boost theo tỉ lệ phủ × weight, không đụng cửa
   assert.deepStrictEqual(same, hls);
 });
 
+/* ── 11. TIER A — multimodal local (keyframe proxy / im lặng / cao độ / fusion / snap) ── */
+function t11mkWav(samples, sr, ch) {
+  const chans = ch || 1;
+  const n = samples.length;
+  const data = Buffer.alloc(n * chans * 2);
+  for (let i = 0; i < n; i++) {
+    const v = Math.max(-32768, Math.min(32767, Math.round(samples[i])));
+    for (let c = 0; c < chans; c++) data.writeInt16LE(v, (i * chans + c) * 2);
+  }
+  const fmt = Buffer.alloc(16);
+  fmt.writeUInt16LE(1, 0); fmt.writeUInt16LE(chans, 2); fmt.writeUInt32LE(sr, 4);
+  fmt.writeUInt32LE(sr * chans * 2, 8); fmt.writeUInt16LE(chans * 2, 12); fmt.writeUInt16LE(16, 14);
+  const riff = Buffer.alloc(4); riff.writeUInt32LE(36 + data.length, 0);
+  const dsize = Buffer.alloc(4); dsize.writeUInt32LE(data.length, 0);
+  return Buffer.concat([
+    Buffer.from('RIFF'), riff, Buffer.from('WAVE'),
+    Buffer.from('fmt '), Buffer.from([16, 0, 0, 0]), fmt,
+    Buffer.from('data'), dsize, data,
+  ]);
+}
+function t11sine(seconds, hz, sr, amp) {
+  const out = new Array(Math.round(seconds * sr));
+  for (let i = 0; i < out.length; i++) out[i] = (amp || 12000) * Math.sin(2 * Math.PI * hz * (i / sr));
+  return out;
+}
+t('parseKeyframePackets: csv ffprobe "pts_time,flags" — chỉ packet cờ K, sort+dedupe', () => {
+  const raw = '12.500000,KF,\r\n12.500000,KF,\r\n0.000000,KF,\r\n1.040000,_,\r\n45.9,KF,\r\nrác không phải csv\r\n';
+  assert.deepStrictEqual(E.parseKeyframePackets(raw), [0, 12500, 45900]);
+  assert.deepStrictEqual(E.parseKeyframePackets(raw, { durationMs: 20000 }), [0, 12500], 'cắt theo durationMs');
+});
+t('parseKeyframePackets: dạng array object (-of json) + rác → vẫn ra keyframe', () => {
+  const arr = [{ pts_time: '3.5', flags: 'K_' }, { pts_time: '7', flags: '__' }, { pts_time: 'x', flags: 'K' }, null];
+  assert.deepStrictEqual(E.parseKeyframePackets(arr), [3500]);
+  assert.deepStrictEqual(E.parseKeyframePackets(null), []);
+});
+t('detectSilence: ngưỡng RMS tương đối theo đỉnh, bỏ gap ngắn hơn minSec', () => {
+  const vals = [];
+  for (let i = 0; i < 60; i++) vals.push(0.8);
+  for (let i = 20; i < 21; i++) vals[i] = 0.001;      // gap 1s — quá ngắn (minSec 1.5)
+  for (let i = 30; i < 34; i++) vals[i] = 0.0005;     // gap 4s — đạt
+  const sil = E.detectSilence(fakeWins(vals), {});
+  assert.strictEqual(sil.gaps.length, 1, 'chỉ 1 gap đạt: ' + JSON.stringify(sil.gaps));
+  assert.strictEqual(sil.gaps[0].startMs, 30000);
+  assert.strictEqual(sil.gaps[0].endMs, 34000);
+  assert.strictEqual(sil.gaps[0].midMs, 32000);
+  assert.strictEqual(sil.totalSec, 4);
+  assert.ok(sil.threshold > 0 && sil.threshold < 0.8);
+  assert.deepStrictEqual(E.detectSilence([], {}), { threshold: 0, gaps: [], totalSec: 0 }, 'wins rỗng → trung tính');
+});
+t('buildBoundaryAnchors: cut ưu tiên gap khi sát nhau, sort, loại rác', () => {
+  const a = E.buildBoundaryAnchors([10000, 5000, 5010, NaN], [{ midMs: 5200 }, { midMs: 20000 }], { mergeTolMs: 250 });
+  assert.deepStrictEqual(a, [{ ms: 5000, kind: 'cut' }, { ms: 10000, kind: 'cut' }, { ms: 20000, kind: 'gap' }],
+    'gap 5200 gộp vào cut 5000 (cut thắng): ' + JSON.stringify(a));
+  assert.deepStrictEqual(E.buildBoundaryAnchors([], []), []);
+});
+
+t('snapWindowEdges: kéo biên về neo trong tolerance; ngoài tolerance giữ nguyên', () => {
+  const anchors = [{ ms: 11800, kind: 'cut' }, { ms: 42600, kind: 'gap' }, { ms: 300000, kind: 'cut' }];
+  const hls = [{ startMs: 12000, endMs: 42000, score: 5, reason: 'gốc' }];
+  const r = E.snapWindowEdges(hls, anchors, { minLen: 15, maxLen: 45, durationMs: 480000 });
+  assert.strictEqual(r.highlights[0].startMs, 11800);
+  assert.strictEqual(r.highlights[0].endMs, 42600);
+  assert.strictEqual(r.highlights[0].snappedEdges, 2);
+  assert.ok(/neo 2 biên \(Tier A: đầu→cảnh cắt, cuối→im lặng\)/.test(r.highlights[0].reason), 'reason khai báo: ' + r.highlights[0].reason);
+  assert.strictEqual(r.adjustments.length, 1);
+  assert.strictEqual(hls[0].startMs, 12000, 'KHÔNG mutate input');
+  const far = E.snapWindowEdges([{ startMs: 20000, endMs: 40000 }], [{ ms: 200000, kind: 'cut' }, { ms: 11800, kind: 'gap' }], { toleranceMs: 4000, minLen: 15, maxLen: 45 });
+  assert.strictEqual(far.highlights[0].startMs, 20000, 'ngoài tolerance → giữ nguyên start');
+  assert.strictEqual(far.highlights[0].endMs, 40000, 'ngoài tolerance → giữ nguyên end');
+  assert.strictEqual(far.adjustments.length, 0);
+});
+t('snapWindowEdges: snap làm vỡ [minLen,maxLen] → revert, vẫn vi phạm thì trả nguyên bản', () => {
+  const a1 = E.snapWindowEdges([{ startMs: 10000, endMs: 25000, score: 4 }], [{ ms: 10200, kind: 'cut' }, { ms: 20000, kind: 'cut' }], { toleranceMs: 4000, minLen: 15, maxLen: 45 });
+  assert.ok(a1.highlights[0].endMs - a1.highlights[0].startMs >= 15000, 'độ dài ≥ minLen sau revert: ' + JSON.stringify(a1.highlights[0]));
+  const both = E.snapWindowEdges([{ startMs: 10000, endMs: 24000, score: 4 }], [{ ms: 10400, kind: 'cut' }, { ms: 20000, kind: 'cut' }], { toleranceMs: 4000, minLen: 15, maxLen: 45 });
+  assert.strictEqual(both.highlights[0].startMs, 10000);
+  assert.strictEqual(both.highlights[0].endMs, 24000);
+  assert.strictEqual(both.adjustments.length, 0, 'revert hết → không adjustment');
+  const over = E.snapWindowEdges([{ startMs: 40000, endMs: 70000, score: 4 }], [{ ms: 72000, kind: 'cut' }], { toleranceMs: 4000, minLen: 15, maxLen: 45, durationMs: 71000 });
+  assert.strictEqual(over.highlights[0].endMs, 70000, 'snap vượt cuối video → revert');
+});
+t('estimatePitchFrames: sine → f0 đúng Hz; âm câm → null; stereo downmix OK', () => {
+  const sr = 48000;
+  const buf = t11mkWav(t11sine(4, 130, sr), sr, 1);
+  const info = E.pcmFromWav(buf);
+  const r = E.estimatePitchFrames(buf, info, {});
+  assert.ok(r.frames.length > 20, 'nhiều frame: ' + r.frames.length);
+  const voiced = r.frames.filter((f) => f.f0 != null);
+  assert.ok(voiced.length / r.frames.length > 0.8, 'voiced ratio cao với sine: ' + voiced.length + '/' + r.frames.length);
+  const med = voiced.map((f) => f.f0).sort((a, b) => a - b)[Math.floor(voiced.length / 2)];
+  assert.ok(Math.abs(med - 130) <= 3, 'median f0 ≈ 130Hz, got ' + med);
+  assert.ok(r.rate >= 6000 && r.rate <= 8100, 'rate rút gọn ~8k: ' + r.rate);
+  assert.strictEqual(r.truncated, false);
+  assert.ok(r.analyzedSec >= 3.5, 'analyzedSec: ' + r.analyzedSec);
+  const zbuf = t11mkWav(new Array(sr * 2).fill(0), sr, 1);
+  const sil = E.estimatePitchFrames(zbuf, E.pcmFromWav(zbuf), {});
+  assert.ok(sil.frames.length > 0 && sil.frames.every((f) => f.f0 === null), 'âm câm → mọi f0 null');
+  const st = t11mkWav(t11sine(2, 200, sr), sr, 2);
+  const stf = E.estimatePitchFrames(st, E.pcmFromWav(st), {});
+  const sv = stf.frames.filter((f) => f.f0 != null).map((f) => f.f0).sort((a, b) => a - b);
+  assert.ok(Math.abs(sv[Math.floor(sv.length / 2)] - 200) <= 4, 'stereo downmix đúng: ' + sv[Math.floor(sv.length / 2)]);
+});
+t('estimatePitchFrames: PCM hỏng / bits ≠ 16 → lỗi lộ liễu (không fallback)', () => {
+  assert.throws(() => E.estimatePitchFrames(Buffer.alloc(10), null), /VC_PITCH/);
+  assert.throws(() => E.estimatePitchFrames(Buffer.alloc(100), { sampleRate: 0 }), /VC_PITCH/);
+  assert.throws(() => E.estimatePitchFrames(Buffer.alloc(100), { sampleRate: 48000, bitsPerSample: 32, dataOffset: 0, dataLen: 100 }), /VC_PITCH_P16/);
+});
+t('estimatePitchFrames: maxSeconds chặn phân tích → truncated KHAI BÁO rõ', () => {
+  const sr = 16000;
+  const buf = t11mkWav(t11sine(10, 150, sr), sr, 1);
+  const r = E.estimatePitchFrames(buf, E.pcmFromWav(buf), { maxSeconds: 3 });
+  assert.strictEqual(r.truncated, true, 'phải khai báo truncated');
+  assert.ok(r.analyzedSec <= 4, 'chỉ ~3s: ' + r.analyzedSec);
+});
+
+t('pitchWindowsFromFrames: voiced ratio + median + biến động cao độ theo window', () => {
+  const sr = 8000;
+  // 3s @120Hz rồi 1s @240Hz: với wLen=2, bucket1 (t 2→4s) chứa CẢ hai cao độ → var lớn
+  const samples = t11sine(3, 120, sr).concat(t11sine(1, 240, sr));
+  const buf = t11mkWav(samples, sr, 1);
+  const info = E.pcmFromWav(buf);
+  const pr = E.estimatePitchFrames(buf, info, {});
+  const wins = [{ t: 0, rms: 1 }, { t: 2, rms: 1 }];
+  const pw = E.pitchWindowsFromFrames(pr.frames, wins);
+  assert.strictEqual(pw.length, 2);
+  assert.ok(pw.every((w) => w.voiced > 0.9), 'toàn bộ voiced: ' + JSON.stringify(pw));
+  assert.ok(Math.abs(pw[0].med - 120) <= 4, 'bucket0 thuần 120Hz: ' + pw[0].med);
+  assert.ok(pw[0].var <= 1, 'bucket0 không biến động: ' + pw[0].var);
+  assert.ok(pw[1].var > 20, 'bucket1 chuyển tiếp 120→240 phải có var lớn: ' + pw[1].var);
+  const empty = E.pitchWindowsFromFrames([], wins);
+  assert.strictEqual(empty.length, 2);
+  assert.ok(empty.every((w) => w.voiced === 0 && w.var === 0), 'không frames → voiced=0, var=0');
+});
+t('fuseLocalScores: trọng số 0.6/0.25/0.15; thiếu pitch → renormalize CÔNG KHAI', () => {
+  const wins = [{ t: 0, rms: 1.0 }, { t: 1, rms: 0.5 }];
+  const full = E.fuseLocalScores(wins, { pitchWins: [{ t: 0, voiced: 1, var: 40 }, { t: 1, voiced: 0.5, var: 10 }] });
+  assert.deepStrictEqual(full.weights, { energy: 0.6, pitch: 0.25, voiced: 0.15 });
+  assert.strictEqual(full.hasPitch, true);
+  assert.strictEqual(full.feats[0].v, 1, 'đỉnh cả 3 tín hiệu → v=1: ' + full.feats[0].v);
+  assert.strictEqual(full.feats[1].v, Math.round((0.5 * 0.6 + 0.25 * 0.25 + 0.5 * 0.15) * 1000) / 1000);
+  const noPitch = E.fuseLocalScores(wins, {});
+  assert.strictEqual(noPitch.hasPitch, false);
+  assert.deepStrictEqual(noPitch.weights, { energy: 1, pitch: 0, voiced: 0 }, 'không có pitchWins → không có voiced thật → thuần energy, KHÔNG loãng điểm');
+  assert.ok(noPitch.feats.every((f) => f.pitch === null && f.voiced === null), 'pitch + voiced null — không bịa số');
+  assert.strictEqual(noPitch.feats[0].v, 1);
+  const onlyVoice = E.fuseLocalScores(wins, { pitchWins: [{ t: 0, voiced: 1, var: 0 }, { t: 1, voiced: 0.4, var: 0 }] });
+  assert.strictEqual(onlyVoice.hasPitch, false, 'var=0 mọi window → pitch không mang thông tin');
+  assert.deepStrictEqual(onlyVoice.weights, { energy: 0.8, pitch: 0, voiced: 0.2 }, '0.6/0.75 + 0.15/0.75');
+  assert.ok(onlyVoice.feats.every((f) => f.pitch === null && f.voiced != null), 'giữ voiced, bỏ pitch');
+  assert.deepStrictEqual(E.fuseLocalScores([], {}), { feats: [], weights: null, hasPitch: false });
+});
+t('pickHighlightsByFusion: bắt đỉnh, floor 35% loại vùng yếu, non-overlap, deterministic', () => {
+  const feats = [];
+  for (let i = 0; i < 90; i++) {
+    const core = i >= 55 && i < 65;           // vùng mạnh nhất
+    const hot = i >= 50 && i < 70;            // vùng nóng bao quanh core
+    const e = core ? 1 : hot ? 0.7 : 0.15, p = core ? 1 : hot ? 0.7 : 0.1, v = core ? 1 : hot ? 0.7 : 0.5;
+    feats.push({ t: i, energy: e, pitch: p, voiced: v, v: e * 0.6 + p * 0.25 + v * 0.15 });
+  }
+  const opts = { minLen: 15, maxLen: 30, maxClips: 2 };
+  const a = E.pickHighlightsByFusion(feats, opts);
+  const b = E.pickHighlightsByFusion(feats, opts);
+  assert.deepStrictEqual(a, b, 'deterministic');
+  assert.ok(a.length >= 1, 'phải có ít nhất 1 highlight');
+  const best = a.reduce((m, h) => (h.score > m.score ? h : m), a[0]);
+  assert.ok(best.startMs <= 55000 && best.endMs >= 65000, 'best phủ trọn core 55–65s: ' + best.startMs + '-' + best.endMs);
+  assert.strictEqual(best.endMs - best.startMs, 15000, 'cửa sổ ngắn nhất cho phép khi đỉnh hẹp (= minLen): ' + (best.endMs - best.startMs));
+  for (const h of a) {
+    assert.ok(h.endMs - h.startMs >= 15000 && h.endMs - h.startMs <= 30000, 'độ dài trong khoảng');
+    assert.ok(h.score > 0 && h.score <= 10, 'thang 0-10: ' + h.score);
+    assert.ok(/đa tín hiệu local/.test(h.reasons[0]), 'reason khai báo nguồn: ' + h.reasons[0]);
+    assert.ok(h.startMs < 70000 && h.endMs > 50000, 'clip phải overlap vùng nóng: ' + h.startMs + '-' + h.endMs);
+    if (h !== best) assert.ok(h.score >= best.score * 0.35 - 0.01, 'FLOOR 35% đỉnh: ' + h.score + ' vs ' + best.score);
+  }
+  for (let i = 1; i < a.length; i++) assert.ok(a[i].startMs >= a[i - 1].endMs, 'non-overlap');
+  const cold = E.pickHighlightsByFusion(feats.map((f) => ({ t: f.t, energy: f.energy, pitch: f.pitch, voiced: f.voiced, v: f.v * 0.2 })), opts);
+  assert.ok(cold.length === 0 || cold[0].score > 0, 'tín hiệu đều nhau vẫn deterministic');
+  const noP = E.pickHighlightsByFusion(feats.map((f) => ({ t: f.t, energy: f.energy, pitch: null, voiced: f.voiced, v: f.v })), { minLen: 15, maxLen: 30, maxClips: 1 });
+  assert.ok(/không có cao độ/.test(noP[0].reasons[0]), 'khai báo thiếu pitch: ' + noP[0].reasons[0]);
+  assert.deepStrictEqual(E.pickHighlightsByFusion([], opts), []);
+  assert.deepStrictEqual(E.pickHighlightsByFusion([{ t: 0, energy: 1, pitch: 1, voiced: 1, v: 1 }], opts), [], '1 window → []');
+  assert.deepStrictEqual(E.pickHighlightsByFusion(feats.map((f) => ({ t: f.t, energy: 0, pitch: 0, voiced: 0, v: 0 })), opts), [], 'toàn bộ bằng 0 → [] (không bịa điểm)');
+});
+t('Tier A integration: fusion → snap giữ cửa sổ hợp lệ trong dung lượng video', () => {
+  const sr = 8000;
+  const samples = t11sine(30, 120, sr).concat(t11sine(10, 220, sr, 26000)).concat(t11sine(20, 120, sr));
+  const buf = t11mkWav(samples, sr, 1);
+  const info = E.pcmFromWav(buf);
+  const wins = E.energyWindowsFromPcm(buf, info, { windowSec: 1 });
+  const pr = E.estimatePitchFrames(buf, info, {});
+  const fus = E.fuseLocalScores(wins, { pitchWins: E.pitchWindowsFromFrames(pr.frames, wins) });
+  assert.strictEqual(fus.hasPitch, true);
+  const top = E.pickHighlightsByFusion(fus.feats, { minLen: 15, maxLen: 45, maxClips: 2 });
+  assert.ok(top.length >= 1, 'phải chọn được highlight vùng to 30–40s');
+  const best = top.reduce((m, h) => (h.score > m.score ? h : m), top[0]);
+  assert.ok(best.startMs < 40000 && best.endMs > 30000, 'best phủ vùng to: ' + best.startMs + '-' + best.endMs);
+  const anchors = E.buildBoundaryAnchors([29800, 40100], E.detectSilence(wins, {}).gaps, {});
+  const sn = E.snapWindowEdges(
+    top.map((c) => ({ startMs: c.startMs, endMs: c.endMs, score: c.score, reason: c.reasons[0] })),
+    anchors, { minLen: 15, maxLen: 45, durationMs: 60000 });
+  for (const h of sn.highlights) {
+    assert.ok(h.startMs >= 0 && h.endMs <= 60000, 'trong dung lượng: ' + h.startMs + '-' + h.endMs);
+    assert.ok(h.endMs - h.startMs >= 15000 && h.endMs - h.startMs <= 45000, 'độ dài hợp lệ sau snap');
+  }
+});
+
 console.log('\nViral Cut engine test: ' + passed + ' test PASS, exitCode=' + (process.exitCode || 0));

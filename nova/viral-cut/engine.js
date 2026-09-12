@@ -359,11 +359,42 @@ function slugify(text) {
     .slice(0, 40) || 'clip';
 }
 
-/* ── 9. Kế hoạch cắt ffmpeg: mỗi highlight 1 output; crop 9:16 khi chọn ── */
+/* ── 9a. Hợp đồng tỉ lệ xuất: 'keep' | '916' | '169' → bộ lọc ffmpeg ────────
+   `keep` = không đụng khung hình. `916` = cắt dải giữa theo chiều cao rồi
+   đóng khung 1080x1920 (Shorts/Reels). `169` = cắt dải giữa theo chiều ngang
+   rồi đóng khung 1920x1080 (ngang/truyền thống). Công thức crop giữ nguyên
+   như bản cũ để hành vi đã kiểm chứng của 916 không đổi. */
+const ASPECT_KEEP = 'keep';
+const ASPECT_FILTERS = {
+  '916': 'crop=min(iw,ih*9/16):ih,scale=1080:1920',
+  '169': 'crop=iw:min(ih,iw*9/16),scale=1920:1080',
+};
+
+/* Chấp nhận cả cách gọi cũ (crop916:true) lẫn giá trị mới; sai → lộ liễu. */
+function normalizeAspect(value, legacyCrop916) {
+  const v = String(value == null ? '' : value).trim().toLowerCase();
+  if (v === '' || v === ASPECT_KEEP || v === 'original' || v === 'none') {
+    return legacyCrop916 ? '916' : ASPECT_KEEP;
+  }
+  const norm = v.replace(/[^0-9]/g, '');
+  if (norm === '916' || v === '9:16') return '916';
+  if (norm === '169' || v === '16:9') return '169';
+  throw new Error('VC_ASPECT_UNSUPPORTED: tỉ lệ xuất không hợp lệ — "' + value
+    + '" (chấp nhận: keep, 916, 169).');
+}
+
+function aspectFilterOf(aspect) {
+  const key = normalizeAspect(aspect);
+  return key === ASPECT_KEEP ? null : ASPECT_FILTERS[key];
+}
+
+/* ── 9b. Kế hoạch cắt ffmpeg: mỗi highlight 1 output; dựng khung theo tỉ lệ chọn ── */
 function buildExportPlan(highlights, opts = {}) {
   const path = require('path');
   const outDir = String(opts.outDir || '');
   if (!outDir) throw new Error('VC_NO_OUTDIR: thiếu thư mục xuất.');
+  const aspect = normalizeAspect(opts.aspect, opts.crop916);
+  const vf = aspectFilterOf(aspect);
   const list = Array.isArray(highlights) ? highlights : [];
   return list.map((h, idx) => {
     const n = String(idx + 1).padStart(2, '0');
@@ -376,7 +407,9 @@ function buildExportPlan(highlights, opts = {}) {
       hookStartSec: h.hookStartMs != null ? h.hookStartMs / 1000 : null,
       hookEndSec: h.hookEndMs != null ? h.hookEndMs / 1000 : null,
       title: h.title || '',
-      crop916: !!opts.crop916,
+      crop916: aspect === '916',
+      aspect: aspect,
+      vf: vf,
     };
   });
 }
@@ -635,6 +668,357 @@ function applyChapterTitles(highlights, chapters) {
   return list;
 }
 
+/* ── 13. TIER A — tín hiệu multimodal CỤC BỘ cho video raw (deterministic, không AI/mạng) ──
+   Bốn tín hiệu rẻ đo trực tiếp từ file, theo đúng tinh thần Luật 8/10:
+   a) Keyframe (packet cờ K từ ffprobe, KHÔNG decode) = proxy cảnh cắt → neo biên.
+   b) Im lặng tương đối theo RMS-window → "break" giữa câu nói, tránh cắt ngang lời.
+   c) Cao độ f0 (autocorrelation chuẩn hoá trên PCM rút gọn 8kHz) → độ biến động giọng.
+   d) Fusion energy + pitch-variance + voiced-ratio CÓ FLOOR, trọng số renormalize
+      công khai khi một feature thiếu (trả về trong `weights`) — không fallback ngầm. */
+
+/* 13a. Parse output ffprobe csv packet "pts_time,flags" (text hoặc array object)
+   → danh sách KEYFRAME (cờ K) dạng ms, sort + dedupe. Dòng rác bỏ qua — probe
+   thất bại cả loạt do ipc khai báo, hàm này chỉ diễn giải dữ liệu có thật. */
+function parseKeyframePackets(raw, opts = {}) {
+  const maxMs = Number(opts.durationMs) > 0 ? Number(opts.durationMs) : Infinity;
+  const lines = Array.isArray(raw) ? raw : String(raw || '').split(/\r?\n/);
+  const seen = new Set();
+  for (const ln of lines) {
+    let tSec = NaN, flags = '';
+    if (typeof ln === 'string') {
+      const parts = ln.split(',');
+      if (parts.length < 2) continue;
+      tSec = Number(parts[0]);
+      flags = parts.slice(1).join(',');
+    } else if (ln && typeof ln === 'object') {
+      tSec = Number(ln.pts_time != null ? ln.pts_time : ln.time);
+      flags = String(ln.flags || ln.flags_string || '');
+    }
+    if (!Number.isFinite(tSec) || tSec < 0) continue;
+    if (!flags.includes('K')) continue; // chỉ keyframe — packet thường bỏ
+    const ms = Math.round(tSec * 1000);
+    if (ms <= maxMs) seen.add(ms);
+  }
+  return [...seen].sort((a, b) => a - b);
+}
+
+/* 13b. Phát hiện khoảng im lặng từ energy windows (ngưỡng RMS TƯƠNG ĐỐI theo
+   đỉnh — không hardcode dB tuyệt đối vì biên độ extract khác nhau).
+   → { threshold, gaps:[{startMs,endMs,midMs}], totalSec }. */
+function detectSilence(wins, opts = {}) {
+  const list = Array.isArray(wins) ? wins : [];
+  if (list.length < 2) return { threshold: 0, gaps: [], totalSec: 0 };
+  const wLen = (Number(list[1].t) - Number(list[0].t)) || 1;
+  const maxRms = list.reduce((m, w) => Math.max(m, Number(w && w.rms) || 0), 0);
+  if (!(maxRms > 0)) return { threshold: 0, gaps: [], totalSec: 0 };
+  const rel = Number(opts.rel) > 0 ? Math.min(0.9, Number(opts.rel)) : 0.10;
+  const threshold = maxRms * rel;
+  const minWindows = Math.max(1, Math.round((Number(opts.minSec) > 0 ? Number(opts.minSec) : 1.5) / wLen));
+  const gaps = [];
+  let run = -1;
+  for (let i = 0; i <= list.length; i++) {
+    const quiet = i < list.length && (Number(list[i].rms) || 0) <= threshold;
+    if (quiet && run < 0) run = i;
+    if (!quiet && run >= 0) {
+      if (i - run >= minWindows) {
+        const s = Math.round(Number(list[run].t) * 1000);
+        const e = Math.round((Number(list[i - 1].t) + wLen) * 1000);
+        gaps.push({ startMs: s, endMs: e, midMs: Math.round((s + e) / 2) });
+      }
+      run = -1;
+    }
+  }
+  const totalSec = gaps.reduce((a, g) => a + (g.endMs - g.startMs) / 1000, 0);
+  return { threshold: Math.round(threshold * 100) / 100, gaps, totalSec: Math.round(totalSec * 10) / 10 };
+}
+
+/* 13c. Neo biên = keyframe cuts ƯU TIÊN hơn midpoint khoảng im lặng; gộp điểm
+   sát nhau trong mergeTolMs (cut thắng gap). → [{ms, kind:'cut'|'gap'}] sorted. */
+function buildBoundaryAnchors(cutsMs, silences, opts = {}) {
+  const mergeTol = Math.max(0, Number(opts.mergeTolMs) || 250);
+  const pts = [];
+  for (const c of (Array.isArray(cutsMs) ? cutsMs : [])) if (Number.isFinite(c)) pts.push({ ms: Math.round(c), kind: 'cut' });
+  for (const g of (Array.isArray(silences) ? silences : [])) if (g && Number.isFinite(g.midMs)) pts.push({ ms: Math.round(g.midMs), kind: 'gap' });
+  pts.sort((a, b) => a.ms - b.ms || (a.kind === 'cut' ? 0 : 1) - (b.kind === 'cut' ? 0 : 1));
+  const out = [];
+  for (const p of pts) {
+    const last = out[out.length - 1];
+    if (last && p.ms - last.ms <= mergeTol) {
+      if (p.kind === 'cut' && last.kind !== 'cut') out[out.length - 1] = { ms: last.ms, kind: 'cut' };
+      continue;
+    }
+    out.push(p);
+  }
+  return out;
+}
+
+/* 13d. Kéo (snap) 2 biên highlight về NEO gần nhất trong tolerance; nếu sau snap
+   cửa sổ vi phạm [minLen·1000, maxLen·1000] hoặc vượt durationMs → REVERT edge
+   lệch xa hơn, lặp; vẫn vi phạm → giữ nguyên bản gốc (không cắt bừa). Trả về
+   MẢNG MỚI + adjustments cho diagnostics (không mutate input). */
+function snapWindowEdges(highlights, anchors, opts = {}) {
+  const tol = Math.max(0, Number(opts.toleranceMs) || 4000);
+  const minMs = (Number(opts.minLen) || 15) * 1000;
+  const maxMs = Math.max(minMs, (Number(opts.maxLen) || 45) * 1000);
+  const durMs = Number(opts.durationMs) > 0 ? Math.round(Number(opts.durationMs)) : Infinity;
+  const pts = (Array.isArray(anchors) ? anchors : [])
+    .filter((a) => a && Number.isFinite(a.ms))
+    .map((a) => ({ ms: Math.round(a.ms), kind: a.kind === 'gap' ? 'gap' : 'cut' }));
+  const nearest = (t) => {
+    let best = null;
+    for (const a of pts) {
+      const d = Math.abs(a.ms - t);
+      if (d > 0 && d <= tol && (!best || d < best.d || (d === best.d && a.ms < best.ms))) best = { ms: a.ms, kind: a.kind, d };
+    }
+    return best;
+  };
+  const adjustments = [];
+  const out = (Array.isArray(highlights) ? highlights : []).map((h) => {
+    let sAdj = nearest(h.startMs), eAdj = nearest(h.endMs);
+    let startMs = sAdj ? sAdj.ms : h.startMs;
+    let endMs = eAdj ? eAdj.ms : h.endMs;
+    if (startMs < 0) { startMs = h.startMs; sAdj = null; }
+    if (Number.isFinite(durMs) && endMs > durMs) { endMs = h.endMs; eAdj = null; } // snap tràn cuối video → revert ngay
+    const bad = () => (endMs - startMs) < minMs || (endMs - startMs) > maxMs;
+    while (bad() && (sAdj || eAdj)) {
+      const ds = sAdj ? sAdj.d : -1;
+      const de = eAdj ? eAdj.d : -1;
+      if (sAdj && ds >= de) { startMs = h.startMs; sAdj = null; }
+      else if (eAdj) { endMs = h.endMs; eAdj = null; }
+    }
+    if (bad()) { startMs = h.startMs; endMs = h.endMs; sAdj = null; eAdj = null; }
+    if (!sAdj && !eAdj) return Object.assign({}, h);
+    const via = [];
+    const lbl = (a) => (a.kind === 'gap' ? 'im lặng' : 'cảnh cắt');
+    if (sAdj) via.push('đầu→' + lbl(sAdj));
+    if (eAdj) via.push('cuối→' + lbl(eAdj));
+    adjustments.push({ fromStartMs: h.startMs, fromEndMs: h.endMs, toStartMs: startMs, toEndMs: endMs, via: via.join(', ') });
+    return Object.assign({}, h, {
+      startMs, endMs, snappedEdges: via.length,
+      reason: (h.reason ? h.reason + ' · ' : '') + 'neo ' + via.length + ' biên (Tier A: ' + via.join(', ') + ')',
+    });
+  });
+  return { highlights: out, adjustments };
+}
+
+/* 13e. f0 bằng autocorrelation chuẩn hoá (NSDF) — thuần JS, deterministic:
+   downmix mono → rút gọn nguyên số về ~8kHz → frame 96ms / hop 48ms, coarse-to-fine
+   (mỗi 4 lag, rồi dò ±3 quanh đỉnh) + năng lượng đuôi tích luỹ ce[lag] để chỉ
+   phải 1 vòng nhân/lag. Đọc PCM theo CHUNK frame (không cấp phát toàn bộ — video
+   45 phút vẫn <2MB/chunk). maxSeconds chặn thời lượng phân tích → `truncated`
+   ĐƯỢC KHAI BÁO trong kết quả (Luật 10), người dùng/ipc tự quyết định dùng hay bỏ.
+   Trả về { frames:[{t, f0|null, clarity}], rate, analyzedSec, truncated }. */
+function estimatePitchFrames(buf, info, opts = {}) {
+  if (!Buffer.isBuffer(buf) || !info || !info.sampleRate) throw new Error('VC_PITCH: PCM không hợp lệ.');
+  if ((Number(info.bitsPerSample) || 16) !== 16) throw new Error('VC_PITCH_P16: chỉ hỗ trợ PCM 16-bit.');
+  const targetRate = Math.max(4000, Number(opts.targetRate) || 8000);
+  const fMin = Math.max(40, Number(opts.fMin) || 65);
+  const frame = Math.max(256, Number(opts.frame) || 768);
+  const hop = Math.max(64, Number(opts.hop) || 384);
+  const clarityMin = Number(opts.clarityMin) > 0 ? Number(opts.clarityMin) : 0.35;
+  const gate = Number(opts.gate) > 0 ? Number(opts.gate) : 120; // RMS int16 — dưới ngưỡng coi là câm
+  const maxSeconds = Number(opts.maxSeconds) > 0 ? Number(opts.maxSeconds) : 2700;
+  const ch = Math.max(1, info.channels || 1);
+  const step = Math.max(1, Math.round(info.sampleRate / targetRate));
+  const rate = info.sampleRate / step;
+  const fMax = Math.min(Number(opts.fMax) > 0 ? Number(opts.fMax) : 400, rate / 2.5);
+  const nSamples = Math.floor(info.dataLen / (2 * ch));
+  const xn = Math.floor(nSamples / step);
+  if (xn < frame) return { frames: [], rate, analyzedSec: 0, truncated: false };
+  const xLimit = Math.min(xn, Math.ceil(maxSeconds * rate));
+  const minLag = Math.max(2, Math.floor(rate / fMax));
+  const maxLag = Math.min(frame - 64, Math.ceil(rate / fMin));
+  if (maxLag - minLag < 4) return { frames: [], rate, analyzedSec: 0, truncated: xLimit < xn };
+  const i16 = ((buf.byteOffset + info.dataOffset) % 2 === 0)
+    ? new Int16Array(buf.buffer, buf.byteOffset + info.dataOffset, Math.floor(info.dataLen / 2)) : null;
+  const at = (si) => (i16 ? i16[si] : buf.readInt16LE(info.dataOffset + si * 2));
+  /* Downmix mono + rút gọn nguyên số theo chunk — không bao giờ cấp phát toàn bộ PCM */
+  const decimate = (arr, pos, count) => {
+    for (let i = 0; i < count; i++) {
+      let acc = 0;
+      const s0 = (pos + i) * step;
+      for (let k = 0; k < step; k++) {
+        let c2 = 0;
+        for (let c = 0; c < ch; c++) c2 += at((s0 + k) * ch + c);
+        acc += c2 / ch;
+      }
+      arr[i] = acc / step;
+    }
+  };
+  const totalFrames = Math.floor((xLimit - frame) / hop) + 1;
+  const CHUNK = 512;                                    // frame/chunk (~33–65s âm thanh)
+  const x = new Float32Array(CHUNK * hop + frame);
+  const seg = new Float32Array(frame);
+  const nCoarse = Math.floor((maxLag - minLag) / 3) + 2;
+  const cLag = new Int16Array(nCoarse);                 // peak coarse đã thu (octave guard)
+  const cVal = new Float32Array(nCoarse);
+  const out = [];
+  let chunkBase = -1, chunkLen = 0;
+  for (let fi = 0; fi < totalFrames; fi++) {
+    const pos = fi * hop;
+    if (pos < chunkBase || pos + frame > chunkBase + chunkLen) {
+      chunkBase = pos;
+      chunkLen = Math.min(xLimit - chunkBase, CHUNK * hop + frame);
+      decimate(x, chunkBase, chunkLen);
+    }
+    const q = pos - chunkBase;
+    let mean = 0;
+    for (let i = 0; i < frame; i++) mean += x[q + i];
+    mean /= frame;
+    let e0 = 0;
+    for (let i = 0; i < frame; i++) { const v = x[q + i] - mean; seg[i] = v; e0 += v * v; }
+    const t = Math.round((pos / rate) * 1000) / 1000;
+    let f0 = null, clarity = 0;
+    if (e0 > 0 && Math.sqrt(e0 / frame) >= gate) {
+      const nsdf = (lag) => {
+        let r = 0, e2 = 0;
+        const end = frame - lag;
+        for (let i = 0; i < end; i++) { const b = x[q + i + lag] - mean; r += seg[i] * b; e2 += b * b; }
+        const den = e0 + e2;
+        return den > 0 ? (2 * r) / den : 0;
+      };
+      /* Octave guard: NSDF của tín hiệu tuần hoàn có NHIỀU đỉnh CAO BẰNG NHAU ở lag
+         bội 2 (200Hz ↔ lag 40 ↔ 100Hz ↔ lag 80) → global max LUÔN đáp nhầm octave
+         dưới. Cách chuẩn: lấy LOCAL MAX ĐẦU TIÊN ≥ clarityMin khi quét từ lag nhỏ
+         (= cao độ cao nhất hợp lệ), chỉ fallback global max khi không có local max. */
+      let bestV = -1, bestG = -1, cnt = 0;
+      for (let lag = minLag; lag <= maxLag; lag += 3) {           // coarse
+        const v = nsdf(lag);
+        cLag[cnt] = lag; cVal[cnt] = v; cnt++;
+        if (v > bestV) { bestV = v; bestG = lag; }
+      }
+      let chosen = -1, chosenV = 0;
+      for (let k = 1; k < cnt - 1; k++) {                         // first valid local peak
+        if (cVal[k] >= clarityMin && cVal[k] >= cVal[k - 1] && cVal[k] > cVal[k + 1]) {
+          const cand = rate / cLag[k];
+          if (cand >= fMin && cand <= fMax) { chosen = cLag[k]; chosenV = cVal[k]; break; }
+        }
+      }
+      if (chosen < 0 && bestV >= clarityMin) { chosen = bestG; chosenV = bestV; }
+      if (chosen > 0) {
+        const lo = Math.max(minLag, chosen - 3), hi = Math.min(maxLag, chosen + 3);
+        for (let lag = lo; lag <= hi; lag++) {                    // fine ±3, tie → lag nhỏ hơn
+          const v = nsdf(lag);
+          if (v > chosenV + 1e-9 || (Math.abs(v - chosenV) <= 1e-9 && lag < chosen)) { chosenV = v; chosen = lag; }
+        }
+        const cand = rate / chosen;
+        if (cand >= fMin && cand <= fMax) { f0 = Math.round(cand * 10) / 10; clarity = Math.round(chosenV * 100) / 100; }
+      }
+    }
+    out.push({ t, f0, clarity });
+  }
+  return {
+    frames: out, rate,
+    analyzedSec: Math.round((((totalFrames - 1) * hop + frame) / rate) * 10) / 10,
+    truncated: xLimit < xn,
+  };
+}
+
+/* 13f. Gom frame f0 theo energy-window → [{t, voiced (0-1), med, var}].
+   var = độ lệch chuẩn f0 trong window (biến động cao độ của giọng nói). */
+function pitchWindowsFromFrames(frames, wins) {
+  const list = Array.isArray(wins) ? wins : [];
+  if (!list.length) return [];
+  const wLen = (list.length > 1 ? Number(list[1].t) - Number(list[0].t) : 1) || 1;
+  const buckets = list.map((w) => ({ t: Number(w.t), total: 0, voiced: 0, fs: [] }));
+  for (const f of (Array.isArray(frames) ? frames : [])) {
+    const i = Math.floor(Number(f && f.t) / wLen);
+    if (i < 0 || i >= buckets.length) continue;
+    buckets[i].total++;
+    if (f.f0 != null) { buckets[i].voiced++; buckets[i].fs.push(Number(f.f0)); }
+  }
+  return buckets.map((b) => {
+    const fs = b.fs.slice().sort((a, z) => a - z);
+    let med = 0;
+    if (fs.length) med = fs.length % 2 ? fs[(fs.length - 1) / 2] : (fs[fs.length / 2 - 1] + fs[fs.length / 2]) / 2;
+    let vr = 0;
+    if (fs.length >= 2) {
+      const mu = fs.reduce((a, z) => a + z, 0) / fs.length;
+      vr = Math.sqrt(fs.reduce((a, z) => a + (z - mu) * (z - mu), 0) / fs.length);
+    }
+    return {
+      t: b.t,
+      voiced: b.total > 0 ? Math.round((b.voiced / b.total) * 1000) / 1000 : 0,
+      med: Math.round(med * 10) / 10,
+      var: Math.round(vr * 10) / 10,
+    };
+  });
+}
+
+/* 13g. Fusion per-window: v = wE·energy + wP·pitchVar + wV·voiced ∈ [0,1].
+   Feature thiếu → trọng số RENORMALIZE công khai (trả về trong `weights`, tổng = 1)
+   và giá trị tương ứng trả `null` — người dùng thấy rõ: không có pitch thì điểm chỉ
+   là energy + voiced; không có cả hai thì thuần energy. Không bịa 0 để loãng điểm. */
+function fuseLocalScores(wins, opts = {}) {
+  const list = Array.isArray(wins) ? wins : [];
+  if (!list.length) return { feats: [], weights: null, hasPitch: false };
+  const r4 = (x) => Math.round(x * 10000) / 10000;
+  const pw = Array.isArray(opts.pitchWins) ? opts.pitchWins : null;
+  const maxRms = list.reduce((m, w) => Math.max(m, Number(w && w.rms) || 0), 0) || 1;
+  const pVar = list.map((w, i) => (pw && pw[i] && Number.isFinite(pw[i].var) ? pw[i].var : null));
+  const pVoice = list.map((w, i) => (pw && pw[i] && Number.isFinite(pw[i].voiced) ? pw[i].voiced : null));
+  const hasPitch = pVar.some((v) => v != null && v > 0);   // var=0 mọi window → pitch không mang thông tin
+  const hasVoiced = pVoice.some((v) => v != null);
+  const nE = list.map((w) => (Number(w.rms) || 0) / maxRms);
+  const maxVar = pVar.reduce((m, v) => (v != null && v > m ? v : m), 0);
+  const nP = hasPitch ? pVar.map((v) => (v != null && maxVar > 0 ? v / maxVar : 0)) : null;
+  const raw = { energy: 0.6, pitch: hasPitch ? 0.25 : 0, voiced: hasVoiced ? 0.15 : 0 };
+  const sumRaw = raw.energy + raw.pitch + raw.voiced || 1;
+  const weights = { energy: r4(raw.energy / sumRaw), pitch: r4(raw.pitch / sumRaw), voiced: r4(raw.voiced / sumRaw) };
+  const feats = list.map((w, i) => ({
+    t: Number(w.t),
+    energy: Math.round(nE[i] * 1000) / 1000,
+    pitch: nP ? Math.round(nP[i] * 1000) / 1000 : null,
+    voiced: pVoice[i] != null ? Math.round(pVoice[i] * 1000) / 1000 : null,
+    v: Math.round((nE[i] * weights.energy + (nP ? nP[i] * weights.pitch : 0) + ((pVoice[i] || 0)) * weights.voiced) * 1000) / 1000,
+  }));
+  return { feats, weights, hasPitch };
+}
+
+/* 13h. Chọn highlight theo điểm fusion (thay tầng năng lượng thuần khi Tier A bật):
+   làm mượt 3, cửa sổ [minLen..maxLen], FLOOR = 35% đỉnh (tín hiệu cục bộ yếu
+   không chiếm slot — như ngưỡng heatmap), non-overlap deterministic. Thang 0-10. */
+function pickHighlightsByFusion(feats, opts = {}) {
+  const list = Array.isArray(feats) ? feats : [];
+  if (list.length < 2) return [];
+  const minLen = Number(opts.minLen) || 15;
+  const maxLen = Math.max(minLen + 1, Number(opts.maxLen) || 45);
+  const cap = Math.max(1, Number(opts.maxClips) || 3);
+  const windowSec = (Number(list[1].t) - Number(list[0].t)) || 1;
+  const vs = smoothSeries(list.map((f) => Math.max(0, Math.min(1, Number(f && f.v) || 0))), 3);
+  const cands = [];
+  for (let a = 0; a < vs.length; a++) {
+    let sE = 0, sP = 0, nP = 0, sV = 0;
+    for (let b = a; b < vs.length; b++) {
+      const dur = (b - a + 1) * windowSec;
+      if (dur > maxLen) break;
+      sE += Number(list[b].energy) || 0;
+      if (list[b].pitch != null) { sP += list[b].pitch; nP++; }
+      sV += Number(list[b].voiced) || 0;
+      if (dur < minLen) continue;
+      let s = 0;
+      for (let k = a; k <= b; k++) s += vs[k];
+      const n = b - a + 1;
+      cands.push({
+        a, b, startMs: Math.round(a * windowSec * 1000), endMs: Math.round((b + 1) * windowSec * 1000),
+        score: s / n, avg: s / n, eAvg: sE / n, pAvg: nP ? sP / nP : null, vAvg: sV / n,
+      });
+    }
+  }
+  if (!cands.length) return [];
+  const peak = cands.reduce((m, c) => Math.max(m, c.avg), 0);
+  if (!(peak > 0)) return [];
+  const kept = cands.filter((c) => c.avg >= peak * 0.35); // FUSION FLOOR
+  if (!kept.length) return [];
+  return pickTopNonOverlap(kept, cap).map((c) => ({
+    startMs: c.startMs, endMs: c.endMs,
+    score: Math.round(c.avg * 10 * 100) / 100,
+    reasons: ['đa tín hiệu local (năng lượng ' + Math.round(c.eAvg * 100) + '%' +
+      (c.pAvg != null ? ' · cao độ ' + Math.round(c.pAvg * 100) + '%' : ' · không có cao độ') +
+      ' · giọng ' + Math.round(c.vAvg * 100) + '%)'],
+  }));
+}
+
 module.exports = {
   HOOK_KEYWORDS,
   parseSrtCues,
@@ -654,6 +1038,8 @@ module.exports = {
   mapLlmHighlights,
   genTitleLocal,
   slugify,
+  normalizeAspect,
+  aspectFilterOf,
   buildExportPlan,
   buildConcatPlan,
   pickHighlightsByHeatmap,
@@ -662,4 +1048,13 @@ module.exports = {
   blendCommentBoost,
   applyChapterTitles,
   cleanChapterTitle,
+  /* Tier A — multimodal local */
+  parseKeyframePackets,
+  detectSilence,
+  buildBoundaryAnchors,
+  snapWindowEdges,
+  estimatePitchFrames,
+  pitchWindowsFromFrames,
+  fuseLocalScores,
+  pickHighlightsByFusion,
 };

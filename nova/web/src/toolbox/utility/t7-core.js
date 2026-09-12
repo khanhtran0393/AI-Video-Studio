@@ -372,7 +372,7 @@ function _t7RailAi(){
   const B = (fn, ic, t, d) => `<div class="t7-fxi" style="align-items:flex-start;padding:9px 10px" onclick="${fn}">
     <b style="display:block">${ic} ${t}</b><s style="display:block;white-space:normal;line-height:1.35;margin-top:2px">${d}</s></div>`;
   box.innerHTML =
-    B('t7AiDesign()', '🎬', 'AI dựng đồ hoạ', 'Đọc lời từng cảnh rồi tự gắn mẫu chuyển động — chỉ chọn trong kho có sẵn.') +
+    B('t7AiDesign()', '🎬', 'AI dựng đồ hoạ', 'Đọc lời từng cảnh rồi ĐỀ XUẤT mẫu chuyển động trong kho có sẵn — bạn duyệt từng cảnh trước khi gắn.') +
     B('t7AiDesignClearAsk()', '🧹', 'Gỡ hết đồ hoạ AI', 'Trả mọi cảnh về video trơn — bỏ chữ nhấn, lower-third, hạt phim…') +
     B('t7TranslateAll()', '🌐', 'Dịch tiếng Việt', 'Dịch lời thoại mọi cảnh để soát — không ghi vào video.') +
     B('t7Build()', '↻', 'Đồng bộ từ Phân Cảnh', 'Nạp lại toàn bộ cảnh, ảnh và lời thoại từ tab Phân Cảnh.') +

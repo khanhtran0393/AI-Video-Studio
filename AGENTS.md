@@ -81,6 +81,7 @@ Chuỗi tuần tự, bước nào FAIL thì dừng cả chuỗi:
 | `npm run test:maintenance` | nova/core maintenance |
 | `npm run test:viral-cut` | test viral-cut (`nova/viral-cut/test.js`) |
 | `npm run test:ffx-smoke` | smoke Công cụ FFmpeg (`nova/scripts/ffx-smoke.js`) — chạy ffmpeg/ffprobe THẬT trên video app đã tạo trong `output/gen-e2e/` (tách audio, cắt, ghép copy/auto/xfade, loop, nén, trích frame, GIF, addMusic, faststart (+ already skip), loudnorm 2-pass (+ keepVideo), bỏ lời/tách giọng (+ loudnorm ghép), fade (+ video copy khi chỉ fade tiếng), huỷ, validate lỗi lộ liễu); thiếu dữ liệu nguồn → FAIL, không bịa dữ liệu |
+| `npm run test:t7-ai` | Kiểm định các HÀM THUẦN của Trợ lý dựng (`nova/scripts/t7-ai-core-test.js`) — nạp `shared/t7.js` + `utility/t7-ai-core.js` vào sandbox `vm` (stub DOM/window tối thiểu, không mạng, không Electron) rồi test đúng hàng rào BẰNG CODE: `_t7AiSig`/`_t7AiEntrySig` (vân tay lời thoại → phát hiện đề xuất hết hiệu lực), `_t7AiPrunePick` (danh sách trắng trường theo params danh mục trước khi vào sceneSpecs), `_t7AiQuota`/`_t7AiPolicy` (trần ambient/chữ + `maxUse` ĐỌC TỪ METADATA `catalog()` của templates.js), `_t7AiGate`/`_t7AiTrGate` (chặn mẫu bịa/hết quota/lặp liền cảnh), `_t7AiFixLayers` (kẹp toạ độ+màu+preset, bỏ lớp đè/trống) |
 | `npm run test:auto-fix` | toàn bộ test auto-fix |
 | `npm run check:bundle` | Remotion bundle self-check |
 | `npm run scan:lifecycle` | quét `lifecycle.log` theo §6.5(b): REAL (exitCode≠-1 / cụm GPU+Network+renderer có bằng chứng main sống ≥10s sau / render-recovery-stopped / unresponsive) → exit 1; WARN (crash đơn lẻ, reason=killed, cụm -1 câm cuối session — kill main ngoài/crash treo không phân biệt được) chỉ cảnh báo; NOISE teardown vô hại (`--json` cho CI, `--self-test` chạy fixture) |
@@ -93,7 +94,7 @@ Chuỗi tuần tự, bước nào FAIL thì dừng cả chuỗi:
 | `npm run build` | electron-builder theo `electron-builder.json` |
 | `npm run smoke:packaged` | smoke bản đóng gói |
 | `npm run build:smoke` | `build:win` xong chạy `smoke:packaged` |
-| `npm run check:all` | **GATE ĐẦY ĐỦ trước build/release**: `check` + foundation + video-agent + voice + auto-fix |
+| `npm run check:all` | **GATE ĐẦY ĐỦ trước build/release**: `check` + foundation + t7-ai (hàm thuần Trợ lý dựng) + video-agent + voice + auto-fix |
 
 ### 3.4 App thật
 

@@ -77,6 +77,9 @@ async function loadCloudState(){
   // 3. Render tier-dependent UI
   renderTierBadge();
   if (typeof initAdminUI === 'function') initAdminUI();
+  // Session Snapshot (lần 2 — sau khi state/IDB nạp + render xong): đè lại
+  // giá trị input "làm dở" mà các render ở trên có thể đã ghi đè.
+  if (typeof sessSnapRestore === 'function') { try { sessSnapRestore(); } catch (e) {} }
 }
 
 // uid kho IDB local: khi còn đăng nhập dùng uid thật (giữ nguyên key cũ);
@@ -181,6 +184,9 @@ function initAppDirect(){
   // mất khối đó sau khi user từng vào Cài đặt — không nhất quán). Xem MEMORY.md 2026-09-11c.
   if (typeof _relocateSettings === 'function') _relocateSettings();
   if (typeof restoreUI === 'function') restoreUI();
+  // Session Snapshot (lần 1 — sớm): trả lại chữ đã gõ/chọn lẻ trước khi state IDB
+  // nạp xong; loadCloudState sẽ gọi sessSnapRestore lần 2 để thắng render đè lên.
+  if (typeof sessSnapRestore === 'function') { try { sessSnapRestore(); } catch (e) {} }
   // Nạp state/profile/workData/ảnh từ IDB (persistence local) — trước đây chỉ chạy
   // từ luồng auth (đã gỡ) nên boot luôn ra state rỗng. Async, không chặn boot.
   if (typeof loadCloudState === 'function') {
@@ -301,6 +307,7 @@ function syncStateToCurrentProfile(){
   p.workData.webCandidates = state.webCandidates || {};
   p.workData.aiMap = state.aiMap || {};
   p.workData.aiQueue = state.aiQueue || [];
+  p.workData.aiHong = state.aiHong || [];
   p.workData.globalGfx = state.globalGfx || [];
   // Nguồn clip YouTube của từng cảnh — cần để biết thẻ nào đang được dùng khi mở lại.
   // CHỈ lưu url/dur/start: heatmap là mảng 100 phần tử, nhân với gần 200 cảnh là phình
@@ -375,6 +382,7 @@ function loadStateFromProfile(p){
   state.webCandidates = wd.webCandidates || {};
   state.aiMap = wd.aiMap || {};
   state.aiQueue = Array.isArray(wd.aiQueue) ? wd.aiQueue : [];
+  state.aiHong = Array.isArray(wd.aiHong) ? wd.aiHong : [];
   state.brandProfile = wd.brandProfile || null;
   // logline đã lưu coi như khớp kịch bản đã lưu → set chữ ký để khỏi sinh lại thừa sau reload
   const _lgScript = (wd.script || '').trim();

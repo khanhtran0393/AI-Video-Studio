@@ -167,6 +167,55 @@ async function step(name, fn) {
   await expectFail('concat copy khác chuẩn (240p vs gốc)', () => mt.concatVideos({ inputPaths: [V_A, small240], outputPath: path.join(OUT, 'x6.mp4') }));
   await expectFail('concat copy file không chứa video', () => mt.concatVideos({ inputPaths: [loopSrc, loopSrc], outputPath: path.join(OUT, 'x7.mp4') }));
 
+  // ── insertAds (Chèn Quảng Cáo): dùng toàn clip THẬT do app sinh — cắt ngắn từ V_A/V_B.
+  // Kiểm tra artifact thật: thời lượng tăng đúng tổng quảng cáo + đệm, mọi điểm nằm trong
+  // nguồn, chuỗi concat 16 chữ số khớp (phần nối copy), số phần = breaks×(clips+2)+1. ──
+  const adA = path.join(OUT, 'ad-a.mp4');
+  const adB = path.join(OUT, 'ad-b.mp4');
+  await mt.cutVideo({ inputPath: V_A, outputPath: adA, startSec: 0, endSec: 2, mode: 'accurate' });
+  await mt.cutVideo({ inputPath: V_B, outputPath: adB, startSec: 0, endSec: 2, mode: 'accurate' });
+  const srcDur = (await mt.probeStreams(V_A)).durationSec;
+  const adDurA = (await mt.probeStreams(adA)).durationSec;
+  const adDurB = (await mt.probeStreams(adB)).durationSec;
+  await step('insertAds 1 điểm · 2 clip · đệm 0.3s · own', async () => {
+    const r = await mt.insertAds({ inputPath: V_A, breaks: [{ atSec: srcDur / 2, adPaths: [adA, adB] }], gapSec: 0.3, outputPath: path.join(OUT, 'ads-1.mp4') });
+    const got = (await mt.probeStreams(path.join(OUT, 'ads-1.mp4'))).durationSec;
+    // Engine dàn phần: (breaks+1) đoạn nguồn + mỗi break có (clips + 2 màn đệm).
+    const want = srcDur + (adDurA + adDurB) + 0.3 * 2 * 1;
+    if (Math.abs(got - want) > 0.8) throw new Error('thời lượng ' + got.toFixed(2) + 's lệch xa dự kiến ' + want.toFixed(2) + 's');
+    if (r.parts !== (1 + 1) + 1 * (2 + 2)) throw new Error('số phần ' + r.parts + ' khác dự kiến ' + ((1 + 1) + 1 * (2 + 2)));
+    if (r.ads !== 2 || r.breaks !== 1) throw new Error('hợp đồng trả về sai breaks/ads: ' + JSON.stringify({ b: r.breaks, a: r.ads }));
+    if (!Array.isArray(r.timeline) || r.timeline.length !== r.parts) throw new Error('timeline ' + (r.timeline && r.timeline.length) + ' khác số phần ' + r.parts);
+    if (r.timeline.filter((t) => t.kind === 'ad').length !== 2) throw new Error('timeline không đủ 2 phần quảng cáo');
+    return r;
+  });
+  await step('insertAds 2 điểm chia đều · nhạc nền under quảng cáo', async () => {
+    const music = path.join(OUT, 'ads-bed.mp3');
+    await mt.extractAudio({ inputPath: V_MUSIC, outputPath: music, bitrate: '128k', format: 'mp3' });
+    const r = await mt.insertAds({ inputPath: V_A, evenCount: 2, adPaths: [adA], musicPath: music, musicVolume: 0.6, outputPath: path.join(OUT, 'ads-2.mp4') });
+    if (r.breaks !== 2) throw new Error('chia đều 2 điểm nhưng breaks=' + r.breaks);
+    if (!r.bed || r.audioMode !== 'own') throw new Error('không ghi nhận bed nhạc: ' + JSON.stringify({ m: r.audioMode, bed: r.bed }));
+    const got = (await mt.probeStreams(path.join(OUT, 'ads-2.mp4'))).durationSec;
+    const want = srcDur + adDurA * 2;
+    if (Math.abs(got - want) > 1.2) throw new Error('thời lượng ' + got.toFixed(2) + 's lệch dự kiến ' + want.toFixed(2) + 's');
+    if (r.parts !== (2 + 1) + 2 * 1) throw new Error('số phần ' + r.parts + ' khác dự kiến ' + ((2 + 1) + 2));
+    return r;
+  });
+  await step('insertAds muteAd · im lặng toàn bộ khi chọn silent', async () => {
+    const r = await mt.insertAds({ inputPath: V_A, breaks: [{ atSec: 1.5, adPaths: [adA] }], audioMode: 'muteAd', outputPath: path.join(OUT, 'ads-3.mp4') });
+    if (r.audioMode !== 'muteAd') throw new Error('audioMode không được trả về đúng: ' + r.audioMode);
+    const s = await mt.insertAds({ inputPath: V_A, breaks: [{ atSec: 1.5, adPaths: [adA] }], audioMode: 'silent', outputPath: path.join(OUT, 'ads-4.mp4') });
+    if (s.audioMode !== 'silent') throw new Error('silent bị biến thành ' + s.audioMode);
+    return r;
+  });
+  await expectFail('insertAds không có điểm chèn', () => mt.insertAds({ inputPath: V_A, adPaths: [adA], outputPath: path.join(OUT, 'ads-x1.mp4') }));
+  await expectFail('insertAds điểm vượt thời lượng', () => mt.insertAds({ inputPath: V_A, breaks: [{ atSec: srcDur + 5, adPaths: [adA] }], outputPath: path.join(OUT, 'ads-x2.mp4') }));
+  await expectFail('insertAds clip không tồn tại', () => mt.insertAds({ inputPath: V_A, breaks: [{ atSec: 1, adPaths: ['D:/khong-ton-tai-ffx-smoke-ads.mp4'] }], outputPath: path.join(OUT, 'ads-x3.mp4') }));
+  await expectFail('insertAds gap > 10s', () => mt.insertAds({ inputPath: V_A, breaks: [{ atSec: 1, adPaths: [adA] }], gapSec: 20, outputPath: path.join(OUT, 'ads-x4.mp4') }));
+  await expectFail('insertAds 21 điểm chia đều', () => mt.insertAds({ inputPath: V_A, evenCount: 21, adPaths: [adA], outputPath: path.join(OUT, 'ads-x5.mp4') }));
+  await expectFail('insertAds đích format không hỗ trợ (.gif)', () => mt.insertAds({ inputPath: V_A, breaks: [{ atSec: 1, adPaths: [adA] }], outputPath: path.join(OUT, 'ads-x6.gif') }));
+  await expectFail('insertAds điểm trùng nhau', () => mt.insertAds({ inputPath: V_A, breaks: [{ atSec: 3, adPaths: [adA] }, { atSec: 3, adPaths: [adA] }], outputPath: path.join(OUT, 'ads-x7.mp4') }));
+
   console.log('\n  ── OPS ──');
   results.forEach((l) => console.log(l));
   console.log('\n  ── VALIDATE ──');

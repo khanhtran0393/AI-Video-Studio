@@ -133,6 +133,8 @@ function registerFfmpegToolsIpc() {
   handleOp('ffx:normalize-audio', (p, onProgress) => mediaTools.normalizeAudio(Object.assign({}, p, { onProgress })));
   handleOp('ffx:remove-vocals', (p, onProgress) => mediaTools.removeVocals(Object.assign({}, p, { onProgress })));
   handleOp('ffx:add-fades', (p, onProgress) => mediaTools.addFades(Object.assign({}, p, { onProgress })));
+  // ── Chèn Quảng Cáo (2026-09-12f): cắt nguồn tại các điểm chèn + ghép clip quảng cáo vào ──
+  handleOp('ffx:insert-ads', (p, onProgress) => mediaTools.insertAds(Object.assign({}, p, { onProgress })));
   // Thumbnail 1 frame (grid thẻ Ghép Video) — nhanh, không cần progress.
   ipcMain.handle('ffx:thumb', async (_e, payload = {}) => {
     try { return await mediaTools.makeThumb(payload || {}); }

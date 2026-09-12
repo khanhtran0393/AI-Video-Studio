@@ -5,7 +5,7 @@
    Kênh `viralCut:*`. Pipeline: extract audio (media-tools) →
    transcript (SRT người dùng chọn) → chọn highlight 3 tầng
    (LLM qua niche/claude → heuristic → năng lượng) → best-hook
-   → cắt ffmpeg (mode accurate, tuỳ chọn crop 9:16).
+   → cắt ffmpeg (mode accurate, tuỳ chọn dựng khung 9:16 / 16:9).
    Mọi đường dẫn media đến từ dialog.showOpenDialog (người dùng
    chọn thật trong GUI) — KHÔNG nhận đường dẫn repo ngoài từ GUI.
    ============================================================ */
@@ -16,7 +16,7 @@ const { spawn } = require('child_process');
 const { app, dialog } = require('electron');
 const E = require('./engine');
 const mediaTools = require('../native-tools/media-tools');
-const { FFMPEG, probeDur } = require('../native-tools/ffmpeg');
+const { FFMPEG, FFPROBE, probeDur } = require('../native-tools/ffmpeg');
 const { claude } = require('../editor-pro/niche');
 const YT = require('./youtube');
 
@@ -100,7 +100,7 @@ function registerViralCutIpc(ipcMain, { getState } = {}) {
       const videoPath = String(p.videoPath || '').trim();
       const srtPath = String(p.srtPath || '').trim();
       const mode = ['auto', 'llm', 'heuristic', 'energy'].includes(p.mode) ? p.mode : 'auto';
-      const maxClips = Math.max(1, Math.min(10, Math.round(Number(p.maxClips) || 3)));
+      const maxClips = Math.max(1, Math.min(10, Math.round(Number(p.maxClips) || 10)));
       const minLen = Math.max(5, Math.round(Number(p.minLen) || 15));
       const maxLen = Math.max(minLen + 5, Math.round(Number(p.maxLen) || 45));
       if (!videoPath) return { ok: false, error: 'Chưa chọn video nguồn.', code: 'VC_NO_INPUT' };
@@ -154,6 +154,77 @@ function registerViralCutIpc(ipcMain, { getState } = {}) {
           return { ok: false, error: 'Chế độ ' + mode + ' cần transcript SRT — hãy chọn file .srt của video (hoặc dùng chế độ Auto/Năng lượng).', code: 'VC_NO_TRANSCRIPT' };
         }
 
+        /* 4b) TIER A — tín hiệu multimodal CỤC BỘ từ chính file (không AI/không mạng).
+            p.tierA = { enabled, sceneSnap, silenceAware, pitch }. Mỗi detector lỗi/thiếu
+            → features.<x>.available=false + reason + warning KHAI BÁO (Luật 10). */
+        const taIn = (p.tierA && typeof p.tierA === 'object') ? p.tierA : (p.tierA ? { enabled: true } : null);
+        let tierA = null;
+        let fusionFeats = null;
+        let anchors = [];
+        if (taIn && taIn.enabled) {
+          const opts = {
+            sceneSnap: taIn.sceneSnap !== false,
+            silenceAware: taIn.silenceAware !== false,
+            pitch: taIn.pitch !== false,
+          };
+          const feats = {
+            keyframe: { available: false, reason: 'Không bật (sceneSnap=false).' },
+            silence: { available: false, reason: 'Không bật (silenceAware=false).' },
+            pitch: { available: false, reason: 'Không bật (pitch=false).' },
+          };
+          tierA = { enabled: true, options: opts, features: feats, weights: null, snappedEdges: 0, used: '' };
+          let cutsMs = [];
+          if (opts.sceneSnap) {
+            prog('tierA-cuts', 46, 'Tier A: dò cảnh cắt qua keyframe (ffprobe)…');
+            const pk = await probeKeyframes(videoPath, durationSec, { timeoutMs: Number(taIn.probeTimeoutMs) || 45000 });
+            if (canceled()) return { ok: false, error: 'Đã hủy bởi người dùng.', code: 'VC_CANCELLED' };
+            if (pk.ok && pk.cutsMs.length >= 2) {
+              cutsMs = pk.cutsMs;
+              feats.keyframe = { available: true, count: cutsMs.length };
+            } else {
+              feats.keyframe = { available: false, reason: pk.ok ? 'Không đọc được keyframe nào của luồng video.' : pk.reason };
+              warnings.push({ code: 'VC_TIERA_CUTS', message: 'Tier A không có cảnh cắt (degrade có khai báo): ' + feats.keyframe.reason });
+            }
+          }
+          let silGaps = [];
+          if (opts.silenceAware) {
+            const sil = E.detectSilence(wins, { rel: Number(taIn.silenceRel) || undefined, minSec: Number(taIn.silenceMinSec) || undefined });
+            silGaps = sil.gaps;
+            feats.silence = { available: true, gapCount: silGaps.length, totalSec: sil.totalSec, threshold: sil.threshold };
+            if (!silGaps.length) warnings.push({ code: 'VC_TIERA_SILENCE', message: 'Tier A: không tìm thấy khoảng im lặng đủ dài (≥1.5s) nào — audio liền mạch hoặc quá ồn.' });
+          }
+          if (opts.pitch) {
+            prog('tierA-pitch', 50, 'Tier A: phân tích cao độ giọng nói (autocorrelation local)…');
+            try {
+              const t0 = Date.now();
+              const pr = E.estimatePitchFrames(wavBuf, wavInfo, { maxSeconds: Number(taIn.pitchMaxSeconds) || undefined });
+              const voiced = pr.frames.reduce((a, f) => a + (f.f0 != null ? 1 : 0), 0);
+              const pw = E.pitchWindowsFromFrames(pr.frames, wins);
+              const varMax = pw.reduce((m, w) => Math.max(m, w.var), 0);
+              if (voiced >= 8 && varMax > 0) {
+                const fus = E.fuseLocalScores(wins, { pitchWins: pw });
+                fusionFeats = fus.feats;
+                tierA.weights = fus.weights;
+                feats.pitch = {
+                  available: true, frames: pr.frames.length, voicedFrames: voiced, rate: pr.rate,
+                  analyzedSec: pr.analyzedSec, truncated: pr.truncated, ms: Date.now() - t0,
+                };
+                if (pr.truncated) warnings.push({ code: 'VC_TIERA_PITCH_TRUNC', message: 'Tier A chỉ phân tích cao độ ' + pr.analyzedSec + 's đầu video (chặn theo maxSeconds) — phần còn lại chỉ dùng năng lượng.' });
+              } else {
+                feats.pitch = { available: false, reason: 'Quá ít khung có cao độ đo được (' + voiced + '/' + pr.frames.length + ' frame, var_max=' + varMax + ') — audio không phải giọng người hoặc quá ồn.' };
+                warnings.push({ code: 'VC_TIERA_PITCH', message: 'Tier A bỏ tín hiệu cao độ (degrade có khai báo): ' + feats.pitch.reason });
+              }
+            } catch (perr) {
+              feats.pitch = { available: false, reason: errOf(perr) };
+              warnings.push({ code: codeOf(perr) === 'VC_ERROR' ? 'VC_TIERA_PITCH' : codeOf(perr), message: 'Tier A lỗi phân tích cao độ (degrade có khai báo): ' + errOf(perr) });
+            }
+          }
+          anchors = E.buildBoundaryAnchors(cutsMs, silGaps, { mergeTolMs: Number(taIn.anchorMergeMs) || undefined });
+          tierA.anchorCount = anchors.length;
+          tierA.cutCount = cutsMs.length;
+          tierA.silenceGapCount = silGaps.length;
+        }
+
         /* 5) Chọn highlight — 3 tầng; hạ cấp chỉ trong chế độ Auto và LUÔN có warning khai báo */
         let tier = null;
         let highlights = [];
@@ -191,11 +262,33 @@ function registerViralCutIpc(ipcMain, { getState } = {}) {
           }
         }
         if (!highlights.length) {
-          prog('energy-select', 65, 'Chọn highlight theo năng lượng âm thanh…');
-          const top = E.pickHighlightsByEnergy(wins, { minLen, maxLen, maxClips });
-          if (!top.length) return { ok: false, error: 'Video quá ngắn so với độ dài clip yêu cầu (' + minLen + '–' + maxLen + ' giây).', code: 'VC_TOO_SHORT' };
-          tier = 'energy';
-          highlights = top.map((c) => ({ startMs: c.startMs, endMs: c.endMs, score: Math.round(c.score * 100) / 100, title: '', reason: (c.reasons || []).join(', '), text: '' }));
+          if (fusionFeats) {
+            prog('fusion-select', 65, 'Chọn highlight theo đa tín hiệu local (năng lượng + cao độ)…');
+            const top = E.pickHighlightsByFusion(fusionFeats, { minLen, maxLen, maxClips });
+            if (!top.length) return { ok: false, error: 'Không ghép được cửa sổ đa tín hiệu nào đủ ' + minLen + '–' + maxLen + ' giây — thử nới khoảng độ dài clip.', code: 'VC_NO_FUSION_WINDOW' };
+            tier = 'fusion';
+            highlights = top.map((c) => ({ startMs: c.startMs, endMs: c.endMs, score: c.score, title: '', reason: (c.reasons || []).join(', '), text: '' }));
+            if (tierA) tierA.used = 'fusion';
+          } else {
+            prog('energy-select', 65, 'Chọn highlight theo năng lượng âm thanh…');
+            const top = E.pickHighlightsByEnergy(wins, { minLen, maxLen, maxClips });
+            if (!top.length) return { ok: false, error: 'Video quá ngắn so với độ dài clip yêu cầu (' + minLen + '–' + maxLen + ' giây).', code: 'VC_TOO_SHORT' };
+            tier = 'energy';
+            highlights = top.map((c) => ({ startMs: c.startMs, endMs: c.endMs, score: Math.round(c.score * 100) / 100, title: '', reason: (c.reasons || []).join(', '), text: '' }));
+            if (tierA) tierA.used = 'energy';
+          }
+        } else if (tierA) {
+          // Đã có transcript/AI chọn — Tier A chỉ chạy neo biên (booster-only), không chấm lại
+          tierA.used = 'booster-snap';
+        }
+
+        /* 5b) Neo biên Tier A: kéo 2 biên highlight về cảnh cắt / im lặng gần nhất
+              (chỉ khi có neo thật; snapWindowEdges tự revert nếu vi phạm độ dài). */
+        if (tierA && anchors.length) {
+          const sn = E.snapWindowEdges(highlights, anchors, { toleranceMs: Number(taIn.snapToleranceMs) || undefined, minLen, maxLen, durationMs: durationSec * 1000 });
+          highlights = sn.highlights;
+          tierA.snappedEdges = sn.highlights.reduce((a, h) => a + (h.snappedEdges || 0), 0);
+          tierA.adjustments = sn.adjustments;
         }
 
         /* 6) Best-hook (chỉ khi có transcript) + tiêu đề local cho tier không LLM */
@@ -222,7 +315,8 @@ function registerViralCutIpc(ipcMain, { getState } = {}) {
           }
         }
 
-        prog('done', 100, 'Hoàn tất phân tích — ' + highlights.length + ' highlight (tầng ' + tier + ').');
+        prog('done', 100, 'Hoàn tất phân tích — ' + highlights.length + ' highlight (tầng ' + tier + ')' +
+          (tierA ? ' · Tier A: ' + (tierA.used || 'không dùng') + ', neo ' + tierA.snappedEdges + ' biên.' : '.'));
         return {
           ok: true,
           tier,
@@ -234,8 +328,10 @@ function registerViralCutIpc(ipcMain, { getState } = {}) {
             hookStartMs: h.hookStartMs != null ? h.hookStartMs : null,
             hookEndMs: h.hookEndMs != null ? h.hookEndMs : null,
             title: h.title, score: h.score, reason: h.reason || '', hookText: h.hookText || '',
+            snappedEdges: h.snappedEdges || 0,
           })),
           warnings,
+          tierA,
         };
       } finally {
         run = null;
@@ -251,7 +347,7 @@ function registerViralCutIpc(ipcMain, { getState } = {}) {
     try {
       guardRun('analyze');
       const url = String(p.url || '').trim();
-      const maxClips = Math.max(1, Math.min(10, Math.round(Number(p.maxClips) || 3)));
+      const maxClips = Math.max(1, Math.min(10, Math.round(Number(p.maxClips) || 10)));
       const minLen = Math.max(5, Math.round(Number(p.minLen) || 15));
       const maxLen = Math.max(minLen + 5, Math.round(Number(p.maxLen) || 45));
       if (!url || !YT.YT_URL_RE.test(url)) return { ok: false, error: 'URL không phải link YouTube hợp lệ (youtube.com/watch, youtu.be, /shorts).', code: 'VC_YT_URL' };
@@ -345,7 +441,8 @@ function registerViralCutIpc(ipcMain, { getState } = {}) {
     }
   });
 
-  /* ── XUẤT: cắt từng highlight bằng ffmpeg accurate + tuỳ chọn crop 9:16
+  /* ── XUẤT: cắt từng highlight bằng ffmpeg accurate + tuỳ chọn dựng khung
+        (giữ nguyên / 9:16 dọc / 16:9 ngang)
         + tuỳ chọn GHÉP tất cả clip thành 1 video (concat demuxer -c copy:
         các clip do chính ta encode cùng tham số → ghép không mất chất lượng) ── */
   handle('viralCut:export', async (e, p = {}) => {
@@ -354,7 +451,11 @@ function registerViralCutIpc(ipcMain, { getState } = {}) {
       const videoPathIn = String(p.videoPath || '').trim();
       const sourceUrl = String(p.sourceUrl || '').trim();
       const outDir = String(p.outDir || '').trim();
-      const crop916 = !!p.crop916;
+      /* `aspect` là hợp đồng mới ('keep'|'916'|'169'); `crop916` vẫn được chấp
+         nhận cho payload cũ. Giá trị lạ → fail lộ liễu ngay trước khi chạy ffmpeg. */
+      let aspect;
+      try { aspect = E.normalizeAspect(p.aspect, p.crop916); }
+      catch (aerr) { return { ok: false, error: errOf(aerr), code: 'VC_ASPECT_UNSUPPORTED' }; }
       const mergeAll = p.mergeAll !== false; // mặc định CÓ ghép
       const highlights = Array.isArray(p.highlights) ? p.highlights : [];
       if (!videoPathIn && !sourceUrl) return { ok: false, error: 'Chưa chọn video nguồn (hoặc URL YouTube).', code: 'VC_NO_INPUT' };
@@ -380,13 +481,13 @@ function registerViralCutIpc(ipcMain, { getState } = {}) {
           if (canceled()) return { ok: false, error: 'Đã hủy bởi người dùng.', code: 'VC_CANCELLED' };
         }
         fs.mkdirSync(outDir, { recursive: true });
-        const plan = E.buildExportPlan(highlights, { outDir, crop916 });
+        const plan = E.buildExportPlan(highlights, { outDir, aspect });
         const results = [];
         for (const item of plan) {
           if (canceled()) return { ok: false, error: 'Đã hủy bởi người dùng.', code: 'VC_CANCELLED', results };
           send({ step: 'clip', index: item.index, total: plan.length, pct: Math.round(((item.index - 1) / plan.length) * 100), message: 'Cắt clip ' + item.index + '/' + plan.length + ': ' + item.title });
           const args = ['-y', '-ss', String(item.startSec), '-i', videoPath, '-t', String(item.endSec - item.startSec)];
-          if (item.crop916) args.push('-vf', 'crop=min(iw,ih*9/16):ih,scale=1080:1920');
+          if (item.vf) args.push('-vf', item.vf);
           args.push('-c:v', 'libx264', '-crf', '20', '-preset', 'fast', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', item.outPath);
           const okRun = await new Promise((resolve) => {
             const cp = spawn(FFMPEG, args, { windowsHide: true });
@@ -438,7 +539,7 @@ function registerViralCutIpc(ipcMain, { getState } = {}) {
         }
 
         send({ step: 'done', index: plan.length, total: plan.length, pct: 100, message: 'Đã xuất ' + results.length + ' clip' + (mergedPath ? ' + 1 bản ghép' : '') + ' vào ' + outDir });
-        return { ok: true, outDir, count: results.length, results, mergedPath, mergeNote };
+        return { ok: true, outDir, count: results.length, results, mergedPath, mergeNote, aspect };
       } finally {
         run = null;
       }
@@ -446,6 +547,30 @@ function registerViralCutIpc(ipcMain, { getState } = {}) {
       run = null;
       return { ok: false, error: errOf(err), code: codeOf(err) };
     }
+  });
+}
+
+/* ── Tier A: dò keyframe bằng ffprobe (packet flags, KHÔNG decode → rẻ).
+   Trả { ok, cutsMs } hoặc { ok:false, reason } — caller khai báo rõ lý do hỏng,
+   không fallback ngầm (Luật 10). Có timeout-guard vì video dài probe chậm. */
+function probeKeyframes(videoPath, durationSec, opts = {}) {
+  return new Promise((resolve) => {
+    if (!FFPROBE) return resolve({ ok: false, reason: 'Không tìm thấy ffprobe binary.' });
+    const timeoutMs = Math.max(2000, Number(opts.timeoutMs) || 30000);
+    const args = ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'packet=pts_time,flags',
+      '-of', 'csv=p=0', videoPath];
+    let cp;
+    try { cp = spawn(FFPROBE, args, { windowsHide: true }); } catch (er) { return resolve({ ok: false, reason: 'spawn ffprobe: ' + String((er && er.message) || er) }); }
+    let out = '', err = '', done = false;
+    const finish = (r) => { if (done) return; done = true; try { clearTimeout(timer); } catch (_) {} resolve(r); };
+    const timer = setTimeout(() => { try { cp.kill(); } catch (_) {} finish({ ok: false, reason: 'ffprobe keyframe quá ' + Math.round(timeoutMs / 1000) + 's — bỏ qua tín hiệu cảnh cắt.' }); }, timeoutMs);
+    cp.stdout.on('data', (d) => { out += d; if (out.length > 24 * 1024 * 1024) { try { cp.kill(); } catch (_) {} finish({ ok: false, reason: 'ffprobe trả quá nhiều packet — bỏ qua tín hiệu cảnh cắt.' }); } });
+    cp.stderr.on('data', (d) => { err += d; });
+    cp.on('error', (er) => finish({ ok: false, reason: 'ffprobe lỗi: ' + String((er && er.message) || er) }));
+    cp.on('close', (code) => {
+      if (code !== 0 && !out.trim()) return finish({ ok: false, reason: 'ffprobe exit ' + code + ': ' + err.slice(-200) });
+      finish({ ok: true, cutsMs: E.parseKeyframePackets(out, { durationMs: (Number(durationSec) || 0) * 1000 }) });
+    });
   });
 }
 

@@ -19,7 +19,7 @@
     "check:docs": "node nova/scripts/docs-sync-check.js",
     "check:selftest": "node nova/scripts/checker-fixture-test.js",
     "scan:lifecycle": "node nova/scripts/lifecycle-log-scan.js",
-    "check:all": "npm run check && npm run test:foundation && npm run test:video-agent && npm run test:voice && npm run test:auto-fix",
+    "check:all": "npm run check && npm run test:foundation && npm run test:t7-ai && npm run test:video-agent && npm run test:voice && npm run test:auto-fix",
     "test:foundation": "node nova/scripts/foundation-test.js",
     "test:agent-bridge": "node nova/scripts/agent-bridge-test.js",
     "test:local-media": "node nova/scripts/local-media-test.js",
@@ -42,7 +42,8 @@
     "test:maintenance": "node nova/core/test-maintenance.js",
     "check:shared-shadow": "node nova/scripts/shared-shadow-check.js",
     "test:viral-cut": "node nova/viral-cut/test.js",
-    "test:ffx-smoke": "node nova/scripts/ffx-smoke.js"
+    "test:ffx-smoke": "node nova/scripts/ffx-smoke.js",
+    "test:t7-ai": "node nova/scripts/t7-ai-core-test.js"
   },
   "dependencies": {
     "@remotion/bundler": "4.0.518",

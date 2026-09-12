@@ -175,6 +175,8 @@
       }
       const dir = fr.path;
       logLine(ui.easyLog, 'Thư mục dự án: ' + dir);
+      // Nhớ projectDir cho lần mở app sau (resume công việc dang dở).
+      if (typeof sessSnapPatch === 'function') { try { sessSnapPatch('vaEasyProjectDir', dir); } catch (e) {} }
 
       /* script/script.md — bắt buộc theo §4 (discover VA_SCRIPT_MISSING) */
       const title = easyProjectTitle();

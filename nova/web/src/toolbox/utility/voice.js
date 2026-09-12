@@ -256,10 +256,10 @@ function giongVe(){
   const hien = _giongDS.filter(_giongHop);
   box.innerHTML = hien.map(v => {
     const chon = v.key === _giongChon, dangPhat = v.key === _giongPhat;
-    return `<div class="gcard${chon ? ' sel' : ''}${dangPhat ? ' play' : ''}${v.factory ? '' : ' has-del'}" onclick="giongBam('${escapeHtml(v.key)}')">
+    return `<div class="gcard${chon ? ' sel' : ''}${dangPhat ? ' play' : ''}${v.factory ? '' : ' has-del'}" onclick="giongChon('${escapeHtml(v.key)}')">
       ${v.factory ? '' : `<button type="button" class="btn sm ghost gdel" onclick="event.stopPropagation();giongXoa('${escapeHtml(v.key)}')" title="Xoá giọng clone" aria-label="Xoá giọng">Xóa</button>`}
       <div class="gtop">
-        <span class="gpico">${_giongTao === v.key ? '⏳' : (dangPhat ? '❙❙' : '▶')}</span>
+        <button type="button" class="gpico" title="Nghe thử 4 giây" aria-label="Nghe thử giọng ${escapeHtml(v.name)}" onclick="event.stopPropagation();giongThu('${escapeHtml(v.key)}')">${_giongTao === v.key ? '⏳' : (dangPhat ? '❙❙' : '▶')}</button>
         <div style="min-width:0"><div class="gname">${escapeHtml(v.name)}</div><div class="gsrc">${escapeHtml(v.src)}</div></div>
       </div>
       <div class="gtags">${(v.tags || []).map(t => `<span class="gtg">${escapeHtml(t)}</span>`).join('')}</div>
@@ -307,7 +307,7 @@ function giongTheoBackend(v){
     _voiceBackend = v.engine;
     _voiceBackendMacDinh = false;   // chọn theo giọng = chọn có chủ đích
     try { localStorage.setItem('voice_backend', v.engine); } catch (e){}
-    _giongMauXoa();      // mẫu nghe thử đang cache tạo bằng engine cũ — xoá cho đúng (cả trên đĩa)
+    _giongMauRamXoa();   // RAM cache không theo engine — dọn để phát lại đúng engine mới; cache ĐĨA giữ nguyên (key có engine)
     try { voiceBackendVe(); giongVeThanh(); } catch (e){}
     try { giongBao('Đã chuyển engine sang ' + _TTS_TEN[v.engine] + ' (theo giọng đang chọn)', 'green'); } catch (e){}
     try { novaLog('🎙 engine theo giọng ' + v.name + ': ' + _TTS_TEN[v.engine]); } catch (e){}
@@ -319,15 +319,17 @@ function giongTheoBackend(v){
   }
 }
 
-// === L9806 (068263fe^): sync — delegate _giongPhatThu (thử-engine fallback) ===
-async function giongBam(key){
+// Chọn giọng trong thư viện — CHỈ chọn, KHÔNG tự nghe thử.
+// Nghe thử là hành động riêng: chỉ chạy khi người dùng bấm nút ▶ trên thẻ (giongThu).
+async function giongChon(key){
   const v = _giongDS.find(x => x.key === key);
   if (!v) return;
   _giongChon = key;
   giongTheoBackend(v);
-  return _giongPhatThu(key);
+  giongVe();
 }
 
+// Nghe thử (nút ▶): phát mẫu đã cache hoặc gen mới — không đổi giọng đang chọn.
 async function giongThu(key){
   return _giongPhatThu(key);
 }
@@ -384,6 +386,14 @@ function _giongMauXoa(key){
     _giongMau.clear();
     try { if (window.native && window.native.voiceSampleClear) window.native.voiceSampleClear(null); } catch (_){}
   }
+}
+
+// Dọn CHỈ cache RAM (objectURL) — KHÔNG đụng cache đĩa. Cache đĩa lưu theo key
+// có engine (_GIONG_MAU_V|engine|voice) nên không bao giờ "stale" khi đổi engine:
+// giữ nguyên để lần sau nghe thử phát ngay, không phải gen lại mẫu.
+function _giongMauRamXoa(){
+  _giongMau.forEach(u => { try { URL.revokeObjectURL(u); } catch (_){} });
+  _giongMau.clear();
 }
 
 async function _giongPhatThu(key){
@@ -990,7 +1000,7 @@ function voiceBackendChon(eng){
   try { localStorage.setItem('voice_backend', eng); } catch (e){}
   const dd = document.getElementById('voiceBackendDD');
   if (dd) dd.classList.remove('mo');
-  _giongMauXoa();      // mẫu nghe thử đang cache tạo bằng engine cũ — xoá cho đúng (cả trên đĩa)
+  _giongMauRamXoa();   // RAM cache không theo engine — dọn; cache ĐĨA giữ nguyên (key có engine) cho lần sau
   // UX "backend trước": giữ giọng đang chọn nếu vẫn thuộc backend mới, không thì
   // chọn sẵn giọng đầu tiên của backend đó cho người dùng.
   if (!giongThuocBackend(_giongDS.find(v => v.key === _giongChon), eng)){
