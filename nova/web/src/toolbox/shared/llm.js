@@ -10,6 +10,9 @@ const PROVIDER_LABEL = { anthropic: 'Claude', openai: 'OpenAI', deepseek: 'DeepS
 // === L?: let _apiKeyIdx ===
 let _apiKeyIdx = 0;
 
+// === L?: let _apiKeyCooldown ===
+let _apiKeyCooldown = Object.create(null);   // key → ts hết cooldown (key dính 401/403/429/quota — xem _keyCooldownMs trong utility/llm.js)
+
 // === L?: const LLM_TIMEOUT_MS ===
 const LLM_TIMEOUT_MS = 180000;
 

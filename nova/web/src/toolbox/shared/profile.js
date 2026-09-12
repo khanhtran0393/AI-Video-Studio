@@ -3,17 +3,52 @@
    Thứ tự nạp index.html: khối shared/ nằm đúng vị trí cũ của shared-consts.js — sau shared-state.js, trước utility.js. */
 const IDB = {
   db: null,
-  async open(){
-    if (this.db) return this.db;
+  _opening: null,
+  _openVer(ver){
     return new Promise((res, rej) => {
-      const r = indexedDB.open('AI Video Studio', 1);
+      const r = indexedDB.open('AI Video Studio', ver);
       r.onupgradeneeded = e => {
         const db = e.target.result;
         if (!db.objectStoreNames.contains('blobs')) db.createObjectStore('blobs');
       };
-      r.onsuccess = () => { this.db = r.result; res(this.db); };
+      r.onsuccess = () => res(r.result);
       r.onerror = () => rej(r.error);
     });
+  },
+  _openAny(){
+    return new Promise((res, rej) => {
+      // Mở KHÔNG chỉ định version: DB mới → tạo v1 (upgrade chạy, tạo store);
+      // DB đã tồn tại ở version bất kỳ → mở đúng version đó, không gây VersionError.
+      const r = indexedDB.open('AI Video Studio');
+      r.onupgradeneeded = e => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains('blobs')) db.createObjectStore('blobs');
+      };
+      r.onsuccess = () => res(r.result);
+      r.onerror = () => rej(r.error);
+    });
+  },
+  async open(){
+    if (this.db) return this.db;
+    if (this._opening) return this._opening;
+    this._opening = (async () => {
+      // DB có thể đã tồn tại do nơi khác tạo (thiếu store 'blobs')
+      // → onupgradeneeded không chạy lại → transaction('blobs') fail vĩnh viễn.
+      // Phát hiện thiếu store và nâng version để upgrade chạy, đảm bảo store luôn có.
+      let db = await this._openAny();
+      if (!db.objectStoreNames.contains('blobs')) {
+        const nextVer = db.version + 1;
+        db.close();
+        db = await this._openVer(nextVer);
+      }
+      return db;
+    })();
+    try {
+      this.db = await this._opening;
+      return this.db;
+    } finally {
+      this._opening = null;
+    }
   },
   async set(key, value){
     const db = await this.open();

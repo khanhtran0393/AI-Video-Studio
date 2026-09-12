@@ -3,10 +3,21 @@
    Toàn bộ là function declaration: chỉ gọi lúc runtime, thứ tự nạp không ảnh hưởng. */
 function _saveCurrentKeyFields(){
   if (!_keyFieldsProvider) return;
-  localStorage.setItem(_provKeyName(_keyFieldsProvider), collectKeys().join('\n'));
+  const keys = collectKeys().join('\n');
+  // Guard "API đã thêm": sau khi reset form, ô key trống là trạng thái mặc định
+  // chứ không phải người dùng xoá key — KHÔNG ghi rỗng đè lên kho key đã lưu.
+  if (!keys && typeof _addedApiGuard !== 'undefined' && _addedApiGuard === _keyFieldsProvider) return;
+  localStorage.setItem(_provKeyName(_keyFieldsProvider), keys);
 }
 
 function _loadKeyFieldsFor(provider){
+  // Guard "API đã thêm": provider vừa bị reset form → giữ ô trống, không nạp key cũ.
+  if (typeof _addedApiGuard !== 'undefined' && _addedApiGuard === provider){
+    renderKeyFields(['']);
+    _keyFieldsProvider = provider;
+    return;
+  }
+  if (typeof _addedApiGuard !== 'undefined' && _addedApiGuard && _addedApiGuard !== provider) _addedApiGuard = null;   // rời provider đang reset → nhả guard
   const raw = localStorage.getItem(_provKeyName(provider)) || '';
   renderKeyFields(raw.split(/[\n,]+/).map(s => s.trim()).filter(Boolean));
   _keyFieldsProvider = provider;

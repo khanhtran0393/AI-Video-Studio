@@ -325,6 +325,22 @@
         ]
       }
     ],
+    "nova/main/media-protocol.js": [
+      {
+        "kind": "object",
+        "entries": [
+          {
+            "name": "registerMediaProtocolSchemes"
+          },
+          {
+            "name": "installMediaProtocolHandler"
+          },
+          {
+            "name": "SCHEME"
+          }
+        ]
+      }
+    ],
     "nova/main/menu.js": [
       {
         "kind": "object",

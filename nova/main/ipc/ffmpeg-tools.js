@@ -24,10 +24,10 @@ function errOf(e) {
   return cancelled ? { error: msg, cancelled: true } : { error: msg };
 }
 
-/* onProgress → gửi % về đúng cửa sổ đã gọi (bọc try — cửa sổ đóng giữa chừng thì bỏ qua). */
+/* onProgress → gửi {pct, fps?, speed?} về đúng cửa sổ đã gọi (bọc try — cửa sổ đóng giữa chừng thì bỏ qua). */
 function progressSender(e) {
-  return (pct) => {
-    try { e.sender.send('ffx:progress', { pct: Math.max(0, Math.min(100, Math.round(Number(pct) || 0))) }); } catch (_) { /* bỏ qua */ }
+  return (p) => {
+    try { e.sender.send('ffx:progress', { pct: Math.max(0, Math.min(100, Math.round(Number(p && p.pct) || 0))), fps: p && p.fps, speed: p && p.speed }); } catch (_) { /* bỏ qua */ }
   };
 }
 
@@ -100,22 +100,38 @@ function registerFfmpegToolsIpc() {
 
   // ── Đo metadata + Huỷ ──
   ipcMain.handle('ffx:probe', async (_e, payload = {}) => {
-    try { return await mediaTools.probeMedia(payload.path); }
+    try { return await mediaTools.probeStreams(payload.path); }
     catch (err) { return errOf(err); }
   });
   ipcMain.handle('ffx:cancel', () => mediaTools.cancelRunning());
+  // Dò cảnh chuyển (scene detection) — trả danh sách thời điểm để UI gợi ý cắt/trích
+  ipcMain.handle('ffx:scenes', async (_e, payload = {}) => {
+    try { return await mediaTools.detectScenes(payload || {}); }
+    catch (err) { return errOf(err); }
+  });
 
   // ── Các tác vụ FFmpeg (onProgress → ffx:progress) ──
   handleOp('ffx:extract-audio', (p, onProgress) => mediaTools.extractAudio(Object.assign({}, p, { onProgress })));
   handleOp('ffx:cut-video', (p, onProgress) => mediaTools.cutVideo(Object.assign({}, p, { onProgress })));
+  handleOp('ffx:cut-multi', (p, onProgress) => mediaTools.cutMulti(Object.assign({}, p, { onProgress })));
   handleOp('ffx:concat-videos', (p, onProgress) => mediaTools.concatVideos(Object.assign({}, p, { onProgress })));
+  handleOp('ffx:concat-auto', (p, onProgress) => mediaTools.concatAuto(Object.assign({}, p, { onProgress })));
+  handleOp('ffx:concat-transition', (p, onProgress) => mediaTools.concatTransition(Object.assign({}, p, { onProgress })));
   handleOp('ffx:loop-video', (p, onProgress) => mediaTools.loopVideo(Object.assign({}, p, { onProgress })));
+  handleOp('ffx:loop-pingpong', (p, onProgress) => mediaTools.loopPingPong(Object.assign({}, p, { onProgress })));
+  handleOp('ffx:loop-crossfade', (p, onProgress) => mediaTools.loopCrossfade(Object.assign({}, p, { onProgress })));
+  handleOp('ffx:loop-audio', (p, onProgress) => mediaTools.loopAudio(Object.assign({}, p, { onProgress })));
   handleOp('ffx:compress-video', (p, onProgress) => mediaTools.compressVideo(Object.assign({}, p, { onProgress })));
   handleOp('ffx:extract-frames', (p, onProgress) => mediaTools.extractFrames(Object.assign({}, p, { onProgress })));
   handleOp('ffx:remove-audio', (p, onProgress) => mediaTools.removeAudio(Object.assign({}, p, { onProgress })));
   handleOp('ffx:convert-media', (p, onProgress) => mediaTools.convertMedia(Object.assign({}, p, { onProgress })));
   handleOp('ffx:add-music', (p, onProgress) => mediaTools.addMusic(Object.assign({}, p, { onProgress })));
   handleOp('ffx:to-gif', (p, onProgress) => mediaTools.toGif(Object.assign({}, p, { onProgress })));
+  // Thumbnail 1 frame (grid thẻ Ghép Video) — nhanh, không cần progress.
+  ipcMain.handle('ffx:thumb', async (_e, payload = {}) => {
+    try { return await mediaTools.makeThumb(payload || {}); }
+    catch (err) { return errOf(err); }
+  });
 }
 
 module.exports = { registerFfmpegToolsIpc };

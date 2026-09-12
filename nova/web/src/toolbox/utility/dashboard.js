@@ -67,6 +67,7 @@ function renderDashboard(){
     <div class="dsec">
       <div class="dsec-h">⚡ Truy cập nhanh</div>
       <div class="dqa">
+        ${qa("switchTool('tool1')", ic.prof, 'Profile Kênh', 'Tạo &amp; quản lý kênh')}
         ${qa("switchTool('toolscript')", '<path d="M14 3v5h5M8 13h8M8 17h5M6 3h9l5 5v11a1 1 0 01-1 1H6a1 1 0 01-1-1V4a1 1 0 011-1z"/>', 'Tạo Kịch Bản', 'AI viết kịch bản (chế độ Novel)')}
         ${qa("switchTool('tool2')", '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 4v16"/>', 'Phân Cảnh', 'Chia cảnh, prompt ảnh &amp; nhân vật')}
         ${qa("switchTool('toolflow')", '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.8"/><path d="M4 18l5-5 4 3 3-3 4 4"/>', 'Tạo Ảnh', 'Google Flow sinh ảnh')}
@@ -82,6 +83,31 @@ function renderDashboard(){
         ${qa("switchTool('toolhanddraw')", '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/>', 'Vẽ Tay Ảnh', 'Ảnh tĩnh → video vẽ tay')}
         ${qa("switchTool('toolimzic')", '<path d="M3 12h18M3 4h18M3 20h18"/><path d="M6 4v16"/>', 'I-MZic', 'Ảnh + nhạc, hiệu ứng theo nhịp')}
         ${qa("switchTool('toolsrttranslate')", '<path d="M4 7l3-3 3 3M7 4v9M20 17l-3 3-3-3M17 20v-9"/>', 'Dịch SRT', 'AI dịch phụ đề SRT')}
+        ${qa("switchTool('toolviralcut')", '<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4L8.12 15.88M14.47 14.48L20 20M8.12 8.12L12 12"/>', 'Viral Cut', 'Tách highlight viral thành clip ngắn')}
+        ${qa("switchTool('toolspy')", '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>', 'Spy Storyboard', 'Soi storyboard video đối thủ')}
+        ${qa("switchTool('tool10')", '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5L5 21"/>', 'Tạo Thumbnail', 'Thumbnail YouTube bằng AI')}
+      </div>
+    </div>
+    <div class="dsec">
+      <div class="dsec-h">🛠 Công cụ FFmpeg</div>
+      <div class="dqa">
+        ${qa("switchTool('toolffxaudio')", '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>', 'Tách MP3', 'Tách âm thanh từ video')}
+        ${qa("switchTool('toolffxcut')", '<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4L8.12 15.88M14.47 14.48L20 20M8.12 8.12L12 12"/>', 'Cắt Video', 'Cắt theo giây, không re-encode')}
+        ${qa("switchTool('toolffxjoin')", '<rect x="2" y="5" width="8" height="14" rx="2"/><rect x="14" y="5" width="8" height="14" rx="2"/><path d="M10 12h4"/>', 'Ghép Video', 'Ghép nhiều file đúng thứ tự')}
+        ${qa("switchTool('toolffxloop')", '<path d="M17 2l4 4-4 4"/><path d="M3 11v-1a4 4 0 014-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 01-4 4H3"/>', 'Loop Video', 'Lặp N lần thành 1 file dài')}
+        ${qa("switchTool('toolffxcompress')", '<path d="M4 9V5h4M20 9V5h-4M4 15v4h4M20 15v4h-4"/><path d="M9 12h6"/>', 'Nén Video', 'Giảm dung lượng (H.264 + CRF)')}
+        ${qa("switchTool('toolffxframes')", '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>', 'Trích Frame', 'Trích ảnh theo giây / mỗi N giây')}
+        ${qa("switchTool('toolffxmute')", '<path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M23 9l-6 6M17 9l6 6"/>', 'Xoá Tiếng', 'Xoá track âm, giữ nguyên hình')}
+        ${qa("switchTool('toolffxconvert')", '<path d="M17 3l4 4-4 4"/><path d="M21 7H8a5 5 0 00-5 5"/><path d="M7 21l-4-4 4-4"/><path d="M3 17h13a5 5 0 005-5"/>', 'Đổi Định Dạng', 'MP4/WEBM/MKV/MOV · MP3/WAV')}
+        ${qa("switchTool('toolffxmusic')", '<rect x="2" y="6" width="12" height="12" rx="2"/><path d="M9 18V5l12-2v13"/><circle cx="18" cy="16" r="3"/>', 'Ghép Nhạc', 'Trộn / thay nhạc nền video')}
+        ${qa("switchTool('toolffxgif')", '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="M8 10v4M12 10v4M8 12h2M16 10a2 2 0 000 4"/>', 'Xuất GIF', 'GIF loop palette 2 pass')}
+      </div>
+    </div>
+    <div class="dsec">
+      <div class="dsec-h">⚙️ Hệ thống</div>
+      <div class="dqa">
+        ${qa("switchTool('toolsettings')", '<path d="M8 6h13M8 12h13M8 18h13"/><circle cx="3.5" cy="6" r="1.5"/><circle cx="3.5" cy="12" r="1.5"/><circle cx="3.5" cy="18" r="1.5"/>', 'API &amp; Tài khoản', 'API key, tài khoản Flow &amp; OmniVoice')}
+        ${qa("switchTool('toollog')", '<path d="M4 5h16M4 10h16M4 15h10M4 20h7"/>', 'Nhật ký', 'Lỗi &amp; hoạt động của app')}
       </div>
     </div>
     <div class="dsec">

@@ -3,7 +3,7 @@
  * Giai đoạn 1 chưa cần API native; để sẵn để Giai đoạn 2 (gọi Flow trực tiếp,
  * proxy per-account, lưu file, FFmpeg…) expose hàm ra window.native qua đây.
  */
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 // Observe-only error forwarding. The private channel is not exposed through
 // window.native, payloads are bounded here and sanitized again by the reporter.
@@ -183,6 +183,23 @@ contextBridge.exposeInMainWorld('native', {
     pickOutput: (defaultName) => ipcRenderer.invoke('srt-translate:pickOutput', { defaultName }),
     translate: (payload) => ipcRenderer.invoke('srt-translate:translate', payload),
   },
+  // Viral Cut — port ViralCut 2.5: video (+SRT tuỳ chọn) → highlight 3 tầng
+  // (LLM → heuristic → energy) → best-hook → cắt ffmpeg. Dialog thật, progress + cancel.
+  viralCut: {
+    pickVideo: () => ipcRenderer.invoke('viralCut:pickVideo'),
+    pickSrt: () => ipcRenderer.invoke('viralCut:pickSrt'),
+    pickOutDir: () => ipcRenderer.invoke('viralCut:pickOutDir'),
+    analyze: (payload) => ipcRenderer.invoke('viralCut:analyze', payload || {}),
+    analyzeYoutube: (payload) => ipcRenderer.invoke('viralCut:analyzeYoutube', payload || {}),
+    downloadSource: (payload) => ipcRenderer.invoke('viralCut:downloadSource', payload || {}),
+    exportClips: (payload) => ipcRenderer.invoke('viralCut:export', payload || {}),
+    cancel: () => ipcRenderer.invoke('viralCut:cancel'),
+    onProgress: (cb) => {
+      const listener = (_e, s) => { if (cb) cb(s); };
+      ipcRenderer.on('viralCut:progress', listener);
+      return () => ipcRenderer.removeListener('viralCut:progress', listener);
+    },
+  },
   // Công cụ FFmpeg (sidebar): tách MP3/M4A/WAV, cắt, ghép, loop, nén, trích frame,
   // xoá tiếng, đổi định dạng, ghép nhạc, GIF — FFmpeg local, dialog thật, progress + cancel.
   ffx: {
@@ -192,17 +209,28 @@ contextBridge.exposeInMainWorld('native', {
     pickMedia: () => ipcRenderer.invoke('ffx:pick-media'),
     pickOutput: (defaultName, defaultDir) => ipcRenderer.invoke('ffx:pick-output', { defaultName, defaultDir }),
     probe: (p) => ipcRenderer.invoke('ffx:probe', { path: p }),
+    scenes: (payload) => ipcRenderer.invoke('ffx:scenes', payload || {}),
     cancel: () => ipcRenderer.invoke('ffx:cancel'),
     extractAudio: (payload) => ipcRenderer.invoke('ffx:extract-audio', payload),
     cutVideo: (payload) => ipcRenderer.invoke('ffx:cut-video', payload),
+    cutMulti: (payload) => ipcRenderer.invoke('ffx:cut-multi', payload),
     concatVideos: (payload) => ipcRenderer.invoke('ffx:concat-videos', payload),
+    concatAuto: (payload) => ipcRenderer.invoke('ffx:concat-auto', payload),
+    concatTransition: (payload) => ipcRenderer.invoke('ffx:concat-transition', payload),
     loopVideo: (payload) => ipcRenderer.invoke('ffx:loop-video', payload),
+    loopPingPong: (payload) => ipcRenderer.invoke('ffx:loop-pingpong', payload),
+    loopCrossfade: (payload) => ipcRenderer.invoke('ffx:loop-crossfade', payload),
+    loopAudio: (payload) => ipcRenderer.invoke('ffx:loop-audio', payload),
     compressVideo: (payload) => ipcRenderer.invoke('ffx:compress-video', payload),
     extractFrames: (payload) => ipcRenderer.invoke('ffx:extract-frames', payload),
     removeAudio: (payload) => ipcRenderer.invoke('ffx:remove-audio', payload),
     convertMedia: (payload) => ipcRenderer.invoke('ffx:convert-media', payload),
     addMusic: (payload) => ipcRenderer.invoke('ffx:add-music', payload),
     toGif: (payload) => ipcRenderer.invoke('ffx:to-gif', payload),
+    thumb: (payload) => ipcRenderer.invoke('ffx:thumb', payload),
+    // Electron 43 gỡ File.path → drag-drop file vào GUI phải đi qua webUtils.getPathForFile
+    // (hàm đồng bộ, chạy trong preload — KHÔNG phải kênh IPC mới).
+    pathForFile: (file) => webUtils.getPathForFile(file),
     onProgress: (cb) => {
       const listener = (_e, s) => cb && cb(s);
       ipcRenderer.on('ffx:progress', listener);
@@ -265,7 +293,8 @@ contextBridge.exposeInMainWorld('native', {
   // Lịch sử "Đã tạo" persist trên đĩa (userData/voice-history) — tách khỏi
   // voice-sample-cache vì việc đổi engine sẽ xoá SẠCH thư mục cache mẫu.
   voiceHistorySave: (payload) => ipcRenderer.invoke('voice-history-save', payload),
-  voiceHistoryList: () => ipcRenderer.invoke('voice-history-list'),
+  voiceHistoryList: (cache) => ipcRenderer.invoke('voice-history-list', !!cache),   // cache=true → vùng voice-cache (đoạn tách)
+  voiceHistoryDelete: (khi, cache) => ipcRenderer.invoke('voice-history-delete', khi, !!cache),
   flowExtExport: () => ipcRenderer.invoke('flow-ext-export'),
   onVoiceLog: (cb) => ipcRenderer.on('voice-log', (_e, s) => cb(s)),
   // Cập nhật app (thông báo hiện ở góc trên phải).

@@ -83,6 +83,97 @@ File nÃ y ghi **tráº¡ng thÃ¡i dÃ i háº¡n vÃ  lá»‹ch sá»­ qu
   vulkan/d3d dllâ€¦) â€” khÃ´ng track, chá»‰ hiá»‡n trÃªn mÃ¡y dev.
 
 ## Nháº­t kÃ½ thay Ä‘á»•i
+## Nhật ký thay đổi
+- [2026-09-12] **Xoay key khi lỗi / hết quota** (renderer pool key): khai báo mới
+  `let _apiKeyCooldown` trong `shared/llm.js` (key → ts hết cooldown); helper mới
+  `_keyCooldownMs(msg)` trong `utility/llm.js`: 401/403/invalid key → nghỉ **15 phút**,
+  429/quota/rate-limit/resource-exhausted → nghỉ **3 phút**, lỗi khác 0. `_nextApiKey()`
+  bỏ qua key đang cooldown (vẫn xoay tuần tự), nếu TẤT CẢ key đều cooldown → chọn key
+  sớm hết hạn nhất (fail lộ liễu, không treo — Luật 10). `callLLM`: lượt thử lại
+  (`_withRetry`, MAX 4) tự lấy key KẾ TIẾP (`_llmAttempt > 1 && !_override?.key`);
+  wrapper sau `doCall` — lỗi dính cooldown thì ghi `_apiKeyCooldown[key]` + novaLog
+  "🔄 Xoay key …", gọi THÀNH CÔNG thì gỡ cooldown key đó; `_override.key` (Test API)
+  không xoay/không cooldown. Test vm: unit rotation 13 assert + E2E k1→k2→k3 với
+  429 đều PASS; `npm run check` EXITCODE=0. Chỉ áp dụng renderer (callLLM); luồng
+  AI main process (niche/loi.js) vẫn 1 key đầu — chưa xoay.
+- [2026-09-12] **Viral Cut — tầng "heatmap YouTube" (Most Replayed) + chapters**: tính
+  năng chọn highlight từ dữ liệu hành vi khán giả YouTube. Module mới
+  `nova/viral-cut/youtube.js`: một lượt `-J` yt-dlp lấy thời lượng + heatmap + chapters
+  (tái dùng `editor-pro/ytdlp-path` binary đóng gói + `nova-cookies` + `ff-path` FFDIR);
+  `probeYoutube` loud-fail `VC_YT_*`, `downloadYoutubeVideo` tải full có tiếng về
+  tmp (cache theo id `vc-yt-<id>.mp4`, giữ tối đa 2 bản, cancel + progress
+  `[download] %`). Engine thêm 2 hàm thuần deterministic: `pickHighlightsByHeatmap`
+  (bỏ bẫy intro 1.0 đầu video, cửa sổ min–max ghép từ biên mốc, ngưỡng ≥35% đỉnh
+  (tối thiểu 0.15), non-overlap qua `pickTopNonOverlap`, score thang 0–10) và
+  `applyChapterTitles`/`cleanChapterTitle` (chapter phủ ≥50% → làm title, không tốn
+  tiền AI). IPC mới `viralCut:analyzeYoutube` (không có heatmap → lỗi lộ liễu
+  `VC_NO_HEATMAP`, Luật 10) + `viralCut:downloadSource`; `viralCut:export` nhận thêm
+  `sourceUrl` (tự tải khi chưa có file, tái dùng cache). Panel: ô URL + nút
+  "Phân tích từ YouTube", timeline vẽ cột đỏ theo value, badge "tầng heatmap
+  YouTube", nút "Tải video nguồn" trong card Tổng quan để bật preview
+  `<video>` (avs-media). Preload thêm 2 method. `nova/ipc-inventory.json` tái sinh
+  (2 kênh mới). Kiểm định: `node --check` toàn bộ OK, `test:viral-cut` 29/29 PASS
+  (5 test mới), `npm run check` EXITCODE=0, live probe thật video YouTube OK
+  (heatmap 100 mốc). Còn treo: e2e thật trong app (dán URL → cắt → ghép) chờ
+  người dùng chạy; Cách 2 (comment timestamping) chưa làm.
+- [2026-09-12] **Khung "📋 API đã thêm" → NGUỒN API cho các công việc dùng AI + mask hiển thị**:
+  entry trong `api_added_list` giờ lưu ĐẦY ĐỦ `url` + mảng `keys` (`addedApiOnSave(provider,
+  model, keys, url)`); hiển thị mask: key = 4 ký tự đầu + 4 ký tự cuối (`addedApiMaskKey`),
+  Base URL = 2 ký tự NGAY SAU `http(s)://` + 2 ký tự cuối (`addedApiMaskUrl`), entry đầu
+  đánh dấu "✓ đang dùng cho AI". Hàm mới `addedApiResolveAiSource()`: ưu tiên **API đã thêm**
+  (entry mới nhất làm chuẩn — provider/model/base URL theo entry, pool key gộp các entry
+  CÙNG provider để xoay; không ghép chéo key khác provider) → **API Key Flow** (`api_key_flow`,
+  key Gemini, provider='gemini' + model mặc định) → null (dùng cấu hình lưu sẵn như cũ).
+  `llm.js` tích hợp: `_apiKeyPool()` đọc resolver đầu tiên; `callLLM` lấy provider/model/base
+  URL từ nguồn đã resolve (`callAnthropic` thêm tham số `baseUrlOverride`); `updateApiStatus`
+  gắn tag "📋 API đã thêm"/"🔑 API Key Flow". Kênh CLI (subscription, không key) KHÔNG bị
+  chi phối; nút Test API (`_override`) vẫn thắng mọi nguồn. Đã viết + bấm vào `saveApiSettings`
+  baseUrl cho hook. Node assert 13/13 PASS, `npm run check` EXITCODE=0. Còn treo: các luồng
+  AI chạy ở MAIN process (Niche Finder `niche/loi.js`, vision `editor-pro/register.js`) vẫn
+  đọc `nova-settings.json` riêng — chưa nối nguồn "API đã thêm" (renderer localStorage không
+  sync sang main).
+- [2026-09-12] **Khung "📋 API đã thêm" trong tab Cài đặt · API & Tài khoản**: partial
+  mới ở cột phải (`partials/panels-admin-settings.html`, trên "🎬 Tài khoản Google Flow"),
+  script mới `nova/web/src/toolbox/utility/added-api.js` (tiền tố `addedApi*`, nạp sau
+  `llm.js` trong index.html). Khi user bấm 💾 Lưu ở 🤖 AI Provider (`saveApiSettings`),
+  API được ghi nhận vào localStorage `api_added_list` (ẩn key + Base URL, chỉ hiện
+  provider/model/số key/thời gian, dedupe theo fingerprint provider+model+keys, tối đa 30
+  mục) rồi form AI Provider RESET về mặc định (anthropic, ô key trống, model mặc định,
+  Base URL trống) để nhập API mới. An toàn key: guard `_addedApiGuard` chặn
+  `_saveCurrentKeyFields`/`saveApiSettings`/`_loadKeyFieldsFor` ghi rỗng hoặc nạp lại
+  key cũ của provider vừa reset; guard tự nhả khi user gõ key, đổi provider khác, hoặc
+  `loadApiSettings` nạp lại form từ cấu hình đã lưu. CLI (không key) không ghi nhận
+  không reset. `npm run check` EXITCODE=0.
+- [2026-09-12] **Viral Cut — port ViralCut 2.5 hoàn tất toàn pipeline + UI**: module mới
+  `nova/viral-cut/` (engine.js 404 dòng thuần Node + ipc.js ~300 dòng 7 kênh `viralCut:*`
+  đăng ký qua `main/ipc/index.js`; test.js 24 unit test → npm script `test:viral-cut`).
+  Pipeline: ffprobe → extractAudio (media-tools, WAV mono 48k cache theo SHA-1) → transcript
+  (SRT user chọn + `parseSrtCues` tái dùng từ whiteboard-annotation) → highlight 3 tầng
+  (LLM gemini-2.5-flash-lite qua niche/claude, AI CHỈ trả CHỈ SỐ câu — Luật 8; heuristic
+  từ-khoá hook/siêu từ/con số; energy RMS cửa sổ 1s từ PCM s16le) → best-hook (≤12 từ,
+  cấm spoil 20% cuối; không transcript thì hook = cửa sổ 8s năng lượng cao nhất) → cắt
+  ffmpeg accurate (-ss trước -i, libx264 crf20, tuỳ chọn crop 9:16 1080x1920). Xuất có
+  tuỳ chọn GHÉP tất cả clip thành 1 video mặc định BẬT (ffmpeg concat demuxer -c copy
+  — các clip encode cùng tham số nên không mất chất lượng; tên `viralcut-ghep-<tên
+  video>-<N>clip.mp4`; lỗi ghép → `VC_CONCAT_FAILED` lộ liễu, clip riêng vẫn giữ). Card
+  "Tổng quan & điều chỉnh" trong panel: `<video>` phát video nguồn qua scheme sẵn có
+  `avs-media://m/<encoded-path>` (Range/seek, bypassCSP), timeline toàn video vẽ các khối
+  highlight theo % thời lượng thật (metadata `<video>`, fallback ffprobe durationSec) —
+  click khối = xem trước đúng đoạn (tự pause tại endMs), click nền = tua; mỗi highlight
+  có ô nhập giây bắt đầu/kết thúc chỉnh trực quan (clamp 0..duration, tối thiểu 1s, hook
+  text ẩn nếu ra ngoài đoạn đã chỉnh); xuất dùng chính dữ liệu đã chỉnh. Luật 10:
+  mode `llm`/`heuristic` thiếu SRT → FAIL lộ liễu `VC_NO_TRANSCRIPT`; Auto hạ cấp có
+  warning `VC_TIER_FALLBACK`. Parser JSON lỏng lẻo `parseJsonListLoose` (fence, phẩy
+  thừa, object cụt, bracket-balance escape-aware). UI: sidebar tab "Viral Cut", tool
+  `tool-toolviralcut` trong panels-small-a.html, `web/viral-cut-panel.js` (IIFE, prefix
+  `vc*`, global `window.ViralCutPanel`), preload `native.viralCut`, nav.js init hook.
+  `check` PASS đầy đủ (180 kênh IPC, exports/shared/shadow/size/toplevel/docs/selftest);
+  `test:viral-cut` 24/24 PASS. Đã kiểm chứng boot app thật: kill instance cũ (user đồng ý),
+  `khoidong.bat --silent` exit 0, không warning `[viral-cut]` (IPC 7 kênh đăng ký OK),
+  `scan:lifecycle` --json: 0 finding trong session mới (REAL/WARN cũ đều của session 09-11).
+  Chưa test pipeline thật end-to-end (analyze+export với video+SRT thật của user — chờ
+  dữ liệu thật theo §6.6, không tự bịa).
+- [2026-09-11] **Kiểm chứng + chốt xoá tàn dư `shared-consts.js` (4.250 dòng) sau đợt tách 12 module `shared/`**
 - [2026-09-11] **Kiểm chứng + chốt xoá tàn dư `shared-consts.js` (4.250 dòng) sau đợt tách 12 module `shared/`**
   của phiên song song: (1) Xác nhận `index.html` L106-120 đã nạp 12 module `src/toolbox/shared/*.js`
   (shell/llm/voice/mvtv/profile/flow/t2-scenes/t2-prompts/auto-assets/t3-stock/t7/t8-t10) đúng vị trí
@@ -3887,6 +3978,49 @@ Kiểm định: `npm run check` EXIT 0 (cảnh báo C2 shadow là nhiễu đã b
   mỗi `batchexecute YhhmEf` lưu raw payload `%TEMP%\flow-gen-capture\bx-variant-<N>.json` +
   tách shape `{model, qualitySlot, prompt, sceneLen, slots, i2vHints}` append vào
   `%APPDATA%\AI Video Studio Independent\chrome-accounts\bx-variant-captures.json`.
+
+## 2026-09-12e — T7 Dựng Video: nút Toàn màn thành bật/tắt + nút back Kho hiệu ứng +
+Trợ lý dựng báo đang chạy ngay + sửa preview 9:16/1:1 bị co nhỏ + dời hàng nút hành
+động lên hàng toolbar
+
+- **Toàn màn ↔ Thu nhỏ** (`partials/panels-tool7-anim.html` + `src/toolbox/t7-fx.js`):
+  nút "⤢ Toàn màn" nhận `id="t7FocusBtn"`, `onclick="t7Focus()"` (toggle thay vì
+  `t7Focus(true)` một chiều). `t7Focus()` giờ đổi nhãn/title nút: đang focus →
+  "⤡ Thu nhỏ" (bấm về khung chính), không còn nút chết lúc phóng to. Thêm **Esc**
+  thoát focus trong `t7HookKeys` (`t7-playback.js`).
+- **Kho hiệu ứng**: thay nút "🎬 Mở Dựng Video" (bị đẩy xuống cuối anim-bar, khó
+  nhận là back) bằng "← Về Dựng Video" đặt ĐẦU thanh (`animGoT7()` có sẵn — không
+  thêm hàm mới).
+- **Trợ lý dựng** (`src/toolbox/t7-ai.js` `t7AiPropose`): mở sheet `#t7Ai` + hiện
+  "↻ Đang phân tích lại từ đầu…" + `_t7AiSteps(0)` + setStatus7 'working' TRƯỚC
+  `await _t7Catalog()` — trước đây sheet chỉ mở sau khi fetch danh mục xong, lúc
+  "Phân tích lại" màn hình im lặng hàng chục giây. Xoá 1 dòng `const m` trùng.
+- **Preview bị co nhỏ** (`src/styles/build-video.css` + `src/toolbox/tool-t7.js`
+  `t7Build`): BẪY CSS `width:100%` + `max-height:calc(100vh - 250px)` làm khung
+  9:16/1:1 giữ nguyên bề ngang mà bị kẹp chiều cao → vỡ tỉ lệ → video thành dải
+  nhỏ giữa khung. Sửa bằng biến `--t7-arw` (tỉ lệ w/h do t7Build đặt theo select
+  Tỉ lệ khung): `width:min(100%, calc((100vh - 250px) * var(--t7-arw,1.7778)))` —
+  khung co NGANG theo chiều cao tối đa, video chiếm trọn khung. Chỉ ảnh hưởng lúc
+  XEM; kích thước xuất do `_t7ExpDims()`.
+- **Dời hàng nút hành động**: `#t7ActRow` (↶ ↷ ✂ ⧉ 🗑 🖼 🔊 🎙 🎵 ↻) chuyển khỏi
+  khối stage (dưới preview) lên trong `.t7-top`, NGAY SAU hàng nút Toàn màn/Kho
+  hiệu ứng/Trợ lý dựng/Lưu/Xuất Video; CSS `.t7-actrow` bỏ padding chèn, thêm
+  `flex:1 1 100%` để chiếm dòng thứ 2 của toolbar.
+- **Lưu ý phiên song song**: trong lúc chạy check đầu tiên, `src/toolbox/tool-ffx.js`
+  (tính năng Công cụ FFmpeg của phiên song song, untracked) đang ở trạng thái
+  ghi-dở (`-placeholder-`) làm `check:syntax` FAIL — phiên đó đã tự hoàn thiện file
+  (397 dòng, `node --check` OK); phiên này KHÔNG đụng tới file đó.
+- **Kiểm định**: `npm run check` EXIT=0 (10/10 bước, chạy riêng từng bước đều ok).
+  Không chạm video-agent/voice nên không chạy test:video-agent/test:voice. App
+  smoke: `khoidong.bat --silent` KDEXIT=0 — app ĐANG chạy (phiên song song giữ)
+  nên chỉ focus cửa sổ, không mở instance 2 (§6.5). `scan:lifecycle`: session=42,
+  REAL=38/WARN=45 nhưng TOÀN BỘ là lịch sử 2026-09-03→09-08; hôm nay 2026-09-12
+  chỉ 1 WARN reason=killed (teardown chủ đích) — phiên hiện tại SẠCH, không REAL.
+  LƯU Ý: instance đang chạy khởi động TRƯỚC các sửa renderer này → muốn thấy UI
+  mới (nút Thu nhỏ, hàng nút trên toolbar, preview to, back Kho hiệu ứng, Trợ lý
+  báo đang chạy) cần restart app — để user tự restart vì phiên song song đang
+  dùng app.
+
   Mặc định 15 phút (`AI_VIDEO_STUDIO_BX_CAPTURE_MIN` để đổi).
 - **Sanity PASS**: default=`abra_t2v_8s` slot 2; `veo_3_1_t2v_fast` slot 4; i2v → throw; slot/model
   sai → `BX_BAD_QUALITY_SLOT` / `BX_BAD_MODEL`.
@@ -4329,6 +4463,59 @@ Kiểm định: `npm run check` EXIT 0 (cảnh báo C2 shadow là nhiễu đã b
 - **Chưa làm (nếu cần sau)**: test app thật bằng video thật trong `output/` qua
   `khoidong.bat` (§6.6) — để dành cho phiên có dữ liệu người dùng sẵn sàng.
 
+## 2026-09-12d — "Công cụ FFmpeg" nâng cấp toàn diện: 10 tool + progress % + huỷ + probe + mm:ss
+
+- **Người dùng yêu cầu triển khai tất cả đề xuất cải tiến** (đợt 2026-09-12c chỉ có 4 tool).
+- **10 tool** (sidebar "Công cụ FFmpeg", dropdown 10 nav-item): Tách MP3/M4A/WAV (chọn
+  định dạng + bitrate) / Cắt Video (nhập "90" hoặc "01:30" / "1:20:32") / Ghép Video
+  (đổi thứ tự clip bằng ↑/↓ sau khi chọn, title = tổng thời lượng probe) / Loop /
+  Nén Video (CRF 23/28/35) / Trích Frame (1 ảnh tại giây, hoặc mỗi N giây 1 ảnh →
+  thư mục lưu qua `pickFolder`, đếm số ảnh xuất) / Xoá Tiếng (-an copy) / Đổi Định Dạng
+  (mp4/webm/mkv/mov/mp3/m4a/wav — webm = libvpx-vp9 realtime + libopus) / Ghép Nhạc
+  (mix amix + volume 0–200%, hoặc replace -shortest) / Xuất GIF (palette 2 pass 1 lệnh,
+  loop vô hạn, từ/đến tuỳ chọn).
+- **Progress % thật**: `native-tools/media-tools.js` viết lại — `spawnRun` parse
+  `time=HH:MM:SS` trên stderr so với totalSec (probeDur ffprobe) → onProgress → IPC
+  sự kiện `ffx:progress` (progressSender bọc try — cửa sổ đóng giữa chừng bỏ qua).
+  Renderer: `ffxWireProgress` đăng ký 1 lần (`__ffxWired`), `ffxActiveStatus` chỉ
+  tool đang chạy nhận bar; progress bar + nút Huỷ chèn ĐỘNG vào hàng hành động
+  (`ffxProgressBox` — HTML panel không cần markup progress).
+- **Huỷ**: registry 1 job (ffxJob + ffxCancelReq) → `cancelRunning()` kill → exit ≠ 0
+  khi có yêu cầu huỷ → reject `FFX_CANCELLED` (code) → renderer phân biệt
+  "⚠️ Đã huỷ" vs "❌ lỗi". Kênh `ffx:cancel`. Chỉ 1 op cùng lúc (chống nghẽn I/O).
+- **Probe**: `ffx:probe` → `probeMedia` (ffprobe json duration+size, reject lộ liễu).
+  Chọn xong nguồn hiện "name · 1:20 · 12 MB" ngay (lỗi probe chỉ ẩn info, không chặn).
+- **Ghi nhớ thư mục output**: localStorage `ffxLastOutDir` (renderer tự cắt dirname
+  chuỗi) → `ffx:pick-output` nhận `defaultDir` + trả cờ `exists` → renderer xác nhận
+  GHI ĐÈ bằng confirm() trước khi chạy (ffmpeg -y không được ghi đè lặng lẽ — Luật 10).
+- **Main**: `media-tools.js` viết lại 287 dòng (10 op + cancelRunning + probeMedia +
+  spawnRun; error code FFX_*, signature đối số qua `o.<tên>`); `ipc/ffmpeg-tools.js`
+  viết lại — 18 kênh: 4 dialog (pick-input/input-audio/media/output) + probe + cancel +
+  10 op qua `handleOp` bọc chung (errOf phân biệt cancelled). Preload `ffx` mở rộng
+  19 method + onProgress.
+- **Renderer**: `tool-ffx.js` viết lại 490 dòng (tiền tố ffx* — toplevel OK); helper
+  mới: ffxParseTime ("90"/"90.5"/"mm:ss"/"hh:mm:ss"), ffxFmtDur, ffxFmtSize, ffxEsc,
+  ffxAppendInfo, ffxRenderJoinList (↑/↓ + tổng thời lượng), ffxFramesModeUI,
+  ffxMusicModeUI/VolUI, ffxRememberOutDir/LastOutDir, ffxPickOutput (exists+confirm),
+  ffxDone (count ảnh + link Mở), ffxFail (phân biệt huỷ). `panels-ffmpeg-tools.html`
+  viết lại 335 dòng — 10 panel .tool. panel-order.js ORDER đủ 10 id.
+- **Smoke bằng dữ liệu THẬT (§6.6)**: `nova/scripts/tmp/tmp-ffx-smoke.js` (gitignored,
+  test một lần) chạy 16 bước TRỰC TIẾP media-tools trên video app tự tạo trong
+  `output/gen-e2e/` (veo31-fast/chrome-veo31-fast/imzic-e2e-offline 12.4MB — nhạc tách
+  từ I-MZic thật): **16/16 PASS** — mọi op tạo artifact thật trong %TEMP%, cancel đạt
+  (FFX_CANCELLED sau 1s nén file 12.4MB; lần đầu FAIL do clip 8s copy-stream xong trước
+  khi huỷ — đổi sang op re-encode chậm), 3 validate lỗi lộ liễu đúng (FFX_RANGE/
+  FFX_FORMAT/FFX_INPUTS).
+- **Kiểm định**: `npm run check` EXIT=0 (10/10). `ipc-inventory.json` đủ 18 kênh ffx:*
+  (kể cả event ffx:progress). Không đụng video-agent/voice → không chạy test bộ đó.
+- **App thật xác minh (§6.5)**: instance đang chạy khởi động 04:25:26Z (11:25 local) —
+  SAU khi code mới xong → main đã nạp IPC ffx:* mới. Fetch trực tiếp server 47280:
+  index.html render đủ dropdown 10 tool (Tách MP3 → Xuất GIF), `tool-ffx.js` HTTP 200
+  23,693 bytes + `panels-ffmpeg-tools.html` HTTP 200 17,568 bytes — khớp byte với đĩa
+  (server phục vụ code mới). `scan:lifecycle`: exit 1 do entry REAL/WARN CŨ (2026-09-11
+  + 1 WARN 2026-09-12T03:00Z reason=killed) — phiên hiện tại 0 entry crash → sạch.
+  Test tương tác nút bấm trong UI để dành cho phiên user dùng thật.
+
 
 ## 2026-09-12d — Tách god-file `handdraw-studio-panel.js` (1.393 dòng) thành 6 module `nova/web/src/hd/` (context registry `hdPanelCtx`)
 
@@ -4357,4 +4544,124 @@ Kiểm định: `npm run check` EXIT 0 (cảnh báo C2 shadow là nhiễu đã b
   PASS: `hdPanelCtx` 63 tên enumerable (`lastProgressAt` non-enumerable — đúng chủ đích defineProperty),
   `HanddrawPanel.init` + `pvRender` sống. `scan:lifecycle`: phiên mới 04:03Z SẠCH — các REAL/WARN còn
   trong log là lịch sử 2026-09-11 (đã xác định bằng timestamp).
+
+
+## 2026-09-12e — Tạo giọng nói (mục "Đã tạo"): nút Xoá bản, ghép theo chọn, TỰ ĐỘNG ghép sau khi gen kịch bản, log quy trình
+
+- **4 yêu cầu user**: (1) thiếu nút xoá bản gen nhầm; (2) thiếu nút ghép các bản đã chọn; (3) không tự ghép sau khi gen kịch bản dài; (4) khung "Nhật ký backend" trống trơn.
+- **Xoá bản**: IPC mới `voice-history-delete` (main `nova/main/ipc/voice.js` — xoá `<khi>.mp3/.wav` + `<khi>.json` trong userData/voice-history) + preload `voiceHistoryDelete` + `giongSuXoa(i)` (renderer) — confirm, revoke objectURL, splice khỏi `_giongSu`, xoá đĩa; nút "Xoá" đỏ trên từng dòng "Đã tạo".
+- **Ghép theo chọn**: checkbox từng dòng (`giongSuChon` — lưu theo `khi`, bền với thứ tự mảng) + nút `giongGhepChonBtn`/"🔗 Ghép các mục đã chọn (n)" hiện khi ≥2 chọn; `giongSuGhepChon()` ghép theo thứ tự cũ→mới, tên "Gộp n mục đã chọn · giờ". Tách core ghép dùng chung `_giongGhepMuc(items, ten, tuDong)` — `giongSuGhep()` (nhóm auto-split "Đoạn i/N") và ghép-chọn cùng dùng; hợp đồng/kỹ thuật decode+OfflineAudioContext+`_giongWav16` giữ nguyên.
+- **Ghép sau khi gen = BẰNG TAY (quyết định user 2026-09-12e)**: `voiceGenerate()` luồng nhiều đoạn xong thì chỉ báo bấm "🔗 Ghép các đoạn đã xong" — KHÔNG tự ghép (user muốn chủ động nghe thử trước).
+- **Mô hình lưu trữ (chốt với user — lần 2)**: HAI vùng đĩa trong profile (userData): `voice-history` = SẢN PHẨM CUỐI (bản "Gộp", bản ghép-theo-chọn, bản gen đơn lẻ); `voice-cache` = CACHE ĐOẠN TÁCH khi gen kịch bản — cache riêng của profile, **tắt mở app VẪN CÒN** (user yêu cầu rõ: đoạn tách không rác kho sản phẩm cuối nhưng cũng không mất khi restart). Main phân vùng bằng cờ `cache` trong payload `voice-history-save` / tham số 2 của `voice-history-list` & `voice-history-delete` (KHÔNG thêm kênh IPC mới — không đổi hợp đồng kênh); 3 handler dùng chung helper `voiceZone{Save,List,Delete}`, prune ≤40 bản / ≤64MB mỗi vùng. Renderer: `_giongLuuBan` đặt `h.cache = !laSanPhamCuoi`, `_giongSuLuuDia(h, cache)` ghi đúng vùng, `_giongSuNapDia` nạp CẢ HAI vùng (Promise.all, đánh dấu `cache: true`), `giongSuXoa` xoá đúng vùng theo `h.cache`, dòng hiển thị gắn nhãn "cache" (tooltip giải thích). preload chuyển tiếp tham số.
+- **Log**: root cause (4) = preload expose `onVoiceLog` nhưng KHÔNG file renderer nào đăng ký → khung `voiceLog` không bao giờ có nội dung. Wire `_voiceLogGan()` trong `voiceInit()` (one-shot flag `_voiceLogDaGan`), log backend + `_voiceLog(msg)` (timestamp, giữ ≤500 dòng, autoscroll) cho mọi bước: nạp lịch sử đĩa, backend sẵn sàng, bắt đầu gen, xong từng đoạn, lưu bản, tự ghép/ghép tay, xoá, lỗi. Thêm `novaLog` cho các sự kiện lớn.
+- **Dọn rác**: xoá `nova/findlog.out`, `nova/findlog2.out` (đã bị commit nhầm từ phiên trước).
+- **Kiểm định**: `npm run check` EXIT=0 (10/10 bước; `check:ipc` sinh lại inventory — 167 kênh, có `voice-history-delete`). `npm run test:voice` EXIT=0. Chưa test app thật (khoidong + gen giọng dữ liệu thật) — để dành cho phiên user dùng thực tế.
+
+
+## 2026-09-12f — Khôi phục pipeline auto-run qua CDP sau loạt restart; FIX TDZ `_t2SceneWarns`; phát hiện persistence toolbox đã mất
+
+- **Bug thật đã FIX** (`nova/web/src/toolbox/utility/t2-scenes.js:98`): `_t2SceneWarns` dùng `txt`/`pr` TRƯỚC `const` khai báo (khối A5 chèn sai chỗ khi tách file) → TDZ ReferenceError mỗi lần render bảng cảnh → `runAutoTool2` (tool-run.js) nuốt mọi lỗi nội bộ (catch-all chỉ `setStatus2`, KHÔNG rethrow — vi phạm Luật 10) → pipeline tự động báo scenes/assets "done" giả → bước images fail `không có prompt`. Fix: dời khai báo `txt`/`pr` lên đầu hàm, giữ nguyên ngữ nghĩa. `npm run check` EXIT=0. **Bài học: TDZ trong hàm không bị check:toplevel bắt — mọi lần tách file verbatim phải smoke-test runtime tới tầng render.**
+- **Persistence toolbox đã chết từ khi gỡ đăng nhập**: `loadCloudState`/`saveCloudState`/`mergeLocalWorkData` đều no-op vì không có `window.currentUser` (không còn Firebase); IDB `AI Video Studio` v1 **thiếu store `blobs`** (DB được tạo bởi something khác không upgrade) → `IDB.get/set` throw luôn. Hệ quả: `state.profiles`, kịch bản, cảnh, prompt, ảnh scene TẤT CẢ chỉ sống trong RAM — restart app = mất sạch. `localStorage.av_queue` là persistence DUY NHẤT còn sống (config job, không có code đọc lại lúc boot). Cần quyết định kiến trúc riêng (local save qua IPC main) — chưa làm.
+- **Quy trình khôi phục CDP** (script `nova/scripts/tmp/tmp-session-resume.js`, monitor `tmp-session-monitor.js`, đã gitignore): phase `a` = voiceInit + dựng lại profile idx 0 từ `av_queue` + reset job (xoá videoId, step 0); phase `run` = runQueue; phase `r` = repair prescan→gán→prompt→TTS. CDP port thật đọc `%APPDATA%\AI Video Studio Independent\DevToolsActivePort` (9334 bị stale socket giữ → DevTools trôi 9336). Renderer eval phải bọc try/catch trả `{__err}`.
+- **Cạm bẫy `runQueue`**: nếu form Dashboard (dashTopic) còn nội dung → tự `queueAdd()` tạo job TRÙNG LẶP trước khi chạy. Job trùng chạy `newVideo()` → reset state → MẤT ảnh scene đã gen (ảnh không nằm trong workData). Đã xoá job trùng bằng splice `_prodQueue` (đừng dùng `queueRemove` — nó `confirm()` treo renderer headless).
+- **Export mp4**: `t7DoExport` cần `%TEMP%\ai-video-studio\` tồn tại (main không tự mkdir → ENOENT mkdtemp; đã tạo tay). Bản export đầu ra NỀN ĐEN 1×1 (33 clip, audio OK, 194s) do ảnh scene đã mất trước khi dựng; ffmpeg render chậm bất thường → đã kill (bản bỏ đi). Aspect set 16:9 qua `t7SetAspect` trước export.
+- **Còn treo (chờ user)**: Flow extension báo `NO_FLOW_KEY` khi `tfEnsureProject` (token phiên Google Flow hết hạn — GET_STATUS vẫn hasToken/129 credits nhưng request 401) → cần user quét lại token/đăng nhập lại labs.google. Sau đó: regen `tfGenAssets('char'/'bg')` + `tfGenScenes` → đặt job step 8 → build → export lại mp4 ra `Desktop\<slug(title)>`. Style kênh: đã gán preset `STYLE_PRESETS.cartoon2d` (user chọn) thay style cũ đã mất.
+
+## 2026-09-12g — FIX persistence toolbox: IDB tự nâng version + luồng save/load local không còn phụ thuộc auth; dữ liệu đã sống thật trên đĩa
+
+- **Root cause persistence chết (3 lỗi chồng nhau), đã FIX tất cả**:
+  1. `nova/web/src/toolbox/shared/profile.js` — DB IDB `'AI Video Studio'` tồn tại sẵn ở v1 **thiếu store `blobs`** (do nơi khác tạo) → `onupgradeneeded` không bao giờ chạy lại → mọi `IDB.set/get` throw `object store not found`. Fix: `IDB.open()` mở **không chỉ định version** (`indexedDB.open(name)`) rồi nếu thiếu store → đóng + mở lại ở `version+1` để upgrade tạo store; có lock `_opening` chống race. Cẩn trọng: mở `open(name, 1)` cứng sẽ gây `VersionError` khi DB đã ở v2 — phải dùng open-versionless làm bước 1.
+  2. `nova/web/src/toolbox/utility/profiles.js` — `saveCloudState` early-return khi không có `window.currentUser` → cả nhánh IDB (persistence máy) bị bỏ qua; `loadCloudState` tương tự. Fix: tách `_tbUid()` (fallback `'_local'`); nhánh IDB LUÔN chạy, nhánh Firestore bọc `if (window.currentUser && window.firebaseSaveDoc)`. `mergeLocalWorkData`/`loadProfileImages`/delete-profile cũng bỏ gate uid. Thêm **snapshot state nhẹ** `IDB.set('_local/state', lightState)` (profiles + workData + text; ảnh vẫn lưu key riêng) và `loadCloudState` nạp lại nó lúc boot.
+  3. `initAppDirect()` **không bao giờ gọi `loadCloudState()`** — trước đây chỉ luồng auth gọi; gỡ auth xong thì boot ra state rỗng. Fix: gọi `loadCloudState().catch(...)` (fire-and-forget) trong `initAppDirect` sau `restoreUI`.
+- **Đã verify END-TO-END bằng dữ liệu thật**: backup RAM job `v_mtxywtjmbjfz` (29 cảnh, script 2356 ký tự, 29 scene prompts) → restore → `saveCloudState(true)` ghi IDB (`_local/p_.../v_.../workData`) → **reload trang hoàn toàn → app tự nạp lại đủ 29 cảnh + script + prompts từ đĩa** (IndexedDB giờ có thư mục `%APPDATA%\AI Video Studio Independent\IndexedDB`, DB v2). Restart app không còn mất toolbox state.
+- **Backup JSON ngoài IDB**: `%APPDATA%\AI Video Studio Independent\toolbox-backup\state-2026-09-12.json` (profiles đầy đủ + workData; ghi qua IPC `save-file`). Giữ làm snapshot an toàn độc lập với IDB.
+- **Kiểm định**: `npm run check` EXIT=0 (2 lần; lần 2 chạy `check:exports -- --update` trước vì module mới `nova/main/media-protocol.js` của phiên khác chưa có baseline — KHÔNG phải thay đổi của phiên này, chỉ đồng bộ baseline theo §4.1).
+- **Hệ quả với job đang chạy**: khi user re-auth Flow xong → regen ảnh (`tfGenAssets` + `tfGenScenes`) sẽ tự persist qua `saveCloudState` → lần sau restart không mất nữa. Còn treo duy nhất vẫn là `NO_FLOW_KEY` chờ user.
+
+## 2026-09-12h — HOÀN TẤT upgrade 10 công cụ FFmpeg (Gói C): smoke 33/33 PASS dữ liệu thật + fix 3 bug backend lộ ra khi verify
+
+- **Smoke test `nova/scripts/tmp/tmp-ffx-smoke.js` (33 bước, dữ liệu thật `output/gen-e2e/`)**: **0 FAIL** — 26 op PASS (extract audio mp3/wav+loudnorm, cut copy/accurate+fade, cutMulti, concat copy/auto/xfade, loop times/total/pingpong/crossfade, compress crf/size 2-pass — target 8MB ra 8.028KB, frames every/single/count/scene/grid, removeAudio, convert mkv+keepSubs/480p+GPU, addMusic mix(loop+fade+loudnorm)/replace, toGif palette+slideshow), cancel trả FFX_CANCELLED đúng, 6 validate fail-loud đúng code (FFX_RANGE/FFX_FORMAT/FFX_INPUTS/FFX_TARGET/FFX_GIF_W/FFX_TIMES).
+- **Fix smoke**: 2 dòng `await` bị chừa ngoài IIFE (ERR_AMBIGUOUS_MODULE_SYNTAX) → dời vào trong.
+- **Bug backend #1 — `detectScenes`**: filter `select='gt(scene,0.3),showinfo'` (showinfo nằm TRONG quote của select) → ffmpeg "Invalid chars ',showinfo'". Sửa quote: `select='gt(scene,0.3)',showinfo`. Loại bug `node --check` không bắt được.
+- **Bug backend #2 — `loopVideo` mode 'total'**: gọi `num(o.times)` TRƯỚC khi rẽ nhánh → mode total luôn throw FFX_TIMES. Sửa: validate `times` chỉ ở nhánh mode mặc định; nhánh total tính `n = max(2, ceil(targetSec/dur))`.
+- **toGif slideshow trên clip đơn cảnh = 0 frame** (ffmpeg "Output file is empty" — lỗi lộ liễu, đúng Luật 10): cả 3 clip gen-e2e đều single-scene (detectScenes `times:[0]`), `full-va_mtl29ola854.mp4` hỏng moov atom. Không bịa dữ liệu: chạy slideshow trên `ghep-auto.mp4` (concat A+B nhiều cảnh — artifact thật của cùng run) → PASS.
+- **Đồng bộ UI/renderer ↔ backend** (backend là chuẩn): cut accurate dùng 1 trường `fade` đối xứng (bỏ fadeIn/fadeOut riêng ở panel + `tool-ffx.js`); loop total `mode:'total'+targetSec`; pingpong `times:2` cố định (UI không có ô số lần); crossfade `times:2 + fadeDur`; compress size `targetMB`; frames grid `cols + count=cols*rows` (backend tự tính rows), scene dùng `threshold` (0–1, fallback 0.3) chứ không phải giây.
+- **Fix bug treo từ phiên trước — `nova/main/media-protocol.js`**: thiếu `const { Readable } = require('stream')` (dùng `Readable.toWeb` cho response Range/200 của scheme `avs-media://`) → ReferenceError ở request preview đầu tiên. Đã thêm import. Các REAL 2026-09-11 13:55Z trong lifecycle (render-process-gone exitCode=2 lặp 4 lần + render-recovery-stopped) giải thích được: renderer crash khi preview video qua protocol — cùng gốc lỗi này.
+- **Kiểm định**: `npm run check` **EXIT 0** (syntax 575 files, IPC 172 kênh, exports 35 modules, shared 19 keys, shadow/shared-shadow/size/toplevel/docs OK, selftest 10/10). Boot app qua `khoidong.bat --silent` sau khi taskkill instance cũ: bridge 47280 lên, session mới 07:13Z lifecycle sạch (chỉ gpu-feature-status). `scan:lifecycle` exit 1 duy nhất do REAL lịch sử 2026-09-11 (trước fix) + WARN `reason=killed` từ taskkill chủ đích — không phải lỗi mới.
+## 2026-09-12i — Mở rộng mô hình 2 vùng cho MỌI sản phẩm trung gian (acache) + FIX cache Veo chết ngầm
+
+- **Bối cảnh**: user chốt "không riêng gì voice — các sản phẩm khác cũng vậy". Khảo sát toàn app:
+  sản phẩm CUỐI đã có kho riêng (kịch bản/cảnh/ảnh Tool 2 → IDB qua profiles.js; render/upscale/ffx →
+  đĩa; imzic settings → localStorage), nhưng các sản phẩm TRUNG GIANG sau đây chỉ nằm trong RAM:
+  kịch bản Tool Script (`tsOutput`), SEO pack Tool 9 (`t9Script/t9Desc/t9Tags`), SRT Tool 2
+  (`srtOutput`), prompt hàng loạt (`bulkPrompts`, `tvPrompts`), cache Veo (`_t6VeoCache`).
+- **Bug thật FIX — cache Veo chết ngầm**: `_t6VeoCache`/`_T6_VEO_MAX` KHÔNG được khai báo ở bất kỳ
+  đâu trong web/src (mất khi tách file) → `_t6VeoCachePut/Get` ném ReferenceError bị try/catch nuốt
+  ⇒ cache tiết kiệm credit Veo KHÔNG HOẠT ĐỘNG. Khai báo lại trong `utility/veo.js` (Map + MAX=6).
+- **Hạ tầng chung (1 cơ chế, không chế registry mới)**: file mới
+  `nova/web/src/toolbox/shared/acache.js` — cache IDB store 'blobs' key `ac:*` (dùng lại IDB của
+  shared/profile.js); API: `acacheSet/Get/Note/Boot` + `_acacheVeoPersist`. Gõ tay debounce 800ms +
+  **sweep 3s** bắt cả ghi programmatic (`out.value = …`); lỗi lưu/đọc báo rõ console.warn + novaLog,
+  KHÔNG nuốt (Luật 10). Nạp trong index.html ngay sau `shared/profile.js`.
+- **Wire**: `boot.js` gọi `acacheBoot()` (khôi phục ô trống + bật listener + sweep + hâm nóng cache
+  Veo từ IDB). `veo.js` `_t6VeoCachePut` write-through xuống IDB (dạng `{b64,mime}` JSON-được) —
+  tắt mở vẫn còn, cache HIT tiết kiệm credit qua restart.
+- **Không đụng** IPC/preload/main → hợp đồng không đổi. Tool 9 / tool-ts / t2-edit / t8 KHÔNG phải
+  sửa (sweep tự bắt). t7: sản phẩm = export ra đĩa sẵn, không cần. mvtv sceneVideoBlobs: đã có IDB
+  riêng qua profiles.js.
+- **Kiểm định**: `node --check` 3 file OK; `npm run check` **EXIT 0** (toplevel 107 đơn vị nạp /
+  1590 tên — 0 xung đột; docs 35 script khớp; selftest 10/10).
+- **Còn treo**: test app thật `khoidong.bat` (gen kịch bản → tắt mở → nội dung còn; gen 1 video Veo
+  → tắt mở → log "Veo cache đã hồi phục") + quét `scan:lifecycle`.
+
+
+## 2026-09-12j — Gói C+ nâng cấp sâu 10 công cụ FFmpeg: cắt nhiều đoạn + dò cảnh, nén hàng loạt, kết quả probe output; FIX crash `viral-cut-panel.js` lúc khởi động
+
+- **Cắt nhiều đoạn (tận dụng `cutMulti` backend sẵn có, trước đó chưa có kênh IPC)**:
+  - IPC mới `ffx:cut-multi` (`nova/main/ipc/ffmpeg-tools.js`, `handleOp` như các kênh ffx khác) + preload `ffx.cutMulti`. `check:ipc` regen inventory: **180 kênh** (commit cùng thay đổi).
+  - UI panel Cắt (`panels-ffmpeg-tools.html`): hàng "Cắt nhiều đoạn" — nút **"🎬 Dò cảnh → sinh đoạn"** (gọi `ffx:scenes`/`detectScenes` rồi sinh các đoạn giữa các mốc, đoạn cuối đóng bằng thời lượng file qua probe), nút "＋ Thêm đoạn", danh sách đoạn sửa/xoá được (`ffxCutSegS<i>`/`ffxCutSegE<i>` nhập "90" hoặc "mm:ss"), nút **"🎞️ Cắt & ghép các đoạn"** → `cutMulti` 1 file.
+  - `tool-ffx.js`: `ffxCutSegs` + `ffxCutSegRender/Sync/Add/Del`, `ffxCutDetectScenes`, `ffxRunCutMulti` (validate từng đoạn lộ liễu, mode copy/accurate dùng chung select của panel).
+- **Nén hàng loạt**: nút "📦 Nén nhiều file…" trong panel Nén → `ffx:pick-inputs` (N video) + `pickFolder` → chạy tuần tự cùng cấu hình CRF/size/GPU, output vào **thư mục con mới `nen-hang-loat-<ts>`** (không ghi đè file cũ — Luật 10), progress tổng theo file `[i/N]`, fail-loud kèm tên file lỗi, Huỷ giữa chừng dừng cả lô qua `FFX_CANCELLED`.
+- **Kết quả sau xử lý**: `ffxDone` giờ probe file output → nối thêm "· 0:16 · 12.4 MB" + link **"Mở thư mục"** (helper `ffxDirOf`; renderer không có module `path`).
+- **GIF slideshow pre-check**: khi tick slideshow, chạy `detectScenes` trước; video 1 cảnh liền mạch → chặn sớm với thông báo rõ (thay vì để ffmpeg fail "Output file is empty" chung chung — Luật 10).
+- **FIX crash renderer thật lúc khởi động** (thấy qua lifecycle console khi `khoidong.bat --silent`): `nova/web/viral-cut-panel.js:77` `SHELL +=` trên `const SHELL` (dòng 24) → `Uncaught TypeError: Assignment to constant variable`, panel viral-cut không render. Sửa `const` → `let`. Vi phạm pattern này `node --check` không bắt — chỉ runtime lộ.
+- **docs-sync**: bổ sung script `test:viral-cut` vào AGENTS.md §3.2 (bị check:docs bắt lệch — drift từ session khác).
+- **Kiểm định**: `node --check` 5 file OK; `npm run check` **EXIT 0** (syntax 575, IPC 180 kênh, exports 35 module, docs 35 script, selftest 10/10); smoke `tmp-ffx-smoke.js` **33/33 PASS** dữ liệu thật `output/gen-e2e/`; app khởi động lại qua `khoidong.bat --silent` sau taskkill — bridge 47280 OK, session mới trong `lifecycle.log` **không REAL/WARN mới** (38 REAL + WARN đều timestamp 2026-09-11 trước khi fix `media-protocol.js`).
+- **Còn treo**: test tay trong UI chạy các chế độ mới (dò cảnh → cắt nhiều đoạn, nén hàng loạt) với dữ liệu app đã lưu; NO_FLOW_KEY chờ user re-auth Flow.
+
+
+## 2026-09-12k — Gói D: 8 phản hồi user về công cụ FFmpeg + chuyển Viral Cut lên dropdown Công cụ AI
+
+- **✂️ Cắt nhiều đoạn**: tính năng đã có từ 2026-09-12j — user chưa thấy (app cũ/trước reload); bổ sung dòng chú thích dưới hàng "Cắt nhiều đoạn" giải thích luồng (thêm đoạn từ→đến, dò cảnh tự sinh, ghép thành video mới NGẮN hơn).
+- **🔗 Ghép Video — grid thẻ có thumbnail**: danh sách clip chuyển từ dòng text sang **grid thẻ 168px: ảnh xem trước frame tại 1s + tên + ↑/↓ + ✕ xoá từng clip** (mới — trước đây chỉ đổi thứ tự). Thumbnail: backend `makeThumb` mới (ffmpeg 1 frame → `%TEMP%\ffx-thumbs\<md5(path|at)>.jpg`, cache tồn tại là bỏ qua) + IPC `ffx:thumb` + preload `ffx.thumb`; renderer hiển thị qua scheme `avs-media://m/<encodeURIComponent(path)>` (media-protocol có sẵn, bypass CSP — không base64). `ffxJoinThumbs` cache URL, re-render 1 lần khi thumb xong (không loop: chỉ re-render khi thành công).
+- **🔁 Loop nhạc**: backend `loopAudio` mới (`-stream_loop N-1` + codec theo đuôi đích mp3/m4a/wav/flac, `targetSec` → `n=ceil(target/dur)` + `-t`, hoặc `times` nguyên ≥1; lỗi lộ liễu FFX_TARGET/FFX_TIMES/FFX_FORMAT) + IPC `ffx:loop-audio` + preload `ffx.loopAudio`. UI: option "🎵 Lặp NHẠC đến đủ dài" trong `ffxLoopMode` → hàng chọn file nhạc + "Tổng thời lượng cần" (trống = dùng Số lần lặp ≥2); `ffxLoopTimesRow` hiện cho cả times lẫn audio. Ping-pong xuôi-ngược đã có sẵn (loopPingPong).
+- **🗜 Nén theo nền tảng**: preset select `ffxCompressPreset` — Zalo (size ≤25MB), Email (size ≤10MB + ≤720p), YouTube 1080p (CRF 23), TikTok/Reels (CRF 26 + ≤1080p), Web nhẹ (CRF 30 + ≤720p), Tự cấu hình. Backend `compressVideo` thêm `maxHeight` tuỳ chọn (144–2160, 0=giữ nguyên → `-vf scale=-2:H` cả 2 mode crf/size; lỗi FFX_HEIGHT). Ô "Giới hạn chiều cao" mới; batch compress nhận cùng cfg.
+- **🔇 Xoá tiếng theo khoảng**: `removeAudio` thêm `rangeStartSec`/`rangeEndSec` (cả 2, 0≤s<e; video copy + audio re-encode aac với `volume=enable='between(t,s,e)':volume=0` — tiếng câm đúng trong khoảng, ngoài giữ nguyên; kèm `track` ≠ all → FFX_TRACK). UI: checkbox `ffxMuteRange` + 2 ô Từ/Đến (ffxMuteRangeUI).
+- **🔄 Đổi định dạng — âm thanh**: backend `convertMedia` bổ sung đích **FLAC** (`-c:a flac`) + **OGG Opus** (`libopus 192k`); UI thêm 2 option + `isAudio` tính cả flac/ogg (ẩn tuỳ chọn video). Trước đó MP3/M4A/WAV đã hỗ trợ nhưng thiếu FLAC/OGG.
+- **🎶 Ghép nhạc theo vùng**: `addMusic` thêm `playStartSec`/`playEndSec` — nhạc chỉ nghe trong [từ, đến] của video (`volume=enable='between(t,ps,pe)':volume=0` nối vào musicChain, áp dụng cả mode mix/replace); chỉ điền Từ = đến hết video (`pe=vDur`); chỉ điền Đến = lỗi lộ liễu FFX_PLAY_RANGE. UI: hàng "Vùng video nghe nhạc — Từ/Đến" (ffxMusicPlayStart/End, nhập "10" hoặc "00:10").
+- **Sidebar**: nav-item `toolviralcut` (Viral Cut) chuyển từ nhóm "Công cụ FFmpeg" lên nhóm **"Công cụ AI"** (sau Video Agent) trong `app-sidebar.html` — để lại comment đánh dấu.
+- **IPC**: 2 kênh mới `ffx:loop-audio`, `ffx:thumb` → inventory **182 kênh** (regen + commit). `media-tools.js` exports thêm `loopAudio`, `makeThumb` — module này KHÔNG nằm trong exports-contract baseline (chỉ shim `nova/*.js` + `nova/main/*.js`) nên `check:exports` không đổi.
+- **Kiểm định**: `node --check` 4 file OK; `npm run check` **EXIT 0** (lần chạy full đầu exit 1 không tái hiện — mọi bước riêng và lần chạy lại đều 0); smoke `tmp-ffx-smoke.js` mở rộng **45/45 PASS** (thêm 9 op thật: loopAudio×2, removeAudio range, convert FLAC/OGG, addMusic vùng nghe, compress maxHeight 480, makeThumb + 4 validate fail-loud) trên dữ liệu thật `output/gen-e2e/`; restart qua `khoidong.bat --silent` → bridge 47280 OK, session 08:19Z lifecycle **không crash/unresponsive** (REAL duy nhất 2026-09-11T13:56 là lịch sử). FIX muộn sau smoke: nhánh loop nhạc bị check `!ffxState.loop` ("Chưa chọn video nguồn") chặn trước khi vào nhánh audio → dời check xuống chỉ áp dụng cho mode video.
+- **Còn treo**: test tay trong UI các luồng mới với dữ liệu thật; NO_FLOW_KEY chờ user re-auth Flow; cân nhắc chính thức hoá `tmp-ffx-smoke.js`.
+
+## 2026-09-12l — Đồng bộ Dashboard với đầy đủ tool hiện tại (sidebar)
+
+- **Vấn đề**: `renderDashboard()` (src/toolbox/utility/dashboard.js) chỉ hiển thị 15 card "⚡ Truy cập nhanh" — thiếu Profile Kênh (tool1), Viral Cut (toolviralcut), Spy Storyboard (toolspy), Tạo Thumbnail (tool10), cả 10 công cụ FFmpeg (toolffx*), API & Tài khoản (toolsettings), Nhật ký (toollog) so với sidebar app-sidebar.html.
+- **Sửa** (chỉ renderer, không đổi IPC/export/state):
+  - Thêm card Profile Kênh vào đầu Truy cập nhanh (icon tái dùng `ic.prof`).
+  - Thêm Viral Cut / Spy Storyboard / Tạo Thumbnail vào cuối Truy cập nhanh.
+  - Thêm 2 section mới: "🛠 Công cụ FFmpeg" (10 card toolffx*) và "⚙️ Hệ thống" (toolsettings, toollog) — icon/label lấy verbatim từ app-sidebar.html; grid `.dqa` auto-fit tự bọc.
+- **Kiểm định**: `node --check` OK; `npm run check` **EXIT 0** (size 801 file 0 lỗi, toplevel 1607 tên 0 xung đột, docs 35 script khớp, selftest 10/10); `khoidong.bat --silent` — app đang chạy, bridge OK (focus cửa sổ sẵn có); `scan:lifecycle` — mọi REAL đều timestamp 2026-09-11 (lịch sử, đã ghi nhận ở 2026-09-12j/k), session hiện tại không crash mới.
+- **Lưu ý**: instance app đang mở nạp dashboard.js cũ — cần **Ctrl+R (reload renderer)** hoặc khởi động lại app để thấy dashboard mới (server phục vụ nova/web từ đĩa).
+
+## 2026-09-12m — Hoàn tất Gói đề xuất FFX: progress thật (+speed/fps), join mismatch guard, compress estimate, smoke chính thức, MP3 quick action, drag-drop, hàng đợi + lịch sử kết quả
+
+- **Đóng gói smoke chính thức**: `nova/scripts/tmp/tmp-ffx-smoke.js` → `nova/scripts/ffx-smoke.js` (di dời bằng Move-Item vì file tmp bị gitignore — `git mv` fail), sửa header + require + probe log; thêm 3 case expectFail: nguồn không tồn tại (`FFX_INPUT`), concat copy lệch chuẩn 240p-vs-gốc (`FFX_JOIN_MISMATCH`), concat copy file không chứa video (dùng `loopSrc`×2 → `FFX_VIDEO_ONLY`). Đăng ký `npm run test:ffx-smoke` + ghi §3.2 AGENTS.md (check:docs xác nhận đồng bộ).
+- **preload.js**: expose `ffx.pathForFile` qua `webUtils.getPathForFile` (Electron 43 bỏ `File.path`) — gọi đồng bộ trong preload, KHÔNG thêm kênh IPC mới.
+- **media-tools.js**: helper dùng chung `concatParamDiffs(infos)` (codec/size/fps/audio-codec); `concatVideos` probe TẤT CẢ input trước khi chạy copy-mode, lệch chuẩn → throw `FFX_JOIN_MISMATCH` (kèm chi tiết diff) SỚM — fail lộ liễu, không fallback (Luật 10); `concatAuto` tái dùng cùng helper cho check `same`.
+- **tool-ffx.js** (~1250 dòng): progress UI hiển thị `speed` + `fps`; thumb cache generic `ffxThumbCache`/`ffxThumbUrl` (thay `ffxJoinThumbs`), thumb cut-segment `ffxSegThumb` update DOM theo id `ffxCutSegT<i>` không re-render; `ffxDone` → `ffxHistoryPush`; join bắt `FFX_JOIN_MISMATCH` → `window.confirm` → tự fork sang `concatAuto`. Section 11 mới: `ffxSetInput`, `ffxCompressEstimateUI` (probe + heuristic CRF/height → nhãn `≈ MB`, wire onchange CRF/targetMB/height), lịch sử localStorage `ffxHistoryV1` (max 30, chỉ lưu path; Push/Render/Open/Remove/Clear/Mp3-192k), hàng đợi job (`ffxFormSnap/Apply` — snapshot config tại lúc bấm, KHÔNG dùng state form mới hơn; `ffxQueuePump` poll `ffxActiveStatus` 400ms, bao gồm cả run tay), 5 nút "⏳ Vào hàng đợi" (Compress/Convert/Join/Loop/Music), drag-drop `ffxEnableDrop` trên 10 panel (lọc đuôi file, join ghép nhiều file), `ffxInitDrops()` gọi cuối file.
+- **panels-ffmpeg-tools.html**: `onchange=ffxCompressEstimateUI()` ×3; 5 nút vào hàng đợi (+flex-wrap); span `ffxCompressEst`; panel mới `#tool-toolffxhistory`.
+- **Runtime sanity tĩnh**: cross-check 74 ID `getElementById` của tool-ffx.js vs panels-ffmpeg-tools.html → **0 thiếu** (loại nghi vấn drag-drop no-op do lệch ID); toàn bộ 10 panel `tool-toolffx*` + `tool-toolffxhistory` tồn tại.
+- **Kiểm định**: `node --check` OK; `npm run check` **EXIT 0** (syntax 579, shared 19 keys, size 799 file 0 lỗi, toplevel 1637 tên 0 xung đột, docs 36 script khớp, selftest 10/10 — 1 lần docs FAIL "test:viral-cut không nhắc" không tái hiện, xác nhận AGENTS.md có mention ×2; nghi do đọc file chưa flush ngay sau khi sửa); `npm run test:ffx-smoke` **48/48 PASS 0 FAIL** trên dữ liệu thật `output/gen-e2e/` (gồm 3 expectFail mới); restart qua taskkill + `khoidong.bat --silent` → bridge 47280 OK, session 09:17:54Z lifecycle **0 entry crash/unresponsive** (`scan:lifecycle` exit 1 duy nhất do REAL lịch sử 2026-09-11T13:55 — đã giải thích ở 2026-09-12j: bug `media-protocol.js`).
+- **Còn treo**: test tay UI các luồng Gói D với dữ liệu thật (drag-drop, estimate, queue, history); NO_FLOW_KEY chờ user re-auth Flow.
 

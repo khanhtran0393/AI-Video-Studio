@@ -40,7 +40,9 @@
     "check:shadow": "node nova/scripts/handler-shadow-check.js",
     "check:bundle": "node nova/scripts/bundle-selfcheck.js",
     "test:maintenance": "node nova/core/test-maintenance.js",
-    "check:shared-shadow": "node nova/scripts/shared-shadow-check.js"
+    "check:shared-shadow": "node nova/scripts/shared-shadow-check.js",
+    "test:viral-cut": "node nova/viral-cut/test.js",
+    "test:ffx-smoke": "node nova/scripts/ffx-smoke.js"
   },
   "dependencies": {
     "@remotion/bundler": "4.0.518",

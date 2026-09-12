@@ -170,6 +170,9 @@
         <div class="nav-item" data-tool="toolvideoagent" onclick="switchTool('toolvideoagent')">
           <span class="num"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M8 12l5 3.5V8.5L8 12z"/></svg></span><span>Video Agent</span>
         </div>
+        <div class="nav-item" data-tool="toolviralcut" onclick="switchTool('toolviralcut')" title="Tách highlight viral từ video dài: AI/heuristic chọn đoạn hay nhất + best-hook → cắt nhiều clip ngắn (9:16 tuỳ chọn)">
+          <span class="num"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4L8.12 15.88M14.47 14.48L20 20M8.12 8.12L12 12"/></svg></span><span>Viral Cut</span>
+        </div>
         <div class="nav-item" data-tool="toolimzic" onclick="switchTool('toolimzic')">
           <span class="num"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 4h18M3 20h18"/><path d="M6 4v16"/></svg></span><span>I-MZic</span>
         </div>
@@ -218,6 +221,7 @@
         <div class="nav-item" data-tool="toolffxgif" onclick="switchTool('toolffxgif')" title="Xuất GIF loop từ video (palette 2 pass — màu chuẩn)">
           <span class="num"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M8 10v4M12 10v4M8 12h2M16 10a2 2 0 000 4"/></svg></span><span>Xuất GIF</span>
         </div>
+        <!-- Viral Cut đã chuyển lên nhóm "Công cụ AI" (2026-09-12) — không còn mục sidebar ở đây. -->
         <div class="nav-group">Cài đặt</div>
         <div class="nav-item" data-tool="toolsettings" onclick="switchTool('toolsettings')">
           <span class="num"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="3.5" cy="6" r="1.5"/><circle cx="3.5" cy="12" r="1.5"/><circle cx="3.5" cy="18" r="1.5"/></svg></span><span>API &amp; Tài khoản</span>

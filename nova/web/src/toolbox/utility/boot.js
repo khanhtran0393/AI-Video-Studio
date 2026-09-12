@@ -9,6 +9,10 @@
       if (typeof initAppDirect === 'function') initAppDirect();
     } catch (e) { try { console.error('[boot] initAppDirect failed', e); } catch (_) {} }
     try {
+      // Cache sản phẩm trung gian (kịch bản, prompt, SRT, cache Veo…) — tắt mở vẫn còn
+      if (typeof acacheBoot === 'function') acacheBoot();
+    } catch (e) { try { console.error('[boot] acacheBoot failed', e); } catch (_) {} }
+    try {
       if (typeof renderDashboard === 'function') renderDashboard();
     } catch (e) { try { console.error('[boot] renderDashboard failed', e); } catch (_) {} }
     try {

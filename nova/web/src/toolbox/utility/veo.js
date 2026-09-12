@@ -1,6 +1,12 @@
 /* VEO — cache prompt Veo (_t6Veo*) + sinh prompt Veo (genSingleVeoPrompt, renderVeoPrompts)
    Tách verbatim từ src/toolbox/utility.js (2026-09-10) — không sửa thân hàm.
    Toàn bộ là function declaration: chỉ gọi lúc runtime, thứ tự nạp không ảnh hưởng. */
+// === L?: var _t6VeoCache / _T6_VEO_MAX === (2026-09-12f: hai tên này TRƯỚC GIỜ KHÔNG TỒN TẠI
+//    ở đâu cả → _t6VeoCachePut/Get ném ReferenceError bị try/catch nuốt ⇒ cache Veo chết ngầm.
+//    Khai báo tại đây + write-through xuống IDB qua shared/acache.js — tắt mở vẫn còn.)
+var _t6VeoCache = new Map();
+var _T6_VEO_MAX = 6;   // tối đa 6 video b64 trong cache (RAM + IDB đồng bộ qua _acacheVeoPersist)
+
 function _t6VeoKey(prompt, model, dur, seed){
   const norm = String(prompt || '').trim().toLowerCase().replace(/\s+/g, ' ');
   return [norm.slice(0, 200), String(model || 'veo31-fast'), String(dur || 8), String(seed || '')].join('|');
@@ -26,6 +32,7 @@ function _t6VeoCachePut(prompt, model, dur, seed, blob){
     const first = _t6VeoCache.keys().next().value;
     _t6VeoCache.delete(first);
   }
+  if (typeof _acacheVeoPersist === 'function') _acacheVeoPersist();   // write-through: tắt mở vẫn còn
 }
 
 function _t6VeoCacheStats(){ return { size: _t6VeoCache.size, max: _T6_VEO_MAX }; }

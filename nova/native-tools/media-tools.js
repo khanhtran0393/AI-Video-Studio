@@ -1,18 +1,24 @@
 'use strict';
-/* ── media-tools.js — Công cụ FFmpeg cho người dùng cuối (sidebar "Công cụ FFmpeg"):
-      tách MP3/M4A/WAV, cắt, ghép, loop, nén, trích frame, xoá tiếng, đổi định dạng,
-      ghép nhạc, xuất GIF.
-      Dùng lại FFMPEG/FFPROBE/probeDur của ./ffmpeg.js. KHÔNG fallback ngầm (Luật 10):
-      thiếu file/binary/tham số sai → reject lộ liễu với error code FFX_*.
-      Progress: parse "time=HH:MM:SS" trên stderr của ffmpeg, so với totalSec đo bằng
-      ffprobe → phát % về renderer qua callback onProgress. Huỷ: registry 1 job
-      đang chạy (ffxJob) → cancelRunning() kill process; exit ≠ 0 khi có yêu cầu huỷ
-      → lỗi FFX_CANCELLED (caller hiển thị "Đã huỷ", không phải lỗi FFmpeg). ── */
+/* ── media-tools.js — Công cụ FFmpeg cho người dùng cuối (sidebar "Công cụ FFmpeg").
+      10 tool nâng cấp chuyên nghiệp (2026-09-12e):
+        1. Tách âm thanh: MP3/M4A/WAV/FLAC + smart-copy AAC + loudnorm + kênh/sample + khoảnh đoạn
+        2. Cắt: copy nhanh | chính xác frame (re-encode) + fade + multi-segment
+        3. Ghép: concat copy | auto-hoà chuẩn (probe khác codec/size/fps → chuẩn hoá rồi ghép) | transitions xfade
+        4. Loop: N lần | tổng thời lượng | ping-pong | crossfade vòng lặp
+        5. Nén: CRF (GPU nvenc/qsv/amf nếu máy hỗ trợ) | dung lượng mục tiêu (2-pass chính xác)
+        6. Trích frame: mỗi N giây | tại giây | theo số frame | theo cảnh | lưới contact-sheet (+ timestamp)
+        7. Xoá tiếng: tất cả track | giữ 1 track cụ thể + giữ phụ đề mềm
+        8. Đổi định dạng: H.264/H.265 (GPU) + giữ sub + scale/fps đích
+        9. Ghép nhạc: mix (volume 2 bên, offset, fade in/out, loop nhạc, loudnorm) | replace
+       10. GIF: loop N lần | palette màu | dithering | slideshow theo cảnh
+      KHÔNG fallback ngầm (Luật 10): mọi lỗi reject lộ liễu với error code FFX_*.
+      Progress: parse time=/fps=/speed= trên stderr → onProgress({pct,fps,speed}). ── */
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
 const { FFMPEG, FFPROBE, probeDur } = require('./ffmpeg');
+const { gpuEncoder, qualityArgs, label: gpuLabel } = require('../editor-pro/gpu-encoder');
 
 /* ── Job đang chạy (chỉ 1 tác vụ FFmpeg cùng lúc — chống nghẽn I/O đĩa) ── */
 let ffxJob = null;
@@ -25,7 +31,7 @@ function cancelRunning() {
   return { ok: true };
 }
 
-/* Spawn ffmpeg, gắn job registry + progress. Reject khi exit ≠ 0 (lộ liễu). */
+/* Spawn ffmpeg: gắn job registry + progress (pct từ time=, kèm fps/speed nếu stderr có). */
 function spawnRun(bin, args, opts) {
   const o = opts || {};
   return new Promise((resolve, reject) => {
@@ -33,15 +39,23 @@ function spawnRun(bin, args, opts) {
     const cp = spawn(bin, args, { windowsHide: true });
     ffxJob = cp; ffxCancelReq = false;
     let err = '';
+    let lastPct = 0;
     cp.stderr.on('data', (d) => {
       const s = String(d); err += s;
-      if (o.onProgress && o.totalSec > 0) {
-        const m = /time=(\d+):(\d+):(\d+(?:[.,]\d+)?)/.exec(s);
-        if (m) {
-          const t = (+m[1]) * 3600 + (+m[2]) * 60 + parseFloat(m[3].replace(',', '.'));
-          o.onProgress(Math.min(99, Math.round((t / o.totalSec) * 100)));
-        }
+      if (!o.onProgress) return;
+      const fps = /fps=\s*([\d.]+)/.exec(s);
+      const spd = /speed=\s*([\d.]+)x/.exec(s);
+      const tm = /time=(\d+):(\d+):(\d+(?:[.,]\d+)?)/.exec(s);
+      if (!tm && !fps && !spd) return;
+      if (tm && o.totalSec > 0) {
+        const t = (+tm[1]) * 3600 + (+tm[2]) * 60 + parseFloat(tm[3].replace(',', '.'));
+        lastPct = Math.min(99, Math.round((t / o.totalSec) * 100));
       }
+      o.onProgress({
+        pct: lastPct,
+        fps: fps ? Number(fps[1]) : undefined,
+        speed: spd ? Number(spd[1]) : undefined,
+      });
     });
     cp.on('error', (e) => { ffxJob = null; reject(e); });
     cp.on('close', (code) => {
@@ -77,44 +91,118 @@ function validBitrate(br) {
   return b;
 }
 
-/* Đo metadata bằng ffprobe — reject lộ liễu (khác probeDur trả 0 im lặng). */
-function probeMedia(file) {
+/* Kéo dài file tạm khi xử lý nhiều bước (chuẩn hoá/cắt segment) — caller tự xoá. */
+function tempDir(prefix) {
+  const dir = path.join(os.tmpdir(), prefix + '-' + Date.now() + '-' + Math.floor(Math.random() * 1e6));
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+function cleanupDir(dir) {
+  try { fs.rmSync(dir, { recursive: true, force: true }); } catch (_) { /* tạm — dọn được thì dọn */ }
+}
+
+/* Chạy 1 lệnh ffprobe -show_format -show_streams, parse JSON đầy đủ. */
+function ffprobeJson(file) {
   return new Promise((resolve, reject) => {
     if (!FFPROBE) { const e = new Error('FFX_PROBE: không tìm thấy ffprobe binary'); e.code = 'FFX_PROBE'; return reject(e); }
     if (!file || !fs.existsSync(file)) { const e = new Error('FFX_PROBE: file không tồn tại — ' + file); e.code = 'FFX_PROBE'; return reject(e); }
-    const cp = spawn(FFPROBE, ['-v', 'error', '-show_entries', 'format=duration,size', '-of', 'json', file], { windowsHide: true });
+    const cp = spawn(FFPROBE, ['-v', 'error', '-show_format', '-show_streams', '-of', 'json', file], { windowsHide: true });
     let out = '';
     cp.stdout.on('data', (d) => { out += d; });
     cp.on('error', reject);
     cp.on('close', () => {
-      try {
-        const j = JSON.parse(out);
-        resolve({
-          durationSec: Math.max(0, Number(j.format && j.format.duration) || 0),
-          sizeBytes: Math.max(0, Number(j.format && j.format.size) || 0),
-        });
-      } catch (_) { const e = new Error('FFX_PROBE: ffprobe trả dữ liệu không đọc được — ' + file); e.code = 'FFX_PROBE'; reject(e); }
+      try { resolve(JSON.parse(out)); }
+      catch (_) { const e = new Error('FFX_PROBE: ffprobe trả dữ liệu không đọc được — ' + file); e.code = 'FFX_PROBE'; reject(e); }
     });
   });
 }
 
-/* ── 1) Tách âm thanh → MP3 (libmp3lame) / M4A (aac) / WAV (pcm) ── */
+/* Metadata đầy đủ: duration/size + video (codec, size, fps) + danh sách track audio + số sub. */
+async function probeStreams(file) {
+  const j = await ffprobeJson(file);
+  const streams = Array.isArray(j.streams) ? j.streams : [];
+  const v = streams.find((s) => s.codec_type === 'video') || null;
+  const audio = streams.filter((s) => s.codec_type === 'audio').map((s) => ({
+    index: typeof s.index === 'number' ? s.index : 0,
+    codec: s.codec_name || '?',
+    channels: s.channels || 0,
+  }));
+  const subs = streams.filter((s) => s.codec_type === 'subtitle').length;
+  let fps = 0;
+  if (v) {
+    const m = String(v.avg_frame_rate || '').match(/^(\d+)\/(\d+)$/);
+    if (m && +m[2] > 0) fps = Math.round((+m[1] / +m[2]) * 100) / 100;
+    else fps = Number(v.r_frame_rate) || 0;
+  }
+  return {
+    durationSec: Math.max(0, Number(j.format && j.format.duration) || 0),
+    sizeBytes: Math.max(0, Number(j.format && j.format.size) || 0),
+    video: v ? { codec: v.codec_name || '?', width: v.width || 0, height: v.height || 0, fps } : null,
+    audioTracks: audio,
+    subCount: subs,
+  };
+}
+
+/* probeMedia ngắn gọn (tương thích renderer cũ). */
+async function probeMedia(file) {
+  const j = await ffprobeJson(file);
+  return {
+    durationSec: Math.max(0, Number(j.format && j.format.duration) || 0),
+    sizeBytes: Math.max(0, Number(j.format && j.format.size) || 0),
+  };
+}
+
+/* ── 1) Tách âm thanh: MP3/M4A/WAV/FLAC ──
+   opts: format, bitrate, smart (m4a + nguồn AAC → copy stream không re-encode),
+   loudnorm (EBU R128), channels ('keep'|'stereo'|'mono'), sampleRate (44100|48000),
+   startSec/endSec (khoảnh đoạn). */
 async function extractAudio(opts) {
   const o = opts || {};
   assertInput(o.inputPath, 'FFX_INPUT');
   assertOutput(o.outputPath);
   const fmt = String(o.format || 'mp3').toLowerCase();
-  let args;
-  if (fmt === 'wav') args = ['-y', '-i', o.inputPath, '-vn', '-c:a', 'pcm_s16le', o.outputPath];
-  else if (fmt === 'm4a') args = ['-y', '-i', o.inputPath, '-vn', '-c:a', 'aac', '-b:a', validBitrate(o.bitrate), o.outputPath];
-  else if (fmt === 'mp3') args = ['-y', '-i', o.inputPath, '-vn', '-c:a', 'libmp3lame', '-b:a', validBitrate(o.bitrate), o.outputPath];
-  else { const e = new Error('FFX_FORMAT: định dạng âm thanh không hỗ trợ — ' + fmt); e.code = 'FFX_FORMAT'; throw e; }
+  if (!['mp3', 'm4a', 'wav', 'flac'].includes(fmt)) { const e = new Error('FFX_FORMAT: định dạng âm thanh không hỗ trợ — ' + fmt); e.code = 'FFX_FORMAT'; throw e; }
+
+  let args = ['-y'];
+  if (o.smart && fmt === 'm4a') {
+    // Smart copy: chỉ khi nguồn thật sự là AAC (probe — không đoán đuôi file)
+    const info = await probeStreams(o.inputPath);
+    if (info.audioTracks.length && info.audioTracks[0].codec === 'aac') {
+      args.push('-map', '0:a:0', '-c:a', 'copy', o.outputPath);
+      await spawnRun(FFMPEG, args, {});
+      return { ok: true, path: o.outputPath, smartCopy: true };
+    }
+  }
+  if (Number.isFinite(Number(o.startSec)) && Number(o.startSec) > 0) args.push('-ss', String(Number(o.startSec)));
+  args.push('-i', o.inputPath);
+  const s = Number(o.startSec) || 0;
+  const e2 = Number(o.endSec);
+  if (Number.isFinite(e2) && e2 > s) args.push('-t', String(e2 - s));
+  args.push('-vn');
+  if (fmt === 'wav') args.push('-c:a', 'pcm_s16le');
+  else if (fmt === 'flac') args.push('-c:a', 'flac');
+  else if (fmt === 'm4a') args.push('-c:a', 'aac', '-b:a', validBitrate(o.bitrate));
+  else args.push('-c:a', 'libmp3lame', '-b:a', validBitrate(o.bitrate));
+  const filters = [];
+  if (o.loudnorm) filters.push('loudnorm=I=-16:TP=-1.5:LRA=11');
+  if (o.channels === 'mono') filters.push('pan=mono|c0=c0');
+  else if (o.channels === 'stereo') filters.push('pan=stereo|c0=c0|c1=c1');
+  if (filters.length) args.push('-af', filters.join(','));
+  if (o.sampleRate === 44100 || o.sampleRate === 48000) args.push('-ar', String(o.sampleRate));
+  else if (o.loudnorm) args.push('-ar', '48000');   // loudnorm ép 192kHz — cần hạ về 48k
+  args.push(o.outputPath);
   const total = await probeDur(o.inputPath);
   await spawnRun(FFMPEG, args, { totalSec: total });
   return { ok: true, path: o.outputPath };
 }
 
-/* ── 2) Cắt video [startSec, endSec] — copy stream, không re-encode ── */
+/* Tham số video cho chế độ cắt chính xác (CPU h264 — đoạn ngắn nên đủ nhanh). */
+function accurateVideoArgs(crf) {
+  return ['-c:v', 'libx264', '-crf', String(Number.isFinite(Number(crf)) ? Number(crf) : 20), '-preset', 'fast'];
+}
+
+/* Cắt 1 đoạn: mode 'copy' (tại keyframe — nhanh) | 'accurate' (re-encode đúng frame + fade tuỳ chọn). */
 async function cutVideo(opts) {
   const o = opts || {};
   assertInput(o.inputPath, 'FFX_INPUT');
@@ -123,13 +211,92 @@ async function cutVideo(opts) {
   const e2 = num(o.endSec, 'FFX_END');
   if (s < 0) { const e = new Error('FFX_START: giây bắt đầu phải ≥ 0'); e.code = 'FFX_START'; throw e; }
   if (e2 <= s) { const e = new Error('FFX_RANGE: giây kết thúc phải LỚN HƠN giây bắt đầu'); e.code = 'FFX_RANGE'; throw e; }
+  const len = e2 - s;
+  if (o.mode === 'accurate') {
+    const fade = Number(o.fade) || 0;
+    if (fade > 0 && fade >= len / 2) { const e = new Error('FFX_FADE: fade phải nhỏ hơn một nửa độ dài đoạn'); e.code = 'FFX_FADE'; throw e; }
+    const args = ['-y', '-ss', String(s), '-i', o.inputPath, '-t', String(len)];
+    if (fade > 0) {
+      args.push('-vf', 'fade=t=in:st=0:d=' + fade + ',fade=t=out:st=' + (len - fade) + ':d=' + fade);
+      args.push('-af', 'afade=t=in:st=0:d=' + fade + ',afade=t=out:st=' + (len - fade) + ':d=' + fade);
+    }
+    args.push(...accurateVideoArgs(), '-c:a', 'aac', '-b:a', '192k', o.outputPath);
+    await spawnRun(FFMPEG, args, { totalSec: len });
+    return { ok: true, path: o.outputPath, mode: 'accurate' };
+  }
   await spawnRun(FFMPEG,
     ['-y', '-ss', String(s), '-to', String(e2), '-i', o.inputPath, '-c', 'copy', '-avoid_negative_ts', 'make_zero', o.outputPath],
-    { totalSec: e2 - s });
-  return { ok: true, path: o.outputPath };
+    { totalSec: len });
+  return { ok: true, path: o.outputPath, mode: 'copy' };
 }
 
-/* ── 3) Ghép nhiều video — concat demuxer (-c copy), list tạm tự xoá ── */
+/* Cắt N đoạn rồi tự ghép thành 1 file (multi-segment). */
+async function cutMulti(opts) {
+  const o = opts || {};
+  assertInput(o.inputPath, 'FFX_INPUT');
+  assertOutput(o.outputPath);
+  const segs = Array.isArray(o.segments) ? o.segments : [];
+  if (segs.length < 1) { const e = new Error('FFX_SEGMENTS: cần ít nhất 1 đoạn cắt'); e.code = 'FFX_SEGMENTS'; throw e; }
+  const mode = o.mode === 'accurate' ? 'accurate' : 'copy';
+  const tmp = tempDir('ffx-cut');
+  try {
+    const parts = [];
+    const dur = await probeDur(o.inputPath);
+    for (let i = 0; i < segs.length; i++) {
+      const part = path.join(tmp, 'seg-' + i + '.mp4');
+      const base = Math.round((i / segs.length) * 100);
+      const span = Math.round(100 / segs.length);
+      const onProg = o.onProgress ? (p) => o.onProgress({ pct: Math.min(99, base + Math.round((p.pct || 0) / 100 * span)), fps: p.fps, speed: p.speed }) : null;
+      await cutVideo({ inputPath: o.inputPath, outputPath: part, startSec: segs[i].startSec, endSec: segs[i].endSec, mode, onProgress: onProg || undefined });
+      parts.push(part);
+    }
+    const listPath = path.join(tmp, 'list.txt');
+    fs.writeFileSync(listPath, parts.map((p) => "file '" + p.replace(/'/g, "'\\''") + "'").join('\n'), 'utf8');
+    const totalOut = segs.reduce((acc, sg) => acc + (num(sg.endSec, 'FFX_END') - num(sg.startSec, 'FFX_START')), 0);
+    await spawnRun(FFMPEG, ['-y', '-f', 'concat', '-safe', '0', '-i', listPath, '-c', 'copy', o.outputPath], { totalSec: dur > 0 ? totalOut : 0 });
+    return { ok: true, path: o.outputPath, segments: segs.length };
+  } finally { cleanupDir(tmp); }
+}
+
+/* Dò cảnh chuyển (scene detection): trả danh sách thời điểm (giây) — KHÔNG ghi file. */
+async function detectScenes(opts) {
+  const o = opts || {};
+  assertInput(o.inputPath, 'FFX_INPUT');
+  const th = Number(o.threshold);
+  const t = Number.isFinite(th) && th > 0 && th < 1 ? th : 0.3;
+  const dur = await probeDur(o.inputPath);
+  const args = ['-y', '-i', o.inputPath, '-vf', "select='gt(scene," + t + ")',showinfo", '-f', 'null', (process.platform === 'win32' ? 'NUL' : os.devNull)];
+  const log = await spawnRun(FFMPEG, args, { totalSec: dur });
+  const times = [0];
+  const re = /pts_time:([0-9]+(?:\.[0-9]+)?)/g;
+  let m;
+  while ((m = re.exec(log)) !== null) {
+    const t2 = Number(m[1]);
+    if (Number.isFinite(t2) && t2 > 0 && times[times.length - 1] !== t2) times.push(t2);
+  }
+  return { ok: true, times, threshold: t };
+}
+
+/* Ghi file concat list (chuỗi đường dẫn) — dùng chung bởi ghép/pingpong. */
+function writeConcatList(listPath, paths) {
+  fs.writeFileSync(listPath, paths.map((p) => "file '" + String(p).replace(/'/g, "'\\''") + "'").join('\n'), 'utf8');
+}
+
+/* Đối chiếu thông số kỹ thuật các clip: trả về danh sách điểm KHÁC nhau
+   (codec video / kích thước / fps / codec âm thanh). Nguồn chân lý duy nhất
+   cho cả concatVideos (chặn sớm lỗi) lẫn concatAuto (quyết định re-encode). */
+function concatParamDiffs(infos) {
+  const vids = infos.map((i) => i.video);
+  const diffs = [];
+  if (vids.some((v) => v.codec !== vids[0].codec)) diffs.push('codec video (' + vids.map((v) => v.codec).join(', ') + ')');
+  if (vids.some((v) => v.width !== vids[0].width || v.height !== vids[0].height)) diffs.push('kích thước (' + vids.map((v) => v.width + 'x' + v.height).join(', ') + ')');
+  if (vids.some((v) => Math.abs((v.fps || 0) - (vids[0].fps || 0)) >= 0.05)) diffs.push('fps (' + vids.map((v) => v.fps).join(', ') + ')');
+  const acodecs = infos.map((i) => (i.audioTracks.length ? i.audioTracks[0].codec : 'không có âm thanh'));
+  if (acodecs.some((c) => c !== acodecs[0])) diffs.push('codec âm thanh (' + acodecs.join(', ') + ')');
+  return diffs;
+}
+
+/* ── 3a) Ghép copy (clip cùng chuẩn) ── */
 async function concatVideos(opts) {
   const o = opts || {};
   if (!Array.isArray(o.inputPaths) || o.inputPaths.length < 2) {
@@ -137,47 +304,296 @@ async function concatVideos(opts) {
   }
   o.inputPaths.forEach((p) => assertInput(p, 'FFX_INPUTS'));
   assertOutput(o.outputPath);
+  // Chặn sớm (Luật 10): concat copy-mode yêu cầu các clip CÙNG chuẩn. Khác chuẩn
+  // → fail lộ liễu kèm chi tiết thay vì xuất file lỗi (âm thanh lệch/lặp khung).
+  const infos = [];
+  for (const p of o.inputPaths) infos.push(await probeStreams(p));
+  if (infos.some((i) => !i.video)) { const e = new Error('FFX_VIDEO_ONLY: có file không chứa video — ghép copy chỉ nhận video'); e.code = 'FFX_VIDEO_ONLY'; throw e; }
+  const diffs = concatParamDiffs(infos);
+  if (diffs.length) {
+    const e = new Error('FFX_JOIN_MISMATCH: các clip KHÔNG cùng chuẩn — ' + diffs.join('; ') + '. Chuyển sang chế độ "Auto-hoà chuẩn" để tự re-encode về chung một chuẩn.');
+    e.code = 'FFX_JOIN_MISMATCH'; e.details = diffs; throw e;
+  }
   let total = 0;
   for (const p of o.inputPaths) total += await probeDur(p);
   const listPath = path.join(os.tmpdir(), 'ffx-concat-' + Date.now() + '.txt');
-  const lines = o.inputPaths.map((p) => "file '" + String(p).replace(/'/g, "'\\''") + "'");
-  fs.writeFileSync(listPath, lines.join('\n'), 'utf8');
+  writeConcatList(listPath, o.inputPaths);
   try {
     await spawnRun(FFMPEG, ['-y', '-f', 'concat', '-safe', '0', '-i', listPath, '-c', 'copy', o.outputPath], { totalSec: total });
-  } finally {
-    try { fs.unlinkSync(listPath); } catch (_) { /* file tạm — dọn được thì dọn */ }
-  }
+  } finally { try { fs.unlinkSync(listPath); } catch (_) { /* tạm */ } }
   return { ok: true, path: o.outputPath };
 }
 
-/* ── 4) Loop video N lần (times ≥ 2) — -stream_loop, copy stream ── */
+/* ── 3b) Ghép auto-hoà: probe các clip — cùng chuẩn thì concat copy, khác chuẩn thì
+   tự re-encode về chuẩn chung (chiều cao nhỏ nhất — không upscale, fps nhỏ nhất) rồi ghép. */
+async function concatAuto(opts) {
+  const o = opts || {};
+  if (!Array.isArray(o.inputPaths) || o.inputPaths.length < 2) {
+    const e = new Error('FFX_INPUTS: cần ít nhất 2 video để ghép'); e.code = 'FFX_INPUTS'; throw e;
+  }
+  o.inputPaths.forEach((p) => assertInput(p, 'FFX_INPUTS'));
+  assertOutput(o.outputPath);
+  const infos = [];
+  for (const p of o.inputPaths) infos.push(await probeStreams(p));
+  const vids = infos.map((i) => i.video);
+  if (vids.some((v) => !v)) { const e = new Error('FFX_VIDEO_ONLY: có file không chứa video'); e.code = 'FFX_VIDEO_ONLY'; throw e; }
+  // Tiêu chí "cùng chuẩn" dùng chung concatParamDiffs với concatVideos — không nhân bản logic.
+  const same = concatParamDiffs(infos).length === 0;
+  if (same) return concatVideos({ inputPaths: o.inputPaths, outputPath: o.outputPath, onProgress: o.onProgress });
+
+  // Khác chuẩn → chuẩn hoá từng clip về: H = chiều cao nhỏ nhất, fps = fps nhỏ nhất, h264 crf 23
+  const heights = vids.map((v) => v.height).filter((h) => h > 0);
+  const fpss = vids.map((v) => v.fps).filter((f) => f > 0);
+  const H = heights.length ? Math.min(...heights) : 720;
+  const F = fpss.length ? Math.min(...fpss) : 30;
+  const tmp = tempDir('ffx-norm');
+  try {
+    const norm = [];
+    const span = 100 / o.inputPaths.length;
+    for (let i = 0; i < o.inputPaths.length; i++) {
+      const part = path.join(tmp, 'norm-' + i + '.mp4');
+      const base = Math.round(i * span);
+      const onProg = o.onProgress ? (p) => o.onProgress({ pct: Math.min(99, base + Math.round((p.pct || 0) / 100 * span)), fps: p.fps, speed: p.speed }) : null;
+      await spawnRun(FFMPEG, ['-y', '-i', o.inputPaths[i],
+        '-vf', 'scale=-2:' + H + ',setsar=1,fps=' + F + ',format=yuv420p',
+        '-c:v', 'libx264', '-crf', '23', '-preset', 'fast',
+        '-c:a', 'aac', '-b:a', '192k', '-ar', '44100', '-ac', '2', part], { onProgress });
+      norm.push(part);
+    }
+    const listPath = path.join(tmp, 'list.txt');
+    writeConcatList(listPath, norm);
+    const dur = infos.reduce((a, i) => a + i.durationSec, 0);
+    await spawnRun(FFMPEG, ['-y', '-f', 'concat', '-safe', '0', '-i', listPath, '-c', 'copy', o.outputPath], { totalSec: dur });
+    return { ok: true, path: o.outputPath, normalized: true, height: H, fps: F };
+  } finally { cleanupDir(tmp); }
+}
+
+/* ── 3c) Ghép có transition (xfade giữa các clip, re-encode) ──
+   transition: fade|wipeleft|wiperight|slideleft|slideright|circleopen|circleclose|smoothleft|smoothright|dissolve|pixelize|radial */
+const XFADE_LIST = ['fade', 'wipeleft', 'wiperight', 'slideleft', 'slideright', 'circleopen', 'circleclose', 'smoothleft', 'smoothright', 'dissolve', 'pixelize', 'radial'];
+
+async function concatTransition(opts) {
+  const o = opts || {};
+  if (!Array.isArray(o.inputPaths) || o.inputPaths.length < 2) {
+    const e = new Error('FFX_INPUTS: cần ít nhất 2 video để ghép'); e.code = 'FFX_INPUTS'; throw e;
+  }
+  o.inputPaths.forEach((p) => assertInput(p, 'FFX_INPUTS'));
+  assertOutput(o.outputPath);
+  const tr = String(o.transition || 'fade');
+  if (!XFADE_LIST.includes(tr)) { const e = new Error('FFX_TRANSITION: kiểu chuyển cảnh không hỗ trợ — ' + tr); e.code = 'FFX_TRANSITION'; throw e; }
+  const fade = Number(o.fadeDur) > 0 ? Number(o.fadeDur) : 0.5;
+  const infos = [];
+  for (const p of o.inputPaths) infos.push(await probeStreams(p));
+  const durs = infos.map((i) => i.durationSec);
+  if (durs.some((d) => d <= 0)) { const e = new Error('FFX_DURATION: không đo được thời lượng một clip'); e.code = 'FFX_DURATION'; throw e; }
+  if (durs.some((d) => fade >= d / 2)) { const e = new Error('FFX_FADE: thời lượng transition phải nhỏ hơn một nửa clip ngắn nhất'); e.code = 'FFX_FADE'; throw e; }
+  const heights = infos.map((i) => i.video && i.video.height).filter((h) => h > 0);
+  const fpss = infos.map((i) => i.video && i.video.fps).filter((f) => f > 0);
+  const H = heights.length ? Math.min(...heights) : 720;
+  const F = fpss.length ? Math.min(...fpss) : 30;
+  const n = o.inputPaths.length;
+  const args = ['-y'];
+  for (const p of o.inputPaths) args.push('-i', p);
+  const chains = [];
+  for (let i = 0; i < n; i++) chains.push('[' + i + ':v]scale=-2:' + H + ',setsar=1,fps=' + F + ',format=yuv420p[v' + i + ']');
+  let prev = 'v0';
+  let off = 0;
+  for (let i = 1; i < n; i++) {
+    off = off + durs[i - 1] - fade;
+    const out = i < n - 1 ? 'x' + i : 'vx';
+    chains.push('[' + prev + '][v' + i + ']xfade=transition=' + tr + ':duration=' + fade + ':offset=' + off.toFixed(3) + '[' + out + ']');
+    prev = out;
+  }
+  const allAudio = infos.every((i) => i.audioTracks.length > 0);
+  let aout = null;
+  if (allAudio) {
+    let aprev = '0:a';
+    for (let i = 1; i < n; i++) {
+      const ax = i < n - 1 ? 'a' + i : 'ax';
+      chains.push('[' + aprev + '][' + i + ':a]acrossfade=d=' + fade + '[' + ax + ']');
+      aprev = ax;
+    }
+    aout = aprev;
+  }
+  const total = durs.reduce((a, d) => a + d, 0) - (n - 1) * fade;
+  args.push('-filter_complex', chains.join(';'));
+  args.push('-map', '[vx]');
+  if (aout) args.push('-map', '[' + aout + ']');
+  args.push('-c:v', 'libx264', '-crf', '20', '-preset', 'fast');
+  if (aout) args.push('-c:a', 'aac', '-b:a', '192k');
+  args.push(o.outputPath);
+  await spawnRun(FFMPEG, args, { totalSec: total });
+  return { ok: true, path: o.outputPath, transition: tr, fade: fade, clips: n };
+}
+
+/* ── 4) Loop: mode 'times' (N lần) | 'total' (tổng thời lượng mục tiêu) — copy stream ── */
 async function loopVideo(opts) {
   const o = opts || {};
   assertInput(o.inputPath, 'FFX_INPUT');
   assertOutput(o.outputPath);
-  const n = num(o.times, 'FFX_TIMES');
-  if (!(n >= 2) || Math.floor(n) !== n) { const e = new Error('FFX_TIMES: số lần lặp phải là số nguyên ≥ 2'); e.code = 'FFX_TIMES'; throw e; }
-  const total = (await probeDur(o.inputPath)) * n;
-  await spawnRun(FFMPEG, ['-y', '-stream_loop', String(n - 1), '-i', o.inputPath, '-c', 'copy', o.outputPath], { totalSec: total });
-  return { ok: true, path: o.outputPath };
+  const dur = await probeDur(o.inputPath);
+  let n;
+  if (o.mode === 'total') {
+    const target = num(o.targetSec, 'FFX_TARGET');
+    if (target <= 0) { const e = new Error('FFX_TARGET: thời lượng mục tiêu phải > 0'); e.code = 'FFX_TARGET'; throw e; }
+    if (dur <= 0) { const e = new Error('FFX_DURATION: không đo được thời lượng video nguồn'); e.code = 'FFX_DURATION'; throw e; }
+    n = Math.max(2, Math.ceil(target / dur));
+  } else {
+    n = num(o.times, 'FFX_TIMES');
+    if (!(n >= 2) || Math.floor(n) !== n) { const e = new Error('FFX_TIMES: số lần lặp phải là số nguyên ≥ 2'); e.code = 'FFX_TIMES'; throw e; }
+  }
+  await spawnRun(FFMPEG, ['-y', '-stream_loop', String(n - 1), '-i', o.inputPath, '-c', 'copy', o.outputPath], { totalSec: dur * n });
+  return { ok: true, path: o.outputPath, times: n };
 }
 
-/* ── 5) Nén video — H.264 + CRF (mặc định 28 = cân bằng), audio AAC 128k ── */
+/* ── 4b) Ping-pong loop (xuôi + ngược xen kẽ — không giật ở điểm nối). Video only.
+   Giới hạn: clip ≤ 120s (filter reverse giữ video trong RAM). ── */
+async function loopPingPong(opts) {
+  const o = opts || {};
+  assertInput(o.inputPath, 'FFX_INPUT');
+  assertOutput(o.outputPath);
+  const n = num(o.times, 'FFX_TIMES');
+  if (!(n >= 2) || Math.floor(n) !== n) { const e = new Error('FFX_TIMES: số đoạn phải là số nguyên ≥ 2'); e.code = 'FFX_TIMES'; throw e; }
+  const dur = await probeDur(o.inputPath);
+  if (dur > 120) { const e = new Error('FFX_PINGPONG_LONG: ping-pong chỉ phù hợp clip ngắn (≤ 120 giây) — clip này ' + Math.round(dur) + 's'); e.code = 'FFX_PINGPONG_LONG'; throw e; }
+  const tmp = tempDir('ffx-pp');
+  try {
+    const rev = path.join(tmp, 'rev.mp4');
+    await spawnRun(FFMPEG, ['-y', '-i', o.inputPath, '-vf', 'reverse', '-an', '-c:v', 'libx264', '-crf', '20', '-preset', 'fast', rev], { totalSec: dur });
+    const seq = [];
+    for (let i = 0; i < n; i++) seq.push(i % 2 === 0 ? o.inputPath : rev);
+    const listPath = path.join(tmp, 'list.txt');
+    writeConcatList(listPath, seq);
+    await spawnRun(FFMPEG, ['-y', '-f', 'concat', '-safe', '0', '-i', listPath, '-c:v', 'libx264', '-crf', '20', '-preset', 'fast', '-an', o.outputPath], { totalSec: dur * n });
+    return { ok: true, path: o.outputPath, times: n, mode: 'pingpong' };
+  } finally { cleanupDir(tmp); }
+}
+
+/* ── 4c) Crossfade loop — N bản ghép với xfade giữa các vòng (re-encode). times ≤ 20. ── */
+async function loopCrossfade(opts) {
+  const o = opts || {};
+  assertInput(o.inputPath, 'FFX_INPUT');
+  assertOutput(o.outputPath);
+  const n = num(o.times, 'FFX_TIMES');
+  if (!(n >= 2) || Math.floor(n) !== n) { const e = new Error('FFX_TIMES: số vòng phải là số nguyên ≥ 2'); e.code = 'FFX_TIMES'; throw e; }
+  if (n > 20) { const e = new Error('FFX_TIMES_TOO_MANY: crossfade loop giới hạn ≤ 20 vòng'); e.code = 'FFX_TIMES_TOO_MANY'; throw e; }
+  const fade = Number(o.fadeDur) > 0 ? Number(o.fadeDur) : 0.5;
+  const dur = await probeDur(o.inputPath);
+  if (dur <= 0) { const e = new Error('FFX_DURATION: không đo được thời lượng video nguồn'); e.code = 'FFX_DURATION'; throw e; }
+  if (fade >= dur / 2) { const e = new Error('FFX_FADE: fade phải nhỏ hơn một nửa độ dài clip'); e.code = 'FFX_FADE'; throw e; }
+  const args = ['-y'];
+  for (let i = 0; i < n; i++) args.push('-i', o.inputPath);
+  const chains = [];
+  for (let i = 0; i < n; i++) chains.push('[' + i + ':v]format=yuv420p[v' + i + ']');
+  let prev = 'v0';
+  for (let i = 1; i < n; i++) {
+    const out = i < n - 1 ? 'x' + i : 'vx';
+    chains.push('[' + prev + '][v' + i + ']xfade=transition=fade:duration=' + fade + ':offset=' + (i * (dur - fade)).toFixed(3) + '[' + out + ']');
+    prev = out;
+  }
+  let aout = null;
+  const hasAudio = (await probeStreams(o.inputPath)).audioTracks.length > 0;
+  if (hasAudio) {
+    let aprev = '0:a';
+    for (let i = 1; i < n; i++) {
+      const ax = i < n - 1 ? 'a' + i : 'ax';
+      chains.push('[' + aprev + '][' + i + ':a]acrossfade=d=' + fade + '[' + ax + ']');
+      aprev = ax;
+    }
+    aout = aprev;
+  }
+  args.push('-filter_complex', chains.join(';'), '-map', '[vx]');
+  if (aout) args.push('-map', '[' + aout + ']', '-c:a', 'aac', '-b:a', '192k');
+  else args.push('-an');
+  args.push('-c:v', 'libx264', '-crf', '20', '-preset', 'fast', o.outputPath);
+  await spawnRun(FFMPEG, args, { totalSec: n * dur - (n - 1) * fade });
+  return { ok: true, path: o.outputPath, times: n, mode: 'crossfade' };
+}
+
+/* ── 4d) Loop nhạc/âm thanh — lặp đến đủ targetSec hoặc N lần (nhạc nền dài). ── */
+async function loopAudio(opts) {
+  const o = opts || {};
+  assertInput(o.inputPath, 'FFX_INPUT');
+  assertOutput(o.outputPath);
+  const dur = await probeDur(o.inputPath);
+  if (dur <= 0) { const e = new Error('FFX_DURATION: không đo được thời lượng âm thanh nguồn'); e.code = 'FFX_DURATION'; throw e; }
+  let n, total;
+  if (o.targetSec !== undefined && o.targetSec !== null && o.targetSec !== '') {
+    const target = num(o.targetSec, 'FFX_TARGET');
+    if (target <= 0) { const e = new Error('FFX_TARGET: thời lượng mục tiêu phải > 0'); e.code = 'FFX_TARGET'; throw e; }
+    n = Math.max(1, Math.ceil(target / dur));
+    total = target;
+  } else {
+    n = num(o.times, 'FFX_TIMES');
+    if (!(n >= 1) || Math.floor(n) !== n) { const e = new Error('FFX_TIMES: số lần lặp phải là số nguyên ≥ 1'); e.code = 'FFX_TIMES'; throw e; }
+    total = dur * n;
+  }
+  const ext = path.extname(o.outputPath).slice(1).toLowerCase();
+  const codecArgs = ext === 'mp3' ? ['-c:a', 'libmp3lame', '-b:a', '192k']
+    : ext === 'm4a' ? ['-c:a', 'aac', '-b:a', '192k']
+    : ext === 'wav' ? ['-c:a', 'pcm_s16le']
+    : ext === 'flac' ? ['-c:a', 'flac']
+    : null;
+  if (!codecArgs) { const e = new Error('FFX_FORMAT: đích loop nhạc chỉ hỗ trợ mp3/m4a/wav/flac — .' + ext); e.code = 'FFX_FORMAT'; throw e; }
+  const args = ['-y', '-stream_loop', String(n - 1), '-i', o.inputPath].concat(codecArgs);
+  if (o.targetSec !== undefined && o.targetSec !== null && o.targetSec !== '') args.push('-t', String(num(o.targetSec, 'FFX_TARGET')));
+  args.push(o.outputPath);
+  await spawnRun(FFMPEG, args, { totalSec: total });
+  return { ok: true, path: o.outputPath, times: n };
+}
+
+/* ── 5) Nén video ──
+   mode 'crf': crf + useGpu (nvenc/qsv/amf — dò thật qua gpu-encoder)
+   mode 'size': targetMB → 2-pass CPU chính xác (GPU không hỗ trợ multipass). */
 async function compressVideo(opts) {
   const o = opts || {};
   assertInput(o.inputPath, 'FFX_INPUT');
   assertOutput(o.outputPath);
-  const q = num(o.crf, 'FFX_CRF');
-  if (q < 14 || q > 40) { const e = new Error('FFX_CRF: CRF phải trong khoảng 14–40'); e.code = 'FFX_CRF'; throw e; }
-  const total = await probeDur(o.inputPath);
-  await spawnRun(FFMPEG,
-    ['-y', '-i', o.inputPath, '-c:v', 'libx264', '-crf', String(q), '-preset', 'fast', '-c:a', 'aac', '-b:a', '128k', o.outputPath],
-    { totalSec: total });
-  return { ok: true, path: o.outputPath };
+  const dur = await probeDur(o.inputPath);
+  const crf = Number.isFinite(Number(o.crf)) ? Number(o.crf) : 28;
+  if (crf < 14 || crf > 40) { const e = new Error('FFX_CRF: CRF phải trong khoảng 14–40'); e.code = 'FFX_CRF'; throw e; }
+  // Giới hạn chiều cao (preset nền tảng) — 0/bỏ trống = giữ nguyên.
+  const mh = Number(o.maxHeight) || 0;
+  if (mh !== 0 && (mh < 144 || mh > 2160)) { const e = new Error('FFX_HEIGHT: chiều cao phải 144–2160 (0 = giữ nguyên)'); e.code = 'FFX_HEIGHT'; throw e; }
+  const scaleArgs = mh > 0 ? ['-vf', 'scale=-2:' + mh] : [];
+  if (o.mode === 'size') {
+    const mb = num(o.targetMB, 'FFX_TARGET');
+    if (mb < 1) { const e = new Error('FFX_TARGET: dung lượng mục tiêu phải ≥ 1 MB'); e.code = 'FFX_TARGET'; throw e; }
+    if (dur <= 0) { const e = new Error('FFX_DURATION: không đo được thời lượng — 2-pass cần duration'); e.code = 'FFX_DURATION'; throw e; }
+    const audioK = 128;
+    const bitK = Math.max(100, Math.floor((mb * 8192) / dur) - audioK);
+    const passStamp = 'ffx-pass-' + Date.now();
+    const passLog = path.join(os.tmpdir(), passStamp);
+    const base = ['-y', '-i', o.inputPath].concat(scaleArgs, ['-c:v', 'libx264', '-b:v', bitK + 'k', '-preset', 'fast', '-pix_fmt', 'yuv420p']);
+    try {
+      await spawnRun(FFMPEG, base.concat(['-pass', '1', '-passlogfile', passLog, '-an', '-f', 'null', (process.platform === 'win32' ? 'NUL' : os.devNull)]),
+        { totalSec: dur, onProgress: o.onProgress ? (p) => o.onProgress({ pct: Math.round((p.pct || 0) / 2), fps: p.fps, speed: p.speed }) : undefined });
+      await spawnRun(FFMPEG, base.concat(['-pass', '2', '-passlogfile', passLog, '-c:a', 'aac', '-b:a', audioK + 'k', o.outputPath]),
+        { totalSec: dur, onProgress: o.onProgress ? (p) => o.onProgress({ pct: 50 + Math.round((p.pct || 0) / 2), fps: p.fps, speed: p.speed }) : undefined });
+    } finally {
+      try {
+        for (const f of fs.readdirSync(os.tmpdir())) {
+          if (f.indexOf(passStamp) === 0) { try { fs.unlinkSync(path.join(os.tmpdir(), f)); } catch (_) { /* tạm */ } }
+        }
+      } catch (_) { /* tạm */ }
+    }
+    return { ok: true, path: o.outputPath, mode: 'size', targetMB: mb, bitrateK: bitK, twoPass: true };
+  }
+  const enc = o.useGpu ? gpuEncoder('h264') : null;
+  const vArgs = enc ? ['-c:v', enc].concat(qualityArgs(enc, { crf })) : ['-c:v', 'libx264', '-crf', String(crf), '-preset', 'fast'];
+  await spawnRun(FFMPEG, ['-y', '-i', o.inputPath].concat(vArgs, scaleArgs, ['-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '128k', o.outputPath]), { totalSec: dur });
+  return { ok: true, path: o.outputPath, mode: 'crf', crf: crf, gpu: enc ? gpuLabel(enc) : null };
 }
 
-/* ── 6) Trích frame — 1 ảnh tại giây atSec, hoặc mỗi everySec giây 1 ảnh vào outputDir ── */
+/* ── 6) Trích frame — 5 mode: every | single | count | scene | grid (+ timestamp) ── */
 const FRAME_PREFIX = 'ffx-frame-';
+
+/* drawtext timestamp góc frame — font Arial hệ thống (libfreetype luôn có trong build). */
+function stampFilter() {
+  const font = 'C\\:/Windows/Fonts/arial.ttf';
+  if (!fs.existsSync('C:\\Windows\\Fonts\\arial.ttf')) { const e = new Error('FFX_FONT: không tìm thấy arial.ttf để đóng timestamp'); e.code = 'FFX_FONT'; throw e; }
+  return "drawtext=text='%{pts\\:hms}':fontfile='" + font + "':fontsize=20:fontcolor=white:box=1:boxcolor=black@0.5:x=10:y=10";
+}
 
 async function extractFrames(opts) {
   const o = opts || {};
@@ -186,34 +602,102 @@ async function extractFrames(opts) {
   if (fmt !== 'png' && fmt !== 'jpg') { const e = new Error('FFX_FORMAT: chỉ hỗ trợ png/jpg'); e.code = 'FFX_FORMAT'; throw e; }
   if (!o.outputDir || typeof o.outputDir !== 'string') { const e = new Error('FFX_OUTDIR: thiếu thư mục lưu ảnh'); e.code = 'FFX_OUTDIR'; throw e; }
   fs.mkdirSync(o.outputDir, { recursive: true });
-  let args;
+  const dur = await probeDur(o.inputPath);
+  const stamp = o.stamp ? stampFilter() : null;
+  const withStamp = (vf) => (stamp ? stamp + ',' + vf : vf);
+
   if (o.mode === 'single') {
     const s = num(o.atSec, 'FFX_AT');
     if (s < 0) { const e = new Error('FFX_AT: giây trích phải ≥ 0'); e.code = 'FFX_AT'; throw e; }
-    args = ['-y', '-ss', String(s), '-i', o.inputPath, '-frames:v', '1', path.join(o.outputDir, FRAME_PREFIX + '0.' + fmt)];
+    const vf = withStamp('null');
+    const args = ['-y', '-ss', String(s), '-i', o.inputPath, '-frames:v', '1'];
+    if (o.stamp) args.push('-vf', vf);
+    args.push(path.join(o.outputDir, FRAME_PREFIX + '0.' + fmt));
     await spawnRun(FFMPEG, args, {});
     return { ok: true, path: path.join(o.outputDir, FRAME_PREFIX + '0.' + fmt), count: 1 };
   }
-  const n = num(o.everySec, 'FFX_EVERY');
-  if (!(n >= 0.1)) { const e = new Error('FFX_EVERY: khoảng cách giữa 2 frame phải ≥ 0.1 giây'); e.code = 'FFX_EVERY'; throw e; }
-  const total = await probeDur(o.inputPath);
-  args = ['-y', '-i', o.inputPath, '-vf', 'fps=1/' + n, path.join(o.outputDir, FRAME_PREFIX + '%04d.' + fmt)];
-  await spawnRun(FFMPEG, args, { totalSec: total });
+
+  if (o.mode === 'grid') {
+    const cols = num(o.cols, 'FFX_COLS');
+    if (!(cols >= 2 && cols <= 10) || Math.floor(cols) !== cols) { const e = new Error('FFX_COLS: số cột lưới phải nguyên 2–10'); e.code = 'FFX_COLS'; throw e; }
+    const count = num(o.count, 'FFX_COUNT');
+    if (!(count >= 2 && count <= 100)) { const e = new Error('FFX_COUNT: số frame lưới phải 2–100'); e.code = 'FFX_COUNT'; throw e; }
+    const rows = Math.ceil(count / cols);
+    if (dur <= 0) { const e = new Error('FFX_DURATION: không đo được thời lượng'); e.code = 'FFX_DURATION'; throw e; }
+    const rate = count / dur;
+    let vf = 'fps=' + rate.toFixed(4) + ',scale=320:-1,tile=' + cols + 'x' + rows;
+    if (o.stamp) vf = stamp + ',' + vf;
+    const out = path.join(o.outputDir, 'ffx-grid.' + fmt);
+    await spawnRun(FFMPEG, ['-y', '-i', o.inputPath, '-vf', vf, '-frames:v', '1', out], { totalSec: dur });
+    return { ok: true, path: out, count: count, mode: 'grid' };
+  }
+
+  let rate = null;
+  if (o.mode === 'every') {
+    const n = num(o.everySec, 'FFX_EVERY');
+    if (!(n >= 0.1)) { const e = new Error('FFX_EVERY: khoảng cách giữa 2 frame phải ≥ 0.1 giây'); e.code = 'FFX_EVERY'; throw e; }
+    rate = 1 / n;
+  } else if (o.mode === 'count') {
+    const n = num(o.count, 'FFX_COUNT');
+    if (!(n >= 1) || Math.floor(n) !== n) { const e = new Error('FFX_COUNT: số frame phải nguyên ≥ 1'); e.code = 'FFX_COUNT'; throw e; }
+    if (dur <= 0) { const e = new Error('FFX_DURATION: không đo được thời lượng'); e.code = 'FFX_DURATION'; throw e; }
+    rate = n / dur;
+  } else if (o.mode !== 'scene') {
+    const e = new Error('FFX_MODE: chế độ trích frame không hỗ trợ — ' + o.mode); e.code = 'FFX_MODE'; throw e;
+  }
+
+  const outPattern = path.join(o.outputDir, FRAME_PREFIX + '%04d.' + fmt);
+  if (o.mode === 'scene') {
+    const th = Number(o.threshold);
+    const t = Number.isFinite(th) && th > 0 && th < 1 ? th : 0.3;
+    let vf = "select='gt(scene," + t + ")'";
+    if (o.stamp) vf = stamp + ',' + vf;
+    await spawnRun(FFMPEG, ['-y', '-i', o.inputPath, '-vf', vf, '-vsync', 'vfr', outPattern], { totalSec: dur });
+  } else {
+    const vf = withStamp('fps=' + rate.toFixed(4));
+    await spawnRun(FFMPEG, ['-y', '-i', o.inputPath, '-vf', vf, outPattern], { totalSec: dur });
+  }
   const count = fs.readdirSync(o.outputDir).filter((f) => f.indexOf(FRAME_PREFIX) === 0).length;
   return { ok: true, path: o.outputDir, count };
 }
 
-/* ── 7) Xoá tiếng — bỏ track audio (-an), copy video nguyên bản ── */
+/* ── 7) Xoá tiếng — track 'all' | số track giữ lại; keepSubs giữ phụ đề mềm ── */
 async function removeAudio(opts) {
   const o = opts || {};
   assertInput(o.inputPath, 'FFX_INPUT');
   assertOutput(o.outputPath);
   const total = await probeDur(o.inputPath);
-  await spawnRun(FFMPEG, ['-y', '-i', o.inputPath, '-an', '-c:v', 'copy', o.outputPath], { totalSec: total });
+  const subs = o.keepSubs === false ? [] : ['-map', '0:s?', '-c:s', 'copy'];
+  // Chế độ "chỉ câm trong khoảng": video copy, audio re-encode aac với volume=0 trong window.
+  const rs = Number(o.rangeStartSec);
+  const re_ = Number(o.rangeEndSec);
+  const hasRange = o.rangeStartSec !== undefined && o.rangeStartSec !== null && o.rangeStartSec !== ''
+    && o.rangeEndSec !== undefined && o.rangeEndSec !== null && o.rangeEndSec !== '';
+  if (hasRange && (!(rs >= 0) || !(re_ > rs))) {
+    const e = new Error('FFX_RANGE: khoảng xoá tiếng không hợp lệ — cần 0 ≤ bắt đầu < kết thúc'); e.code = 'FFX_RANGE'; throw e;
+  }
+  let args;
+  if (hasRange) {
+    if (o.track !== undefined && o.track !== null && o.track !== '' && o.track !== 'all') {
+      const e = new Error('FFX_TRACK: xoá theo khoảng chỉ áp dụng cho toàn bộ track — bỏ chọn track'); e.code = 'FFX_TRACK'; throw e;
+    }
+    const win = "volume=enable='between(t," + rs + "," + re_ + ")':volume=0";
+    args = ['-y', '-i', o.inputPath, '-map', '0:v'].concat(subs, ['-c:v', 'copy', '-af', win, '-c:a', 'aac', '-b:a', '192k', o.outputPath]);
+  } else if (o.track === 'all' || o.track === undefined || o.track === null || o.track === '') {
+    args = ['-y', '-i', o.inputPath, '-map', '0:v'].concat(subs, ['-c:v', 'copy', '-an', o.outputPath]);
+  } else {
+    const idx = num(o.track, 'FFX_TRACK');
+    const info = await probeStreams(o.inputPath);
+    if (idx < 0 || idx >= info.audioTracks.length) {
+      const e = new Error('FFX_TRACK: video chỉ có ' + info.audioTracks.length + ' track audio — không có track ' + idx); e.code = 'FFX_TRACK'; throw e;
+    }
+    args = ['-y', '-i', o.inputPath, '-map', '0:v', '-map', '0:a:' + idx].concat(subs, ['-c:v', 'copy', '-c:a', 'copy', o.outputPath]);
+  }
+  await spawnRun(FFMPEG, args, { totalSec: total });
   return { ok: true, path: o.outputPath };
 }
 
-/* ── 8) Đổi định dạng — target theo đuôi file output (mp4/webm/mkv/mov hoặc mp3/m4a/wav) ── */
+/* ── 8) Đổi định dạng — codec h264|h265 (GPU nếu có), giữ sub, scale/fps đích ── */
 async function convertMedia(opts) {
   const o = opts || {};
   assertInput(o.inputPath, 'FFX_INPUT');
@@ -224,14 +708,36 @@ async function convertMedia(opts) {
   if (ext === 'mp3') args = ['-y', '-i', o.inputPath, '-vn', '-c:a', 'libmp3lame', '-b:a', '192k', o.outputPath];
   else if (ext === 'm4a') args = ['-y', '-i', o.inputPath, '-vn', '-c:a', 'aac', '-b:a', '192k', o.outputPath];
   else if (ext === 'wav') args = ['-y', '-i', o.inputPath, '-vn', '-c:a', 'pcm_s16le', o.outputPath];
-  else if (ext === 'webm') args = ['-y', '-i', o.inputPath, '-c:v', 'libvpx-vp9', '-deadline', 'realtime', '-cpu-used', '5', '-crf', '34', '-b:v', '0', '-c:a', 'libopus', o.outputPath];
-  else if (ext === 'mp4' || ext === 'mov' || ext === 'mkv') args = ['-y', '-i', o.inputPath, '-c:v', 'libx264', '-crf', '23', '-preset', 'fast', '-c:a', 'aac', '-b:a', '128k', o.outputPath];
-  else { const e = new Error('FFX_FORMAT: định dạng đích không hỗ trợ — ' + ext); e.code = 'FFX_FORMAT'; throw e; }
+  else if (ext === 'flac') args = ['-y', '-i', o.inputPath, '-vn', '-c:a', 'flac', o.outputPath];
+  else if (ext === 'ogg') args = ['-y', '-i', o.inputPath, '-vn', '-c:a', 'libopus', '-b:a', '192k', o.outputPath];
+  else if (ext === 'webm') {
+    // VP9 CPU (không có GPU vp9 trong danh sách dò) — realtime deadline cho nhanh
+    args = ['-y', '-i', o.inputPath, '-c:v', 'libvpx-vp9', '-deadline', 'realtime', '-cpu-used', '5', '-crf', '34', '-b:v', '0', '-c:a', 'libopus', o.outputPath];
+  } else if (ext === 'mp4' || ext === 'mov' || ext === 'mkv') {
+    const wantH265 = o.codec === 'h265';
+    const enc = o.useGpu ? gpuEncoder(wantH265 ? 'h265' : 'h264') : null;
+    const vArgs = enc
+      ? ['-c:v', enc].concat(qualityArgs(enc, { crf: wantH265 ? 24 : 23 }))
+      : (wantH265 ? ['-c:v', 'libx265', '-crf', '26', '-preset', 'fast'] : ['-c:v', 'libx264', '-crf', '23', '-preset', 'fast']);
+    const vfParts = [];
+    const h = Number(o.height) || 0;
+    if (h > 0) vfParts.push('scale=-2:' + h);
+    const f = Number(o.fps) || 0;
+    if (f > 0) vfParts.push('fps=' + f);
+    if (vfParts.length) vfParts.push('format=yuv420p');
+    args = ['-y', '-i', o.inputPath, '-map', '0:v:0', '-map', '0:a:0?'];
+    if (o.keepSubs && (ext === 'mkv' || ext === 'mp4' || ext === 'mov')) {
+      args.push('-map', '0:s?');
+      args.push('-c:s', ext === 'mkv' ? 'copy' : 'mov_text');
+    }
+    if (vfParts.length) args.push('-vf', vfParts.join(','));
+    args = args.concat(vArgs, ['-c:a', 'aac', '-b:a', '192k', o.outputPath]);
+  } else { const e = new Error('FFX_FORMAT: định dạng đích không hỗ trợ — ' + ext); e.code = 'FFX_FORMAT'; throw e; }
   await spawnRun(FFMPEG, args, { totalSec: total });
   return { ok: true, path: o.outputPath };
 }
 
-/* ── 9) Ghép nhạc vào video — mix (amix, volume 0–2) hoặc thay thế tiếng gốc ── */
+/* ── 9) Ghép nhạc — mix (volume 2 bên, offset, fade in/out, loop nhạc, loudnorm) | replace ── */
 async function addMusic(opts) {
   const o = opts || {};
   assertInput(o.inputPath, 'FFX_INPUT');
@@ -239,22 +745,59 @@ async function addMusic(opts) {
   assertOutput(o.outputPath);
   const m = String(o.mode || 'mix');
   if (m !== 'mix' && m !== 'replace') { const e = new Error('FFX_MUSIC_MODE: chế độ phải là mix hoặc replace'); e.code = 'FFX_MUSIC_MODE'; throw e; }
-  const v = num(o.musicVolume, 'FFX_MUSIC_VOL');
-  if (v < 0 || v > 2) { const e = new Error('FFX_MUSIC_VOL: âm lượng nhạc phải trong khoảng 0–2'); e.code = 'FFX_MUSIC_VOL'; throw e; }
-  const total = await probeDur(o.inputPath);
-  const audio = ['-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k'];
+  const mv = num(o.musicVolume, 'FFX_MUSIC_VOL');
+  if (mv < 0 || mv > 2) { const e = new Error('FFX_MUSIC_VOL: âm lượng nhạc phải 0–2'); e.code = 'FFX_MUSIC_VOL'; throw e; }
+  const vv = Number.isFinite(Number(o.videoVolume)) ? Math.max(0, Math.min(2, Number(o.videoVolume))) : 1;
+  const start = Number(o.musicStartSec) > 0 ? Number(o.musicStartSec) : 0;
+  const fi = Number(o.fadeInSec) > 0 ? Number(o.fadeInSec) : 0;
+  const fo = Number(o.fadeOutSec) > 0 ? Number(o.fadeOutSec) : 0;
+  const vDur = await probeDur(o.inputPath);
+  if (fo > 0 && vDur <= 0) { const e = new Error('FFX_FADE: fade-out cần biết thời lượng video'); e.code = 'FFX_FADE'; throw e; }
+  const outFadeSt = fo > 0 ? Math.max(0, vDur - fo) : 0;
+  const musicChainParts = [];
+  if (o.normalizeMusic) musicChainParts.push('loudnorm=I=-16:TP=-1.5:LRA=11');
+  if (fi > 0) musicChainParts.push('afade=t=in:st=0:d=' + fi);
+  if (fo > 0) musicChainParts.push('afade=t=out:st=' + outFadeSt + ':d=' + fo);
+  // Vùng video nghe nhạc (tuỳ chọn): ngoài [playStartSec, playEndSec] nhạc bị câm.
+  // Điền cả 2 = vùng [từ, đến]; chỉ điền Từ = từ đó đến hết video; chỉ điền Đến = lỗi lộ liễu.
+  const hasPs = o.playStartSec !== undefined && o.playStartSec !== null && o.playStartSec !== '';
+  const hasPe = o.playEndSec !== undefined && o.playEndSec !== null && o.playEndSec !== '';
+  let ps = Number(o.playStartSec);
+  let pe = hasPe ? Number(o.playEndSec) : vDur;
+  if (hasPe && !hasPs) { const e = new Error('FFX_PLAY_RANGE: vùng nghe nhạc cần cả "Từ" và "Đến" (hoặc chỉ "Từ" = đến hết video)'); e.code = 'FFX_PLAY_RANGE'; throw e; }
+  if (hasPs && (!(ps >= 0) || !(pe > ps) || !(vDur <= 0 || ps < vDur))) {
+    const e = new Error('FFX_PLAY_RANGE: vùng nghe nhạc không hợp lệ — cần 0 ≤ bắt đầu < kết thúc ≤ thời lượng video'); e.code = 'FFX_PLAY_RANGE'; throw e;
+  }
+  if (hasPs) musicChainParts.push("volume=enable='between(t," + ps + "," + pe + ")':volume=0");
+  const musicChain = musicChainParts.join(',');
   let args;
   if (m === 'replace') {
-    args = ['-y', '-i', o.inputPath, '-i', o.musicPath, '-map', '0:v', '-map', '1:a', '-shortest'].concat(audio, [o.outputPath]);
+    args = ['-y', '-i', o.inputPath];
+    if (o.loopMusic) args.push('-stream_loop', '-1');
+    if (start > 0) args.push('-ss', String(start));
+    args.push('-i', o.musicPath, '-map', '0:v', '-map', '1:a', '-shortest');
+    const afParts = [];
+    if (mv !== 1) afParts.push('volume=' + mv);
+    if (musicChain) afParts.push(musicChain);
+    if (afParts.length) args.push('-af', afParts.join(','));
+    args.push('-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', o.outputPath);
   } else {
-    const fc = '[1:a]volume=' + v + '[m];[0:a][m]amix=inputs=2:duration=first:dropout_transition=2[aout]';
-    args = ['-y', '-i', o.inputPath, '-i', o.musicPath, '-filter_complex', fc, '-map', '0:v', '-map', '[aout]'].concat(audio, [o.outputPath]);
+    args = ['-y', '-i', o.inputPath];
+    if (o.loopMusic) args.push('-stream_loop', '-1');
+    if (start > 0) args.push('-ss', String(start));
+    args.push('-i', o.musicPath);
+    const chains = [];
+    if (musicChain) chains.push('[1:a]' + musicChain + '[m]');
+    const mRef = musicChain ? 'm' : '1:a';
+    chains.push('[0:a][' + mRef + ']amix=inputs=2:duration=first:weights=' + vv + ' ' + mv + '[aout]');
+    args.push('-filter_complex', chains.join(';'), '-map', '0:v', '-map', '[aout]');
+    args.push('-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', o.outputPath);
   }
-  await spawnRun(FFMPEG, args, { totalSec: total });
-  return { ok: true, path: o.outputPath };
+  await spawnRun(FFMPEG, args, { totalSec: vDur });
+  return { ok: true, path: o.outputPath, mode: m };
 }
 
-/* ── 10) Xuất GIF — palette 2 pass trong 1 lệnh, loop vô hạn; [startSec, endSec] tuỳ chọn ── */
+/* ── 10) Xuất GIF — loop N lần, palette max_colors, dithering, slideshow theo cảnh ── */
 async function toGif(opts) {
   const o = opts || {};
   assertInput(o.inputPath, 'FFX_INPUT');
@@ -272,16 +815,41 @@ async function toGif(opts) {
     if (e2 <= s) { const e = new Error('FFX_RANGE: giây kết thúc phải LỚN HƠN giây bắt đầu'); e.code = 'FFX_RANGE'; throw e; }
     dur = e2 - s;
   }
-  const vf = 'fps=' + f + ',scale=' + w + ':-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse';
+  const colors = [64, 128, 256].includes(Number(o.maxColors)) ? Number(o.maxColors) : 256;
+  const dither = o.dither === 'bayer' ? 'bayer' : 'sierra2_4a';
+  const chain = [];
+  if (o.slideshow) chain.push("select='gt(scene,0.2)'");
+  chain.push('fps=' + f);
+  chain.push('scale=' + w + ':-1:flags=lanczos');
+  const vf = chain.join(',') + ',split[s0][s1];[s0]palettegen=max_colors=' + colors + '[p];[s1][p]paletteuse=dither=' + dither + (dither === 'bayer' ? ':bayer_scale=4' : '');
+  const loop = [0, -1].includes(Number(o.loopCount)) ? Number(o.loopCount) : (Number.isInteger(Number(o.loopCount)) && Number(o.loopCount) >= 1 ? Number(o.loopCount) : 0);
   const args = ['-y', '-ss', String(s), '-i', o.inputPath];
   if (dur > 0) args.push('-t', String(dur));
-  args.push('-vf', vf, '-loop', '0', o.outputPath);
+  args.push('-vf', vf, '-loop', String(loop), o.outputPath);
   await spawnRun(FFMPEG, args, { totalSec: dur > 0 ? dur : totalAll });
-  return { ok: true, path: o.outputPath };
+  return { ok: true, path: o.outputPath, loop: loop, colors: colors, dither: dither };
+}
+
+/* ── 10b) Thumbnail — trích 1 frame jpg cache theo đường dẫn (grid thẻ Ghép Video). ── */
+async function makeThumb(opts) {
+  const o = opts || {};
+  assertInput(o.inputPath, 'FFX_INPUT');
+  const dir = path.join(os.tmpdir(), 'ffx-thumbs');
+  fs.mkdirSync(dir, { recursive: true });
+  const crypto = require('crypto');
+  const key = crypto.createHash('md5').update(o.inputPath + '|' + String(o.atSec || 1)).digest('hex').slice(0, 20);
+  const out = path.join(dir, key + '.jpg');
+  if (!fs.existsSync(out)) {
+    const at = Math.max(0, Number(o.atSec) || 1);
+    await spawnRun(FFMPEG, ['-y', '-ss', String(at), '-i', o.inputPath, '-frames:v', '1', '-vf', 'scale=320:-2', out], { totalSec: 0 });
+  }
+  if (!fs.existsSync(out)) { const e = new Error('FFX_THUMB: không sinh được thumbnail — ' + o.inputPath); e.code = 'FFX_THUMB'; throw e; }
+  return { ok: true, path: out };
 }
 
 module.exports = {
-  cancelRunning, probeMedia,
-  extractAudio, cutVideo, concatVideos, loopVideo,
-  compressVideo, extractFrames, removeAudio, convertMedia, addMusic, toGif,
+  cancelRunning, probeMedia, probeStreams, detectScenes,
+  extractAudio, cutVideo, cutMulti, concatVideos, concatAuto, concatTransition,
+  loopVideo, loopPingPong, loopCrossfade, loopAudio, compressVideo,
+  extractFrames, removeAudio, convertMedia, addMusic, toGif, makeThumb,
 };

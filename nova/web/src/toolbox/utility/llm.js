@@ -2,6 +2,9 @@
    Tách verbatim từ src/toolbox/utility.js (2026-09-10) — không sửa thân hàm.
    Toàn bộ là function declaration: chỉ gọi lúc runtime, thứ tự nạp không ảnh hưởng. */
 function loadApiSettings(){
+  // Mở lại form từ cấu hình đã lưu — hết trạng thái reset của "API đã thêm" (nhả guard
+  // để key của provider được nạp lại bình thường vào các ô).
+  if (typeof _addedApiGuard !== 'undefined') _addedApiGuard = null;
   const provider = localStorage.getItem('api_provider') || 'anthropic';
   const model = localStorage.getItem('api_model') || '';
   // Migrate key cũ (lưu chung ở 'api_key') → kho riêng của provider hiện tại (1 lần)
@@ -68,11 +71,17 @@ function saveApiSettings(){
     }
   }
   const keys = collectKeys();
+  // Guard "API đã thêm": form vừa bị reset (ô key trống) — bấm Lưu lúc này không được
+  // ghi rỗng đè lên kho key đã lưu của provider, vẫn dùng lại key đang có trong kho.
+  const storedRaw = localStorage.getItem(_provKeyName(provider)) || '';
+  const effKeys = (!keys.length && storedRaw && typeof _addedApiGuard !== 'undefined' && _addedApiGuard === provider)
+    ? storedRaw.split(/[\n,]+/).map(s => s.trim()).filter(Boolean)
+    : keys;
   const baseUrl = document.getElementById('apiBaseUrl').value.trim().replace(/\/+$/, '');
   localStorage.setItem('api_provider', provider);
   localStorage.setItem('api_model', model);
-  localStorage.setItem(_provKeyName(provider), keys.join('\n'));   // lưu key RIÊNG theo provider
-  localStorage.setItem('api_key', keys.join('\n'));               // mirror provider hiện tại (cho code cũ: _apiKeyPool, Tool10 mượn key)
+  localStorage.setItem(_provKeyName(provider), effKeys.join('\n'));   // lưu key RIÊNG theo provider
+  localStorage.setItem('api_key', effKeys.join('\n'));               // mirror provider hiện tại (cho code cũ: _apiKeyPool, Tool10 mượn key)
   _keyFieldsProvider = provider;
   localStorage.setItem('api_thinking', document.getElementById('apiThinking')?.checked ? '1' : '');
   const conc = parseInt(document.getElementById('apiConcurrency')?.value);
@@ -85,11 +94,19 @@ function saveApiSettings(){
   localStorage.setItem('json_fb_key', (document.getElementById('jsonFbKey')?.value || '').trim());
   updateApiStatus();
   setApiStatus(baseUrl ? `✓ Đã lưu. Dùng Base URL: ${baseUrl}` : '✓ Đã lưu cấu hình API.', 'ok');
+  // Ghi nhận API vừa lưu vào khung "📋 API đã thêm" (cột phải tab Cài đặt) rồi reset
+  // form 🤖 AI Provider về trạng thái trống để người dùng nhập API mới tiếp.
+  // CLI (gói Claude/ChatGPT) không dùng API key → không ghi nhận, không reset.
+  if (typeof addedApiOnSave === 'function' && provider !== 'cli' && effKeys.length) addedApiOnSave(provider, model, effKeys, baseUrl);
 }
 
 function updateApiStatus(){
-  const provider = localStorage.getItem('api_provider');
-  const model = localStorage.getItem('api_model');
+  const localProv = localStorage.getItem('api_provider');
+  // Nguồn AI thực tế (giống callLLM): "📋 API đã thêm" → "API Key Flow" → cấu hình lưu sẵn; CLI hiển thị riêng
+  const src = (localProv !== 'cli' && typeof addedApiResolveAiSource === 'function') ? addedApiResolveAiSource() : null;
+  const provider = src ? src.provider : localProv;
+  const model = (src && src.model) ? src.model : localStorage.getItem('api_model');
+  const tag = src ? (src.source === 'added' ? ' · 📋 API đã thêm' : ' · 🔑 API Key Flow') : '';
   const el = document.getElementById('apiStatus');
   // CLI tự host: không cần key — báo theo endpoint.
   if (provider === 'cli') {
@@ -104,7 +121,7 @@ function updateApiStatus(){
   if (keys.length && provider && model) {
     const lanes = _concurrency();
     const multi = lanes > 1 ? ` · ⚡ ${lanes} luồng (${keys.length} key)` : '';
-    el.innerHTML = `<span class="api-status ok"></span> ${PROVIDER_LABEL[provider] || provider} · ${model}${multi}`;
+    el.innerHTML = `<span class="api-status ok"></span> ${PROVIDER_LABEL[provider] || provider} · ${model}${multi}${tag}`;
   } else {
     el.innerHTML = `<span class="api-status"></span> Chưa cấu hình`;
   }
@@ -158,18 +175,41 @@ async function testApi(){
 }
 
 function _apiKeyPool(){
+  // NGUỒN AI — ưu tiên: "📋 API đã thêm" → "API Key Flow" (key Gemini) → kho key provider hiện tại.
+  // CLI (gói subscription, không cần API key) không bị kênh ưu tiên này chi phối.
+  const localProv = localStorage.getItem('api_provider') || 'anthropic';
+  if (localProv !== 'cli' && typeof addedApiResolveAiSource === 'function'){
+    const src = addedApiResolveAiSource();
+    if (src) return src.keys;
+  }
   // Key của ĐÚNG provider đang dùng (api_key_<provider>); fallback kho cũ 'api_key' nếu chưa migrate
-  const provider = localStorage.getItem('api_provider') || 'anthropic';
-  const raw = localStorage.getItem(_provKeyName(provider)) || localStorage.getItem('api_key') || '';
+  const raw = localStorage.getItem(_provKeyName(localProv)) || localStorage.getItem('api_key') || '';
   return raw.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
+}
+
+// Thời gian tạm nghỉ key theo loại lỗi: 401/403 (key sai/hết hiệu lực) 15 phút; 429/quota/rate-limit 3 phút
+function _keyCooldownMs(msg){
+  if (/\b(401|403)\b|unauthor|forbidden|invalid[ _-]?(api[ _-]?)?key|incorrect api key|api key not valid/i.test(msg)) return 15 * 60 * 1000;
+  if (/\b429\b|quota|rate.?limit|insufficient|resource[ _-]?exhausted/i.test(msg)) return 3 * 60 * 1000;
+  return 0;
 }
 
 function _nextApiKey(){
   const pool = _apiKeyPool();
   if (!pool.length) return '';
-  const k = pool[_apiKeyIdx % pool.length];
-  _apiKeyIdx++;
-  return k;
+  const now = Date.now();
+  // XOAY KEY: bỏ qua key đang tạm nghỉ (dính lỗi 401/403/429/quota); nếu TẤT CẢ đều đang
+  // nghỉ → lấy key sớm hết cooldown nhất để lỗi lộ thẳng ra UI (không treo — Luật 10)
+  let pick = '';
+  for (let i = 0; i < pool.length; i++){
+    const k = pool[(_apiKeyIdx + i) % pool.length];
+    if (!(_apiKeyCooldown[k] > now)){ pick = k; _apiKeyIdx += i + 1; break; }
+  }
+  if (!pick){
+    pick = pool.slice().sort((a, b) => (_apiKeyCooldown[a] || 0) - (_apiKeyCooldown[b] || 0))[0];
+    _apiKeyIdx++;
+  }
+  return pick;
 }
 
 function _usingCli(){
@@ -223,10 +263,19 @@ function _chatEndpoint(base){
 }
 
 async function callLLM(prompt, opts = {}){
-  const provider = opts._override?.provider || localStorage.getItem('api_provider') || 'anthropic';
-  const model = opts._override?.model || localStorage.getItem('api_model') || MODELS[provider][0].id;
-  // Mỗi lần gọi lấy 1 key kế tiếp trong pool → nhiều key sẽ tự chia tải khi chạy song song
-  const key = opts._override?.key || _nextApiKey();
+  // Nguồn AI (theo khung "📋 API đã thêm"): ưu tiên API đã thêm → API Key Flow (key Gemini)
+  // → cấu hình đang lưu. _override (nút Test API / gọi thủ công) luôn thắng mọi nguồn;
+  // người dùng đang chọn CLI (gói subscription, không cần key) → giữ nguyên kênh CLI.
+  const localProv = localStorage.getItem('api_provider') || 'anthropic';
+  const aiSrc = (localProv === 'cli' || opts._override?.provider || opts._override?.key)
+    ? null : ((typeof addedApiResolveAiSource === 'function') ? addedApiResolveAiSource() : null);
+  const provider = opts._override?.provider || aiSrc?.provider || localProv;
+  const model = opts._override?.model || aiSrc?.model || localStorage.getItem('api_model') || MODELS[provider][0].id;
+  // Mỗi lần gọi lấy 1 key kế tiếp trong pool → nhiều key sẽ tự chia tải khi chạy song song.
+  // XOAY KEY KHI LỖI/HẾT QUOTA: lượt thử lại (_withRetry) tự lấy key KẾ TIẾP; key dính
+  // 401/403/429/quota bị đưa vào cooldown (_keyCooldownMs) → các lượt gọi sau tự nhảy qua nó.
+  let key = opts._override?.key || _nextApiKey();
+  let _llmAttempt = 0;
   const maxTokens = opts.maxTokens || 1500;
   const messages = opts.messages || [{ role: 'user', content: prompt }];
 
@@ -264,9 +313,13 @@ async function callLLM(prompt, opts = {}){
 
   const thinking = opts._override?.thinking ?? (localStorage.getItem('api_thinking') === '1');
   const json = !!opts.json;   // ép JSON mode (OpenAI/DeepSeek)
-  const _baseUrl = (localStorage.getItem('api_base_url') || '').trim().replace(/\/+$/, '');   // gateway ngoài (hhtech/gwai…)
+  const _baseUrl = aiSrc
+    ? (aiSrc.baseUrl || '')                                   // base URL theo API đã thêm / Flow (rỗng = gọi thẳng nhà cung cấp)
+    : (localStorage.getItem('api_base_url') || '').trim().replace(/\/+$/, '');   // gateway ngoài (hhtech/gwai…)
   const doCall = () => {
-    if (provider === 'anthropic') return callAnthropic(messages, model, key, maxTokens);   // callAnthropic tự đọc Base URL bên trong
+    _llmAttempt++;
+    if (_llmAttempt > 1 && !opts._override?.key) key = _nextApiKey();   // lượt thử lại → XOAY sang key kế tiếp
+    if (provider === 'anthropic') return callAnthropic(messages, model, key, maxTokens, aiSrc ? aiSrc.baseUrl : undefined);   // callAnthropic tự đọc Base URL bên trong nếu không override
     // Có Base URL → OpenAI/DeepSeek đi QUA gateway (/v1/chat/completions), KHÔNG gọi thẳng api.openai.com/deepseek.
     // stream:true giữ connection qua giai đoạn model reasoning nghĩ (né 500 → retry → 409 duplicate của gateway).
     if (_baseUrl && (provider === 'openai' || provider === 'deepseek'))
@@ -295,7 +348,20 @@ async function callLLM(prompt, opts = {}){
     }
     throw new Error('Provider không hỗ trợ: ' + provider);
   };
-  return _withRetry(doCall);
+  return _withRetry(async () => {
+    try {
+      const r = await doCall();
+      if (key) delete _apiKeyCooldown[key];   // key hoạt động trở lại → gỡ cooldown
+      return r;
+    } catch (e) {
+      const cd = _keyCooldownMs(String(e?.message || e));
+      if (cd && key && !opts._override?.key){
+        _apiKeyCooldown[key] = Date.now() + cd;
+        try { if (typeof novaLog === 'function') novaLog(`🔄 Xoay key ${key.slice(0, 4)}…${key.slice(-4)} — lỗi/hết quota, tạm nghỉ ${Math.round(cd / 60000)} phút, gọi sau sẽ dùng key kế tiếp`, 'warn'); } catch (_){}
+      }
+      throw e;
+    }
+  });
 }
 
 async function _llmFetch(url, init = {}){
@@ -332,9 +398,10 @@ function llmUsageReport(short){
   return { ...u };
 }
 
-async function callAnthropic(messages, model, key, maxTokens){
+async function callAnthropic(messages, model, key, maxTokens, baseUrlOverride){
   const body = JSON.stringify({ model, max_tokens: maxTokens, messages });
-  const baseUrl = localStorage.getItem('api_base_url') || '';
+  // baseUrlOverride: base URL theo nguồn AI đã resolve ("📋 API đã thêm" / Flow); undefined = dùng cấu hình lưu sẵn
+  const baseUrl = (baseUrlOverride !== undefined ? (baseUrlOverride || '') : (localStorage.getItem('api_base_url') || ''));
 
   // Nếu có Base URL bên thứ 3 → gọi thẳng, bỏ qua proxy Vercel
   if (baseUrl) {

@@ -52,6 +52,11 @@ try { app.commandLine.appendSwitch('log-level', '3'); } catch (e) { /* */ }
 try { require('./main/gpu-policy').installGpuPolicy(app); } catch (e) {
   console.warn('[gpu-policy] lỗi nạp module:', (e && e.message) || e);
 }
+// Scheme avs-media:// (preview video/âm thanh thật trên đĩa trong thẻ <video>) —
+// PHẢI đăng ký privileged TRƯỚC app.whenReady(). Handler gắn khi ready bên dưới.
+try { require('./main/media-protocol').registerMediaProtocolSchemes(); } catch (e) {
+  console.warn('[media-protocol] không đăng ký được scheme:', (e && e.message) || e);
+}
 // Bắt lỗi toàn cục (uncaughtException/unhandledRejection) → thông báo thân thiện, không văng app.
 installGlobalErrorHandlers();
 
@@ -145,6 +150,10 @@ app.whenReady().then(async () => {
   try { runStartupJanitor(app); } catch (e) { console.warn('[janitor] startup:', e && e.message); }
 
   buildMenu();
+  // Gắn handler avs-media:// (preview media) — sau khi ready, trước khi tạo cửa sổ.
+  try { require('./main/media-protocol').installMediaProtocolHandler(); } catch (e) {
+    console.warn('[media-protocol] không gắn được handler:', (e && e.message) || e);
+  }
   // Đăng ký IPC của Editor Pro (nhúng qua <webview>) — dùng chung userData Nova nhưng không dùng session app khác.
   try {
     require('./editor-pro/register').registerEditorPro(ipcMain, { userDataDir: app.getPath('userData') });

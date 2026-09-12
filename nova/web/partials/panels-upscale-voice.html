@@ -299,10 +299,11 @@
 
       <!-- ── ĐÃ TẠO ── -->
       <div class="panel mb-16">
-        <div class="panel-head"><span>Đã tạo</span><span style="text-transform:none;letter-spacing:0;font-weight:500;color:var(--text-dim);font-size:12px">lưu trên máy — còn đó khi mở lại app</span></div>
+        <div class="panel-head"><span>Đã tạo</span><span style="text-transform:none;letter-spacing:0;font-weight:500;color:var(--text-dim);font-size:12px">bản cuối lưu kho · đoạn tách lưu cache — tắt mở vẫn còn</span></div>
         <div class="panel-body" style="padding:10px">
           <button class="btn primary sm" id="giongGhepBtn" style="display:none;width:100%;margin-bottom:8px" onclick="giongSuGhep()">🔗 Ghép các đoạn đã xong</button>
-          <div id="giongSu"><div class="empty-state">Chưa tạo bản nào. Bản đã tạo được lưu trên máy — còn đó khi mở lại app.</div></div>
+          <button class="btn primary sm" id="giongGhepChonBtn" style="display:none;width:100%;margin-bottom:8px" onclick="giongSuGhepChon()">🔗 Ghép các mục đã chọn (<span id="giongChonDem">0</span>)</button>
+          <div id="giongSu"><div class="empty-state">Chưa tạo bản nào. Bản gộp / bản gen đơn lẻ lưu kho sản phẩm cuối; các đoạn tách khi gen kịch bản lưu cache riêng của app — cả hai đều còn đó khi mở lại.</div></div>
         </div>
       </div>
 

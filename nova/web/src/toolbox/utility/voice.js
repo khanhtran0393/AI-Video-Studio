@@ -1,7 +1,39 @@
 /* VOICE — giọng đọc OmniVoice/TTS: voice*, giong* (nạp, vẽ, thử, ghép, backend)
    Tách verbatim từ src/toolbox/utility.js (2026-09-10) — không sửa thân hàm.
    Toàn bộ là function declaration: chỉ gọi lúc runtime, thứ tự nạp không ảnh hưởng. */
+let _giongSuChon = new Set();   // tập `khi` của các bản "Đã tạo" đang được đánh dấu chọn để ghép
+let _voiceLogDaGan = false;     // kênh voice-log từ backend đã wire vào khung nhật ký chưa
+
+// Log quá trình làm việc của chức năng giọng nói: ghi vào khung "Nhật ký backend"
+// (voiceLog) kèm timestamp — giúp lần mở lại vẫn thấy các bước đã chạy.
+function _voiceLog(msg){
+  const el = document.getElementById('voiceLog');
+  if (!el) return;
+  let t = ''; try { t = new Date().toLocaleTimeString('vi-VN'); } catch (_){}
+  el.textContent += (el.textContent ? '\n' : '') + '[' + t + '] ' + String(msg == null ? '' : msg);
+  const dong = el.textContent.split('\n');
+  if (dong.length > 500) el.textContent = dong.slice(-500).join('\n');   // giữ vừa khung
+  el.scrollTop = el.scrollHeight;
+}
+
+// Wire log thật từ backend (kênh voice-log — log của OmniVoice/VieNeu/XTTS) vào khung nhật ký.
+function _voiceLogGan(){
+  try {
+    if (_voiceLogDaGan || !window.native || typeof window.native.onVoiceLog !== 'function') return;
+    _voiceLogDaGan = true;
+    window.native.onVoiceLog((line) => {
+      const el = document.getElementById('voiceLog');
+      if (!el) return;
+      el.textContent += (el.textContent ? '\n' : '') + String(line == null ? '' : line);
+      const dong = el.textContent.split('\n');
+      if (dong.length > 500) el.textContent = dong.slice(-500).join('\n');
+      el.scrollTop = el.scrollHeight;
+    });
+  } catch (_){}
+}
+
 async function voiceInit(){
+  _voiceLogGan();
   const st = document.getElementById('voiceBackendStatus');
   if (!window.native?.voiceStart){
     if (st) st.innerHTML = '<span style="color:var(--red)">Chỉ dùng được trong app desktop.</span>';
@@ -10,7 +42,7 @@ async function voiceInit(){
   try { _giongSuNapDia(); } catch (_){}   // nạp lịch sử "Đã tạo" đã lưu trên đĩa (không cần backend)
   // Xác minh backend còn sống (không chỉ dựa cờ cũ — phòng khi backend đã tắt/khởi động lại).
   const cur = await window.native.voiceStatus().catch(() => null);
-  if (cur?.running){ _voiceReady = true; if (cur?.url) VOICE_URL = cur.url; if (st) st.innerHTML = '<span style="color:var(--green)">● Giọng nói sẵn sàng (OmniVoice · VieNeu · XTTS)</span>'; voiceLoadVoices(); voiceHWNap(); try { giongKiemEngine(); } catch (_){} return; }
+  if (cur?.running){ _voiceReady = true; if (cur?.url) VOICE_URL = cur.url; try { _voiceLog('Backend sẵn sàng: ' + (cur.url || VOICE_URL)); } catch (_){} if (st) st.innerHTML = '<span style="color:var(--green)">● Giọng nói sẵn sàng (OmniVoice · VieNeu · XTTS)</span>'; voiceLoadVoices(); voiceHWNap(); try { giongKiemEngine(); } catch (_){} return; }
   _voiceReady = false;
   // Đã cài backend trên máy chưa? (thay vì báo lỗi đỏ → hiện panel hướng dẫn cài)
   const pb = window.native.voiceProbe ? await window.native.voiceProbe().catch(() => null) : null;
@@ -20,7 +52,7 @@ async function voiceInit(){
   if (st) st.innerHTML = '⏳ Đang khởi động backend giọng nói (OmniVoice · VieNeu · XTTS)… lần đầu ~30-60s, giữ app mở.';
   if (!_voiceStarting) _voiceStarting = window.native.voiceStart();
   const r = await _voiceStarting; _voiceStarting = null;
-  if (r?.ok){ _voiceReady = true; if (r?.url) VOICE_URL = r.url; if (st) st.innerHTML = '<span style="color:var(--green)">● Giọng nói sẵn sàng (OmniVoice · VieNeu · XTTS)</span>'; voiceLoadVoices(); voiceHWNap(); try { giongKiemEngine(); } catch (_){} }
+  if (r?.ok){ _voiceReady = true; if (r?.url) VOICE_URL = r.url; try { _voiceLog('Backend vừa khởi động xong: ' + (r.url || VOICE_URL)); } catch (_){} if (st) st.innerHTML = '<span style="color:var(--green)">● Giọng nói sẵn sàng (OmniVoice · VieNeu · XTTS)</span>'; voiceLoadVoices(); voiceHWNap(); try { giongKiemEngine(); } catch (_){} }
   else if (st) st.innerHTML = '<span style="color:var(--red)">Lỗi khởi động: ' + escapeHtml(r?.error || '') + '</span>';
 }
 
@@ -515,29 +547,35 @@ function _giongTachDoan(text, maxTu){
   return ds;
 }
 
-async function _giongLuuBan(blob, giong, engine, text, nhan){
+async function _giongLuuBan(blob, giong, engine, text, nhan, laSanPhamCuoi){
   const url = URL.createObjectURL(blob);
   const au = new Audio(url);
   const giay = await new Promise(r => { au.onloadedmetadata = () => r(au.duration || 0); au.onerror = () => r(0); });
-  const h = { url, blob, ten: (nhan ? nhan + ' · ' : '') + giong.name, engine, giay, text, khi: Date.now() };
+  const h = { url, blob, ten: (nhan ? nhan + ' · ' : '') + giong.name, engine, giay, text, khi: Date.now(), cache: !laSanPhamCuoi };
   _giongSu.unshift(h);
   _giongSu = _giongSu.slice(0, 40);   // kịch bản tách nhiều đoạn cần nhiều slot hơn 12
+  try { _voiceLog((laSanPhamCuoi ? 'Đã lưu vào "Đã tạo" (SẢN PHẨM CUỐI — lưu đĩa): ' : 'Đã lưu vào "Đã tạo" (cache — tắt mở app vẫn còn): ') + '"' + h.ten + '" · ' + Math.floor(h.giay / 60) + ':' + String(Math.round(h.giay % 60)).padStart(2, '0')); } catch (_){}
   giongSuVe();
-  try { _giongSuLuuDia(h); } catch (_){}   // persist đĩa — lỗi lưu không chặn phiên
+  // HAI vùng đĩa (main phân theo cờ `cache`):
+  //   • Sản phẩm cuối (bản gộp / bản gen đơn lẻ) → userData/voice-history.
+  //   • Đoạn tách khi gen kịch bản → userData/voice-cache — cache riêng của
+  //     profile, tắt mở app VẪN CÒN; xoá tay bằng nút Xoá hoặc prune tự động.
+  try { await _giongSuLuuDia(h, !laSanPhamCuoi); } catch (_){}
 }
 
-// ── Lịch sử "Đã tạo" persist qua IPC (userData/voice-history) ───────────────
-// Bản đọc còn đó sau khi reload/app khởi động lại. Audio ghi nhị phân, meta
-// ghi .json cùng tên; main tự prune (≤40 bản, ≤64MB). Thất bại = im lặng:
-// lịch sử trong RAM vẫn dùng bình thường.
-async function _giongSuLuuDia(h){
+// ── Lịch sử "Đã tạo" persist qua IPC — 2 vùng đĩa trong profile ─────────────
+//   • userData/voice-history — sản phẩm cuối (bản gộp / bản gen đơn lẻ).
+//   • userData/voice-cache   — đoạn tách khi gen kịch bản (cache riêng, tắt mở
+//     app vẫn còn). Audio ghi nhị phân, meta .json cùng tên; main tự prune
+//     (≤40 bản, ≤64MB mỗi vùng). Thất bại = im lặng: bản trong RAM vẫn dùng.
+async function _giongSuLuuDia(h, cache){
   try {
     if (!(window.native && window.native.voiceHistorySave) || !h || !h.blob) return;
     if (h.blob.size > 64 * 1024 * 1024) return;   // main cũng prune ở 64MB — bỏ qua bản quá to
     const ext = /(mpeg|mp3)/.test(h.blob.type) ? '.mp3' : '.wav';
     const buf = new Uint8Array(await h.blob.arrayBuffer());
     await window.native.voiceHistorySave({
-      khi: h.khi, ext, buf,
+      khi: h.khi, ext, buf, cache: !!cache,
       meta: { khi: h.khi, ten: h.ten || '', engine: h.engine || '', giay: h.giay || 0, text: h.text || '', ext },
     });
   } catch (_){}
@@ -547,18 +585,29 @@ async function _giongSuNapDia(){
   if (_giongSuDaNap || !(window.native && window.native.voiceHistoryList)) return;
   _giongSuDaNap = true;
   try {
-    const r = await window.native.voiceHistoryList();
-    if (!r || !r.ok || !Array.isArray(r.items) || !r.items.length) return;
-    for (const it of r.items){
-      const m = it.meta || {};
-      if (!m.khi || _giongSu.some(x => x.khi === m.khi)) continue;   // bản vừa tạo trong phiên đã có
-      try {
-        const blob = new Blob([it.buf], { type: m.ext === '.mp3' ? 'audio/mpeg' : 'audio/wav' });
-        _giongSu.push({ url: URL.createObjectURL(blob), blob, ten: m.ten || '', engine: m.engine || '', giay: m.giay || 0, text: m.text || '', khi: m.khi });
-      } catch (_){}
+    // Nạp cả HAI vùng: sản phẩm cuối (voice-history) + đoạn tách cache (voice-cache).
+    const [rCuoi, rCache] = await Promise.all([
+      window.native.voiceHistoryList(false),
+      window.native.voiceHistoryList(true),
+    ]);
+    const vung = [[rCuoi, false], [rCache, true]];
+    let nap = 0;
+    for (const [r, laCache] of vung){
+      if (!r || !r.ok || !Array.isArray(r.items)) continue;
+      for (const it of r.items){
+        const m = it.meta || {};
+        if (!m.khi || _giongSu.some(x => x.khi === m.khi)) continue;   // bản vừa tạo trong phiên đã có
+        try {
+          const blob = new Blob([it.buf], { type: m.ext === '.mp3' ? 'audio/mpeg' : 'audio/wav' });
+          _giongSu.push({ url: URL.createObjectURL(blob), blob, ten: m.ten || '', engine: m.engine || '', giay: m.giay || 0, text: m.text || '', khi: m.khi, cache: laCache });
+          nap++;
+        } catch (_){}
+      }
     }
+    if (!nap) return;
     _giongSu.sort((a, b) => b.khi - a.khi);
     _giongSu = _giongSu.slice(0, 40);
+    try { _voiceLog('Đã nạp ' + _giongSu.length + ' bản "Đã tạo" từ đĩa (gồm cả cache đoạn tách).'); } catch (_){}
     giongSuVe();
   } catch (_){}
 }
@@ -574,12 +623,15 @@ async function voiceGenerate(){
     // Độ dài đoạn theo phần cứng (/api/hardware): GPU nhanh → đoạn dài 500 từ (khỏi tách
     // vụn); máy yếu CPU → 250 từ (nghe được sớm, không dính trần chờ). Mặc định 400.
     const doan = _giongTachDoan(text, (_voiceHW && _voiceHW.recommended && _voiceHW.recommended.seg_words) || 400);
+    try { _voiceLog('Bắt đầu tạo giọng: ' + text.length + ' ký tự · ' + _giongDemTu(text) + ' từ · tách ' + doan.length + ' đoạn.'); } catch (_){}
+    try { novaLog('🎙 Bắt đầu tạo giọng nói (' + _giongDemTu(text) + ' từ · ' + doan.length + ' đoạn)'); } catch (_){}
 
     if (doan.length <= 1){
       // Ngắn — giữ nguyên luồng cũ: 1 task trọn vẹn.
       giongBao('Đang tạo giọng…');
       const { blob, giong, engine, luiVe } = await ttsDoc(text, s => giongBao('Đang tạo… ' + s));
-      await _giongLuuBan(blob, giong, engine, text);
+      await _giongLuuBan(blob, giong, engine, text, '', true);   // bản đơn lẻ = sản phẩm cuối → lưu đĩa
+      try { _voiceLog('Xong 1 bản duy nhất sau ' + Math.round((Date.now() - t0) / 1000) + ' giây.'); } catch (_){}
       giongBao('✓ Xong sau ' + Math.round((Date.now() - t0) / 1000) + ' giây' + (luiVe ? ' (đã lui về ' + _TTS_TEN[engine] + ')' : ''), 'green');
       return;
     }
@@ -593,8 +645,9 @@ async function voiceGenerate(){
         try {
           giongBao('Đang tạo ' + nhan + ' (~' + _giongDemTu(doan[i]) + ' từ)' + (thu > 1 ? ' · thử lần ' + thu : '') + '…');
           const { blob, giong, engine } = await ttsDoc(doan[i], s => giongBao(nhan + ' · ' + s));
-          await _giongLuuBan(blob, giong, engine, doan[i], nhan);
+          await _giongLuuBan(blob, giong, engine, doan[i], nhan, false);   // đoạn tách = cache phiên, chỉ bản gộp mới lưu đĩa
           xong++;
+          try { _voiceLog(nhan + ' xong (' + xong + '/' + doan.length + ').'); } catch (_){}
           giongBao('✓ ' + nhan + ' xong (' + xong + '/' + doan.length + ')' + (i + 1 < doan.length ? ' — đang sang đoạn tiếp…' : ''), 'green');
           loi = null;
           break;
@@ -603,12 +656,15 @@ async function voiceGenerate(){
       if (loi){
         // Dừng ngay: lỗi thường mang tính hệ thống (backend/engine hỏng), chạy tiếp chỉ tốn giờ.
         const conLai = doan.slice(i).reduce((a, d) => a + _giongDemTu(d), 0);
-        giongBao('⚠ ' + nhan + ' lỗi sau 2 lần thử (' + (loi.message || loi) + '). Đã xong ' + xong + '/' + doan.length + ' đoạn (đã lưu trong lịch sử bên dưới). Muốn làm tiếp: dán phần văn bản còn lại (~' + conLai + ' từ) vào ô rồi bấm “Tạo giọng”.', 'red');
+        try { _voiceLog(nhan + ' lỗi sau 2 lần thử: ' + (loi.message || loi) + ' — đã xong ' + xong + '/' + doan.length + ' đoạn.'); } catch (_){}
+        giongBao('⚠ ' + nhan + ' lỗi sau 2 lần thử (' + (loi.message || loi) + '). Đã xong ' + xong + '/' + doan.length + ' đoạn — các đoạn đã xong ĐƯỢC LƯU CACHE riêng của app (tắt mở lại vẫn còn ở khung Đã tạo), ghép được ngay: bấm “🔗 Ghép các đoạn đã xong”. Muốn làm nốt: dán phần văn bản còn lại (~' + conLai + ' từ) vào ô rồi bấm “Tạo giọng”.', 'red');
         return;
       }
     }
-    giongBao('✓ Xong ' + doan.length + ' đoạn sau ' + Math.round((Date.now() - t0) / 1000) + ' giây — bấm “🔗 Ghép các đoạn đã xong” ở khung Đã tạo để có 1 file trọn vẹn.', 'green');
+    try { _voiceLog('Xong đủ ' + doan.length + ' đoạn sau ' + Math.round((Date.now() - t0) / 1000) + ' giây — ghép bằng tay khi muốn.'); } catch (_){}
+    giongBao('✓ Xong ' + doan.length + ' đoạn sau ' + Math.round((Date.now() - t0) / 1000) + ' giây — nghe thử từng đoạn rồi bấm “🔗 Ghép các đoạn đã xong” ở khung Đã tạo để có 1 file trọn vẹn.', 'green');
   } catch (e){
+    try { _voiceLog('Lỗi tạo giọng: ' + (e.message || e)); } catch (_){}
     giongBao('Lỗi: ' + (e.message || e), 'red');
   } finally {
     if (btn){ btn.disabled = false; btn.textContent = '🎙 Tạo giọng'; }
@@ -618,7 +674,7 @@ async function voiceGenerate(){
 function giongSuVe(){
   const box = document.getElementById('giongSu');
   if (!box) return;
-  // Nút gộp: chỉ hiện khi có nhóm ≥2 đoạn auto-split đã xong (kể cả thiếu đoạn).
+  // Nút gộp nhóm auto-split: chỉ hiện khi có nhóm ≥2 đoạn đã xong (kể cả thiếu đoạn).
   const g = _giongNhomDoan();
   const gb = document.getElementById('giongGhepBtn');
   if (gb){
@@ -626,21 +682,63 @@ function giongSuVe(){
     gb.style.display = ok ? '' : 'none';
     if (ok) gb.textContent = '🔗 Ghép các đoạn đã xong (' + g.items.length + '/' + g.N + ')';
   }
+  // Nút ghép theo CHỌN: hiện khi ≥2 bản được đánh dấu.
+  const gc = document.getElementById('giongGhepChonBtn');
+  if (gc) gc.style.display = _giongSuChon.size >= 2 ? '' : 'none';
+  const dem = document.getElementById('giongChonDem');
+  if (dem) dem.textContent = String(_giongSuChon.size);
   if (!_giongSu.length){ box.innerHTML = '<div class="empty-state">Chưa tạo bản nào. Bản đã tạo được lưu trên máy — còn đó khi mở lại app.</div>'; return; }
   box.innerHTML = _giongSu.map((h, i) => {
     const ph = Math.floor(h.giay / 60), gi = Math.round(h.giay % 60);
     return `<div class="grow-row" onclick="giongSuPhat(${i})">
       <span class="gpico">▶</span>
+      <input type="checkbox" title="Chọn để ghép" style="flex:none;margin:0 4px" ${_giongSuChon.has(h.khi) ? 'checked' : ''} onclick="event.stopPropagation()" onchange="giongSuChon(${i})">
       <div style="flex:1;min-width:0">
         <div class="gh-txt">${escapeHtml(h.text.slice(0, 70))}${h.text.length > 70 ? '…' : ''}</div>
-        <div class="gh-meta">${escapeHtml(h.ten)}${h.engine ? ' · ' + (_TTS_TEN[h.engine] || '') : ''} · ${ph}:${String(gi).padStart(2,'0')} · ${_giongKhiNao(h.khi)}</div>
+        <div class="gh-meta">${escapeHtml(h.ten)}${h.engine ? ' · ' + (_TTS_TEN[h.engine] || '') : ''} · ${ph}:${String(gi).padStart(2,'0')} · ${_giongKhiNao(h.khi)}${h.cache ? ' · <span style="color:var(--text-dim)" title="Đoạn tách lưu ở cache riêng của app — tắt mở vẫn còn, khác kho sản phẩm cuối">cache</span>' : ''}</div>
       </div>
       <div class="gh-act">
         <button class="btn sm ghost" onclick="event.stopPropagation();giongSuTai(${i})">Tải</button>
         <button class="btn sm ghost" onclick="event.stopPropagation();giongSuDungChoVideo(${i})">Dùng cho video</button>
+        <button class="btn sm ghost" style="color:var(--red)" onclick="event.stopPropagation();giongSuXoa(${i})">Xoá</button>
       </div>
     </div>`;
   }).join('');
+}
+
+// Đánh dấu / bỏ đánh dấu 1 bản để ghép (theo `khi` — bền với thứ tự mảng).
+function giongSuChon(i){
+  const h = _giongSu[i]; if (!h) return;
+  if (_giongSuChon.has(h.khi)) _giongSuChon.delete(h.khi);
+  else _giongSuChon.add(h.khi);
+  giongSuVe();
+}
+
+// Xoá 1 bản đã tạo (gen nhầm…) — khỏi RAM, khỏi đĩa (qua IPC voice-history-delete).
+async function giongSuXoa(i){
+  const h = _giongSu[i]; if (!h) return;
+  const ph = Math.floor(h.giay / 60), gi = Math.round(h.giay % 60);
+  if (!confirm('Xoá bản này khỏi "Đã tạo"?\n\n' + (h.ten || '(không tên)') + ' · ' + ph + ':' + String(gi).padStart(2,'0'))) return;
+  _giongSuChon.delete(h.khi);   // phòng khi bản bị xoá đang được chọn
+  try { if (_giongAudio && h.url && _giongAudio.src === h.url) _giongAudio.pause(); } catch (_){}
+  try { if (h.url) URL.revokeObjectURL(h.url); } catch (_){}
+  _giongSu.splice(i, 1);
+  try {
+    if (window.native && window.native.voiceHistoryDelete){
+      // h.cache = true → bản nằm ở vùng voice-cache (đoạn tách), không thì voice-history.
+      const r = await window.native.voiceHistoryDelete(h.khi, !!h.cache);
+      if (r && r.error) throw new Error(r.error);
+    }
+  } catch (e){
+    giongBao('Xoá lỗi: ' + (e.message || e), 'red');
+    try { _voiceLog('Xoá bản lỗi: ' + (e.message || e)); } catch (_){}
+    giongSuVe();
+    return;
+  }
+  try { _voiceLog('Đã xoá 1 bản khỏi "Đã tạo" (' + (h.ten || '') + ' · ' + ph + ':' + String(gi).padStart(2,'0') + ').'); } catch (_){}
+  try { novaLog('🎙 Đã xoá 1 bản giọng nói khỏi "Đã tạo" (' + (h.ten || '') + ')'); } catch (_){}
+  giongBao('✓ Đã xoá bản đã chọn.', 'green');
+  giongSuVe();
 }
 
 function _giongKhiNao(t){
@@ -711,48 +809,74 @@ function _giongWav16(ab){   // AudioBuffer → Blob WAV PCM 16-bit
   return new Blob([dv], { type: 'audio/wav' });
 }
 
+// Core ghép dùng chung: decode từng blob → nối qua OfflineAudioContext (tự resample
+// nếu khác sample-rate) → encode WAV PCM 16-bit. Trả về { blob, giay }.
+async function _giongGhepMuc(items, ten){
+  const AC = window.AudioContext || window.webkitAudioContext;
+  const ctx = new AC();
+  const bufs = [];
+  for (const it of items) bufs.push(await ctx.decodeAudioData(await it.h.blob.arrayBuffer()));
+  try { ctx.close(); } catch (_){ }
+  const sr = Math.max(...bufs.map(b => b.sampleRate));
+  const nCh = Math.max(...bufs.map(b => b.numberOfChannels));
+  const total = bufs.reduce((a, b) => a + b.length, 0);
+  const off = new OfflineAudioContext(nCh, total, sr);
+  let t = 0;
+  for (const b of bufs){
+    const s = off.createBufferSource(); s.buffer = b;
+    s.connect(off.destination); s.start(t);
+    t += b.length / b.sampleRate;
+  }
+  const out = await off.startRendering();
+  const blob = _giongWav16(out);
+  const hGhep = {
+    url: URL.createObjectURL(blob), blob,
+    ten, engine: items[0].h.engine, giay: out.duration,
+    text: items.map(x => x.h.text).join(' '), khi: Date.now(),
+  };
+  _giongSu.unshift(hGhep);
+  _giongSu = _giongSu.slice(0, 40);
+  giongSuVe();
+  try { _giongSuLuuDia(hGhep); } catch (_){}   // bản gộp cũng persist đĩa
+  try { _voiceLog('Đã ghép ' + items.length + ' bản thành 1 file WAV ' + Math.round(out.duration) + ' giây — "' + ten + '".'); } catch (_){}
+  try { novaLog('🎙 Đã ghép ' + items.length + ' bản giọng nói → "' + ten + '" (' + Math.round(out.duration) + 's)'); } catch (_){}
+  return hGhep;
+}
+
+// Ghép NHÓM auto-split ("Đoạn i/N · giọng") — thứ tự đúng theo số đoạn.
 async function giongSuGhep(){
   const g = _giongNhomDoan();
   if (!g || g.items.length < 2){ giongBao('Cần ít nhất 2 đoạn đã xong trong lịch sử để ghép.', 'red'); return; }
   const btn = document.getElementById('giongGhepBtn');
   if (btn){ btn.disabled = true; btn.textContent = '⏳ Đang ghép ' + g.items.length + ' đoạn…'; }
   try {
-    // 1) Decode từng blob (mp3/wav đều được).
-    const AC = window.AudioContext || window.webkitAudioContext;
-    const ctx = new AC();
-    const bufs = [];
-    for (const it of g.items) bufs.push(await ctx.decodeAudioData(await it.h.blob.arrayBuffer()));
-    try { ctx.close(); } catch (_){ }
-    // 2) Nối qua OfflineAudioContext — tự resample nếu các đoạn khác sample-rate.
-    const sr = Math.max(...bufs.map(b => b.sampleRate));
-    const nCh = Math.max(...bufs.map(b => b.numberOfChannels));
-    const total = bufs.reduce((a, b) => a + b.length, 0);
-    const off = new OfflineAudioContext(nCh, total, sr);
-    let t = 0;
-    for (const b of bufs){
-      const s = off.createBufferSource(); s.buffer = b;
-      s.connect(off.destination); s.start(t);
-      t += b.length / b.sampleRate;
-    }
-    const out = await off.startRendering();
-    // 3) Encode WAV → lưu vào lịch sử như 1 bản (Tải / Dùng cho video như bản khác).
-    const blob = _giongWav16(out);
-    const hGhep = {
-      url: URL.createObjectURL(blob), blob,
-      ten: 'Gộp ' + g.items.length + ' đoạn · ' + g.giong,
-      engine: g.items[0].h.engine, giay: out.duration,
-      text: g.items.map(x => x.h.text).join(' '), khi: Date.now(),
-    };
-    _giongSu.unshift(hGhep);
-    _giongSu = _giongSu.slice(0, 40);
-    giongSuVe();
-    try { _giongSuLuuDia(hGhep); } catch (_){}   // bản gộp cũng persist đĩa
+    const hGhep = await _giongGhepMuc(g.items, 'Gộp ' + g.items.length + ' đoạn · ' + g.giong);
     const thieu = g.N - g.items.length;
-    giongBao('✓ Đã ghép ' + g.items.length + '/' + g.N + ' đoạn thành 1 file (' + Math.round(out.duration) + ' giây)'
+    giongBao('✓ Đã ghép ' + g.items.length + '/' + g.N + ' đoạn thành 1 file (' + Math.round(hGhep.giay) + ' giây)'
       + (thieu > 0 ? ' — thiếu ' + thieu + ' đoạn chưa xong, render nốt rồi ghép lại sẽ đủ.' : '')
       + ' Bản "Gộp…" nằm đầu lịch sử: bấm Tải hoặc Dùng cho video.', 'green');
   } catch (e){
     giongBao('Lỗi ghép: ' + (e.message || e), 'red');
+    try { _voiceLog('Ghép nhóm lỗi: ' + (e.message || e)); } catch (_){}
+  } finally {
+    if (btn) btn.disabled = false;
+    giongSuVe();
+  }
+}
+
+// Ghép CÁC MỤC ĐÃ CHỌN (checkbox trong khung "Đã tạo") — thứ tự cũ → mới.
+async function giongSuGhepChon(){
+  const chon = _giongSu.filter(h => _giongSuChon.has(h.khi)).sort((a, b) => a.khi - b.khi);
+  if (chon.length < 2){ giongBao('Đánh dấu ít nhất 2 bản (checkbox bên trái mỗi dòng) để ghép.', 'red'); return; }
+  const btn = document.getElementById('giongGhepChonBtn');
+  if (btn){ btn.disabled = true; btn.textContent = '⏳ Đang ghép ' + chon.length + ' mục đã chọn…'; }
+  try {
+    await _giongGhepMuc(chon, 'Gộp ' + chon.length + ' mục đã chọn · ' + new Date().toLocaleTimeString('vi-VN'));
+    _giongSuChon.clear();   // ghép xong bỏ đánh dấu — chọn lại nếu cần
+    giongBao('✓ Đã ghép ' + chon.length + ' mục đã chọn thành 1 file — nằm đầu lịch sử: bấm Tải hoặc Dùng cho video.', 'green');
+  } catch (e){
+    giongBao('Lỗi ghép: ' + (e.message || e), 'red');
+    try { _voiceLog('Ghép theo chọn lỗi: ' + (e.message || e)); } catch (_){}
   } finally {
     if (btn) btn.disabled = false;
     giongSuVe();

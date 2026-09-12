@@ -45,7 +45,7 @@ function switchTool(name){
   if (name === 'toolniche' && typeof nicheInit === 'function') nicheInit();
   if (name === 'toolflow'){ if (typeof tfInit === 'function') tfInit(); if (typeof _autoSaveSyncUI === 'function') _autoSaveSyncUI(); }
   if (name === 'tool2'){ try { t2RenderNguon(); } catch (e) {} }
-  if (name === 'toolsettings'){ if (typeof _relocateSettings === 'function') _relocateSettings(); if (typeof tfInit === 'function') tfInit(); if (typeof loadApiSettings === 'function') try { loadApiSettings(); } catch(e){} if (typeof t11Init === 'function') try { t11Init(); } catch(e){} }
+  if (name === 'toolsettings'){ if (typeof _relocateSettings === 'function') _relocateSettings(); if (typeof tfInit === 'function') tfInit(); if (typeof loadApiSettings === 'function') try { loadApiSettings(); } catch(e){} if (typeof addedApiLoad === 'function') try { addedApiLoad(); } catch(e){} if (typeof t11Init === 'function') try { t11Init(); } catch(e){} }
   if (name === 'toolvoice'){
     // Ba việc độc lập: OmniVoice có thể chưa cài mà giọng đám mây vẫn phải hiện.
     if (typeof voiceInit === 'function') voiceInit();
@@ -53,6 +53,11 @@ function switchTool(name){
     if (typeof giongKiemEngine === 'function') giongKiemEngine();
   }
   if (name === 'toolupscale' && typeof upInit === 'function') upInit();
+  if (name === 'toolviralcut') {
+    if (window.ViralCutPanel && typeof window.ViralCutPanel.init === 'function') {
+      window.ViralCutPanel.init();
+    }
+  }
   if (name === 'toolscript' && typeof tsInit === 'function') tsInit();
   if (name === 'toolvideoagent') {
     if (window.videoAgentPanel && typeof window.videoAgentPanel.init === 'function') {

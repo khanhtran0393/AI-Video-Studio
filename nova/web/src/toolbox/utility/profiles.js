@@ -2,28 +2,46 @@
    Tách verbatim từ src/toolbox/utility.js (2026-09-10) — không sửa thân hàm.
    Toàn bộ là function declaration: chỉ gọi lúc runtime, thứ tự nạp không ảnh hưởng. */
 async function loadCloudState(){
-  if (!window.currentUser || !window.firebaseLoadDoc) return;
-  const uid = window.currentUser.uid;
+  // Đã gỡ đăng nhập → không còn Firestore. NHÁNH LOCAL (IDB) phải LUÔN chạy —
+  // đây là persistence duy nhất còn lại của toolbox (xem MEMORY 2026-09-12f).
+  const hasCloud = !!(window.currentUser && window.firebaseLoadDoc);
+  if (hasCloud) {
+    const uid = window.currentUser.uid;
+    try {
+      // 1. Load state nhẹ từ Firestore
+      const data = await window.firebaseLoadDoc(uid);
+      if (data && data.state) {
+        Object.assign(state, data.state);
+        console.log('✓ Loaded state from Firestore');
+      }
+      // 1b. Load tier + hạn dùng (proUntil). Hết hạn → tự về free.
+      state.userTier = (data && data.tier) || 'free';
+      state.proUntil = (data && data.proUntil) || null;
+      if ((state.userTier === 'pro' || state.userTier === 'max') && state.proUntil && Date.now() > state.proUntil) {
+        state.userTier = 'free';
+        console.log('⏰ Pro đã hết hạn → về Free.');
+      }
+      console.log('✓ User tier:', state.userTier);
+      // Backfill email vào doc để trang admin thấy được (chỉ ghi khi thiếu/khác).
+      if (window.currentUser?.email && data?.email !== window.currentUser.email && window.firebaseSaveDoc) {
+        window.firebaseSaveDoc(window.currentUser.uid, { email: window.currentUser.email }).catch(() => {});
+      }
+    } catch (e) {
+      console.warn('Cloud load failed:', e);
+    }
+  }
+  // 1c/1d/2. Migration + nạp workData/ảnh từ IndexedDB — chạy kể cả khi không đăng nhập.
   try {
-    // 1. Load state nhẹ từ Firestore
-    const data = await window.firebaseLoadDoc(uid);
-    if (data && data.state) {
-      Object.assign(state, data.state);
-      console.log('✓ Loaded state from Firestore');
-    }
-    // 1b. Load tier + hạn dùng (proUntil). Hết hạn → tự về free.
-    state.userTier = (data && data.tier) || 'free';
-    state.proUntil = (data && data.proUntil) || null;
-    if ((state.userTier === 'pro' || state.userTier === 'max') && state.proUntil && Date.now() > state.proUntil) {
-      state.userTier = 'free';
-      console.log('⏰ Pro đã hết hạn → về Free.');
-    }
-    console.log('✓ User tier:', state.userTier);
-    // Backfill email vào doc để trang admin thấy được (chỉ ghi khi thiếu/khác).
-    if (window.currentUser?.email && data?.email !== window.currentUser.email && window.firebaseSaveDoc) {
-      window.firebaseSaveDoc(window.currentUser.uid, { email: window.currentUser.email }).catch(() => {});
-    }
-    // 1c. Migration: ensure all profiles have profileId + workData; migrate global state nếu cần
+    // Nạp snapshot state nhẹ (profiles/kịch bản/prompt) từ IDB — thay vai trò Firestore.
+    try {
+      const saved = await IDB.get('_local/state');
+      if (saved && typeof saved === 'object') {
+        const { profiles, ...rest } = saved;
+        Object.assign(state, rest);
+        if (Array.isArray(profiles) && profiles.length) state.profiles = profiles;
+        console.log('✓ Loaded local state snapshot from IndexedDB');
+      }
+    } catch (e) { console.warn('IDB state snapshot load failed:', e); }
     if (typeof migrateProfiles === 'function' && state.profiles?.length) {
       const migrated = migrateProfiles();
       if (migrated) saveCloudState(true);
@@ -53,21 +71,26 @@ async function loadCloudState(){
       // Không có profile → state rỗng
       loadStateFromProfile(null);
     }
-    // 3. Render tier-dependent UI
-    renderTierBadge();
-    if (typeof initAdminUI === 'function') initAdminUI();
   } catch (e) {
-    console.warn('Cloud load failed:', e);
+    console.warn('Local load failed:', e);
   }
+  // 3. Render tier-dependent UI
+  renderTierBadge();
+  if (typeof initAdminUI === 'function') initAdminUI();
 }
+
+// uid kho IDB local: khi còn đăng nhập dùng uid thật (giữ nguyên key cũ);
+// đã gỡ đăng nhập → '_local' để dữ liệu vẫn được lưu/đọc bền bỉ trên máy.
+function _tbUid(){ return (window.currentUser && window.currentUser.uid) || '_local'; }
 
 function _lightWorkData(wd){ if (!wd || typeof wd !== 'object') return {}; const o = {}; for (const k of _WD_LIGHT_KEYS) if (wd[k] !== undefined) o[k] = wd[k]; return o; }
 
 async function saveCloudState(immediate = false, skipImages = false){
-  if (!window.currentUser || !window.firebaseSaveDoc) return;
+  // KHÔNG early-return khi không đăng nhập nữa: nhánh IDB (persistence máy)
+  // phải luôn chạy; chỉ nhánh Firestore là cần tài khoản (2026-09-12f).
   clearTimeout(_saveTimer);
+  const uid = _tbUid();
   const doSave = async () => {
-    const uid = window.currentUser.uid;
     setSyncStatus('💾 Đang lưu...', 'working');
     // Sync state.{...} → current profile's workData trước khi save
     if (typeof syncStateToCurrentProfile === 'function') syncStateToCurrentProfile();
@@ -82,6 +105,9 @@ async function saveCloudState(immediate = false, skipImages = false){
     const vid = curP ? _curVideoId(curP) : 'v_main';
     // ① LƯU LOCAL (IndexedDB) TRƯỚC — quan trọng nhất. Cloud lỗi (doc >1MB khi nhiều cảnh) KHÔNG được làm mất dữ liệu máy.
     try {
+      // Snapshot state nhẹ (profiles + workData + text) → IDB. Khi đã gỡ auth,
+      // đây là persistence DUY NHẤT cho danh sách profile (trước đây đi lên Firestore).
+      await IDB.set('_local/state', lightState);
       if (pid) {
         const b = uid + '/' + pid + '/' + vid + '/';
         // workData (kịch bản/cảnh/prompt) LUÔN lưu, kể cả light save → sống qua restart, không dính giới hạn 1MB Firestore.
@@ -113,20 +139,25 @@ async function saveCloudState(immediate = false, skipImages = false){
         }
       }
     } catch (e) { console.warn('IDB all-workData save failed:', e); try { setSyncStatus('⚠️ Lưu máy LỖI — dữ liệu có thể mất khi tải lại: ' + String(e && e.message || e).slice(0, 60), 'error'); } catch (_) {} }
-    // ② Rồi lưu cloud (state nhẹ) — profiles đã CẮT workData nặng → doc nhỏ, không vượt 1MB → profile/metadata luôn lưu được.
-    try {
-      const cloudProfiles = (lightState.profiles || []).map(P => (P && Array.isArray(P.videos)) ? { ...P, videos: P.videos.map(v => ({ ...v, workData: _lightWorkData(v.workData) })) } : P);
-      await window.firebaseSaveDoc(uid, {
-        state: { ...lightState, profiles: cloudProfiles },
-        email: window.currentUser?.email || null,   // để trang admin hiện email
-        updatedAt: Date.now()
-      });
-      setSyncStatus('✓ Đã đồng bộ', 'ok');
-    } catch (e) {
-      console.warn('Cloud save failed:', e);
-      // Local đã lưu → không mất gì; chỉ đồng bộ đám mây trượt (thường do storyboard nhiều cảnh > 1MB).
-      if (e.code === 'invalid-argument' || /too large|maximum|exceeds|larger than/i.test(e.message || '')) setSyncStatus('✓ Đã lưu (máy) · cloud bỏ qua (quá lớn)', 'ok');
-      else setSyncStatus('✓ Đã lưu (máy) · cloud lỗi', 'ok');
+    // ② Rồi lưu cloud (state nhẹ) — chỉ khi CÒN đăng nhập. Đã gỡ auth → bỏ qua,
+    // IDB ở trên là persistence chính (2026-09-12f).
+    if (window.currentUser && window.firebaseSaveDoc) {
+      try {
+        const cloudProfiles = (lightState.profiles || []).map(P => (P && Array.isArray(P.videos)) ? { ...P, videos: P.videos.map(v => ({ ...v, workData: _lightWorkData(v.workData) })) } : P);
+        await window.firebaseSaveDoc(window.currentUser.uid, {
+          state: { ...lightState, profiles: cloudProfiles },
+          email: window.currentUser?.email || null,   // để trang admin hiện email
+          updatedAt: Date.now()
+        });
+        setSyncStatus('✓ Đã đồng bộ', 'ok');
+      } catch (e) {
+        console.warn('Cloud save failed:', e);
+        // Local đã lưu → không mất gì; chỉ đồng bộ đám mây trượt (thường do storyboard nhiều cảnh > 1MB).
+        if (e.code === 'invalid-argument' || /too large|maximum|exceeds|larger than/i.test(e.message || '')) setSyncStatus('✓ Đã lưu (máy) · cloud bỏ qua (quá lớn)', 'ok');
+        else setSyncStatus('✓ Đã lưu (máy) · cloud lỗi', 'ok');
+      }
+    } else {
+      setSyncStatus('✓ Đã lưu (máy)', 'ok');
     }
   };
   if (immediate) {
@@ -150,6 +181,11 @@ function initAppDirect(){
   // mất khối đó sau khi user từng vào Cài đặt — không nhất quán). Xem MEMORY.md 2026-09-11c.
   if (typeof _relocateSettings === 'function') _relocateSettings();
   if (typeof restoreUI === 'function') restoreUI();
+  // Nạp state/profile/workData/ảnh từ IDB (persistence local) — trước đây chỉ chạy
+  // từ luồng auth (đã gỡ) nên boot luôn ra state rỗng. Async, không chặn boot.
+  if (typeof loadCloudState === 'function') {
+    try { loadCloudState().catch(e => console.warn('loadCloudState failed:', e)); } catch (e) { console.warn('loadCloudState failed:', e); }
+  }
   if (typeof renderTierBadge === 'function') renderTierBadge();
 }
 
@@ -373,8 +409,8 @@ function loadStateFromProfile(p){
 
 async function mergeLocalWorkData(p, videoId){
   try {
-    const uid = window.currentUser?.uid;
-    if (!uid || !p || !p.profileId) return;
+    const uid = _tbUid();
+    if (!p || !p.profileId) return;
     _ensureVideos(p);
     const vid = videoId || _curVideoId(p);
     let wd = await IDB.get(uid + '/' + p.profileId + '/' + vid + '/workData');
@@ -387,8 +423,8 @@ async function mergeLocalWorkData(p, videoId){
 }
 
 async function loadProfileImages(profileId, videoId){
-  const uid = window.currentUser?.uid;
-  if (!uid || !profileId) return;
+  const uid = _tbUid();
+  if (!profileId) return;
   const p = getProfile();
   const vid = videoId || (p && p.profileId === profileId ? _curVideoId(p) : 'v_main');
   const prof = uid + '/' + profileId + '/';             // key cũ (trước khi tách video)
@@ -604,8 +640,8 @@ async function deleteProfile(){
   const p = getProfile();
   if (!confirm('Xoá profile "' + (p.tenKenh || 'unnamed') + '"?\nTOÀN BỘ kịch bản, cảnh, prompt, ảnh storyboard của profile này sẽ mất. Không hoàn tác được.')) return;
   // Cleanup IDB images cho profile này
-  const uid = window.currentUser?.uid;
-  if (uid && p.profileId) {
+  const uid = _tbUid();
+  if (p.profileId) {
     try {
       await IDB.set(uid + '/' + p.profileId + '/characterImages', null);
       await IDB.set(uid + '/' + p.profileId + '/sceneImages', null);

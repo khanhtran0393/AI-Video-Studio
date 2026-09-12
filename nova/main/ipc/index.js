@@ -24,6 +24,7 @@ const { registerSpyIpc } = require('./spy');
 const { registerFfmpegToolsIpc } = require('./ffmpeg-tools');
 const { registerWhiteboardIpc } = require('../../whiteboard-studio/ipc');
 const { registerSrtTranslateIpc } = require('../../srt-translate/ipc');
+const { registerViralCutIpc } = require('../../viral-cut/ipc');
 
 function registerAllIpc() {
   registerFlowIpc();
@@ -50,6 +51,12 @@ function registerAllIpc() {
   try {
     registerSrtTranslateIpc(ipcMain, { getState: () => state });
   } catch (e) { console.warn('[srt-translate]', e && e.message); }
+
+  // ── Viral Cut — port ViralCut 2.5: video (+SRT tuỳ chọn) → highlight 3 tầng
+  //    (LLM → heuristic → energy) → best-hook → cắt ffmpeg. Dialog thật. ──
+  try {
+    registerViralCutIpc(ipcMain, { getState: () => state });
+  } catch (e) { console.warn('[viral-cut]', e && e.message); }
 
   // ── CLI bridge native: app tự chạy gói Claude/ChatGPT của user (localhost:8795/8796) ──
   try { cliBridge.startAll(); } catch (e) { console.warn('[cli-bridge]', e && e.message); }
