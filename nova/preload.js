@@ -228,6 +228,14 @@ contextBridge.exposeInMainWorld('native', {
     addMusic: (payload) => ipcRenderer.invoke('ffx:add-music', payload),
     toGif: (payload) => ipcRenderer.invoke('ffx:to-gif', payload),
     thumb: (payload) => ipcRenderer.invoke('ffx:thumb', payload),
+    // Gói E: Shorts 9:16 / đóng phụ đề / faststart / loudnorm / bỏ lời / fade
+    pickSub: () => ipcRenderer.invoke('ffx:pick-sub'),
+    shortsVideo: (payload) => ipcRenderer.invoke('ffx:shorts-video', payload),
+    burnSubs: (payload) => ipcRenderer.invoke('ffx:burn-subs', payload),
+    faststart: (payload) => ipcRenderer.invoke('ffx:faststart', payload),
+    normalizeAudio: (payload) => ipcRenderer.invoke('ffx:normalize-audio', payload),
+    removeVocals: (payload) => ipcRenderer.invoke('ffx:remove-vocals', payload),
+    addFades: (payload) => ipcRenderer.invoke('ffx:add-fades', payload),
     // Electron 43 gỡ File.path → drag-drop file vào GUI phải đi qua webUtils.getPathForFile
     // (hàm đồng bộ, chạy trong preload — KHÔNG phải kênh IPC mới).
     pathForFile: (file) => webUtils.getPathForFile(file),

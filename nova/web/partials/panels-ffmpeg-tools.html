@@ -1,6 +1,6 @@
     <!-- ══════ CÔNG CỤ FFMPEG (sidebar dropdown "Công cụ FFmpeg") ══════
-         10 tool: Tách MP3/M4A/WAV / Cắt / Ghép / Loop / Nén / Trích Frame / Xoá Tiếng /
-         Đổi Định Dạng / Ghép Nhạc / Xuất GIF.
+         13 tool: Tách MP3/M4A/WAV / Cắt / Ghép / Loop / Nén / Trích Frame / Xoá Tiếng /
+         Đổi Định Dạng / Ghép Nhạc / Xuất GIF / Shorts 9:16 / Đóng Phụ Đề / Âm Thanh Nâng Cao.
          Logic trong src/toolbox/tool-ffx.js (tiền tố ffx*), IPC ffx:* qua window.native.ffx.
          Progress bar + nút Huỷ được JS chèn động vào hàng hành động khi chạy. -->
 
@@ -612,7 +612,149 @@
           </div>
         </div>
 
-    <!-- 11. KẾT QUẢ GẦN ĐÂY & HÀNG ĐỢI (FFmpeg) -->
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn primary sm" onclick="ffxRunGif()">🎞 Xuất GIF</button>
+          <span id="ffxGifStatus" style="font-size:11.5px"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 11. SHORTS 9:16 (ngang → dọc cho Shorts/TikTok/Reels) -->
+    <div class="tool" id="tool-toolffxshorts">
+      <div class="tool-head">
+        <div class="tool-title">📱 Shorts 9:16</div>
+        <div class="tool-subtitle">Đổi video ngang thành dọc 1080×1920 đăng Shorts/TikTok/Reels: nền mờ (giữ nguyên khung hình, blur phía sau) hoặc cắt giữa (mất 2 bên). Xuất có faststart sẵn.</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px;max-width:640px">
+        <div>
+          <label class="label">Video nguồn</label>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <button class="btn ghost sm" onclick="ffxPickInput('shorts')">📁 Chọn video</button>
+            <span id="ffxShortsInput" style="font-size:11.5px;color:var(--text-muted);word-break:break-all">Chưa chọn</span>
+          </div>
+        </div>
+        <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end">
+          <div>
+            <label class="label">Kiểu chuyển</label>
+            <select id="ffxShortsMode" style="max-width:260px">
+              <option value="blur" selected>Nền mờ (blur phía sau) — giữ trọn khung</option>
+              <option value="crop">Cắt giữa — lấy vùng giữa 9:16</option>
+            </select>
+          </div>
+          <div>
+            <label class="label" style="display:flex;gap:6px;align-items:center;cursor:pointer">
+              <input type="checkbox" id="ffxShortsGpu"> Dùng GPU (nếu máy hỗ trợ)
+            </label>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <button class="btn primary sm" onclick="ffxRunShorts()">📱 Dựng 9:16</button>
+          <button class="btn ghost sm" onclick="ffxEnqueueShorts()" title="Xếp vào hàng đợi chạy tuần tự">⏳ Vào hàng đợi</button>
+          <span id="ffxShortsStatus" style="font-size:11.5px"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 12. ĐÓNG PHỤ ĐỀ CỨNG (SRT/ASS) -->
+    <div class="tool" id="tool-toolffxsubs">
+      <div class="tool-head">
+        <div class="tool-title">💬 Đóng Phụ Đề</div>
+        <div class="tool-subtitle">Chữ nổi trực tiếp lên video (burn-in) từ file SRT hoặc ASS — YouTube/Facebook hiển thị được cả khi tắt tiếng. SRT dùng style dựng sẵn (chọn cỡ chữ), ASS giữ nguyên style gốc.</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px;max-width:640px">
+        <div>
+          <label class="label">Video nguồn</label>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <button class="btn ghost sm" onclick="ffxPickInput('subs')">📁 Chọn video</button>
+            <span id="ffxSubsInput" style="font-size:11.5px;color:var(--text-muted);word-break:break-all">Chưa chọn</span>
+          </div>
+        </div>
+        <div>
+          <label class="label">File phụ đề</label>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <button class="btn ghost sm" onclick="ffxPickSubFile()">💬 Chọn .srt / .ass</button>
+            <span id="ffxSubsFile" style="font-size:11.5px;color:var(--text-muted);word-break:break-all">Chưa chọn</span>
+          </div>
+        </div>
+        <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end">
+          <div>
+            <label class="label">Cỡ chữ (SRT)</label>
+            <select id="ffxSubsSize" style="max-width:160px">
+              <option value="18">18 — nhỏ</option>
+              <option value="24" selected>24 — vừa</option>
+              <option value="32">32 — to</option>
+              <option value="40">40 — rất to</option>
+            </select>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <button class="btn primary sm" onclick="ffxRunSubs()">🔥 Đóng phụ đề</button>
+          <button class="btn ghost sm" onclick="ffxEnqueueSubs()" title="Xếp vào hàng đợi chạy tuần tự">⏳ Vào hàng đợi</button>
+          <span id="ffxSubsStatus" style="font-size:11.5px"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 13. ÂM THANH SÂU (chuẩn hoá LUFS / bỏ lời / fade) -->
+    <div class="tool" id="tool-toolffxaudiofx">
+      <div class="tool-head">
+        <div class="tool-title">🎚 Âm Thanh Nâng Cao</div>
+        <div class="tool-subtitle">3 tác vụ: chuẩn hoá âm lượng EBU R128 (loudnorm 2-pass — âm lượng đều giữa các video), bỏ lời/tách giọng thô (nguồn stereo), và fade mở/khép video + âm thanh.</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px;max-width:640px">
+        <div>
+          <label class="label">Nguồn (video hoặc âm thanh)</label>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <button class="btn ghost sm" onclick="ffxPickInput('audiofx')">📁 Chọn file</button>
+            <span id="ffxAudiofxInput" style="font-size:11.5px;color:var(--text-muted);word-break:break-all">Chưa chọn</span>
+          </div>
+        </div>
+        <div style="border:1px solid var(--border,#2a2d3a);border-radius:8px;padding:10px">
+          <div style="font-size:12.5px;font-weight:600;margin-bottom:8px">1 · Chuẩn hoá âm lượng (EBU R128)</div>
+          <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end">
+            <div>
+              <label class="label">Mục tiêu</label>
+              <select id="ffxNormTarget" style="max-width:280px">
+                <option value="-16" selected>-16 LUFS — YouTube/podcast</option>
+                <option value="-14">-14 LUFS — Spotify/mạng xã hội</option>
+                <option value="-23">-23 LUFS — chuẩn phát sóng</option>
+              </select>
+            </div>
+            <button class="btn primary sm" onclick="ffxRunNorm()">🎚 Chuẩn hoá</button>
+            <button class="btn ghost sm" onclick="ffxEnqueueNorm()" title="Xếp vào hàng đợi chạy tuần tự">⏳</button>
+            <span id="ffxNormStatus" style="font-size:11.5px"></span>
+          </div>
+        </div>
+        <div style="border:1px solid var(--border,#2a2d3a);border-radius:8px;padding:10px">
+          <div style="font-size:12.5px;font-weight:600;margin-bottom:8px">2 · Bỏ lời / tách giọng (thô — nguồn stereo)</div>
+          <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end">
+            <div>
+              <label class="label">Chế độ</label>
+              <select id="ffxVocalMode" style="max-width:320px">
+                <option value="instrumental" selected>Bỏ lời — giữ nhạc nền (karaoke)</option>
+                <option value="vocal">Tách giọng thô — băng trung tâm 200–3800Hz</option>
+              </select>
+            </div>
+            <button class="btn primary sm" onclick="ffxRunVocal()">🎤 Xử lý</button>
+            <span id="ffxVocalStatus" style="font-size:11.5px"></span>
+          </div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:6px">Center-cancel bằng FFmpeg, không phải AI tách tiếng — kết quả tách giọng chỉ tham khảo.</div>
+        </div>
+        <div style="border:1px solid var(--border,#2a2d3a);border-radius:8px;padding:10px">
+          <div style="font-size:12.5px;font-weight:600;margin-bottom:8px">3 · Fade in/out (giây — bỏ trống = không fade)</div>
+          <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end">
+            <div><label class="label">Video mở</label><input type="text" id="ffxFadeVin" placeholder="0.5" style="max-width:90px"></div>
+            <div><label class="label">Video khép</label><input type="text" id="ffxFadeVout" placeholder="0.5" style="max-width:90px"></div>
+            <div><label class="label">Tiếng mở</label><input type="text" id="ffxFadeAin" placeholder="0.5" style="max-width:90px"></div>
+            <div><label class="label">Tiếng khép</label><input type="text" id="ffxFadeAout" placeholder="0.5" style="max-width:90px"></div>
+            <button class="btn primary sm" onclick="ffxRunFades()">🌅 Thêm fade</button>
+            <span id="ffxFadeStatus" style="font-size:11.5px"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 14. KẾT QUẢ GẦN ĐÂY & HÀNG ĐỢI (FFmpeg) -->
     <div class="tool" id="tool-toolffxhistory">
       <div class="tool-head">
         <div class="tool-title">🗂 Kết quả gần đây &amp; Hàng đợi</div>
@@ -634,12 +776,6 @@
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <span id="ffxHistoryStatus" style="font-size:11.5px"></span>
-        </div>
-      </div>
-    </div>
-        <div style="display:flex;gap:8px;align-items:center">
-          <button class="btn primary sm" onclick="ffxRunGif()">🎞 Xuất GIF</button>
-          <span id="ffxGifStatus" style="font-size:11.5px"></span>
         </div>
       </div>
     </div>

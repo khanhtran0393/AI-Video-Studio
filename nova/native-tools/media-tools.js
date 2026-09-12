@@ -1,6 +1,6 @@
 'use strict';
 /* ── media-tools.js — Công cụ FFmpeg cho người dùng cuối (sidebar "Công cụ FFmpeg").
-      10 tool nâng cấp chuyên nghiệp (2026-09-12e):
+      16 tool nâng cấp chuyên nghiệp (2026-09-12e + gói E):
         1. Tách âm thanh: MP3/M4A/WAV/FLAC + smart-copy AAC + loudnorm + kênh/sample + khoảnh đoạn
         2. Cắt: copy nhanh | chính xác frame (re-encode) + fade + multi-segment
         3. Ghép: concat copy | auto-hoà chuẩn (probe khác codec/size/fps → chuẩn hoá rồi ghép) | transitions xfade
@@ -9,9 +9,16 @@
         6. Trích frame: mỗi N giây | tại giây | theo số frame | theo cảnh | lưới contact-sheet (+ timestamp)
         7. Xoá tiếng: tất cả track | giữ 1 track cụ thể + giữ phụ đề mềm
         8. Đổi định dạng: H.264/H.265 (GPU) + giữ sub + scale/fps đích
-        9. Ghép nhạc: mix (volume 2 bên, offset, fade in/out, loop nhạc, loudnorm) | replace
-       10. GIF: loop N lần | palette màu | dithering | slideshow theo cảnh
-      KHÔNG fallback ngầm (Luật 10): mọi lỗi reject lộ liễu với error code FFX_*.
+       9. Ghép nhạc: mix (volume 2 bên, offset, fade in/out, loop nhạc, loudnorm) | replace
+      10. GIF: loop N lần | palette màu | dithering | slideshow theo cảnh
+      11. Shorts 9:16: ngang → dọc 1080x1920 (nền mờ blur-pad | cắt giữa) + faststart
+      12. Đóng phụ đề cứng: SRT (force_style fontsize) | ASS nguyên bản
+      13. Faststart remux: moov atom lên đầu MP4/M4A/MOV — copy stream, không re-encode
+      14. Chuẩn hoá âm lượng: EBU R128 loudnorm 2-pass (đo rồi chỉnh tuyến tính)
+      15. Bỏ lời / tách giọng thô: karaoke center-cancel (cần nguồn stereo)
+      16. Fade in/out: video + audio (mở/khép màn hình và âm thanh)
+     (Gói E 2026-09-12: nhóm 1 đa kênh + nhóm 4 âm thanh sâu.)
+       KHÔNG fallback ngầm (Luật 10): mọi lỗi reject lộ liễu với error code FFX_*.
       Progress: parse time=/fps=/speed= trên stderr → onProgress({pct,fps,speed}). ── */
 const fs = require('fs');
 const os = require('os');
@@ -847,9 +854,252 @@ async function makeThumb(opts) {
   return { ok: true, path: out };
 }
 
+/* ── 11) Shorts 9:16 — video ngang → dọc 1080x1920 (nền mờ blur-pad | cắt giữa) ── */
+const SHORTS_W = 1080, SHORTS_H = 1920;
+
+/* Bộ args encode H.264 dùng chung cho Shorts/burn-sub/fade (GPU nếu máy hỗ trợ, CRF 20). */
+function shortsVArgs(useGpu) {
+  const enc = useGpu ? gpuEncoder('h264') : null;
+  return {
+    args: enc ? ['-c:v', enc].concat(qualityArgs(enc, { crf: 20 })) : ['-c:v', 'libx264', '-crf', '20', '-preset', 'medium'],
+    gpu: enc ? gpuLabel(enc) : null,
+  };
+}
+
+async function shortsVideo(opts) {
+  const o = opts || {};
+  assertInput(o.inputPath, 'FFX_INPUT');
+  assertOutput(o.outputPath);
+  const ext = path.extname(o.outputPath).slice(1).toLowerCase();
+  if (ext !== 'mp4' && ext !== 'mov') { const e = new Error('FFX_FORMAT: Shorts 9:16 chỉ xuất MP4/MOV — đích .' + ext); e.code = 'FFX_FORMAT'; throw e; }
+  const mode = String(o.mode || 'blur');
+  if (mode !== 'blur' && mode !== 'crop') { const e = new Error("FFX_SHORTS_MODE: chế độ phải là 'blur' (nền mờ) hoặc 'crop' (cắt giữa)"); e.code = 'FFX_SHORTS_MODE'; throw e; }
+  const info = await probeStreams(o.inputPath);
+  if (!info.video || !info.video.width || !info.video.height) {
+    const e = new Error('FFX_INPUT: file không chứa video đọc được kích thước — ' + o.inputPath); e.code = 'FFX_INPUT'; throw e;
+  }
+  const dur = info.durationSec;
+  const vw = info.video.width, vh = info.video.height;
+  let args;
+  if (mode === 'crop') {
+    let vf;
+    if (vw / vh <= 9 / 16) {
+      // Nguồn đã dọc ≤ 9:16 — cắt ngang sẽ mất nội dung → scale + pad viền (khai báo rõ, không ngầm).
+      vf = 'scale=' + SHORTS_W + ':' + SHORTS_H + ':force_original_aspect_ratio=decrease,pad=' + SHORTS_W + ':' + SHORTS_H + ':(ow-iw)/2:(oh-ih)/2,format=yuv420p';
+    } else {
+      vf = 'crop=ih*9/16:ih,scale=' + SHORTS_W + ':' + SHORTS_H + ',format=yuv420p';
+    }
+    args = ['-y', '-i', o.inputPath, '-map', '0:v:0', '-map', '0:a:0?', '-vf', vf].concat(shortsVArgs(o.useGpu).args, shortsOutArgs(o));
+  } else {
+    // Nền mờ: phóng phủ khung 1080x1920 → blur + tối nhẹ làm nền, video gốc lồng giữa.
+    const fc = '[0:v]split=2[bg][fg];' +
+      '[bg]scale=' + SHORTS_W + ':' + SHORTS_H + ':force_original_aspect_ratio=increase,crop=' + SHORTS_W + ':' + SHORTS_H + ',boxblur=24:2,eq=brightness=-0.08[bgf];' +
+      '[fg]scale=' + SHORTS_W + ':' + SHORTS_H + ':force_original_aspect_ratio=decrease[fgf];' +
+      '[bgf][fgf]overlay=(W-w)/2:(H-h)/2,format=yuv420p[v]';
+    args = ['-y', '-i', o.inputPath, '-filter_complex', fc, '-map', '[v]', '-map', '0:a:0?'].concat(shortsVArgs(o.useGpu).args, shortsOutArgs(o));
+  }
+  await spawnRun(FFMPEG, args, { totalSec: dur });
+  return { ok: true, path: o.outputPath, mode: mode, size: SHORTS_W + 'x' + SHORTS_H };
+}
+
+/* ── 12) Đóng phụ đề cứng (SRT/ASS) vào video ── */
+function subsFilterPath(p) {
+  // Path trong filter graph phải escape: \ → /, : → \:, ' → \', , ; [ ] → escaped, rồi bọc trong '…'
+  return String(p)
+    .replace(/\\/g, '/')
+    .replace(/:/g, '\\:')
+    .replace(/'/g, "\\'")
+    .replace(/,/g, '\\,')
+    .replace(/;/g, '\\;')
+    .replace(/\[/g, '\\[')
+    .replace(/\]/g, '\\]');
+}
+
+async function burnSubs(opts) {
+  const o = opts || {};
+  assertInput(o.inputPath, 'FFX_INPUT');
+  assertInput(o.subPath, 'FFX_SUB');
+  assertOutput(o.outputPath);
+  const subExt = path.extname(o.subPath).slice(1).toLowerCase();
+  if (subExt !== 'srt' && subExt !== 'ass') { const e = new Error('FFX_FORMAT: file phụ đề phải .srt hoặc .ass — nhận .' + subExt); e.code = 'FFX_FORMAT'; throw e; }
+  const fsz = num(o.fontSize, 'FFX_SUB_SIZE');
+  if (fsz < 10 || fsz > 72) { const e = new Error('FFX_SUB_SIZE: cỡ chữ phụ đề phải 10–72'); e.code = 'FFX_SUB_SIZE'; throw e; }
+  const info = await probeStreams(o.inputPath);
+  if (!info.video) { const e = new Error('FFX_INPUT: file không chứa video — ' + o.inputPath); e.code = 'FFX_INPUT'; throw e; }
+  const f = subsFilterPath(o.subPath);
+  let vf;
+  if (subExt === 'ass') {
+    // ASS tự mang style — đóng nguyên bản.
+    vf = "subtitles='" + f + "'";
+  } else {
+    vf = "subtitles='" + f + "':force_style='FontName=Arial,FontSize=" + fsz +
+      ",PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2,Shadow=1,MarginV=25'";
+  }
+  // Audio: copy khi codec copy-thẳng được; ngược lại re-encode AAC 192k (khai báo rõ trong kết quả).
+  const codec = (info.audioTracks[0] || {}).codec || '';
+  const copyable = ['aac', 'mp3', 'ac3', 'eac3', 'opus', 'flac'].indexOf(codec) >= 0;
+  const v = shortsVArgs(o.useGpu);
+  const args = ['-y', '-i', o.inputPath, '-map', '0:v:0', '-map', '0:a:0?', '-vf', vf]
+    .concat(v.args)
+    .concat(copyable ? ['-c:a', 'copy'] : ['-c:a', 'aac', '-b:a', '192k'])
+    .concat(['-movflags', '+faststart', o.outputPath]);
+  await spawnRun(FFMPEG, args, { totalSec: info.durationSec });
+  return { ok: true, path: o.outputPath, subExt: subExt, audio: copyable ? 'copy:' + codec : 'aac192' };
+}
+
+/* Args audio/faststart đích dùng chung cho Shorts (AAC 192k + moov lên đầu — chuẩn upload mạng xã hội). */
+function shortsOutArgs(o) {
+  return ['-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', o.outputPath];
+}
+
+/* ── 13) Faststart remux — chuyển moov atom lên đầu (copy toàn bộ stream, không re-encode) ── */
+async function faststartRemux(opts) {
+  const o = opts || {};
+  assertInput(o.inputPath, 'FFX_INPUT');
+  assertOutput(o.outputPath);
+  const ext = path.extname(o.outputPath).slice(1).toLowerCase();
+  if (['mp4', 'm4a', 'mov'].indexOf(ext) < 0) {
+    const e = new Error('FFX_FORMAT: faststart chỉ áp dụng cho MP4/M4A/MOV — đích .' + ext); e.code = 'FFX_FORMAT'; throw e;
+  }
+  const info = await probeStreams(o.inputPath);
+  if (info.subCount > 0) {
+    // Phụ đề mềm không copy thẳng sang MP4 được — không âm thầm drop dữ liệu (Luật 10).
+    const e = new Error('FFX_SUBS: file có ' + info.subCount + ' track phụ đề mềm — faststart remux không giữ được; hãy burn cứng (Đóng Phụ Đề) hoặc Đổi Định Dạng trước'); e.code = 'FFX_SUBS'; throw e;
+  }
+  await spawnRun(FFMPEG, ['-y', '-i', o.inputPath, '-map', '0', '-c', 'copy', '-movflags', '+faststart', o.outputPath], { totalSec: info.durationSec });
+  return { ok: true, path: o.outputPath, remux: true };
+}
+
+/* ── 14) Chuẩn hoá âm lượng EBU R128 — loudnorm 2-pass (pass 1 đo → pass 2 chỉnh tuyến tính) ── */
+const NORM_EXT = ['mp3', 'm4a', 'wav', 'flac'];
+
+function normCodecArgs(ext) {
+  return ext === 'mp3' ? ['-c:a', 'libmp3lame', '-b:a', '192k'] :
+    ext === 'm4a' ? ['-c:a', 'aac', '-b:a', '192k'] :
+      ext === 'wav' ? ['-c:a', 'pcm_s16le'] : ['-c:a', 'flac'];
+}
+
+async function normalizeAudio(opts) {
+  const o = opts || {};
+  assertInput(o.inputPath, 'FFX_INPUT');
+  assertOutput(o.outputPath);
+  const ext = path.extname(o.outputPath).slice(1).toLowerCase();
+  if (NORM_EXT.indexOf(ext) < 0) {
+    const e = new Error('FFX_FORMAT: chuẩn hoá âm lượng xuất MP3/M4A/WAV/FLAC — đích .' + ext); e.code = 'FFX_FORMAT'; throw e;
+  }
+  const target = num(o.targetLU, 'FFX_TARGET_LU');
+  if (target < -40 || target > -5) { const e = new Error('FFX_TARGET_LU: mục tiêu LUFS phải trong khoảng -40 … -5'); e.code = 'FFX_TARGET_LU'; throw e; }
+  const dur = await probeDur(o.inputPath);
+  if (dur <= 0) { const e = new Error('FFX_DURATION: không đo được thời lượng nguồn'); e.code = 'FFX_DURATION'; throw e; }
+  const nullDev = process.platform === 'win32' ? 'NUL' : os.devNull;
+  // Pass 1: đo loudness → JSON trên stderr.
+  const measured = await new Promise((resolve, reject) => {
+    const cp = spawn(FFMPEG, ['-hide_banner', '-i', o.inputPath, '-vn', '-af',
+      'loudnorm=I=' + target + ':TP=-1.5:LRA=11:print_format=json', '-f', 'null', nullDev], { windowsHide: true });
+    let err = '';
+    cp.stderr.on('data', (d) => { err += String(d); });
+    cp.on('error', reject);
+    cp.on('close', (code) => {
+      if (code !== 0) { const e = new Error('FFX_LOUDNORM_MEASURE: pass đo âm lượng lỗi (' + code + '): ' + err.slice(-300)); e.code = 'FFX_LOUDNORM_MEASURE'; return reject(e); }
+      const blocks = err.match(/\{[^{}]*\}/g) || [];
+      for (let i = blocks.length - 1; i >= 0; i--) {
+        try { const j = JSON.parse(blocks[i]); if (j.input_i !== undefined) return resolve(j); } catch (_) { /* khối JSON khác — bỏ qua */ }
+      }
+      const e = new Error('FFX_LOUDNORM_MEASURE: không đọc được kết quả đo loudnorm'); e.code = 'FFX_LOUDNORM_MEASURE'; reject(e);
+    });
+  });
+  const mi = Number(measured.input_i), mtp = Number(measured.input_tp), mlra = Number(measured.input_lra), mth = Number(measured.input_thresh);
+  const linear = [mi, mtp, mlra, mth].every(Number.isFinite) && mi > -70;
+  let af;
+  if (linear) {
+    af = 'loudnorm=I=' + target + ':TP=-1.5:LRA=11:measured_I=' + measured.input_i + ':measured_TP=' + measured.input_tp +
+      ':measured_LRA=' + measured.input_lra + ':measured_thresh=' + measured.input_thresh +
+      (Number.isFinite(Number(measured.target_offset)) ? ':offset=' + measured.target_offset : '') + ':linear=true';
+  } else {
+    // Nguồn gần câm / số đo bất thường — 1 pass động (khai báo rõ trong kết quả, không ngầm).
+    af = 'loudnorm=I=' + target + ':TP=-1.5:LRA=11';
+  }
+  await spawnRun(FFMPEG, ['-hide_banner', '-y', '-i', o.inputPath, '-vn', '-af', af].concat(normCodecArgs(ext), [o.outputPath]),
+    { totalSec: dur });
+  return { ok: true, path: o.outputPath, targetLU: target, linear: linear };
+}
+
+/* ── 15) Bỏ lời / tách giọng thô — karaoke center-cancel (cần nguồn stereo) ── */
+async function removeVocals(opts) {
+  const o = opts || {};
+  assertInput(o.inputPath, 'FFX_INPUT');
+  assertOutput(o.outputPath);
+  const ext = path.extname(o.outputPath).slice(1).toLowerCase();
+  if (NORM_EXT.indexOf(ext) < 0) {
+    const e = new Error('FFX_FORMAT: xuất MP3/M4A/WAV/FLAC — đích .' + ext); e.code = 'FFX_FORMAT'; throw e;
+  }
+  const mode = String(o.mode || 'instrumental');
+  if (mode !== 'instrumental' && mode !== 'vocal') {
+    const e = new Error("FFX_VOCAL_MODE: chế độ phải là 'instrumental' (bỏ lời giữ nhạc) hoặc 'vocal' (tách giọng thô)"); e.code = 'FFX_VOCAL_MODE'; throw e;
+  }
+  const info = await probeStreams(o.inputPath);
+  if (!info.audioTracks.length) { const e = new Error('FFX_INPUT: file không có track âm thanh — ' + o.inputPath); e.code = 'FFX_INPUT'; throw e; }
+  const ch = info.audioTracks[0].channels;
+  if (ch !== 2) {
+    const e = new Error('FFX_CHANNELS: bỏ lời/tách giọng cần nguồn STEREO (2 kênh) — nguồn hiện tại ' + ch + ' kênh'); e.code = 'FFX_CHANNELS'; throw e;
+  }
+  // instrumental: center-cancel bằng pan (L−R / R−L) — giọng hát thường nằm giữa 2 kênh nên bị triệt tiêu.
+  // vocal (thô, heuristic): lấy kênh giữa + băng tần lời hát 200–3800 Hz — KHÔNG phải AI separation.
+  const af = mode === 'instrumental' ? 'pan=stereo|c0=c0-c1|c1=c1-c0' : 'pan=mono|c0=0.5*c0+0.5*c1,highpass=f=200,lowpass=f=3800';
+  await spawnRun(FFMPEG, ['-hide_banner', '-y', '-i', o.inputPath, '-vn', '-af', af].concat(normCodecArgs(ext), [o.outputPath]),
+    { totalSec: info.durationSec });
+  return { ok: true, path: o.outputPath, mode: mode, rough: mode === 'vocal' };
+}
+
+/* ── 16) Fade in/out video + audio (mở/khép màn hình và âm thanh) ── */
+async function addFades(opts) {
+  const o = opts || {};
+  assertInput(o.inputPath, 'FFX_INPUT');
+  assertOutput(o.outputPath);
+  const ext = path.extname(o.outputPath).slice(1).toLowerCase();
+  if (ext !== 'mp4' && ext !== 'mov') { const e = new Error('FFX_FORMAT: fade xuất MP4/MOV — đích .' + ext); e.code = 'FFX_FORMAT'; throw e; }
+  const vi = Number(o.videoInSec) || 0, vo = Number(o.videoOutSec) || 0;
+  const ai = Number(o.audioInSec) || 0, ao = Number(o.audioOutSec) || 0;
+  const vals = [['video in', vi], ['video out', vo], ['audio in', ai], ['audio out', ao]];
+  if (!vals.some((x) => x[1] > 0)) { const e = new Error('FFX_FADE: cần ít nhất 1 giá trị fade > 0'); e.code = 'FFX_FADE'; throw e; }
+  for (const pair of vals) {
+    if (pair[1] < 0 || pair[1] > 10) { const e = new Error('FFX_FADE: fade ' + pair[0] + ' phải trong khoảng 0–10 giây'); e.code = 'FFX_FADE'; throw e; }
+  }
+  const info = await probeStreams(o.inputPath);
+  if (!info.video) { const e = new Error('FFX_INPUT: file không chứa video — ' + o.inputPath); e.code = 'FFX_INPUT'; throw e; }
+  const dur = info.durationSec;
+  if (dur <= 0) { const e = new Error('FFX_DURATION: không đo được thời lượng video'); e.code = 'FFX_DURATION'; throw e; }
+  if ((vo > 0 && vo >= dur) || (ao > 0 && ao >= dur)) {
+    const e = new Error('FFX_FADE: fade-out (' + Math.max(vo, ao) + 's) phải NHỎ HƠN thời lượng video (' + Math.round(dur) + 's)'); e.code = 'FFX_FADE'; throw e;
+  }
+  if ((ai > 0 || ao > 0) && !info.audioTracks.length) {
+    const e = new Error('FFX_INPUT: video không có âm thanh — không fade audio được'); e.code = 'FFX_INPUT'; throw e;
+  }
+  const vfParts = [];
+  if (vi > 0) vfParts.push('fade=t=in:st=0:d=' + vi);
+  if (vo > 0) vfParts.push('fade=t=out:st=' + Math.max(0, dur - vo).toFixed(3) + ':d=' + vo);
+  if (vi > 0 || vo > 0) vfParts.push('format=yuv420p');
+  const v = shortsVArgs(o.useGpu);
+  let args = ['-y', '-i', o.inputPath, '-map', '0:v:0', '-map', '0:a:0?'];
+  if (vfParts.length) args.push('-vf', vfParts.join(','));
+  args = args.concat(v.args);
+  if (ai > 0 || ao > 0) {
+    const afParts = [];
+    if (ai > 0) afParts.push('afade=t=in:st=0:d=' + ai);
+    if (ao > 0) afParts.push('afade=t=out:st=' + Math.max(0, dur - ao).toFixed(3) + ':d=' + ao);
+    args = args.concat(['-af', afParts.join(','), '-c:a', 'aac', '-b:a', '192k']);
+  } else {
+    args = args.concat(['-c:a', 'copy']);
+  }
+  args = args.concat(['-movflags', '+faststart', o.outputPath]);
+  await spawnRun(FFMPEG, args, { totalSec: dur });
+  return { ok: true, path: o.outputPath, fade: { videoIn: vi, videoOut: vo, audioIn: ai, audioOut: ao } };
+}
+
 module.exports = {
   cancelRunning, probeMedia, probeStreams, detectScenes,
   extractAudio, cutVideo, cutMulti, concatVideos, concatAuto, concatTransition,
   loopVideo, loopPingPong, loopCrossfade, loopAudio, compressVideo,
   extractFrames, removeAudio, convertMedia, addMusic, toGif, makeThumb,
+  shortsVideo, burnSubs, faststartRemux, normalizeAudio, removeVocals, addFades,
 };

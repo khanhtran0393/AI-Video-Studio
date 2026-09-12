@@ -80,7 +80,7 @@ Chuỗi tuần tự, bước nào FAIL thì dừng cả chuỗi:
 | `npm run test:web-origin` | web origin QA |
 | `npm run test:maintenance` | nova/core maintenance |
 | `npm run test:viral-cut` | test viral-cut (`nova/viral-cut/test.js`) |
-| `npm run test:ffx-smoke` | smoke Công cụ FFmpeg (`nova/scripts/ffx-smoke.js`) — chạy ffmpeg/ffprobe THẬT trên video app đã tạo trong `output/gen-e2e/` (tách audio, cắt, ghép copy/auto/xfade, loop, nén, trích frame, GIF, addMusic, huỷ, validate lỗi lộ liễu); thiếu dữ liệu nguồn → FAIL, không bịa dữ liệu |
+| `npm run test:ffx-smoke` | smoke Công cụ FFmpeg (`nova/scripts/ffx-smoke.js`) — chạy ffmpeg/ffprobe THẬT trên video app đã tạo trong `output/gen-e2e/` (tách audio, cắt, ghép copy/auto/xfade, loop, nén, trích frame, GIF, addMusic, Shorts 9:16, faststart, loudnorm 2-pass, bỏ lời/tách giọng, fade, huỷ, validate lỗi lộ liễu); thiếu dữ liệu nguồn → FAIL, không bịa dữ liệu |
 | `npm run test:auto-fix` | toàn bộ test auto-fix |
 | `npm run check:bundle` | Remotion bundle self-check |
 | `npm run scan:lifecycle` | quét `lifecycle.log` theo §6.5(b): REAL (exitCode≠-1 / cụm GPU+Network+renderer có bằng chứng main sống ≥10s sau / render-recovery-stopped / unresponsive) → exit 1; WARN (crash đơn lẻ, reason=killed, cụm -1 câm cuối session — kill main ngoài/crash treo không phân biệt được) chỉ cảnh báo; NOISE teardown vô hại (`--json` cho CI, `--self-test` chạy fixture) |

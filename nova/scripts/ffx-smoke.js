@@ -88,6 +88,22 @@ async function step(name, fn) {
   await step('toGif 0–3s (256 màu, bayer)', () => mt.toGif({ inputPath: V_A, outputPath: path.join(OUT, 'x.gif'), width: 320, fps: 10, startSec: 0, endSec: 3, loopCount: 0, maxColors: 256, dither: 'bayer' }));
   await step('toGif slideshow scene (trên ghep-auto nhiều cảnh)', () => mt.toGif({ inputPath: path.join(OUT, 'ghep-auto.mp4'), outputPath: path.join(OUT, 'slide.gif'), width: 320, fps: 10, slideshow: true }));
 
+  // ── Gói E (2026-09-12): nhóm 1 đa kênh + nhóm 4 âm thanh sâu ──
+  await step('shortsVideo blur (ngang → 9:16 nền mờ)', () => mt.shortsVideo({ inputPath: V_A, outputPath: path.join(OUT, 'shorts-blur.mp4'), mode: 'blur' }));
+  await step('shortsVideo crop (cắt giữa 9:16)', () => mt.shortsVideo({ inputPath: V_A, outputPath: path.join(OUT, 'shorts-crop.mp4'), mode: 'crop' }));
+  await step('faststartRemux (copy stream, moov lên đầu)', () => mt.faststartRemux({ inputPath: path.join(OUT, 'nen.mp4'), outputPath: path.join(OUT, 'faststart.mp4') }));
+  await step('normalizeAudio 2-pass → m4a -16 LUFS', () => mt.normalizeAudio({ inputPath: loopSrc, outputPath: path.join(OUT, 'norm.m4a'), targetLU: -16 }));
+  // Bỏ lời/tách giọng cần nguồn STEREO — kiểm tra kênh thật của artifact app rồi mới chạy (không bịa dữ liệu).
+  const vocalProbe = await mt.probeStreams(loopSrc);
+  const vch = (vocalProbe.audioTracks[0] || {}).channels || 0;
+  if (vch === 2) {
+    await step('removeVocals instrumental (karaoke bỏ lời)', () => mt.removeVocals({ inputPath: loopSrc, outputPath: path.join(OUT, 'khong-loi.mp3'), mode: 'instrumental' }));
+    await step('removeVocals vocal (giọng thô 200–3800Hz)', () => mt.removeVocals({ inputPath: loopSrc, outputPath: path.join(OUT, 'giong-tho.mp3'), mode: 'vocal' }));
+  } else {
+    results.push('  SKIP removeVocals — nguồn ' + vch + ' kênh (cần stereo); op đã chặn sớm FFX_CHANNELS ở validate');
+  }
+  await step('addFades video+audio 0.5s (re-encode)', () => mt.addFades({ inputPath: path.join(OUT, 'cat.mp4'), outputPath: path.join(OUT, 'fade.mp4'), videoInSec: 0.5, videoOutSec: 0.5, audioInSec: 0.5, audioOutSec: 0.5 }));
+
   // Huỷ: nén CRF 23 file I-MZic 12.4MB (re-encode — chậm) → huỷ sau 1s → phải lỗi FFX_CANCELLED
   try {
     const p = mt.compressVideo({ inputPath: V_MUSIC, outputPath: path.join(OUT, 'cancel.mp4'), crf: 23 });
@@ -116,6 +132,18 @@ async function step(name, fn) {
   await expectFail('addMusic vùng nghe thiếu Từ', () => mt.addMusic({ inputPath: V_A, musicPath: loopSrc, outputPath: path.join(OUT, 'x3.mp4'), playEndSec: 2 }));
   await expectFail('compress maxHeight sai', () => mt.compressVideo({ inputPath: V_A, outputPath: path.join(OUT, 'x4.mp4'), crf: 28, maxHeight: 99 }));
   await expectFail('nguồn không tồn tại', () => mt.cutVideo({ inputPath: 'D:/khong-ton-tai-ffx-smoke.mp4', outputPath: path.join(OUT, 'x5.mp4'), startSec: 0, endSec: 2 }));
+  // ── Gói E: validate lỗi lộ liễu ──
+  await expectFail('shortsVideo mode sai', () => mt.shortsVideo({ inputPath: V_A, outputPath: path.join(OUT, 'x10.mp4'), mode: 'zoom' }));
+  await expectFail('shortsVideo đích .mkv', () => mt.shortsVideo({ inputPath: V_A, outputPath: path.join(OUT, 'x10.mkv'), mode: 'blur' }));
+  await expectFail('burnSubs thiếu file phụ đề', () => mt.burnSubs({ inputPath: V_A, subPath: path.join(OUT, 'khong-ton-tai.srt'), outputPath: path.join(OUT, 'x8.mp4'), fontSize: 24 }));
+  await expectFail('burnSubs phụ đề .vtt', () => mt.burnSubs({ inputPath: V_A, subPath: V_A, outputPath: path.join(OUT, 'x9.mp4'), fontSize: 24 }));
+  await expectFail('burnSubs fontsize sai (ext chặn trước)', () => mt.burnSubs({ inputPath: V_A, subPath: V_A, outputPath: path.join(OUT, 'x9.mp4'), fontSize: 999 }));
+  await expectFail('faststart đích .mkv', () => mt.faststartRemux({ inputPath: V_A, outputPath: path.join(OUT, 'x11.mkv') }));
+  await expectFail('normalizeAudio target sai', () => mt.normalizeAudio({ inputPath: loopSrc, outputPath: path.join(OUT, 'x12.mp3'), targetLU: 5 }));
+  await expectFail('normalizeAudio đích .ogg', () => mt.normalizeAudio({ inputPath: loopSrc, outputPath: path.join(OUT, 'x12.ogg'), targetLU: -16 }));
+  await expectFail('removeVocals mode sai', () => mt.removeVocals({ inputPath: loopSrc, outputPath: path.join(OUT, 'x13.mp3'), mode: 'magic' }));
+  await expectFail('addFades tất cả = 0', () => mt.addFades({ inputPath: V_A, outputPath: path.join(OUT, 'x14.mp4') }));
+  await expectFail('addFades out ≥ thời lượng', () => mt.addFades({ inputPath: path.join(OUT, 'cat.mp4'), outputPath: path.join(OUT, 'x15.mp4'), videoOutSec: 99 }));
 
   // Join copy-mode phải CHẶN SỚM khi clip khác chuẩn (FFX_JOIN_MISMATCH) thay vì xuất file lỗi.
   const small240 = path.join(OUT, '240p.mp4');

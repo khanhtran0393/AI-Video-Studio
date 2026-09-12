@@ -116,6 +116,29 @@ File nÃ y ghi **tráº¡ng thÃ¡i dÃ i háº¡n vÃ  lá»‹ch sá»­ qu
   (5 test mới), `npm run check` EXITCODE=0, live probe thật video YouTube OK
   (heatmap 100 mốc). Còn treo: e2e thật trong app (dán URL → cắt → ghép) chờ
   người dùng chạy; Cách 2 (comment timestamping) chưa làm.
+- [2026-09-12] **Viral Cut — Cách 2: tầng BÌNH LUẬN YouTube bổ trợ heatmap (đã làm)**:
+  mốc giờ khán giả tự đánh dấu ("12:05 đoạn này đỉnh") là tín hiệu phụ xếp lại
+  highlight heatmap, không thay thế. `youtube.js`: `fetchYoutubeComments()` — một lượt
+  `-J --write-comments --extractor-args youtube:max_comments=N,all,all,all` (⚠️ dạng
+  `N,0,0,0` trả 0 bình luận âm thầm — phát hiện bằng live probe, phải dùng `all`);
+  tái dùng `runYtdlp` + `nova-cookies`; không có bình luận → `[]` (khai báo
+  unavailable, không phải lỗi); JSON hỏng → loud `VC_YT_COMMENTS`. Engine thêm 3 hàm
+  thuần deterministic: `parseCommentTimestamps` (regex m:ss/mm:ss/h:mm:ss, lọc
+  phút/giây vô lý + mốc ngoài video), `pickHighlightsByComments` (trọng số
+  1+log2(1+like), bucket 5s, làm mượt 1 lượt, cửa sổ min–max + ngưỡng 35% đỉnh +
+  non-overlap y hệt heatmap, bỏ intro, reason khai báo số bình luận đánh dấu) và
+  `blendCommentBoost` (boost = weight × score bình luận × tỉ lệ phủ, weight mặc định
+  0.25 chặn trần 0.5, score chặn 10, set cửa sổ heatmap KHÔNG đổi). IPC
+  `analyzeYoutube` nhận `withComments`: lỗi fetch → warning khai báo (code VC_YT_*)
+  + `commentsTier.status='unavailable'` kèm reason, không fallback ngầm (Luật 10);
+  result trả thêm `commentsTier` + `warnings` thật + `commentBoost` từng highlight.
+  Panel: checkbox "Kèm bình luận (bổ trợ)" cạnh nút phân tích; dòng info hiển thị
+  " + bình luận (N cửa sổ)" hoặc reason unavailable. `test.js` +4 test (34/34 PASS):
+  parser (bao gồm bẫy "12:90" vô lý, "12:05" vượt duration bị lọc), cluster
+  deterministic, rỗng→[], boost chính xác (1.3/7.3/trần 10/wins rỗng nguyên vẹn).
+  Kiểm định: `node --check` OK, `npm run check` EXITCODE=0, live thật dQw4w9WgXcQ:
+  fetch 60 bình luận (top-60 không có mốc giờ → windows=[] đúng logic). Còn treo:
+  e2e thật trong app với video nhiều comment timestamp + e2e dán URL → cắt → ghép.
 - [2026-09-12] **Khung "📋 API đã thêm" → NGUỒN API cho các công việc dùng AI + mask hiển thị**:
   entry trong `api_added_list` giờ lưu ĐẦY ĐỦ `url` + mảng `keys` (`addedApiOnSave(provider,
   model, keys, url)`); hiển thị mask: key = 4 ký tự đầu + 4 ký tự cuối (`addedApiMaskKey`),
@@ -4664,4 +4687,13 @@ Trợ lý dựng báo đang chạy ngay + sửa preview 9:16/1:1 bị co nhỏ +
 - **Runtime sanity tĩnh**: cross-check 74 ID `getElementById` của tool-ffx.js vs panels-ffmpeg-tools.html → **0 thiếu** (loại nghi vấn drag-drop no-op do lệch ID); toàn bộ 10 panel `tool-toolffx*` + `tool-toolffxhistory` tồn tại.
 - **Kiểm định**: `node --check` OK; `npm run check` **EXIT 0** (syntax 579, shared 19 keys, size 799 file 0 lỗi, toplevel 1637 tên 0 xung đột, docs 36 script khớp, selftest 10/10 — 1 lần docs FAIL "test:viral-cut không nhắc" không tái hiện, xác nhận AGENTS.md có mention ×2; nghi do đọc file chưa flush ngay sau khi sửa); `npm run test:ffx-smoke` **48/48 PASS 0 FAIL** trên dữ liệu thật `output/gen-e2e/` (gồm 3 expectFail mới); restart qua taskkill + `khoidong.bat --silent` → bridge 47280 OK, session 09:17:54Z lifecycle **0 entry crash/unresponsive** (`scan:lifecycle` exit 1 duy nhất do REAL lịch sử 2026-09-11T13:55 — đã giải thích ở 2026-09-12j: bug `media-protocol.js`).
 - **Còn treo**: test tay UI các luồng Gói D với dữ liệu thật (drag-drop, estimate, queue, history); NO_FLOW_KEY chờ user re-auth Flow.
+
+## 2026-09-12n — Gói E FFmpeg: tích hợp nhóm 1 (đa kênh) + nhóm 4 (âm thanh sâu) — 6 op mới, 3 panel mới
+
+- **media-tools.js** (855 → ~1105 dòng, exports +6 cuối — module không nằm trong exports-contract): `shortsVideo` (ngang → 1080×1920: `blur` = blur-pad nền mờ qua filter_complex split/boxblur/overlay; `crop` = `crop=ih*9/16:ih`; nguồn đã dọc ≤9:16 → scale+pad khai báo rõ; xuất +faststart, GPU opt) · `burnSubs` (SRT force_style FontName/FontSize/MarginV hoặc ASS nguyên bản; helper `subsFilterPath` escape `\ : ' , ; [ ]`; audio copy khi codec cho phép, ngược lại AAC 192k — trả `audio:` khai báo rõ) · `faststartRemux` (`-c copy -movflags +faststart`; có track sub mềm → throw `FFX_SUBS` không drop ngầm) · `normalizeAudio` (loudnorm **2-pass thật**: pass 1 đo JSON trên stderr → parse `measured_*` + `offset`, `linear=true`; nguồn gần câm → 1-pass động khai báo `linear:false`) · `removeVocals` (**LƯU Ý: build FFmpeg hiện tại KHÔNG có filter `karaoke`** — smoke bắt được, thay bằng center-cancel `pan=stereo|c0=c0-c1|c1=c1-c0`; mode `vocal` = mid + bandpass 200–3800Hz, khai báo THÔ heuristic; nguồn ≠ stereo → `FFX_CHANNELS`) · `addFades` (fade/afade in-out video+audio, fade-out phải < duration, audio không fade → `-c:a copy`).
+- **IPC** (`main/ipc/ffmpeg-tools.js`): dialog `ffx:pick-sub` (SUB_FILTERS srt/ass) + 6 `handleOp` `ffx:shorts-video / burn-subs / faststart / normalize-audio / remove-vocals / add-fades`; preload expose `pickSub shortsVideo burnSubs faststart normalizeAudio removeVocals addFades`; inventory regen + commit.
+- **UI**: 3 panel mới `#tool-toolffxshorts` (mode + GPU) / `#tool-toolffxsubs` (video + file sub + cỡ chữ) / `#tool-toolffxaudiofx` (3 khung: chuẩn hoá LUFS −16/−14/−23, bỏ lời/tách giọng, fade 4 ô giây) + 3 mục sidebar; **sửa bug cấu trúc từ phiên m: panel history bị lồng trong panel GIF** (thẻ đóng GIF nhảy xuống cuối file) — đã chuyển hàng hành động GIF + `</div></div>` lên đúng chỗ, history giờ là sibling cuối; drop mở rộng: `ffxEnableDrop(toolId, key, labelId, extraExts)` + key `'subs'` tách theo đuôi (video→nguồn, .srt/.ass→file phụ đề); enqueue Shorts/Subs/Norm dùng chung hàng đợi; `ffxRunNorm/Vocal/Fades`, `ffxAudioOutExt` giữ đuôi nguồn hợp lệ.
+- **Smoke** (`ffx-smoke.js`): +7 bước thật (shorts blur/crop, faststart trên `nen.mp4`, loudnorm 2-pass → m4a, bỏ lời + tách giọng trên `loopSrc` — probe stereo trước khi chạy, SKIP trung thực nếu mono; addFades) + 11 expectFail (`FFX_SHORTS_MODE/FORMAT`, `FFX_SUB`, `FFX_FORMAT`, `FFX_TARGET_LU`, `FFX_VOCAL_MODE`, `FFX_FADE`×2) → tổng **66 bước, 0 FAIL**. burnSubs thành công-path CHƯA test được: không có file .srt/.ass thật nào do app/user tạo (chỉ có srt trong venv gradio — không phải dữ liệu user, cấm dùng theo Luật 6) — chờ test tay UI với phụ đề thật.
+- **Kiểm định**: `npm run check` **EXIT=0** (toplevel 1648 tên, docs 36 script, selftest 10/10); ID cross-check 21/21 OK (tmp-ffx-id-check-goiE.js); restart app thật (kill electron PID theo port 47280 → `khoidong.bat --silent`): session 10:16Z lifecycle **không có entry mới**; scan:lifecycle chỉ còn WARN lịch sử (mới nhất 08:27:33Z — trước phiên này).
+- **Còn treo**: (giữ nguyên từ m) test tay UI Gói D/E với dữ liệu thật — đặc biệt burnSubs cần 1 file SRT thật của user; NO_FLOW_KEY; parallel session sở hữu `nova/viral-cut/youtube.js`.
 
