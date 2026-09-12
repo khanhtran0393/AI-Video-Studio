@@ -74,13 +74,13 @@ Chuỗi tuần tự, bước nào FAIL thì dừng cả chuỗi:
 | `npm run test:voice:all` | `test:voice` + `test:voice:integration` |
 | `npm run test:voice:live` | voice live test |
 | `npm run test:voice:ui` | voice UI smoke |
-| `npm run test:viral-cut` | Viral Cut engine unit test (47 test: JSON lỏng lẻo, heuristic, energy, hook, export plan, concat plan, heatmap/chapters/bình luận, **Tier A multimodal local**: keyframe proxy, im lặng, cao độ NSDF + octave guard, fusion renormalize, snap bảo thủ) |
+| `npm run test:viral-cut` | Viral Cut engine unit test (55 test: JSON lỏng lẻo, heuristic, energy, hook, export plan + hợp đồng tỉ lệ `normalizeAspect`/`aspectFilterOf`/`buildExportPlan({aspect})`, concat plan, heatmap/chapters/bình luận, **Tier A multimodal local**: keyframe proxy, im lặng, cao độ NSDF + octave guard, fusion renormalize, snap bảo thủ; **hợp đồng tĩnh panel**: payload export dùng `aspect` không còn `crop916`, default `maxClips=10`, grid 2 khung/hàng, đủ id + binding khung 3) |
 | `npm run test:agent-bridge` | Agent Bridge 47280–47283 |
 | `npm run test:local-media` | local media pipeline |
 | `npm run test:web-origin` | web origin QA |
 | `npm run test:maintenance` | nova/core maintenance |
 | `npm run test:viral-cut` | test viral-cut (`nova/viral-cut/test.js`) |
-| `npm run test:ffx-smoke` | smoke Công cụ FFmpeg (`nova/scripts/ffx-smoke.js`) — chạy ffmpeg/ffprobe THẬT trên video app đã tạo trong `output/gen-e2e/` (tách audio, cắt, ghép copy/auto/xfade, loop, nén, trích frame, GIF, addMusic, faststart (+ already skip), loudnorm 2-pass (+ keepVideo), bỏ lời/tách giọng (+ loudnorm ghép), fade (+ video copy khi chỉ fade tiếng), huỷ, validate lỗi lộ liễu); thiếu dữ liệu nguồn → FAIL, không bịa dữ liệu |
+| `npm run test:ffx-smoke` | smoke Công cụ FFmpeg (`nova/scripts/ffx-smoke.js`) — chạy ffmpeg/ffprobe THẬT trên video app đã tạo trong `output/gen-e2e/` (tách audio, cắt, ghép copy/auto/xfade, loop, nén, trích frame, GIF, addMusic, faststart (+ already skip), loudnorm 2-pass (+ keepVideo), bỏ lời/tách giọng (+ loudnorm ghép), fade (+ video copy khi chỉ fade tiếng), chèn quảng cáo (điểm chèn tay / dò cảnh / chia đều ≤ 20 điểm, đệm màu trước-sau, 3 chế độ tiếng, nhạc nền dưới quảng cáo, timeline trả về), huỷ, validate lỗi lộ liễu); thiếu dữ liệu nguồn → FAIL, không bịa dữ liệu |
 | `npm run test:t7-ai` | Kiểm định các HÀM THUẦN của Trợ lý dựng (`nova/scripts/t7-ai-core-test.js`) — nạp `shared/t7.js` + `utility/t7-ai-core.js` vào sandbox `vm` (stub DOM/window tối thiểu, không mạng, không Electron) rồi test đúng hàng rào BẰNG CODE: `_t7AiSig`/`_t7AiEntrySig` (vân tay lời thoại → phát hiện đề xuất hết hiệu lực), `_t7AiPrunePick` (danh sách trắng trường theo params danh mục trước khi vào sceneSpecs), `_t7AiQuota`/`_t7AiPolicy` (trần ambient/chữ + `maxUse` ĐỌC TỪ METADATA `catalog()` của templates.js), `_t7AiGate`/`_t7AiTrGate` (chặn mẫu bịa/hết quota/lặp liền cảnh), `_t7AiFixLayers` (kẹp toạ độ+màu+preset, bỏ lớp đè/trống) |
 | `npm run test:auto-fix` | toàn bộ test auto-fix |
 | `npm run check:bundle` | Remotion bundle self-check |
