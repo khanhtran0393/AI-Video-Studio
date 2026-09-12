@@ -646,6 +646,11 @@
               <input type="checkbox" id="ffxShortsGpu"> Dùng GPU (nếu máy hỗ trợ)
             </label>
           </div>
+          <div>
+            <label class="label" style="display:flex;gap:6px;align-items:center;cursor:pointer" title="Chỉ áp dụng cho nền mờ: đẩy nội dung lên ~1/4 khung, tránh vùng caption/nút UI mà TikTok/Shorts che ở đáy">
+              <input type="checkbox" id="ffxShortsUp"> Đẩy nội dung lên trên (tránh vùng che UI)
+            </label>
+          </div>
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <button class="btn primary sm" onclick="ffxRunShorts()">📱 Dựng 9:16</button>
@@ -686,12 +691,29 @@
               <option value="40">40 — rất to</option>
             </select>
           </div>
+          <div>
+            <label class="label">Màu chữ</label>
+            <select id="ffxSubsColor" style="max-width:160px">
+              <option value="white" selected>Trắng — viền đen</option>
+              <option value="yellow">Vàng — viền đen</option>
+            </select>
+          </div>
+          <div>
+            <label class="label">Vị trí</label>
+            <select id="ffxSubsPos" style="max-width:180px">
+              <option value="bottom" selected>Đáy màn hình</option>
+              <option value="middle">Giữa màn hình</option>
+              <option value="top">Đỉnh màn hình</option>
+            </select>
+          </div>
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <button class="btn ghost sm" onclick="ffxSubsPreviewRun()" title="Render 1 khung hình có phụ đề (mốc ~30% thời lượng) — không encode cả video">🖼 Xem thử</button>
           <button class="btn primary sm" onclick="ffxRunSubs()">🔥 Đóng phụ đề</button>
           <button class="btn ghost sm" onclick="ffxEnqueueSubs()" title="Xếp vào hàng đợi chạy tuần tự">⏳ Vào hàng đợi</button>
           <span id="ffxSubsStatus" style="font-size:11.5px"></span>
         </div>
+        <div id="ffxSubsPreview"></div>
       </div>
     </div>
 
@@ -720,6 +742,11 @@
                 <option value="-23">-23 LUFS — chuẩn phát sóng</option>
               </select>
             </div>
+            <div>
+              <label class="label" style="display:flex;gap:6px;align-items:center;cursor:pointer">
+                <input type="checkbox" id="ffxNormKeepVideo"> Giữ nguyên hình (chuẩn hoá trong video MP4)
+              </label>
+            </div>
             <button class="btn primary sm" onclick="ffxRunNorm()">🎚 Chuẩn hoá</button>
             <button class="btn ghost sm" onclick="ffxEnqueueNorm()" title="Xếp vào hàng đợi chạy tuần tự">⏳</button>
             <span id="ffxNormStatus" style="font-size:11.5px"></span>
@@ -734,6 +761,11 @@
                 <option value="instrumental" selected>Bỏ lời — giữ nhạc nền (karaoke)</option>
                 <option value="vocal">Tách giọng thô — băng trung tâm 200–3800Hz</option>
               </select>
+            </div>
+            <div>
+              <label class="label" style="display:flex;gap:6px;align-items:center;cursor:pointer">
+                <input type="checkbox" id="ffxVocalNorm" title="Ghép loudnorm vào cùng 1 lần chạy ffmpeg — bản karaoke thường bị nhỏ tiếng"> Chuẩn hoá −16 LUFS sau khi xử lý
+              </label>
             </div>
             <button class="btn primary sm" onclick="ffxRunVocal()">🎤 Xử lý</button>
             <span id="ffxVocalStatus" style="font-size:11.5px"></span>

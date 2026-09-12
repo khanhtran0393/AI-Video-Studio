@@ -142,6 +142,7 @@ function registerFfmpegToolsIpc() {
   // ── Gói E (2026-09-12): nhóm 1 đa kênh + nhóm 4 âm thanh sâu ──
   handleOp('ffx:shorts-video', (p, onProgress) => mediaTools.shortsVideo(Object.assign({}, p, { onProgress })));
   handleOp('ffx:burn-subs', (p, onProgress) => mediaTools.burnSubs(Object.assign({}, p, { onProgress })));
+  handleOp('ffx:sub-preview', (p, onProgress) => mediaTools.previewBurnSubs(Object.assign({}, p, { onProgress })));
   handleOp('ffx:faststart', (p, onProgress) => mediaTools.faststartRemux(Object.assign({}, p, { onProgress })));
   handleOp('ffx:normalize-audio', (p, onProgress) => mediaTools.normalizeAudio(Object.assign({}, p, { onProgress })));
   handleOp('ffx:remove-vocals', (p, onProgress) => mediaTools.removeVocals(Object.assign({}, p, { onProgress })));

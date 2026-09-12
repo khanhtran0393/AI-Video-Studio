@@ -4688,6 +4688,33 @@ Trợ lý dựng báo đang chạy ngay + sửa preview 9:16/1:1 bị co nhỏ +
 - **Kiểm định**: `node --check` OK; `npm run check` **EXIT 0** (syntax 579, shared 19 keys, size 799 file 0 lỗi, toplevel 1637 tên 0 xung đột, docs 36 script khớp, selftest 10/10 — 1 lần docs FAIL "test:viral-cut không nhắc" không tái hiện, xác nhận AGENTS.md có mention ×2; nghi do đọc file chưa flush ngay sau khi sửa); `npm run test:ffx-smoke` **48/48 PASS 0 FAIL** trên dữ liệu thật `output/gen-e2e/` (gồm 3 expectFail mới); restart qua taskkill + `khoidong.bat --silent` → bridge 47280 OK, session 09:17:54Z lifecycle **0 entry crash/unresponsive** (`scan:lifecycle` exit 1 duy nhất do REAL lịch sử 2026-09-11T13:55 — đã giải thích ở 2026-09-12j: bug `media-protocol.js`).
 - **Còn treo**: test tay UI các luồng Gói D với dữ liệu thật (drag-drop, estimate, queue, history); NO_FLOW_KEY chờ user re-auth Flow.
 
+## 2026-09-12o — Gói E cải tiến: 10 mục chất lượng/UX cho 6 op FFmpeg mới
+
+- **Engine (`nova/native-tools/media-tools.js`)**: (1) `addFades` chỉ fade tiếng → `-c:v copy`,
+  không re-encode vô ích (`videoCopy: true`); (2) `normalizeAudio` trả `measured.inputI/TP/LRA`
+  + thêm tuỳ chọn `keepVideo` (chuẩn hoá trong MP4, copy video, đích MP4/MOV); (3) `faststartRemux`
+  quét top-level atom (`mp4MoovFirst`) — moov đã ở đầu thì copy thẳng, trả `already: true`;
+  (4) `burnSubs`: SRT/UTF-16 (BOM LE/BE) tự convert sang UTF-8 file tạm trong %TEMP% (xoá sau khi
+  chạy, khai báo `encoding: 'utf16→utf8'`), byte không hợp lệ UTF-8 → fail lộ liễu `FFX_SUB_ENCODING`
+  (tiếng Việt ANSI là nguy cơ thật); (5) style phụ đề mới: màu trắng/vàng + vị trí đáy/giữa/đỉnh
+  (`subStyleArgs`, force_style Alignment numpad ASS); (6) op mới `previewBurnSubs` — render 1 khung
+  hình có phụ đề (mặc định 30% thời lượng, jpg vào %TEMP%) không encode cả video; IPC
+  `ffx:sub-preview` + preload `subPreview`; (7) `shortsVideo` thêm `pushUp` (overlay tại 25% khung,
+  tránh vùng che UI TikTok/Shorts) + `warn` khi video > 180s; (8) `removeVocals` thêm
+  `normalizeLU` (loudnorm ghép cùng 1 lần chạy ffmpeg, 1-pass động khai báo rõ).
+- **UI**: panel Shorts thêm checkbox "Đẩy nội dung lên trên"; panel Đóng Phụ Đề thêm Màu chữ +
+  Vị trí + nút "🖼 Xem thử" (ảnh qua `avs-media://m/`); panel Âm Thanh Nâng Cao thêm
+  "Giữ nguyên hình" (chuẩn hoá) và "Chuẩn hoá −16 LUFS" (bỏ lời); status Chuẩn hoá hiển thị
+  "nguồn X LUFS → đích Y LUFS (tuyến tính/động)"; hàng đợi chụp thêm các field mới.
+- **Smoke: 76 bước, 0 FAIL** (từ 66): thêm SRT UTF-16 convert + preview + pushUp + fade-tieng-copy +
+  faststart-already + norm-keepVideo + bỏ-lời-norm + 3 expectFail (FFX_SUB_ENCODING, keepVideo đích
+  .m4a, normalizeLU sai). Bài học: step() của ffx-smoke đọc `r.path` — step dạng `async () => {}`
+  phải `return r` nếu không sẽ FAIL ảo "reading 'path'".
+- **B4 auto-thumb history đã có sẵn** (ffxHistoryRender tự thumb mọi video output) — không cần làm.
+- Kiểm định: `npm run check` EXIT=0 (192 kênh IPC), smoke 0 FAIL. Đã commit.
+- Còn lại: user test UI thủ công với SRT thật; C1 (AI separation), C2 (tách tool-ffx2.js khi
+  > 2000 dòng) giữ nguyên lập luận — chưa làm.
+
 ## 2026-09-12n — Gói E FFmpeg: tích hợp nhóm 1 (đa kênh) + nhóm 4 (âm thanh sâu) — 6 op mới, 3 panel mới
 
 - **media-tools.js** (855 → ~1105 dòng, exports +6 cuối — module không nằm trong exports-contract): `shortsVideo` (ngang → 1080×1920: `blur` = blur-pad nền mờ qua filter_complex split/boxblur/overlay; `crop` = `crop=ih*9/16:ih`; nguồn đã dọc ≤9:16 → scale+pad khai báo rõ; xuất +faststart, GPU opt) · `burnSubs` (SRT force_style FontName/FontSize/MarginV hoặc ASS nguyên bản; helper `subsFilterPath` escape `\ : ' , ; [ ]`; audio copy khi codec cho phép, ngược lại AAC 192k — trả `audio:` khai báo rõ) · `faststartRemux` (`-c copy -movflags +faststart`; có track sub mềm → throw `FFX_SUBS` không drop ngầm) · `normalizeAudio` (loudnorm **2-pass thật**: pass 1 đo JSON trên stderr → parse `measured_*` + `offset`, `linear=true`; nguồn gần câm → 1-pass động khai báo `linear:false`) · `removeVocals` (**LƯU Ý: build FFmpeg hiện tại KHÔNG có filter `karaoke`** — smoke bắt được, thay bằng center-cancel `pan=stereo|c0=c0-c1|c1=c1-c0`; mode `vocal` = mid + bandpass 200–3800Hz, khai báo THÔ heuristic; nguồn ≠ stereo → `FFX_CHANNELS`) · `addFades` (fade/afade in-out video+audio, fade-out phải < duration, audio không fade → `-c:a copy`).
@@ -4696,4 +4723,14 @@ Trợ lý dựng báo đang chạy ngay + sửa preview 9:16/1:1 bị co nhỏ +
 - **Smoke** (`ffx-smoke.js`): +7 bước thật (shorts blur/crop, faststart trên `nen.mp4`, loudnorm 2-pass → m4a, bỏ lời + tách giọng trên `loopSrc` — probe stereo trước khi chạy, SKIP trung thực nếu mono; addFades) + 11 expectFail (`FFX_SHORTS_MODE/FORMAT`, `FFX_SUB`, `FFX_FORMAT`, `FFX_TARGET_LU`, `FFX_VOCAL_MODE`, `FFX_FADE`×2) → tổng **66 bước, 0 FAIL**. burnSubs thành công-path CHƯA test được: không có file .srt/.ass thật nào do app/user tạo (chỉ có srt trong venv gradio — không phải dữ liệu user, cấm dùng theo Luật 6) — chờ test tay UI với phụ đề thật.
 - **Kiểm định**: `npm run check` **EXIT=0** (toplevel 1648 tên, docs 36 script, selftest 10/10); ID cross-check 21/21 OK (tmp-ffx-id-check-goiE.js); restart app thật (kill electron PID theo port 47280 → `khoidong.bat --silent`): session 10:16Z lifecycle **không có entry mới**; scan:lifecycle chỉ còn WARN lịch sử (mới nhất 08:27:33Z — trước phiên này).
 - **Còn treo**: (giữ nguyên từ m) test tay UI Gói D/E với dữ liệu thật — đặc biệt burnSubs cần 1 file SRT thật của user; NO_FLOW_KEY; parallel session sở hữu `nova/viral-cut/youtube.js`.
+
+## 2026-09-12o — Viral Cut: Tier A — phát hiện highlight đa tín hiệu CỤC BỘ, deterministic (engine + IPC + UI)
+
+- **Bản chất**: tầng tín hiệu mới chạy HOÀN TOÀN local, không AI/không mạng, **bổ trợ chứ không thay** 3 tầng LLM → heuristic → năng lượng. Bật qua `p.tierA = { enabled, sceneSnap, silenceAware, pitch }`; mặc định TẮT — hành vi cũ không đổi khi user không tick.
+- **Engine** (`nova/viral-cut/engine.js`, 8 primitive export cuối `module.exports`, giữ hợp đồng Luật 1 — `check:exports` 35 module khớp baseline, không cần `--update`):
+  `parseKeyframePackets` (csv/json packet ffprobe → ms, chỉ cờ K, sort+dedupe), `detectSilence` (ngưỡng RMS **tương đối theo đỉnh**, `rel` mặc định 0.10, `minSec` 1.5), `buildBoundaryAnchors` (cut **thắng** gap trong `mergeTolMs` 250), `snapWindowEdges`, `estimatePitchFrames`, `pitchWindowsFromFrames`, `fuseLocalScores`, `pickHighlightsByFusion`.
+- **Ranh giới đơn vị (dễ sai nhất)**: MỌI trường thời gian trong engine là **ms**; `pts_time` của ffprobe là **giây** và chỉ được nhân 1000 **một lần duy nhất** tại biên probe (`parseKeyframePackets` / `probeKeyframes`: `durationMs = durationSec*1000`). `energyWindowsFromPcm` trả `{t}` theo **giây** → `detectSilence`/`pitchWindowsFromFrames`/`snapWindowEdges` quy ra ms ngay chỗ dựng `startMs/endMs`.
+- **`estimatePitchFrames` = coarse-to-fine NSDF** trên PCM rút gọn ~8 kHz, chunked (không cấp full-PCM → hết OOM video dài): frame 2048 mẫu, hop 8, `fMin/fMax` 65–400 Hz, `clarityMin` 0.28, `rmsMin = 0.02·rmsRef` → frame không đủ động là `f0:null` (KHÔNG đoán). **Octave guard (bài học đắt giá)**: NSDF của tín hiệu tuần hoàn lý tưởng có nhiều đỉnh **cao bằng nhau** ở lag bội 2 → 200 Hz liên tục đáp nhầm 100 Hz; global-max + "lag nhỏ nhất trong nhóm tie" **không cứu được** vì coarse grid của sine đúng chu kỳ thường chỉ thấy 1 đỉnh. Cách đúng: lấy **LOCAL MAX ĐẦU TIÊN ≥ clarityMin** khi quét lag từ nhỏ → lớn (= cao độ cao nhất hợp lệ), chỉ fallback global max khi không có local max; refine ±3, tie → lag nhỏ hơn.
+- **Fusion**: `v = wE·energy + wP·pitchVar + wV·voiced`, trọng số gốc 0.6/0.25/0.15 nhưng **renormalize công khai** theo feature THẬT SỰ có mặt và trả về trong `weights` (tổng = 1): không pitchWins → `{energy:1,pitch:0,voiced:0}` (thuần energy, **không loãng điểm**); có voiced nhưng `var=0` mọi window → `{0.8,0,0.2}`. Giá trị không có → `pitch:null`/`voiced:null`, **cấm bịa 0**. `hasPitch` yêu cầu `var>0` (var bằng 0 toàn tập = không mang thông tin).
+- **Chọn theo fusion**: `pickHighlightsByFusion` làm mượt 3, cửa sổ `[minLen..maxLen]`, **FUSION FLOOR = 35% đỉnh** (giống ngưỡng heatmap — vùng yếu cục bộ không chiếm slot), non-overlap deterministic, thang 0–10, reason nêu `%năng lượng / %cao độ / %giọng` hoặc "không có cao độ". **Không kỳ vọng phủ trọn vùng nóng**: với đỉnh hẹp, cửa sổ ngắn nhất cho phép (= `minLen`) điểm cao hơn cửa sổ dài chứa vùng bớt nóng — đó là hành vi đúng, không phải bug.
 

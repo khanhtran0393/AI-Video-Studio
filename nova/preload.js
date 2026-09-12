@@ -232,6 +232,7 @@ contextBridge.exposeInMainWorld('native', {
     pickSub: () => ipcRenderer.invoke('ffx:pick-sub'),
     shortsVideo: (payload) => ipcRenderer.invoke('ffx:shorts-video', payload),
     burnSubs: (payload) => ipcRenderer.invoke('ffx:burn-subs', payload),
+  subPreview: (payload) => ipcRenderer.invoke('ffx:sub-preview', payload),
     faststart: (payload) => ipcRenderer.invoke('ffx:faststart', payload),
     normalizeAudio: (payload) => ipcRenderer.invoke('ffx:normalize-audio', payload),
     removeVocals: (payload) => ipcRenderer.invoke('ffx:remove-vocals', payload),

@@ -99,10 +99,51 @@ async function step(name, fn) {
   if (vch === 2) {
     await step('removeVocals instrumental (karaoke bỏ lời)', () => mt.removeVocals({ inputPath: loopSrc, outputPath: path.join(OUT, 'khong-loi.mp3'), mode: 'instrumental' }));
     await step('removeVocals vocal (giọng thô 200–3800Hz)', () => mt.removeVocals({ inputPath: loopSrc, outputPath: path.join(OUT, 'giong-tho.mp3'), mode: 'vocal' }));
+    await step('removeVocals instrumental + loudnorm -16 (1 lần chạy)', () => mt.removeVocals({ inputPath: loopSrc, outputPath: path.join(OUT, 'khong-loi-norm.mp3'), mode: 'instrumental', normalizeLU: -16 }));
   } else {
     results.push('  SKIP removeVocals — nguồn ' + vch + ' kênh (cần stereo); op đã chặn sớm FFX_CHANNELS ở validate');
   }
   await step('addFades video+audio 0.5s (re-encode)', () => mt.addFades({ inputPath: path.join(OUT, 'cat.mp4'), outputPath: path.join(OUT, 'fade.mp4'), videoInSec: 0.5, videoOutSec: 0.5, audioInSec: 0.5, audioOutSec: 0.5 }));
+
+  // ── Gói E cải tiến (2026-09-12): encoding phụ đề, xem thử 1 khung, copy-stream, already-faststart ──
+  const srtVn = '1\n00:00:00,500 --> 00:00:02,500\nXin chào — phụ đề tiếng Việt có dấu\n\n2\n00:00:03,000 --> 00:00:05,000\nDòng thứ hai kiểm tra style và vị trí\n';
+  const srtUtf16 = path.join(OUT, 'phude-utf16.srt');
+  fs.writeFileSync(srtUtf16, Buffer.from('\ufeff' + srtVn, 'utf16le'));
+  await step('burnSubs SRT UTF-16 → tự convert UTF-8 + style vàng/giữa', async () => {
+    const r = await mt.burnSubs({ inputPath: V_A, subPath: srtUtf16, outputPath: path.join(OUT, 'phude-vang.mp4'), fontSize: 28, color: 'yellow', pos: 'middle' });
+    if (r.encoding !== 'utf16→utf8') throw new Error('không tự convert encoding: ' + r.encoding);
+    return r;
+  });
+  await step('previewBurnSubs (1 khung có phụ đề — không encode cả video)', async () => {
+    const r = await mt.previewBurnSubs({ inputPath: V_A, subPath: srtUtf16, fontSize: 28, color: 'yellow', pos: 'middle' });
+    if (!r.ok || !fs.existsSync(r.path)) throw new Error('không tạo được ảnh xem thử');
+    return r;
+  });
+  const srtBad = path.join(OUT, 'phude-ansi.srt');
+  fs.writeFileSync(srtBad, Buffer.concat([
+    Buffer.from('1\n00:00:00,500 --> 00:00:02,500\nTieng Viet ANSI loi: ', 'utf8'),
+    Buffer.from([0xe0, 0xe1, 0xe2, 0x20, 0x6e, 0x68, 0x69, 0x65, 0x75, 0x0d, 0x0a]),
+  ]));
+  await step('shortsVideo blur + pushUp (nội dung đẩy lên vùng an toàn UI)', () => mt.shortsVideo({ inputPath: V_A, outputPath: path.join(OUT, 'shorts-pushup.mp4'), mode: 'blur', pushUp: true }));
+  await step('addFades chỉ fade tiếng (video copy — không re-encode)', async () => {
+    const src = await mt.probeStreams(path.join(OUT, 'cat.mp4'));
+    const r = await mt.addFades({ inputPath: path.join(OUT, 'cat.mp4'), outputPath: path.join(OUT, 'fade-tieng.mp4'), audioInSec: 0.5, audioOutSec: 0.5 });
+    if (r.videoCopy !== true) throw new Error('video vẫn bị re-encode dù chỉ fade tiếng');
+    const outInfo = await mt.probeStreams(r.path);
+    if (!outInfo.video || outInfo.video.codec !== src.video.codec) throw new Error('codec video bị đổi — copy stream thất bại');
+    return r;
+  });
+  await step('faststartRemux trên file đã faststart → already (copy thẳng)', async () => {
+    const r = await mt.faststartRemux({ inputPath: path.join(OUT, 'faststart.mp4'), outputPath: path.join(OUT, 'faststart-2.mp4') });
+    if (r.already !== true || r.remux !== false) throw new Error('moov đã ở đầu mà vẫn remux lại');
+    return r;
+  });
+  await step('normalizeAudio keepVideo (chuẩn hoá trong MP4, copy video) + số đo LUFS', async () => {
+    const r = await mt.normalizeAudio({ inputPath: V_A, outputPath: path.join(OUT, 'norm-video.mp4'), targetLU: -16, keepVideo: true });
+    if (r.keepVideo !== true) throw new Error('keepVideo không được ghi nhận');
+    if (!r.measured || !Number.isFinite(r.measured.inputI)) throw new Error('thiếu số đo measured.inputI');
+    return r;
+  });
 
   // Huỷ: nén CRF 23 file I-MZic 12.4MB (re-encode — chậm) → huỷ sau 1s → phải lỗi FFX_CANCELLED
   try {
@@ -144,6 +185,9 @@ async function step(name, fn) {
   await expectFail('removeVocals mode sai', () => mt.removeVocals({ inputPath: loopSrc, outputPath: path.join(OUT, 'x13.mp3'), mode: 'magic' }));
   await expectFail('addFades tất cả = 0', () => mt.addFades({ inputPath: V_A, outputPath: path.join(OUT, 'x14.mp4') }));
   await expectFail('addFades out ≥ thời lượng', () => mt.addFades({ inputPath: path.join(OUT, 'cat.mp4'), outputPath: path.join(OUT, 'x15.mp4'), videoOutSec: 99 }));
+  await expectFail('burnSubs encoding lỗi (ANSI không phải UTF-8)', () => mt.burnSubs({ inputPath: V_A, subPath: srtBad, outputPath: path.join(OUT, 'x16.mp4'), fontSize: 24 }));
+  await expectFail('normalizeAudio keepVideo đích .m4a', () => mt.normalizeAudio({ inputPath: V_A, outputPath: path.join(OUT, 'x17.m4a'), targetLU: -16, keepVideo: true }));
+  await expectFail('removeVocals normalizeLU sai (3 LUFS)', () => mt.removeVocals({ inputPath: loopSrc, outputPath: path.join(OUT, 'x18.mp3'), mode: 'instrumental', normalizeLU: 3 }));
 
   // Join copy-mode phải CHẶN SỚM khi clip khác chuẩn (FFX_JOIN_MISMATCH) thay vì xuất file lỗi.
   const small240 = path.join(OUT, '240p.mp4');
