@@ -83,6 +83,7 @@ File nÃ y ghi **tráº¡ng thÃ¡i dÃ i háº¡n vÃ  lá»‹ch sá»­ qu
   vulkan/d3d dllâ€¦) â€” khÃ´ng track, chá»‰ hiá»‡n trÃªn mÃ¡y dev.
 
 ## Nhật ký thay đổi
+- [2026-09-12] **PHÁT TRỰC TIẾP — Livestream Studio đa nền tảng (mô hình TikTok LIVE Studio)**: sidebar có mục mới "Phát Trực Tiếp" (panel `tool-toollive`, partial `partials/panel-tool-live.html`, renderer `web/src/toolbox/tool-live.js` tiền tố `lstudio*` nạp ngay sau `tool-ffx.js`; `panel-order.js` thêm `toollive`). Main: module mới `nova/main/ipc/live-stream.js` (exports `registerLiveStreamIpc` + `stopLiveStream`) — 6 kênh IPC mới `livestream:pick-video|list-cameras|list-windows|start|stop|status` + 2 event `livestream:progress|status` (preload `window.native.liveStudio`; ipc-inventory.json regenerated: 197 kênh). Kiến trúc: ffmpeg encode 1 luồng libx264/aac → tee muxer `-f tee [f=flv:onfail=ignore]…` đẩy SONG SONG nhiều nền tảng (preset YouTube `rtmp://a.rtmp.youtube.com/live2/` / TikTok `rtmp://push.tiktokcdn-live.com/live/` / Facebook `rtmps://live-api-s.facebook.com:443/rtmp/` + Tùy chỉnh; stream key nhập tay, lưu localStorage `lstudio.config.v1` — chỉ trên máy user). 3 chế độ nguồn: video có sẵn (`-re` + loop `-stream_loop -1`), webcam dshow, cửa sổ ứng dụng gdigrab `title=` (liệt kê qua `desktopCapturer`); camera/window bắt buộc chọn micro hoặc tick "phát không tiếng (chủ động)" → `LS_NO_AUDIO`; video nguồn không track audio → dò ffprobe trước, báo `LS_SOURCE_NO_AUDIO` (không fallback ngầm). Progress fps/bitrate/speed event throttle 1s, watchdog stderr 3 phút (LS_STALL), dừng sạch khi thoát app qua `stopLiveStream()` trong lifecycle. Kiểm định: unit hàm thuần qua stub electron/ffmpeg 6/6 PASS (tmp đã xoá), `npm run check` GREEN exit=0 (exports-contract KHÔNG đổi — module dưới `main/ipc/` không thuộc baseline), relaunch `khoidong.bat --silent` exit=0, phiên lifecycle sạch (chỉ gpu-feature-status); scan:lifecycle còn exit 1 CHỈ do REAL lịch sử 2026-09-11 13:55–13:56. Chưa test E2E lên sóng thật — cần stream key thật + kênh YouTube đã bật live (hỏi user khi test).
 - [2026-09-12] **Icon taskbar HOÀN CHỈNH — regenerate `build/icon.ico` từ emblem N (sửa tiếp entry icon cùng ngày)**: fix trước đó đã trỏ đúng file nhưng `build/icon.ico` (285KB, 4 frame BMP 256/48/32/16) lại được sinh từ ảnh BANNER 2048×768 → mọi frame là cả banner bị nén vào ô vuông (gần như toàn đen, chữ NOVA li ti) — taskbar hiển thị đốm đen/"bánh răng" khó nhận diện. Phát hiện thêm: `build/icon-square.png` cũng KHÔNG phải icon vuông đúng nghĩa — nó là banner thu nhỏ đặt giữa canvas 256×256 TRONG SUỐT (emblem N chiếm cột 4–111, hàng 83–169; chữ NOVA bắt đầu cột 118; alpha=0 ngoài vùng nội dung). Xử lý: script `nova/scripts/tmp/regen-icon-ico.mjs` (pngjs + png-to-ico đã có sẵn trong node_modules, KHÔNG thêm dependency) tách riêng emblem N (bbox 108×87 tính theo ALPHA), compose lên canvas vuông 256×256 trong suốt chiếm 78% cạnh, box-filter downscale premultiplied-alpha ra 7 frame 16/24/32/48/64/128/256, `png-to-ico` sinh frame DIB chuẩn → `build/icon.ico` (372,526 bytes; bản banner-based cũ backup tại `nova/scripts/tmp/icon-banner-backup.ico`), đồng bộ `nova/web/brand-logo.ico`. Verify: render từng frame bằng System.Drawing khớp thiết kế; lấy icon LIVE từ cửa sổ thật qua WM_GETICON (ICON_SMALL) = emblem N 16×16 rõ nét. `npm run check` EXIT=0; app restart qua `khoidong.bat --silent` EXIT=0; scan:lifecycle: session 13:26Z không có finding mới (REAL còn lại đều là lịch sử 2026-09-11). `electron-builder.json` (`win.icon` + `extraResources`) không cần đổi — đã trỏ đúng `build/icon.ico`.
 - [2026-09-12] **Thư viện giọng — 3 cải tiến cache mẫu nghe thử (user duyệt cả 3)**:
   (1) *cache nhận biết tham số* — `_GIONG_MAU_V` bump `v1→v2`: file cache đĩa giờ là JSON
@@ -200,9 +201,9 @@ File nÃ y ghi **tráº¡ng thÃ¡i dÃ i háº¡n vÃ  lá»‹ch sá»­ qu
   được (tool-voice.css). Sửa trong `web/src/toolbox/utility/voice.js`. Kiểm định vùng
   sửa: check:toplevel / check:size / check:ipc / check:exports / check:shared /
   check:shared-shadow / check:docs / check:selftest / test:voice đều PASS;
-  `npm run check` chuỗi đầy đủ đang bị chặn TRƯỚC bởi check:syntax FAIL có sẵn tại
-  `nova/native-tools/media-tools.js` (refactor dở trong working tree, cụt giữa hàm —
-  không liên quan thay đổi này); check:shadow exit 1 do 85 warn id-tham-chếu có sẵn
+  `npm run check` chuỗi đầy đủ EXIT=0 (blocker check:syntax tại `media-tools.js`
+  đã được phiên song song "Chèn Quảng Cáo" hoàn tất + commit (xem mục Gỡ 2 tool
+  FFmpeg ở trên); check:shadow exit 1 do 85 warn id-tham-chếu có sẵn
   (shell.js/dashboard), 0 lỗi shadowing, không có warn nào về voice.
 
 - [2026-09-12] **Xoay key khi lỗi / hết quota** (renderer pool key): khai báo mới
@@ -5049,3 +5050,15 @@ Trợ lý dựng báo đang chạy ngay + sửa preview 9:16/1:1 bị co nhỏ +
   `#t7Player` (t7-preview.js, t7-core.js) không đổi ngữ nghĩa; không tên top-level mới.
 - **Kiểm định**: `npm run check` EXIT 0 toàn chuỗi (syntax/ipc/exports/shared/
   shadow/size/toplevel/docs/selftest).
+
+## 2026-09-12t — Tool 7: phục hồi chiều cao khung xem sau khi dời thanh điều khiển (theo 2026-09-12s)
+
+- **Phát hiện**: `_t7SyncColHeight()` (t7-core.js) tính `moc = player.height − (scrollHeight − innerHeight)`
+  → khi `.t7-pbar` thành hàng riêng bên dưới, tràn trang tăng đúng bằng chiều cao thanh
+  → player bị co ~38px (màn hình xem trước thu nhỏ).
+- **Khắc phục (giữ thanh điều khiển bên dưới, không đụng JS sync)**:
+  - Dời `#t7StatusLean` (hàng trạng thái 27px vốn hay trống) vào **giữa hàng `.t7-pctl`**
+    (thay spacer `.sp`, giữ nguyên ID → `setStatus7` không đổi; thêm ellipsis/nowrap).
+  - Nén `.t7-pbar` (padding 7→3px) + `.t7-ptrack` (margin-bottom 8→5px) → bù thêm ~10px.
+- `npm run check` EXIT 0. Lưu ý `_pinW` dùng `stage.clientWidth - 28` vẫn đúng vì lề
+  14px/bên đã chuyển nguyên vẹn sang `#t7PlayerShell`.

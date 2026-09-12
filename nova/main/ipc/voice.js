@@ -80,13 +80,40 @@ ipcMain.handle('voice-engines', () => require('../../voice-native/engines').list
     const safe = String(key || '').replace(/[/\\:*?"<>|]+/g, '_').replace(/\.\.+/g, '_').slice(0, 180);
     return path.join(app.getPath('userData'), 'voice-sample-cache', safe + '.txt');
   }
+  function voiceSampleDir(){
+    return path.join(app.getPath('userData'), 'voice-sample-cache');
+  }
+  // Trần dung lượng cache mẫu nghe thử: vượt trần thì dọn file CŨ NHẤT trước (LRU)
+  // để cache không phình vô hạn khi người dùng nghe thử nhiều giọng.
+  const VOICE_SAMPLE_CAP_BYTES = 50 * 1024 * 1024;
+  function voiceSampleGomDu(){
+    try {
+      const dir = voiceSampleDir();
+      if (!fs.existsSync(dir)) return;
+      const files = fs.readdirSync(dir).filter((f) => f.endsWith('.txt')).map((f) => {
+        try {
+          const st = fs.statSync(path.join(dir, f));
+          return { file: path.join(dir, f), bytes: st.size, mtime: st.mtimeMs };
+        } catch { return null; }
+      }).filter(Boolean);
+      let total = files.reduce((s, x) => s + x.bytes, 0);
+      files.sort((a, b) => a.mtime - b.mtime);   // cũ nhất trước
+      for (const x of files){
+        if (total <= VOICE_SAMPLE_CAP_BYTES) break;
+        try { fs.rmSync(x.file, { force: true }); total -= x.bytes; } catch (_) {}
+      }
+    } catch (_) {}
+  }
   ipcMain.handle('voice-sample-save', (_e, payload = {}) => {
     try {
-      const { key, dataUrl } = payload || {};
+      const { key, dataUrl, sp, p } = payload || {};
       if (!key || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:') || dataUrl.length > 16 * 1024 * 1024) return { error: 'DỮ_LIỆU_KHÔNG_HỢP_LỆ' };
       const file = voiceSampleFile(key);
       fs.mkdirSync(path.dirname(file), { recursive: true });
-      fs.writeFileSync(file, dataUrl, 'utf8');
+      // Format v2: gói tham số tốc độ/cao độ lúc gen cùng dataURL — renderer đọc ra
+      // so khớp, lệch tham số thì gen lại và ghi đè (đĩa luôn 1 file / giọng + engine).
+      fs.writeFileSync(file, JSON.stringify({ v: 2, sp: typeof sp === 'number' ? sp : null, p: typeof p === 'number' ? p : null, dataUrl }), 'utf8');
+      voiceSampleGomDu();
       return { ok: true };
     } catch (e) { return { error: String((e && e.message) || e) }; }
   });
@@ -94,10 +121,35 @@ ipcMain.handle('voice-engines', () => require('../../voice-native/engines').list
     try {
       const file = voiceSampleFile(key);
       if (!fs.existsSync(file)) return { missing: true };
-      const dataUrl = fs.readFileSync(file, 'utf8');
-      if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) return { missing: true };
-      return { ok: true, dataUrl };
+      const raw = fs.readFileSync(file, 'utf8');
+      if (typeof raw !== 'string' || !raw.length) return { missing: true };
+      // Format v2 (JSON có tham số): trả nguyên object để renderer so khớp tham số.
+      try {
+        const obj = JSON.parse(raw);
+        if (obj && typeof obj.dataUrl === 'string' && obj.dataUrl.startsWith('data:')){
+          return { ok: true, dataUrl: obj.dataUrl, sp: typeof obj.sp === 'number' ? obj.sp : null, p: typeof obj.p === 'number' ? obj.p : null };
+        }
+      } catch (_) {}
+      // File v1 cũ (dataURL trần) — trả sp/p trống, renderer coi là lệch tham số
+      // và sẽ gen lại + ghi đè, không cần migration.
+      if (raw.startsWith('data:')) return { ok: true, dataUrl: raw, sp: null, p: null };
+      return { missing: true };
     } catch (e) { return { missing: true }; }
+  });
+  // Danh sách mẫu đã cache trên đĩa: renderer dùng để vẽ badge "đã có mẫu — phát
+  // ngay" trên nút ▶ mà không phải probe từng giọng (mỗi lần load là 1 dataURL nặng).
+  ipcMain.handle('voice-sample-list', () => {
+    try {
+      const dir = voiceSampleDir();
+      if (!fs.existsSync(dir)) return { ok: true, items: [] };
+      const items = fs.readdirSync(dir).filter((f) => f.endsWith('.txt')).map((f) => {
+        try {
+          const st = fs.statSync(path.join(dir, f));
+          return { key: f.slice(0, -4), bytes: st.size, mtime: st.mtimeMs };
+        } catch { return null; }
+      }).filter(Boolean);
+      return { ok: true, items };
+    } catch (e) { return { error: String((e && e.message) || e) }; }
   });
   ipcMain.handle('voice-sample-clear', (_e, key) => {
     try {

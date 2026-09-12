@@ -244,6 +244,26 @@ contextBridge.exposeInMainWorld('native', {
       return () => ipcRenderer.removeListener('ffx:progress', listener);
     },
   },
+  // Phát Trực Tiếp (Livestream Studio): đa nền tảng RTMP (YouTube/TikTok/Facebook/Tùy chỉnh),
+  // nguồn video có sẵn / webcam / cửa sổ ứng dụng — ffmpeg tee đẩy song song, progress + dừng.
+  liveStudio: {
+    pickVideo: () => ipcRenderer.invoke('livestream:pick-video'),
+    listCameras: () => ipcRenderer.invoke('livestream:list-cameras'),
+    listWindows: () => ipcRenderer.invoke('livestream:list-windows'),
+    start: (payload) => ipcRenderer.invoke('livestream:start', payload || {}),
+    stop: () => ipcRenderer.invoke('livestream:stop'),
+    status: () => ipcRenderer.invoke('livestream:status'),
+    onProgress: (cb) => {
+      const listener = (_e, s) => cb && cb(s);
+      ipcRenderer.on('livestream:progress', listener);
+      return () => ipcRenderer.removeListener('livestream:progress', listener);
+    },
+    onStatus: (cb) => {
+      const listener = (_e, s) => cb && cb(s);
+      ipcRenderer.on('livestream:status', listener);
+      return () => ipcRenderer.removeListener('livestream:status', listener);
+    },
+  },
   // Thư viện Hiệu ứng âm thanh (SFX) dựng sẵn.
   sfxLibrary: () => ipcRenderer.invoke('nova:sfxLibrary:list'),
   // Flow tích hợp sẵn (trình duyệt nhúng) — UI gọi flowBridge → window.native.flow.
@@ -297,6 +317,7 @@ contextBridge.exposeInMainWorld('native', {
   voiceSampleSave: (payload) => ipcRenderer.invoke('voice-sample-save', payload),
   voiceSampleLoad: (key) => ipcRenderer.invoke('voice-sample-load', key),
   voiceSampleClear: (key) => ipcRenderer.invoke('voice-sample-clear', key),
+  voiceSampleList: () => ipcRenderer.invoke('voice-sample-list'),
   // Lịch sử "Đã tạo" persist trên đĩa (userData/voice-history) — tách khỏi
   // voice-sample-cache vì việc đổi engine sẽ xoá SẠCH thư mục cache mẫu.
   voiceHistorySave: (payload) => ipcRenderer.invoke('voice-history-save', payload),

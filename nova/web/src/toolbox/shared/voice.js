@@ -51,7 +51,15 @@ let _giongPhat = '';
 let _giongAudio = null;
 
 // === L?: const _giongMau ===
+// key = voice key → { url: objectURL, sp: tốc độ lúc gen, p: cao độ lúc gen }
 const _giongMau = new Map();
+
+// === L?: let _giongMauSan ===
+// tập KEY ĐĨA (đã sanitize bởi main, vd 'v2_omni_omni_factory_en_male_deep') của
+// các mẫu nghe thử đang có trên đĩa — vẽ badge "phát ngay" trên nút ▶; nạp từ
+// voice-sample-list khi backend sẵn sàng. Voice key gốc chứa ':' bị sanitize thành
+// '_' nên KHÔNG tách ngược được: so khớp giọng luôn qua _giongMauSanCo() ở utility.
+let _giongMauSan = new Set();
 
 // === L?: let _giongSu ===
 let _giongSu = [];
@@ -101,7 +109,10 @@ let _giongTao = '';           // khoá đang TẠO mẫu nghe thử (⏳) — ch
 let _giongBusy = false;
 
 // === L479 (5f2e1d26): const _GIONG_MAU_V ===
-const _GIONG_MAU_V = 'v1';
+// v2 — file cache mẫu nghe thử là JSON { v:2, sp, p, dataUrl }: kèm tham số
+// tốc độ/cao độ lúc gen. Lệch tham số → renderer gen lại + ghi đè cùng file
+// (đĩa luôn 1 file / giọng + engine, không phình theo tham số).
+const _GIONG_MAU_V = 'v2';
 
 // === L482 (5f2e1d26): const _GIONG_DOAN_RE ===
 const _GIONG_DOAN_RE = /^Đoạn (\d+)\/(\d+) · (.+)$/;

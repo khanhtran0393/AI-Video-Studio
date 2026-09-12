@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-12T12:56:08.230Z",
+  "generatedAt": "2026-09-12T13:36:27.518Z",
   "sourceFiles": [
     "chrome-extension/app.js",
     "chrome-extension/background.js",
@@ -2595,6 +2595,7 @@
     "voice-pick-root",
     "voice-probe",
     "voice-sample-clear",
+    "voice-sample-list",
     "voice-sample-load",
     "voice-sample-save",
     "voice-start",

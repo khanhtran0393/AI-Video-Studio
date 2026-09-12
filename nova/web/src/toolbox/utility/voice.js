@@ -42,7 +42,7 @@ async function voiceInit(){
   try { _giongSuNapDia(); } catch (_){}   // nạp lịch sử "Đã tạo" đã lưu trên đĩa (không cần backend)
   // Xác minh backend còn sống (không chỉ dựa cờ cũ — phòng khi backend đã tắt/khởi động lại).
   const cur = await window.native.voiceStatus().catch(() => null);
-  if (cur?.running){ _voiceReady = true; if (cur?.url) VOICE_URL = cur.url; try { _voiceLog('Backend sẵn sàng: ' + (cur.url || VOICE_URL)); } catch (_){} if (st) st.innerHTML = '<span style="color:var(--green)">● Giọng nói sẵn sàng (OmniVoice · VieNeu · XTTS)</span>'; voiceLoadVoices(); voiceHWNap(); try { giongKiemEngine(); } catch (_){} return; }
+  if (cur?.running){ _voiceReady = true; if (cur?.url) VOICE_URL = cur.url; try { _voiceLog('Backend sẵn sàng: ' + (cur.url || VOICE_URL)); } catch (_){} if (st) st.innerHTML = '<span style="color:var(--green)">● Giọng nói sẵn sàng (OmniVoice · VieNeu · XTTS)</span>'; voiceLoadVoices(); voiceHWNap(); try { giongKiemEngine(); } catch (_){} try { giongMauSanNap(); } catch (_){} return; }
   _voiceReady = false;
   // Đã cài backend trên máy chưa? (thay vì báo lỗi đỏ → hiện panel hướng dẫn cài)
   const pb = window.native.voiceProbe ? await window.native.voiceProbe().catch(() => null) : null;
@@ -52,7 +52,7 @@ async function voiceInit(){
   if (st) st.innerHTML = '⏳ Đang khởi động backend giọng nói (OmniVoice · VieNeu · XTTS)… lần đầu ~30-60s, giữ app mở.';
   if (!_voiceStarting) _voiceStarting = window.native.voiceStart();
   const r = await _voiceStarting; _voiceStarting = null;
-  if (r?.ok){ _voiceReady = true; if (r?.url) VOICE_URL = r.url; try { _voiceLog('Backend vừa khởi động xong: ' + (r.url || VOICE_URL)); } catch (_){} if (st) st.innerHTML = '<span style="color:var(--green)">● Giọng nói sẵn sàng (OmniVoice · VieNeu · XTTS)</span>'; voiceLoadVoices(); voiceHWNap(); try { giongKiemEngine(); } catch (_){} }
+  if (r?.ok){ _voiceReady = true; if (r?.url) VOICE_URL = r.url; try { _voiceLog('Backend vừa khởi động xong: ' + (r.url || VOICE_URL)); } catch (_){} if (st) st.innerHTML = '<span style="color:var(--green)">● Giọng nói sẵn sàng (OmniVoice · VieNeu · XTTS)</span>'; voiceLoadVoices(); voiceHWNap(); try { giongKiemEngine(); } catch (_){} try { giongMauSanNap(); } catch (_){} }
   else if (st) st.innerHTML = '<span style="color:var(--red)">Lỗi khởi động: ' + escapeHtml(r?.error || '') + '</span>';
 }
 
@@ -256,10 +256,11 @@ function giongVe(){
   const hien = _giongDS.filter(_giongHop);
   box.innerHTML = hien.map(v => {
     const chon = v.key === _giongChon, dangPhat = v.key === _giongPhat;
+    const sanMau = _giongMauSanCo(v.key);   // đã có mẫu trên đĩa → ▶ phát ngay
     return `<div class="gcard${chon ? ' sel' : ''}${dangPhat ? ' play' : ''}${v.factory ? '' : ' has-del'}" onclick="giongChon('${escapeHtml(v.key)}')">
       ${v.factory ? '' : `<button type="button" class="btn sm ghost gdel" onclick="event.stopPropagation();giongXoa('${escapeHtml(v.key)}')" title="Xoá giọng clone" aria-label="Xoá giọng">Xóa</button>`}
       <div class="gtop">
-        <button type="button" class="gpico" title="Nghe thử 4 giây" aria-label="Nghe thử giọng ${escapeHtml(v.name)}" onclick="event.stopPropagation();giongThu('${escapeHtml(v.key)}')">${_giongTao === v.key ? '⏳' : (dangPhat ? '❙❙' : '▶')}</button>
+        <button type="button" class="gpico${sanMau ? ' san' : ''}" title="${sanMau ? 'Nghe thử 4 giây (đã có mẫu — phát ngay)' : 'Nghe thử 4 giây (lần đầu sẽ tạo mẫu, ~30-60 giây)'}" aria-label="Nghe thử giọng ${escapeHtml(v.name)}" onclick="event.stopPropagation();giongThu('${escapeHtml(v.key)}')">${_giongTao === v.key ? '⏳' : (dangPhat ? '❙❙' : '▶')}</button>
         <div style="min-width:0"><div class="gname">${escapeHtml(v.name)}</div><div class="gsrc">${escapeHtml(v.src)}</div></div>
       </div>
       <div class="gtags">${(v.tags || []).map(t => `<span class="gtg">${escapeHtml(t)}</span>`).join('')}</div>
@@ -359,30 +360,58 @@ function _giongThuTu(v){
 
 function _giongMauFileKey(eng, key){ return _GIONG_MAU_V + '|' + eng + '|' + key; }
 
+// Key ĐĨA của mẫu = _giongMauFileKey sau khi main sanitize (voiceSampleFile):
+// /[/\\:*?"<>|]+/g → '_', '..+' → '_', cắt 180 ký tự. Voice key gốc chứa ':'
+// (vd 'omni:factory_en_male_deep') bị đổi thành '_' → KHÔNG tách ngược được,
+// badge phải so khớp chiều đi (forward-mapping) qua _giongMauSanCo().
+function _giongMauKeyDia(eng, key){ return _giongMauFileKey(eng, key).replace(/[/\\:*?"<>|]+/g, '_').replace(/\.\.+/g, '_').slice(0, 180); }
+
+// Giọng `key` đã có mẫu nghe thử trên đĩa (bất kỳ engine nào)?
+function _giongMauSanCo(key){
+  if (key == null) return false;
+  for (const eng of Object.keys(_TTS_TEN)){
+    if (_giongMauSan.has(_giongMauKeyDia(eng, key))) return true;
+  }
+  return false;
+}
+
+// Đọc mẫu nghe thử từ cache đĩa → { dataUrl, sp, p } | null.
+// sp/p = tham số lúc gen (file v2); file v1 cũ trả sp/p null → renderer coi là
+// lệch tham số, tự gen lại + ghi đè nên không cần migration.
 async function _giongMauDocDia(eng, key){
   try {
     if (!(window.native && window.native.voiceSampleLoad)) return null;   // bản web không có IPC
     const r = await window.native.voiceSampleLoad(_giongMauFileKey(eng, key));
-    if (r && r.ok && typeof r.dataUrl === 'string' && r.dataUrl.startsWith('data:')) return r.dataUrl;
+    if (r && r.ok && typeof r.dataUrl === 'string' && r.dataUrl.startsWith('data:')){
+      return { dataUrl: r.dataUrl, sp: (typeof r.sp === 'number' ? r.sp : null), p: (typeof r.p === 'number' ? r.p : null) };
+    }
   } catch (_){}
   return null;
 }
 
-async function _giongMauGhiDia(eng, key, blob){
+// Ghi mẫu vừa gen xuống đĩa kèm tham số tốc độ/cao độ (fire-and-forget: lỗi ghi không chặn việc nghe).
+async function _giongMauGhiDia(eng, key, blob, tuyChon){
   try {
     if (!(window.native && window.native.voiceSampleSave) || !blob) return;
     const dataUrl = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result || '')); fr.onerror = () => rej(new Error('đọc blob lỗi')); fr.readAsDataURL(blob); });
-    if (dataUrl && dataUrl.startsWith('data:')) window.native.voiceSampleSave({ key: _giongMauFileKey(eng, key), dataUrl });   // fire-and-forget: lỗi ghi không chặn việc nghe
+    if (dataUrl && dataUrl.startsWith('data:')){
+      window.native.voiceSampleSave({
+        key: _giongMauFileKey(eng, key), dataUrl,
+        sp: tuyChon ? tuyChon.tocDo : null,
+        p: tuyChon ? tuyChon.caoDo : null,
+      });
+    }
   } catch (_){}
 }
 
 function _giongMauXoa(key){
   if (key != null){
     const u = _giongMau.get(key);
-    if (u){ try { URL.revokeObjectURL(u); } catch (_){} _giongMau.delete(key); }
+    if (u){ try { URL.revokeObjectURL(u.url); } catch (_){} _giongMau.delete(key); }
+    for (const eng of Object.keys(_TTS_TEN)) _giongMauSan.delete(_giongMauKeyDia(eng, key));
     try { if (window.native && window.native.voiceSampleClear){ for (const e of Object.keys(_TTS_TEN)) window.native.voiceSampleClear(_giongMauFileKey(e, key)); } } catch (_){}
   } else {
-    _giongMau.forEach(u => { try { URL.revokeObjectURL(u); } catch (_){} });
+    _giongMau.forEach(u => { try { URL.revokeObjectURL(u.url); } catch (_){} });
     _giongMau.clear();
     try { if (window.native && window.native.voiceSampleClear) window.native.voiceSampleClear(null); } catch (_){}
   }
@@ -392,8 +421,31 @@ function _giongMauXoa(key){
 // có engine (_GIONG_MAU_V|engine|voice) nên không bao giờ "stale" khi đổi engine:
 // giữ nguyên để lần sau nghe thử phát ngay, không phải gen lại mẫu.
 function _giongMauRamXoa(){
-  _giongMau.forEach(u => { try { URL.revokeObjectURL(u); } catch (_){} });
+  _giongMau.forEach(u => { try { URL.revokeObjectURL(u.url); } catch (_){} });
   _giongMau.clear();
+}
+
+// Nạp tập giọng ĐÃ có mẫu nghe thử trên đĩa (badge "phát ngay" trên nút ▶).
+// Gọi 1 lần khi backend sẵn sàng + tự cập nhật sau mỗi lần gen thành công.
+async function giongMauSanNap(){
+  try {
+    if (!(window.native && window.native.voiceSampleList)) return;   // bản web không có IPC
+    const r = await window.native.voiceSampleList();
+    if (r && r.error) throw new Error(r.error);
+    // _giongMauSan giữ KEY ĐĨA NGUYÊN BẢN (đã sanitize bởi main, có tiền tố 'v2_').
+    // So khớp giọng → _giongMauSanCo() sanitize chiều đi, KHÔNG tách ngược vì
+    // ':' trong voice key gốc bị main đổi thành '_' (mất thông tin, không khôi phục).
+    const tienTo = _GIONG_MAU_V + '_';
+    const ds = (r && r.items) || [];
+    const san = new Set();
+    for (const it of ds){
+      if (it && typeof it.key === 'string' && it.key.startsWith(tienTo)) san.add(it.key);
+    }
+    _giongMauSan = san;
+    giongVe();
+  } catch (e){
+    try { novaLog('🎙 đọc danh sách mẫu nghe thử lỗi: ' + (e.message || e), 'warn'); } catch (_){}
+  }
 }
 
 async function _giongPhatThu(key){
@@ -403,34 +455,42 @@ async function _giongPhatThu(key){
   if (_giongTao === key) return;   // đang tạo mẫu cho chính giọng này — chờ, bấm thêm không spawn thêm task
   giongVe();
   try {
-    let url = _giongMau.get(key);
-    if (!url){
+    const tuyChon = giongDocTuyChon();   // tham số tốc độ/cao độ hiện tại của tab
+    const khopThamSo = h => !!h && h.sp === tuyChon.tocDo && h.p === tuyChon.caoDo;
+    let hit = _giongMau.get(key);
+    if (!khopThamSo(hit)) hit = null;    // RAM có nhưng lệch tốc độ/cao độ → coi như chưa có, gen lại
+    if (!hit){
       // RAM không có → đọc cache trên đĩa (đã sinh từ phiên trước, phát ngay).
       // Dò theo đúng thứ tự engine ưu tiên như lúc tạo để không bỏ sót mẫu
-      // tạo bằng engine fallback, và dò được là dừng.
+      // tạo bằng engine fallback. Thấy entry đầu tiên là dừng: khớp tham số thì
+      // phát luôn, lệch thì gen lại và ghi đè cùng file (đĩa 1 file/giếng+engine).
       for (const e of _giongThuTu(v)){
         const duLieu = await _giongMauDocDia(e, key);
         if (duLieu){
-          try {
-            const r = await fetch(duLieu); const blob = await r.blob();
-            if (blob && blob.size){ url = URL.createObjectURL(blob); _giongMau.set(key, url); }
-          } catch (_){}
+          if (khopThamSo(duLieu)){
+            try {
+              const r = await fetch(duLieu.dataUrl); const blob = await r.blob();
+              if (blob && blob.size){ hit = { url: URL.createObjectURL(blob), sp: duLieu.sp, p: duLieu.p }; _giongMau.set(key, hit); }
+            } catch (_){}
+          }
           break;
         }
       }
     }
-    if (!url){
+    if (!hit){
       _giongTao = key; _giongPhat = ''; giongVe();
       // Lần đầu model nạp lười mất ~30-60s — báo rõ đang chạy, đừng để tưởng treo.
       giongBao('⏳ Đang tạo mẫu nghe thử của "' + v.name + '"… lần đầu model nạp ~30-60 giây, giữ app mở.', 'text-muted');
       const kq = await _giongTTS(v, _GIONG_THU);   // { blob, engine }
-      url = URL.createObjectURL(kq.blob); _giongMau.set(key, url);
-      _giongMauGhiDia(kq.engine, key, kq.blob);    // ghi đĩa — phiên sau nghe ngay không tạo lại
+      hit = { url: URL.createObjectURL(kq.blob), sp: tuyChon.tocDo, p: tuyChon.caoDo };
+      _giongMau.set(key, hit);
+      _giongMauGhiDia(kq.engine, key, kq.blob, tuyChon);   // ghi đĩa — phiên sau nghe ngay không tạo lại
+      _giongMauSan.add(_giongMauKeyDia(kq.engine, key));   // set giữ KEY ĐĨA — từ giờ nút ▶ có badge "đã có mẫu"
     }
     _giongTao = '';
     if (!_giongAudio) _giongAudio = new Audio();
     _giongAudio.onended = () => { _giongPhat = ''; giongVe(); };
-    _giongAudio.src = url; _giongPhat = key; giongVe();
+    _giongAudio.src = hit.url; _giongPhat = key; giongVe();
     await _giongAudio.play();
   } catch (err){
     _giongPhat = ''; _giongTao = '';
