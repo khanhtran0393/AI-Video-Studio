@@ -256,6 +256,12 @@ function t7Focus(on){
   const b = document.body;
   const want = (on === undefined) ? !b.classList.contains('t7-focus') : !!on;
   b.classList.toggle('t7-focus', want);
+  // Nút cùng hàng đổi vai trò: phóng to → "Thu nhỏ" (bấm để về khung chính), không chết nút.
+  const fbtn = document.getElementById('t7FocusBtn');
+  if (fbtn){
+    fbtn.textContent = want ? '⤡ Thu nhỏ' : '⤢ Toàn màn';
+    fbtn.title = want ? 'Thu nhỏ về khung chính (Esc)' : 'Mở rộng Dựng Video ra toàn cửa sổ (Esc để thoát)';
+  }
   const inf = document.getElementById('t7FocusInfo');
   if (inf && want){
     const n = _t7Clips().length;

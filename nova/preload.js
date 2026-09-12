@@ -183,6 +183,32 @@ contextBridge.exposeInMainWorld('native', {
     pickOutput: (defaultName) => ipcRenderer.invoke('srt-translate:pickOutput', { defaultName }),
     translate: (payload) => ipcRenderer.invoke('srt-translate:translate', payload),
   },
+  // Công cụ FFmpeg (sidebar): tách MP3/M4A/WAV, cắt, ghép, loop, nén, trích frame,
+  // xoá tiếng, đổi định dạng, ghép nhạc, GIF — FFmpeg local, dialog thật, progress + cancel.
+  ffx: {
+    pickInput: () => ipcRenderer.invoke('ffx:pick-input'),
+    pickInputs: () => ipcRenderer.invoke('ffx:pick-inputs'),
+    pickAudio: () => ipcRenderer.invoke('ffx:pick-audio'),
+    pickMedia: () => ipcRenderer.invoke('ffx:pick-media'),
+    pickOutput: (defaultName, defaultDir) => ipcRenderer.invoke('ffx:pick-output', { defaultName, defaultDir }),
+    probe: (p) => ipcRenderer.invoke('ffx:probe', { path: p }),
+    cancel: () => ipcRenderer.invoke('ffx:cancel'),
+    extractAudio: (payload) => ipcRenderer.invoke('ffx:extract-audio', payload),
+    cutVideo: (payload) => ipcRenderer.invoke('ffx:cut-video', payload),
+    concatVideos: (payload) => ipcRenderer.invoke('ffx:concat-videos', payload),
+    loopVideo: (payload) => ipcRenderer.invoke('ffx:loop-video', payload),
+    compressVideo: (payload) => ipcRenderer.invoke('ffx:compress-video', payload),
+    extractFrames: (payload) => ipcRenderer.invoke('ffx:extract-frames', payload),
+    removeAudio: (payload) => ipcRenderer.invoke('ffx:remove-audio', payload),
+    convertMedia: (payload) => ipcRenderer.invoke('ffx:convert-media', payload),
+    addMusic: (payload) => ipcRenderer.invoke('ffx:add-music', payload),
+    toGif: (payload) => ipcRenderer.invoke('ffx:to-gif', payload),
+    onProgress: (cb) => {
+      const listener = (_e, s) => cb && cb(s);
+      ipcRenderer.on('ffx:progress', listener);
+      return () => ipcRenderer.removeListener('ffx:progress', listener);
+    },
+  },
   // Thư viện Hiệu ứng âm thanh (SFX) dựng sẵn.
   sfxLibrary: () => ipcRenderer.invoke('nova:sfxLibrary:list'),
   // Flow tích hợp sẵn (trình duyệt nhúng) — UI gọi flowBridge → window.native.flow.

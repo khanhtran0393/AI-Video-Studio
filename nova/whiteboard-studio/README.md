@@ -9,7 +9,7 @@
 | File | Vai trò |
 |---|---|
 | `../web/whiteboard-studio-panel.js` | UI panel (luồng repo): chọn 1/nhiều ảnh hoặc cả thư mục → mỗi ảnh 1 cảnh (đổi thứ tự ▲▼, sửa thời lượng, đổi/xoá ảnh) → tuỳ chọn SRT gán phụ đề + thời lượng → voice-over → Export. Preview ảnh + progress + log. |
-| `../web/handdraw-studio-panel.js` | UI panel "Vẽ Tay Ảnh" (sidebar `toolhanddraw`): ảnh tĩnh → video stream-ink, không SRT/voice. |
+| `../web/src/hd/` (6 module `hd-*.js`) | UI panel "Vẽ Tay Ảnh" (sidebar `toolhanddraw`): ảnh tĩnh → video stream-ink, không SRT/voice. |
 | `ipc.js` | IPC main process: dialog chọn SRT/voice/ảnh thật, đo thời lượng bằng ffprobe, parse cảnh (`parse_srt.py`), export stream (`exportStream`); giữ các kênh cũ cho tương thích. |
 | `ff-runtime.js` | Resolve ffmpeg/ffprobe nội bộ (app.asar.unpacked → node_modules → PATH), tự sửa path asar (ENOTDIR). |
 | `py-backend.js` | Bridge Node→Python tới repo **srt-whiteboard-animation** (vendored tại `srt-whiteboard-animation/`): `status/prepare/parseSrt/exportVideo/previewAnnotation` — render stream-ink từng cảnh, merge cảnh, ghép voice + nhạc nền bằng ffmpeg nội bộ; hủy tiến trình con khi cancel. |

@@ -93,6 +93,7 @@
 <!--#include "partials/panels-tool7-anim.html" -->
 <!--#include "partials/panels-niche-flow.html" -->
 <!--#include "partials/panels-upscale-voice.html" -->
+<!--#include "partials/panels-ffmpeg-tools.html" -->
 <!--#include "partials/panels-admin-settings.html" -->
   </main>
   </div>
@@ -182,15 +183,31 @@
 <script src="src/toolbox/tool-ts.js"></script>
 <script src="src/toolbox/tool-tts.js"></script>
 <script src="src/toolbox/tool-upg.js"></script>
+<!-- Công cụ FFmpeg (sidebar dropdown): Tách MP3 / Cắt / Ghép / Loop — IPC ffx:* -->
+<script src="src/toolbox/tool-ffx.js"></script>
 
 <script src="src/toolbox/utility/collapse.js"></script>
 
-  <script src="video-agent-panel.js"></script>
+  <!-- Video Agent panel: tách từ video-agent-panel.js (2026-09-12) — 5 file IIFE
+       góp tên vào window.vaPanelCtx; THỨ TỰ NẠP = NGỮ NGHĨA (core → easy-ui →
+       easy-flow → advanced → main), không đổi thứ tự -->
+  <script src="src/va/va-core.js"></script>
+  <script src="src/va/va-easy-ui.js"></script>
+  <script src="src/va/va-easy-flow.js"></script>
+  <script src="src/va/va-advanced.js"></script>
+  <script src="src/va/va-main.js"></script>
   <!-- Whiteboard Studio: annotation core (UMD — dùng chung main + renderer) + panel (UI luồng srt-whiteboard-animation) -->
   <script src="whiteboard-annotation.js?v=hdlasso6"></script>
   <script src="whiteboard-studio-panel.js?v=hdlasso6"></script>
   <!-- Vẽ Tay Ảnh: tách phần animation vẽ tay từ Whiteboard Studio (tái dùng whiteboard-annotation.js + IPC whiteboard:*) -->
-  <script src="handdraw-studio-panel.js?v=hdlasso6"></script>
+  <!-- Tách từ handdraw-studio-panel.js thành 6 module IIFE góp tên vào window.hdPanelCtx
+       (mô hình src/va — AGENTS.md §4/§8). Thứ tự nạp = ngữ nghĩa. KHÔNG import/export. -->
+  <script src="src/hd/hd-core.js"></script>
+  <script src="src/hd/hd-scenes.js"></script>
+  <script src="src/hd/hd-canvas.js"></script>
+  <script src="src/hd/hd-ai-export.js"></script>
+  <script src="src/hd/hd-render.js"></script>
+  <script src="src/hd/hd-main.js"></script>
   <!-- Dịch SRT: panel UI (IPC srt-translate:* qua window.native.srtTranslate) -->
   <script src="srt-translate-panel.js?v=srtt1"></script>
 <script src="spy-panel.js?v=spy1"></script>

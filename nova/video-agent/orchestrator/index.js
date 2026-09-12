@@ -7,6 +7,8 @@ const { buildTimeline } = require('../timeline/engine');
 const { renderPreview } = require('../preview/render');
 const { runQA } = require('../qa/qa');
 const { autoFix } = require('../auto-fix/loop');
+const { parseRenderDigest } = require('../auto-fix/log-parse');
+const { createAiFixer } = require('../auto-fix/fixer');
 const { SceneCache, sceneKey } = require('../cache/store');
 const { createRendererAdapter } = require('../remotion/bridge');
 const { createUploader } = require('../uploader/local');
@@ -161,7 +163,7 @@ function createVideoJob({ projectDir, adapters = {}, options = {} }) {
         const preview = await step('PREVIEW_RENDER', () => renderPreview({ adapter: render, spec, manifest, projectDir,
           voicePath: project.files.ttsAudio, musicPath: (project.files.music || [])[0], opts: options.preview || {},
           onProgress: (p) => emit('PREVIEW_RENDER', { percent: p }), registerCancel, signal: abortController.signal }));
-        if (!preview.ok) { const e = new Error('Không dựng được bản xem trước (preview): ' + (preview.error || preview.code || 'không rõ lý do')); e.code = preview.code || 'VA_PREVIEW_FAIL'; throw e; }
+        if (!preview.ok) { const e = new Error('Không dựng được bản xem trước (preview): ' + (preview.error || preview.code || 'không rõ lý do')); e.code = preview.code || 'VA_PREVIEW_FAIL'; e.digest = parseRenderDigest(preview); throw e; }
         out.previewPath = preview.outputPath;
         if (preview.outputPath) artifacts.push(preview.outputPath);
         visionStats = grabFrames(preview.outputPath); // Phase 4: frame thật từ preview
@@ -169,8 +171,16 @@ function createVideoJob({ projectDir, adapters = {}, options = {} }) {
         versions.commitQA(qaReport);
         if (qaReport.status === 'fail') {
           setState('AUTO_FIX');
+          // Fixer_Agent (mô hình đối kháng AutoGen — tách vai với QA): chỉ tạo khi có AI
+          // provider thật (registry còn provider khác local). Không có AI → loop chạy
+          // rule 100% như trước. Adapter aiFixer inject (test/IPC) luôn thắng.
+          const hasAi = !!(A.aiGateway && A.aiGateway.registry
+            && A.aiGateway.registry.list().some((p) => p.kind !== 'local'));
+          const aiFixer = typeof adapters.aiFixer === 'function' ? adapters.aiFixer
+            : hasAi ? createAiFixer(A.aiGateway, { signal: abortController.signal }) : null;
           const fixed = await autoFix({ spec, validate, qa: doQA, maxAttempts: options.maxAutoFixAttempts || 5,
             perScene: options.perSceneAutoFix !== false,   // P2: checkpoint theo scene — mỗi attempt chỉ sửa 1 scene (tối ưu thay đổi nhỏ)
+            fixer: aiFixer,
             onAttempt: (a) => emit('AUTO_FIX', a) });
           if (fixed.checkpoints) out.autoFixCheckpoints = fixed.checkpoints;
           if (fixed.spec !== spec) { spec = fixed.spec; timeline = buildTimeline(spec); out.specVersion = versions.commitVideoSpec(spec); qaReport = fixed.qa; versions.commitQA(qaReport); }
@@ -184,7 +194,7 @@ function createVideoJob({ projectDir, adapters = {}, options = {} }) {
       const rendered = await step('FULL_RENDER', () => render.render({ spec, manifest, projectDir, outputPath: fullOutput,
         voicePath: project.files.ttsAudio, musicPath: (project.files.music || [])[0],
         onProgress: (p) => emit('FULL_RENDER', { percent: p }), registerCancel, signal: abortController.signal }));
-      if (!rendered.ok) { const e = new Error('Không render được video hoàn chỉnh: ' + (rendered.error || rendered.code || 'không rõ lý do')); e.code = rendered.code || 'VA_RENDER_FAIL'; throw e; }
+      if (!rendered.ok) { const e = new Error('Không render được video hoàn chỉnh: ' + (rendered.error || rendered.code || 'không rõ lý do')); e.code = rendered.code || 'VA_RENDER_FAIL'; e.digest = parseRenderDigest(rendered); throw e; }
       output = rendered.outputPath; out.outputPath = output;
       if (output) artifacts.push(output);
       visionStats = grabFrames(output); // Phase 4: FINAL_QA chạy trên frame của bản full

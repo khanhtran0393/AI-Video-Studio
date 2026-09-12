@@ -333,36 +333,51 @@ async function genImagesBX(cdp, { prompt, projectId, count = 1, template, onEach
   return out;
 }
 
-/* ── VIDEO gen (rpcid `YhhmEf`) — schema đo thật 11/9/2026 (UI capture ×3) ──
-   Trigger f.req payload (JSON string trong wrb.fr):
-     [0]  = [[[ [null,null,[[[PROMPT]]], MODEL, 2, null, [null,null,null,null,U1,U2] ]]]]
+/* ── VIDEO gen (rpcid `YhhmEf` t2v / `jIps6` i2v-edit) — slot map đo thật 11–12/9/2026,
+   UI capture ×6 + credit thật (360p·8s=6cr, 720p·4s=7cr, 720p·8s=12cr E2E qua path này) ──
+   Trigger f.req payload (JSON string trong wrb.fr) — CHUNG cho cả 2 rpcid:
+     [0]  = [[ scene ]]   (scene = mảng phẳng, promptBlock bọc ở scene[0])
      [1]  = [null,22,null,null,null,projectId,null,null,null,null,[CAPTCHA,1]]
      [2]  = [U3, 2]
-   MODEL = "abra_t2v_8s" (text-to-video 8s; 360p/720p/aspect nằm ở slot "2").
-   Response: [null, <credits còn lại>, [[taskId,null,null,[title,ts,null,null,
-   mediaId,otherId,ts], projectId]], [[…]]] — SYNCHRONOUS (không cần poll trigger).
-   Poll kết quả: as29s với payload ["<mediaId>"] → record chứa status ([2]=đang
-   xử lý, [3]=xong) + URL https://flow-content.google/video/<mediaId>?…
-   Chi phí: 12 credits / video (x1, 720p, 8s — đo 11/9). */
-function buildYhhmEfPayload({ prompt, projectId, captchaToken, model, qualitySlot, imageMediaId }) {
+   t2v scene = [ [null,null,[[[PROMPT]]]], MODEL, 2, null, [null,null,null,null,U1,U2],
+                 …khi 360p: null, null, [4] ]
+     • MODEL key = "abra_t2v_<dur>s" + "_360p" khi 360p — đo thật: abra_t2v_8s_360p /
+       abra_t2v_4s / abra_t2v_10s / abra_t2v_4s_360p (abra_t2v_6s suy từ pattern, chưa đốt credit).
+     • slot "2" = aspect 16:9 (không đổi ở mọi capture — KHÔNG phải resolution).
+     • [4] tại scene[7] = CỜ 360P (chỉ xuất hiện ở capture 360p; không phải "extra scene").
+   i2v scene (rpcid `jIps6` — KHÔNG phải YhhmEf) = [ [null,MEDIA_ID,0,96],
+     [null,null,[[[PROMPT]]]], "abra_edit_360p", 2, [null,null,null,null,U1,U2],
+     null,null,null,null,null,null,null, [4] ]
+     • mediaRef = scene[0] (0..96 = range %); model CỨNG "abra_edit_360p" — chip
+       resolution/duration của UI bị BỎ QUA với ingredient (chip 720p·4s vẫn gửi 360p).
+     • [4] tại scene[12] luôn có (capture duy nhất).
+   Response (2 rpcid cùng shape): [null,<credits còn lại>,[[taskId,null,null,
+     [title,ts,null,null,mediaId,otherId,ts],projectId]],[[…]]] — SYNCHRONOUS (không cần poll trigger).
+   Poll kết quả: as29s payload ["<mediaId>"] với mediaId = gen[3][4] (parseYhhmEf trả
+     đúng slot này cho cả 2 rpcid — đo thật i2v: poll "4219f67b…" → video URL
+     https://flow-content.google/video/4219f67b…). Record chứa status ([2]=đang xử lý,
+     [3]=xong) + URL https://flow-content.google/video/<mediaId>?… */
+function buildYhhmEfPayload({ prompt, projectId, captchaToken, model, qualitySlot, p360, imageMediaId }) {
   if (!prompt) throw new Error('BX_NO_PROMPT');
   if (!projectId) throw new Error('BX_NO_PROJECT');
   if (!captchaToken) throw new Error('BX_NO_CAPTCHA');
-  /* Luật 10 — i2v CHƯA có shape thật trên YhhmEf (chưa capture imageMediaId nằm ở đâu trong
-     scene) → NỔ LỘ LIỄU thay vì đoán payload. Chờ capture qua nova/scripts/tmp/tmp-bx-variant-capture.js. */
-  if (imageMediaId) throw new Error('BX_I2V_SHAPE_NOT_CAPTURED: shape YhhmEf image-to-video chưa được capture thật — chạy tmp-bx-variant-capture.js khi gen i2v trong Flow UI');
+  /* Luật 10 — i2v KHÔNG đi qua YhhmEf (rpcid khác, đã đo thật 12/9/2026). */
+  if (imageMediaId) throw new Error('BX_I2V_USE_JIPS6: image-to-video đi qua rpcid jIps6 — gọi genVideoBX({ imageMediaId }) thay vì truyền imageMediaId vào buildYhhmEfPayload');
   /* Biến thể:
      • model       = chuỗi model key server-side. Mặc định 'abra_t2v_8s' (omni-flash, E2E PASS
-                     11/9/2026). Các key đã biết tồn tại ở path aisandbox (gen.js): veo_3_1_t2v,
-                     veo_3_1_t2v_fast, veo_3_1_t2v_lite — CHƯA verify riêng trên BX YhhmEf;
-                     server trả BX_RPC_ERROR_* lộ liễu nếu sai (không fallback ngầm).
-     • qualitySlot = slot scene[2] — giá trị 2 = 720p/16:9 (đo cứng bằng settings UI,
-                     tmp-video-shape2.txt). Giá trị khác (360p…) chỉ truyền khi đã có capture thật. */
+                     11/9/2026). Variant theo UI: buildT2VModelKey({ durationS, p360 }) — key
+                     abra_t2v_4s/6s/8s/10s (+ "_360p"). Server trả BX_RPC_ERROR_* lộ liễu nếu sai
+                     (không fallback ngầm).
+     • qualitySlot = slot scene[2] — 2 = aspect 16:9 (cứng ở mọi capture; KHÔNG phải resolution).
+     • p360        = true → cờ 360p: scene[5..7] = null,null,[4] (slot [4] đo thật CHỈ ở capture
+                     360p; model key hậu tố "_360p" do caller tự gắn qua buildT2VModelKey). */
   const slot = qualitySlot == null ? 2 : qualitySlot;
   if (!Number.isInteger(slot) || slot < 0 || slot > 255) throw new Error('BX_BAD_QUALITY_SLOT: ' + qualitySlot);
   if (model != null && !/^[a-z0-9_.]+$/i.test(String(model))) throw new Error('BX_BAD_MODEL: ' + model);
+  if (p360 != null && typeof p360 !== 'boolean') throw new Error('BX_BAD_P360: ' + p360);
   const uuid = () => (typeof require('crypto').randomUUID === 'function' ? require('crypto').randomUUID() : 'b-' + Date.now()).toUpperCase();
-  /* Scene = [promptBlock, model, qualitySlot, null, uuids] — shape khớp capture thật (tmp-video-shape2.txt):
+  /* Scene = [promptBlock, model, qualitySlot, null, uuids(, null, null, [4])] — shape khớp
+     capture thật (tmp-video-shape2.txt + ui-variant-YhhmEf-{2,11,22}):
      inner[0]=[scene] (A1) · scene=A5 · scene[0]=A3=[null,null,[[[PROMPT]]]] · inner[1]=ctx A11 · inner[2]=[U3,2]. */
   const scene = [
     [null, null, [[[String(prompt)]]]],
@@ -370,6 +385,49 @@ function buildYhhmEfPayload({ prompt, projectId, captchaToken, model, qualitySlo
     slot,
     null,
     [null, null, null, null, uuid(), uuid()],
+  ];
+  if (p360) scene.push(null, null, [4]);
+  return [
+    [scene],
+    [null, 22, null, null, null, projectId, null, null, null, null, [captchaToken, 1]],
+    [uuid(), 2],
+  ];
+}
+
+/* Model key t2v theo biến thể UI (slot map đo thật 11–12/9/2026):
+   "abra_t2v_<dur>s" + "_360p" khi 360p. Đã capture thật: 4s/8s/10s × 360p/720p.
+   6s CHƯA capture riêng (tiết kiệm credit) — chấp nhận theo pattern; sai thì server
+   trả BX_RPC_ERROR_* lộ liễu. */
+const T2V_DURATIONS = [4, 6, 8, 10];
+function buildT2VModelKey({ durationS = 8, p360 = false } = {}) {
+  if (!Number.isInteger(durationS) || !T2V_DURATIONS.includes(durationS)) {
+    throw new Error('BX_BAD_DURATION: ' + durationS + ' (hỗ trợ: ' + T2V_DURATIONS.join('/') + ')');
+  }
+  return 'abra_t2v_' + durationS + 's' + (p360 ? '_360p' : '');
+}
+
+/* i2v (ingredient video) — rpcid `jIps6`, shape đo thật 12/9/2026 (capture ui-variant-jIps6-10).
+   Scene phẳng 13 phần tử: mediaRef ở scene[0], promptBlock ở scene[1], model CỨNG
+   "abra_edit_360p" (chip resolution/duration của UI bị bỏ qua), cờ [4] ở scene[12].
+   Response + poll as29s dùng CHUNG parseYhhmEf với YhhmEf (mediaId = gen[3][4] = id
+   UI thật sự poll — đo thật: poll "4219f67b…" → video URL của media đó). */
+function buildJIpS6Payload({ prompt, projectId, captchaToken, imageMediaId, rangeStart = 0, rangeEnd = 96 }) {
+  if (!prompt) throw new Error('BX_NO_PROMPT');
+  if (!projectId) throw new Error('BX_NO_PROJECT');
+  if (!captchaToken) throw new Error('BX_NO_CAPTCHA');
+  if (!imageMediaId) throw new Error('BX_NO_MEDIA_REF: i2v cần imageMediaId của ingredient video đã có trong project');
+  for (const [k, v] of [['rangeStart', rangeStart], ['rangeEnd', rangeEnd]]) {
+    if (!Number.isInteger(v) || v < 0 || v > 100) throw new Error('BX_BAD_RANGE: ' + k + '=' + v);
+  }
+  const uuid = () => (typeof require('crypto').randomUUID === 'function' ? require('crypto').randomUUID() : 'b-' + Date.now()).toUpperCase();
+  const scene = [
+    [null, String(imageMediaId), rangeStart, rangeEnd],
+    [null, null, [[[String(prompt)]]]],
+    'abra_edit_360p',
+    2,
+    [null, null, null, null, uuid(), uuid()],
+    null, null, null, null, null, null, null,
+    [4],
   ];
   return [
     [scene],
@@ -407,24 +465,42 @@ function parseAs29s(payloadStr) {
   return { mediaId, status, videoUrl, imageUrl, raw: inner };
 }
 
-/* Gen 1 video qua YhhmEf + poll as29s đến khi có URL. Trả
-   { ok, mediaId, taskId, videoUrl, imageUrl, creditsAfter } hoặc NÉM lỗi có mã.
-   Biến thể: { model, qualitySlot } (xem buildYhhmEfPayload — mặc định t2v 8s 720p đã verify). */
-async function genVideoBX(cdp, { prompt, projectId, captchaToken, siteKey, model, qualitySlot, pollMs = 15000, pollMax = 40 }) {
+/* Gen 1 video: t2v (rpcid YhhmEf) hoặc i2v edit (rpcid jIps6 khi có imageMediaId)
+   + poll as29s đến khi có URL. Trả { ok, mediaId, taskId, videoUrl, imageUrl,
+   creditsAfter } hoặc NÉM lỗi có mã.
+   Biến thể t2v: { model } key tường minh HOẶC { durationS, p360 } qua buildT2VModelKey
+   (mặc định 720p·8s = 'abra_t2v_8s', E2E PASS 11/9).
+   i2v: { imageMediaId } — model cứng abra_edit_360p (capture 12/9/2026); truyền kèm
+   model/durationS/qualitySlot là LỖI lộ liễu (BX_I2V_FIXED_SHAPE), không nuốt ngầm. */
+async function genVideoBX(cdp, { prompt, projectId, captchaToken, siteKey, model, qualitySlot, durationS, p360, imageMediaId, pollMs = 15000, pollMax = 40 }) {
   if (!prompt) throw new Error('BX_NO_PROMPT');
   if (!projectId) throw new Error('BX_NO_PROJECT');
+  const isEdit = imageMediaId != null;
+  if (isEdit && (model != null || durationS != null || qualitySlot != null)) {
+    throw new Error('BX_I2V_FIXED_SHAPE: i2v (jIps6) cứng model abra_edit_360p — không nhận model/durationS/qualitySlot');
+  }
   await ensureProjectPage(cdp, projectId);
   let cap = captchaToken || null;
   if (!cap) {
     cap = await evalArrow(cdp, CAPTCHA_PAGE_FN, { siteKey: siteKey || SITE_KEY, action: 'VIDEO_GENERATION' }).catch((e) => { throw new Error('BX_CAPTCHA: ' + (e.message || e)); });
     if (!cap || String(cap).length < 100) throw new Error('BX_CAPTCHA_EMPTY');
   }
-  const payload = buildYhhmEfPayload({ prompt, projectId, captchaToken: cap, model, qualitySlot });
-  const freq = JSON.stringify([[['YhhmEf', JSON.stringify(payload), null, 'generic']]]);
-  const res = await bxFetch(cdp, { rpcid: 'YhhmEf', freq, sourcePath: '/project/' + projectId });
+  const rpcid = isEdit ? 'jIps6' : 'YhhmEf';
+  const payload = isEdit
+    ? buildJIpS6Payload({ prompt, projectId, captchaToken: cap, imageMediaId })
+    : buildYhhmEfPayload({
+        prompt,
+        projectId,
+        captchaToken: cap,
+        model: model || (durationS != null || p360 != null ? buildT2VModelKey({ durationS, p360 }) : undefined),
+        qualitySlot,
+        p360: !!p360,
+      });
+  const freq = JSON.stringify([[[rpcid, JSON.stringify(payload), null, 'generic']]]);
+  const res = await bxFetch(cdp, { rpcid, freq, sourcePath: '/project/' + projectId });
   const entries = parseBxResponse(res.text);
-  const own = entries.find((e) => e.rpcid === 'YhhmEf');
-  if (!own) throw new Error('BX_BAD_RESPONSE: thiếu wrb.fr/YhhmEf (len=' + (res.text || '').length + ') head=' + JSON.stringify(String(res.text || '').slice(0, 300)));
+  const own = entries.find((e) => e.rpcid === rpcid);
+  if (!own) throw new Error('BX_BAD_RESPONSE: thiếu wrb.fr/' + rpcid + ' (len=' + (res.text || '').length + ') head=' + JSON.stringify(String(res.text || '').slice(0, 300)));
   const parsed = parseYhhmEf(own.payload);
   if (!parsed || !parsed.mediaId) {
     const errInfo = String(own.payload || '').match(/([A-Z_]{6,})/);
@@ -446,6 +522,6 @@ async function genVideoBX(cdp, { prompt, projectId, captchaToken, siteKey, model
   throw new Error('BX_VIDEO_TIMEOUT: mediaId=' + parsed.mediaId + ' status=' + (last && last.status) + ' sau ' + pollMax + ' lần poll');
 }
 
-module.exports = { genImageBX, genImagesBX, genVideoBX, getCreditsBX, healthCheckBX, buildYhhmEfPayload, parseYhhmEf, parseAs29s, loadTemplate, saveTemplate, buildOgiZ0bPayload, parseBxResponse, parseOgiZ0b, ensureProjectPage, bxFetch, templateFile };
+module.exports = { genImageBX, genImagesBX, genVideoBX, getCreditsBX, healthCheckBX, buildYhhmEfPayload, buildT2VModelKey, buildJIpS6Payload, parseYhhmEf, parseAs29s, loadTemplate, saveTemplate, buildOgiZ0bPayload, parseBxResponse, parseOgiZ0b, ensureProjectPage, bxFetch, templateFile };
 
 

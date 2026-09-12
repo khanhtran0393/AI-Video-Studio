@@ -222,8 +222,10 @@
       @keyframes t7wipe{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0 0 0)}}
       @keyframes t7circle{from{clip-path:circle(0% at 50% 50%)}to{clip-path:circle(75% at 50% 50%)}}
       .t7-pbar{position:absolute;left:0;right:0;bottom:0;padding:8px 11px;background:linear-gradient(0deg,rgba(0,0,0,.75),transparent)}
-/* Hàng nút hành động ngay dưới preview (khôi phục từ t7-tlbar cũ) */
-.t7-actrow{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:7px 14px 1px}
+/* Hàng nút hành động — đã DỜI lên hàng .t7-top (sau Toàn màn/Kho hiệu ứng/Trợ lý/Lưu/Xuất),
+   không còn chèn giữa khung xem trước và chân trang */
+.t7-actrow{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:0}
+#tool-tool7 .t7-top .t7-actrow{flex:1 1 100%}
       .t7-ptrack{height:4px;background:rgba(255,255,255,.25);border-radius:3px;margin-bottom:8px;position:relative;cursor:pointer;touch-action:none}
       /* vùng bắt chuột cao hơn hẳn vạch 4px — kéo không bị trượt tay */
       .t7-ptrack::before{content:'';position:absolute;left:0;right:0;top:-7px;bottom:-7px}
@@ -505,9 +507,12 @@
       /* Khung 9:16 / 1:1 cao hơn cả màn hình → cả trang bị kéo dài, dưới khung xem
          thừa ra một mảng trắng dài. Chặn chiều cao theo vùng nhìn thấy, khung tự thu
          bề ngang cho đúng tỉ lệ. Chỉ ảnh hưởng lúc XEM — kích thước xuất video do
-         _t7ExpDims() quyết định, không liên quan. */
+         _t7ExpDims() quyết định, không liên quan.
+         ⚠ width:100% + max-height là BẪY: hộp giữ nguyên bề ngang mà chiều cao bị kẹp,
+         tỉ lệ vỡ → video 9:16 co thành dải nhỏ giữa khung rộng. Dùng --t7-arw (tỉ lệ
+         w/h do t7Build đặt theo Tỉ lệ khung) để bề ngang tự tính theo chiều cao tối đa. */
       body.t7-lean #tool-tool7 .t7-player{border-radius:12px;max-height:calc(100vh - 250px);
-        width:100%;max-width:100%;margin-inline:auto}
+        width:min(100%, calc((100vh - 250px) * var(--t7-arw,1.7778)));margin-inline:auto}
 
       /* danh sách cảnh kiểu mockup: ảnh + tên + lời thoại + chấm trạng thái */
       body.t7-lean #tool-tool7 .t7-binlist{display:flex;flex-direction:column;gap:4px;padding:0 8px 10px}

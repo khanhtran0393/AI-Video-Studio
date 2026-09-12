@@ -66,10 +66,23 @@ node nova/video-agent/test-render-real.js  # (qua Electron: npx electron nova/vi
                                        # REAL-RENDER-OK — render Remotion THẬT: bridge → renderNovaScenes → mp4 1080p
 node nova/video-agent/check.js       # syntax all files
 node nova/video-agent/test-phases.js # Phase 3/4/5 acceptance — 52/52 PASS (dùng ffmpeg thật sinh fixture)
+node nova/video-agent/test-autofix-upgrade.js # Auto-Fix nâng cấp (Wolverine/Aider/AutoGen) — 19/19 PASS
 ```
 `test-bridge.js` đối chiếu tầng dữ liệu với **mã nguồn engine** (preset IN/OUT/HOLD bóc từ `anim.js`,
 transition id bóc từ `transitions.json` + legacy map) — render thật cần Electron + `@remotion/renderer`
 (không có ở môi trường dev plain-node).
+
+## Auto-Fix nâng cấp — QA chẩn đoán / Fixer đề xuất (2026-09-12)
+
+- `auto-fix/log-parse.js` (Wolverine): stderr render → digest ≤30 dòng/≤2000 ký tự,
+  deterministic; gắn vào error object (`e.digest`) ở PREVIEW_RENDER/FULL_RENDER fail,
+  persist qua `job.json`.
+- `auto-fix/patch.js` (Aider): AI trả patch `{ scene, find, replace, reason }` — engine tự
+  tìm fragment JSON (subset match) vá trên bản sao spec; hỏng → `VA_PATCH_*` + `didYouMean`.
+- `auto-fix/fixer.js` + `auto-fix/loop.js` (AutoGen): QA chỉ chẩn đoán (số đo
+  `overrunSec`…), Fixer AI đề xuất patch qua task `autoFix.patch`; loop giữ ≤5 attempt /
+  keep-best — 2 attempt rule đầu, hết mới bật patch mode; patch hỏng vẫn tính attempt và
+  feed ngược "did you mean" cho lần sau. Không có AI provider → hành vi rule cũ 100%.
 
 ## V5 Phase B — AI Gateway + Provider Registry
 - `ai-gateway/registry.js` đăng ký/routing provider theo capability flags `vision`, `structuredOutput`, `toolCalling`;

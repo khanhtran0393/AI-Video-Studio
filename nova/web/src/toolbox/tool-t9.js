@@ -266,6 +266,30 @@ function t9Init(){
   }
 }
 
+function t9PullFromScript(){
+  // Nút chủ động: nhận nội dung kịch bản từ tab Tạo Kịch Bản (ghi đè cả khi ô đã có nội dung).
+  const ta = document.getElementById('t9Script');
+  if (!ta) return setStatus9('Không tìm thấy ô nội dung video.', 'error');
+  // 1) Ưu tiên nguồn trực tiếp: ô Kịch bản ở tab Tạo Kịch Bản.
+  const ts = (document.getElementById('tsOutput')?.value || '').trim();
+  if (ts) {
+    ta.value = ts;
+    const tt = document.getElementById('t9Title');
+    const topic = (document.getElementById('tsTopic')?.value || '').trim();
+    if (tt && !tt.value.trim() && topic) tt.value = topic;
+    const info = document.getElementById('t9TimingInfo');
+    if (info) info.textContent = 'Đã nhận kịch bản từ tab Tạo Kịch Bản (chưa chia cảnh — chapters do AI tự đề xuất).';
+    setStatus9('✓ Đã nhận kịch bản từ tab Tạo Kịch Bản. Bấm Tạo SEO Pack.', 'ok');
+    return;
+  }
+  // 2) Kịch bản đã đi qua Phân Cảnh (state) — vẫn dùng được và có timing cho chapters.
+  if ((state.script && state.script.trim()) || (state.scenes && state.scenes.length)) {
+    t9LoadFromTool2();
+    return;
+  }
+  setStatus9('Chưa có kịch bản để nhận. Hãy viết kịch bản ở tab Tạo Kịch Bản trước.', 'error');
+}
+
 function t9RefTab(mode){
   t9Ref.mode = mode;
   const b1 = document.getElementById('t9RefTab1'), b2 = document.getElementById('t9RefTab2');

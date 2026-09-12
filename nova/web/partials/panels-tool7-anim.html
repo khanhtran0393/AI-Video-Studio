@@ -22,11 +22,23 @@
           <button data-a="1:1" onclick="t7SetAspect('1:1')">1:1</button>
         </div>
         <div class="t7-actions">
-          <button class="btn ghost" onclick="t7Focus(true)" title="Mở rộng Dựng Video ra toàn cửa sổ (Esc để thoát)">⤢ Toàn màn</button>
+          <button class="btn ghost" id="t7FocusBtn" onclick="t7Focus()" title="Mở rộng Dựng Video ra toàn cửa sổ (Esc để thoát)">⤢ Toàn màn</button>
           <button class="btn ghost" onclick="animOpen()" title="Xem kho hiệu ứng chuyển động toàn màn hình: mẫu đồ hoạ động, bit Remotion, chuyển cảnh — bấm thẻ để áp vào cảnh đang chọn">✨ Kho hiệu ứng</button>
           <button class="btn ghost" id="t7AiDesignBtn" onclick="t7AiPropose()" title="Trợ lý đọc lời từng cảnh, đề xuất mẫu chuyển động kèm LÝ DO — bạn duyệt từng cảnh rồi mới gắn">✨ Trợ lý dựng</button>
           <button class="btn ghost" onclick="t7Save()">🗂 Lưu</button>
           <button class="btn primary" id="t7ExportBtn" onclick="t7OpenExport()">⬆ Xuất Video</button>
+        </div>
+        <div class="t7-actrow" id="t7ActRow">
+          <button class="t7-tlbtn" title="Hoàn tác (Ctrl/⌘+Z)" onclick="t7Undo()">↶ Hoàn tác</button>
+          <button class="t7-tlbtn" title="Làm lại (Ctrl/⌘+Shift+Z)" onclick="t7Redo()">↷ Làm lại</button>
+          <button class="t7-tlbtn" title="Cắt clip tại vạch phát (S)" onclick="t7SplitAtPlayhead()">✂ Tách</button>
+          <button class="t7-tlbtn" title="Nhân đôi clip đang chọn" onclick="t7DupSel()">⧉ Nhân đôi</button>
+          <button class="t7-tlbtn" title="Xoá clip đang chọn (Delete)" onclick="t7DeleteSel()">🗑 Xoá</button>
+          <button class="t7-tlbtn" title="Thêm ảnh đè (full-frame) lên video" onclick="document.getElementById('t7OverlayInput').click()">🖼 Ảnh đè</button>
+          <button class="t7-tlbtn" title="Mở thư viện hiệu ứng âm thanh (SFX)" onclick="t7SfxLibOpen()">🔊 SFX</button>
+          <button class="t7-tlbtn" title="Nhập giọng đọc (MP3/WAV) cho bản dựng" onclick="document.getElementById('t7VoInput').click()">🎙 Giọng đọc</button>
+          <button class="t7-tlbtn" title="Nhập nhạc nền (MP3/WAV)" onclick="document.getElementById('t7BgmInput').click()">🎵 Nhạc nền</button>
+          <button class="t7-tlbtn" title="Đồng bộ lại cảnh từ tab Phân Cảnh" onclick="t7Build()">↻ Đồng bộ cảnh</button>
         </div>
         <select id="t7Aspect" style="display:none" onchange="t7Build()">
           <option value="16:9" selected>16:9</option><option value="9:16">9:16</option><option value="1:1">1:1</option>
@@ -99,19 +111,6 @@
                 <span class="tc" id="t7AspectLabel">16:9</span>
               </div>
             </div>
-          </div>
-          <!-- Hàng nút hành động dưới preview (khôi phục 2026-09-11: đã bị xoá nhầm trong đợt dọn "hàng nút mini dư thừa" — mọi hàm handler vẫn còn sống trong tool-t7.js/utility/t7.js) -->
-          <div class="t7-actrow" id="t7ActRow">
-            <button class="t7-tlbtn" title="Hoàn tác (Ctrl/⌘+Z)" onclick="t7Undo()">↶ Hoàn tác</button>
-            <button class="t7-tlbtn" title="Làm lại (Ctrl/⌘+Shift+Z)" onclick="t7Redo()">↷ Làm lại</button>
-            <button class="t7-tlbtn" title="Cắt clip tại vạch phát (S)" onclick="t7SplitAtPlayhead()">✂ Tách</button>
-            <button class="t7-tlbtn" title="Nhân đôi clip đang chọn" onclick="t7DupSel()">⧉ Nhân đôi</button>
-            <button class="t7-tlbtn" title="Xoá clip đang chọn (Delete)" onclick="t7DeleteSel()">🗑 Xoá</button>
-            <button class="t7-tlbtn" title="Thêm ảnh đè (full-frame) lên video" onclick="document.getElementById('t7OverlayInput').click()">🖼 Ảnh đè</button>
-            <button class="t7-tlbtn" title="Mở thư viện hiệu ứng âm thanh (SFX)" onclick="t7SfxLibOpen()">🔊 SFX</button>
-            <button class="t7-tlbtn" title="Nhập giọng đọc (MP3/WAV) cho bản dựng" onclick="document.getElementById('t7VoInput').click()">🎙 Giọng đọc</button>
-            <button class="t7-tlbtn" title="Nhập nhạc nền (MP3/WAV)" onclick="document.getElementById('t7BgmInput').click()">🎵 Nhạc nền</button>
-            <button class="t7-tlbtn" title="Đồng bộ lại cảnh từ tab Phân Cảnh" onclick="t7Build()">↻ Đồng bộ cảnh</button>
           </div>
           <div id="t7StatusLean" style="min-height:17px;padding:2px 14px 8px;font-size:12px;color:var(--text-muted);text-align:center"></div>
           <div id="t7PreviewCap" class="t7-pcap" style="display:none"></div>
@@ -293,9 +292,9 @@
       </div>
       <div class="anim-wrap">
         <div class="anim-bar">
+          <button class="btn ghost sm" onclick="animGoT7()" title="Quay về khung Dựng Video">← Về Dựng Video</button>
           <input id="animQ" type="text" placeholder="Tìm mẫu, bit, chuyển cảnh…" oninput="animRender()">
           <span class="anim-stat" id="animStat">…</span>
-          <button class="btn ghost sm" onclick="animGoT7()">🎬 Mở Dựng Video</button>
         </div>
         <div class="anim-status" id="animStatus">Bấm một hiệu ứng để áp vào cảnh đang chọn trong Dựng Video.</div>
         <div id="animBody"></div>

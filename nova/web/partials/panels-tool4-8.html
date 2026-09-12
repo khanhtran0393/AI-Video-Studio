@@ -67,7 +67,7 @@
         <div class="t9-left">
         <!-- INPUT -->
         <div class="t9-card">
-          <div class="t9-h">⚙️ Đầu vào <button class="btn ghost sm" style="text-transform:none;font-weight:400" onclick="t9GenTitleFromContent()">✨ Tạo tiêu đề từ nội dung</button></div>
+          <div class="t9-h">⚙️ Đầu vào <button class="btn ghost sm" style="text-transform:none;font-weight:400" onclick="t9PullFromScript()" title="Nạp kịch bản từ tab Tạo Kịch Bản (hoặc từ Phân Cảnh nếu kịch bản đã chia cảnh)">📥 Nhận kịch bản từ Tạo Kịch Bản</button><button class="btn ghost sm" style="text-transform:none;font-weight:400" onclick="t9GenTitleFromContent()">✨ Tạo tiêu đề từ nội dung</button></div>
           <label class="t9-lbl">📌 Tiêu đề video <span style="text-transform:none">(tự lấy từ Tạo Kịch Bản — sửa được)</span></label>
           <input type="text" id="t9Title" placeholder="Tự lấy từ tab Tạo Kịch Bản, hoặc bấm 'Tạo tiêu đề từ nội dung'" style="margin-bottom:12px" onchange="try{const v=this.value.trim();const t=document.getElementById('t10TitleInput');if(t&&!t.value.trim())t.value=v;if(typeof t9Step2Refresh==='function')t9Step2Refresh();if(typeof saveState==='function')saveState(true);}catch(e){}">
           <label class="t9-lbl">📄 Nội dung video <span style="text-transform:none">(tự lấy từ Tạo Kịch Bản / Phân Cảnh)</span></label>

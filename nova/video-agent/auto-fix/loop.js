@@ -1,6 +1,13 @@
 'use strict';
 // §21 Auto-Fix Loop — sửa lỗi có kiểm soát: max attempts, mỗi attempt 1 version (§22),
 // giữ lại bản tốt nhất, vượt giới hạn → NEEDS_REVIEW (không loop vô hạn §1.6).
+// Mô hình 2 vai (AutoGen đối kháng): QA chẩn đoán (qa/qa.js), Fixer đề xuất
+// (auto-fix/fixer.js qua injected `fixer`). Chính sách mode:
+//   - attempt 1..patchAfter  → 'rule'  : applyFixes deterministic theo suggestedFix (hành vi cũ, giữ nguyên).
+//   - attempt >patchAfter    → 'patch' : gọi fixer (Aider find/replace trên spec, patch.js)
+//     khi có fixer; không có fixer → tiếp tục rule như trước (khai báo qua `mode` trong history).
+// Mọi attempt đều chấm lại QA + keep-best; patch hỏng KHÔNG nuốt — ghi reason vào history
+// và vẫn tính 1 attempt (Luật 10).
 const ROUND3 = (v) => Math.round(v * 1000) / 1000;
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -46,22 +53,45 @@ function worstSceneErrors(errors) {
   return groups[0];
 }
 
-async function autoFix({ spec, validate, qa, maxAttempts = 5, onAttempt, perScene = false }) {
+async function autoFix({ spec, validate, qa, maxAttempts = 5, onAttempt, perScene = false, fixer = null, patchAfter = 2 }) {
   let current = spec;
   let currentQA = await qa(current);
-  const history = [{ version: 1, status: currentQA.status, scores: currentQA.scores, strategies: summarizeStrategies(currentQA.errors) }];
+  const history = [{ version: 1, status: currentQA.status, scores: currentQA.scores, strategies: summarizeStrategies(currentQA.errors), mode: 'baseline' }];
   const checkpoints = {};   // sceneId → version giữ được sau Auto-Fix (perScene checkpoint)
+  const patchFeedback = { last: null }; // Aider-style: feedback patch hỏng + didYouMean cho lần fixer sau
   let attempt = 0;
   while (currentQA.status === 'fail' && attempt < maxAttempts) {
     attempt++;
-    const errorSet = perScene ? worstSceneErrors(currentQA.errors) : currentQA.errors;
-    const candidate = applyFixes(current, errorSet);
+    const usePatch = typeof fixer === 'function' && attempt > patchAfter;
+    const errorSet = perScene && !usePatch ? worstSceneErrors(currentQA.errors) : currentQA.errors;
+    let candidate = null;
+    let patchResults = null;
+    if (usePatch) {
+      const worst = worstSceneErrors(currentQA.errors);
+      const scene = worst.length && worst[0] && worst[0].scene ? worst[0].scene : null;
+      const r = await fixer({ spec: current, errors: currentQA.errors, scene, feedback: patchFeedback.last, attempt });
+      if (!r || r.ok !== true || !r.spec) {
+        // Patch không áp dụng được (AI lỗi / find không khớp / mơ hồ) — khai báo rõ, đếm attempt.
+        patchResults = (r && r.results) || null;
+        history.push({ version: attempt + 1, status: 'patch_unapplied', mode: 'patch',
+          reason: (r && r.reason) || 'VA_PATCH_UNAPPLIED', error: (r && r.error) || null, patches: patchResults });
+        patchFeedback.last = patchResults;
+        if (onAttempt) { try { await onAttempt({ attempt, status: 'patch_unapplied', mode: 'patch', reason: (r && r.reason) || 'VA_PATCH_UNAPPLIED' }); } catch (_) {} }
+        continue;
+      }
+      candidate = r.spec; patchResults = r.results || null;
+      patchFeedback.last = patchResults;
+    } else {
+      candidate = applyFixes(current, errorSet);
+    }
     const v = validate(candidate);
     if (!v.ok) break; // spec hỏng → dừng, giữ bản hiện tại (rollback §1.6)
     const candQA = await qa(v.spec);
     const strategies = summarizeStrategies(candQA.errors);
-    if (onAttempt) { try { await onAttempt({ attempt, status: candQA.status, scores: candQA.scores, strategies }); } catch (_) {} }
-    history.push({ version: attempt + 1, status: candQA.status, scores: candQA.scores, strategies, ...(perScene ? { sceneErrors: worstSceneErrors(currentQA.errors).map(e => e.scene) } : {}) });
+    if (onAttempt) { try { await onAttempt({ attempt, status: candQA.status, scores: candQA.scores, strategies, mode: usePatch ? 'patch' : 'rule' }); } catch (_) {} }
+    history.push({ version: attempt + 1, status: candQA.status, scores: candQA.scores, strategies, mode: usePatch ? 'patch' : 'rule',
+      ...(usePatch && patchResults ? { patch: { applied: patchResults.filter(r => r.ok).length, total: patchResults.length } } : {}),
+      ...(perScene && !usePatch ? { sceneErrors: worstSceneErrors(currentQA.errors).map(e => e.scene) } : {}) });
     if (meanScore(candQA) >= meanScore(currentQA)) {
       current = v.spec; currentQA = candQA;
       // Checkpoint: scene nào được sửa thành công trong version này → đánh dấu.

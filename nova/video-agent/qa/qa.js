@@ -46,8 +46,15 @@ function temporalQA(spec, timeline, audioDuration) {
           suggestedFix: { type: 'extend_caption', index: j } });
     });
   });
-  if (Number.isFinite(audioDuration) && timeline.durationSec > audioDuration + 0.5)
-    errors.push({ scene: null, type: 'tts_out_of_sync', severity: 'high', suggestedFix: null });
+  if (Number.isFinite(audioDuration) && timeline.durationSec > audioDuration + 0.5) {
+    const overrun = ROUND3(timeline.durationSec - audioDuration);
+    // Vai QA_Agent (AutoGen đối kháng) — chỉ CHẨN ĐOÁN: ghi số đo cụ thể (overrunSec)
+    // để Fixer (auto-fix/fixer.js) quyết định cách sửa; loại này không có rule cứng
+    // nên không tự ý gắn suggestedFix.
+    errors.push({ scene: null, type: 'tts_out_of_sync', severity: 'high', suggestedFix: null,
+      message: `Timeline ${timeline.durationSec}s tràn ${overrun}s so với giọng đọc TTS (${audioDuration}s)`,
+      audioDuration, timelineDurationSec: timeline.durationSec, overrunSec: overrun });
+  }
   return errors;
 }
 

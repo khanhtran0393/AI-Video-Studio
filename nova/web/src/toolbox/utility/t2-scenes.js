@@ -96,13 +96,13 @@ function _t2Coverage(script, scenes){
 }
 
 function _t2SceneWarns(s, idx, scenes){
-  const w = [];  // A5: canh trong (khong co gi het) -> chip warning nhung
+  const w = [];
+  const txt = String(s.text || '').trim();
+  const pr  = (state.scenePrompts || {})[s.id] || '';
+  // A5: canh trong (khong co gi het) -> chip warning nhạt
   if (!txt && !pr.trim() && !String(s.character || '').trim() && !String(s.background || '').trim()){
     w.push('canh trong - can nhap text hoac generate prompt');
   }
-
-  const txt = String(s.text || '').trim();
-  const pr  = (state.scenePrompts || {})[s.id] || '';
   if (!pr.trim()) w.push('chưa có prompt ảnh');
   // Lời đọc có người hành động mà cảnh không gán nhân vật → thường là AI nhận diện hụt
   if (!String(s.character || '').trim() && /\b(he|she|they|his|her|người|anh|cô|ông|bà|họ)\b/i.test(txt) && s.shot !== 'b-roll')

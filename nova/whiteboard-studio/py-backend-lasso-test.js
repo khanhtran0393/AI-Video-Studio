@@ -1,6 +1,6 @@
 'use strict';
 /* Test e2e đường dữ liệu "khoanh tay theo vật thể" (lasso polygon) của Vẽ Tay Ảnh:
-    Mô phỏng đúng panel mới (handdraw-studio-panel.js):
+    Mô phỏng đúng panel mới (web/src/hd/ — module hd-scenes/hd-canvas):
       pvCreateLassoElement → points preview → raw element (region có points,
       handPath = điểm đầu/cuối nét khoanh, timing pvNextTiming nối tiếp)
       → A.normalizeElement (sanitize points + bbox) → A.toAnnotation → validate

@@ -24,7 +24,7 @@
     "test:agent-bridge": "node nova/scripts/agent-bridge-test.js",
     "test:local-media": "node nova/scripts/local-media-test.js",
     "test:web-origin": "node nova/scripts/web-origin-qa.js",
-    "test:video-agent": "node nova/video-agent/test.js && node nova/video-agent/test-ipc.js && node nova/video-agent/test-bridge.js && node nova/video-agent/test-phases.js && node nova/video-agent/test-behavior-frame.js && node nova/video-agent/test-ai-gateway.js",
+    "test:video-agent": "node nova/video-agent/test.js && node nova/video-agent/test-ipc.js && node nova/video-agent/test-bridge.js && node nova/video-agent/test-phases.js && node nova/video-agent/test-behavior-frame.js && node nova/video-agent/test-ai-gateway.js && node nova/video-agent/test-autofix-upgrade.js",
     "test:video-agent:render": "electron nova/video-agent/test-render-real.js",
     "test:video-agent:live": "node nova/video-agent/test-ai-live.js",
     "test:auto-fix": "npm --prefix auto-fix run test:all",

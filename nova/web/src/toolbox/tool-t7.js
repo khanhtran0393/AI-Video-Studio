@@ -48,6 +48,10 @@ function t7Build(){
   try { if (!_t7Cat || !_t7Trans || !_t7Bits) _t7LoadFx().then(() => { try { t7RenderRail(); if (typeof t7SetMediaTab === 'function') t7SetMediaTab(t7State.mediaTab || 'scenes'); } catch (e) {} }); } catch (e) {}
   const asp = document.getElementById('t7Aspect')?.value || '16:9';
   const player = document.getElementById('t7Player'); if (player) player.style.aspectRatio = asp.replace(':', '/');
+  // Biến tỉ lệ w/h cho CSS (width:min(100%, maxH * arw)) — khung 9:16/1:1 co NGANG theo
+  // chiều cao tối đa thay vì giữ width 100% rồi bị max-height kẹp vỡ tỉ lệ (preview nhỏ).
+  const ab = asp.split(':'); const pl2 = document.getElementById('t7Player');
+  if (pl2 && ab.length === 2 && +ab[1] > 0) pl2.style.setProperty('--t7-arw', String(+ab[0] / +ab[1]));
   const al = document.getElementById('t7AspectLabel'); if (al) al.textContent = asp;
   _t7AutoBuild();          // luôn khớp Phân Cảnh (Tool 2), giữ hiệu ứng/lựa chọn video
   _t7CoverAudio();         // giọng dài hơn cảnh → kéo dài cảnh cuối cho đủ (preview = video xuất)

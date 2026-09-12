@@ -66,6 +66,9 @@ function viError(err, stage) {
     stage: stage || (err && err.stage) || null,
     message: viText(code, original),
     original,
+    // digest = log render đã cắt gọn (auto-fix/log-parse.js) — đi kèm lỗi render để
+    // job.json giữ nguyên nhân tóm tắt cho người dùng + auto-fix/AI đọc.
+    digest: (err && err.digest) || null,
     details: (err && (err.details || (err.qa && err.qa.errors))) || null,
   };
 }

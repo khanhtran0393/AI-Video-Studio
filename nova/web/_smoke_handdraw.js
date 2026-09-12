@@ -114,8 +114,14 @@ window.native = {
 };
 
 (async () => {
-  /* 1 · boot panel — bắt lỗi init (bind/thẻ bút/wireEvents/render) */
-  require('./handdraw-studio-panel.js');
+  /* 1 · boot panel — bắt lỗi init (bind/thẻ bút/wireEvents/render)
+     Nạp đủ 6 module theo đúng thứ tự index.html (context registry window.hdPanelCtx) */
+  require('./src/hd/hd-core.js');
+  require('./src/hd/hd-scenes.js');
+  require('./src/hd/hd-canvas.js');
+  require('./src/hd/hd-ai-export.js');
+  require('./src/hd/hd-render.js');
+  require('./src/hd/hd-main.js');
   if (!window.HanddrawPanel || typeof window.HanddrawPanel.init !== 'function') throw new Error('HanddrawPanel không nạp được');
   console.log('[1] panel boot OK (không lỗi init)');
 

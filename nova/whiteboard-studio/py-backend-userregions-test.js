@@ -1,6 +1,6 @@
 'use strict';
 /* Test e2e đường dữ liệu "vùng người dùng khoanh" của Vẽ Tay Ảnh:
-    Mô phỏng đúng từng bước panel (handdraw-studio-panel.js):
+    Mô phỏng đúng từng bước panel (web/src/hd/ — module hd-scenes/hd-canvas):
       pvCreateElement → raw element (rect tùy ý, timing pvNextTiming nối tiếp)
       → A.normalizeElement → s.elements → A.toAnnotation → validate
       → PyBackend.exportVideo (engine Python render thật) → MP4

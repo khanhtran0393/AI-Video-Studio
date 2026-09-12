@@ -1,0 +1,334 @@
+    <!-- ══════ CÔNG CỤ FFMPEG (sidebar dropdown "Công cụ FFmpeg") ══════
+         10 tool: Tách MP3/M4A/WAV / Cắt / Ghép / Loop / Nén / Trích Frame / Xoá Tiếng /
+         Đổi Định Dạng / Ghép Nhạc / Xuất GIF.
+         Logic trong src/toolbox/tool-ffx.js (tiền tố ffx*), IPC ffx:* qua window.native.ffx.
+         Progress bar + nút Huỷ được JS chèn động vào hàng hành động khi chạy. -->
+
+    <!-- 1. TÁCH MP3/M4A/WAV -->
+    <div class="tool" id="tool-toolffxaudio">
+      <div class="tool-head">
+        <div class="tool-title">🎵 Tách MP3</div>
+        <div class="tool-subtitle">Tách âm thanh từ video thành MP3 / M4A / WAV bằng FFmpeg local — không cần upload, không tốn API.</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px;max-width:640px">
+        <div>
+          <label class="label">Video nguồn</label>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <button class="btn ghost sm" onclick="ffxPickInput('audio')">📁 Chọn video</button>
+            <span id="ffxAudioInput" style="font-size:11.5px;color:var(--text-muted);word-break:break-all">Chưa chọn</span>
+          </div>
+        </div>
+        <div style="display:flex;gap:14px;flex-wrap:wrap">
+          <div>
+            <label class="label">Định dạng</label>
+            <select id="ffxAudioFormat" style="max-width:160px">
+              <option value="mp3" selected>MP3</option>
+              <option value="m4a">M4A</option>
+              <option value="wav">WAV</option>
+            </select>
+          </div>
+          <div>
+            <label class="label">Chất lượng</label>
+            <select id="ffxAudioBitrate" style="max-width:220px">
+              <option value="128k">128 kbps — nhẹ</option>
+              <option value="192k" selected>192 kbps — cân bằng</option>
+              <option value="320k">320 kbps — cao nhất</option>
+            </select>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn primary sm" onclick="ffxRunExtract()">🎵 Tách âm thanh</button>
+          <span id="ffxAudioStatus" style="font-size:11.5px"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. CẮT VIDEO (nhập giây hoặc mm:ss / hh:mm:ss) -->
+    <div class="tool" id="tool-toolffxcut">
+      <div class="tool-head">
+        <div class="tool-title">✂️ Cắt Video</div>
+        <div class="tool-subtitle">Cắt 1 đoạn video theo giây bắt đầu / kết thúc — copy stream (không re-encode) nên nhanh và giữ nguyên chất lượng. Nhập được cả "90" hoặc "01:30".</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px;max-width:640px">
+        <div>
+          <label class="label">Video nguồn</label>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <button class="btn ghost sm" onclick="ffxPickInput('cut')">📁 Chọn video</button>
+            <span id="ffxCutInput" style="font-size:11.5px;color:var(--text-muted);word-break:break-all">Chưa chọn</span>
+          </div>
+        </div>
+        <div style="display:flex;gap:14px;flex-wrap:wrap">
+          <div>
+            <label class="label">Bắt đầu</label>
+            <input type="text" id="ffxCutStart" placeholder="0 hoặc 00:00" style="max-width:160px">
+          </div>
+          <div>
+            <label class="label">Kết thúc</label>
+            <input type="text" id="ffxCutEnd" placeholder="30 hoặc 00:30" style="max-width:160px">
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn primary sm" onclick="ffxRunCut()">✂️ Cắt video</button>
+          <span id="ffxCutStatus" style="font-size:11.5px"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. GHÉP VIDEO (đổi thứ tự clip bằng ↑/↓) -->
+    <div class="tool" id="tool-toolffxjoin">
+      <div class="tool-head">
+        <div class="tool-title">🔗 Ghép Video</div>
+        <div class="tool-subtitle">Ghép nhiều video thành 1 file theo đúng thứ tự — các clip nên cùng định dạng/độ phân giải để ghép không re-encode. Đổi thứ tự bằng nút ↑/↓.</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px;max-width:640px">
+        <div>
+          <label class="label">Danh sách clip (thứ tự = thứ tự ghép)</label>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="btn ghost sm" onclick="ffxPickInputs()">📁 Chọn các clip</button>
+            <span id="ffxJoinCount" style="font-size:11.5px;color:var(--text-muted)">Chưa chọn clip nào</span>
+          </div>
+          <div id="ffxJoinList" style="font-size:11.5px;color:var(--text-dim);margin-top:6px;word-break:break-all"></div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn primary sm" onclick="ffxRunJoin()">🔗 Ghép video</button>
+          <span id="ffxJoinStatus" style="font-size:11.5px"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. LOOP VIDEO -->
+    <div class="tool" id="tool-toolffxloop">
+      <div class="tool-head">
+        <div class="tool-title">🔁 Loop Video</div>
+        <div class="tool-subtitle">Lặp video N lần thành 1 file dài hơn (ví dụ loop 5 lần clip 10s → video 50s) — copy stream, không re-encode.</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px;max-width:640px">
+        <div>
+          <label class="label">Video nguồn</label>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <button class="btn ghost sm" onclick="ffxPickInput('loop')">📁 Chọn video</button>
+            <span id="ffxLoopInput" style="font-size:11.5px;color:var(--text-muted);word-break:break-all">Chưa chọn</span>
+          </div>
+        </div>
+        <div>
+          <label class="label">Số lần lặp</label>
+          <input type="number" id="ffxLoopTimes" min="2" step="1" value="2" style="max-width:160px">
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn primary sm" onclick="ffxRunLoop()">🔁 Loop video</button>
+          <span id="ffxLoopStatus" style="font-size:11.5px"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5. NÉN VIDEO -->
+    <div class="tool" id="tool-toolffxcompress">
+      <div class="tool-head">
+        <div class="tool-title">🗜 Nén Video</div>
+        <div class="tool-subtitle">Nén video giảm dung lượng để gửi Zalo/Drive/Email — H.264 + CRF: CRF càng cao file càng nhẹ (chất giảm dần).</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px;max-width:640px">
+        <div>
+          <label class="label">Video nguồn</label>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <button class="btn ghost sm" onclick="ffxPickInput('compress')">📁 Chọn video</button>
+            <span id="ffxCompressInput" style="font-size:11.5px;color:var(--text-muted);word-break:break-all">Chưa chọn</span>
+          </div>
+        </div>
+        <div>
+          <label class="label">Mức nén (CRF)</label>
+          <select id="ffxCompressCrf" style="max-width:260px">
+            <option value="23">CRF 23 — nhẹ tay, chất cao</option>
+            <option value="28" selected>CRF 28 — cân bằng</option>
+            <option value="35">CRF 35 — mạnh, file nhỏ nhất</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn primary sm" onclick="ffxRunCompress()">🗜 Nén video</button>
+          <span id="ffxCompressStatus" style="font-size:11.5px"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 6. TRÍCH FRAME -->
+    <div class="tool" id="tool-toolffxframes">
+      <div class="tool-head">
+        <div class="tool-title">🖼 Trích Frame</div>
+        <div class="tool-subtitle">Trích ảnh từ video: 1 ảnh tại đúng giây chọn, hoặc mỗi N giây 1 ảnh (làm storyboard/thumbnail). Ảnh lưu vào thư mục bạn chọn.</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px;max-width:640px">
+        <div>
+          <label class="label">Video nguồn</label>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <button class="btn ghost sm" onclick="ffxPickInput('frames')">📁 Chọn video</button>
+            <span id="ffxFramesInput" style="font-size:11.5px;color:var(--text-muted);word-break:break-all">Chưa chọn</span>
+          </div>
+        </div>
+        <div style="display:flex;gap:14px;flex-wrap:wrap">
+          <div>
+            <label class="label">Chế độ</label>
+            <select id="ffxFramesMode" onchange="ffxFramesModeUI()" style="max-width:230px">
+              <option value="every" selected>Mỗi N giây 1 ảnh</option>
+              <option value="single">1 ảnh tại giây chọn</option>
+            </select>
+          </div>
+          <div>
+            <label class="label" id="ffxFramesSecsLabel">Khoảng cách (giây)</label>
+            <input type="number" id="ffxFramesSecs" min="0.1" step="0.1" value="5" style="max-width:140px">
+          </div>
+          <div>
+            <label class="label">Định dạng</label>
+            <select id="ffxFramesFormat" style="max-width:120px">
+              <option value="png" selected>PNG</option>
+              <option value="jpg">JPG</option>
+            </select>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn primary sm" onclick="ffxRunFrames()">🖼 Trích frame</button>
+          <span id="ffxFramesStatus" style="font-size:11.5px"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 7. XOÁ TIẾNG -->
+    <div class="tool" id="tool-toolffxmute">
+      <div class="tool-head">
+        <div class="tool-title">🔇 Xoá Tiếng</div>
+        <div class="tool-subtitle">Bỏ track âm thanh khỏi video (giữ nguyên hình, copy stream không re-encode) — chuẩn bị ghép nhạc hoặc xuất bản câm.</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px;max-width:640px">
+        <div>
+          <label class="label">Video nguồn</label>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <button class="btn ghost sm" onclick="ffxPickInput('mute')">📁 Chọn video</button>
+            <span id="ffxMuteInput" style="font-size:11.5px;color:var(--text-muted);word-break:break-all">Chưa chọn</span>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn primary sm" onclick="ffxRunMute()">🔇 Xoá tiếng</button>
+          <span id="ffxMuteStatus" style="font-size:11.5px"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 8. ĐỔI ĐỊNH DẠNG -->
+    <div class="tool" id="tool-toolffxconvert">
+      <div class="tool-head">
+        <div class="tool-title">🔄 Đổi Định Dạng</div>
+        <div class="tool-subtitle">Chuyển video/âm thanh sang định dạng khác: MP4/WEBM/MKV/MOV hoặc MP3/M4A/WAV — chọn đích theo mục "Chuyển sang".</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px;max-width:640px">
+        <div>
+          <label class="label">Nguồn (video hoặc âm thanh)</label>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <button class="btn ghost sm" onclick="ffxPickMedia()">📁 Chọn media</button>
+            <span id="ffxConvertInput" style="font-size:11.5px;color:var(--text-muted);word-break:break-all">Chưa chọn</span>
+          </div>
+        </div>
+        <div>
+          <label class="label">Chuyển sang</label>
+          <select id="ffxConvertTarget" style="max-width:220px">
+            <option value="mp4" selected>MP4</option>
+            <option value="webm">WEBM</option>
+            <option value="mkv">MKV</option>
+            <option value="mov">MOV</option>
+            <option value="mp3">MP3</option>
+            <option value="m4a">M4A</option>
+            <option value="wav">WAV</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn primary sm" onclick="ffxRunConvert()">🔄 Chuyển đổi</button>
+          <span id="ffxConvertStatus" style="font-size:11.5px"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 9. GHÉP NHẠC -->
+    <div class="tool" id="tool-toolffxmusic">
+      <div class="tool-head">
+        <div class="tool-title">🎶 Ghép Nhạc</div>
+        <div class="tool-subtitle">Ghép nhạc nền vào video: TRỘN với tiếng gốc (điều chỉnh âm lượng nhạc) hoặc THAY THẾ hoàn toàn tiếng gốc.</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px;max-width:640px">
+        <div>
+          <label class="label">Video nguồn</label>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <button class="btn ghost sm" onclick="ffxPickInput('music')">📁 Chọn video</button>
+            <span id="ffxMusicInput" style="font-size:11.5px;color:var(--text-muted);word-break:break-all">Chưa chọn</span>
+          </div>
+        </div>
+        <div>
+          <label class="label">File nhạc</label>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <button class="btn ghost sm" onclick="ffxPickMusic()">📁 Chọn nhạc</button>
+            <span id="ffxMusicFile" style="font-size:11.5px;color:var(--text-muted);word-break:break-all">Chưa chọn</span>
+          </div>
+        </div>
+        <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end">
+          <div>
+            <label class="label">Chế độ</label>
+            <select id="ffxMusicMode" onchange="ffxMusicModeUI()" style="max-width:240px">
+              <option value="mix" selected>Trộn với tiếng gốc</option>
+              <option value="replace">Thay thế tiếng gốc</option>
+            </select>
+          </div>
+          <div id="ffxMusicVolRow">
+            <label class="label">Âm lượng nhạc: <span id="ffxMusicVolText">100%</span></label>
+            <input type="range" id="ffxMusicVol" min="0" max="200" value="100" step="10" oninput="ffxMusicVolUI()" style="width:180px">
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn primary sm" onclick="ffxRunMusic()">🎶 Ghép nhạc</button>
+          <span id="ffxMusicStatus" style="font-size:11.5px"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 10. XUẤT GIF -->
+    <div class="tool" id="tool-toolffxgif">
+      <div class="tool-head">
+        <div class="tool-title">🎞 Xuất GIF</div>
+        <div class="tool-subtitle">Xuất GIF loop vô hạn từ video — palette 2 pass nên màu chuẩn. Chỉ nên xuất đoạn ngắn (dưới 1 phút) vì GIF nặng.</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px;max-width:640px">
+        <div>
+          <label class="label">Video nguồn</label>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <button class="btn ghost sm" onclick="ffxPickInput('gif')">📁 Chọn video</button>
+            <span id="ffxGifInput" style="font-size:11.5px;color:var(--text-muted);word-break:break-all">Chưa chọn</span>
+          </div>
+        </div>
+        <div style="display:flex;gap:14px;flex-wrap:wrap">
+          <div>
+            <label class="label">Bề rộng</label>
+            <select id="ffxGifWidth" style="max-width:140px">
+              <option value="320">320 px</option>
+              <option value="480" selected>480 px</option>
+              <option value="640">640 px</option>
+            </select>
+          </div>
+          <div>
+            <label class="label">FPS</label>
+            <select id="ffxGifFps" style="max-width:120px">
+              <option value="10">10</option>
+              <option value="12" selected>12</option>
+              <option value="15">15</option>
+            </select>
+          </div>
+          <div>
+            <label class="label">Từ (giây)</label>
+            <input type="text" id="ffxGifStart" placeholder="0 hoặc 00:00" style="max-width:130px">
+          </div>
+          <div>
+            <label class="label">Đến (tuỳ chọn)</label>
+            <input type="text" id="ffxGifEnd" placeholder="30 hoặc 00:30" style="max-width:130px">
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn primary sm" onclick="ffxRunGif()">🎞 Xuất GIF</button>
+          <span id="ffxGifStatus" style="font-size:11.5px"></span>
+        </div>
+      </div>
+    </div>

@@ -1,0 +1,31 @@
+web\partials\panels-upscale-voice.html:320:        <pre id="voiceLog" style="max-height:240px;overflow:auto;background:var(--surface-2);color:var(--text-muted);border:1px solid var(--border);font-size:11px;line-height:1.5;padding:10px;border-radius:8px;margin-top:6px;white-space:pre-wrap"></pre>
+web\src\toolbox\utility\voice.js:280:    try { giongBao('Đã chuyển engine sang ' + _TTS_TEN[v.engine] + ' (theo giọng đang chọn)', 'green'); } catch (e){}
+web\src\toolbox\utility\voice.js:383:      giongBao('⏳ Đang tạo mẫu nghe thử của "' + v.name + '"… lần đầu model nạp ~30-60 giây, giữ app mở.', 'text-muted');
+web\src\toolbox\utility\voice.js:396:    giongBao('Nghe thử lỗi: ' + (err.message || err), 'red');
+web\src\toolbox\utility\voice.js:474:function giongBao(msg, mau){
+web\src\toolbox\utility\voice.js:482:  if (!txt){ giongBao('Chưa có kịch bản ở Tool 2.', 'text-muted'); return; }
+web\src\toolbox\utility\voice.js:569:  if (!text){ giongBao('Nhập nội dung trước.', 'red'); return; }
+web\src\toolbox\utility\voice.js:580:      giongBao('Đang tạo giọng…');
+web\src\toolbox\utility\voice.js:581:      const { blob, giong, engine, luiVe } = await ttsDoc(text, s => giongBao('Đang tạo… ' + s));
+web\src\toolbox\utility\voice.js:583:      giongBao('✓ Xong sau ' + Math.round((Date.now() - t0) / 1000) + ' giây' + (luiVe ? ' (đã lui về ' + _TTS_TEN[engine] + ')' : ''), 'green');
+web\src\toolbox\utility\voice.js:594:          giongBao('Đang tạo ' + nhan + ' (~' + _giongDemTu(doan[i]) + ' từ)' + (thu > 1 ? ' · thử lần ' + thu : '') + '…');
+web\src\toolbox\utility\voice.js:595:          const { blob, giong, engine } = await ttsDoc(doan[i], s => giongBao(nhan + ' · ' + s));
+web\src\toolbox\utility\voice.js:598:          giongBao('✓ ' + nhan + ' xong (' + xong + '/' + doan.length + ')' + (i + 1 < doan.length ? ' — đang sang đoạn tiếp…' : ''), 'green');
+web\src\toolbox\utility\voice.js:606:        giongBao('⚠ ' + nhan + ' lỗi sau 2 lần thử (' + (loi.message || loi) + '). Đã xong ' + xong + '/' + doan.length + ' đoạn (đã lưu trong lịch sử bên dưới). Muốn làm tiếp: dán phần văn bản còn lại (~' + conLai + ' từ) vào ô rồi bấm “Tạo giọng”.', 'red');
+web\src\toolbox\utility\voice.js:610:    giongBao('✓ Xong ' + doan.length + ' đoạn sau ' + Math.round((Date.now() - t0) / 1000) + ' giây — bấm “🔗 Ghép các đoạn đã xong” ở khung Đã tạo để có 1 file trọn vẹn.', 'green');
+web\src\toolbox\utility\voice.js:612:    giongBao('Lỗi: ' + (e.message || e), 'red');
+web\src\toolbox\utility\voice.js:672:  giongBao('✓ Đã gán vào dựng video — sang tab Dựng video là thấy.', 'green');
+web\src\toolbox\utility\voice.js:716:  if (!g || g.items.length < 2){ giongBao('Cần ít nhất 2 đoạn đã xong trong lịch sử để ghép.', 'red'); return; }
+web\src\toolbox\utility\voice.js:751:    giongBao('✓ Đã ghép ' + g.items.length + '/' + g.N + ' đoạn thành 1 file (' + Math.round(out.duration) + ' giây)'
+web\src\toolbox\utility\voice.js:755:    giongBao('Lỗi ghép: ' + (e.message || e), 'red');
+web\src\toolbox\utility\voice.js:775:  if (!ten){ giongBao('Đặt tên cho giọng trước.', 'red'); return; }
+web\src\toolbox\utility\voice.js:777:    if (!_voiceReady){ await voiceInit(); if (!_voiceReady){ giongBao('Backend giọng nói chưa sẵn sàng.', 'red'); return; } }
+web\src\toolbox\utility\voice.js:781:      if (!f){ giongBao('Chọn file giọng mẫu.', 'red'); return; }
+web\src\toolbox\utility\voice.js:782:      giongBao('Đang tải file mẫu…');
+web\src\toolbox\utility\voice.js:788:      if (!ins){ giongBao('Nhập mô tả giọng.', 'red'); return; }
+web\src\toolbox\utility\voice.js:800:    giongBao('✓ Đã thêm giọng "' + ten + '".', 'green');
+web\src\toolbox\utility\voice.js:801:  } catch (e){ giongBao('Thêm giọng lỗi: ' + (e.message || e), 'red'); }
+web\src\toolbox\utility\voice.js:807:  if (!v){ giongBao('Không tìm thấy giọng.', 'red'); return; }
+web\src\toolbox\utility\voice.js:808:  if (v.factory){ giongBao('Không xoá được giọng có sẵn.', 'red'); return; }
+web\src\toolbox\utility\voice.js:820:    giongBao('✓ Đã xoá giọng "' + v.name + '".', 'green');
+web\src\toolbox\utility\voice.js:821:  } catch (e){ giongBao('Xoá lỗi: ' + (e.message || e), 'red'); }

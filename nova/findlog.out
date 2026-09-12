@@ -1,0 +1,2 @@
+preload.js:270:  onVoiceLog: (cb) => ipcRenderer.on('voice-log', (_e, s) => cb(s)),
+scripts\voice-contract-test.js:88:for (const ch of ['voiceStart', 'voiceStatus', 'voiceProbe', 'voiceInstallBackend', 'onVoiceLog']) {

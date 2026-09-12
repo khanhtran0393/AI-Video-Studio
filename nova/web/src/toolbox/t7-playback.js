@@ -241,6 +241,7 @@ function t7HookKeys(){
     else if (e.key === 'Delete' || e.key === 'Backspace'){ e.preventDefault(); t7DeleteSel(); }
     else if ((e.metaKey || e.ctrlKey) && (e.key === 'z' || e.key === 'Z')){ e.preventDefault(); if (e.shiftKey) t7Redo(); else t7Undo(); }
     else if ((e.metaKey || e.ctrlKey) && (e.key === 'y' || e.key === 'Y')){ e.preventDefault(); t7Redo(); }
+    else if (e.key === 'Escape' && document.body.classList.contains('t7-focus')){ e.preventDefault(); t7Focus(false); }
   });
 }
 

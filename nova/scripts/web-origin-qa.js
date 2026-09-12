@@ -63,7 +63,7 @@ function extractFn(src, name) {
   // route /local-media — đây mới là chỗ phát sinh URL từ file:///).
   check('index.html load toolbox/utility.js', html.indexOf('src/toolbox/utility.js') >= 0);
 
-  const panelPaths = ['/handdraw-studio-panel.js', '/whiteboard-studio-panel.js'];
+  const panelPaths = ['/src/hd/hd-core.js', '/whiteboard-studio-panel.js'];
   const panels = {};
   for (const pp of panelPaths) {
     const r = await get(port, pp);
@@ -95,7 +95,7 @@ function extractFn(src, name) {
     check('_t7FileUrl: rong tra rong', f('') === '');
   }
 
-  const hd = extractFn(panels['/handdraw-studio-panel.js'], 'hdFileUrl');
+  const hd = extractFn(panels['/src/hd/hd-core.js'], 'hdFileUrl');
   check('trich duoc hdFileUrl tu panel', !!hd);
   if (hd) {
     const f = new Function(hd + ' return hdFileUrl;')();

@@ -375,7 +375,7 @@ for (const file of jsFiles) {
   const text = jsTextCache.get(file);
   if (text !== undefined) callsByFile.set(file, extractCallsFromCode(text));
 }
-const SCAN_DEAD_IN = /[\\/](?:src[\\/]toolbox[\\/][^\\/]+\.js|handdraw-studio-panel\.js|video-agent-panel\.js|whiteboard-studio-panel\.js|srt-translate-panel\.js)$/i;
+const SCAN_DEAD_IN = /[\\/](?:src[\\/]toolbox[\\/][^\\/]+\.js|src[\\/]va[\\/][^\\/]+\.js|src[\\/]hd[\\/][^\\/]+\.js|whiteboard-studio-panel\.js|srt-translate-panel\.js)$/i;
 for (const file of jsFiles) {
   if (!SCAN_DEAD_IN.test(file)) continue;
   const text = jsTextCache.get(file);

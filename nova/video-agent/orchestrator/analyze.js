@@ -53,7 +53,7 @@ async function runAnalysis(projectDir, ctx) {
   spec = v.spec;
   const specVersion = versions.commitVideoSpec(spec);
   return { project: prj, script, tts, manifest, storyPlan, visualPlan, spec, versions, validate, specVersion,
-    ai: aiGateway.registry.describe() };
+    ai: aiGateway.registry.describe(), aiGateway };
 }
 
 
@@ -193,5 +193,5 @@ async function runAnalysisFromData(inputData, ctx) {
   const specVersion = versions.commitVideoSpec(spec);
 
   return { project: prj, script, tts, manifest, storyPlan, visualPlan, spec, versions, validate, specVersion,
-    ai: aiGateway.registry.describe() };
+    ai: aiGateway.registry.describe(), aiGateway };
 }

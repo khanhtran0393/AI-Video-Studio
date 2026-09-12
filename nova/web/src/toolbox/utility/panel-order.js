@@ -13,6 +13,8 @@
       'toolflow','tool6','tool7','toolupscale','toolvoice',
       'toolniche','toolvideoagent','toolimzic','toolwhiteboard',
       'toolhanddraw','toolsrttranslate',
+      'toolffxaudio','toolffxcut','toolffxjoin','toolffxloop',
+      'toolffxcompress','toolffxframes','toolffxmute','toolffxconvert','toolffxmusic','toolffxgif'  /* Công cụ FFmpeg (sidebar dropdown) */,
       'toolsettings','tooladmin','toollog',
       'toolanim'  /* mồ côi: mở từ Tool 7 */
     ];

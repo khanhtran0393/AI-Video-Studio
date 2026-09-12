@@ -21,6 +21,7 @@ const { registerSecretVaultIpc } = require('./secret-vault');
 const { registerImzicIpc } = require('./imzic');
 const { registerScheduleIpc } = require('./schedule');
 const { registerSpyIpc } = require('./spy');
+const { registerFfmpegToolsIpc } = require('./ffmpeg-tools');
 const { registerWhiteboardIpc } = require('../../whiteboard-studio/ipc');
 const { registerSrtTranslateIpc } = require('../../srt-translate/ipc');
 
@@ -36,6 +37,7 @@ function registerAllIpc() {
   registerImzicIpc();
   registerScheduleIpc();
   registerSpyIpc();
+  registerFfmpegToolsIpc();   // Công cụ FFmpeg (sidebar): tách MP3, cắt, ghép, loop video
 
   // ── Whiteboard Studio (port TPL Studio Stories) — module độc lập,
   //    runtime ffmpeg nội bộ riêng, không phụ thuộc app cũ ──

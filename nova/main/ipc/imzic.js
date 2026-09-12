@@ -143,6 +143,11 @@ function registerImzicIpc() {
       if (trimStart > 0) args.push('-ss', String(trimStart));
       if (trimEnd > trimStart) args.push('-t', String(trimEnd - trimStart));
       args.push('-i', audPath);
+      // Map stream TƯỜNG MINH (Luật 8 deterministic + Luật 10 fail-loud): video lấy
+      // từ input 0 (raw H.264 của WebCodecs), nhạc lấy từ input 1. Nếu file "nhạc"
+      // không có track audio, ffmpeg báo "matches no streams" lộ lỗi thay vì im lặng
+      // xuất video không nhạc (đã từng xảy ra: chọn video Flow gen làm input nhạc).
+      args.push('-map', '0:v:0', '-map', '1:a:0');
       const filters = [];
       if (fadeIn > 0) filters.push('afade=t=in:st=0:d=' + fadeIn);
       if (fadeOut > 0 && trimEnd > trimStart) {
@@ -155,7 +160,16 @@ function registerImzicIpc() {
       } else {
         args.push('-c:v', 'copy', '-c:a', 'copy');
       }
-      args.push('-shortest', outPath);
+      // Cắt đầu ra theo THỜI LƯỢNG ĐÍCH thay cho -shortest: tổ hợp "-shortest +
+      // -c copy" từng làm muxer dừng trước khi ghi gói nhạc nào (repro thật
+      // 2026-09-11 với output/gen-e2e video Flow gen 8s làm input nhạc →
+      // "audio:0kB", file .mp4 ra không có tiếng). Renderer luôn gửi totalDur =
+      // thời lượng video đã encode; có trim thì đích = trimEnd - trimStart.
+      const targetDur = (trimEnd > trimStart) ? (trimEnd - trimStart) : (+p.totalDur || 0);
+      if (targetDur <= 0) {
+        return { ok: false, code: 'IMZIC_BAD_PAYLOAD', message: 'Thiếu totalDur (thời lượng video đích) — không thể cắt nhạc đúng chỗ.' };
+      }
+      args.push('-t', targetDur.toFixed(3), outPath);
 
       try {
         await runFfmpeg(args);

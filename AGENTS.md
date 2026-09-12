@@ -66,7 +66,7 @@ Chuỗi tuần tự, bước nào FAIL thì dừng cả chuỗi:
 | Lệnh | Nội dung |
 |---|---|
 | `npm run test:foundation` | foundation test |
-| `npm run test:video-agent` | 6 suite video-agent (unit + IPC + bridge + phases + gateway) |
+| `npm run test:video-agent` | 7 suite video-agent (unit + IPC + bridge + phases + gateway + auto-fix-upgrade) |
 | `npm run test:video-agent:render` | render Remotion THẬT qua Electron (lần đầu tự tải Chrome) |
 | `npm run test:video-agent:live` | AI gateway live (cần tài khoản/credit thật) |
 | `npm run test:voice` | voice contract test |

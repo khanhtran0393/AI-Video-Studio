@@ -6,14 +6,19 @@ async function t7AiPropose(lamLai){
   if (!clips.length){ setStatus7('Chưa có cảnh nào.', 'error'); return; }
   if (!window.native || typeof window.native.sceneTemplates !== 'function'){
     setStatus7('Chỉ chạy trong app Nova.', 'error'); return; }
+  // Mở khung trợ lý + báo đang chạy NGAY TRƯỚC mọi lượt chờ AI — nếu chờ danh mục
+  // xong mới mở thì lúc "Phân tích lại" màn hình im lặng, tưởng bấm hụt.
+  const m = document.getElementById('t7Ai'); if (m) m.classList.add('on');
+  _t7AiSteps(0, { 0: 'đang chuẩn bị…' });
+  document.getElementById('t7AiProps').innerHTML = '<div class="t7-empty">'
+    + (lamLai ? '↻ Đang phân tích lại từ đầu… đọc kịch bản và so khớp kho mẫu.' : 'Đang nạp dự án…') + '</div>';
+  setStatus7(lamLai ? '✨ Trợ lý dựng đang phân tích lại toàn bộ cảnh…' : '✨ Trợ lý dựng đang nạp dự án…', 'working');
   const cat = await _t7Catalog();
   if (!cat){ setStatus7('Không đọc được danh mục mẫu — khởi động lại app.', 'error'); return; }
   // Kho mẫu rỗng thì BỎ QUA phần đồ hoạ chứ không thoát hẳn — chuyển cảnh vẫn chạy được.
   // Chạy phần đề xuất mẫu khi kho rỗng chỉ tổ đốt 60 lượt gọi rồi loại sạch.
   const boQuaDoHoa = !cat.length;
   const allowed = new Map(cat.map(c => [c.template, c]));
-
-  const m = document.getElementById('t7Ai'); if (m) m.classList.add('on');
 
   // ── Mở lại video cũ: dựng thẳng hàng đề xuất đã lưu, KHÔNG gọi lại AI ──
   if (!lamLai){
