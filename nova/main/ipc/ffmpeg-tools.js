@@ -16,7 +16,7 @@ const AUDIO_FILTERS = [{ name: 'Âm thanh', extensions: ['mp3', 'm4a', 'wav', 'a
 const MEDIA_FILTERS = [
   { name: 'Media', extensions: ['mp4', 'mov', 'webm', 'm4v', 'mkv', 'avi', 'ts', 'mp3', 'm4a', 'wav', 'aac', 'ogg', 'flac'] },
 ];
-const SUB_FILTERS = [{ name: 'Phụ đề', extensions: ['srt', 'ass'] }];
+
 
 /* Bọc handler chung: lỗi lộ liễu trả {error}, lỗi huỷ đánh dấu riêng cho renderer hiển thị "Đã huỷ". */
 function errOf(e) {
@@ -86,17 +86,6 @@ function registerFfmpegToolsIpc() {
     } catch (e) { return { error: e.message || String(e) }; }
   });
 
-  // Chọn file phụ đề SRT/ASS (Đóng phụ đề cứng)
-  ipcMain.handle('ffx:pick-sub', async () => {
-    try {
-      const r = await dialog.showOpenDialog(state.mainWindow, {
-        title: 'Chọn file phụ đề (.srt / .ass)', properties: ['openFile'], filters: SUB_FILTERS,
-      });
-      if (r.canceled || !r.filePaths || !r.filePaths[0]) return { canceled: true };
-      return { path: r.filePaths[0] };
-    } catch (e) { return { error: e.message || String(e) }; }
-  });
-
   // Chọn nơi lưu output. Trả cờ `exists` để renderer xác nhận GHI ĐÈ trước khi chạy
   // (ffmpeg -y ghi đè lặng lẽ — cấm hành vi ngầm, Luật 10). defaultDir = thư mục lần trước.
   ipcMain.handle('ffx:pick-output', async (_e, payload = {}) => {
@@ -139,10 +128,7 @@ function registerFfmpegToolsIpc() {
   handleOp('ffx:convert-media', (p, onProgress) => mediaTools.convertMedia(Object.assign({}, p, { onProgress })));
   handleOp('ffx:add-music', (p, onProgress) => mediaTools.addMusic(Object.assign({}, p, { onProgress })));
   handleOp('ffx:to-gif', (p, onProgress) => mediaTools.toGif(Object.assign({}, p, { onProgress })));
-  // ── Gói E (2026-09-12): nhóm 1 đa kênh + nhóm 4 âm thanh sâu ──
-  handleOp('ffx:shorts-video', (p, onProgress) => mediaTools.shortsVideo(Object.assign({}, p, { onProgress })));
-  handleOp('ffx:burn-subs', (p, onProgress) => mediaTools.burnSubs(Object.assign({}, p, { onProgress })));
-  handleOp('ffx:sub-preview', (p, onProgress) => mediaTools.previewBurnSubs(Object.assign({}, p, { onProgress })));
+  // ── Gói E (2026-09-12): nhóm 4 âm thanh sâu ──
   handleOp('ffx:faststart', (p, onProgress) => mediaTools.faststartRemux(Object.assign({}, p, { onProgress })));
   handleOp('ffx:normalize-audio', (p, onProgress) => mediaTools.normalizeAudio(Object.assign({}, p, { onProgress })));
   handleOp('ffx:remove-vocals', (p, onProgress) => mediaTools.removeVocals(Object.assign({}, p, { onProgress })));

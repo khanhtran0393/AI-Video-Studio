@@ -228,11 +228,7 @@ contextBridge.exposeInMainWorld('native', {
     addMusic: (payload) => ipcRenderer.invoke('ffx:add-music', payload),
     toGif: (payload) => ipcRenderer.invoke('ffx:to-gif', payload),
     thumb: (payload) => ipcRenderer.invoke('ffx:thumb', payload),
-    // Gói E: Shorts 9:16 / đóng phụ đề / faststart / loudnorm / bỏ lời / fade
-    pickSub: () => ipcRenderer.invoke('ffx:pick-sub'),
-    shortsVideo: (payload) => ipcRenderer.invoke('ffx:shorts-video', payload),
-    burnSubs: (payload) => ipcRenderer.invoke('ffx:burn-subs', payload),
-  subPreview: (payload) => ipcRenderer.invoke('ffx:sub-preview', payload),
+    // Gói E: faststart / loudnorm / bỏ lời / fade
     faststart: (payload) => ipcRenderer.invoke('ffx:faststart', payload),
     normalizeAudio: (payload) => ipcRenderer.invoke('ffx:normalize-audio', payload),
     removeVocals: (payload) => ipcRenderer.invoke('ffx:remove-vocals', payload),

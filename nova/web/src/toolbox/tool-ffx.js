@@ -1,7 +1,6 @@
 /* ── tool-ffx.js — CÔNG CỤ FFMPEG (sidebar dropdown "Công cụ FFmpeg"):
       Tách MP3/M4A/WAV / Cắt / Ghép (đổi thứ tự) / Loop / Nén / Trích Frame /
-      Xoá Tiếng / Đổi Định Dạng / Ghép Nhạc / GIF / Shorts 9:16 / Đóng Phụ Đề /
-      Âm Thanh Nâng Cao (loudnorm, bỏ lời, fade).
+      Xoá Tiếng / Đổi Định Dạng / Ghép Nhạc / GIF / Âm Thanh Nâng Cao (loudnorm, bỏ lời, fade).
       Renderer script thường (không import/export). Mọi tên cấp đầu tiền tố ffx*
       (module system của renderer — AGENTS.md §8). Chạy qua IPC ffx:* → window.native.ffx.
       Tiến bộ: progress % thật (parse time= phía main), nút Huỷ, probe thời lượng/dung lượng
@@ -13,8 +12,9 @@ var ffxState = {
   audio: '', cut: '', loop: '', loopAudio: '', join: [],
   compress: '', frames: '', mute: '', convert: '',
   music: '', musicFile: '', gif: '',
-  shorts: '', subs: '', subsFile: '', audiofx: '',
+  audiofx: '',
 };
+
 
 /* Tool đang chạy (statusId) — nhận sự kiện ffx:progress để cập nhật đúng progress bar. */
 var ffxActiveStatus = '';
@@ -218,22 +218,6 @@ async function ffxPickLoopAudio() {
     ffxState.loopAudio = r.path;
     const el = document.getElementById('ffxLoopAudioFile');
     if (el) { el.textContent = ffxShort(r.path); el.title = r.path; ffxAppendInfo(el, r.path); }
-  } catch (e) {
-    if (typeof novaToast === 'function') novaToast('FFmpeg: ' + (e.message || e));
-  }
-}
-
-/* Chọn file phụ đề SRT/ASS (Đóng Phụ Đề). */
-async function ffxPickSubFile() {
-  try {
-    const n = ffxNative();
-    if (typeof n.pickSub !== 'function') throw new Error('Thiếu bridge ffx.pickSub — cần khởi động lại app.');
-    const r = await n.pickSub();
-    if (!r || r.error) { ffxSetStatus('ffxSubsStatus', 'Lỗi chọn phụ đề: ' + (r && r.error), true); return; }
-    if (r.canceled || !r.path) return;
-    ffxState.subsFile = r.path;
-    const el = document.getElementById('ffxSubsFile');
-    if (el) { el.textContent = ffxShort(r.path); el.title = r.path; }
   } catch (e) {
     if (typeof novaToast === 'function') novaToast('FFmpeg: ' + (e.message || e));
   }
@@ -1102,75 +1086,13 @@ async function ffxHistoryMp3(i) {
   } catch (e) { ffxFail(id, e); }
 }
 
-/* ── 11) Shorts 9:16 (nền mờ | cắt giữa) ── */
-async function ffxRunShorts() {
-  const id = 'ffxShortsStatus';
-  try {
-    ffxWireProgress();
-    if (!ffxState.shorts) { ffxSetStatus(id, 'Chưa chọn video nguồn', true); return; }
-    const mode = (document.getElementById('ffxShortsMode') || {}).value || 'blur';
-    const gpu = !!(document.getElementById('ffxShortsGpu') || {}).checked;
-    const up = !!(document.getElementById('ffxShortsUp') || {}).checked;
-    ffxActiveStatus = id; ffxShowProgress(id);
-    ffxSetStatus(id, '⏳ Đang dựng 9:16… (0%)', false);
-    const out = await ffxPickOutput(ffxStripExt(ffxBaseName(ffxState.shorts)) + (mode === 'crop' ? '-crop916.mp4' : '-shorts916.mp4'), id);
-    if (!out) { ffxActiveStatus = ''; ffxHideProgress(id); ffxSetStatus(id, '', false); return; }
-    const r = await ffxNative().shortsVideo({ inputPath: ffxState.shorts, outputPath: out, mode: mode, useGpu: gpu, pushUp: up });
-    ffxDone(id, r);
-    if (r && r.warn) { const el = document.getElementById(id); if (el) el.appendChild(document.createTextNode(' · ⚠ ' + r.warn)); }
-  } catch (e) { ffxFail(id, e); }
-}
-
-/* Style phụ đề hiện tại của panel Đóng Phụ Đề (dùng chung cho Xem thử + Đóng thật). */
-function ffxSubsStyle() {
-  return {
-    fontSize: Number((document.getElementById('ffxSubsSize') || {}).value) || 24,
-    color: (document.getElementById('ffxSubsColor') || {}).value || 'white',
-    pos: (document.getElementById('ffxSubsPos') || {}).value || 'bottom',
-  };
-}
-
-/* Xem thử phụ đề: render 1 khung hình — sai style chỉ tốn vài trăm ms, không phải encode cả video. */
-async function ffxSubsPreviewRun() {
-  const id = 'ffxSubsStatus';
-  try {
-    if (!ffxState.subs) { ffxSetStatus(id, 'Chưa chọn video nguồn', true); return; }
-    if (!ffxState.subsFile) { ffxSetStatus(id, 'Chưa chọn file phụ đề .srt / .ass', true); return; }
-    const st = ffxSubsStyle();
-    const r = await ffxNative().subPreview({ inputPath: ffxState.subs, subPath: ffxState.subsFile, fontSize: st.fontSize, color: st.color, pos: st.pos });
-    if (r && r.ok && r.path) {
-      const box = document.getElementById('ffxSubsPreview');
-      if (box) box.innerHTML = '<img src="avs-media://m/' + encodeURIComponent(r.path) + '" alt="Xem thử phụ đề" style="max-width:280px;max-height:220px;border-radius:6px;border:1px solid var(--border,#333)">';
-      ffxSetStatus(id, '🖼 Xem thử tại ' + r.atSec + 's — chỉnh style rồi xem lại, ưng ý mới bấm Đóng phụ đề', false);
-    } else {
-      ffxSetStatus(id, '❌ ' + ((r && r.error) || 'Xem thử thất bại'), true);
-    }
-  } catch (e) { ffxSetStatus(id, '❌ ' + ((e && e.message) || e), true); }
-}
-
-/* ── 12) Đóng phụ đề cứng (SRT/ASS) ── */
-async function ffxRunSubs() {
-  const id = 'ffxSubsStatus';
-  try {
-    ffxWireProgress();
-    if (!ffxState.subs) { ffxSetStatus(id, 'Chưa chọn video nguồn', true); return; }
-    if (!ffxState.subsFile) { ffxSetStatus(id, 'Chưa chọn file phụ đề .srt / .ass', true); return; }
-    const st = ffxSubsStyle();
-    ffxActiveStatus = id; ffxShowProgress(id);
-    ffxSetStatus(id, '⏳ Đang đóng phụ đề… (0%)', false);
-    const out = await ffxPickOutput(ffxStripExt(ffxBaseName(ffxState.subs)) + '-phude.mp4', id);
-    if (!out) { ffxActiveStatus = ''; ffxHideProgress(id); ffxSetStatus(id, '', false); return; }
-    ffxDone(id, await ffxNative().burnSubs({ inputPath: ffxState.subs, subPath: ffxState.subsFile, outputPath: out, fontSize: st.fontSize, color: st.color, pos: st.pos }));
-  } catch (e) { ffxFail(id, e); }
-}
-
 /* Đuôi file xuất âm thanh: giữ đuôi nguồn nếu hợp lệ, không thì M4A (chuẩn YouTube). */
 function ffxAudioOutExt(p) {
   const ext = (ffxBaseName(p).lastIndexOf('.') >= 0 ? ffxBaseName(p).split('.').pop() : '').toLowerCase();
   return ['mp3', 'm4a', 'wav', 'flac'].indexOf(ext) >= 0 ? ext : 'm4a';
 }
 
-/* ── 13a) Chuẩn hoá âm lượng EBU R128 (loudnorm 2-pass) ── */
+/* ── 11a) Chuẩn hoá âm lượng EBU R128 (loudnorm 2-pass) ── */
 async function ffxRunNorm() {
   const id = 'ffxNormStatus';
   try {
@@ -1192,7 +1114,7 @@ async function ffxRunNorm() {
   } catch (e) { ffxFail(id, e); }
 }
 
-/* ── 13b) Bỏ lời / tách giọng thô ── */
+/* ── 11b) Bỏ lời / tách giọng thô ── */
 async function ffxRunVocal() {
   const id = 'ffxVocalStatus';
   try {
@@ -1209,7 +1131,7 @@ async function ffxRunVocal() {
   } catch (e) { ffxFail(id, e); }
 }
 
-/* ── 13c) Fade in/out video + audio ── */
+/* ── 11c) Fade in/out video + audio ── */
 async function ffxRunFades() {
   const id = 'ffxFadeStatus';
   try {
@@ -1291,7 +1213,7 @@ function ffxQueueRender() {
   const box = document.getElementById('ffxQueueList');
   if (!box) return;
   if (!ffxQueueArr.length) {
-    box.innerHTML = '<span style="font-size:12px;color:var(--text-muted)">Hàng đợi trống — bấm "⏳ Vào hàng đợi" ở tool Nén / Đổi định dạng / Ghép / Loop / Ghép nhạc / Shorts 9:16 / Đóng Phụ Đề / Chuẩn hoá âm lượng để xếp việc chạy tuần tự (cấu hình được chụp lại lúc bấm nút).</span>';
+    box.innerHTML = '<span style="font-size:12px;color:var(--text-muted)">Hàng đợi trống — bấm "⏳ Vào hàng đợi" ở tool Nén / Đổi định dạng / Ghép / Loop / Ghép nhạc / Chuẩn hoá âm lượng để xếp việc chạy tuần tự (cấu hình được chụp lại lúc bấm nút).</span>';
     return;
   }
   box.innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">' +
@@ -1336,19 +1258,6 @@ function ffxEnqueueMusic() {
     ['ffxMusicMode', 'ffxMusicVol', 'ffxMusicVideoVol', 'ffxMusicStart', 'ffxMusicFadeIn', 'ffxMusicFadeOut', 'ffxMusicPlayStart', 'ffxMusicPlayEnd', 'ffxMusicLoop', 'ffxMusicNorm'], 'ffxRunMusic');
 }
 
-function ffxEnqueueShorts() {
-  if (!ffxState.shorts) { ffxSetStatus('ffxShortsStatus', 'Chưa chọn video nguồn', true); return; }
-  ffxEnqueue('Shorts 9:16: ' + ffxBaseName(ffxState.shorts), { shorts: ffxState.shorts },
-    ['ffxShortsMode', 'ffxShortsGpu', 'ffxShortsUp'], 'ffxRunShorts');
-}
-
-function ffxEnqueueSubs() {
-  if (!ffxState.subs) { ffxSetStatus('ffxSubsStatus', 'Chưa chọn video nguồn', true); return; }
-  if (!ffxState.subsFile) { ffxSetStatus('ffxSubsStatus', 'Chưa chọn file phụ đề', true); return; }
-  ffxEnqueue('Đóng phụ đề: ' + ffxBaseName(ffxState.subs), { subs: ffxState.subs, subsFile: ffxState.subsFile },
-    ['ffxSubsSize', 'ffxSubsColor', 'ffxSubsPos'], 'ffxRunSubs');
-}
-
 function ffxEnqueueNorm() {
   if (!ffxState.audiofx) { ffxSetStatus('ffxNormStatus', 'Chưa chọn file nguồn', true); return; }
   ffxEnqueue('Chuẩn hoá âm lượng: ' + ffxBaseName(ffxState.audiofx), { audiofx: ffxState.audiofx },
@@ -1358,7 +1267,6 @@ function ffxEnqueueNorm() {
 /* ── Kéo-thả file từ Explorer vào panel tool (Electron 43 gỡ File.path → phải qua
    webUtils.getPathForFile do preload expose là ffx.pathForFile) ── */
 var FFX_DROP_EXT = ['mp4', 'mov', 'webm', 'm4v', 'mkv', 'avi', 'ts', 'gif', 'mp3', 'm4a', 'wav', 'aac', 'ogg', 'flac'];
-var FFX_SUB_EXT = ['srt', 'ass'];
 
 function ffxDropExtOk(p, extraExts) {
   const name = ffxBaseName(p);
@@ -1371,9 +1279,7 @@ function ffxSetInputLabel(key, p, labelId) {
   if (el) { el.textContent = ffxShort(p); el.title = p; ffxAppendInfo(el, p); }
 }
 
-/* Bật drop cho 1 panel: key = ô nguồn trong ffxState (single), 'join' = nối danh sách ghép,
-   'subs' = tách theo đuôi: video → nguồn, .srt/.ass → file phụ đề.
-   extraExts = đuôi mở rộng được nhận thêm (vd ['srt','ass']). */
+/* Bật drop cho 1 panel: key = ô nguồn trong ffxState (single), 'join' = nối danh sách ghép. */
 function ffxEnableDrop(toolId, key, labelId, extraExts) {
   const el = document.getElementById(toolId);
   if (!el || el.__ffxDrop) return;
@@ -1400,16 +1306,6 @@ function ffxEnableDrop(toolId, key, labelId, extraExts) {
     if (key === 'join') {
       ffxState.join = ffxState.join.concat(paths);
       ffxRenderJoinList();
-    } else if (key === 'subs') {
-      // Panel Đóng Phụ Đề có 2 ô nguồn — tách theo đuôi file.
-      let firstVideo = '';
-      for (const p of paths) {
-        const ext = (ffxBaseName(p).lastIndexOf('.') >= 0 ? ffxBaseName(p).split('.').pop() : '').toLowerCase();
-        if (FFX_SUB_EXT.indexOf(ext) >= 0) { ffxState.subsFile = p; ffxSetInputLabel('subsFile', p, 'ffxSubsFile'); }
-        else if (!firstVideo) { firstVideo = p; }
-      }
-      if (firstVideo) { ffxState.subs = firstVideo; ffxSetInputLabel('subs', firstVideo, 'ffxSubsInput'); }
-      if (paths.length > 1 && typeof novaToast === 'function') novaToast('Kéo-thả: video nhận file đầu tiên, phụ đề nhận file .srt/.ass');
     } else {
       ffxSetInput(key, paths[0], labelId);
       if (paths.length > 1 && typeof novaToast === 'function') novaToast('Kéo-thả: dùng file đầu tiên trong ' + paths.length + ' file');
@@ -1429,9 +1325,6 @@ function ffxInitDrops() {
   ffxEnableDrop('tool-toolffxconvert', 'convert');
   ffxEnableDrop('tool-toolffxmusic', 'music');
   ffxEnableDrop('tool-toolffxgif', 'gif');
-  // Gói E: Shorts 9:16 / Đóng Phụ Đề (nhận thêm .srt/.ass) / Âm Thanh Nâng Cao
-  ffxEnableDrop('tool-toolffxshorts', 'shorts');
-  ffxEnableDrop('tool-toolffxsubs', 'subs', '', FFX_SUB_EXT);
   ffxEnableDrop('tool-toolffxaudiofx', 'audiofx');
   ffxHistoryRender();
   ffxQueueRender();

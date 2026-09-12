@@ -88,9 +88,7 @@ async function step(name, fn) {
   await step('toGif 0–3s (256 màu, bayer)', () => mt.toGif({ inputPath: V_A, outputPath: path.join(OUT, 'x.gif'), width: 320, fps: 10, startSec: 0, endSec: 3, loopCount: 0, maxColors: 256, dither: 'bayer' }));
   await step('toGif slideshow scene (trên ghep-auto nhiều cảnh)', () => mt.toGif({ inputPath: path.join(OUT, 'ghep-auto.mp4'), outputPath: path.join(OUT, 'slide.gif'), width: 320, fps: 10, slideshow: true }));
 
-  // ── Gói E (2026-09-12): nhóm 1 đa kênh + nhóm 4 âm thanh sâu ──
-  await step('shortsVideo blur (ngang → 9:16 nền mờ)', () => mt.shortsVideo({ inputPath: V_A, outputPath: path.join(OUT, 'shorts-blur.mp4'), mode: 'blur' }));
-  await step('shortsVideo crop (cắt giữa 9:16)', () => mt.shortsVideo({ inputPath: V_A, outputPath: path.join(OUT, 'shorts-crop.mp4'), mode: 'crop' }));
+  // ── Gói E (2026-09-12): nhóm 4 âm thanh sâu ──
   await step('faststartRemux (copy stream, moov lên đầu)', () => mt.faststartRemux({ inputPath: path.join(OUT, 'nen.mp4'), outputPath: path.join(OUT, 'faststart.mp4') }));
   await step('normalizeAudio 2-pass → m4a -16 LUFS', () => mt.normalizeAudio({ inputPath: loopSrc, outputPath: path.join(OUT, 'norm.m4a'), targetLU: -16 }));
   // Bỏ lời/tách giọng cần nguồn STEREO — kiểm tra kênh thật của artifact app rồi mới chạy (không bịa dữ liệu).
@@ -105,26 +103,6 @@ async function step(name, fn) {
   }
   await step('addFades video+audio 0.5s (re-encode)', () => mt.addFades({ inputPath: path.join(OUT, 'cat.mp4'), outputPath: path.join(OUT, 'fade.mp4'), videoInSec: 0.5, videoOutSec: 0.5, audioInSec: 0.5, audioOutSec: 0.5 }));
 
-  // ── Gói E cải tiến (2026-09-12): encoding phụ đề, xem thử 1 khung, copy-stream, already-faststart ──
-  const srtVn = '1\n00:00:00,500 --> 00:00:02,500\nXin chào — phụ đề tiếng Việt có dấu\n\n2\n00:00:03,000 --> 00:00:05,000\nDòng thứ hai kiểm tra style và vị trí\n';
-  const srtUtf16 = path.join(OUT, 'phude-utf16.srt');
-  fs.writeFileSync(srtUtf16, Buffer.from('\ufeff' + srtVn, 'utf16le'));
-  await step('burnSubs SRT UTF-16 → tự convert UTF-8 + style vàng/giữa', async () => {
-    const r = await mt.burnSubs({ inputPath: V_A, subPath: srtUtf16, outputPath: path.join(OUT, 'phude-vang.mp4'), fontSize: 28, color: 'yellow', pos: 'middle' });
-    if (r.encoding !== 'utf16→utf8') throw new Error('không tự convert encoding: ' + r.encoding);
-    return r;
-  });
-  await step('previewBurnSubs (1 khung có phụ đề — không encode cả video)', async () => {
-    const r = await mt.previewBurnSubs({ inputPath: V_A, subPath: srtUtf16, fontSize: 28, color: 'yellow', pos: 'middle' });
-    if (!r.ok || !fs.existsSync(r.path)) throw new Error('không tạo được ảnh xem thử');
-    return r;
-  });
-  const srtBad = path.join(OUT, 'phude-ansi.srt');
-  fs.writeFileSync(srtBad, Buffer.concat([
-    Buffer.from('1\n00:00:00,500 --> 00:00:02,500\nTieng Viet ANSI loi: ', 'utf8'),
-    Buffer.from([0xe0, 0xe1, 0xe2, 0x20, 0x6e, 0x68, 0x69, 0x65, 0x75, 0x0d, 0x0a]),
-  ]));
-  await step('shortsVideo blur + pushUp (nội dung đẩy lên vùng an toàn UI)', () => mt.shortsVideo({ inputPath: V_A, outputPath: path.join(OUT, 'shorts-pushup.mp4'), mode: 'blur', pushUp: true }));
   await step('addFades chỉ fade tiếng (video copy — không re-encode)', async () => {
     const src = await mt.probeStreams(path.join(OUT, 'cat.mp4'));
     const r = await mt.addFades({ inputPath: path.join(OUT, 'cat.mp4'), outputPath: path.join(OUT, 'fade-tieng.mp4'), audioInSec: 0.5, audioOutSec: 0.5 });
@@ -174,18 +152,12 @@ async function step(name, fn) {
   await expectFail('compress maxHeight sai', () => mt.compressVideo({ inputPath: V_A, outputPath: path.join(OUT, 'x4.mp4'), crf: 28, maxHeight: 99 }));
   await expectFail('nguồn không tồn tại', () => mt.cutVideo({ inputPath: 'D:/khong-ton-tai-ffx-smoke.mp4', outputPath: path.join(OUT, 'x5.mp4'), startSec: 0, endSec: 2 }));
   // ── Gói E: validate lỗi lộ liễu ──
-  await expectFail('shortsVideo mode sai', () => mt.shortsVideo({ inputPath: V_A, outputPath: path.join(OUT, 'x10.mp4'), mode: 'zoom' }));
-  await expectFail('shortsVideo đích .mkv', () => mt.shortsVideo({ inputPath: V_A, outputPath: path.join(OUT, 'x10.mkv'), mode: 'blur' }));
-  await expectFail('burnSubs thiếu file phụ đề', () => mt.burnSubs({ inputPath: V_A, subPath: path.join(OUT, 'khong-ton-tai.srt'), outputPath: path.join(OUT, 'x8.mp4'), fontSize: 24 }));
-  await expectFail('burnSubs phụ đề .vtt', () => mt.burnSubs({ inputPath: V_A, subPath: V_A, outputPath: path.join(OUT, 'x9.mp4'), fontSize: 24 }));
-  await expectFail('burnSubs fontsize sai (ext chặn trước)', () => mt.burnSubs({ inputPath: V_A, subPath: V_A, outputPath: path.join(OUT, 'x9.mp4'), fontSize: 999 }));
   await expectFail('faststart đích .mkv', () => mt.faststartRemux({ inputPath: V_A, outputPath: path.join(OUT, 'x11.mkv') }));
   await expectFail('normalizeAudio target sai', () => mt.normalizeAudio({ inputPath: loopSrc, outputPath: path.join(OUT, 'x12.mp3'), targetLU: 5 }));
   await expectFail('normalizeAudio đích .ogg', () => mt.normalizeAudio({ inputPath: loopSrc, outputPath: path.join(OUT, 'x12.ogg'), targetLU: -16 }));
   await expectFail('removeVocals mode sai', () => mt.removeVocals({ inputPath: loopSrc, outputPath: path.join(OUT, 'x13.mp3'), mode: 'magic' }));
   await expectFail('addFades tất cả = 0', () => mt.addFades({ inputPath: V_A, outputPath: path.join(OUT, 'x14.mp4') }));
   await expectFail('addFades out ≥ thời lượng', () => mt.addFades({ inputPath: path.join(OUT, 'cat.mp4'), outputPath: path.join(OUT, 'x15.mp4'), videoOutSec: 99 }));
-  await expectFail('burnSubs encoding lỗi (ANSI không phải UTF-8)', () => mt.burnSubs({ inputPath: V_A, subPath: srtBad, outputPath: path.join(OUT, 'x16.mp4'), fontSize: 24 }));
   await expectFail('normalizeAudio keepVideo đích .m4a', () => mt.normalizeAudio({ inputPath: V_A, outputPath: path.join(OUT, 'x17.m4a'), targetLU: -16, keepVideo: true }));
   await expectFail('removeVocals normalizeLU sai (3 LUFS)', () => mt.removeVocals({ inputPath: loopSrc, outputPath: path.join(OUT, 'x18.mp3'), mode: 'instrumental', normalizeLU: 3 }));
 

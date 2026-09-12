@@ -854,11 +854,8 @@ async function makeThumb(opts) {
   return { ok: true, path: out };
 }
 
-/* ── 11) Shorts 9:16 — video ngang → dọc 1080x1920 (nền mờ blur-pad | cắt giữa) ── */
-const SHORTS_W = 1080, SHORTS_H = 1920;
-
-/* Bộ args encode H.264 dùng chung cho Shorts/burn-sub/fade (GPU nếu máy hỗ trợ, CRF 20). */
-function shortsVArgs(useGpu) {
+/* Bộ args encode H.264 dùng chung cho fade video (GPU nếu máy hỗ trợ, CRF 20). */
+function h264VArgs(useGpu) {
   const enc = useGpu ? gpuEncoder('h264') : null;
   return {
     args: enc ? ['-c:v', enc].concat(qualityArgs(enc, { crf: 20 })) : ['-c:v', 'libx264', '-crf', '20', '-preset', 'medium'],
@@ -866,153 +863,7 @@ function shortsVArgs(useGpu) {
   };
 }
 
-async function shortsVideo(opts) {
-  const o = opts || {};
-  assertInput(o.inputPath, 'FFX_INPUT');
-  assertOutput(o.outputPath);
-  const ext = path.extname(o.outputPath).slice(1).toLowerCase();
-  if (ext !== 'mp4' && ext !== 'mov') { const e = new Error('FFX_FORMAT: Shorts 9:16 chỉ xuất MP4/MOV — đích .' + ext); e.code = 'FFX_FORMAT'; throw e; }
-  const mode = String(o.mode || 'blur');
-  if (mode !== 'blur' && mode !== 'crop') { const e = new Error("FFX_SHORTS_MODE: chế độ phải là 'blur' (nền mờ) hoặc 'crop' (cắt giữa)"); e.code = 'FFX_SHORTS_MODE'; throw e; }
-  const info = await probeStreams(o.inputPath);
-  if (!info.video || !info.video.width || !info.video.height) {
-    const e = new Error('FFX_INPUT: file không chứa video đọc được kích thước — ' + o.inputPath); e.code = 'FFX_INPUT'; throw e;
-  }
-  const dur = info.durationSec;
-  const vw = info.video.width, vh = info.video.height;
-  let args;
-  if (mode === 'crop') {
-    let vf;
-    if (vw / vh <= 9 / 16) {
-      // Nguồn đã dọc ≤ 9:16 — cắt ngang sẽ mất nội dung → scale + pad viền (khai báo rõ, không ngầm).
-      vf = 'scale=' + SHORTS_W + ':' + SHORTS_H + ':force_original_aspect_ratio=decrease,pad=' + SHORTS_W + ':' + SHORTS_H + ':(ow-iw)/2:(oh-ih)/2,format=yuv420p';
-    } else {
-      vf = 'crop=ih*9/16:ih,scale=' + SHORTS_W + ':' + SHORTS_H + ',format=yuv420p';
-    }
-    args = ['-y', '-i', o.inputPath, '-map', '0:v:0', '-map', '0:a:0?', '-vf', vf].concat(shortsVArgs(o.useGpu).args, shortsOutArgs(o));
-  } else {
-    // Nền mờ: phóng phủ khung 1080x1920 → blur + tối nhẹ làm nền, video gốc lồng giữa.
-    // pushUp: đẩy nội dung lên ~1/4 khung — tránh vùng caption/nút UI mà TikTok/Shorts che ở đáy.
-    const fc = '[0:v]split=2[bg][fg];' +
-      '[bg]scale=' + SHORTS_W + ':' + SHORTS_H + ':force_original_aspect_ratio=increase,crop=' + SHORTS_W + ':' + SHORTS_H + ',boxblur=24:2,eq=brightness=-0.08[bgf];' +
-      '[fg]scale=' + SHORTS_W + ':' + SHORTS_H + ':force_original_aspect_ratio=decrease[fgf];' +
-      '[bgf][fgf]overlay=(W-w)/2:' + (o.pushUp ? '(H-h)*0.25' : '(H-h)/2') + ',format=yuv420p[v]';
-    args = ['-y', '-i', o.inputPath, '-filter_complex', fc, '-map', '[v]', '-map', '0:a:0?'].concat(shortsVArgs(o.useGpu).args, shortsOutArgs(o));
-  }
-  await spawnRun(FFMPEG, args, { totalSec: dur });
-  const warn = dur > 180 ? 'Video dài ' + Math.round(dur) + 's — quá 3 phút, YouTube có thể không tính là Shorts' : null;
-  return { ok: true, path: o.outputPath, mode: mode, size: SHORTS_W + 'x' + SHORTS_H, warn: warn || undefined };
-}
-
-/* ── 12) Đóng phụ đề cứng (SRT/ASS) vào video ── */
-function subsFilterPath(p) {
-  // Path trong filter graph phải escape: \ → /, : → \:, ' → \', , ; [ ] → escaped, rồi bọc trong '…'
-  return String(p)
-    .replace(/\\/g, '/')
-    .replace(/:/g, '\\:')
-    .replace(/'/g, "\\'")
-    .replace(/,/g, '\\,')
-    .replace(/;/g, '\\;')
-    .replace(/\[/g, '\\[')
-    .replace(/\]/g, '\\]');
-}
-
-function subStyleArgs(fontSize, color, pos) {
-  const fsz = num(fontSize, 'FFX_SUB_SIZE');
-  if (fsz < 10 || fsz > 72) { const e = new Error('FFX_SUB_SIZE: cỡ chữ phụ đề phải 10–72'); e.code = 'FFX_SUB_SIZE'; throw e; }
-  const primary = color === 'yellow' ? '&H0000FFFF' : '&H00FFFFFF';
-  // Alignment theo numpad ASS: 2 = đáy giữa, 5 = giữa màn hình, 8 = đỉnh giữa.
-  const align = pos === 'middle' ? 'Alignment=5,MarginV=0' : pos === 'top' ? 'Alignment=8,MarginV=25' : 'Alignment=2,MarginV=25';
-  return 'FontName=Arial,FontSize=' + fsz + ',PrimaryColour=' + primary + ',OutlineColour=&H00000000,BorderStyle=1,Outline=2,Shadow=1,' + align;
-}
-
-/* Filter `subtitles` chỉ đọc UTF-8: file UTF-16 (BOM) → convert sang file UTF-8 tạm (khai báo
-   converted trong kết quả, xoá sau khi chạy); byte không hợp lệ UTF-8 → FFX_SUB_ENCODING lộ liễu (Luật 10). */
-function subEncoding(p) {
-  const buf = fs.readFileSync(p);
-  if (buf.length >= 2 && ((buf[0] === 0xff && buf[1] === 0xfe) || (buf[0] === 0xfe && buf[1] === 0xff))) {
-    const body = buf.subarray(2);
-    if (buf[0] === 0xfe) { // UTF-16BE → đổi cặp byte thành LE để decode
-      for (let i = 0; i + 1 < body.length; i += 2) { const t = body[i]; body[i] = body[i + 1]; body[i + 1] = t; }
-    }
-    const tmp = path.join(os.tmpdir(), 'ffx-sub-utf8-' + Date.now() + '-' + path.basename(p));
-    fs.writeFileSync(tmp, '\ufeff' + body.toString('utf16le'), 'utf8');
-    return { path: tmp, converted: true };
-  }
-  try { new TextDecoder('utf-8', { fatal: true }).decode(buf); return { path: p, converted: false }; }
-  catch (_) {
-    const e = new Error("FFX_SUB_ENCODING: file phụ đề không phải UTF-8/UTF-16 — FFmpeg chỉ đọc được UTF-8 nên chữ sẽ hiển thị sai. Mở lại và lưu dạng 'UTF-8' (VS Code: góc dưới bên phải / Notepad: Save As → Encoding): " + p);
-    e.code = 'FFX_SUB_ENCODING';
-    throw e;
-  }
-}
-
-function subVideoFilter(subPath, subExt, style) {
-  const f = subsFilterPath(subPath);
-  return subExt === 'ass' ? "subtitles='" + f + "'" : "subtitles='" + f + "':force_style='" + style + "'";
-}
-
-async function burnSubs(opts) {
-  const o = opts || {};
-  assertInput(o.inputPath, 'FFX_INPUT');
-  assertInput(o.subPath, 'FFX_SUB');
-  assertOutput(o.outputPath);
-  const subExt = path.extname(o.subPath).slice(1).toLowerCase();
-  if (subExt !== 'srt' && subExt !== 'ass') { const e = new Error('FFX_FORMAT: file phụ đề phải .srt hoặc .ass — nhận .' + subExt); e.code = 'FFX_FORMAT'; throw e; }
-  const fsz = num(o.fontSize, 'FFX_SUB_SIZE');
-  if (fsz < 10 || fsz > 72) { const e = new Error('FFX_SUB_SIZE: cỡ chữ phụ đề phải 10–72'); e.code = 'FFX_SUB_SIZE'; throw e; }
-  const info = await probeStreams(o.inputPath);
-  if (!info.video) { const e = new Error('FFX_INPUT: file không chứa video — ' + o.inputPath); e.code = 'FFX_INPUT'; throw e; }
-  const enc = subEncoding(o.subPath);
-  const vf = subVideoFilter(enc.path, subExt, subStyleArgs(fsz, o.color, o.pos));
-  // Audio: copy khi codec copy-thẳng được; ngược lại re-encode AAC 192k (khai báo rõ trong kết quả).
-  const codec = (info.audioTracks[0] || {}).codec || '';
-  const copyable = ['aac', 'mp3', 'ac3', 'eac3', 'opus', 'flac'].indexOf(codec) >= 0;
-  const v = shortsVArgs(o.useGpu);
-  const args = ['-y', '-i', o.inputPath, '-map', '0:v:0', '-map', '0:a:0?', '-vf', vf]
-    .concat(v.args)
-    .concat(copyable ? ['-c:a', 'copy'] : ['-c:a', 'aac', '-b:a', '192k'])
-    .concat(['-movflags', '+faststart', o.outputPath]);
-  try {
-    await spawnRun(FFMPEG, args, { totalSec: info.durationSec });
-  } finally {
-    if (enc.converted) { try { fs.unlinkSync(enc.path); } catch (_) { /* file tạm đã biến mất — không chặn kết quả */ } }
-  }
-  return { ok: true, path: o.outputPath, subExt: subExt, audio: copyable ? 'copy:' + codec : 'aac192', encoding: enc.converted ? 'utf16→utf8' : 'utf8' };
-}
-
-/* ── 12b) Xem thử phụ đề: render 1 khung hình (mặc định mốc 30% thời lượng) — không encode cả video ── */
-async function previewBurnSubs(opts) {
-  const o = opts || {};
-  assertInput(o.inputPath, 'FFX_INPUT');
-  assertInput(o.subPath, 'FFX_SUB');
-  const subExt = path.extname(o.subPath).slice(1).toLowerCase();
-  if (subExt !== 'srt' && subExt !== 'ass') { const e = new Error('FFX_FORMAT: file phụ đề phải .srt hoặc .ass — nhận .' + subExt); e.code = 'FFX_FORMAT'; throw e; }
-  const fsz = num(o.fontSize, 'FFX_SUB_SIZE');
-  if (fsz < 10 || fsz > 72) { const e = new Error('FFX_SUB_SIZE: cỡ chữ phụ đề phải 10–72'); e.code = 'FFX_SUB_SIZE'; throw e; }
-  const info = await probeStreams(o.inputPath);
-  if (!info.video) { const e = new Error('FFX_INPUT: file không chứa video — ' + o.inputPath); e.code = 'FFX_INPUT'; throw e; }
-  let at = Number(o.atSec);
-  if (!Number.isFinite(at) || at < 0) at = info.durationSec * 0.3;
-  if (info.durationSec > 0 && at >= info.durationSec) at = info.durationSec / 2;
-  const enc = subEncoding(o.subPath);
-  const vf = subVideoFilter(enc.path, subExt, subStyleArgs(fsz, o.color, o.pos));
-  const out = o.outputPath || path.join(os.tmpdir(), 'ffx-sub-preview-' + Date.now() + '.jpg');
-  const args = ['-y', '-ss', at.toFixed(3), '-i', o.inputPath, '-vf', vf, '-frames:v', '1', '-q:v', '3', out];
-  try {
-    await spawnRun(FFMPEG, args, {});
-  } finally {
-    if (enc.converted) { try { fs.unlinkSync(enc.path); } catch (_) { /* file tạm đã biến mất — không chặn kết quả */ } }
-  }
-  return { ok: true, path: out, atSec: Math.round(at * 100) / 100 };
-}
-
-/* Args audio/faststart đích dùng chung cho Shorts (AAC 192k + moov lên đầu — chuẩn upload mạng xã hội). */
-function shortsOutArgs(o) {
-  return ['-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', o.outputPath];
-}
-
-/* ── 13) Faststart remux — chuyển moov atom lên đầu (copy toàn bộ stream, không re-encode) ── */
+/* ── 11) Faststart remux — chuyển moov atom lên đầu (copy toàn bộ stream, không re-encode) ── */
 /* Quét top-level MP4/MOV atoms: moov đứng trước mdat → file đã faststart, không cần remux lại. */
 function mp4MoovFirst(p) {
   const fd = fs.openSync(p, 'r');
@@ -1191,7 +1042,7 @@ async function addFades(opts) {
   if (vi > 0) vfParts.push('fade=t=in:st=0:d=' + vi);
   if (vo > 0) vfParts.push('fade=t=out:st=' + Math.max(0, dur - vo).toFixed(3) + ':d=' + vo);
   if (vi > 0 || vo > 0) vfParts.push('format=yuv420p');
-  const v = shortsVArgs(o.useGpu);
+  const v = h264VArgs(o.useGpu);
   let args = ['-y', '-i', o.inputPath, '-map', '0:v:0', '-map', '0:a:0?'];
   if (vfParts.length) {
     args.push('-vf', vfParts.join(','));
@@ -1213,10 +1064,241 @@ async function addFades(opts) {
   return { ok: true, path: o.outputPath, fade: { videoIn: vi, videoOut: vo, audioIn: ai, audioOut: ao }, videoCopy: vfParts.length === 0 };
 }
 
+/* ══ 17) CHÈN QUẢNG CÁO (panel "Chèn Quảng Cáo", 2026-09-12f) ══════════════════
+   Chèn 1..N clip quảng cáo vào video nguồn tại các điểm chọn trước — HOẶC chia đều
+   N điểm theo thời lượng nguồn. Cách làm (tái dùng đúng khuôn concatAuto — không
+   nhân bản logic ghép):
+     1).every phần (đoạn nguồn + mỗi quảng cáo + màn đệm tuỳ chọn) được xuất ra 1 file
+        tạm CHUẨN HOÁ GIỐNG HỆT nhau: cùng W×H (theo video nguồn, pad letterbox —
+        không méo hình), cùng fps, H.264 CRF, AAC 44.1k stereo → ghép chắc chắn khớp.
+     2) Ghép lại bằng concat demuxer `-c copy` (một lần nối, không re-encode lần 2).
+   Âm thanh (audioMode):
+     own    — mỗi phần giữ tiếng riêng (quảng cáo phát tiếng của chính nó)
+     muteAd — giữ tiếng video nguồn, quảng cáo câm
+     silent — câm toàn bộ (để sau này lồng tiếng/nhạc mới)
+   musicPath (tuỳ chọn): trộn nhạc nền UNDER tiếng quảng cáo (khuôn addMusic mix).
+   gapSec + gapColor: màn đệm đặc (đen/trắng) trước & sau mỗi quảng cáo.
+   KHÔNG fallback ngầm (Luật 10): lỗi → reject lộ liễu mã FFX_ADS_*. Nguồn không có
+   tiếng mà chọn chế độ cần tiếng → FFX_ADS_NO_SRC_AUDIO (không tự động bù câm).
+   Quảng cáo không có tiếng → làm câm phần đó có chủ đích + báo về `adsNoAudio`
+   (khai báo rõ trong kết quả, UI hiển thị — không im lặng). ── */
+const ADS_MAX_BREAKS = 20;        // điểm chèn tối đa mỗi lần chạy
+const ADS_MAX_PARTS = 160;        // trần số phần (chặn lệnh ffmpeg dây chuyền quá dài)
+const ADS_MIN_SEG_SEC = 0.05;     // đoạn nguồn ngắn hơn → bỏ qua (ffmpeg không cắt nổi)
+const ADS_TOTAL_CAP_SEC = 4 * 3600;
+const ADS_GAP_COLORS = ['black', 'white'];
+
+function adsErr(code, msg) { const e = new Error(code + ': ' + msg); e.code = code; throw e; }
+
+/* Dàn danh sách điểm chèn thành mảng break đã kiểm tra + sắp xếp tăng dần theo atSec.
+   Hai nguồn: breaks[{atSec, adPaths|adPath}] (nhập tay / từ dò cảnh) hoặc evenCount
+   (chia đều, dùng chung adPaths). Trả về [{atSec, adPaths, adDurs, adSec}]. */
+async function resolveAdBreaks(o, srcDur) {
+  const groups = [];
+  const even = (o.evenCount === undefined || o.evenCount === null || o.evenCount === '') ? 0 : num(o.evenCount, 'FFX_ADS_EVEN');
+  if (Array.isArray(o.breaks) && o.breaks.length) {
+    for (const b of o.breaks) {
+      const at = num(b && b.atSec, 'FFX_ADS_AT');
+      const paths = Array.isArray(b && b.adPaths) ? b.adPaths.slice() : (b && b.adPath ? [b.adPath] : []);
+      groups.push({ atSec: at, adPaths: paths });
+    }
+  } else if (even >= 1) {
+    const paths = (Array.isArray(o.adPaths) && o.adPaths.length) ? o.adPaths.slice() : (o.adPath ? [o.adPath] : []);
+    if (!paths.length) adsErr('FFX_ADS_AD', 'chưa chọn clip quảng cáo để chèn');
+    const n = Math.floor(even);
+    if (n > ADS_MAX_BREAKS) adsErr('FFX_ADS_EVEN', 'chia đều tối đa ' + ADS_MAX_BREAKS + ' điểm (đang yêu cầu ' + n + ')');
+    const step = srcDur / (n + 1);
+    for (let i = 0; i < n; i++) groups.push({ atSec: Math.round(step * (i + 1) * 1000) / 1000, adPaths: paths });
+  } else {
+    adsErr('FFX_ADS_BREAKS', 'chưa có điểm chèn — thêm điểm thủ công hoặc chọn chế độ "Chia đều"');
+  }
+  if (groups.length > ADS_MAX_BREAKS) adsErr('FFX_ADS_BREAKS', 'tối đa ' + ADS_MAX_BREAKS + ' điểm chèn mỗi lần (đang có ' + groups.length + ')');
+  for (const g of groups) {
+    if (!(g.atSec >= 0 && g.atSec < srcDur)) adsErr('FFX_ADS_AT', 'điểm chèn ' + g.atSec + 's ngoài khoảng 0 … ' + srcDur + 's của video nguồn');
+    if (!g.adPaths.length) adsErr('FFX_ADS_AD', 'điểm chèn ' + g.atSec + 's chưa có clip quảng cáo');
+    for (const p of g.adPaths) assertInput(p, 'FFX_ADS_AD');
+    g.adDurs = [];
+    for (const p of g.adPaths) {
+      const d = await probeDur(p);
+      if (!(d > 0)) adsErr('FFX_ADS_AD', 'không đo được thời lượng clip quảng cáo — ' + p);
+      g.adDurs.push(d);
+    }
+    g.adSec = g.adDurs.reduce((a, d) => a + d, 0);
+  }
+  groups.sort((a, b) => a.atSec - b.atSec);
+  for (let i = 1; i < groups.length; i++) {
+    if (groups[i].atSec - groups[i - 1].atSec < ADS_MIN_SEG_SEC) {
+      adsErr('FFX_ADS_AT', 'hai điểm chèn quá gần nhau (' + groups[i - 1].atSec + 's & ' + groups[i].atSec + 's — cách nhau tối thiểu ' + ADS_MIN_SEG_SEC + 's)');
+    }
+  }
+  return groups;
+}
+
+
+/* Bộ args encode video cho chuẩn hoá phần: GPU nếu user bật + máy hỗ trợ, else libx264. */
+function adsVideoArgs(useGpu, crf) {
+  const c = Number.isFinite(Number(crf)) ? Math.max(14, Math.min(38, Number(crf))) : 20;
+  const enc = useGpu ? gpuEncoder('h264') : null;
+  return { args: enc ? ['-c:v', enc].concat(qualityArgs(enc, { crf: c })) : ['-c:v', 'libx264', '-crf', String(c), '-preset', 'fast'], enc: enc || null };
+}
+
+/* Chuẩn hoá 1 phần (đoạn nguồn / quảng cáo / màn đệm) về ĐÚNG W×H + fps + AAC 44.1k
+   stereo như mọi phần khác → concat copy chắc chắn khớp. scale fit + pad letterbox
+   (không méo hình, không upscale). im.put silent → anullsrc cùng đời phần. */
+function adsPartArgs(part, spec) {
+  const vFilter = 'scale=' + spec.W + ':' + spec.H + ':force_original_aspect_ratio=decrease,'
+    + 'pad=' + spec.W + ':' + spec.H + ':(ow-iw)/2:(oh-ih)/2,setsar=1,fps=' + spec.F + ',format=yuv420p';
+  const aFormat = 'aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo';
+  const args = ['-hide_banner', '-y'];
+  if (part.kind === 'gap') {
+    args.push('-f', 'lavfi', '-i', 'color=c=' + spec.gapColor + ':s=' + spec.W + 'x' + spec.H + ':r=' + spec.F + ':d=' + part.dur);
+    args.push('-f', 'lavfi', '-t', String(part.dur), '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100');
+  } else {
+    if (part.kind === 'src') args.push('-ss', String(part.ss), '-to', String(part.to));
+    args.push('-i', part.file);
+    if (part.bed) args.push('-stream_loop', '-1', '-i', part.bed);
+  }
+  args.push('-map', '0:v:0');
+  const chains = [];
+  let mapArgs = null;
+  let vf = vFilter;
+  if (part.bed && part.hasAudio) {
+    // Nhạc nền UNDER tiếng quảng cáo — khuôn amix của addMusic (duration=first = đúng đời clip).
+    // Có filter_complex → KHÔNG được dùng -vf nữa (xung đột), đưa cả video vào graph.
+    vf = null;
+    chains.push('[0:v]' + vFilter + '[sv]');
+    chains.push('[0:a]' + aFormat + '[sa]');
+    chains.push('[1:a]' + aFormat + '[mb]');
+    chains.push('[sa][mb]amix=inputs=2:duration=first:weights=1 ' + spec.bedVol + '[amix]');
+    mapArgs = ['-map', '[sv]', '-map', '[amix]'];
+  } else if (part.hasAudio) {
+    mapArgs = ['-map', '0:a:0', '-af', aFormat];
+  } else {
+    const n = args.length;      // nguồn anullsrc bổ sung — câm có chủ đích (khai báo rõ)
+    args.push('-f', 'lavfi', '-t', String(part.dur), '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100');
+    mapArgs = ['-map', n + ':a'];
+  }
+  if (vf) args.push('-vf', vf);
+  if (chains.length) args.push('-filter_complex', chains.join(';'));
+  args.push(...mapArgs);
+  args.push(spec.video.args.concat(['-c:a', 'aac', '-b:a', '192k', '-ar', '44100', '-ac', '2', '-shortest', part.out]));
+  return args;
+}
+
+async function normalizeAdPart(part, spec) {
+  await spawnRun(FFMPEG, adsPartArgs(part, spec), { totalSec: part.dur, onProgress: part.onProgress });
+  return part.out;
+}
+
+/* CHÈN QUẢNG CÁO vào video nguồn — xem khối comment 17) ở trên. */
+async function insertAds(opts) {
+  const o = opts || {};
+  assertInput(o.inputPath, 'FFX_INPUT');
+  assertOutput(o.outputPath);
+  const outExt = path.extname(o.outputPath).slice(1).toLowerCase();
+  if (['mp4', 'mov', 'mkv'].indexOf(outExt) < 0) adsErr('FFX_ADS_FORMAT', 'file đích phải là .mp4 / .mov / .mkv (đang là .' + (outExt || '?') + ')');
+
+  const srcInfo = await probeStreams(o.inputPath);
+  if (!srcInfo.video) adsErr('FFX_ADS_SRC_VIDEO', 'video nguồn không chứa stream video — ' + o.inputPath);
+  const srcDur = srcInfo.durationSec;
+  if (!(srcDur > 0)) adsErr('FFX_DURATION', 'không đo được thời lượng video nguồn');
+  const groups = await resolveAdBreaks(o, srcDur);
+
+  const mode = (o.audioMode === 'muteAd' || o.audioMode === 'silent') ? o.audioMode : 'own';
+  const srcHasAudio = srcInfo.audioTracks.length > 0;
+  if (mode !== 'silent' && !srcHasAudio) {
+    adsErr('FFX_ADS_NO_SRC_AUDIO', 'video nguồn không có tiếng — chuyển sang âm thanh "Câm toàn bộ" hoặc dùng nguồn có tiếng (chế độ đang chọn: ' + mode + ')');
+  }
+  let bed = '';
+  if (o.musicPath !== undefined && o.musicPath !== null && o.musicPath !== '') {
+    assertInput(o.musicPath, 'FFX_ADS_MUSIC');
+    bed = o.musicPath;
+  }
+  const bedVol = num((o.musicVolume === undefined || o.musicVolume === null || o.musicVolume === '') ? 0.25 : o.musicVolume, 'FFX_ADS_MUSIC_VOL');
+  if (bedVol <= 0 || bedVol > 2) adsErr('FFX_ADS_MUSIC_VOL', 'âm lượng nhạc nền phải trong khoảng 0.01 … 2');
+  const gapSec = num((o.gapSec === undefined || o.gapSec === null || o.gapSec === '') ? 0 : o.gapSec, 'FFX_ADS_GAP');
+  if (gapSec < 0 || gapSec > 10) adsErr('FFX_ADS_GAP', 'khoảng đệm trước/sau quảng cáo phải trong khoảng 0 … 10 giây');
+  const gapColor = String(o.gapColor || 'black').toLowerCase();
+  if (gapSec > 0 && ADS_GAP_COLORS.indexOf(gapColor) < 0) adsErr('FFX_ADS_GAP_COLOR', 'màu màn đệm chỉ hỗ trợ ' + ADS_GAP_COLORS.join(' / ') + ' — đang là ' + gapColor);
+
+  // Khung HÌNH ĐÍCH = video nguồn (không upscale; làm chẵn cho H.264).
+  const sw = srcInfo.video.width, sh = srcInfo.video.height;
+  if (!(sw > 0 && sh > 0)) adsErr('FFX_ADS_SRC_VIDEO', 'không đọc được kích thước video nguồn');
+  const spec = {
+    W: sw % 2 ? sw - 1 : sw, H: sh % 2 ? sh - 1 : sh,
+    F: Number(o.fps) > 0 ? Math.round(Number(o.fps) * 100) / 100 : (srcInfo.video.fps > 0 ? srcInfo.video.fps : 30),
+    gapColor: gapColor, bedVol: bedVol, video: adsVideoArgs(o.useGpu, o.crf),
+  };
+
+  // Dàn danh sách phần: nguồn xen quảng cáo (+ màn đệm) theo đúng thứ tự thời gian.
+  const bounds = [];
+  for (let i = 0; i <= groups.length; i++) {
+    const start = i === 0 ? 0 : groups[i - 1].atSec;
+    const end = i === groups.length ? srcDur : groups[i].atSec;
+    bounds.push({ start: Math.round(start * 1000) / 1000, end: Math.round(end * 1000) / 1000 });
+  }
+  const parts = [];
+  let adCount = 0, adSec = 0;
+  for (let i = 0; i < bounds.length; i++) {
+    const dur = Math.round((bounds[i].end - bounds[i].start) * 1000) / 1000;
+    if (dur > ADS_MIN_SEG_SEC) parts.push({ kind: 'src', file: o.inputPath, ss: bounds[i].start, to: bounds[i].end, dur: dur });
+    if (i >= groups.length) break;
+    if (gapSec > 0) parts.push({ kind: 'gap', dur: gapSec });
+    for (let j = 0; j < groups[i].adPaths.length; j++) {
+      parts.push({ kind: 'ad', file: groups[i].adPaths[j], dur: Math.round(groups[i].adDurs[j] * 1000) / 1000 });
+      adCount++; adSec += groups[i].adDurs[j];
+    }
+    if (gapSec > 0) parts.push({ kind: 'gap', dur: gapSec });
+  }
+  if (!parts.some((p) => p.kind === 'src')) adsErr('FFX_ADS_BREAKS', 'các điểm chèn ăn hết video nguồn — không còn đoạn nào để giữ');
+  if (parts.length > ADS_MAX_PARTS) adsErr('FFX_ADS_BREAKS', 'quá nhiều phần phải xử lý (' + parts.length + ' > ' + ADS_MAX_PARTS + ') — giảm số điểm chèn hoặc số clip mỗi điểm');
+  const totalOut = Math.round((srcDur + adSec + gapSec * 2 * groups.length) * 1000) / 1000;
+  if (totalOut > ADS_TOTAL_CAP_SEC) adsErr('FFX_ADS_TOTAL', 'thời lượng thành phẩm ước tính ' + Math.round(totalOut) + 's vượt trần ' + ADS_TOTAL_CAP_SEC + 's — giảm số điểm chèn hoặc dùng clip ngắn hơn');
+
+  // Âm thanh từng phần theo audioMode (khai báo rõ, không nuốt dữ liệu):
+  //   own    — mỗi phần giữ tiếng riêng của nó
+  //   muteAd — nguồn giữ tiếng, quảng cáo + màn đệm câm
+  //   silent — câm toàn bộ (anullsrc đúng đời phần, không âm thầm drop)
+  const hasAudioOf = async (p) => {
+    if (p.kind === 'gap') return false;
+    if (p.kind === 'src') return srcHasAudio;
+    const inf = await probeStreams(p.file);
+    return inf.audioTracks.length > 0;
+  };
+  for (const p of parts) {
+    p.hasAudio = await hasAudioOf(p);
+    if (mode === 'silent' || (mode === 'muteAd' && p.kind !== 'src')) p.hasAudio = false;
+    if (p.kind === 'ad' && bed && p.hasAudio) p.bed = bed;
+  }
+
+  // Progress toàn cục: mỗi phần chiếm tỉ trọng theo thời lượng của nó.
+  let acc = 0;
+  for (const p of parts) {
+    const w = p.dur > 0 ? Math.min(1, p.dur / totalOut) : 0;
+    const off = acc; acc += w;
+    if (typeof o.onProgress === 'function') p.onProgress = (r) => o.onProgress(Math.min(0.99, off + Math.max(0, Math.min(1, r)) * w));
+  }
+
+  // Chuẩn hoá từng phần ra file .ts trung gian CÙNG CHUẨN → concat demuxer -c copy (1 lần nối).
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ffx-ads-'));
+  try {
+    for (let i = 0; i < parts.length; i++) {
+      parts[i].out = path.join(tmpDir, 'phan-' + String(i).padStart(4, '0') + '.ts');
+      await normalizeAdPart(parts[i], spec);
+    }
+    const listPath = path.join(tmpDir, 'list.txt');
+    fs.writeFileSync(listPath, parts.map((p) => "file '" + p.out.replace(/\\/g, '/').replace(/'/g, "'\\''") + "'").join('\n'), 'utf8');
+    await spawnRun(FFMPEG, ['-hide_banner', '-y', '-f', 'concat', '-safe', '0', '-i', listPath, '-c', 'copy', o.outputPath], { totalSec: totalOut });
+  } finally {
+    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch (_) { /* dọn thư mục tạm — không chặn kết quả */ }
+  }
+  return { ok: true, path: o.outputPath, adCount: adCount, adSec: Math.round(adSec * 100) / 100, parts: parts.length, totalSec: totalOut, audio: mode };
+}
+
 module.exports = {
   cancelRunning, probeMedia, probeStreams, detectScenes,
   extractAudio, cutVideo, cutMulti, concatVideos, concatAuto, concatTransition,
   loopVideo, loopPingPong, loopCrossfade, loopAudio, compressVideo,
   extractFrames, removeAudio, convertMedia, addMusic, toGif, makeThumb,
-  shortsVideo, burnSubs, previewBurnSubs, faststartRemux, normalizeAudio, removeVocals, addFades,
+  faststartRemux, normalizeAudio, removeVocals, addFades, insertAds,
 };
