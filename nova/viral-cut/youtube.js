@@ -130,7 +130,7 @@ async function fetchYoutubeComments(url, { maxComments = 100, timeoutMs = 120000
   const n = Math.max(1, Math.min(500, Math.round(Number(maxComments) || 100)));
   const ck = await youtubeCookiesFile().catch(() => null);
   const args = ['--skip-download', '--no-warnings', '--no-playlist',
-    '--write-comments', '--extractor-args', 'youtube:max_comments=' + n + ',0,0,0', '-J', String(url)];
+    '--write-comments', '--extractor-args', 'youtube:max_comments=' + n + ',all,all,all', '-J', String(url)];
   if (ck) args.push('--cookies', ck);
   const out = await runYtdlp(args, timeoutMs);
   let j;
