@@ -211,7 +211,10 @@
       .t7-aud .t .n{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
       .t7-aud .t .s{font-size:10.5px;color:var(--text-muted)}
 
-      .t7-player{position:relative;border-radius:11px;overflow:hidden;background:#000;aspect-ratio:16/9;display:grid;place-items:center;margin:0 14px 14px}
+      .t7-player{position:relative;border-radius:11px;overflow:hidden;background:#000;aspect-ratio:16/9;display:grid;place-items:center;margin:0}
+      /* Shell bọc khung xem + thanh điều khiển (đều nằm dưới, không đè lên hình).
+         Lề cũ của .t7-player chuyển sang shell; ⛶ fullscreen cả shell. */
+      #t7PlayerShell{margin:0 14px 14px}
       #t7PreviewWrap{position:absolute;inset:0;will-change:opacity,transform,clip-path}
       .t7-pcap{padding:12px 20px 2px;text-align:center}
       .t7-pcap .vo{font-style:italic;font-size:14px;line-height:1.5;color:var(--text)}
@@ -221,12 +224,21 @@
       @keyframes t7slide{from{transform:translateX(100%)}to{transform:translateX(0)}}
       @keyframes t7wipe{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0 0 0)}}
       @keyframes t7circle{from{clip-path:circle(0% at 50% 50%)}to{clip-path:circle(75% at 50% 50%)}}
-      .t7-pbar{position:absolute;left:0;right:0;bottom:0;padding:8px 11px;background:linear-gradient(0deg,rgba(0,0,0,.75),transparent)}
+      /* Thanh điều khiển đã DỜI xuống dưới khung xem — hàng riêng trong luồng, không còn absolute đè lên hình.
+         Nén gọn (padding/margin nhỏ) để bù chiều cao cho khung xem — chiều cao player
+         do _t7SyncColHeight quyết định theo phần tràn trang, thanh càng cao khung càng co. */
+      .t7-pbar{padding:3px 4px 0}
+      /* Full màn hình (⛶): fullscreen cả SHELL → khung + thanh điều khiển cùng hiển thị.
+         Nền đen toàn màn, khung co theo --t7-arw (đặt inline trên .t7-player bởi tool-t7.js). */
+      #t7PlayerShell:fullscreen{background:#000;display:flex;flex-direction:column;justify-content:center}
+      #t7PlayerShell:fullscreen .t7-player{border-radius:0;max-height:calc(100vh - 90px);
+        width:min(100%,calc((100vh - 90px)*var(--t7-arw,1.7778)))}
+      #t7PlayerShell:fullscreen .t7-pbar{padding:10px 16px 6px}
 /* Hàng nút hành động — đã DỜI lên hàng .t7-top (sau Toàn màn/Kho hiệu ứng/Trợ lý/Lưu/Xuất),
    không còn chèn giữa khung xem trước và chân trang */
 .t7-actrow{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:0}
 #tool-tool7 .t7-top .t7-actrow{flex:1 1 100%}
-      .t7-ptrack{height:4px;background:rgba(255,255,255,.25);border-radius:3px;margin-bottom:8px;position:relative;cursor:pointer;touch-action:none}
+      .t7-ptrack{height:4px;background:rgba(255,255,255,.25);border-radius:3px;margin-bottom:5px;position:relative;cursor:pointer;touch-action:none}
       /* vùng bắt chuột cao hơn hẳn vạch 4px — kéo không bị trượt tay */
       .t7-ptrack::before{content:'';position:absolute;left:0;right:0;top:-7px;bottom:-7px}
       .t7-ptrack i{position:absolute;left:0;top:0;bottom:0;background:var(--accent);border-radius:3px;width:0%}

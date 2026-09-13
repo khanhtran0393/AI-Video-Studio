@@ -258,20 +258,21 @@ function _t7SyncColHeight(){
     // Rút cột cảnh về 0 trước → hàng co lại đúng bằng NỘI DUNG cột xem trước → đo → ghim.
     bin.style.height = '0px';
     void bin.offsetHeight;                          // ép tính lại ngay, không đợi frame sau
-    // Chặn chiều cao KHUNG XEM cho cột vừa đúng vùng nhìn thấy — bằng MỘT công thức
-    // hội tụ (fixed-point), KHÔNG đo-ghi-đo-lại:
-    //   moc = chiều cao player hiện tại − phần tràn trang hiện tại
-    // Trừ đúng phần tràn (hoặc cộng đúng phần thiếu khi trang ngắn hơn viewport) thì
-    // player khớp viewport sau ĐÚNG MỘT lần ghi; lượt ResizeObserver chạy lại tính ra
-    // CÙNG một giá trị → bỏ ghi → vòng phản hồi RO tự tắt.
-    // (Công thức cũ: ghi mốc lớn theo viewport → đo tràn du → bớt du → player co →
-    // RO nổ → chạy lại từ mốc lớn → ghi du → ... dao động moc1↔moc2 suốt ~1s sau mỗi
-    // lần bấm Tách / ↻ Đồng bộ, khung nhấp nháy liên tục — bản ghi 2026-09-11.)
+    // CỐ ĐỊNH chiều cao KHUNG XEM — công thức TUYỆT ĐỐI, không phản hồi theo nội dung:
+    //   moc = viewport − (tọa độ đỉnh player trên tài liệu) − thanh điều khiển − dự trữ cố định
+    // Trước đây moc = player.height − phần tràn trang → mọi thứ dưới khung (phụ đề bật/tắt,
+    // thông báo dài ngắn) đều làm KHUNG CO GIÃN theo. Giờ chỉ dựa trên vị trí đỉnh player
+    // (các thứ TRÊN khung — ổn định) + một mức dự trữ CỐ ĐỊNH cho phần dưới (thanh điều
+    // khiển + vùng phụ đề + lề) → khung giữ nguyên kích thước, hết nhấp nháy.
+    //   scrollY bù vào rect.top để công thức KHÔNG phụ thuộc vị trí cuộn hiện tại.
+    //   Dự trữ cố định: 14 lề dưới shell + 64 vùng phụ đề (pcap) + 16 đệm đáy trang.
     const player = document.getElementById('t7Player');
     if (player){
-      const ph = Math.round(player.getBoundingClientRect().height);
-      const du = document.documentElement.scrollHeight - window.innerHeight;   // dương = tràn, âm = còn thiếu
-      const moc = Math.max(220, ph - du);           // mốc tuyệt đối đã trừ/bù sẵn du, không cộng dồn
+      const shell = document.getElementById('t7PlayerShell');
+      const pbar = shell ? shell.querySelector('.t7-pbar') : null;
+      const pbarH = pbar ? Math.round(pbar.getBoundingClientRect().height) : 0;
+      const pTop = Math.round(player.getBoundingClientRect().top + (window.scrollY || window.pageYOffset || 0));
+      const moc = Math.max(220, window.innerHeight - pTop - pbarH - 14 - 64 - 16);
       _t7SyncColHeight._moc = moc;
       if (player.style.maxHeight !== moc + 'px'){   // cùng giá trị → khỏi ghi → không đánh thức RO
         player.style.maxHeight = moc + 'px';

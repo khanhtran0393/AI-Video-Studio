@@ -137,7 +137,7 @@ function t7ToggleSubPreview(){
   setStatus7(on ? '🅣 Hiện phụ đề (lấy từ lời thoại cảnh) — cũng sẽ ghi vào video khi Xuất.' : 'Đã ẩn phụ đề trên preview.', 'info');
 }
 
-function t7Fullscreen(){ try { const el = document.getElementById('t7Player'); if (el && el.requestFullscreen) el.requestFullscreen(); } catch (_) {} }
+function t7Fullscreen(){ try { const el = document.getElementById('t7PlayerShell') || document.getElementById('t7Player'); if (el && el.requestFullscreen) el.requestFullscreen(); } catch (_) {} }
 
 function t7Play(){
   const total = _t7Total(); if (total <= 0) return;

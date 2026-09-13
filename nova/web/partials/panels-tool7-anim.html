@@ -82,6 +82,9 @@
         <!-- STAGE: preview -->
         <section class="t7-panel">
           <div class="t7-ph2"><span class="t7-lbl">Xem trước</span><span class="t7-chip" id="t7StageChip">—</span><span class="sp" style="flex:1"></span><button class="t7-mini" id="t7TransBtn" onclick="t7TranslateAll()" title="Dịch lời thoại tất cả cảnh sang tiếng Việt để kiểm tra (chỉ để xem, không ghi vào video)">🌐 Dịch tiếng Việt</button></div>
+          <!-- Shell bọc khung xem + thanh điều khiển: nút ⛶ fullscreen cả shell để
+               thanh điều khiển vẫn hiển thị khi tràn màn hình -->
+          <div id="t7PlayerShell">
           <div class="t7-player" id="t7Player" ondragover="t7StageDragOver(event)" ondragleave="t7StageDragLeave(event)" ondrop="t7StageDrop(event)">
             <div id="t7DropMark" style="display:none;position:absolute;z-index:9;width:26px;height:26px;margin:-13px 0 0 -13px;border:2px solid var(--accent);border-radius:50%;background:color-mix(in srgb,var(--accent) 25%,transparent);pointer-events:none"></div>
             <div id="t7PreviewWrap" style="width:100%;height:100%;position:relative"><img id="t7PreviewImg" alt="" style="display:none"></div>
@@ -98,21 +101,28 @@
             </div>
             <div id="t7GlobOv" style="position:absolute;inset:0;z-index:4;pointer-events:none;overflow:hidden;container-type:size"></div>
             <div id="t7PreviewSub" style="display:none;position:absolute;left:4%;right:4%;bottom:9%;z-index:6;text-align:center;font-weight:800;color:#fff;-webkit-text-stroke:1.5px #000;paint-order:stroke fill;text-shadow:0 2px 5px rgba(0,0,0,.55);line-height:1.12;pointer-events:none;white-space:pre-wrap"></div>
-            <div class="t7-pbar">
-              <div class="t7-ptrack" id="t7Seek" onpointerdown="t7SeekPointerDown(event)" title="Bấm hoặc kéo để tua"><i id="t7SeekFill"></i></div>
-              <div class="t7-pctl">
-                <span class="b" id="t7PlayBtn" onclick="t7TogglePlay()">▶</span>
-                <select id="t7Rate" onchange="t7SetRate(this.value)" title="Tốc độ xem trước" style="cursor:pointer;min-width:30px;text-align:center;background:transparent;border:0;font-size:11.5px;color:#e5ded4;padding:0 2px;appearance:auto"><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="1.5">1.5x</option><option value="2">2x</option></select>
-                <span class="tc" id="t7TimeCode">00:00 / 00:00</span>
-                <span class="sp"></span>
-                <span class="tc" id="t7LoopBtn" onclick="t7ToggleLoop()" title="Lặp lại khi hết" style="cursor:pointer">🔁</span>
-                <span class="tc" id="t7SafeBtn" onclick="t7ToggleSafe()" title="Khung an toàn 5% / 10%" style="cursor:pointer">▢</span>
-                <span class="tc" id="t7FullBtn" onclick="t7Fullscreen()" title="Xem khung tràn màn hình (Esc để thoát)" style="cursor:pointer">⛶</span>
-                <span class="tc" id="t7AspectLabel">16:9</span>
-              </div>
+          </div>
+          <!-- Thanh điều khiển DỜI khỏi khung xem — thành hàng riêng BÊN DƯỚI,
+               không còn đè lên hình xem trước -->
+          <div class="t7-pbar">
+            <div class="t7-ptrack" id="t7Seek" onpointerdown="t7SeekPointerDown(event)" title="Bấm hoặc kéo để tua"><i id="t7SeekFill"></i></div>
+            <div class="t7-pctl">
+              <span class="b" id="t7PlayBtn" onclick="t7TogglePlay()">▶</span>
+              <select id="t7Rate" onchange="t7SetRate(this.value)" title="Tốc độ xem trước" style="cursor:pointer;min-width:30px;text-align:center;background:transparent;border:0;font-size:11.5px;color:#e5ded4;padding:0 2px;appearance:auto"><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="1.5">1.5x</option><option value="2">2x</option></select>
+              <span class="tc" id="t7TimeCode">00:00 / 00:00</span>
+              <!-- Dòng trạng thái (setStatus7 ghi cả #status7 lẫn #t7StatusLean) dời vào
+                   hàng điều khiển — không còn thành hàng riêng dưới khung làm co khung xem
+                   (chiều cao player do _t7SyncColHeight quyết định theo phần tràn trang). -->
+              <span id="t7StatusLean" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11.5px;text-align:left;min-width:0"></span>
+              <span class="tc" id="t7LoopBtn" onclick="t7ToggleLoop()" title="Lặp lại khi hết" style="cursor:pointer">🔁</span>
+              <span class="tc" id="t7SafeBtn" onclick="t7ToggleSafe()" title="Khung an toàn 5% / 10%" style="cursor:pointer">▢</span>
+              <span class="tc" id="t7FullBtn" onclick="t7Fullscreen()" title="Xem khung tràn màn hình (Esc để thoát)" style="cursor:pointer">⛶</span>
+              <span class="tc" id="t7AspectLabel">16:9</span>
             </div>
           </div>
-          <div id="t7StatusLean" style="min-height:17px;padding:2px 14px 8px;font-size:12px;color:var(--text-muted);text-align:center"></div>
+          </div>
+          <!-- (Dòng trạng thái #t7StatusLean đã dời vào hàng điều khiển .t7-pctl phía trên —
+                 không còn hàng riêng dưới khung làm co khung xem) -->
           <div id="t7PreviewCap" class="t7-pcap" style="display:none"></div>
         </section>
 
