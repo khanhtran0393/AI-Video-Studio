@@ -56,6 +56,40 @@ function updateScriptCount(){
   if (el) el.textContent = (state.script || '').length.toLocaleString() + ' ký tự';
 }
 
+function t2PullFromScript(){
+  // Nút chủ động: nhận kịch bản viết ở tab Tạo Kịch Bản (ghi đè cả khi ô đã có nội dung).
+  const ta = document.getElementById('scriptInput');
+  if (!ta) return setStatus2('Không tìm thấy ô kịch bản.', 'error');
+  const sync = () => {
+    updateScriptCount();
+    if (typeof t2UpdateCost === 'function') t2UpdateCost();
+    if (typeof t2UpdateAnalyzeBtn === 'function') t2UpdateAnalyzeBtn();
+  };
+  // 1) Nguồn trực tiếp: ô Kịch bản ở tab Tạo Kịch Bản (tsOutput).
+  const ts = (document.getElementById('tsOutput')?.value || '').trim();
+  if (ts) {
+    const isNew = ta.value.trim() !== ts;
+    ta.value = ts;
+    state.script = ts;
+    if (isNew){
+      state.videoLogline = ''; state.videoLoglineSig = '';   // kịch bản mới → bỏ logline cũ
+      const lgEl = document.getElementById('videoLogline'); if (lgEl) lgEl.value = '';
+    }
+    sync();
+    try { if (typeof syncStateToCurrentProfile === 'function') syncStateToCurrentProfile(); saveState(); } catch (e) {}
+    setStatus2('✓ Đã nhận kịch bản từ tab Tạo Kịch Bản. Bấm ✨ Phân tích kịch bản.', 'ok');
+    return;
+  }
+  // 2) Kịch bản đã nằm trong state từ phiên làm việc (tsOutput trống) — vẫn dùng được, LỘ LIỄU nguồn.
+  if (state.script && state.script.trim() && state.script !== ta.value){
+    ta.value = state.script;
+    sync();
+    setStatus2('✓ Đã nạp kịch bản từ phiên làm việc (tab Tạo Kịch Bản hiện đang trống).', 'ok');
+    return;
+  }
+  setStatus2('Chưa có kịch bản để nhận. Hãy viết kịch bản ở tab Tạo Kịch Bản trước.', 'error');
+}
+
 function splitIntoSentences(text){
   text = text.replace(/[\u201C\u201D]/g, '"').replace(/[\u2018\u2019]/g, "'").replace(/\r/g, '');
   const paras = text.split(/\n+/).map(p => p.trim()).filter(Boolean);

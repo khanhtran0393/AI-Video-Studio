@@ -252,6 +252,7 @@
         <div class="fc-step"><span class="n">1</span> Danh sách prompt
           <span class="r">
             <span id="bulkCount" style="font-size:12px;color:var(--text-muted)">0 ảnh</span>
+            <button class="btn ghost sm" style="color:var(--teal)" onclick="bulkPullScenes()" title="Đổ prompt ảnh từng cảnh từ Tool 02 (Phân Cảnh) vào danh sách">📥 Prompt từ Phân Cảnh</button>
             <label class="btn ghost sm" style="cursor:pointer">📄 Nhập file<input type="file" accept=".txt,.csv,text/*" style="display:none" onchange="bulkImportFile(this)"></label>
             <button class="btn ghost sm" style="color:var(--red)" onclick="var t=document.getElementById('bulkPrompts');if(t){t.value='';bulkUpdateCount();}">🗑 Xoá</button>
           </span>

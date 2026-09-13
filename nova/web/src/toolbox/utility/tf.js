@@ -95,6 +95,30 @@ function bulkImportFile(input){
   r.readAsText(f, 'utf-8');
 }
 
+// Nhận prompt ảnh từ Tool 02 (Phân Cảnh): state.scenes + state.scenePrompts (biến thể A/B qua scenePrompts/scenePrompts2).
+function bulkPullScenes(){
+  const scenes = state.scenes || [];
+  const SP = state.scenePrompts || {}, SP2 = state.scenePrompts2 || {};
+  if (!scenes.length) return setStatusF('Tool 02 (Phân Cảnh) chưa có cảnh — phân cảnh kịch bản ở Tool 02 trước rồi quay lại đây.', 'error');
+  const flat = t => String(t || '').replace(/\s*\n+\s*/g, ' ').trim();
+  const lines = [];
+  let skip = 0;
+  for (const s of scenes){
+    const pa = flat(SP[s.id]);
+    if (pa) lines.push('scene-' + s.id + ' | ' + pa); else skip++;
+    const pb = flat(SP2[s.id]);
+    if (pb) lines.push('scene-' + s.id + '-b | ' + pb);
+  }
+  if (!lines.length) return setStatusF('Phân Cảnh đã có ' + scenes.length + ' cảnh nhưng chưa có prompt ảnh nào. Tạo prompt ảnh ở Tool 02 trước.', 'error');
+  const ta = document.getElementById('bulkPrompts');
+  if (!ta) return setStatusF('Không tìm thấy ô Danh sách prompt.', 'error');
+  const cur = _bulkParse().length;
+  if (cur && !confirm('Thay thế ' + cur + ' prompt đang có bằng ' + lines.length + ' prompt từ Phân Cảnh?')) return;
+  ta.value = lines.join('\n');
+  bulkUpdateCount();
+  setStatusF('📥 Đã nhận ' + lines.length + ' prompt từ Phân Cảnh' + (skip ? ' (' + skip + ' cảnh chưa có prompt bị bỏ qua)' : '') + '. Bấm ▶ Tạo tất cả để tạo ảnh.', 'ok');
+}
+
 function bulkAddRefs(files){
   [...(files || [])].forEach(f => { const r = new FileReader(); r.onload = () => { bulkState.refs.push({ name: 'ref-' + (bulkState.refs.length + 1), base64: String(r.result || ''), mediaType: f.type || 'image/png' }); bulkRenderRefs(); }; r.readAsDataURL(f); });
 }

@@ -21,7 +21,10 @@
           <div>
             <div class="panel-head" style="padding:0 0 6px;border:none;background:none">
               <span style="font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-dim);font-weight:600">KỊCH BẢN · <span id="scriptCount">0 ký tự</span></span>
-              <label class="btn ghost sm" style="cursor:pointer;border-color:var(--accent);color:var(--accent)" title="Tải file .txt/.md/.srt">📄 Tải file<input type="file" accept=".txt,.md,.text,.srt,.vtt,text/*" onchange="loadScriptFile(this)" style="display:none"></label>
+              <span style="display:flex;gap:6px;align-items:center">
+                <button class="btn ghost sm" style="text-transform:none;font-weight:400" onclick="t2PullFromScript()" title="Nạp kịch bản viết ở tab Tạo Kịch Bản (ghi đè nội dung hiện tại)">📥 Nhận kịch bản</button>
+                <label class="btn ghost sm" style="cursor:pointer;border-color:var(--accent);color:var(--accent)" title="Tải file .txt/.md/.srt">📄 Tải file<input type="file" accept=".txt,.md,.text,.srt,.vtt,text/*" onchange="loadScriptFile(this)" style="display:none"></label>
+              </span>
             </div>
             <textarea id="scriptInput" placeholder="Paste kịch bản vào đây — hoặc bấm 📄 Tải file" style="min-height:200px;background:var(--surface-2);border:1px solid var(--border);border-radius:11px;padding:12px 14px" oninput="state.script=this.value;updateScriptCount();if(typeof t2UpdateCost==='function')t2UpdateCost();if(typeof t2UpdateAnalyzeBtn==='function')t2UpdateAnalyzeBtn()"></textarea>
           </div>
