@@ -88,6 +88,7 @@
     if (ui.advRunBtn) ui.advRunBtn.disabled = state.advRunning || !state.advProject;
     if (ui.advCancelBtn) ui.advCancelBtn.disabled = !state.advRunning;
     if (ui.advRetryBtn) ui.advRetryBtn.disabled = state.advRunning || !state.advJobId;
+    if (ui.advResumeBtn) ui.advResumeBtn.disabled = state.advRunning || !state.advJobId;
   }
 
   function advSetProgress(label, percent) {
@@ -225,7 +226,7 @@
     state.advRunning = true;
     advSetRunButtons();
     try {
-      logLine(ui.advLog, 'Thử lại từ đầu…');
+      logLine(ui.advLog, 'Tiếp tục công việc — dùng options đã lưu trong output/job.json…');
       const r = await bridge.retry(state.advJobId);
       if (!r || r.ok === false) { notice(errText(r && (r.error || r), 'Thử lại')); return; }
       showAdvResult(r);
@@ -306,6 +307,29 @@
      Nguồn: session snapshot (sessSnapGet) lưu projectDir gần nhất — cả
      luồng Nâng cao (vaProjectDir) lẫn luồng Dễ chạy pipeline đầy đủ
      (vaEasyProjectDir). Main trả job.json qua videoAgent:inspect. */
+
+  /* Nút "Tiếp tục" cho công việc dang dở → videoAgent:retry với đúng options
+     đã lưu trong output/job.json (main tự hydrate map active khi inspect,
+     nên retry chạy được cả sau khi restart app — ipc.js readJob dòng 27). */
+  function setAdvResumeVisible(on) {
+    if (!on) {
+      if (ui.advResumeBtn) {
+        const row = ui.advResumeBtn.parentElement;
+        if (row && row.classList && row.classList.contains('va-row')) row.remove();
+        else ui.advResumeBtn.remove();
+        ui.advResumeBtn = null;
+      }
+      return;
+    }
+    if (!ui.advResumeBtn) {
+      ui.advResumeBtn = el('button', { class: 'va-btn primary', onclick: retryAdv }, '⏯ Tiếp tục công việc dang dở');
+      const prog = ui.advProgFill && ui.advProgFill.parentElement;
+      if (prog && prog.parentElement) prog.parentElement.insertBefore(el('div', { class: 'va-row' }, ui.advResumeBtn), prog);
+      else if (ui.advRunBtn && ui.advRunBtn.parentElement) ui.advRunBtn.parentElement.append(ui.advResumeBtn);
+    }
+    ui.advResumeBtn.disabled = state.advRunning || !state.advJobId;
+  }
+
   async function vaResumeCheck() {
     const bridge = va25();
     if (!bridge || typeof bridge.inspect !== 'function') return;
@@ -325,15 +349,18 @@
       state.advJobId = (job && (job.jobId || job.id)) || state.advJobId;
       advSetRunButtons();
       if (!job) {
+        setAdvResumeVisible(false);
         notice(`📂 Đã mở lại dự án gần nhất: ${fileName(r.projectDir || projectDir)} — chưa có lần chạy nào.`, 'info');
       } else if (status === 'completed') {
+        setAdvResumeVisible(false);
         showAdvResult(job);
         markAdvStages('COMPLETED');
         advSetProgress('Hoàn tất (lần chạy trước) 🎉', 100);
         notice('📂 Dự án gần nhất đã HOÀN TẤT — video ở Bước 3. Bấm "🤖 Chạy Video Agent" nếu muốn dựng lại.', 'ok');
       } else {
         const vi = STAGE_VI[String(job.stage || job.state || '').toUpperCase()] || status || 'dở dang';
-        notice(`⏸ Công việc dang dở: "${fileName(projectDir)}" — lần chạy trước dừng ở trạng thái ${vi}. Nguyên liệu vẫn còn trong dự án — bấm "🤖 Chạy Video Agent" để dựng lại.`, 'info');
+        setAdvResumeVisible(true);
+        notice(`⏸ Công việc dang dở: "${fileName(projectDir)}" — lần chạy trước dừng ở trạng thái ${vi}. Bấm "⏯ Tiếp tục" để chạy lại với ĐÚNG cấu hình đã lưu trong dự án.`, 'info');
         advSetProgress(`Công việc dang dở — trạng thái trước đó: ${vi}`, 0);
       }
       /* Nhảy sang tab Nâng cao — nơi có kết quả + nút chạy lại. */
