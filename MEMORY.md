@@ -83,8 +83,22 @@ File nÃ y ghi **tráº¡ng thÃ¡i dÃ i háº¡n vÃ  lá»‹ch sá»­ qu
   vulkan/d3d dllâ€¦) â€” khÃ´ng track, chá»‰ hiá»‡n trÃªn mÃ¡y dev.
 
 ## Nhật ký thay đổi
+- [2026-09-12] **Panel Giọng nói — restructure: xoá panel "Thư viện giọng", thêm lọc "Giọng Clone", dời "＋ Thêm giọng" vào "Đọc thành giọng"** (user duyệt phương án giữ nút thêm giọng — cách duy nhất để clone — chuyển vào phần Đọc thành giọng, mọi thứ khác của thư viện xoá sạch). HTML `nova/web/partials/panels-upscale-voice.html`: xoá `tool-subtitle` + dòng trạng thái xanh "Giọng nói sẵn sàng" (`#voiceBackendStatus` giờ phải rỗng khi ready); xoá toàn bộ panel Thư viện giọng (head, `giongDem`, `giongLibDD`, `giongLuoiBtn`, hint, `giongLuoiWrap`/`giongChips`/`giongLuoi`); thêm `<option value="clone">Giọng Clone…</option>` vào `#voiceLang`; head "Giọng đọc" thành flex có nút "＋ Thêm giọng" (`giongThemBat()`); form `giongThemBox` dời nguyên vẹn xuống cuối panel. JS `nova/web/src/toolbox/utility/voice.js`: thay `_giongHop` (loc thẻ/chips) bằng `_giongDapUngLang(v, lang)` — `'all'` = tất cả, `'clone'` = `kind==='clone'`, còn lại so `lang`; `giongVe()` rút gọn chỉ còn nhãn đang chọn + sync `giongDDVe` + hàng tinh chỉnh (bỏ lưới thẻ/chips/dem); xoá `giongDatLoc`, `giongLibMo`, `giongLibChon`, `giongLibVe`, `giongLuoiBat`; `giongDDVe` + nhánh đổi backend `voiceBackendChon` lọc qua helper mới (hết giọng khớp → thôi lọc + ghi chú riêng cho 'clone'); `giongDDChon`/`giongTheoBackend` đồng bộ select Ngôn ngữ về `'clone'` khi chọn giọng clone; `voiceInit`/`r?.ok` ready → `st.innerHTML=''` (không chữ trạng thái). `giongTaiDS` không sinh option lang 'clone' từ dữ liệu (option tĩnh trong HTML, không xung đột). State mồ côi `_giongLoc`, `_giongLuoiMo` còn khai báo trong `web/src/toolbox/shared/voice.js` (không còn ai đọc — nợ dọn state chết, không chạm để giữ hợp đồng shared). `check:syntax`/`check:toplevel` sạch tham chiếu mồ côi; `npm run check` EXIT=0 (lần chạy đầu FAIL do leftover `nova/scripts/tmp/tmp-reorder-sim.js` liệt kê nhưng đã mất trên đĩa — lần sau PASS). `tool-tts.js` tự mở form thêm giọng vẫn hoạt động (`giongThemBox`/`giongThemBat` giữ nguyên, chỉ dời chỗ). `giong-dd-packaged-check.js` đã sửa theo UI mới: bỏ phần kiểm lưới thẻ `.gcard`/`giongLuoi`/`giongBam` (không còn tồn tại), thay bằng đồng bộ dropdown `#voiceGiongDD` ↔ nhãn `#giongDangChon` (chọn B → nhãn B → chọn lại A → nhãn A, menu đóng đúng) — chạy lại trên bản đóng gói dist qua CDP **passed** (report `smoke-results/giong-dd-2026-09-12T14-47-08-210Z/`; lưu ý dist hiện tại vẫn là bản build TRƯỚC restructure — muốn UI mới vào bản đóng gói cần `npm run build:win`). **Smoke app dev đạt (khoidong.bat --silent 14:52Z EXIT=0 → CDP 9336 probe tmp-voice-panel-smoke, đã xoá theo quy ước)**: vào tab 🎙 Giọng nói OK; option "Giọng Clone" có trong `#voiceLang`; nút "＋ Thêm giọng" + `giongThemBox` nằm trong panel; lưới thẻ/chips/dem đã biến mất; bật/tắt form OK; dữ liệu THẬT 57 giọng (2 clone "thùy tiên/thùy trang sample") — lọc clone đúng (menu clone hiện đúng 2 giọng clone; backend vieneu hiện tại chưa có giọng clone → rơi vào nhánh fallback ghi chú "Backend này chưa có giọng clone nào — đang hiện tất cả giọng." như thiết kế); `#voiceBackendStatus` RỖNG khi backend sẵn sàng (hành vi mới xác nhận); 0 exception renderer. `scan:lifecycle` exit 1 CHỈ do REAL lịch sử ≤ 2026-09-11T13:56 (đã ghi nhận từ trước) + WARN kill chủ đích khi kiểm định đóng gói; phiên 14:52Z sạch (chỉ gpu-feature-status).
+
+- [2026-09-12z] **Icon taskbar lần 4 — dùng ĐÚNG emblem NOVA lấy từ banner `build/icon.png` (theo yêu cầu user)**: user chỉ thẳng `build/icon.png` là icon chuẩn → xem lại kết luận "banner không crop được" của lần 3 và thấy SAI: banner 2048×768 có nền trong suốt chuẩn (alpha histogram: 60% = 0, 29.7% = 255, ~10% halo glow alpha 1–15; RGB lẫn trong pixel alpha=0 chỉ là rác bộ encode — lần 3 phân tích theo RGB thay vì alpha nên tưởng "nền glow gradient"). Emblem nằm sạch bbox x 34..895, y 27..721 (865×695, độ phân giải cao — tốt hơn hẳn nguồn 108×87 của `icon-square.png`). Script `nova/scripts/tmp/regen-icon-ico-v4.mjs`: crop bbox theo alpha>2 (giữ halo mềm), compose canvas 1024 fill 94%, box-filter premultiplied → 7 frame 16/24/32/48/64/128/256, png-to-ico pack → `build/icon.ico` + sync `nova/web/brand-logo.ico` (hash khớp); bản N-letter backup tại `nova/scripts/tmp/icon-nletter-backup.ico`. Đánh đổi đã biết: 256/128/32px emblem rõ đẹp chuẩn brand; **16px chỉ còn mảng màu xanh-tím + chấm vàng** (giới hạn vật lý của emblem chi tiết — không thể đọc chữ). Verify live: pack lần 1 FAIL `UNKNOWN` vì app đang chạy giữ khóa icon.ico → kill electron (Stop-Process chủ đích) → pack OK → `khoidong.bat --silent` EXIT=0 → WM_GETICON trên hwnd thật: ICON_BIG 32px = emblem rõ, ICON_SMALL 16px = mảng màu brand. `npm run check` PASS; scan:lifecycle 0 REAL mới (38 REAL đều lịch sử ≤ 2026-09-11T13:56; WARN 14:27Z 12/09 là cụm -1 do kill chủ đích khi restart). Nếu không chấp nhận 16px mờ → hybrid v3 (N-letter frame 16–24, backup đã giữ). Tile pinned cũ cần unpin/repin; `dist/` cần `npm run build:win` lại.
+- [2026-09-12] **Icon taskbar lần 3 — frame nhỏ (16–64px) dùng chữ `N` gradient thay emblem đầy đủ**: user báo `vẫn chưa đúng` — kiểm chứng cho thấy icon.ico khi đó ĐÃ đúng emblem N mới (WM_GETICON trả emblem), nhưng frame 16px của emblem (quá chi tiết: icon quỹ đạo, bóng loang) vỡ thành cục màu lộn xộn trên taskbar. 2 bài học: (a) vùng emblem trong banner gốc `build/icon.png` 2048×768 có NỀN GLOW GRADIENT (không phải nền đen) — crop riêng ribbon từ banner vẫn xấu ở 16px; (b) nguồn emblem trong `icon-square.png` chỉ 108×87px, upscale lên 200px đã mềm. Giải pháp: frame 16–64 = chữ `N` letterform (Segoe UI Black) gradient cyan→tím vẽ vector 1024px bằng System.Drawing (`nova/scripts/tmp/render-n-letter.ps1`); frame 128/256 giữ emblem đầy đủ (logic v1 từ `icon-square.png`); đóng gói 7 frame bằng `nova/scripts/tmp/regen-icon-ico-v3.mjs` (png-to-ico, không thêm dependency). Verify: WM_GETICON live sau restart = N rõ nét cả ICON_SMALL 16px lẫn ICON_BIG 32px (`capture-live-icon.ps1`); `npm run check` PASS toàn chuỗi — sau khi XOÁ file hỏng `nova/scripts/tmp/tmp-ffx-ads-ipc-live.js` bị cắt cụt giữa chừng (leftover phiên trước, chặn check:syntax: Unexpected end of input); restart `khoidong.bat --silent` EXIT=0; scan:lifecycle không có REAL mới (REAL còn lại là lịch sử 2026-09-11, WARN là cụm -1 do kill ngoài khi restart). Lưu ý: tile PINNED cũ có thể giữ icon cache → unpin/repin; bản đóng gói `dist/` vẫn nhúng icon cũ tới khi `npm run build:win` lại.
+- [2026-09-13] **Commit tổng hợp batch 2026-09-12 → `9ff5b0b6`**: toàn bộ công việc
+  12/9 (livestream đa nền tảng, viral-cut heatmap/bình luận + aspect, voice cache mẫu
+  v2, t7-ai 12 cải tiến, icon taskbar, `media-protocol-range-test` chính thức hoá,
+  khung "API đã thêm") đã kiểm định lại GREEN (`npm run check` EXIT=0;
+  test:media-protocol PASS / test:viral-cut 61 / test:voice / test:t7-ai 67 PASS)
+  rồi commit 44 file (+4081/−484); dọn file rác `check-full.txt` khỏi root repo.
+  Còn treo: E2E livestream lên sóng thật (cần stream key + kênh live) và e2e Viral
+  Cut trong app (dán URL → cắt → ghép) — chờ dữ liệu thật của user (§6.6).
 - [2026-09-12] **PHÁT TRỰC TIẾP — Livestream Studio đa nền tảng (mô hình TikTok LIVE Studio)**: sidebar có mục mới "Phát Trực Tiếp" (panel `tool-toollive`, partial `partials/panel-tool-live.html`, renderer `web/src/toolbox/tool-live.js` tiền tố `lstudio*` nạp ngay sau `tool-ffx.js`; `panel-order.js` thêm `toollive`). Main: module mới `nova/main/ipc/live-stream.js` (exports `registerLiveStreamIpc` + `stopLiveStream`) — 6 kênh IPC mới `livestream:pick-video|list-cameras|list-windows|start|stop|status` + 2 event `livestream:progress|status` (preload `window.native.liveStudio`; ipc-inventory.json regenerated: 197 kênh). Kiến trúc: ffmpeg encode 1 luồng libx264/aac → tee muxer `-f tee [f=flv:onfail=ignore]…` đẩy SONG SONG nhiều nền tảng (preset YouTube `rtmp://a.rtmp.youtube.com/live2/` / TikTok `rtmp://push.tiktokcdn-live.com/live/` / Facebook `rtmps://live-api-s.facebook.com:443/rtmp/` + Tùy chỉnh; stream key nhập tay, lưu localStorage `lstudio.config.v1` — chỉ trên máy user). 3 chế độ nguồn: video có sẵn (`-re` + loop `-stream_loop -1`), webcam dshow, cửa sổ ứng dụng gdigrab `title=` (liệt kê qua `desktopCapturer`); camera/window bắt buộc chọn micro hoặc tick "phát không tiếng (chủ động)" → `LS_NO_AUDIO`; video nguồn không track audio → dò ffprobe trước, báo `LS_SOURCE_NO_AUDIO` (không fallback ngầm). Progress fps/bitrate/speed event throttle 1s, watchdog stderr 3 phút (LS_STALL), dừng sạch khi thoát app qua `stopLiveStream()` trong lifecycle. Kiểm định: unit hàm thuần qua stub electron/ffmpeg 6/6 PASS (tmp đã xoá), `npm run check` GREEN exit=0 (exports-contract KHÔNG đổi — module dưới `main/ipc/` không thuộc baseline), relaunch `khoidong.bat --silent` exit=0, phiên lifecycle sạch (chỉ gpu-feature-status); scan:lifecycle còn exit 1 CHỈ do REAL lịch sử 2026-09-11 13:55–13:56. Chưa test E2E lên sóng thật — cần stream key thật + kênh YouTube đã bật live (hỏi user khi test).
 - [2026-09-12] **Icon taskbar HOÀN CHỈNH — regenerate `build/icon.ico` từ emblem N (sửa tiếp entry icon cùng ngày)**: fix trước đó đã trỏ đúng file nhưng `build/icon.ico` (285KB, 4 frame BMP 256/48/32/16) lại được sinh từ ảnh BANNER 2048×768 → mọi frame là cả banner bị nén vào ô vuông (gần như toàn đen, chữ NOVA li ti) — taskbar hiển thị đốm đen/"bánh răng" khó nhận diện. Phát hiện thêm: `build/icon-square.png` cũng KHÔNG phải icon vuông đúng nghĩa — nó là banner thu nhỏ đặt giữa canvas 256×256 TRONG SUỐT (emblem N chiếm cột 4–111, hàng 83–169; chữ NOVA bắt đầu cột 118; alpha=0 ngoài vùng nội dung). Xử lý: script `nova/scripts/tmp/regen-icon-ico.mjs` (pngjs + png-to-ico đã có sẵn trong node_modules, KHÔNG thêm dependency) tách riêng emblem N (bbox 108×87 tính theo ALPHA), compose lên canvas vuông 256×256 trong suốt chiếm 78% cạnh, box-filter downscale premultiplied-alpha ra 7 frame 16/24/32/48/64/128/256, `png-to-ico` sinh frame DIB chuẩn → `build/icon.ico` (372,526 bytes; bản banner-based cũ backup tại `nova/scripts/tmp/icon-banner-backup.ico`), đồng bộ `nova/web/brand-logo.ico`. Verify: render từng frame bằng System.Drawing khớp thiết kế; lấy icon LIVE từ cửa sổ thật qua WM_GETICON (ICON_SMALL) = emblem N 16×16 rõ nét. `npm run check` EXIT=0; app restart qua `khoidong.bat --silent` EXIT=0; scan:lifecycle: session 13:26Z không có finding mới (REAL còn lại đều là lịch sử 2026-09-11). `electron-builder.json` (`win.icon` + `extraResources`) không cần đổi — đã trỏ đúng `build/icon.ico`.
+- [2026-09-12] **Thư viện giọng — QA runtime qua CDP của 3 cải tiến cache mẫu: bắt + sửa 2 bug thật, E2E PASS**: probe `nova/scripts/tmp/tmp-cdp-voice-probe.js` (tmp, gitignored) nối CDP DevTools 9336 của app đang chạy, reload renderer rồi eval trong trang thật với dữ liệu thật (57 giọng, backend TTS sẵn sàng). Phát hiện **bug 1 — badge không bao giờ sáng**: key đĩa bị main `voiceSampleFile` sanitize `/[/\\:*?"<>|]+/g → '_'`, tức cả `|` lẫn `:` trong voice key (`omni:factory_en_male_deep` → `omni_factory_en_male_deep`) đều thành `_` → tách ngược từ key đĩa MẤT thông tin. Sửa sang **forward-mapping**: `_giongMauSan` giữ KEY ĐĨA NGUYÊN BẢN (có tiền tố `v2_`), so khớp giọng qua `_giongMauSanCo(key)` mới — tổng hợp `v2|eng|key` rồi sanitize chiều đi bằng cùng regex main (helper `_giongMauKeyDia`); `giongMauXoa` (`giongXoa`) xoá set theo key đĩa từng engine. **Bug 2** — `_giongPhatThu` sau khi gen thêm key THÔ vào set (trộn 2 loại key) → sửa thêm key đĩa. E2E thật PASS toàn phần: gen TTS thật ~54s → file v2 xuống đĩa đúng `sp/p` → badge sáng → dọn RAM → nghe lại phát từ đĩa 26–42ms (không gen lại); đổi `voiceSpeed` 1→1.2 → gen THẬT mới (khopThamSo chặn dùng mẫu cũ) + ghi đè cùng key với `sp:1.2` → khôi phục tốc độ 1 → gen lại đúng sp=1. Kiểm định: `npm run check` EXIT=0, `test:voice` PASS. Commit: amend `a8b06970` thêm 2 file renderer voice; entry MEMORY này để working tree (đang có WIP chưa commit của các phiên song song).
+
 - [2026-09-12] **Thư viện giọng — 3 cải tiến cache mẫu nghe thử (user duyệt cả 3)**:
   (1) *cache nhận biết tham số* — `_GIONG_MAU_V` bump `v1→v2`: file cache đĩa giờ là JSON
   `{v:2, sp, p, dataUrl}` (ghi ở `voice-sample-save` trong `nova/main/ipc/voice.js`, `sp/p` =
@@ -4810,6 +4824,7 @@ Trợ lý dựng báo đang chạy ngay + sửa preview 9:16/1:1 bị co nhỏ +
 - **Kiểm định**: `node --check` OK; `npm run check` **EXIT 0** (syntax 579, shared 19 keys, size 799 file 0 lỗi, toplevel 1637 tên 0 xung đột, docs 36 script khớp, selftest 10/10 — 1 lần docs FAIL "test:viral-cut không nhắc" không tái hiện, xác nhận AGENTS.md có mention ×2; nghi do đọc file chưa flush ngay sau khi sửa); `npm run test:ffx-smoke` **48/48 PASS 0 FAIL** trên dữ liệu thật `output/gen-e2e/` (gồm 3 expectFail mới); restart qua taskkill + `khoidong.bat --silent` → bridge 47280 OK, session 09:17:54Z lifecycle **0 entry crash/unresponsive** (`scan:lifecycle` exit 1 duy nhất do REAL lịch sử 2026-09-11T13:55 — đã giải thích ở 2026-09-12j: bug `media-protocol.js`).
 - **Còn treo**: test tay UI các luồng Gói D với dữ liệu thật (drag-drop, estimate, queue, history); NO_FLOW_KEY chờ user re-auth Flow.
 
+
 ## 2026-09-12o — Gói E cải tiến: 10 mục chất lượng/UX cho 6 op FFmpeg mới
 
 - **Engine (`nova/native-tools/media-tools.js`)**: (1) `addFades` chỉ fade tiếng → `-c:v copy`,
@@ -4952,64 +4967,6 @@ Trợ lý dựng báo đang chạy ngay + sửa preview 9:16/1:1 bị co nhỏ +
   weights đã cache trong HF: `neuphonic/*`, `pnnbao-ump/Vi*`). `[prewarm] đã nạp sẵn
   engine vieneu trong 16.1s` (nhanh hơn prewarm omni 31.0s).
 
-## 2026-09-12s — Viral Cut: khung 3 chỉnh giờ thật sự chạy + preview fail lộ liễu + mặc định 10 clip + 16:9 + card 2 khung/hàng
-
-- **Bối cảnh**: 4 phản hồi UX của user trên panel Viral Cut (`nova/web/viral-cut-panel.js`):
-  (1) "không preview được video", (2) khung Tổng quan phải chỉnh được thời gian START/END
-  thật sự, (3) mặc định `Số clip tối đa = 10`, (4) danh sách kết quả quá dài → 2 khung mỗi hàng.
-- **Engine/IPC (đã commit trước đó, lần này chỉ thêm export + test)**: `normalizeAspect(value,
-  legacyCrop916)` → `'keep'|'916'|'169'`, giá trị rác ném `VC_ASPECT_UNSUPPORTED` (Luật 10,
-  không âm thầm về `keep`); `aspectFilterOf` → chuỗi ffmpeg (`916`: `crop=min(iw,ih*9/16):ih,
-  scale=1080:1920`, `169`: `crop=iw:min(ih,iw*9/16),scale=1920:1080`); `buildExportPlan` gắn
-  `item.aspect` + `item.vf` cho mọi clip, IPC `-vf` đọc `item.vf` và payload không còn `crop916`.
-  `module.exports` của engine thêm `ASPECT_KEEP`, `ASPECT_FILTERS` (engine KHÔNG nằm trong baseline
-  `exports-contract.json` — contract chỉ phủ shim `nova/*.js` + `nova/main/*.js` → `check:exports`
-  PASS không cần `--update`).
-- **Khung 3 giờ đã có hành vi (trước đó chỉ có markup)**:
-  - `vcState.pickedIdx` là con trỏ duy nhất, đồng bộ 3 chiều: select `#vcPickHl` + ◀▶ ⇄ card
-    trong `#vcHlList` (chạm card = chọn, nút "✎ Chỉnh" = chọn + scroll tới khung 3) ⇄ khối trên
-    timeline (`vc-active`). `vcRenderTimeline()` luôn gọi `vcRenderPick()` nên trạng thái điều
-    khiển không bao giờ "treo" sau khi phân tích lại.
-  - Ô số + thanh trượt `#vcSelStart(R)` / `#vcSelEnd(R)` hai chiều qua `vcAdjustSel()`: clamp
-    `0..durationMs`, buộc `end-start ≥ 1s`, cập nhật thẳng `vcState.highlights[i]` → payload
-    export dùng giá trị đã sửa. Kéo slider = scrub: pause + tua `video.currentTime` tới biên vừa
-    sửa để user THẤY khung hình tương ứng. `#vcMarkStart` / `#vcMarkEnd` lấy playhead làm biên.
-  - `▶ Phát đoạn` / `⏹ Dừng` / ☑ "lặp đoạn" dùng `previewStartMs` + `previewUntilMs`: `timeupdate`
-    tự tua về đầu đoạn khi bật loop (không pause), tắt loop thì dừng hẳn. `#vcSelInfo`/`#vcSelDur`
-    hiện "Đoạn k/n" + độ dài.
-  - Ô đang giữ focus không bị ghi đè khi render lại (chống nhảy số khi gõ), nhưng `vcRenderPick(true)`
-    vẫn nạp đúng khi ĐỔI đoạn.
-- **Chẩn đoán "không preview được video" (đã loại trừ, còn 1 nguyên nhân thật)**:
-  - `avs-media://` được cài đúng: `main.plain.js:57` register TRƯỚC `whenReady`, `:154` install handler
-    SAU ready; `main/media-protocol.js` KHÔNG whitelist thư mục → mọi path đĩa đều được serve kèm
-    Range/seek, MIME theo phần mở rộng. Vậy **không phải lỗi đường dẫn/CSP**.
-  - Nguyên nhân còn lại: **codec/container** — Chromium trong `<video>` chỉ phát H.264/VP9/AV1 +
-    AAC/Opus trong MP4/WebM/M4V/MOV; MKV/AVI/TS/WMV/FLV/ProRes/HEVC cho khung đen. Bản cũ **không có
-    error listener** nên fail lặng lẽ → giờ `vcSetVideoErr()` + `#vcVideoErr` báo rõ theo
-    `MEDIA_ERR_*` (1/2/3/4), kèm nhắc sớm theo phần mở rộng (`VC_HARD_UNSUPPORTED`) và nhắc "bấm
-    Cắt & xuất vẫn chạy vì engine cắt dùng FFmpeg". `loadedmetadata` xoá cảnh báo, `vcRenderPick`
-    tắt slider khi chưa có `durationMs` (codec lỗi thì vẫn gõ số được).
-  - **Còn treo (cần user xác nhận bằng GUI)**: file nguồn cụ thể mà user mở là định dạng gì — nếu
-    `.mkv`/HEVC thì đúng chẩn đoán trên; nếu `.mp4` H.264 mà vẫn đen thì phải xem tiếp Range/seek.
-- **Mặc định & layout**: `#vcMaxClips` `<option selected>10</option>` + fallback JS `|| 10` ở CẢ HAI
-  luồng (analyze local + analyzeYoutube) khớp `ipc.js:103,350` (`Number(p.maxClips) || 10`, kẹp 1..10);
-  `#vcAspect` thêm `16:9 (ngang)`, payload đổi `crop916` → `aspect`, dòng kết quả ghi "(khung 9:16 /
-  16:9)" theo `r.aspect`; `#vcHlList` bọc `.vc-hls` = `grid repeat(2,minmax(0,1fr))` (1 cột dưới 900px),
-  card gọn: title 1 dòng ellipsis, meta + reason + hook quote, hàng điều khiển có ô số `data-i/data-f`,
-  ▶, ✎ Chỉnh; mọi text từ engine/LLM qua `vcEsc()`.
-- **Kiểm định**: `npm run test:viral-cut` **55/55 PASS exitCode=0** — thêm 8 test: 6 test aspect
-  (chuẩn hoá cách viết, legacy crop916, giá trị rác → lộ liễu, filter chuỗi, plan per-item,
-  VC_NO_OUTDIR) + 2 test hợp đồng TĨNH của panel (panel là global script không import được → đọc
-  source, đếm ngoặc lấy đúng khối `exportClips({...})` để khẳng định `aspect` thay `crop916`,
-  default 10 ở 2 chỗ, 2 tuỳ chọn tỉ lệ, `.vc-hls` 2 cột, và 15 id khung 3 đều vừa có markup vừa
-  có binding — chống đúng lỗi "markup đã thêm nhưng JS chưa nối"). `npm run check` **EXIT=0**
-  (syntax/ipc/exports/shared/shared-shadow/shadow/size 0 warning/toplevel 1691 tên 0 xung đột/
-  docs 37 script/selftest 10-10); cập nhật AGENTS.md §3.2 "47 test" → 55 test + nêu hợp đồng tĩnh
-  panel, `check:docs` PASS lại sau khi sửa. Lưu ý: output `npm run check` dài nên PowerShell có
-  hiển thị lỗi cắt dòng của checker C2 (`web/src/toolbox/...`) — chạy từng bước riêng lẻ đều exit 0.
-- **Chưa làm / cần làm tiếp**: smoke GUI thật (`.\khoidong.bat` → Viral Cut → mở MP4 H.264, bấm
-  Phát đoạn + kéo slider, xuất thử 9:16 và 16:9 rồi đối chiếu `ffprobe` kích thước ảnh) — bắt buộc
-  theo §6.5+§6.6, chưa có sự xác nhận của user nên chưa kết luận "đạt".
 
 - **Quyết định CUDA torch trên 1050 Ti: KHÔNG làm**, 3 lý do:
   (1) Docs chính thức vieneu (PyPI 3.6.4): GPU chỉ thắng nhờ **batching trên text dài**,
@@ -5062,3 +5019,513 @@ Trợ lý dựng báo đang chạy ngay + sửa preview 9:16/1:1 bị co nhỏ +
   - Nén `.t7-pbar` (padding 7→3px) + `.t7-ptrack` (margin-bottom 8→5px) → bù thêm ~10px.
 - `npm run check` EXIT 0. Lưu ý `_pinW` dùng `stage.clientWidth - 28` vẫn đúng vì lề
   14px/bên đã chuyển nguyên vẹn sang `#t7PlayerShell`.
+
+## 2026-09-12u — Sidebar: dời 5 khâu (Tạo Ảnh / Tạo Video / Dựng Video / Nâng cấp ảnh / Tạo giọng nói) lên nhóm "Sản xuất video"
+
+- **Yêu cầu**: 5 mục trên đang nằm ở nhóm "Công cụ AI" → đưa thẳng vào nhóm
+  "Sản xuất video" để đi đúng luồng Kịch bản → Phân cảnh → Ảnh → Video → Dựng.
+- **Sửa** (2 file renderer, không đụng main/IPC/state/env):
+  - `nova/web/partials/app-sidebar.html`: di dời NGUYÊN VĂN 5 `nav-item` (kèm comment
+    "Kho hiệu ứng … Tool 7" đi theo Dựng Video) vào giữa nhóm "Sản xuất video" —
+    chèn sau cụm `tool2/tool3/tool8/tool5` (3 mục cuối nav ẩn) và TRƯỚC `tool4`
+    (Đổi Tên Ảnh). Giữ lại comment đánh dấu tại chỗ rút đi trong "Công cụ AI".
+    Không đổi `data-tool`, `onclick`, thứ tự tương đối → `switchTool()`/`nav.js`
+    init theo tên không bị ảnh hưởng; `nav-accordion.js` + `navFilter()` (shell.js)
+    đi theo `.nav-group`/`nextElementSibling` nên tự thích ứng; key accordion là
+    TEXT nhóm → trạng thái thu/mở trong localStorage vẫn đúng.
+  - `nova/web/src/toolbox/utility/panel-order.js`: dời khối
+    `'toolflow','tool6','tool7','toolupscale','toolvoice'` lên ngay sau
+    `'tool8','tool5'` để giữ hợp đồng "DOM panel theo đúng thứ tự sidebar".
+- **Không phá hợp đồng nào**: không thêm/xoá kênh IPC, không đổi export, không tên
+  top-level mới, không hardcode cổng/env. Dashboard (`utility/dashboard.js` — lưới
+  "⚡ Truy cập nhanh") vẫn liệt kê các tool theo thứ tự cũ: chủ ý KHÔNG đổi vì yêu
+  cầu chỉ về sidebar; muốn đồng bộ thì sửa riêng mảng `qa(...)` trong dashboard.js.
+- **Bằng chứng kiểm định**:
+  - `npm run check` EXIT 0 toàn chuỗi (syntax 487 file, ipc 197 kênh, exports 35
+    module, shared, shared-shadow, shadow, size, toplevel 1715 tên, docs, selftest 10/10).
+  - `npm run test:foundation` EXIT 0 · `npm run test:web-origin` "WEB-ORIGIN QA OK".
+  - `.\khoidong.bat --silent` EXIT 0 → đọc `lifecycle.log`: từ 12:46Z (vết crash cuối
+    CỦA PHIÊN TRƯỚC) tới hết phiên này chỉ có `gpu-feature-status` + các cặp
+    `window-all-closed → before-quit → will-quit → quit` = đóng cleanly, 0 lỗi mới.
+  - `npm run scan:lifecycle` exit 1 là **tồn tích lịch sử** (REAL sớm nhất 03/09,
+    gần nhất 12:46Z hôm trước khi sửa) — không phải crash của phiên vừa mở.
+  - Đối chiếu máy (script tạm `nova/scripts/tmp/`): `tmp-nav-order-check.js` PASS
+    (sidebar ↔ ORDER, 5/5 khâu thuộc đúng nhóm) và `tmp-served-sidebar-probe.js`
+    đọc `index.html` THẬT app phục vụ (port 47280, 316KB, sau include tĩnh) →
+    "[Sản xuất video] … toolflow, tool6, tool7, toolupscale, toolvoice, tool4,
+    tool9, tool10", "Công cụ AI" không còn sót mục nào.
+  - Lưu ý drift CÓ TRƯỚC (tại thời điểm đó): `tmp-nav-drift-on-head.js` đếm 2 điểm
+    đảo chiều sidebar↔ORDER trên CẢ HEAD lẫn bản mới. → ĐÃ ĐÓNG ở 2026-09-12z.
+
+## 2026-09-12u — Gói 3 close-out: quét card chọn CUDA + sửa Whisper ASR `cublas64_12.dll` (faster-whisper GPU chạy thật)
+
+- **Quét card (nvidia-smi)**: GTX 1050 Ti 4GB, WDDM, driver 582.66, CUDA max theo driver
+  13.0. Card là **Pascal sm_61** → CUDA 13 đã bỏ hỗ trợ compile; **CUDA 12.x là nhánh đúng**
+  (cuBLAS/cuDNN 9 vẫn hỗ trợ sm_61, int8 qua dp4a). Không cài CUDA toolkit ~3GB — dùng wheel pip.
+- **Root cause `cublas64_12.dll`**: torch trong `.venv-omni` là `2.13.0+cpu` (không kèm DLL
+  CUDA) + máy không có CUDA toolkit; `ctranslate2 4.8.2` + `faster-whisper 1.2.1` với
+  `device="auto"` thấy CUDA device (nvcuda.dll từ driver) rồi chết lúc nạp cuBLAS.
+- **Cài vào `.venv-omni` voice-backend**: `nvidia-cublas-cu12 12.9.2.10` +
+  `nvidia-cuda-nvrtc-cu12 12.9.86` + `nvidia-cudnn-cu12 9.26.0.51` (DLL nằm tại
+  `site-packages/nvidia/<pkg>/bin/cublas64_12.dll` + `cudnn64_9.dll`).
+- **Patch chính thức** `nova/voice-backend/backend/engines/asr_whisper.py` (+ mirror
+  `nova/voice-studio/backend/engines/asr_whisper.py` byte-identical, drift-check OK):
+  `_register_cuda_dll_dirs()` — Windows: `os.add_dll_directory` + prepend PATH cho
+  `nvidia/{cublas,cudnn,cuda_nvrtc,nvjitlink,cuda_runtime}/bin` TRƯỚC khi import
+  faster_whisper; thiếu wheel → `print [whisper] WARN` lộ liễu kèm lệnh cài, KHÔNG
+  fallback ngầm (tầng `app.py` giữ nguyên cơ chế degrade đã khai báo).
+- **Verify bằng artifact thật**: audio thật T4 của app
+  (`voice-backend/data/output/d7937e04b703/output.mp3`, 39.3s) qua đúng code path
+  `backend.engines.asr_whisper.WhisperEngine` → load 8.3s, **transcribe 7.9s**, text đúng;
+  `WhisperModel(..., device='auto')` in `device = cuda` xác nhận chạy GPU thật (không đoán).
+  Xoá script tmp dùng thử (không để trong source).
+- **Kiểm định**: `test:voice` EXIT 0; `voice-drift-check` EXIT 0 (3 WARN pre-existing:
+  tts_patch.py, test_vieneu_direct.py, PrewarmBody — không sinh từ thay đổi này);
+  `npm run check` EXIT 0 toàn chuỗi.
+- **Treo mới**: `.venv-omni` của **voice-studio** hỏng sẵn (`No pyvenv.cfg` khi gọi python)
+  → chưa cài được wheel cho venv mirror; production dùng voice-backend (server.js ưu tiên)
+  nên không ảnh hưởng runtime. Nếu sau này dùng voice-studio backend: sửa venv rồi
+  `pip install nvidia-cublas-cu12 nvidia-cudnn-cu12` (lần sau có pip cache, nhanh).
+- **Nhắc user**: backend 8771 đang sống vẫn giữ code cũ trong RAM → restart app qua
+  `.\khoidong.bat` để nạp bản ASR GPU. Còn mở: quyết định default `VOICE_TTS_ENGINE`
+  (vieneu vs omnivoice), tuning `VOICE_VIENEU_THREADS`.
+
+
+## 2026-09-12v — Tool 7: CỐ ĐỊNH chiều cao khung xem, bỏ phản hồi theo nội dung (theo 2026-09-12t)
+
+- **Yêu cầu user**: khung xem trước tự co giãn theo nội dung (phụ đề bật/tắt, thông báo dài
+  ngắn) → muốn CỐ ĐỊNH kích thước.
+- **Sửa `_t7SyncColHeight()` (t7-core.js)**: bỏ công thức phản hồi
+  `moc = player.height − (scrollHeight − innerHeight)` (phụ thuộc nội dung dưới khung),
+  thay bằng công thức TUYỆT ĐỐI:
+  `moc = innerHeight − (đỉnh player trên tài liệu, có bù scrollY) − pbarH − 14 − 64 − 16`
+  (14 lề dưới shell + 64 vùng phụ đề pcap dự trữ cố định + 16 đệm đáy trang).
+  Chỉ phụ thuộc thứ TRÊN khung (ổn định) → player giữ nguyên size mọi lúc; đổi giá trị
+  mới ghi (guard như cũ) → RO không lặp. Vẫn giữ `Math.max(220, …)` và `_pinW`.
+- **Đánh đổi**: khi phụ đề tắt sẽ còn ~64px trống dưới thanh điều khiển — giá của việc
+  khung không đổi size. Nếu pcap dài quá dự trữ, trang tràn nhẹ (hiếm).
+- `npm run check` EXIT 0 (syntax/toplevel/docs/selftest…).
+
+## 2026-09-12w — Tool Giọng nói: thu gọn cột cài đặt (Tinh chỉnh + Cài đặt nâng cao)
+
+- **Yêu cầu**: user muốn các mục cài đặt giọng (Ngôn ngữ · Giọng đọc · Tinh chỉnh ·
+  Cài đặt nâng cao) gọn hơn, tối ưu không gian cột phải 254px của `#tool-toolvoice`.
+- **Làm** (chỉ HTML partial + CSS, không đổi JS/IPC/state):
+  - `nova/web/partials/panels-upscale-voice.html`: bỏ 6 dòng mô tả `.why` tĩnh
+    (Cao độ, Top P, Top K, Repetition, Tốc độ sinh, Sắc nét) — thông tin đã có sẵn
+    trong `title` tooltip của từng nhãn (bổ sung "Cao = nhanh hơn" vào title
+    Tốc độ sinh). Giữ `whyTocDo`/`whyNgonNgu` vì `voice.js` ghi động
+    (`giongVeThanh()` — hint "VieNeu Turbo chưa có tốc độ" v.v.).
+  - Co lề: tiêu đề mục `.rhead` margin-top 18→12px (inline), `.sl+.sl` 16→10px,
+    `.rhead` margin-bottom 14→10px (`src/styles/tool-voice.css`), khối
+    `<details>` nâng cao 18/14→12/10px, gap trong 12→8px, summary 13.5→12.5px.
+- **Kiểm chứng**: không còn tham chiếu `whyCaoDo` ở bất kỳ JS nào; `npm run check`
+  EXIT 0 (10 bước + selftest 10 PASS); `khoidong.bat --silent` EXIT 0 (app đang
+  chạy → focus, không mở instance 2). `scan:lifecycle` chỉ WARN session cũ
+  (≤12:46 trưa, trước thay đổi) — không có entry mới của phiên này.
+
+## 2026-09-12x — Phát Trực Tiếp: ĐA NGUỒN song song (nhiều cửa sổ ứng dụng) + nền tảng gán nguồn + lặp video theo số lần
+
+- **Yêu cầu**: (1) chế độ 🪟 Cửa sổ ứng dụng thêm được NHIỀU nguồn để live đồng thời nhiều ứng dụng; (2) mỗi nền tảng chọn được nguồn phát riêng khi "+ Thêm nền tảng"; (3) video có sẵn thêm chế độ lặp theo số lần.
+- **Kiến trúc mới** (`nova/main/ipc/live-stream.js`, viết lại ~400 dòng; hợp đồng exports + 6 kênh IPC `livestream:*` GIỮ NGUYÊN — không cần update baseline):
+  - Payload mới `sources:[]` — mỗi nguồn = MỘT tiến trình ffmpeg riêng (video `-re` / webcam dshow / cửa sổ gdigrab); nền tảng được GÁN vào nguồn qua `platforms[].sourceId`, các nền tảng cùng nguồn chia sẻ tee muxer (`onfail=ignore`) của tiến trình đó. Shape cũ 1 nguồn vẫn hợp lệ (nền tảng không gán → nguồn duy nhất).
+  - Lặp video: `loopMode` = none/infinite/finite + `loopCount` N (tổng số lần phát → `-stream_loop N-1`); hết số lần → ffmpeg thoát 0 → `livestream:status` báo `endedSource.finishedNormally` (kết thúc bình thường, không phải lỗi).
+  - Lỗi mới lộ liễu (LS_* trong message, như FFX_*): `LS_SOURCE_UNUSED` (nguồn không có nền tảng nào gán), `LS_SOURCE_ASSIGN` (nền tảng gán nguồn không tồn tại), `LS_MIC_BUSY` (2 nguồn giành 1 micro — dshow là exclusive), `LS_NO_SOURCE`.
+  - `lsProcs[]` thay `lsProc` đơn: watchdog/stderr/progress THEO TỪNG nguồn, event `livestream:progress` có `sourceId`/`sourceLabel`; `livestream:stop` + `stopLiveStream()` kill TẤT CẢ; `endSource` — 1 nguồn chết không làm chết các nguồn khác, sự kiện status báo `remaining`.
+- **UI** (`partials/panel-tool-live.html` + `src/toolbox/tool-live.js`, tiền tố lstudio*): khối cửa sổ đổi thành danh sách hàng nguồn + "+ Thêm cửa sổ" / "↻ Làm mới danh sách"; select "Nguồn" trên từng nền tảng (disable khi chỉ 1 nguồn); select Lặp (1 lần / vô hạn / theo số lần + ô số 2–1000); khi >1 nguồn cửa sổ hiện select "nhận bởi" cho micro (1 micro chỉ nhận bởi 1 nguồn, nguồn còn lại phải tick "Phát không tiếng (chủ động)"); config localStorage v1 mở rộng (windows/winOptions/loopMode/loopCount) backward-safe.
+- **Kiểm định**: unit stub (`tmp-livestream-multi.js` + 4 stub, đã xoá theo quy ước tmp-) chặn `electron`/`ffmpeg`/`media-tools`/`child_process` qua `Module._resolveFilename` — 7/7 PASS (finite loop 3 → `-stream_loop 2`; legacy loopVideo → `-1`; 2 cửa sổ → 2 tiến trình args khác nhau không `-re`; 4 code LS_* đúng). `npm run check` **EXIT 0** (10 bước + selftest 10/10; exports/ipc contract không đổi; vượt qua giữa lúc phiên song song đang sửa tmp — chạy từng bước + full lần cuối). `khoidong.bat --silent` EXIT 0 sau restart thật (taskkill chủ đích → khoidong), renderer nạp sạch không lỗi mới. `scan:lifecycle`: **0 entry REAL ngày 2026-09-12** — chỉ WARN teardown chủ đích (taskkill 12:46/14:03 UTC) + REAL lịch sử ≤2026-09-11 (đã biết, xem 2026-09-11t).
+- **Còn treo**: E2E go-live thật cần stream key + tài khoản đủ điều kiện live (YouTube: xác minh SĐT + chờ 24h; TikTok/Facebook: đủ điều kiện LIVE) — chờ user cung cấp.
+
+## 2026-09-12y — Viral Cut: khung 3 chỉnh giờ thật sự chạy + preview fail lộ liễu + mặc định 10 clip + 16:9 + card 2 khung/hàng
+
+- **Bối cảnh**: 4 phản hồi UX của user trên panel Viral Cut (`nova/web/viral-cut-panel.js`):
+  (1) "không preview được video", (2) khung Tổng quan phải chỉnh được thời gian START/END
+  thật sự, (3) mặc định `Số clip tối đa = 10`, (4) danh sách kết quả quá dài → 2 khung mỗi hàng.
+- **Engine/IPC (đã commit trước đó, lần này chỉ thêm export + test)**: `normalizeAspect(value,
+  legacyCrop916)` → `'keep'|'916'|'169'`, giá trị rác ném `VC_ASPECT_UNSUPPORTED` (Luật 10,
+  không âm thầm về `keep`); `aspectFilterOf` → chuỗi ffmpeg (`916`: `crop=min(iw,ih*9/16):ih,
+  scale=1080:1920`, `169`: `crop=iw:min(ih,iw*9/16),scale=1920:1080`); `buildExportPlan` gắn
+  `item.aspect` + `item.vf` cho mọi clip, IPC `-vf` đọc `item.vf` và payload không còn `crop916`.
+  `module.exports` của engine thêm `ASPECT_KEEP`, `ASPECT_FILTERS` (engine KHÔNG nằm trong baseline
+  `exports-contract.json` — contract chỉ phủ shim `nova/*.js` + `nova/main/*.js` → `check:exports`
+  PASS không cần `--update`).
+- **NGUYÊN NHÂN GỐC "không preview được video" — đã tìm ra + sửa + có bằng chứng**:
+  `nova/main/media-protocol.js` đọc header Range bằng **`req.headers.range`** trong khi Electron
+  gọi `protocol.handle(scheme, h)` với `req.headers` LÀ object **`Headers`** (Fetch API, KHÔNG có
+  property `.range` — đã chứng minh bằng code: `new Headers({range:'bytes=1000-'}).range === undefined`).
+  → `rangeHeader` luôn `''` → handler **không BAO GIỜ trả 206**, mọi request đều 200 toàn bộ file
+  → `<video>` mất seek. Video THẬT của app kiểm bằng script box-parser: 2/3 file (`chrome-video-veo31-quality.mp4`
+  moov@1907682 > mdat@6306; `imzic-e2e-offline.mp4` moov@12390533 > mdat@40) **không faststart** →
+  Chromium BuỘC phải Range tới cuối file mới đọc được metadata → khung đen + treo. Fix: lấy header
+  qua `req.headers.get('range')` (kèm guard typeof). Kiểm định bằng `npm run test:media-protocol`
+  (mới — xem §3.2): revert 1 dòng về `req.headers.range` → test FAIL đúng `200 !== 206`; code mới →
+  PASS 200/206/416/400/404; chạy tiếp trên 3 video THẬT của app → khớp từng byte.
+  - Đồng thời bỏ hẳn ĐOÁN mò: panel gọi ffprobe THẬT (`window.native.ffx.probe` → `mediaTools.probeStreams`
+    đã có sẵn IPC, KHÔNG thêm kênh mới) để kết luận codec; `VC_VIDEO_OK={h264,vp8,vp9,av1}` +
+    `VC_AUDIO_OK` để báo đúng "video HEVC/AV1-không-hỗ trợ" thay vì đổ tại container. Thêm watchdog
+    `vcWatchLoad()` (8s không metadata VÀ không error → nói rõ readyState/networkState + gợi ý) và
+    listener `error` in sẵn `MEDIA_ERR_*` + path + readyState/networkState. Luật 10: mọi nhánh lỗi
+    đều có dòng chữ rõ, không còn khung đen im lặng.
+- **Khung 3 giờ đã có hành vi (trước đó chỉ có markup)**:
+  - `vcState.pickedIdx` là con trỏ duy nhất, đồng bộ 3 chiều: select `#vcPickHl` + ◀▶ ⇄ card
+    trong `#vcHlList` (chạm card = chọn, nút "✎ Chỉnh" = chọn + scroll tới khung 3) ⇄ khối trên
+    timeline (`vc-active`). `vcRenderTimeline()` luôn gọi `vcRenderPick()` nên trạng thái điều
+    khiển không bao giờ "treo" sau khi phân tích lại.
+  - Ô số + thanh trượt `#vcSelStart(R)` / `#vcSelEnd(R)` hai chiều qua `vcAdjustSel()`: clamp
+    `0..durationMs`, buộc `end-start ≥ 1s`, cập nhật thẳng `vcState.highlights[i]` → payload
+    export dùng giá trị đã sửa. Kéo slider = scrub: pause + tua `video.currentTime` tới biên vừa
+    sửa để user THẤY khung hình tương ứng. `#vcMarkStart` / `#vcMarkEnd` lấy playhead làm biên.
+  - `▶ Phát đoạn` / `⏹ Dừng` / ☑ "lặp đoạn" dùng `previewStartMs` + `previewUntilMs`: `timeupdate`
+    tự tua về đầu đoạn khi bật loop (không pause), tắt loop thì dừng hẳn. `#vcSelInfo`/`#vcSelDur`
+    hiện "Đoạn k/n" + độ dài.
+  - Ô đang giữ focus không bị ghi đè khi render lại (chống nhảy số khi gõ), nhưng `vcRenderPick(true)`
+    vẫn nạp đúng khi ĐỔI đoạn.
+- **Các hàng rào hiển thị lỗi khác đã nối vào**: bản cũ KHÔNG có `error listener` nên fail lặng lẽ →
+  giờ `vcSetVideoErr()` + `#vcVideoErr` báo rõ theo `MEDIA_ERR_*` (1/2/3/4) kèm path +
+  readyState/networkState; `loadedmetadata` xoá cảnh báo; `vcRenderPick` tắt slider khi chưa có
+  `durationMs` (vẫn gõ được số và vẫn xuất được clip bằng FFmpeg).
+- **Đã loại trừ (khỏi đoán mò)**: (a) đường dẫn/CSP — `main.plain.js:57` register scheme TRƯỚC
+  `whenReady`, `:154` install handler SAU ready; handler KHÔNG whitelist thư mục; round-trip
+  `encodeURIComponent` ↔ `new URL().pathname` an toàn với path Windows có space/`#`/`%`/Unicode
+  (đã test 4 case); (b) codec của sản phẩm app — ffprobe THẬT trên `output/gen-e2e/*.mp4` cho
+  `h264 profile=100 yuv420p + aac` = Chromium phát tốt, nên nguồn do app tạo không phải lỗi codec.
+- **Mặc định & layout**: `#vcMaxClips` `<option selected>10</option>` + fallback JS `|| 10` ở CẢ HAI
+  luồng (analyze local + analyzeYoutube) khớp `ipc.js:103,350` (`Number(p.maxClips) || 10`, kẹp 1..10);
+  `#vcAspect` thêm `16:9 (ngang)`, payload đổi `crop916` → `aspect`, dòng kết quả ghi "(khung 9:16 /
+  16:9)" theo `r.aspect`; `#vcHlList` bọc `.vc-hls` = `grid repeat(2,minmax(0,1fr))` (1 cột dưới 900px),
+  card gọn: title 1 dòng ellipsis, meta + reason + hook quote, hàng điều khiển có ô số `data-i/data-f`,
+  ▶, ✎ Chỉnh; mọi text từ engine/LLM qua `vcEsc()`.
+- **Kiểm định**: `npm run test:viral-cut` **55/55 PASS exitCode=0** — thêm 8 test: 6 test aspect
+  (chuẩn hoá cách viết, legacy crop916, giá trị rác → lộ liễu, filter chuỗi, plan per-item,
+  VC_NO_OUTDIR) + 2 test hợp đồng TĨNH của panel (panel là global script không import được → đọc
+  source, đếm ngoặc lấy đúng khối `exportClips({...})` để khẳng định `aspect` thay `crop916`,
+  default 10 ở 2 chỗ, 2 tuỳ chọn tỉ lệ, `.vc-hls` 2 cột, panel CÓ gọi ffprobe qua
+  `window.native.ffx.probe`, và 15 id khung 3 đều vừa có markup vừa có binding — chống đúng lỗi
+  "markup đã thêm nhưng JS chưa nối"). `npm run test:media-protocol` **PASS** (kèm
+  `test:foundation` + `test:local-media` OK). `npm run check` **EXIT=0** (syntax/ipc/exports/
+  shared/shared-shadow/shadow/size 0 warning/toplevel 1691 tên 0 xung đột/docs 38 script/
+  selftest 10-10); cập nhật AGENTS.md §3.2: "47 test" → 55 test + nêu hợp đồng tĩnh panel, THÊM
+  dòng mô tả `test:media-protocol`; `package.json` thêm script `test:media-protocol`
+  (check:docs PASS lại sau khi sửa). Lưu ý: output `npm run check` dài nên PowerShell hiển thị lỗi
+  cắt dòng của checker C2 (`web/src/toolbox/...`) — chạy từng bước riêng lẻ đều exit 0.
+- **BẮT BUỘC khởi động lại app** để thử: `media-protocol.js` chạy ở MAIN process, phiên app đang
+  mở vẫn giữ handler cũ (luôn 200) trong RAM → preview vẫn đen cho tới khi restart. Renderer chỉ
+  cần reload là nhận panel mới.
+- **Chưa làm / cần làm tiếp**: smoke GUI thật (`.\khoidong.bat` → Viral Cut → mở 1 MP4 H.264 có
+  moov ở CUỐI file để kiểm chứng đúng bug, bấm Phát đoạn + kéo slider + ✎ Chỉnh, xuất thử 9:16 và
+  16:9 rồi đối chiếu `ffprobe` kích thước ảnh) — bắt buộc theo §6.5+§6.6; chưa có xác nhận của
+  user nên chưa kết luận "đạt".
+
+
+
+
+## 2026-09-12v — Gói 3 close-out phần 2: default TTS engine = vieneu + tuning threads + sửa .venv-omni voice-studio
+
+- **Default `VOICE_TTS_ENGINE` = `vieneu`** (quyết định từ 2026-09-12q):
+  - `nova/voice-native/server.js`: `env.VOICE_TTS_ENGINE ||= 'vieneu'` (trước đây
+    `defaultEngine = venvKind` → theo tên venv `.venv-omni` = omnivoice). OmniVoice
+    vẫn chọn được per-request qua field `engine` của `/api/tts`
+    (`_resolve_tts_engine` ưu tiên `payload.engine` trước `config.TTS_ENGINE`).
+  - `voice-backend/scripts/run.sh`: cập nhật default dev script + comment cùng quyết định.
+  - ASR default giữ `whisper` khi venv là .venv-omni (GPU ASR đã chạy thật từ 2026-09-12u).
+- **Tuning `VOICE_VIENEU_THREADS` = 16** (server.js set env trước khi spawn backend):
+  benchmark thật trên máy này (56 thread logic), giọng clone `spk_5a5afe11.mp3` +
+  text 185 ký tự lấy từ `output.srt` của task d7937e04b703:
+  steady-state — 0→13.78s, 4→13.46s, 8→13.29s, **16→11.92s**, 28→13.59s;
+  load model — 0→15.56s, 16→12.18s. 16 thread tối ưu (~14% nhanh hơn mặc định);
+  máy khác ghi đè bằng env. Script bench dùng một lần đã xoá (tmp-).
+- **Sửa `.venv-omni` voice-studio** (hỏng sẵn `No pyvenv.cfg`, chỉ 23 package rác —
+  không phải bản copy venv chuẩn): xoá theo đúng quy ước `setup-omni.bat` (venv thiếu
+  pyvenv.cfg = venv hỏng → dựng lại), tạo venv mới bằng uv (CPython 3.11.15), cài
+  `fastapi + uvicorn + requirements-ai.txt + nvidia-cublas-cu12/nvidia-cuda-nvrtc-cu12/
+  nvidia-cudnn-cu12` (uv cache ấm từ venv chuẩn → không tải lại ~2-3GB). Verify:
+  import vieneu/faster_whisper/onnxruntime/nvidia OK, đủ `cublas64_12.dll` +
+  `cudnn64_9.dll`. Lưu ý voiceRoot() ưu tiên voice-backend nên venv này chỉ là dự phòng.
+- **Restart app thật** (khoidong.bat §6.5): đóng electron graceful (WM_CLOSE, backend
+  8771 nhả port), `khoidong.bat --silent` lên OK (Agent Bridge + uvicorn 8771 mới).
+- **Verify bằng artifact thật, không đoán**:
+  - `/api/health` → `tts_engine: "vieneu"`, `asr_engine: "whisper"` (default mới đã nạp).
+  - POST `/api/tts` KHÔNG có field `engine` (giọng clone thật spk_5a5afe11):
+    task 1 (câu trùng T2 cũ) → completed, `cache_hits: 1` (key cache gồm engine →
+    chứng minh default route vào vieneu); task 2 (câu mới) → completed sau synth thật
+    17.5s (gồm load model lần đầu), artifact `data/output/8adf8271895c/`
+    (output.mp3 110KB + srt + wav) có trên đĩa.
+  - `npm run check` EXIT 0; `npm run test:voice` EXIT 0; `scan:lifecycle`:
+    **0 REAL ngày 12/09** (exit 1 do REAL lịch sử 03–11/09 còn trong log 512KB —
+    đã ghi nhận từ trước; 3 WARN 12/09 là teardown lúc đóng app để restart, vô hại).
+- **Còn mở**: không còn treo nào của Gói 3. Đề xuất tiếp (chưa làm): dọn REAL lịch sử
+  bằng cách luân chuyển lifecycle.log (tự cắt 512KB), cân nhắc VOICE_VIENEU_THREADS
+
+## 2026-09-12z — Sidebar (tiếp 2026-09-12u): ĐÓNG nốt 2 điểm đảo chiều sidebar ↔ panel-order.js
+
+- **Bối cảnh**: 2026-09-12u để ngỏ 2 drift sidebar↔`ORDER` có từ trước (`toolimzic`,
+  `toolspy`). Mục tiêu gốc là "giữ logic thứ tự panel thẳng hàng" → đóng nốt.
+- **Sửa duy nhất `nova/web/src/toolbox/utility/panel-order.js`** (ORDER là phía bám
+  theo sidebar — đúng header của chính script: "tự sắp xếp DOM panel theo thứ tự
+  sidebar"). Không đổi sidebar HTML:
+  - `toolimzic` dời từ giữa nhóm AI (ngay sau `toolvideoagent`) về đúng sau `toollive`.
+  - `toolspy` dời từ cuối mảng (hạng "mồ côi") về cuối nhóm "Công cụ AI" — comment
+    "mồ côi" đã LỖI THỜI vì toolspy CÓ nav-item (app-sidebar.html:199).
+  - Kết quả: ORDER 41 id, sidebar 39 nav-item; `toolffxhistory` + `toolanim` vẫn là
+    id không-nav (hợp lệ: dropdown FFmpeg / mở từ Tool 7).
+- **Bẫy đã bắt được bằng máy**: lần sửa đầu để `toolspy` xuất hiện HAI LẦN trong ORDER
+  (chèn mới nhưng chưa xoá dòng "mồ côi" cũ) → sinh inversion `toolffxaudio`.
+  Checker tạm phát hiện ngay (id trùng lặp + điểm đảo chiều 1) → xoá bản trùng.
+  Bài học: thêm id vào ORDER phải kiểm tra trùng, không chỉ kiểm tra thứ tự.
+- **An toàn khi đổi thứ tự DOM panel**: đã xác minh KHÔNG có CSS selector nào phụ thuộc
+  sibling của `.tool` (`grep '.tool\s*[+~]'`, `.tool:nth`, `[id^=tool-]` = 0 kết quả),
+  và các `nextElementSibling`/`querySelectorAll('.tool')` trong JS chỉ chạy trên
+  **nav-item trong sidebar** (`nav-accordion.js`, `shell.js`) hoặc map theo id
+  (`nav.js:28`) → reorder panel không phá hành vi nào.
+- **Bằng chứng kiểm định**:
+  - `tmp-nav-order-align.js` (đối chiếu tĩnh 2 file trên đĩa): 39 nav-item, **0 điểm
+    đảo chiều**, 0 id trùng, 0 nav thiếu trong ORDER, 5/5 khâu thuộc "Sản xuất video",
+    không sót ở "Công cụ AI" → PASS exit 0.
+  - `tmp-reorder-sim.js` (mạnh hơn — chạy **chính IIFE thật** của `panel-order.js`
+    trong sandbox `vm`, DOM mock dựng từ thứ tự panel `.tool` THẬT của `index.html`
+    app đang phục vụ port 47280, `appendChild` = move node đúng ngữ nghĩa):
+    DOM nguồn lộn xộn (41 panel, mở đầu `toollog, toolvideoagent, toolimzic…`) →
+    hàm reorder báo `[reorder] panels reordered to match sidebar order` → DOM sau
+    reorder **khớp ORDER 41/41**, **0 mất panel**, **0 đảo chiều nav↔DOM** → PASS.
+    (Cùng pattern nạp-code-that-trong-vm như `nova/scripts/t7-ai-core-test.js`.)
+  - `npm run check` EXIT 0 toàn chuỗi (syntax 491 file, ipc 197 kênh/20 events,
+    exports 35 module, shared 19 keys, shared-shadow, shadow 0 lỗi, size 718 file
+    0 warning, toplevel 1731 tên, docs-sync 38 script, selftest 10/10).
+  - `npm run test:foundation` EXIT 0 · `npm run test:web-origin` `WEB-ORIGIN QA OK`.
+- **Phân định `scan:lifecycle` exit 1 (KHÔNG phải do thay đổi này)** — số liệu:
+  - **38 REAL**, tất cả là lịch sử: sớm nhất 2026-09-03T01:50, **nghiêm trọng nhất
+    cluster 09-11 13:30→13:56** (exitCode=2 giữa phiên ×12 + 3 lần
+    `render-recovery-stopped`). **0 REAL ngày 12/09.**
+  - Pattern `render-process-gone reason=crashed exitCode=-1` xảy ra **78 lần** trong
+    log, **lần đầu 03/09** (trước mọi thay đổi sidebar) → là vấn đề GPU/recovery nền
+    của môi trường, không liên quan nav.
+  - Phiên 12/09 chỉ có WARN: `12:46:13Z` và `14:27:59Z` (cụm -1 cuối session /
+    auto-reload 1/3). Sau 14:27:59 app **còn sống và phục vụ bình thường**
+    (GET `/index.html` → HTTP 200, 317KB) + `gpu-feature-status` tiếp diễn
+    14:28:02, 14:28:38, 14:40:54 → auto-reload đã hồi phục, không treo.
+  - Kết luận theo §6.5: cụm -1 câm KHÔNG phân biệt được kill-main-ngoài vs crash treo
+    → chỉ WARN; `14:27:59` cần user xác nhận bằng mắt (cửa sổ có trắng/treo không).
+    `lifecycle.log` đã đầy 512KB toàn REAL lịch sử → để scan hữu dụng trở lại cần
+    luân chuyển log (đề xuất riêng, chưa làm).
+- **Không phá hợp đồng**: không đổi kênh IPC, không đổi `module.exports`, không tên
+  top-level mới, không hardcode cổng/env. `nova/ipc-inventory.json` đổi là do
+  `check:ipc` tái sinh theo các file khác đang modified trong working tree.
+- **Còn mở**: (a) Dashboard "⚡ Truy cập nhanh" vẫn theo thứ tự nhóm cũ — ngoài phạm vi
+  yêu cầu; (b) 38 REAL lịch sử + cluster exitCode=2 ngày 11/09 chưa ai điều tra;
+  (c) `khoidong.bat` không bật CDP nên không probe DOM thật từ ngoài được — đã bù bằng
+  `tmp-reorder-sim.js` (chạy code thật trên DOM thật-derived).
+
+  tự động theo số nhân vật lý thay vì hardcode 16.
+
+## 2026-09-12aa — Phát Trực Tiếp: gói 7 cải tiến cho live thật (retry / NVENC / scale-pad / sink-drop / băng thông)
+
+- **Auto-reconnect** (`live-stream.js`): tùy chọn `retry {enabled, maxRetries≤10}` — ffmpeg chết giữa
+  phiên (mạng rớt, watchdog stall) → tự spawn lại với backoff 5/10/20/30s, mỗi lần là event
+  `livestream:status` `sourceRetry` (khai báo rõ, không fallback ngầm — Luật 10); KHÔNG retry khi lặp
+  video kết thúc bình thường hay user chủ động dừng; stop/stopLiveStream dọn cả retryTimer.
+- **Scale giữ tỉ lệ**: `-vf scale=W:H:force_original_aspect_ratio=decrease,pad=W:H:(ow-iw)/2:(oh-ih)/2`
+  thay scale ép thẳng — video dọc 9:16 lên 720p không còn bị bóp méo (viền đen như OBS).
+- **Bộ mã hóa NVENC**: select x264 (CPU) / h264_nvenc (GPU); dò `ffmpeg -encoders` MỘT lần (cache),
+  thiếu → `LS_ENCODER` fail lộ liễu, không tự chuyển về x264; nvenc bỏ `-tune zerolatency` (chỉ của x264).
+- **Báo nền tảng rớt**: parse stderr tee (`sink N` + fail/error) → event `platformDropped` kèm tên nền
+  tảng (best-effort, throttle 5s) — trước đó `onfail=ignore` bỏ lặng lẽ, user không biết YouTube rớt.
+- **FIX bug có sẵn**: `endSource` null `lsSender` TRƯỚC `lsSend` → event kết thúc phiên không bao giờ
+  tới renderer (UI kẹt "Đang phát" vĩnh viễn). Gửi xong mới dọn.
+- **UI** (`tool-live.js` + `panel-tool-live.html`): stats progress theo TỪNG nguồn (trước đó 1 dòng bị
+  các nguồn ghi đè nhau), checkbox "Tự thử lại khi mất kết nối" + số lần, cảnh báo tổng băng thông đẩy
+  lên (nền tảng bật × kbps; vàng ≥8 Mbps, đỏ ≥15 Mbps), nút 👁 hiện/ẩn Stream Key.
+- **Verify**: tmp test 5/5 PASS (stub spawn/electron — args scale/pad/tee, sink-drop map đúng tên,
+  retry backoff→respawn→kết thúc bình thường, LS_ENCODER, nvenc args; đã xoá file tmp);
+  `npm run check` EXIT 0; relaunch `khoidong.bat --silent` OK (renderer nạp panel mới);
+  `scan:lifecycle` ngày 12/09: 0 REAL (WARN 14:27:59 = taskkill chủ đích trước relaunch 14:40:54,
+  phiên mới sạch).
+- **Còn mở**: E2E go-live vẫn chờ stream key + tài khoản đủ điều kiện live (như 2026-09-12x).
+
+
+
+## 2026-09-12z — Phân Cảnh (tool2): thêm nút "📥 Nhận kịch bản" từ Tạo Kịch Bản
+
+- **Vấn đề**: tab Phân Cảnh (tool2) chỉ nhận kịch bản theo chiều Tạo Kịch Bản → Phân Cảnh qua nút
+  "🎬 Sang Phân Cảnh" (`tsToScenes()`, ghi đè luôn) — khi người dùng đã ở Phân Cảnh, sửa/dán nội dung
+  khác, hoặc sinh kịch bản MỚI ở tab Tạo Kịch Bản sau đó thì không có nút chủ động nào kéo kịch bản
+  `tsOutput` về ô `scriptInput`; phải paste tay.
+- **Fix**: theo đúng mẫu Tool 9 (entry 2026-09-12a):
+  - `nova/web/partials/panels-tool2-3.html` — thêm nút `📥 Nhận kịch bản` vào panel-head card
+    "1 · Nguồn" (gói `<span style="display:flex;gap:6px">` cùng nút "📄 Tải file").
+  - `nova/web/src/toolbox/utility/t2-split.js` — hàm mới `t2PullFromScript()`: (1) ưu tiên nguồn trực
+    tiếp `tsOutput` (ghi đè cả khi ô đã có nội dung, kịch bản mới → reset `videoLogline` như
+    `loadScriptFile`), gọi `syncStateToCurrentProfile()` + `saveState()` như `tsToScenes()`;
+    (2) degrade CÓ KHAI BÁO: `tsOutput` trống nhưng `state.script` có nội dung khác ô hiện tại → nạp
+    từ state, status ghi rõ nguồn; (3) không có gì → lỗi lộ liễu "Chưa có kịch bản để nhận".
+    Cập nhật đồng bộ `scriptCount`, `t2UpdateCost`, `t2UpdateAnalyzeBtn`.
+- **Kiểm định**: `npm run check` EXIT 0 (gồm check:toplevel — không xung đột tên mới;
+  check:size 0 warn); `khoidong.bat --silent` OK (app đang chạy → focus, bản renderer trong
+  app là code cũ — cần restart app để thấy nút); `scan:lifecycle` chỉ còn WARN/REAL lịch sử
+  11–12/09 (trước thay đổi, không liên quan — renderer-only).
+
+## 2026-09-12z — Tạo Ảnh Hàng Loạt: nút "📥 Prompt từ Phân Cảnh" ở mục ① Danh sách prompt
+
+- **Vấn đề**: tab 🖼️ Tạo Ảnh Hàng Loạt (toolflow) chỉ có "📄 Nhập file" — không có cách chủ động
+  kéo prompt ảnh từng cảnh từ Phân Cảnh (Tool 02) vào ô `bulkPrompts`; phải copy tay từng cảnh.
+- **Fix**: theo đúng mẫu entry 2026-09-12z trước (Phân Cảnh nhận kịch bản):
+  - `nova/web/partials/panels-niche-flow.html` — thêm nút `📥 Prompt từ Phân Cảnh` vào header
+    mục ① "Danh sách prompt" (cùng hàng với "📄 Nhập file" / "🗑 Xoá").
+  - `nova/web/src/toolbox/utility/tf.js` — hàm mới `bulkPullScenes()`: đọc `state.scenes` +
+    `state.scenePrompts` (biến thể A) và `state.scenePrompts2` (biến thể B, tên `scene-<id>-b`);
+    ghi đè ô `bulkPrompts` theo định dạng `tên | prompt` mà `_bulkParse()` hiểu (prompt ghép
+    xuống dòng thành 1 dòng); ô đã có prompt → `confirm()` trước khi thay (không mất dữ liệu
+    người dùng ngầm); không có cảnh / không có prompt → lỗi lộ liễu qua `setStatusF` (Luật 10).
+- **Kiểm định**: `npm run check` EXIT 0; `khoidong.bat --silent` OK (app đang chạy → focus,
+  cần reload/restart app để nút xuất hiện); `scan:lifecycle` REAL chỉ là lịch sử 11/09,
+  phiên hiện tại sạch sau thay đổi.
+
+## 2026-09-12Ω — Trợ lý dựng: tái verify 12 cải tiến sau resumption (không đổi code)
+
+- **Bối cảnh**: phiên mới tiếp nối sau compaction; các transcript Cline nguồn
+  (`1789192953326_rtxnt`, `1789196161123_f7cff`) đã bị dọn khỏi đĩa (ENOENT) —
+  không đọc lại được văn bản gốc 12 mục, nhưng nội dung đã được chốt đầy đủ tại
+  entry `[2026-09-12] Trợ lý dựng (Tool 7 · tab ✨) — 12 cải tiến` ở trên.
+- **Đối chiếu code hiện tại → cả 12 mục ĐÃ NẰM TRONG SOURCE** (không cần sửa gì):
+  (1) `_t7AiSig`/`_t7AiEntrySig` + so vân tay khi mở dự án; (2) `_t7AiPrunePick`
+  tại `_t7AiApply`; (3) `_t7AiSave()` cuối mỗi lô + sau vision/critic; (4)
+  `t7AiRetryFailed`; (5) `t7AiRegen(i)`; (6) `t7AiRestore(i)` nhóm "Đã tự loại";
+  (7) `_t7AiStat`/`_t7AiStatLine` footer; (8) `POLICY`/`maxUse` metadata trong
+  `templates.js` + `_t7AiPolicy`/`_t7AiQuota`; (9) `_t7AiVis` khoá
+  `_t7AiSig(b64)|_t7AiSig(prompt)`, tách `_t7AiVisApply`, cap 400; (10)
+  `t7AiDesign → t7AiPropose(false)`, `_t7AiGfxRunning` đã xoá; (11)
+  `nova/scripts/t7-ai-core-test.js`; (12) `_T7_AI_BATCH/_T7_AI_CH/_T7_AI_MAP_CH/_T7_AI_POOL`
+  trong `shared/t7.js`.
+- **Kiểm định lại**: `npm run check` EXIT=0 nguyên chuỗi (lần chạy đầu trong
+  wrapper báo exit 1 — chạy riêng 10 bước đều exit 0, chạy lại nguyên chuỗi qua
+  file .cmd ghi EXIT=0; nguyên nhân exit 1 là artifact PSReadLine/wrapper, KHÔNG
+  phải check thất bại — handler-shadow chỉ là 86 warn C2 + 1 C1 có sẵn
+  `profiles.js:813` truy cập `#pCharStyleB` không guard, chưa phải FAIL).
+  `npm run test:t7-ai` **67/67 PASS** (entry trước ghi 66 assert — đã lớn thêm 1).
+  `khoidong.bat --silent` exit 0 (app đang chạy → focus, Agent Bridge OK).
+  `scan:lifecycle`: KHÔNG entry mới sau smoke — mọi REAL đều là lịch sử
+  13:51–13:56Z 11/09 (renderer exitCode=2 + render-recovery-stopped trong lúc
+  dev sửa code nóng), các entry 12/09 chỉ WARN teardown.
+- **Còn treo (giữ nguyên từ entry trước)**: E2E thật với credit AI theo §6.6 —
+  cần user bấm thật trên dự án có lời thoại đã sửa; C1 `profiles.js:813` nên
+  thêm guard khi có dịp chạm file này.
+- Dọn rác tmp dump của phiên (dump-t7-*.js, inv-*.txt, kw-*.txt, check-full.log,
+  run-check.cmd) — tmp* đã gitignore sẵn.
+
+## 2026-09-12ffx — Công cụ FFmpeg: nối onProgress khắp engine + sửa crash thật concatAuto
+
+- **Crash thật (bắt được bằng probe, không suy đoán)**: `concatAuto` nhánh re-encode — xảy ra
+  khi ghép các clip KHÁC chuẩn, tức trường hợp phổ biến nhất của panel Ghép Video — ném
+  `ReferenceError` ở dòng `{ onProgress }` (biến cục bộ thực tên `onProg`, lại khai báo SAU
+  điểm dùng). Smoke trước đó luôn PASS vì không truyền `onProgress` → không chạm dòng đó.
+- **Quy mô thật của "progress đứng 0"**: engine có 33 điểm gọi `spawnRun` nhưng chỉ 4 điểm
+  nối `o.onProgress` xuống ffmpeg; đa số handler nhận callback rồi BỎ RƠI. Đã nối hết, và với
+  op nhiều giai đoạn thì chia **ngân sách % theo giai đoạn** (re-encode nặng ăn dải lớn, copy
+  mux nhanh ăn dải nhỏ) → % toàn op ĐƠN ĐIỆU TĂNG, không nhảy 0→99→0: `extractAudio` (probe
+  MỘT lần dùng chung 2 nhánh để cả copy mux có totalSec thật), `cutVideo`, `cutMulti`
+  (0..90 cắt / 90..99 ghép), `concatVideos`, `concatAuto`, `concatTransition`, `loopVideo`,
+  `loopPingPong` (0..30 bản ngược / 30..99 ghép), `loopCrossfade`, `loopAudio`, `compressVideo`
+  (CRF + 2-pass 0..50 / 50..99), `extractFrames`, `removeAudio`, `convertMedia`, `addMusic`,
+  `toGif`, `faststartRemux`, `normalizeAudio` (pass ĐO 0..50 — parse `time=` từ spawn thô —
+  pass CHỈNH 50..99), `removeVocals`, `addFades`, `insertAds` (mỗi phần 0..90 theo trọng số
+  thời lượng / concat 90..99). Helper mới: `stageScaler(onProgress, lo, hi)` (trao dải con
+  [lo..hi] cho mỗi lần chạy ffmpeg, luôn ≤99 tới khi handler trả kết quả).
+- **KHÔNG wire CÓ CHỦ ĐÍCH + khai báo ngay tại thân hàm** (Luật 10 — thà không % còn hơn % bịa):
+  `detectScenes` (ffmpeg chỉ in showinfo về NUL, không phát `time=`), `makeThumb` (totalSec=0
+  và đa số lần gọi là cache hit), `extractFrames` mode `single` (1 frame tức thì).
+- **Hồi quy vĩnh viễn**: `nova/scripts/ffx-smoke.js` thêm `progStep()` — chạy op CÓ truyền
+  `onProgress` rồi assert (a) có ≥1 kiện, (b) % không lùi, (c) nằm trong 0..99, (d) artifact
+  vẫn sinh ra; kèm bước "concatAuto khi KHÔNG truyền onProgress vẫn chạy OK" (đường đi
+  `stageScaler` trả `undefined`). 7 bước progress mới, smoke 75 → 83 bước.
+- **Kiểm định**: `node --check` OK; probe tạm trên video THẬT của app (2 clip khác chuẩn
+  1280x720@24 vs 1080x1920@30) → concatAuto hết crash, 6 op đa giai đoạn đều `backJumps=0`;
+  `npm run test:ffx-smoke` → **0 FAIL — 83 bước** (concatAuto 4..99, cutMulti 9..99,
+  compress 2-pass 0..99, loopPingPong 0..98, normalizeAudio 0..99, insertAds 0..99 — lùi=0);
+  `npm run check` EXIT 0 (491 file syntax, exports 35 module, size 0 warning).
+  `khoidong.bat --silent` exit 0 nhưng app ĐANG chạy sẵn (instance của phiên làm việc khác) →
+  engine trong app vẫn là code cũ; KHÔNG restart để tránh phá phiên đang hoạt động, bằng chứng
+  engine là ffmpeg THẬT chạy qua smoke. `scan:lifecycle` EXIT 1 do REAL lịch sử 11/09
+  (exitCode=2 + render-recovery-stopped) — tồn tại trước thay đổi; thay đổi này chỉ chạm
+  native-tools + script kiểm định, không đụng renderer.
+
+## 2026-09-13a — Tool Giọng nói: khôi phục đường XOÁ giọng clone trong dropdown + siết voice contract thành hành vi
+
+- **Lỗi thật, không phải lỗi test**: `test:voice` FAIL vì `giongXoa()` thành **hàm mồ côi** —
+  lưới thẻ `.gcard` ("Thư viện giọng") đã bị gỡ trong đợt thu gọn cột cài đặt (2026-09-12w),
+  và call site duy nhất của `giongXoa()` nằm trong thẻ đó → người dùng **mất hẳn khả năng gỡ
+  giọng clone** ở UI, dù backend (`DELETE /api/voices`) vẫn còn sống. Test cũ vẫn XANH vì chỉ
+  assert chuỗi CSS chết `gcard.has-del` → đây chính là fallback ngầm kiểu Luật 10: hợp đồng
+  kiểm thứ không còn tồn tại thay vì kiểm hành vi.
+- **Đã khôi phục bằng cách khôi phục tính năng, KHÔNG nới test xuống**:
+  `nova/web/src/toolbox/utility/voice.js` → `_giongMenuItem()` (hàm vẽ MỘT mục dropdown
+  "Giọng đọc", call site duy nhất là `giongDDVe()`) render thêm
+  `<button class="btn sm ghost gdel" onclick="event.stopPropagation();giongXoa('key')">Xoá</button>`
+  cho giọng **không-factory**. Factory KHÔNG có nút → khớp guard backend (403 "Không xoá được
+  giọng có sẵn"); đặt nút sau `be-mo` và TRƯỚC `gplay` nên click vào tên/mô tả vẫn chọn giọng.
+- **CSS bắt buộc kèm theo**: `nova/web/src/styles/tool-voice.css` thêm
+  `#tool-toolvoice .be-item .gdel{position:static;…}`. Lý do: `.gdel` cũ là
+  `position:absolute` bám theo `.gcard` có `position:relative`; `.be-item` KHÔNG relative →
+  nếu để nguyên, mọi nút Xoá thoát dòng chảy, đè chụm vào gốc phải `.be-menu` (nút này chồng
+  nút kia, không bấm được). Đây là lỗi chỉ thấy khi đo hình học thật, không thấy khi đọc code.
+- **`nova/scripts/voice-contract-test.js`**: bỏ assert chuỗi chết (`class="…gdel"` + `>Xóa<`,
+  `gcard.has-del`), thay bằng **hành vi + call site**: (a) `giongXoa()` tồn tại,
+  (b) `_giongFetchJson()` tồn tại, (c) có nút `.gdel` với nhãn `Xoá`, (d) nút Xoá **gọi
+  `giongXoa('${escapeHtml(v.key)}')`** — chặn đúng kiểu hồi quy vừa rồi (hàm tồn tại mà không
+  ai gọi), (e) regex `/v\.factory\s*\?\s*''\s*:\s*`<button[^`]*giongXoa\(/` bảo đảm CHỈ
+  giọng không nhà máy được render nút Xoá, (f) giữ thông báo chặn xoá giọng nhà máy.
+  Đã chứng minh bộ assert mới **FAIL thật** khi cố tình gỡ nút / gỡ lời gọi / bỏ guard factory
+  (fixture tạm, đã xoá) — không phải test luôn xanh.
+- **Bằng chứng live qua CDP trên app thật** (`khoidong.bat --silent`, 57 giọng: 55 factory +
+  2 clone): backend omni → dropdown hiện ĐÚNG 2 nút Xoá, mỗi clone một nút, `onclick` chứa
+  `giongXoa(...)`; đo `getBoundingClientRect()` → nút nằm trong item, `position:static`,
+  không đè tiêu đề/nút play. Backend vieneu → 20 giọng factory, **0 nút Xoá** (đúng guard).
+  Artifact tạm (`.tmp-*`, `nova/scripts/tmp/tmp-cdp-*`) đã dọn sạch.
+- **Kiểm định**: `npm run test:voice` PASS; `npm run check` EXIT 0 (selftest 10 PASS);
+  `check:all` không chứa `scan:lifecycle` → crash REAL trong `lifecycle.log` là **lịch sử**
+  (muộn nhất 2026-09-11T13:56Z), quét riêng theo phiên hiện tại (từ app start 2026-09-12T15:12:32Z)
+  cho 0 REAL / 0 WARN → đạt chuẩn §6.5(b). KHÔNG xoá/cắt log lịch sử để làm xanh gate.
+- **Ghi chú dọn dẹp**: một file rác từng bị commit dưới tên `rcva …ForEach-Object…` (lỗi paste
+  lệnh PowerShell) đang ở trạng thái deleted trong working tree — commit này gồm cả việc gỡ nó.
+
+
+
+## 2026-09-13b — Tool "Phát Trực Tiếp" (Livestream Studio đa nền tảng): hoàn tất kiểm định + smoke app thật, chờ E2E RTMP với key thật
+
+- **Tính năng mới trong working tree (chưa commit, chưa có entry trước đó — phiên trước bị ngắt giữa chừng)**:
+  mô hình TikTok LIVE Studio — NHIỀU nguồn phát song song (video có sẵn `-stream_loop`
+  lặp vô hạn/theo số lần, webcam dshow, cửa sổ gdigrab qua `desktopCapturer`), mỗi nguồn
+  1 tiến trình ffmpeg riêng; NHIỀU nền tảng (YouTube/TikTok/Facebook/Tùy chỉnh) mỗi nền
+  tảng GÁN vào MỘT nguồn, các nền tảng cùng nguồn chia sẻ tee muxer (`-f tee`,
+  `onfail=ignore`) — 1 nền tảng rớt không chết nền tảng khác, event `platformDropped`
+  báo rõ (best-effort parse stderr). Encoder x264/nvenc (dò `ffmpeg -encoders`, thiếu
+  nvenc → `LS_ENCODER` fail lộ liễu, KHÔNG tự rơi về x264). Scale giữ tỉ lệ
+  (`force_original_aspect_ratio=decrease` + pad). Retry mất kết nối tự nguyện
+  (backoff 5/10/20/30s, trần 1..10, tắt mặc định). Watchdog stderr 3 phút → `LS_STALL`.
+  Micro dshow chỉ nhận bởi 1 tiến trình → 2 nguồn giành cùng micro chặn sớm `LS_MIC_BUSY`.
+  Mọi lỗi theo error code `LS_*` — không fallback ngầm (Luật 10).
+- **Dây nối đầy đủ**: `nova/main/ipc/live-stream.js` (mới, export
+  `registerLiveStreamIpc, stopLiveStream` — module `nova/main/ipc/` không thuộc phạm vi
+  baseline `exports-contract.json`, check:exports vẫn PASS); `nova/main/ipc/index.js`
+  đăng ký; `nova/main/lifecycle.js` gọi `stopLiveStream()` khi thoát (idempotent);
+  preload expose `native.liveStudio` (7 kênh `livestream:*` + 2 event,
+  `check:ipc` inventory cập nhật → 197 kênh); panel
+  `nova/web/partials/panel-tool-live.html` + include ở `index.html:97`, script
+  `src/toolbox/tool-live.js` (tiền tố `lstudio*` theo §8) nạp ở `index.html:191`;
+  nav-item `toollive` trong `app-sidebar.html`; `panel-order.js` đưa `toollive` vào
+  nhóm "Công cụ AI" (giữa `toolviralcut` và `toolimzic`).
+- **Kiểm định tĩnh (phiên này)**: `npm run check` **EXIT=0** đầy đủ 10 bước
+  (syntax/ipc 197 kênh/exports 35 module/shared 19 keys/shared-shadow/shadow/size
+  717 file 0 lỗi/toplevel 1728 tên 0 xung đột/docs 38 script/selftest 10-10).
+  Lưu ý vận hành: chạy `npm run check 2>&1 | …` trong PowerShell 5.1 có thể báo
+  exit 1 ảo do NativeCommandError của stderr pipeline — chạy `npm run check *> file`
+  hoặc trực tiếp mới đáng tin. Cross-check tĩnh 31 id `getElementById/querySelector('#…')`
+  của `tool-live.js` vs `panel-tool-live.html` + sidebar + index → **0 thiếu**
+  (chống đúng lớp bug "markup có mà JS chưa nối" của viral-cut 2026-09-12).
+- **Smoke app thật (§6.5)**: đóng electron graceful (CloseMainWindow) để nhả instance
+  cũ chạy code main trước khi có live-stream.js → `khoidong.bat --silent` exit 0,
+  Agent Bridge OK. Probe CDP 9336 trên app thật: `window.native.liveStudio` có bridge,
+  IPC `livestream:status` (chỉ đọc) trả `{running:false}` đúng, panel `#tool-toollive`
+  render đủ nút. lifecycle.log từ 09:04Z của phiên mới: **0** gone/unresponsive/recovery.
+- **Còn mở (chờ user)**: E2E phát thật cần RTMP URL + stream key THẬT của nền tảng
+  (YouTube/TikTok/Facebook) — KHÔNG tự bịa dữ liệu (§6.6), cần user cung cấp key và
+  duyệt chạy thật. Working tree còn NHIỀU gói đã xong chưa commit (xem nhật ký
+  2026-09-12* → 2026-09-13a + tính năng này) — commit khi user duyệt.
