@@ -153,6 +153,9 @@ function registerViralCutIpc(ipcMain, { getState } = {}) {
           // Chế độ cần transcript mà không có SRT → fail lộ liễu (Luật 10), không ngầm chạy energy
           return { ok: false, error: 'Chế độ ' + mode + ' cần transcript SRT — hãy chọn file .srt của video (hoặc dùng chế độ Auto/Năng lượng).', code: 'VC_NO_TRANSCRIPT' };
         }
+        /* CPS (words/giây) trên cùng lịch cửa sổ năng lượng — chỉ tồn tại khi có SRT
+           thật; không có transcript → null (fusion bỏ kênh, khai báo hasCps=false). */
+        const cpsWins = sentences.length ? E.cpsWindowsFromSentences(sentences, wins) : null;
 
         /* 4b) TIER A — tín hiệu multimodal CỤC BỘ từ chính file (không AI/không mạng).
             p.tierA = { enabled, sceneSnap, silenceAware, pitch }. Mỗi detector lỗi/thiếu
@@ -171,6 +174,7 @@ function registerViralCutIpc(ipcMain, { getState } = {}) {
             keyframe: { available: false, reason: 'Không bật (sceneSnap=false).' },
             silence: { available: false, reason: 'Không bật (silenceAware=false).' },
             pitch: { available: false, reason: 'Không bật (pitch=false).' },
+            cps: { available: false, reason: sentences.length ? 'Chưa tính (fusion không chạy).' : 'Không có transcript SRT — không có nhịp words/giây.' },
           };
           tierA = { enabled: true, options: opts, features: feats, weights: null, snappedEdges: 0, used: '' };
           let cutsMs = [];
@@ -202,13 +206,20 @@ function registerViralCutIpc(ipcMain, { getState } = {}) {
               const pw = E.pitchWindowsFromFrames(pr.frames, wins);
               const varMax = pw.reduce((m, w) => Math.max(m, w.var), 0);
               if (voiced >= 8 && varMax > 0) {
-                const fus = E.fuseLocalScores(wins, { pitchWins: pw });
+                const fus = E.fuseLocalScores(wins, { pitchWins: pw, cpsWins: cpsWins || undefined });
                 fusionFeats = fus.feats;
                 tierA.weights = fus.weights;
+                tierA.energyNorm = fus.energyNorm;   // 'z' = tương đối nội video, 'max' = audio đều
+                tierA.coHitMax = fus.coHit;
+                tierA.crestRef = fus.crestRef;       // median crest của video (null → không phạt được impuls)
+                if (fus.crestRef == null) warnings.push({ code: 'VC_TIERA_CREST', message: 'Tier A: không đo được crest tham chiếu (mọi cửa sổ im lặng hoặc thiếu peak) — bỏ qua phạt tín hiệu impuls.' });
                 feats.pitch = {
                   available: true, frames: pr.frames.length, voicedFrames: voiced, rate: pr.rate,
                   analyzedSec: pr.analyzedSec, truncated: pr.truncated, ms: Date.now() - t0,
                 };
+                feats.cps = cpsWins
+                  ? { available: true, windows: cpsWins.filter((w) => w.cps > 0).length, totalWindows: cpsWins.length }
+                  : feats.cps;
                 if (pr.truncated) warnings.push({ code: 'VC_TIERA_PITCH_TRUNC', message: 'Tier A chỉ phân tích cao độ ' + pr.analyzedSec + 's đầu video (chặn theo maxSeconds) — phần còn lại chỉ dùng năng lượng.' });
               } else {
                 feats.pitch = { available: false, reason: 'Quá ít khung có cao độ đo được (' + voiced + '/' + pr.frames.length + ' frame, var_max=' + varMax + ') — audio không phải giọng người hoặc quá ồn.' };
@@ -250,15 +261,20 @@ function registerViralCutIpc(ipcMain, { getState } = {}) {
           }
         }
         if (!highlights.length && sentences.length && mode !== 'energy') {
-          prog('heuristic', 60, 'Chấm điểm heuristic theo transcript…');
-          const cands = E.heuristicCandidates(sentences, { minLen, maxLen });
+          prog('heuristic', 60, 'Chấm điểm heuristic theo transcript (density + hook + TF-IDF)…');
+          const idf = E.idfFromSentences(sentences);
+          const cands = E.heuristicCandidates(sentences, { minLen, maxLen, idf });
           if (!cands.length && mode === 'heuristic') {
             return { ok: false, error: 'Không có cửa sổ câu nào đủ ' + minLen + '–' + maxLen + ' giây — thử nới khoảng độ dài.', code: 'VC_NO_WINDOW' };
           }
           const top = E.pickTopNonOverlap(cands, maxClips);
           if (top.length) {
             tier = tier || 'heuristic';
-            highlights = top.map((c) => ({ ...c, score: Math.round(c.score * 10) / 10, title: '', reason: (c.parts && c.parts.reasons ? c.parts.reasons.join(', ') : '') }));
+            highlights = top.map((c) => ({
+              ...c, score: Math.round(c.score * 10) / 10, title: '',
+              reason: ((c.parts && c.parts.reasons ? c.parts.reasons.join(', ') : '') +
+                (c.tfidfNorm ? ', từ khoá hiếm ' + Math.round(c.tfidfNorm * 100) + '% so với cả video' : '')).replace(/^, /, ''),
+            }));
           }
         }
         if (!highlights.length) {
@@ -275,7 +291,16 @@ function registerViralCutIpc(ipcMain, { getState } = {}) {
             if (!top.length) return { ok: false, error: 'Video quá ngắn so với độ dài clip yêu cầu (' + minLen + '–' + maxLen + ' giây).', code: 'VC_TOO_SHORT' };
             tier = 'energy';
             highlights = top.map((c) => ({ startMs: c.startMs, endMs: c.endMs, score: Math.round(c.score * 100) / 100, title: '', reason: (c.reasons || []).join(', '), text: '' }));
-            if (tierA) tierA.used = 'energy';
+            if (tierA) {
+              tierA.used = 'energy';
+              /* Path energy cũng chấm tương đối + phạt impuls → khai báo cùng diagnostic
+                 bộ để panel hiển thị thống nhất giữa hai tầng. */
+              const st = top[0]._stat || {};
+              tierA.energyNorm = st.flat ? 'max' : 'z';
+              tierA.crestRef = st.crestRef == null ? null : st.crestRef;
+              if (st.flat) warnings.push({ code: 'VC_TIERA_FLAT', message: 'Năng lượng audio gần như không biến động (σ/μ quá nhỏ) — điểm chỉ là xếp hạng tương đối, không có nghĩa đoạn nổi bật thật.' });
+              if (st.crestRef == null) warnings.push({ code: 'VC_TIERA_CREST', message: 'Tier A: không đo được crest tham chiếu (mọi cửa sổ im lặng hoặc thiếu peak) — bỏ qua phạt tín hiệu impuls.' });
+            }
           }
         } else if (tierA) {
           // Đã có transcript/AI chọn — Tier A chỉ chạy neo biên (booster-only), không chấm lại

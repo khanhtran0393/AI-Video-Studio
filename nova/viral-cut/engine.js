@@ -55,18 +55,69 @@ function pcmFromWav(buf) {
   return out;
 }
 
-/* ── 1. Energy: RMS theo cửa sổ từ PCM s16le (đơn kê). Đầu ra deterministic. ── */
+/* ── 1. Energy: RMS + PEAK + CREST FACTOR theo cửa sổ từ PCM s16le (đơn kê).
+   Đầu ra deterministic. Mỗi cửa sổ mang:
+     rms   = căn quân phương biên độ
+     peak  = biên độ tuyệt đối lớn nhất
+     crest = peak / rms (crest factor chuẩn của đoạn đó; 0 khi rms = 0)
+   Vì sao crest phải so với THAM CHIẾU của chính video (xem crestReference): audio
+   thật (nhạc, vỗ tay) có crest 2.5–5 là BÌNH THƯỜNG, nếu phạt theo ngưỡng tuyệt đối
+   thì phạt gần hết mọi video. Ngưỡng tương đối bắt đúng thủ phạm: một tiếng cốc bàn /
+   va mic giữa đoạn đọc tạo cửa sổ có crest CAO HƠN hẳn phần còn lại → bị phạt, còn
+   sine thuần (crest 1.414) hay nhạc punchy đều đều thì không. ── */
+const CREST_RATIO_SOFT = 2.0;  // ≤ 2× tham chiếu: không phạt
+const CREST_RATIO_HARD = 8.0;  // ≥ 8× tham chiếu: phạt tối đa
+const CREST_PENALTY = 0.35;    // mức phạt tối đa (-35% điểm energy)
+
+function medianSeries(xs) {
+  const v = [];
+  for (const x of (Array.isArray(xs) ? xs : [])) if (Number.isFinite(x)) v.push(x);
+  if (!v.length) return null;
+  v.sort((a, b) => a - b);
+  const m = Math.floor((v.length - 1) / 2);
+  return v.length % 2 ? v[m] : (v[m] + v[m + 1]) / 2;
+}
+
+/* Bội số phạt theo TỈ LỆ crest so với tham chiếu ∈ [1-CREST_PENALTY, 1], ramp tuyến
+   tính. ratio không hợp lệ/không dương → 1 (không có thông tin: không phạt, không thưởng). */
+function crestFactor(ratio) {
+  const r = Number(ratio);
+  if (!Number.isFinite(r) || r <= CREST_RATIO_SOFT) return 1;
+  if (r >= CREST_RATIO_HARD) return Math.round((1 - CREST_PENALTY) * 1000) / 1000;
+  const t = (r - CREST_RATIO_SOFT) / (CREST_RATIO_HARD - CREST_RATIO_SOFT);
+  return Math.round((1 - CREST_PENALTY * t) * 1000) / 1000;
+}
+
+/* Tham chiếu crest = TRUNG VỊ crest của các cửa sổ có tín hiệu (rms>0). Trả
+   { ref, mul[] } — ref null khi không đo được (toàn bộ im lặng) → mul toàn 1 và
+   người gọi khai báo "không có cơ sở phạt impuls", không giả có. */
+function crestReference(wins) {
+  const list = Array.isArray(wins) ? wins : [];
+  const ref = medianSeries(list.map((w) => ((Number(w && w.rms) || 0) > 0 ? Number(w.crest) || 0 : NaN)));
+  if (!(ref > 0)) return { ref: null, mul: list.map(() => 1) };
+  return { ref, mul: list.map((w) => crestFactor(((Number(w && w.rms) || 0) > 0 ? (Number(w.crest) || 0) / ref : 0))) };
+}
+
 function energyWindowsFromPcm(buf, info, opts = {}) {
   const windowSec = Math.max(0.25, Number(opts.windowSec) || 1.0);
-  const bytesPerFrame = (info.bitsPerSample / 8) * (info.channels || 1);
-  const framesPerWin = Math.max(1, Math.round((info.sampleRate * windowSec) * (info.channels || 1)));
+  const channels = info.channels || 1;
+  const bytesPerFrame = (info.bitsPerSample / 8) * channels;
+  const bytesPerSample = info.bitsPerSample / 8;
+  const samplesPerWin = Math.max(channels, Math.round(info.sampleRate * windowSec) * channels);
   const end = info.dataOffset + info.dataLen;
   const wins = [];
-  for (let p = info.dataOffset; p + bytesPerFrame <= end; p += framesPerWin * bytesPerFrame) {
-    const stop = Math.min(p + framesPerWin * bytesPerFrame, end);
-    let sum = 0, n = 0;
-    for (let q = p; q + 1 < stop; q += 2) { const s = buf.readInt16LE(q); sum += s * s; n++; }
-    if (n > 0) wins.push({ t: wins.length * windowSec, rms: Math.sqrt(sum / n) });
+  for (let p = info.dataOffset; p + bytesPerFrame <= end; p += samplesPerWin * bytesPerSample) {
+    const stop = Math.min(p + samplesPerWin * bytesPerSample, end);
+    let sum = 0, n = 0, peak = 0;
+    for (let q = p; q + 1 < stop; q += 2) {
+      const s = buf.readInt16LE(q); const a = s < 0 ? -s : s;
+      sum += s * s; n++;
+      if (a > peak) peak = a;
+    }
+    if (n > 0) {
+      const rms = Math.sqrt(sum / n);
+      wins.push({ t: wins.length * windowSec, rms, peak, crest: rms > 0 ? Math.round((peak / rms) * 1000) / 1000 : 0 });
+    }
   }
   return wins;
 }
@@ -135,12 +186,107 @@ function scoreText(text) {
   return { hookHits, q, nums, sup, words, reasons };
 }
 
-/* Trượt cửa sổ các câu LIÊN TIẾP [i..j] có thời lượng trong [minLen, maxLen]; chấm điểm. */
+/* ── 3b. TF-IDF trên transcript (deterministic, không mạng, không model).
+   Vì sao: heuristic cũ chỉ thấy "nhiều từ / có hook", không phân biệt được đoạn
+   dùng THUẬT MỚI so với đoạn lặp lại ý đã nói cả video. IDF tính trên chính
+   transcript đang phân tích (corpus = N câu của video) → không cần tài nguyên
+   ngoài, luôn ra cùng kết quả cho cùng input. Stopword bị loại để không tặng
+   điểm cho "và/cái/này/the". ── */
+const STOPWORDS = new Set([
+  // vi (đã bỏ dấu — so khớp sau normToken)
+  'va','la','co','khong','nhung','cua','cho','voi','duoc','trong','ngoai',
+  'nay','kia','do','day','ay','toi','ban','chung','anh','chi','em','no','ho',
+  'minh','may','cai','con','cung','luc','vi','nen','neu','them','rat','hoi',
+  'lam','mot','hai','ba','bon','nam','sau','bay','tam','muoi','den','khoang',
+  // en
+  'the','and','or','but','if','then','than','so','as','at','by','for','from',
+  'with','without','are','was','were','be','been','being','do','does','did',
+  'not','very','just','about','into','over','under','more','most','some','any',
+  'you','your','his','her','its','our','their','they','he','she','it','we',
+  'what','when','where','who','why','how','all','each','other','because','while',
+  'this','that','these','those','have','has','had','will','would','can','could',
+]);
+
+/* Bỏ dấu tiếng Việt + đ→d cho 1 token (cùng pattern slugify) để stopword ASCII
+   khớp được cả "và" lẫn "va". Không phải user-facing text → không cần giữ dấu. */
+function normToken(tk) {
+  return String(tk || '').normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase();
+}
+
+/* token nội dung (bỏ stopword + đơn âm không mang nghĩa) — giữ thứ tự, bỏ trùng */
+function contentTokens(text) {
+  const out = [];
+  for (const raw of tokenize(text)) {
+    const tk = normToken(raw);
+    if (tk.length < 2) continue;
+    if (STOPWORDS.has(tk)) continue;
+    out.push(tk);
+  }
+  return out;
+}
+
+/* idf = ln(1 + N / (1 + df)) trên tập câu đưa vào. Map term → idf. */
+function idfFromSentences(sentences) {
+  const list = Array.isArray(sentences) ? sentences : [];
+  const df = new Map();
+  for (const s of list) {
+    const uniq = new Set(contentTokens(s && s.text));
+    for (const t of uniq) df.set(t, (df.get(t) || 0) + 1);
+  }
+  const n = list.length;
+  const idf = new Map();
+  for (const [t, d] of [...df.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
+    idf.set(t, Math.round(Math.log(1 + n / (1 + d)) * 10000) / 10000);
+  }
+  return idf;
+}
+
+/* Tổng idf của cácterm KHÁC NHAU trong text (không đếm trùng → không thưởng việc lặp) */
+function tfidfWeight(text, idf) {
+  const uniq = new Set(contentTokens(text));
+  let s = 0;
+  for (const t of [...uniq].sort()) {
+    const v = idf && idf.get(t);
+    if (v != null) s += v;
+  }
+  return Math.round(s * 1000) / 1000;
+}
+
+/* ── 3c. CPS (words/giây) theo cửa sổ năng lượng: mỗi từ được đặt tại thời điểm
+   suy ra từ vị trí tương đối của nó trong câu (phân bố đều theo thời lượng câu),
+   rồi đổ vào bucket cửa sổ chứa thời điểm đó. Không nội suy ngoài dữ liệu: câu
+   không có text/words → bỏ, và nếu transcript không phủ window nào thì window đó
+   trả cps = 0 (thật sự không có lời), KHÔNG bịa giá trị. */
+function cpsWindowsFromSentences(sentences, wins) {
+  const list = Array.isArray(wins) ? wins : [];
+  if (!list.length) return [];
+  const wLen = (list.length > 1 ? Number(list[1].t) - Number(list[0].t) : 1) || 1;
+  const buckets = list.map((w) => ({ t: Number(w.t), cps: 0 }));
+  for (const s of (Array.isArray(sentences) ? sentences : [])) {
+    const start = Number(s && s.startMs), end = Number(s && s.endMs);
+    const words = Math.round(Number(s && s.words) || (s && s.text ? tokenize(s.text).length : 0));
+    if (!Number.isFinite(start) || !Number.isFinite(end) || words <= 0 || end <= start) continue;
+    for (let k = 0; k < words; k++) {
+      const tSec = (start + ((k + 0.5) * (end - start)) / words) / 1000;
+      const i = Math.floor(tSec / wLen);
+      if (i >= 0 && i < buckets.length) buckets[i].cps++;
+    }
+  }
+  return buckets;
+}
+
+/* Trượt cửa sổ các câu LIÊN TIẾP [i..j] có thời lượng trong [minLen, maxLen]; chấm điểm.
+   opts.idf: Map term→idf do idfFromSentences(sentences) tạo — thiếu thì thành phần
+   TF-IDF = 0 và KHAI BÁO qua parts.tfidf:false (không giả có dữ liệu từ vựng). */
 function heuristicCandidates(sentences, opts = {}) {
   const minMs = (Number(opts.minLen) || 15) * 1000;
   const maxMs = (Number(opts.maxLen) || 45) * 1000;
+  const idf = opts.idf instanceof Map ? opts.idf : null;
+  const wTfidf = Number(opts.wTfidf) > 0 ? Number(opts.wTfidf) : 1.25;
   const cands = [];
-  let maxWordsPerSec = 0;
+  let maxWordsPerSec = 0, maxTfidf = 0;
   for (let i = 0; i < sentences.length; i++) {
     for (let j = i; j < sentences.length; j++) {
       const startMs = sentences[i].startMs;
@@ -152,12 +298,21 @@ function heuristicCandidates(sentences, opts = {}) {
       const sc = scoreText(text);
       const density = sc.words / Math.max(1, dur / 1000);
       if (density > maxWordsPerSec) maxWordsPerSec = density;
-      cands.push({ i, j, startMs, endMs, durMs: dur, score: 0, parts: sc, text });
+      const tfidfW = idf ? tfidfWeight(text, idf) : 0;
+      if (tfidfW > maxTfidf) maxTfidf = tfidfW;
+      cands.push({
+        i, j, startMs, endMs, durMs: dur, score: 0, text,
+        parts: Object.assign({}, sc, { hasTfidf: !!idf, tfidfW }),
+      });
     }
   }
   for (const c of cands) {
     const densityNorm = c.parts.words / Math.max(1, c.durMs / 1000) / Math.max(0.1, maxWordsPerSec);
-    c.score = 1.0 * densityNorm + 2.0 * c.parts.hookHits + 1.5 * c.parts.q + 1.0 * c.parts.nums + 1.5 * c.parts.sup;
+    const tfidfNorm = maxTfidf > 0 ? c.parts.tfidfW / maxTfidf : 0;
+    c.tfidfNorm = Math.round(tfidfNorm * 1000) / 1000;
+    c.score = 1.0 * densityNorm + 2.0 * c.parts.hookHits + 1.5 * c.parts.q
+      + 1.0 * c.parts.nums + 1.5 * c.parts.sup + wTfidf * tfidfNorm;
+    c.score = Math.round(c.score * 1000) / 1000;
   }
   return cands;
 }
@@ -175,29 +330,63 @@ function pickTopNonOverlap(cands, maxClips) {
   return picked.sort((a, b) => a.startMs - b.startMs);
 }
 
-/* ── 4. Energy tier: chọn highlight theo năng lượng âm thanh (không cần transcript) ── */
+/* Chuỗi Z-score của một dãy số. hasVar=false khi σ ≈ 0 (audio đều/nền phẳng) —
+   người gọi PHẢI xử lý công khai, không được giả định z có nghĩa. */
+function zSeries(xs) {
+  const { mean, std } = meanStd(xs);
+  const flat = !(std > 1e-9);
+  return { mean, std, flat, z: xs.map((x) => (flat ? 0 : (x - mean) / std)) };
+}
+
+/* Ánh xạ z ∈ [-2..+2] → [0..1] (z=0 → 0.5): điểm tương đối trong chính video,
+   không phụ thuộc âm lượng tuyệt đối — ASMR nhẹ vẫn có đỉnh tương đối. */
+function zToUnit(z) {
+  const v = 0.5 + (Number(z) || 0) / 4;
+  return Math.max(0, Math.min(1, v));
+}
+
+/* ── 4. Energy tier: chọn highlight theo năng lượng âm thanh TƯƠNG ĐỐI (Z-score)
+   + phạt tín hiệu impuls (crest cao). Không cần transcript.
+   Vì sao Z thay RMS tuyệt đối: RMS thô làm video to luôn ăn điểm và video nhỏ
+   (ASMR/đọc nhẹ) luôn về 0 dù có cao trào riêng. Z-score trả về "đoạn nào NỔI
+   BẬT hơn phần còn lại của chính video này". Crest chỉ PHẠT, không thưởng. ── */
 function pickHighlightsByEnergy(wins, opts = {}) {
   const minLen = Number(opts.minLen) || 15;
   const maxLen = Number(opts.maxLen) || 45;
   const cap = Math.max(1, Number(opts.maxClips) || 3);
   const windowSec = (wins.length > 1 ? wins[1].t - wins[0].t : 1) || 1;
-  const smoothed = smoothSeries(wins.map((w) => w.rms), 3);
-  const { mean, std } = meanStd(smoothed);
+  const rmsRaw = wins.map((w) => Number(w.rms) || 0);
+  const smoothed = smoothSeries(rmsRaw, 3);
+  const { mean, std, flat, z } = zSeries(smoothed);
+  const cr = crestReference(wins);
   const cands = [];
   for (let a = 0; a < smoothed.length; a++) {
     for (let b = a; b < smoothed.length; b++) {
       const dur = (b - a + 1) * windowSec;
       if (dur > maxLen) break;
       if (dur < minLen) continue;
-      let s = 0;
-      for (let k = a; k <= b; k++) s += smoothed[k];
-      const avg = s / (b - a + 1);
-      const voiced = smoothed.slice(a, b + 1).filter((v) => v > mean + 0.5 * std).length / (b - a + 1);
-      cands.push({ a, b, startMs: Math.round(a * windowSec * 1000), endMs: Math.round((b + 1) * windowSec * 1000), score: avg * (0.5 + voiced), avg, voiced });
+      let s = 0, u = 0;
+      for (let k = a; k <= b; k++) { s += smoothed[k]; u += zToUnit(z[k]) * cr.mul[k]; }
+      const n = b - a + 1;
+      const avg = s / n;                       // RMS trung bình (giữ để chẩn đoán)
+      const rel = u / n;                       // điểm tương đối 0-1 đã phạt crest
+      const voiced = z.slice(a, b + 1).filter((v) => v > 0.5).length / n;
+      const impulsive = cr.mul.slice(a, b + 1).filter((m) => m < 1).length / n;
+      cands.push({
+        a, b, startMs: Math.round(a * windowSec * 1000), endMs: Math.round((b + 1) * windowSec * 1000),
+        score: Math.round(rel * (0.5 + voiced) * 1000) / 1000, avg, rel, voiced, impulsive,
+      });
     }
   }
   const top = pickTopNonOverlap(cands, cap);
-  return top.map((c) => ({ ...c, reasons: ['năng lượng cao (voiced ' + Math.round(c.voiced * 100) + '%)'] }));
+  return top.map((c) => ({
+    ...c,
+    reasons: ['năng lượng tương đối (Z) ' + Math.round(c.rel * 100) + '% · voiced ' + Math.round(c.voiced * 100) + '%' +
+      (flat ? ' · audio đều, không có biến động để chấm tương đối' : '') +
+      (cr.ref == null ? ' · không đo được crest tham chiếu (bỏ phạt impuls)' : '') +
+      (c.impulsive > 0 ? ' · ' + Math.round(c.impulsive * 100) + '% cửa sổ impuls (bị phạt)' : '')],
+    _stat: { mean, std, flat, crestRef: cr.ref },
+  }));
 }
 
 /* ── 5. Best-hook: cửa sổ ≤ maxWords từ, mật độ từ cao nhất, nằm trong highlight,
@@ -945,34 +1134,90 @@ function pitchWindowsFromFrames(frames, wins) {
   });
 }
 
-/* 13g. Fusion per-window: v = wE·energy + wP·pitchVar + wV·voiced ∈ [0,1].
+/* 13g. Fusion per-window: v = wE·energy + wP·pitchVar + wV·voiced (+ wC·CPS) ∈ [0,1].
    Feature thiếu → trọng số RENORMALIZE công khai (trả về trong `weights`, tổng = 1)
    và giá trị tương ứng trả `null` — người dùng thấy rõ: không có pitch thì điểm chỉ
-   là energy + voiced; không có cả hai thì thuần energy. Không bịa 0 để loãng điểm. */
+   là energy + voiced; không có cả hai thì thuần energy. Không bịa 0 để loãng điểm.
+
+   Nâng cấp deterministic (2026-09-12):
+   - Energy chuẩn hoá bằng Z-score nội video → `energyNorm:'z'` khi có biến động thật
+     (đủ cửa sổ + CV = σ/μ ≥ DYN_MIN_CV); ngược lại giữ max-norm + KHAI BÁO
+     `energyNorm:'max'` (audio đều thì Z vô nghĩa, không giả vờ có tương đối).
+   - Crest factor cao (impulse: cốc bàn, clap đơn lẻ) → PHẠT energy, không bao giờ thưởng.
+   - CPS (words/giây từ transcript) đưa vào làm kênh độc lập thứ 4 khi có SRT.
+   - Co-occurrence: ≥2 kênh cùng nổi bật (chuẩn hoá ≥ CO_HIGH) → thưởng bội nhỏ,
+     CÓ TRẦN và clamp v ≤ 1; số kênh thắng ghi trong `coHit` để người dùng thấy lý do. */
+const Z_MIN_WINDOWS = 6;
+const DYN_MIN_CV = 0.15;
+const CO_HIGH = 0.75;
+const CO_BONUS = { 2: 1.05, 3: 1.1, 4: 1.15 };
+
 function fuseLocalScores(wins, opts = {}) {
   const list = Array.isArray(wins) ? wins : [];
+  /* Không có window nào → trả đúng hợp đồng rỗng cũ (không bịa kênh/điagnostics). */
   if (!list.length) return { feats: [], weights: null, hasPitch: false };
   const r4 = (x) => Math.round(x * 10000) / 10000;
   const pw = Array.isArray(opts.pitchWins) ? opts.pitchWins : null;
-  const maxRms = list.reduce((m, w) => Math.max(m, Number(w && w.rms) || 0), 0) || 1;
+  const cw = Array.isArray(opts.cpsWins) ? opts.cpsWins : null;
+  const rmsArr = list.map((w) => Number(w.rms) || 0);
+  const maxRms = rmsArr.reduce((m, v) => Math.max(m, v), 0) || 1;
   const pVar = list.map((w, i) => (pw && pw[i] && Number.isFinite(pw[i].var) ? pw[i].var : null));
   const pVoice = list.map((w, i) => (pw && pw[i] && Number.isFinite(pw[i].voiced) ? pw[i].voiced : null));
+  const pCps = list.map((w, i) => (cw && cw[i] && Number.isFinite(cw[i].cps) ? cw[i].cps : null));
   const hasPitch = pVar.some((v) => v != null && v > 0);   // var=0 mọi window → pitch không mang thông tin
   const hasVoiced = pVoice.some((v) => v != null);
-  const nE = list.map((w) => (Number(w.rms) || 0) / maxRms);
+  const hasCps = pCps.some((v) => v != null && v > 0);
+  /* energy: Z khi có biến động thật, nếu không max-norm (khai báo qua energyNorm) */
+  const zs = zSeries(rmsArr);
+  const cv = zs.mean > 0 ? zs.std / zs.mean : 0;
+  const useZ = list.length >= Z_MIN_WINDOWS && !zs.flat && cv >= DYN_MIN_CV;
+  const energyScale = useZ ? rmsArr.map((v, i) => zToUnit(zs.z[i])) : rmsArr.map((v) => v / maxRms);
+  /* crest tương đối theo tham chiếu của chính video (median) — chỉ PHẠT energy */
+  const cr = crestReference(list);
+  const nE = energyScale.map((v, i) => Math.max(0, Math.min(1, v * cr.mul[i])));
   const maxVar = pVar.reduce((m, v) => (v != null && v > m ? v : m), 0);
   const nP = hasPitch ? pVar.map((v) => (v != null && maxVar > 0 ? v / maxVar : 0)) : null;
-  const raw = { energy: 0.6, pitch: hasPitch ? 0.25 : 0, voiced: hasVoiced ? 0.15 : 0 };
-  const sumRaw = raw.energy + raw.pitch + raw.voiced || 1;
-  const weights = { energy: r4(raw.energy / sumRaw), pitch: r4(raw.pitch / sumRaw), voiced: r4(raw.voiced / sumRaw) };
-  const feats = list.map((w, i) => ({
-    t: Number(w.t),
-    energy: Math.round(nE[i] * 1000) / 1000,
-    pitch: nP ? Math.round(nP[i] * 1000) / 1000 : null,
-    voiced: pVoice[i] != null ? Math.round(pVoice[i] * 1000) / 1000 : null,
-    v: Math.round((nE[i] * weights.energy + (nP ? nP[i] * weights.pitch : 0) + ((pVoice[i] || 0)) * weights.voiced) * 1000) / 1000,
-  }));
-  return { feats, weights, hasPitch };
+  const maxCps = pCps.reduce((m, v) => (v != null && v > m ? v : m), 0);
+  const nC = hasCps ? pCps.map((v) => (v != null && maxCps > 0 ? v / maxCps : 0)) : null;
+  const raw = {
+    energy: 0.6,
+    pitch: hasPitch ? 0.25 : 0,
+    voiced: hasVoiced ? 0.15 : 0,
+    cps: hasCps ? 0.15 : 0,
+  };
+  const sumRaw = raw.energy + raw.pitch + raw.voiced + raw.cps || 1;
+  /* weights CHỈ chứa kênh đang tồn tại thật (energy luôn có; pitch/voiced/cps khi có
+     dữ liệu) — tổng luôn = 1. Panel đọc weights.energy/pitch/voiced nên không được
+     thêm key 0 thừa làm đổi hợp đồng cũ. */
+  const weights = {
+    energy: r4(raw.energy / sumRaw), pitch: r4(raw.pitch / sumRaw), voiced: r4(raw.voiced / sumRaw),
+  };
+  if (hasCps) weights.cps = r4(raw.cps / sumRaw);
+  const feats = list.map((w, i) => {
+    const chans = [nE[i], nP ? nP[i] : null, pVoice[i] != null ? pVoice[i] : null, nC ? nC[i] : null]
+      .filter((v) => v != null);
+    const hi = chans.filter((v) => v >= CO_HIGH).length;
+    const bonus = hi >= 2 ? (CO_BONUS[Math.min(4, hi)] || 1) : 1;
+    const base = nE[i] * weights.energy + (nP ? nP[i] * weights.pitch : 0) +
+      ((pVoice[i] || 0)) * weights.voiced + (nC ? nC[i] * weights.cps : 0);
+    const v = Math.max(0, Math.min(1, base * bonus));
+    return {
+      t: Number(w.t),
+      energy: Math.round(nE[i] * 1000) / 1000,
+      pitch: nP ? Math.round(nP[i] * 1000) / 1000 : null,
+      voiced: pVoice[i] != null ? Math.round(pVoice[i] * 1000) / 1000 : null,
+      cps: nC ? Math.round(nC[i] * 1000) / 1000 : null,
+      crest: Number.isFinite(Number(w.crest)) ? Math.round(Number(w.crest) * 100) / 100 : null,
+      coHit: hi >= 2 ? hi : 0,
+      v: Math.round(v * 1000) / 1000,
+    };
+  });
+  return {
+    feats, weights, hasPitch, hasCps,
+    energyNorm: useZ ? 'z' : 'max',
+    coHit: feats.reduce((m, f) => Math.max(m, f.coHit), 0),
+    crestRef: cr.ref == null ? null : Math.round(cr.ref * 100) / 100,
+  };
 }
 
 /* 13h. Chọn highlight theo điểm fusion (thay tầng năng lượng thuần khi Tier A bật):
@@ -988,13 +1233,16 @@ function pickHighlightsByFusion(feats, opts = {}) {
   const vs = smoothSeries(list.map((f) => Math.max(0, Math.min(1, Number(f && f.v) || 0))), 3);
   const cands = [];
   for (let a = 0; a < vs.length; a++) {
-    let sE = 0, sP = 0, nP = 0, sV = 0;
+    let sE = 0, sP = 0, nP = 0, sV = 0, sC = 0, nC = 0, sCo = 0, sCr = 0, nCr = 0;
     for (let b = a; b < vs.length; b++) {
       const dur = (b - a + 1) * windowSec;
       if (dur > maxLen) break;
       sE += Number(list[b].energy) || 0;
       if (list[b].pitch != null) { sP += list[b].pitch; nP++; }
       sV += Number(list[b].voiced) || 0;
+      if (list[b].cps != null) { sC += list[b].cps; nC++; }
+      sCo += Number(list[b].coHit) || 0;
+      if (list[b].crest != null) { sCr += list[b].crest; nCr++; }
       if (dur < minLen) continue;
       let s = 0;
       for (let k = a; k <= b; k++) s += vs[k];
@@ -1002,6 +1250,7 @@ function pickHighlightsByFusion(feats, opts = {}) {
       cands.push({
         a, b, startMs: Math.round(a * windowSec * 1000), endMs: Math.round((b + 1) * windowSec * 1000),
         score: s / n, avg: s / n, eAvg: sE / n, pAvg: nP ? sP / nP : null, vAvg: sV / n,
+        cAvg: nC ? sC / n : null, coAvg: sCo / n, crestAvg: nCr ? Math.round((sCr / nCr) * 100) / 100 : null,
       });
     }
   }
@@ -1015,19 +1264,37 @@ function pickHighlightsByFusion(feats, opts = {}) {
     score: Math.round(c.avg * 10 * 100) / 100,
     reasons: ['đa tín hiệu local (năng lượng ' + Math.round(c.eAvg * 100) + '%' +
       (c.pAvg != null ? ' · cao độ ' + Math.round(c.pAvg * 100) + '%' : ' · không có cao độ') +
-      ' · giọng ' + Math.round(c.vAvg * 100) + '%)'],
+      ' · giọng ' + Math.round(c.vAvg * 100) + '%' +
+      (c.cAvg != null ? ' · nhịp words ' + Math.round(c.cAvg * 100) + '%' : '') +
+      (c.coAvg >= 2 ? ' · ' + Math.round(c.coAvg) + ' tín hiệu cùng nổi bật' : '') +
+      (c.crestAvg != null ? ' · crest ' + c.crestAvg : '') + ')'],
+    coHit: Math.round(c.coAvg * 10) / 10,
   }));
 }
 
 module.exports = {
   HOOK_KEYWORDS,
+  STOPWORDS,
   parseSrtCues,
   pcmFromWav,
   energyWindowsFromPcm,
+  medianSeries,
+  crestFactor,
+  crestReference,
+  CREST_RATIO_SOFT,
+  CREST_RATIO_HARD,
+  CREST_PENALTY,
   smoothSeries,
   meanStd,
+  zSeries,
+  zToUnit,
   buildSentences,
   tokenize,
+  normToken,
+  contentTokens,
+  idfFromSentences,
+  tfidfWeight,
+  cpsWindowsFromSentences,
   scoreText,
   heuristicCandidates,
   pickTopNonOverlap,
@@ -1038,6 +1305,8 @@ module.exports = {
   mapLlmHighlights,
   genTitleLocal,
   slugify,
+  ASPECT_KEEP,
+  ASPECT_FILTERS,
   normalizeAspect,
   aspectFilterOf,
   buildExportPlan,

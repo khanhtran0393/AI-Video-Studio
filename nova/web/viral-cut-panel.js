@@ -30,6 +30,7 @@
     loopPreview: false,   // lặp lại đúng đoạn đã chọn khi gặp mốc dừng
     previewStartMs: null, // mốc bắt đầu phát của lượt xem trước hiện tại (phục vụ loop)
     videoErr: '',         // lý do <video> không phát được (codec/DOM) — báo lộ liễu, không im lặng
+    loadTimer: null,      // watchdog: src gán rồi mà không có metadata trong 8s → báo lỗi
   };
 
   let SHELL = `
@@ -61,7 +62,8 @@
     .vc-edit { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 14px; margin-top: 10px; }
     @media (max-width: 760px) { .vc-edit { grid-template-columns: minmax(0, 1fr); } }
     .vc-efield { display: flex; flex-direction: column; gap: 3px; font-size: 11px; opacity: .92; min-width: 0; }
-    .vc-efield .vc-erow { display: flex; align-items: center; gap: 8px; }
+    .vc-edit .vc-field { gap: 3px; font-size: 11px; opacity: .92; min-width: 0; }
+    .vc-edit .vc-field .vc-erow { display: flex; align-items: center; gap: 8px; }
     .vc-erange { flex: 1 1 auto; min-width: 0; accent-color: #a78bfa; }
     .vc-ehint { font-size: 10.5px; opacity: .55; }
     .vc-badge { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11px; background: rgba(124,77,255,.25); border: 1px solid rgba(124,77,255,.5); }
@@ -105,13 +107,18 @@
   };
 
   /* ── TỔNG QUAN: URL media cục bộ qua scheme avs-media:// (Range/seek, bypass CSP) ──
-     Scheme này KHÔNG whitelist thư mục (media-protocol.js): mọi path trên đĩa đều
-     được serve với Range. Vì vậy nếu khung hình vẫn đen thì thủ phạm là CODEC —
-     Chromium trong <video> chỉ hỗ trợ H.264/H.265(?), VP8/VP9/AV1 + AAC/Opus trong
-     MP4/WebM/M4V/MOV-mp4. MKV/AVI/TS/WMV/FLV/ProRes/HEVC → không phát được.
-     Engine cắt dùng FFmpeg THẬT nên export VẪN chạy được dù preview đen — phải nói rõ. */
+     Scheme này KHÔNG whitelist thư mục (main/media-protocol.js) → mọi path đĩa đều được
+     serve kèm Range; round-trip `encodeURIComponent` ↔ `new URL().pathname` đã được kiểm
+     chứng an toàn cho path Windows có khoảng trắng/ký tự đặc biệt/Unicode. Vì vậy khi khung
+     hình đen, nguyên nhân còn lại là CODEC/CONTAINER — dùng ffprobe THẬT (window.native.ffx
+     .probe → mediaTools.probeStreams) để kết luận, KHÔNG đoán theo phần mở rộng.
+     Engine cắt dùng FFmpeg nên export VẪN chạy được dù preview không phát được. */
   const vcMediaUrl = (p) => 'avs-media://m/' + encodeURIComponent(p);
-  const VC_HARD_UNSUPPORTED = ['.mkv', '.avi', '.ts', '.m2ts', '.mts', '.wmv', '.flv', '.vob', '.rmvb', '.ogv', '.mxf', '.hevc', '.265', '.divx'];
+  /* Container mà Chromium KHÔNG remux được trong <video> (dù codec bên trong là gì) */
+  const VC_HARD_UNSUPPORTED = ['.avi', '.wmv', '.flv', '.vob', '.rmvb', '.ogm', '.mxf', '.ts', '.m2ts', '.mts', '.svq3', '.divx'];
+  /* Codec video Chromium giải mã được trong <video> (Electron dùng đúng decoder này) */
+  const VC_VIDEO_OK = { h264: 'H.264', vp8: 'VP8', vp9: 'VP9', av1: 'AV1' };
+  const VC_AUDIO_OK = ['aac', 'mp3', 'opus', 'vorbis', 'flac', 'pcm_s16le', 'pcm_s24le', 'pcm_f32le'];
 
   /* Báo lỗi preview LỘ LIỄU (Luật 10) — không im lặng để user đoán mò */
   const vcSetVideoErr = (msg) => {
@@ -122,13 +129,63 @@
     el.textContent = vcState.videoErr;
   };
 
-  /* Chuẩn đoán trước theo phần mở rộng: nhắc sớm, vẫn để <video> thử phát */
-  const vcDiagnoseSource = () => {
-    const p = String(vcState.videoPath || '').toLowerCase();
-    if (!p) return;
-    const hit = VC_HARD_UNSUPPORTED.find((x) => p.endsWith(x));
-    if (hit) vcSetVideoErr('Định dạng ' + hit.toUpperCase() + ' nhiều khả năng KHÔNG phát được trong Electron (Chromium chỉ hỗ trợ H.264/VP9/AV1 trong MP4/WebM). Khung hình có thể đen — bấm "Cắt & xuất" vẫn chạy bình thường vì engine cắt dùng FFmpeg. Muốn xem trước: xuất lại nguồn sang H.264 bằng Công cụ FFmpeg.');
-    else vcSetVideoErr('');
+  /* Chuẩn đoán trước theo phần mở rộng (nhắc sớm), rồi ffprobe THẬT để kết luận đúng codec.
+     KHÔNG đoán mò: nếu ffprobe nói H.264/AAC mà vẫn đen thì phải nói rõ là lỗi khác. */
+  const vcDiagnoseSource = async () => {
+    const p = String(vcState.videoPath || '');
+    if (!p) {
+      vcSetVideoErr(vcState.sourceUrl ? 'Chưa có file nguồn trên máy — bấm ⬇ "Tải video nguồn về máy" để xem trước được.' : '');
+      vcRenderPick();
+      return;
+    }
+    const low = p.toLowerCase();
+    const hit = VC_HARD_UNSUPPORTED.find((x) => low.endsWith(x));
+    if (hit) {
+      vcSetVideoErr('Container ' + hit.toUpperCase() + ' không phát được trong <video> của Electron (Chromium không remux định dạng này). Bấm "Cắt & xuất" vẫn chạy bình thường vì engine cắt dùng FFmpeg — muốn xem trước: dùng Công cụ FFmpeg đổi sang MP4 (H.264).');
+      vcRenderPick();
+      return;
+    }
+    /* .mkv/.mp4/.mov đều có thể OK hoặc NOT OK tuỳ codec bên trong → cần ffprobe */
+    let pr = null;
+    try { pr = window.native.ffx && await window.native.ffx.probe(p); } catch (_) { pr = null; }
+    if (!pr || pr.error || !pr.video) {
+      vcSetVideoErr(''); // chưa kết luận được bằng ffprobe — để <video> tự báo lỗi thật qua event 'error'
+      vcRenderPick();
+      return;
+    }
+    const vc = String(pr.video.codec || '').toLowerCase();
+    const ac = ((pr.audioTracks || [])[0] || {}).codec || '';
+    const frames = [];
+    if (!VC_VIDEO_OK[vc]) frames.push('video ' + (vc || '?').toUpperCase() + ' — Electron/Chromium không giải mã được trong <video> (chỉ ' + Object.values(VC_VIDEO_OK).join(', ') + ')');
+    if (ac && VC_AUDIO_OK.indexOf(String(ac).toLowerCase()) < 0) frames.push('audio ' + ac.toUpperCase() + ' cũng không hỗ trợ');
+    const geo = pr.video.width + '×' + pr.video.height + (pr.video.fps ? ', ' + pr.video.fps + 'fps' : '');
+    if (frames.length) {
+      vcSetVideoErr('Không xem trước được: ' + frames.join(' + ') + ' (nguồn ' + geo + '). FFmpeg vẫn cắt/xuất bình thường — bấm "Cắt & xuất", hoặc dùng Công cụ FFmpeg đổi nguồn sang H.264 trước để xem trước.');
+    } else {
+      vcSetVideoErr('');
+      vcSetLog('Nguồn ' + VC_VIDEO_OK[vc] + '/' + (ac || '?').toUpperCase() + ' ' + geo + ' — Chromium phát được; nếu vẫn đen thì lỗi nằm ở việc đọc file, không phải codec.');
+    }
+    vcRenderPick();
+  };
+
+  /* Watchdog: gán src mà không có metadata VÀ cũng không báo lỗi gì → treo lặng lẽ.
+     Phải nói rõ thay vì để user nhìn khung đen mãi. */
+  const vcWatchLoad = () => {
+    if (vcState.loadTimer) { clearTimeout(vcState.loadTimer); vcState.loadTimer = null; }
+    const v = vcEl('vcVideo');
+    if (!v || !vcState.videoPath) return;
+    const expected = vcState.videoPath; // nguồn có thể đổi giữa chừng → chỉ báo nếu vẫn là file này
+    vcState.loadTimer = setTimeout(() => {
+      vcState.loadTimer = null;
+      const vv = vcEl('vcVideo');
+      if (!vv || vv.readyState >= 1 || vcState.videoErr) return;
+      if (vcState.videoPath !== expected || vv.dataset.path !== expected) return;
+      vcSetVideoErr('Không đọc được metadata của video sau 8 giây qua avs-media:// (readyState=' + vv.readyState +
+        ', networkState=' + vv.networkState + '). Nguồn: ' + vcState.videoPath +
+        ' — file có thể đang bị khoá bởi app khác, ở network/oneDrive chưa đồng bộ, hoặc scheme media không phục vụ được. Cắt/xuất bằng FFmpeg vẫn chạy.' +
+        ' Bấm lại "Chọn video gốc…" để thử lại.');
+      vcRenderPick();
+    }, 8000);
   };
 
   const vcClearActiveSeg = () => {
@@ -142,6 +199,7 @@
     const hint = vcEl('vcTlHint');
     if (!marks) return;
     marks.innerHTML = '';
+    vcRenderPick(); // khung 3 luôn bám theo danh sách hiện tại (kể cả khi rỗng → tắt hết)
     if (!vcState.highlights.length) {
       if (hint) hint.textContent = 'Chưa có highlight — bấm "Phân tích" để chọn đoạn.';
       return;
@@ -171,27 +229,117 @@
       marks.appendChild(seg);
       segs.push(seg);
     });
-    vcRenderPick();
     return segs;
+  };
+
+  /* ── KHUNG 3: đoạn đang chỉnh (pickedIdx) — số + thanh trượt đồng bộ 2 chiều ── */
+  const vcPick = () => vcState.highlights[vcState.pickedIdx] || null;
+
+  /* Nạp danh sách đoạn + các ô chỉnh giờ cho đoạn đang chọn.
+     force=true → ghi đè cả ô đang giữ focus (dùng khi ĐỔI đoạn, tránh ô trượt cũ bị kẹt giá trị). */
+  const vcRenderPick = (force) => {
+    const sel = vcEl('vcPickHl');
+    if (!sel) return;
+    const n = vcState.highlights.length;
+    if (vcState.pickedIdx == null || vcState.pickedIdx >= n) vcState.pickedIdx = n ? 0 : null;
+    sel.innerHTML = '';
+    vcState.highlights.forEach((h, i) => {
+      const o = document.createElement('option');
+      o.value = String(i);
+      o.textContent = (i + 1) + '. ' + String(h.title || 'Clip').slice(0, 42) + ' (' + vcFmt(h.startMs) + '–' + vcFmt(h.endMs) + ')';
+      sel.appendChild(o);
+    });
+    sel.disabled = !n;
+    if (vcState.pickedIdx != null) sel.value = String(vcState.pickedIdx);
+    const h = vcPick();
+    const totalS = Math.max(1, (vcState.durationMs || 0) / 1000);
+    const numS = vcEl('vcSelStart'), numE = vcEl('vcSelEnd');
+    const rgS = vcEl('vcSelStartR'), rgE = vcEl('vcSelEndR');
+    if (rgS) { rgS.max = totalS.toFixed(1); if (rgS !== document.activeElement) rgS.value = h ? Math.min(totalS, h.startMs / 1000).toFixed(1) : '0'; }
+    if (rgE) { rgE.max = totalS.toFixed(1); if (rgE !== document.activeElement) rgE.value = h ? Math.min(totalS, h.endMs / 1000).toFixed(1) : '0'; }
+    if (numS) numS.value = h ? (h.startMs / 1000).toFixed(1) : '';
+    if (numE) numE.value = h ? (h.endMs / 1000).toFixed(1) : '';
+    /* Thanh trượt cần biết thời lượng thật → tắt khi chưa có (chứ KHÔNG tắt vì lỗi codec:
+       vẫn chỉnh được giờ bằng số và vẫn xuất được clip bằng FFmpeg). */
+    const noDur = !vcState.durationMs;
+    const noPlay = !!vcState.videoErr || !vcState.videoPath;
+    for (const el of [numS, numE]) if (el) el.disabled = !h;
+    for (const el of [rgS, rgE]) if (el) el.disabled = !h || noDur;
+    const info = vcEl('vcSelInfo');
+    if (info) info.textContent = n ? 'Đoạn ' + (vcState.pickedIdx + 1) + '/' + n + (vcState.videoErr ? ' · ⚠ preview không phát được' : '') : '—';
+    const dEl = vcEl('vcSelDur');
+    if (dEl) dEl.textContent = h ? 'Độ dài ' + ((h.endMs - h.startMs) / 1000).toFixed(1) + 's' : '';
+    const hintS = vcEl('vcStartHint'), hintE = vcEl('vcEndHint');
+    if (hintS) hintS.textContent = h ? '0 → ' + (h.endMs / 1000).toFixed(1) + 's' : '';
+    if (hintE) hintE.textContent = h ? (h.startMs / 1000).toFixed(1) + 's → ' + totalS.toFixed(1) + 's' : '';
+    const play = vcEl('vcPlaySel'), stop = vcEl('vcStopSel'), prev = vcEl('vcPrevHl'), next = vcEl('vcNextHl');
+    if (play) play.disabled = !h;
+    if (stop) stop.disabled = !h;
+    if (prev) prev.disabled = !n || vcState.pickedIdx <= 0;
+    if (next) next.disabled = !n || vcState.pickedIdx >= n - 1;
+    const ms = vcEl('vcMarkStart'), me = vcEl('vcMarkEnd');
+    if (ms) ms.disabled = !h || noPlay;
+    if (me) me.disabled = !h || noPlay;
+  };
+
+  /* Chọn đoạn: đồng bộ khung 3 ↔ card danh sách ↔ timeline */
+  const vcSetPick = (i) => {
+    if (!vcState.highlights[i]) return;
+    vcState.pickedIdx = i;
+    vcRenderPick(true); // đổi đoạn → nạp lại giờ kể cả khi focus đang ở ô cũ
+    vcRenderResults();
+    vcRenderTimeline();
+  };
+
+  /* Dừng lượt xem trước hiện tại (nút ⏹) */
+  const vcPauseSel = () => {
+    const v = vcEl('vcVideo');
+    if (v) v.pause();
+    vcState.previewUntilMs = null;
+    vcState.previewStartMs = null;
+    vcState.previewIdx = null;
+  };
+
+  /* Đặt lại state chọn/xem trước khi có kết quả phân tích mới */
+  const vcResetPicks = () => {
+    vcState.pickedIdx = null;
+    vcState.previewIdx = null;
+    vcState.previewUntilMs = null;
+    vcState.previewStartMs = null;
   };
 
   const vcPreviewHighlight = (i) => {
     const h = vcState.highlights[i];
     if (!h) return;
     const v = vcEl('vcVideo');
+    vcState.previewStartMs = h.startMs;
     vcState.previewUntilMs = h.endMs;
     vcState.previewIdx = i;
+    vcState.pickedIdx = i;
     vcClearActiveSeg();
     const seg = vcEl('vcTlMarks') ? vcEl('vcTlMarks').querySelectorAll('.vc-tl-seg')[i] : null;
     if (seg) seg.classList.add('vc-active');
+    vcRenderPick(true);
     if (!v || !vcState.videoPath) {
       // Chế độ YouTube chưa tải nguồn: vẫn tô khối, nhưng không phát được
       vcSetLog('Đoạn ' + (i + 1) + ': ' + vcFmt(h.startMs) + ' → ' + vcFmt(h.endMs) + ' — bấm "Tải video nguồn" để xem trước được.');
       return;
     }
-    v.currentTime = h.startMs / 1000;
-    const pr = v.play();
-    if (pr && pr.catch) pr.catch(() => {});
+    /* src có thể chưa gán nếu user bấm khối trước khi khung 3 mở xong */
+    if (v.dataset.path !== vcState.videoPath) {
+      v.src = vcMediaUrl(vcState.videoPath);
+      v.dataset.path = vcState.videoPath;
+      vcWatchLoad();
+    }
+    const seek = () => {
+      const cur = vcState.highlights[i];
+      if (!cur) return;
+      v.currentTime = cur.startMs / 1000;
+      const pr = v.play();
+      if (pr && pr.catch) pr.catch((e) => vcSetVideoErr('Không phát được: ' + ((e && e.message) || e) + ' — bấm "Cắt & xuất" vẫn chạy vì engine cắt dùng FFmpeg.'));
+    };
+    if (v.readyState >= 1) seek();
+    else v.addEventListener('loadedmetadata', seek, { once: true });
     vcSetLog('Đang xem trước đoạn ' + (i + 1) + ': ' + vcFmt(h.startMs) + ' → ' + vcFmt(h.endMs) + (h.title ? ' — ' + h.title : ''));
   };
 
@@ -207,8 +355,50 @@
       else h.startMs = Math.max(0, h.endMs - 1000);
     }
     if (vcState.previewIdx === i) vcState.previewUntilMs = null; // dữ liệu vừa đổi — ngừng auto-dừng
+    if (vcState.pickedIdx == null) vcState.pickedIdx = i;
+    vcRenderPick();
     vcRenderResults();
     vcRenderTimeline();
+  };
+
+  /* Chỉnh start/end của đoạn ĐANG CHỌN từ khung 3 (ô số hoặc thanh trượt).
+     `fromSlider` = kéo thanh trượt: chỉ tua con trỏ video tới biên mới, không autoplay. */
+  const vcAdjustSel = (field, valSec, fromSlider) => {
+    const i = vcState.pickedIdx;
+    const h = vcPick();
+    if (!h) return;
+    let ms = Math.round((Number(valSec) || 0) * 1000);
+    ms = Math.max(0, vcState.durationMs ? Math.min(ms, vcState.durationMs) : ms);
+    if (field === 'start') h.startMs = ms; else h.endMs = ms;
+    if (h.endMs - h.startMs < 1000) {
+      if (field === 'start') h.endMs = Math.min(h.startMs + 1000, vcState.durationMs || h.startMs + 1000);
+      else h.startMs = Math.max(0, h.endMs - 1000);
+    }
+    if (vcState.previewIdx === i) {
+      vcState.previewStartMs = h.startMs;
+      vcState.previewUntilMs = h.endMs; // mốc dừng bám theo đoạn vừa sửa
+    }
+    /* Đang kéo thanh trượt = đang_scrub_: tạm dừng và đưa khung hình về đúng biên vừa sửa
+       để user THẤY ngay đoạn mới (kể cả khi chưa bấm Phát đoạn). */
+    const v = vcEl('vcVideo');
+    if (fromSlider && v && vcState.videoPath && v.readyState) {
+      if (vcState.previewIdx === i) v.pause();
+      v.currentTime = (field === 'start' ? h.startMs : h.endMs) / 1000;
+    }
+    vcRenderPick();
+    vcRenderResults();
+    vcRenderTimeline();
+    vcSetLog('Đoạn ' + (i + 1) + ' đã đổi: ' + vcFmt(h.startMs) + ' → ' + vcFmt(h.endMs) +
+      ' (' + ((h.endMs - h.startMs) / 1000).toFixed(1) + 's)');
+  };
+
+  /* Lấy vị trí đang phát của <video> làm biên Start/End cho đoạn đang chọn */
+  const vcMarkPlayhead = (field) => {
+    const v = vcEl('vcVideo');
+    const h = vcPick();
+    if (!v || !h || !vcState.videoPath) return;
+    if (!v.readyState) { vcSetLog('Video chưa sẵn sàng (chưa tải được metadata) — không lấy được vị trí đang phát.'); return; }
+    vcAdjustSel(field, v.currentTime, false);
   };
 
   /* Mở tổng quan: video cục bộ → gán src qua avs-media; YouTube chưa tải → hiện nút tải nguồn */
@@ -223,6 +413,7 @@
       if (v.dataset.path !== vcState.videoPath) {
         v.src = vcMediaUrl(vcState.videoPath);
         v.dataset.path = vcState.videoPath;
+        vcWatchLoad(); // src mới → canh chừng trường hợp treo lặng lẽ (không metadata, không error)
       }
       vcState.durationMs = 0; // loadedmetadata sẽ set lại theo thời lượng thật
     } else {
@@ -230,6 +421,8 @@
       if (v) { v.style.display = 'none'; v.removeAttribute('src'); if (v.dataset.path) delete v.dataset.path; }
       /* giữ durationMs từ probe YouTube — timeline vẽ đúng tỉ lệ ngay */
     }
+    vcDiagnoseSource();
+    vcRenderPick();
     vcRenderTimeline();
   };
 
@@ -455,8 +648,7 @@
     vcState.analyzing = true;
     vcState.highlights = [];
     vcState.tier = '';
-    vcState.previewUntilMs = null;
-    vcState.previewIdx = null;
+    vcResetPicks();
     vcWarn([]);
     vcTierAShow(null);
     vcSetBusy();
@@ -500,8 +692,7 @@
     vcState.analyzing = true;
     vcState.highlights = [];
     vcState.tier = '';
-    vcState.previewUntilMs = null;
-    vcState.previewIdx = null;
+    vcResetPicks();
     vcWarn([]);
     vcTierAShow(null);
     vcSetBusy();
@@ -613,8 +804,18 @@
     vcSetLog((r && r.canceled) ? 'Đang hủy…' : 'Không có tác vụ nào đang chạy.');
   };
 
+  /* ── <video> error code → lời bằng tiếng Việt (Chromium MEDIA_ERR_*) ── */
+  const VC_ERR_TEXT = {
+    1: 'bị chặn (ABORTED)',
+    2: 'lỗi mạng khi đọc file (NETWORK) — kiểm tra đĩa/đường dẫn',
+    3: 'không giải mã được (DECODE) — codec/container không được Electron hỗ trợ (HEVC/H.265, MKV, AVI, ProRes…)',
+    4: 'định dạng KHÔNG hỗ trợ (SRC_NOT_SUPPORTED) — Chromium chỉ phát H.264/VP9/AV1 + AAC/Opus trong MP4/WebM/M4V/MOV',
+  };
+
   const vcBind = () => {
     const on = (id, fn) => { const el = vcEl(id); if (el) el.addEventListener('click', fn); };
+    const onChg = (id, fn) => { const el = vcEl(id); if (el) el.addEventListener('change', fn); };
+    const onIn = (id, fn) => { const el = vcEl(id); if (el) el.addEventListener('input', fn); };
     on('vcPickVideo', vcPickVideo);
     on('vcPickSrt', vcPickSrt);
     on('vcClearSrt', vcClearSrt);
@@ -629,20 +830,37 @@
     const v = vcEl('vcVideo');
     if (v) {
       v.addEventListener('loadedmetadata', () => {
+        if (vcState.loadTimer) { clearTimeout(vcState.loadTimer); vcState.loadTimer = null; }
         vcState.durationMs = Math.round((v.duration || 0) * 1000);
-        vcRenderTimeline(); // thời lượng thật từ metadata → vẽ lại đúng tỉ lệ
+        vcSetVideoErr(''); // metadata đọc được → bỏ cảnh báo cũ, bật lại thanh trượt
+        vcRenderTimeline(); // thời lượng thật từ metadata → vẽ lại đúng tỉ lệ + biên trượt
+      });
+      /* Lỗi phát thật sự — báo LỘ LIỄU + kèm số liệu kỹ thuật để không phải đoán lại */
+      v.addEventListener('error', () => {
+        const code = v.error ? v.error.code : 0;
+        vcSetVideoErr('Không xem trước được video này: ' + (VC_ERR_TEXT[code] || 'lỗi không xác định (code ' + code + ')') +
+          '. Nguồn: ' + (vcState.videoPath || '') +
+          ' | readyState=' + v.readyState + ' networkState=' + v.networkState +
+          '. Cắt/xuất vẫn chạy bình thường vì engine dùng FFmpeg — muốn xem trước thì chuyển nguồn sang H.264 (MP4).');
+        vcRenderPick();
       });
       v.addEventListener('timeupdate', () => {
         const ms = Math.round(v.currentTime * 1000);
         const cur = vcEl('vcTlCursor');
         if (cur && vcState.durationMs) cur.style.left = (ms / vcState.durationMs * 100) + '%';
         if (vcState.previewUntilMs != null && ms >= vcState.previewUntilMs) {
+          if (vcState.loopPreview && vcState.previewStartMs != null) {
+            /* lặp đúng đoạn đang chọn: tua về biên bắt đầu, tiếp tục phát */
+            v.currentTime = vcState.previewStartMs / 1000;
+            return;
+          }
           v.pause();
           vcState.previewUntilMs = null;
+          vcState.previewStartMs = null;
           vcClearActiveSeg();
         }
       });
-      v.addEventListener('ended', () => { vcState.previewUntilMs = null; vcClearActiveSeg(); });
+      v.addEventListener('ended', () => { vcState.previewUntilMs = null; vcState.previewStartMs = null; vcClearActiveSeg(); });
     }
     const tl = vcEl('vcTimeline');
     if (tl) {
@@ -656,6 +874,29 @@
         v2.currentTime = frac * vcState.durationMs / 1000;
       });
     }
+
+    /* ── Khung 3: chọn đoạn + chỉnh giờ 2 chiều (ô số ⇄ thanh trượt) ── */
+    onChg('vcPickHl', (ev) => vcSetPick(Number(ev.target.value)));
+    on('vcPrevHl', () => vcSetPick(Math.max(0, (vcState.pickedIdx || 0) - 1)));
+    on('vcNextHl', () => vcSetPick(Math.min(vcState.highlights.length - 1, (vcState.pickedIdx || 0) + 1)));
+    on('vcPlaySel', () => { if (vcState.pickedIdx != null) vcPreviewHighlight(vcState.pickedIdx); });
+    on('vcStopSel', vcPauseSel);
+    onChg('vcLoopSel', (ev) => {
+      vcState.loopPreview = !!ev.target.checked;
+      if (vcState.loopPreview && vcState.previewIdx == null && vcState.pickedIdx != null) {
+        vcPreviewHighlight(vcState.pickedIdx); // bật lặp → phát ngay đoạn đang chọn cho thấy kết quả
+      }
+      vcSetLog(vcState.loopPreview ? 'Đang lặp đoạn đã chọn.' : 'Đã tắt lặp.');
+    });
+    on('vcMarkStart', () => vcMarkPlayhead('start'));
+    on('vcMarkEnd', () => vcMarkPlayhead('end'));
+    /* Ô số: đổi khi user gõ xong (change) + giữ nguyên khi đang kéo slider */
+    onChg('vcSelStart', (ev) => vcAdjustSel('start', Number(ev.target.value), false));
+    onChg('vcSelEnd', (ev) => vcAdjustSel('end', Number(ev.target.value), false));
+    /* Thanh trượt: kéo liên tục (input) — đồng bộ ô số qua vcRenderPick */
+    onIn('vcSelStartR', (ev) => vcAdjustSel('start', Number(ev.target.value), true));
+    onIn('vcSelEndR', (ev) => vcAdjustSel('end', Number(ev.target.value), true));
+
     const list = vcEl('vcHlList');
     if (list) {
       list.addEventListener('change', (ev) => {
@@ -665,8 +906,22 @@
         }
       });
       list.addEventListener('click', (ev) => {
-        const btn = ev.target && ev.target.closest ? ev.target.closest('[data-prev]') : null;
-        if (btn) vcPreviewHighlight(Number(btn.dataset.prev));
+        const t = ev.target;
+        if (!t || !t.closest) return;
+        const play = t.closest('[data-prev]');
+        if (play) { vcPreviewHighlight(Number(play.dataset.prev)); return; }
+        const edit = t.closest('[data-edit]');
+        if (edit) {
+          vcSetPick(Number(edit.dataset.edit));
+          const card = vcEl('vcOverviewCard');
+          if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          return;
+        }
+        const card = t.closest('.vc-hl');
+        if (card && list.contains(card)) {
+          const idx = Array.prototype.indexOf.call(list.children, card);
+          if (idx >= 0) vcSetPick(idx); // chạm card = chọn đoạn (không đổi giờ đang phát)
+        }
       });
     }
   };

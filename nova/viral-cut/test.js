@@ -553,4 +553,210 @@ t('Tier A integration: fusion → snap giữ cửa sổ hợp lệ trong dung l�
   }
 });
 
+/* ── 12. Hợp đồng tỉ lệ xuất ('keep'|'916'|'169') + kế hoạch cắt theo tỉ lệ ──
+   Lý do test: panel gửi `aspect` chuỗi (select Tỉ lệ xuất), IPC gọi `normalizeAspect`
+   rồi dùng `item.vf` của plan — sai ở đây là mọi clip xuất sai khung hình. */
+const HL2 = [
+  { title: 'Đoạn một', startMs: 1000, endMs: 20000 },
+  { title: 'Đoạn hai?', startMs: 30000, endMs: 50000, hookStartMs: 31000, hookEndMs: 34000 },
+];
+t('normalizeAspect: giá trị chuẩn + cách viết người dùng hay gõ', () => {
+  assert.strictEqual(E.normalizeAspect('keep'), 'keep');
+  assert.strictEqual(E.normalizeAspect('916'), '916');
+  assert.strictEqual(E.normalizeAspect('9:16'), '916');
+  assert.strictEqual(E.normalizeAspect('169'), '169');
+  assert.strictEqual(E.normalizeAspect('16:9'), '169');
+  assert.strictEqual(E.normalizeAspect('  16:9  '), '169', 'khoảng trắng + hoa thường');
+  assert.strictEqual(E.normalizeAspect('KEEP'), 'keep', 'không phân biệt hoa thường');
+  assert.strictEqual(E.normalizeAspect('9_16'), '916', 'mọi chữ số còn lại được chuẩn hoá');
+});
+t('normalizeAspect: rỗng/null → keep, trừ khi có crop916 legacy (hành vi cũ không đổi)', () => {
+  assert.strictEqual(E.normalizeAspect(null), 'keep');
+  assert.strictEqual(E.normalizeAspect(''), 'keep');
+  assert.strictEqual(E.normalizeAspect(undefined, true), '916', 'legacy crop916:true → 916');
+  assert.strictEqual(E.normalizeAspect('', false), 'keep');
+  assert.strictEqual(E.normalizeAspect('keep', true), '916', 'legacy thắng khi aspect để trống');
+  assert.strictEqual(E.normalizeAspect('916', false), '916', 'aspect rõ ràng thắng legacy false');
+  assert.strictEqual(E.normalizeAspect('169', true), '169', 'aspect đã nêu thì crop916 cũ bị bỏ qua');
+});
+t('normalizeAspect: giá trị rác → LỘ LIỄU VC_ASPECT_UNSUPPORTED (không âm thầm về keep)', () => {
+  for (const bad of ['4x3', 'square', '1:1', '9161', 'auto', '0']) {
+    assert.throws(() => E.normalizeAspect(bad), /VC_ASPECT_UNSUPPORTED/, 'phải ném cho ' + bad);
+  }
+});
+t('aspectFilterOf: keep → null (không đụng vf), 916/169 → đúng chuỗi ffmpeg', () => {
+  assert.strictEqual(E.aspectFilterOf('keep'), null);
+  assert.strictEqual(E.aspectFilterOf('916'), 'crop=min(iw,ih*9/16):ih,scale=1080:1920');
+  assert.strictEqual(E.aspectFilterOf('169'), 'crop=iw:min(ih,iw*9/16),scale=1920:1080');
+  assert.strictEqual(E.aspectFilterOf('16:9'), E.aspectFilterOf('169'), '2 cách viết ra cùng 1 filter');
+  assert.throws(() => E.aspectFilterOf('nope'), /VC_ASPECT_UNSUPPORTED/);
+});
+t('buildExportPlan: mỗi item mang aspect + vf, crop916 chỉ đúng cho 916', () => {
+  const keep = E.buildExportPlan(HL2, { outDir: 'C:/out' });
+  assert.strictEqual(keep.length, 2);
+  for (const it of keep) {
+    assert.strictEqual(it.aspect, 'keep');
+    assert.strictEqual(it.vf, null, 'keep = không có filter');
+    assert.strictEqual(it.crop916, false);
+  }
+  const vert = E.buildExportPlan(HL2, { outDir: 'C:/out', aspect: '916' });
+  assert.strictEqual(vert[0].aspect, '916');
+  assert.strictEqual(vert[0].crop916, true, 'giữ cờ cũ cho code còn đọc crop916');
+  assert.strictEqual(vert[0].vf, E.ASPECT_FILTERS['916']);
+  const horiz = E.buildExportPlan(HL2, { outDir: 'C:/out', aspect: '169' });
+  assert.strictEqual(horiz[0].aspect, '169');
+  assert.strictEqual(horiz[0].crop916, false, '16:9 KHÔNG được coi là crop 9:16');
+  assert.strictEqual(horiz[0].vf, 'crop=iw:min(ih,iw*9/16),scale=1920:1080');
+  /* di sản: chỉ gửi crop916:true (bản gọi cũ) → vẫn ra 916, không im lặng thành keep */
+  const legacy = E.buildExportPlan(HL2, { outDir: 'C:/out', crop916: true });
+  assert.strictEqual(legacy[0].aspect, '916');
+  assert.strictEqual(legacy[0].vf, E.ASPECT_FILTERS['916']);
+  /* thời gian + hook + tên file không đổi khi thêm tỉ lệ (không hồi quy) */
+  assert.strictEqual(horiz[1].startSec, 30);
+  assert.strictEqual(horiz[1].endSec, 50);
+  assert.strictEqual(horiz[1].hookStartSec, 31);
+  assert.strictEqual(horiz[1].hookEndSec, 34);
+  assert.ok(/viralcut-02-.*\.mp4$/.test(horiz[1].outPath.replace(/\\/g, '/')), horiz[1].outPath);
+});
+t('buildExportPlan: aspect rác → VC_ASPECT_UNSUPPORTED trước khi tạo thư mục/file', () => {
+  assert.throws(() => E.buildExportPlan(HL2, { outDir: 'C:/out', aspect: 'cinematic' }), /VC_ASPECT_UNSUPPORTED/);
+  assert.throws(() => E.buildExportPlan(HL2, { aspect: '916' }), /VC_NO_OUTDIR/, 'thiếu outDir vẫn lộ liễu');
+});
+
+/* ── 13. Hợp đồng tĩnh PANEL (nova/web/viral-cut-panel.js) ──
+   Panel là global script không có module system → không import để test hàm được.
+   Đọc source và khẳng định các ràng buộc UX/hợp đồng đã thống nhất, để lần sửa
+   sau không âm thầm đưa `crop916` trở lại payload hay bỏ mất lựa chọn 16:9. */
+t('Panel: payload export dùng `aspect` (không còn `crop916`), default maxClips=10, có 16:9', () => {
+  const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'web', 'viral-cut-panel.js'), 'utf8');
+  const at = src.indexOf('exportClips({');
+  assert.ok(at >= 0, 'phải tìm thấy lời gọi exportClips({...}) trong panel');
+  /* lấy đúng tới dấu đóng lời gọi (count ngoặc) thay vì regex non-greedy bị cắt ở "{}" của object literal */
+  let depth = 0, end = at;
+  for (let i = at + 'exportClips'.length; i < src.length; i++) {
+    if (src[i] === '(') depth++;
+    else if (src[i] === ')') { depth--; if (depth === 0) { end = i; break; } }
+  }
+  const exp = src.slice(at, end + 1);
+  assert.ok(/aspect:\s*\(\(vcEl\('vcAspect'\)\s*\|\|\s*\{\}\)\.value\s*\|\|\s*'keep'\)/.test(exp), 'payload gửi `aspect` từ select vcAspect: ' + exp.slice(0, 260));
+  assert.ok(!/crop916/.test(exp), 'payload KHÔNG còn cờ crop916');
+  assert.ok(/videoPath:\s*vcState\.videoPath/.test(exp) && /highlights:\s*vcState\.highlights/.test(exp), 'payload vẫn gửi videoPath + highlights');
+  assert.ok(/<option selected>10<\/option>/.test(src), 'select Số clip tối đa phải chọn sẵn 10');
+  assert.ok(/Number\(\(vcEl\('vcMaxClips'\)\s*\|\|\s*\{\}\)\.value\)\s*\|\|\s*10/.test(src), 'fallback JS của maxClips cũng phải là 10 (khớp default IPC)');
+  assert.strictEqual((src.match(/'vcMaxClips'\)\s*\|\|\s*\{\}\)\.value\)\s*\|\|\s*10/g) || []).length, 2, 'cả 2 luồng gửi (local + YouTube) phải dùng default 10');
+  assert.ok(/<option value="169">/.test(src), 'phải có lựa chọn 16:9');
+  assert.ok(/<option value="916">/.test(src), 'phải có lựa chọn 9:16');
+});
+t('Panel: grid 2 khung mỗi hàng + báo lỗi preview lộ liễu + đủ điều khiển khung 3', () => {
+  const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'web', 'viral-cut-panel.js'), 'utf8');
+  assert.ok(/\.vc-hls \{[^}]*repeat\(2, minmax\(0, 1fr\)\)/.test(src), 'danh sách highlight là grid 2 cột');
+  assert.ok(/vcVideoErr/.test(src) && /vcSetVideoErr/.test(src), 'phải có khối + hàm báo lỗi <video>');
+  assert.ok(/vc-hl-active/.test(src) && /vc-hl\.vc-hl-active/.test(src), 'card đang chọn được tô sáng');
+  /* Chẩn đoán preview phải dựa ffprobe THẬT (IPC đã có ffx:probe) chứ không đoán theo phần mở rộng */
+  assert.ok(/native\.ffx[\s\S]{0,40}probe\(/.test(src), 'panel phải gọi ffprobe qua window.native.ffx.probe để kết luận codec');
+  assert.ok(/VC_VIDEO_OK/.test(src) && /h264:/.test(src), 'phải có danh sách codec Chromium phát được');
+  /* mọi id khung 3 phải vừa có trong markup vừa có listener — chống "markup nhưng không hoạt động" */
+  const ids = ['vcVideo', 'vcVideoErr', 'vcPickHl', 'vcPrevHl', 'vcNextHl', 'vcPlaySel', 'vcStopSel', 'vcLoopSel',
+    'vcSelStart', 'vcSelStartR', 'vcSelEnd', 'vcSelEndR', 'vcMarkStart', 'vcMarkEnd', 'vcSelInfo', 'vcSelDur'];
+  for (const id of ids) {
+    assert.ok(src.includes('id="' + id + '"'), 'markup thiếu #' + id);
+    if (['vcSelInfo', 'vcSelDur', 'vcVideoErr'].includes(id)) continue; // chỉ để hiển thị
+    assert.ok(new RegExp("on(?:Chg|In)?\\('" + id + "'|vcEl\\('" + id + "'\\)").test(src), '#' + id + ' không được bind/đọc ở đâu cả');
+  }
+});
+
+/* ── 14. Chấm điểm TƯƠNG ĐỐI + crest tương đối + CPS + TF-IDF (nâng cấp 2026-09-12).
+   Ba bài học được khoá bằng test:
+   (a) Video nhỏ tiếng (ASMR/đọc nhẹ) PHẢI vẫn tìm được cao trào của chính nó — RMS thô
+       từng trả 0 cho mọi cửa sổ khiến tier năng lượng vô dụng.
+   (b) Crest factor chỉ PHẠT và phạt theo THAM CHIẾU của chính video (median) — ngưỡng
+       tuyệt đối sẽ phạt oan mọi video có nhạc/vỗ tay bình thường (crest 2.5–5).
+   (c) Không có dữ liệu cho kênh nào (pitch/CPS/IDF) thì kênh đó VẮNG MẶT khỏi weights và
+       KHAI BÁO qua hasPitch/hasCps/parts.hasTfidf — cấm thêm `0` cho đủ bộ (Luật 10). ── */
+t('medianSeries: median lẻ/chẵn, bỏ non-finite, rỗng → null', () => {
+  assert.strictEqual(E.medianSeries([3, 1, 2]), 2);
+  assert.strictEqual(E.medianSeries([4, 1, 2, 3]), 2.5);
+  assert.strictEqual(E.medianSeries([5, NaN, Infinity, 7]), 6, 'non-finite bị loại');
+  assert.strictEqual(E.medianSeries([]), null);
+  assert.strictEqual(E.medianSeries(null), null);
+  assert.strictEqual(E.medianSeries([NaN]), null);
+});
+t('crestFactor: ramp theo TỈ LỆ crest so với tham chiếu — ≤2× không phạt, ≥8× phạt trần', () => {
+  assert.strictEqual(E.CREST_RATIO_SOFT, 2);
+  assert.strictEqual(E.CREST_RATIO_HARD, 8);
+  assert.strictEqual(E.crestFactor(1), 1);
+  assert.strictEqual(E.crestFactor(E.CREST_RATIO_SOFT), 1, 'đúng ngưỡng mềm: chưa phạt');
+  assert.strictEqual(E.crestFactor(E.CREST_RATIO_HARD), 1 - E.CREST_PENALTY);
+  assert.strictEqual(E.crestFactor(999), 1 - E.CREST_PENALTY, 'trần phạt, không âm');
+  assert.strictEqual(E.crestFactor(5), 0.825, 'giữa 2..8 phải ramp tuyến tính: 1 - 0.35*0.5');
+  assert.strictEqual(E.crestFactor(null), 1, 'không đo được → không phạt (không bịa)');
+  assert.strictEqual(E.crestFactor(-3), 1);
+  assert.strictEqual(E.crestFactor(NaN), 1);
+});
+t('crestReference: tham chiếu = median crest của cửa sổ CÓ tín hiệu; im lặng → ref null', () => {
+  const wins = [
+    { t: 0, rms: 10, crest: 1.4 }, { t: 1, rms: 10, crest: 1.5 },
+    { t: 2, rms: 10, crest: 1.45 }, { t: 3, rms: 0, crest: 99 },   // im lặng: crest vô nghĩa
+    { t: 4, rms: 10, crest: 30 },                                  // cốc bàn → impuls
+  ];
+  const cr = E.crestReference(wins);
+  /* 4 cửa sổ có tín hiệu: [1.4, 1.45, 1.5, 30] → median = (1.45+1.5)/2 = 1.475.
+     Median chống nhiễu: chính cửa sổ impuls cũng nằm trong mẫu nhưng không kéo ref lên. */
+  assert.ok(Math.abs(cr.ref - 1.475) < 1e-9, 'ref phải median của 4 cửa sổ có tín hiệu: ' + cr.ref);
+  assert.strictEqual(cr.mul[3], 1, 'rms=0 không bị phạt (không có thông tin)');
+  assert.ok(cr.mul[4] < 1, 'cửa sổ crest gấp ~20× ref phải bị phạt: ' + cr.mul[4]);
+  assert.ok(cr.mul[0] === 1 && cr.mul[1] === 1 && cr.mul[2] === 1, 'crest đều thì không phạt');
+  const allSilent = E.crestReference([{ t: 0, rms: 0, crest: 0 }, { t: 1, rms: 0, crest: 0 }]);
+  assert.strictEqual(allSilent.ref, null, 'không đo được → null để người gọi KHAI BÁO');
+  assert.deepStrictEqual(allSilent.mul, [1, 1]);
+  assert.deepStrictEqual(E.crestReference([]), { ref: null, mul: [] });
+});
+t('energyWindowsFromPcm: mỗi cửa sổ mang rms + peak + crest (không sub-block)', () => {
+  const sr = 8000;
+  const buf = t11mkWav(t11sine(3, 150, sr, 6000), sr, 1);
+  const wins = E.energyWindowsFromPcm(buf, E.pcmFromWav(buf), { windowSec: 1 });
+  assert.strictEqual(wins.length, 3);
+  for (const w of wins) {
+    assert.ok(Math.abs(w.rms - 6000 / Math.SQRT2) < 30, 'rms sine: ' + w.rms);
+    assert.ok(Math.abs(w.peak - 6000) < 30, 'peak sine: ' + w.peak);
+    assert.ok(Math.abs(w.crest - Math.SQRT2) < 0.02, 'crest sine ≈ 1.414: ' + w.crest);
+  }
+  // xung cực ngắn: rms rất nhỏ nhưng peak tối đa → crest bùng nổ (đúng thứ phải phạt)
+  const spike = new Array(sr).fill(0); spike[10] = 32000;
+  const sbuf = t11mkWav(spike, sr, 1);
+  const sw = E.energyWindowsFromPcm(sbuf, E.pcmFromWav(sbuf), { windowSec: 1 });
+  assert.ok(sw[0].crest > 20, 'xung đơn lẻ phải có crest rất cao: ' + sw[0].crest);
+  // stereo: bước nhảy tính theo frame, không nhân đôi channel hai lần
+  const st = t11mkWav(new Array(sr * 4).fill(1000), sr, 2);
+  const stw = E.energyWindowsFromPcm(st, E.pcmFromWav(st), { windowSec: 1 });
+  assert.strictEqual(stw.length, 4, '4 cửa sổ cho 4s stereo: ' + stw.length);
+  assert.deepStrictEqual(stw.map((w) => w.t), [0, 1, 2, 3], 'nhãn t đúng lịch');
+});
+t('pickHighlightsByEnergy: crest vượt tham chiếu bị PHẠT (A/B cùng dãy rms)', () => {
+  const mk = (withCrest) => new Array(12).fill(0).map((_, i) => ({
+    t: i, rms: i === 6 ? 1 : 0.05,
+    crest: withCrest ? (i === 6 ? 20 : 1.4) : undefined,   // window đỉnh = tiếng cốc bàn
+  }));
+  const opts = { minLen: 3, maxLen: 6, maxClips: 1 };
+  const clean = E.pickHighlightsByEnergy(mk(false), opts)[0];
+  const dirty = E.pickHighlightsByEnergy(mk(true), opts)[0];
+  assert.strictEqual(clean._stat.crestRef, null, 'không có crest → ref null, không phạt');
+  assert.ok(/không đo được crest tham chiếu/.test(clean.reasons[0]), 'phải KHAI BÁO vì sao không phạt: ' + clean.reasons[0]);
+  assert.ok(dirty._stat.crestRef > 1.3 && dirty._stat.crestRef < 1.5, 'ref = median crest thường: ' + dirty._stat.crestRef);
+  assert.strictEqual(dirty.startMs, clean.startMs, 'vẫn xét cùng cửa sổ để so được');
+  assert.ok(dirty.rel < clean.rel, 'crest cao phải làm giảm rel: ' + clean.rel + ' → ' + dirty.rel);
+  assert.ok(dirty.score < clean.score, 'điểm cuối cũng phải giảm: ' + clean.score + ' → ' + dirty.score);
+  assert.strictEqual(dirty.impulsive, 1 / 3, '1/3 cửa sổ trong clip bị phạt');
+  assert.ok(/impuls \(bị phạt\)/.test(dirty.reasons[0]), 'khai báo lý do phạt: ' + dirty.reasons[0]);
+});
+t('pickHighlightsByEnergy: crest cao tuyệt đối nhưng ĐỀU thì không phạt oan', () => {
+  /* Nhạc punchy crest 4 ở mọi cửa sổ: ref = 4 → tỉ lệ 1 → không phạt. Ngưỡng tuyệt đối
+     2.5 (bản đầu) sẽ phạt gần hết video có nhạc — đó là lý do phải so với chính nó. */
+  const wins = new Array(14).fill(0).map((_, i) => ({ t: i, rms: i === 7 ? 1 : 0.5, crest: 4 }));
+  const top = E.pickHighlightsByEnergy(wins, { minLen: 3, maxLen: 6, maxClips: 1 })[0];
+  assert.strictEqual(top.impulsive, 0, 'không window nào bị coi là impuls');
+  assert.strictEqual(top._stat.crestRef, 4);
+  assert.ok(!/bị phạt/.test(top.reasons[0]), 'không phạt thì không được nhắc đến phạt: ' + top.reasons[0]);
+});
+// __TAIL__
 console.log('\nViral Cut engine test: ' + passed + ' test PASS, exitCode=' + (process.exitCode || 0));
