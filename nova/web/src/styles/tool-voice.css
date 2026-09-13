@@ -27,6 +27,11 @@
           color:var(--text-muted);border:1px solid var(--border);font-weight:500}
         #tool-toolvoice .gdel{position:absolute;top:8px;right:8px;opacity:1;padding:2px 8px;min-width:28px;line-height:1.4;z-index:1;color:var(--text-muted)}
         #tool-toolvoice .gdel:hover{color:var(--red);border-color:var(--red)}
+        /* Nút Xoá trong mục dropdown "Giọng đọc" (đường xoá giọng duy nhất từ
+           2026-09-12, sau khi lưới .gcard bị gỡ): .be-item KHÔNG có position:relative
+           → nếu để plan position:absolute như bản .gdel cũ, mọi nút sẽ đè nhau ở
+           gốc phải .be-menu. Ở đây trả về dòng chảy flex của item. */
+        #tool-toolvoice .be-item .gdel{position:static;padding:2px 8px;min-width:0;font-size:11.5px;line-height:1.5}
         #tool-toolvoice .gadd{border:1px dashed var(--border-2);border-radius:10px;display:grid;place-items:center;
           color:var(--text-dim);font-size:13px;cursor:pointer;min-height:100px;font-weight:500}
         #tool-toolvoice .gadd:hover{border-color:var(--accent);color:var(--accent)}
@@ -57,8 +62,9 @@
         #tool-toolvoice .gbar{display:flex;justify-content:space-between;align-items:center;gap:12px;
           margin-top:14px;padding-top:14px;border-top:1px solid var(--border);flex-wrap:wrap;flex:0 0 auto}
 
-        /* Thanh trượt — engine không hiểu thì mờ, không giấu */
-        #tool-toolvoice .sl+.sl{margin-top:16px}
+        /* Thanh trượt — engine không hiểu thì mờ, không giấu. Khoảng cách co gọn
+           (2026-09-12) để cột cài đặt 254px đỡ cao — mô tả .why tĩnh đã dời vào title. */
+        #tool-toolvoice .sl+.sl{margin-top:10px}
         #tool-toolvoice .sl.off{opacity:.42}
         #tool-toolvoice .slh{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
         #tool-toolvoice .slh b{font-size:12.5px;font-weight:600}
@@ -66,7 +72,7 @@
         #tool-toolvoice .sl input[type=range]{width:100%;margin:0;accent-color:var(--accent)}
         #tool-toolvoice .sl .why{font-size:11px;color:var(--text-dim);margin-top:4px}
         #tool-toolvoice .rhead{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:600;
-          color:var(--text-muted);margin-bottom:14px}
+          color:var(--text-muted);margin-bottom:10px}
 
         /* Lịch sử */
         #tool-toolvoice .grow-row{display:flex;align-items:center;gap:12px;padding:11px 13px;border-radius:8px;cursor:pointer}

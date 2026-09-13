@@ -4,9 +4,30 @@ tự lùi về faster-whisper (CPU/CUDA) trên nền tảng khác.
 from __future__ import annotations
 
 import os
+import sys
+from pathlib import Path
 from typing import Optional
 
 from .base import ASREngine
+
+
+def _register_cuda_dll_dirs() -> list:
+    """Windows: đăng ký thư mục DLL CUDA 12 / cuDNN 9 từ wheel nvidia-* (pip) vào
+    search path của process TRƯỚC khi faster-whisper/ctranslate2 nạp cublas64_12.dll.
+    Card Pascal (sm_61) chỉ chạy CUDA 12.x — CUDA 13 đã bỏ hỗ trợ, đừng nâng mù.
+    Trả về danh sách thư mục đã đăng ký (rỗng = chưa cài wheel → GPU sẽ fail lộ liễu,
+    tầng trên xử lý theo cơ chế degrade đã khai báo, KHÔNG fallback ngầm ở đây)."""
+    if os.name != "nt":
+        return []
+    sp = Path(sys.executable).resolve().parent.parent / "Lib" / "site-packages"
+    added = []
+    for pkg in ("cublas", "cudnn", "cuda_nvrtc", "nvjitlink", "cuda_runtime"):
+        d = sp / "nvidia" / pkg / "bin"
+        if d.is_dir():
+            os.add_dll_directory(str(d))
+            os.environ["PATH"] = str(d) + os.pathsep + os.environ.get("PATH", "")
+            added.append(str(d))
+    return added
 
 
 class WhisperEngine(ASREngine):
@@ -30,6 +51,12 @@ class WhisperEngine(ASREngine):
             return
         except Exception:
             pass
+        # Windows: nạp DLL CUDA 12/cuDNN 9 từ wheel nvidia-* nếu có (GPU faster-whisper).
+        added = _register_cuda_dll_dirs()
+        if os.name == "nt" and not added:
+            print("[whisper] WARN: chưa thấy wheel nvidia-cublas-cu12/nvidia-cudnn-cu12 "
+                  "trong venv — faster-whisper GPU sẽ fail cublas64_12.dll nếu device=auto "
+                  "chọn CUDA (cài: pip install nvidia-cublas-cu12 nvidia-cudnn-cu12)")
         # Lùi về faster-whisper.
         from faster_whisper import WhisperModel
 

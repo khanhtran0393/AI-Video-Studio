@@ -132,12 +132,21 @@ assert(!novaWeb.includes('ai:ttsGenerate'),
   'Voice Studio renderer không được gọi channel TTS của Editor Pro');
 
 // 9. UI xóa giọng clone luôn hiện; TTS/thêm/xóa kiểm tra HTTP; backend từ chối xóa giọng nhà máy.
+// Từ 2026-09-12 lưới thẻ .gcard bị gỡ, chọn giọng chuyển sang dropdown "Giọng đọc"
+// → đường vào giongXoa() nằm ở _giongMenuItem. Hợp đồng là HÀNH VI, không phải vị trí:
+// giọng không-factory phải có nút Xoá thật sự gọi giongXoa(); giọng nhà máy thì không.
+// (Kiểm bằng call site chứ không chỉ "hàm tồn tại": phiên bản 2026-09-12 đã để
+//  giongXoa() thành hàm mồ côi — không UI nào gọi — tức người dùng mất tính năng
+//  mà test cũ vẫn xanh. Đó là fallback ngầm kiểu Luật 10.)
 assert(novaWeb.includes('async function giongXoa(key)'), 'UI phải có hàm xóa giọng clone');
 assert(novaWeb.includes('async function _giongFetchJson(url, opt)'), 'UI phải kiểm tra HTTP khi gọi Voice API');
-assert(novaWeb.includes('class="btn sm ghost gdel"') && novaWeb.includes('>Xóa</button>'),
-  'thẻ giọng clone phải có nút Xóa luôn hiện');
+assert(novaWeb.includes('class="btn sm ghost gdel"') && novaWeb.includes('>Xoá</button>'),
+  'mục dropdown giọng phải có nút Xoá cho giọng clone');
+assert(novaWeb.includes("giongXoa('${escapeHtml(v.key)}')"),
+  'nút Xoá phải gọi giongXoa() với key giọng (hàm không được mồ côi)');
+assert(/v\.factory\s*\?\s*''\s*:\s*`<button[^`]*giongXoa\(/.test(novaWeb),
+  'chỉ giọng KHÔNG nhà máy mới được render nút Xoá');
 assert(novaWeb.includes('Không xoá được giọng có sẵn'), 'UI phải chặn xóa giọng nhà máy');
-assert(novaWeb.includes('gcard.has-del'), 'thẻ clone phải chừa chỗ nút Xóa');
 const voicebankSrc = read('voice-backend/backend/voicebank.py');
 const appSrc = read('voice-backend/backend/app.py');
 assert(voicebankSrc.includes('raise PermissionError("Không xoá được giọng có sẵn")'),

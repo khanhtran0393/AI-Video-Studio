@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Chạy Voice Studio backend + UI.
 # Ưu tiên: OmniVoice (.venv-omni) > XTTS (.venv) > mock.
+# Default TTS engine: vieneu (VieNeu v3 Turbo) — OmniVoice chọn per-request qua
+# field "engine" của /api/tts (xem voice-native/server.js cùng quyết định).
 set -e
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$DIR/backend"

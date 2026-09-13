@@ -121,8 +121,14 @@ async function start() {
     env.PYTHONUTF8 = env.PYTHONUTF8 || '1';
     env.PYTHONIOENCODING = env.PYTHONIOENCODING || 'utf-8';
     env.PYTHONDONTWRITEBYTECODE = env.PYTHONDONTWRITEBYTECODE || '1';
-    const defaultEngine = kind;
-    env.VOICE_TTS_ENGINE = env.VOICE_TTS_ENGINE || defaultEngine;
+    // Default TTS engine: 'vieneu' (VieNeu v3 Turbo — CPU, khởi động nhanh, không cần
+    // model OmniVoice 6GB trong RAM; benchmark 2026-09-12: steady-state ~29× nhanh hơn).
+    // OmniVoice vẫn chọn được per-request qua field "engine" của /api/tts.
+    env.VOICE_TTS_ENGINE = env.VOICE_TTS_ENGINE || 'vieneu';
+    // Tuning ONNX intra-op threads (benchmark 2026-09-12 trên máy 56 thread logic:
+    // steady 185 ký tự — 0→13.78s, 4→13.46s, 8→13.29s, 16→11.92s, 28→13.59s).
+    // 16 thread tối ưu; máy khác vẫn ghi đè bằng env.
+    env.VOICE_VIENEU_THREADS = env.VOICE_VIENEU_THREADS || '16';
     // VieNeu/XTTS không cần Whisper để chạy luồng đọc; OmniVoice mới ưu tiên ASR thật.
     env.VOICE_ASR_ENGINE = env.VOICE_ASR_ENGINE || (kind === 'omnivoice' ? 'whisper' : 'mock');
     if (kind === 'omnivoice') {

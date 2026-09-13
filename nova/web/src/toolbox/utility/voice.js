@@ -42,7 +42,7 @@ async function voiceInit(){
   try { _giongSuNapDia(); } catch (_){}   // nạp lịch sử "Đã tạo" đã lưu trên đĩa (không cần backend)
   // Xác minh backend còn sống (không chỉ dựa cờ cũ — phòng khi backend đã tắt/khởi động lại).
   const cur = await window.native.voiceStatus().catch(() => null);
-  if (cur?.running){ _voiceReady = true; if (cur?.url) VOICE_URL = cur.url; try { _voiceLog('Backend sẵn sàng: ' + (cur.url || VOICE_URL)); } catch (_){} if (st) st.innerHTML = '<span style="color:var(--green)">● Giọng nói sẵn sàng (OmniVoice · VieNeu · XTTS)</span>'; voiceLoadVoices(); voiceHWNap(); try { giongKiemEngine(); } catch (_){} try { giongMauSanNap(); } catch (_){} return; }
+  if (cur?.running){ _voiceReady = true; if (cur?.url) VOICE_URL = cur.url; try { _voiceLog('Backend sẵn sàng: ' + (cur.url || VOICE_URL)); } catch (_){} if (st) st.innerHTML = ''; voiceLoadVoices(); voiceHWNap(); try { giongKiemEngine(); } catch (_){} try { giongMauSanNap(); } catch (_){} return; }
   _voiceReady = false;
   // Đã cài backend trên máy chưa? (thay vì báo lỗi đỏ → hiện panel hướng dẫn cài)
   const pb = window.native.voiceProbe ? await window.native.voiceProbe().catch(() => null) : null;
@@ -52,7 +52,7 @@ async function voiceInit(){
   if (st) st.innerHTML = '⏳ Đang khởi động backend giọng nói (OmniVoice · VieNeu · XTTS)… lần đầu ~30-60s, giữ app mở.';
   if (!_voiceStarting) _voiceStarting = window.native.voiceStart();
   const r = await _voiceStarting; _voiceStarting = null;
-  if (r?.ok){ _voiceReady = true; if (r?.url) VOICE_URL = r.url; try { _voiceLog('Backend vừa khởi động xong: ' + (r.url || VOICE_URL)); } catch (_){} if (st) st.innerHTML = '<span style="color:var(--green)">● Giọng nói sẵn sàng (OmniVoice · VieNeu · XTTS)</span>'; voiceLoadVoices(); voiceHWNap(); try { giongKiemEngine(); } catch (_){} try { giongMauSanNap(); } catch (_){} }
+  if (r?.ok){ _voiceReady = true; if (r?.url) VOICE_URL = r.url; try { _voiceLog('Backend vừa khởi động xong: ' + (r.url || VOICE_URL)); } catch (_){} if (st) st.innerHTML = ''; voiceLoadVoices(); voiceHWNap(); try { giongKiemEngine(); } catch (_){} try { giongMauSanNap(); } catch (_){} }
   else if (st) st.innerHTML = '<span style="color:var(--red)">Lỗi khởi động: ' + escapeHtml(r?.error || '') + '</span>';
 }
 
@@ -62,14 +62,8 @@ async function voiceHWNap(){
     const h = await _giongFetchJson(VOICE_URL + '/api/hardware');
     if (!h || !h.profile) return;
     _voiceHW = h;
-    const st = document.getElementById('voiceBackendStatus');
-    if (st && /sẵn sàng/.test(st.textContent || '')){
-      const chip = h.device === 'cuda'
-        ? ' · ' + (h.gpu || 'GPU') + (h.vram_gb ? ' ' + h.vram_gb + 'GB' : '') + ' 🚀'
-        : (h.device === 'xpu' ? ' · ' + (h.gpu || 'Intel GPU') + ' 🚀'
-        : (h.device === 'mps' ? ' · Apple GPU' : ' · CPU ' + (h.cpu_cores || '?') + ' nhân'));
-      st.innerHTML += '<span style="color:var(--text-dim)">' + escapeHtml(chip) + '</span>';
-    }
+    // Chip "· CPU n nhân / GPU 🚀" đã bỏ (2026-09-12) — dòng trạng thái backend
+    // ẩn khi sẵn sàng, chỉ hiện khi đang khởi động / cần cài / lỗi.
     if (h.profile !== 'gpu' && _voiceBackendMacDinh && _voiceBackend === 'omni'){
       _voiceBackend = 'vieneu';
       _voiceBackendMacDinh = false;   // đã chủ đích chọn theo phần cứng — health không đè lại
@@ -210,12 +204,12 @@ async function giongTaiDS(){
   giongVe();
 }
 
-function _giongHop(v){
-  if (_giongLoc === '*') return true;
-  if (_giongLoc.startsWith('e:')) return giongThuocBackend(v, _giongLoc.slice(2));
-  if (_giongLoc.startsWith('k:')) return v.kind === _giongLoc.slice(2);
-  if (_giongLoc.startsWith('l:')) return v.lang === _giongLoc.slice(2);
-  return (v.tags || []).includes(_giongLoc);
+// Giọng v có thỏa mãn giá trị đang chọn ở select "Ngôn ngữ" (voiceLang) không?
+// 'all' = tất cả; 'clone' = CHỈ giọng đã clone (kind === 'clone'); còn lại so lang.
+function _giongDapUngLang(v, lang){
+  if (!lang || lang === 'all') return true;
+  if (lang === 'clone') return v.kind === 'clone';
+  return v.lang === lang;
 }
 
 // Giọng nào "thuộc" backend nào (UX chọn backend trước — dropdown giọng lọc theo đây):
@@ -231,52 +225,14 @@ function giongThuocBackend(v, eng){
 }
 
 function giongVe(){
-  const box = document.getElementById('giongLuoi');
-  const chips = document.getElementById('giongChips');
-  if (!box) return;
-
-  if (chips){
-    const dem = f => _giongDS.filter(v => { const c = _giongLoc; _giongLoc = f; const k = _giongHop(v); _giongLoc = c; return k; }).length;
-    const muc = [['*', 'Tất cả']];
-    for (const [k, t] of [['k:clone','Clone'],['k:design','Thiết kế']]) if (_giongDS.some(v => v.kind === k.slice(2))) muc.push([k, t]);
-    for (const [e, t] of [['omni', _TTS_TEN.omni], ['vieneu', _TTS_TEN.vieneu], ['xtts', _TTS_TEN.xtts]])
-      if (_giongDS.some(v => giongThuocBackend(v, e))) muc.push(['e:' + e, t]);
-    const nhan = {};
-    for (const v of _giongDS) for (const t of (v.tags || [])) nhan[t] = (nhan[t] || 0) + 1;
-    for (const t of Object.keys(nhan).sort((a,b) => nhan[b] - nhan[a]).slice(0, 4)) muc.push([t, t]);
-    // Chip lọc ngôn ngữ: các ngôn ngữ ngoài 'vi' đông nhất trong thư viện (tối đa 3).
-    const langDem = {};
-    for (const v of _giongDS){ const l = v.lang || 'vi'; langDem[l] = (langDem[l] || 0) + 1; }
-    for (const l of Object.keys(langDem).filter(l => l !== 'vi').sort((a, b) => langDem[b] - langDem[a]).slice(0, 3))
-      muc.push(['l:' + l, _giongLangTen(l)]);
-    chips.innerHTML = muc.map(([f, t]) =>
-      `<div class="gchip${f === _giongLoc ? ' on' : ''}" onclick="giongDatLoc('${escapeHtml(f)}')">${escapeHtml(t)}<span class="c">${dem(f)}</span></div>`).join('');
-  }
-
-  const hien = _giongDS.filter(_giongHop);
-  box.innerHTML = hien.map(v => {
-    const chon = v.key === _giongChon, dangPhat = v.key === _giongPhat;
-    const sanMau = _giongMauSanCo(v.key);   // đã có mẫu trên đĩa → ▶ phát ngay
-    return `<div class="gcard${chon ? ' sel' : ''}${dangPhat ? ' play' : ''}${v.factory ? '' : ' has-del'}" onclick="giongChon('${escapeHtml(v.key)}')">
-      ${v.factory ? '' : `<button type="button" class="btn sm ghost gdel" onclick="event.stopPropagation();giongXoa('${escapeHtml(v.key)}')" title="Xoá giọng clone" aria-label="Xoá giọng">Xóa</button>`}
-      <div class="gtop">
-        <button type="button" class="gpico${sanMau ? ' san' : ''}" title="${sanMau ? 'Nghe thử 4 giây (đã có mẫu — phát ngay)' : 'Nghe thử 4 giây (lần đầu sẽ tạo mẫu, ~30-60 giây)'}" aria-label="Nghe thử giọng ${escapeHtml(v.name)}" onclick="event.stopPropagation();giongThu('${escapeHtml(v.key)}')">${_giongTao === v.key ? '⏳' : (dangPhat ? '❙❙' : '▶')}</button>
-        <div style="min-width:0"><div class="gname">${escapeHtml(v.name)}</div><div class="gsrc">${escapeHtml(v.src)}</div></div>
-      </div>
-      <div class="gtags">${(v.tags || []).map(t => `<span class="gtg">${escapeHtml(t)}</span>`).join('')}</div>
-    </div>`;
-  }).join('') + `<div class="gadd" onclick="giongThemBat()">＋ Thêm giọng</div>`;
-
-  const n = document.getElementById('giongDem'); if (n) n.textContent = _giongDS.length + ' giọng';
+  // Lưới thẻ + chips lọc của "Thư viện giọng" đã xoá (2026-09-12) — giongVe chỉ
+  // còn cập nhật nhãn "đang chọn" + dropdown "Giọng đọc" + hàng tinh chỉnh.
   const cur = _giongDS.find(v => v.key === _giongChon);
   const lb = document.getElementById('giongDangChon');
   if (lb) lb.textContent = cur ? (cur.name + ' · ' + _TTS_TEN[_voiceBackend]) : 'chưa chọn giọng';
   try { giongDDVe(); } catch (e){}   // dropdown "Giọng đọc" dưới cũng chạy theo thư viện
-  try { giongLibVe(); } catch (e){}  // dropdown "Thư viện giọng" phía trên cũng vậy
   giongVeThanh();
 }
-
-function giongDatLoc(f){ _giongLoc = f; giongVe(); }
 
 function giongVeThanh(){
   // VieNeu Turbo chưa nhận tham số tốc độ, và chỉ đọc tiếng Việt —
@@ -313,10 +269,11 @@ function giongTheoBackend(v){
     try { giongBao('Đã chuyển engine sang ' + _TTS_TEN[v.engine] + ' (theo giọng đang chọn)', 'green'); } catch (e){}
     try { novaLog('🎙 engine theo giọng ' + v.name + ': ' + _TTS_TEN[v.engine]); } catch (e){}
   }
-  // Ngôn ngữ cũng theo giọng: chọn giọng Nhật → dropdown sang tiếng Nhật.
+  // Ngôn ngữ cũng theo giọng (giọng clone → "Giọng Clone" ở select Ngôn ngữ).
   const sl = document.getElementById('voiceLang');
-  if (sl && v.lang && sl.value !== v.lang && Array.from(sl.options).some(o => o.value === v.lang)){
-    sl.value = v.lang;
+  const muonLang = v.kind === 'clone' ? 'clone' : v.lang;
+  if (sl && muonLang && sl.value !== muonLang && Array.from(sl.options).some(o => o.value === muonLang)){
+    sl.value = muonLang;
   }
 }
 
@@ -1064,10 +1021,11 @@ function voiceBackendChon(eng){
   // UX "backend trước": giữ giọng đang chọn nếu vẫn thuộc backend mới, không thì
   // chọn sẵn giọng đầu tiên của backend đó cho người dùng.
   if (!giongThuocBackend(_giongDS.find(v => v.key === _giongChon), eng)){
-    // Ưu tiên giọng đầu tiên của backend mới đúng ngôn ngữ đang chọn (nếu có).
+    // Ưu tiên giọng đầu tiên của backend mới khớp "Ngôn ngữ" đang chọn (bao gồm
+    // 'clone' = Giọng Clone) — nếu không có thì giọng đầu tiên của backend đó.
     const sl = document.getElementById('voiceLang');
     const lv = sl ? sl.value : '';
-    const dau = (lv && lv !== 'all' && _giongDS.find(v => giongThuocBackend(v, eng) && v.lang === lv))
+    const dau = _giongDS.find(v => giongThuocBackend(v, eng) && _giongDapUngLang(v, lv) && lv && lv !== 'all')
       || _giongDS.find(v => giongThuocBackend(v, eng));
     _giongChon = dau ? dau.key : '';
   }
@@ -1104,18 +1062,25 @@ function giongDDChon(key){
   _giongChon = key;
   // Backend do dropdown "Backend tạo giọng" quyết định (UX chọn backend trước) —
   // chọn giọng trong dropdown này KHÔNG tự đổi engine nữa, chỉ đồng bộ ngôn ngữ theo giọng.
+  // Giọng clone → giữ/đưa select "Ngôn ngữ" về "Giọng Clone" thay vì lang gốc.
   const sl = document.getElementById('voiceLang');
-  if (sl && v.lang && sl.value !== v.lang && Array.from(sl.options).some(o => o.value === v.lang)){
-    sl.value = v.lang;
+  const muonLang = v.kind === 'clone' ? 'clone' : v.lang;
+  if (sl && muonLang && sl.value !== muonLang && Array.from(sl.options).some(o => o.value === muonLang)){
+    sl.value = muonLang;
   }
   const dd = document.getElementById('voiceGiongDD'); if (dd) dd.classList.remove('mo');
-  giongVe();   // vẽ lại thẻ thư viện + nhãn + chính dropdown này
+  giongVe();   // vẽ lại nhãn "đang chọn" + chính dropdown này
 }
 
 function _giongMenuItem(v, chonFn){
   const phat = v.key === _giongPhat, tao = v.key === _giongTao;
+  // Nút Xoá đặt NGAY TRONG MỤC DROPDOWN — từ 2026-09-12 thư viện giọng dạng lưới
+  // thẻ (.gcard) đã bị xoá nên giongXoa() không còn call site nào, tức người dùng
+  // mất hẳn khả năng gỡ giọng clone. Giọng nhà máy (factory) KHÔNG có nút này
+  // (backend cũng từ chối — 403), giữ đúng guard "Không xoá được giọng có sẵn."
+  const xoa = v.factory ? '' : `<button type="button" class="btn sm ghost gdel" onclick="event.stopPropagation();giongXoa('${escapeHtml(v.key)}')" title="Xoá giọng" aria-label="Xoá giọng">Xoá</button>`;
   return `<div class="be-item${v.key === _giongChon ? ' sel' : ''}" role="option" onclick="${chonFn}('${escapeHtml(v.key)}')">` +
-    `<span class="be-ten">${escapeHtml(v.name)}</span><span class="be-mo">${escapeHtml(v.src || '')}</span>` +
+    `<span class="be-ten">${escapeHtml(v.name)}</span><span class="be-mo">${escapeHtml(v.src || '')}</span>${xoa}` +
     `<button type="button" class="gplay${phat ? ' on' : ''}" title="${tao ? 'Đang tạo mẫu nghe thử…' : (phat ? 'Dừng nghe thử' : 'Nghe thử 4 giây')}" aria-label="Nghe thử" onclick="event.stopPropagation();giongThu('${escapeHtml(v.key)}')">${tao ? '⏳' : (phat ? '❙❙' : '▶')}</button></div>`;
 }
 
@@ -1129,7 +1094,7 @@ function giongDDVe(){
     ten.textContent = 'chưa có giọng nào';
     note.textContent = '';
     menu.innerHTML = '<div class="be-item" style="cursor:default;color:var(--text-dim)">Chưa có giọng trong thư viện</div>';
-    if (why) why.textContent = 'Bấm “＋ Thêm giọng” trong Thư viện giọng phía trên (clone từ file mẫu 5–15 giây, hoặc thiết kế từ mô tả chữ) — lưu xong sẽ chọn được ở đây.';
+    if (why) why.textContent = 'Bấm “＋ Thêm giọng” cạnh danh sách Giọng đọc (clone từ file mẫu 5–15 giây, hoặc thiết kế từ mô tả chữ) — lưu xong sẽ chọn được ở đây.';
     return;
   }
   // UX "backend trước": dropdown chỉ liệt kê giọng thuộc backend đang chọn
@@ -1140,20 +1105,22 @@ function giongDDVe(){
     note.textContent = '';
     menu.innerHTML = '<div class="be-item" style="cursor:default;color:var(--text-dim)">Backend này chưa có giọng phù hợp</div>';
     if (why) why.textContent = _voiceBackend === 'xtts'
-      ? 'XTTS đọc giọng nhân bản: bấm “＋ Thêm giọng” trong Thư viện giọng phía trên để clone từ file mẫu 5–15 giây.'
-      : 'Bấm “＋ Thêm giọng” trong Thư viện giọng phía trên để tạo giọng cho backend này (clone từ mẫu hoặc thiết kế từ mô tả).';
+      ? 'XTTS đọc giọng nhân bản: bấm “＋ Thêm giọng” cạnh danh sách Giọng đọc để clone từ file mẫu 5–15 giây.'
+      : 'Bấm “＋ Thêm giọng” cạnh danh sách Giọng đọc để tạo giọng cho backend này (clone từ mẫu hoặc thiết kế từ mô tả).';
     return;
   }
-  // Lọc thêm theo ngôn ngữ đã chọn — nếu backend không có giọng nào cho ngôn ngữ
-  // đó thì thôi lọc (hiện tất cả) kèm ghi chú, tránh danh sách trắng trơn.
+  // Lọc thêm theo "Ngôn ngữ" đã chọn (giá trị 'clone' = chỉ giọng đã clone) — nếu
+  // backend không có giọng nào khớp thì thôi lọc (hiện tất cả) kèm ghi chú.
   let hopBe = hopBe0;
   const slL = document.getElementById('voiceLang');
   const lang = slL ? slL.value : '';
   const locLang = lang && lang !== 'all';
-  const hopLang = locLang ? hopBe.filter(v => v.lang === lang) : hopBe;
+  const hopLang = locLang ? hopBe.filter(v => _giongDapUngLang(v, lang)) : hopBe;
   let chuY = '';
   if (hopLang.length) hopBe = hopLang;
-  else if (locLang) chuY = 'Chưa có giọng cho ngôn ngữ này — đang hiện tất cả giọng của backend.';
+  else if (locLang) chuY = lang === 'clone'
+    ? 'Backend này chưa có giọng clone nào — đang hiện tất cả giọng.'
+    : 'Chưa có giọng cho ngôn ngữ này — đang hiện tất cả giọng của backend.';
   // Giọng đang chọn bị lọc ra (đổi ngôn ngữ tay…) → tạm chọn giọng đầu của bộ lọc
   // để nhãn trên dropdown luôn trùng với giọng sẽ được dùng khi tạo tiếng.
   if (hopBe.length && !hopBe.some(v => v.key === _giongChon)) _giongChon = hopBe[0].key;
@@ -1164,46 +1131,5 @@ function giongDDVe(){
   menu.innerHTML = (chuY ? '<div class="be-item" style="cursor:default;color:var(--text-dim);font-size:12px">' + escapeHtml(chuY) + '</div>' : '')
     + hop.map(v => _giongMenuItem(v, 'giongDDChon')).join('');
   if (why) why.textContent = '';
-}
-
-function giongLibMo(e){
-  if (e) e.stopPropagation();
-  const dd = document.getElementById('giongLibDD'); if (!dd) return;
-  dd.classList.toggle('mo');
-  const btn = document.getElementById('giongLibBtn');
-  if (btn) btn.setAttribute('aria-expanded', dd.classList.contains('mo') ? 'true' : 'false');
-}
-
-function giongLibChon(key){
-  const v = _giongDS.find(x => x.key === key); if (!v) return;
-  _giongChon = key;
-  giongTheoBackend(v);   // chọn giọng → engine/ngôn ngữ đổi theo backend của giọng
-  const dd = document.getElementById('giongLibDD'); if (dd) dd.classList.remove('mo');
-  giongVe();   // vẽ lại nút, nhãn, lưới (nếu mở) + dropdown "Giọng đọc"
-}
-
-function giongLibVe(){
-  const ten = document.getElementById('giongLibTen');
-  const note = document.getElementById('giongLibNote');
-  const menu = document.getElementById('giongLibMenu');
-  if (!ten || !note || !menu) return;
-  if (!_giongDS.length){
-    ten.textContent = 'chưa có giọng nào';
-    note.textContent = '';
-    menu.innerHTML = '<div class="be-item" style="cursor:default;color:var(--text-dim)">Chưa có giọng trong thư viện</div>';
-    return;
-  }
-  const cur = _giongDS.find(v => v.key === _giongChon);
-  ten.textContent = cur ? cur.name : 'chưa chọn giọng';
-  note.textContent = cur ? (cur.src || '') : '';
-  menu.innerHTML = _giongDS.map(v => _giongMenuItem(v, 'giongLibChon')).join('');
-}
-
-function giongLuoiBat(){
-  _giongLuoiMo = !_giongLuoiMo;
-  const w = document.getElementById('giongLuoiWrap');
-  if (w) w.style.display = _giongLuoiMo ? '' : 'none';
-  const b = document.getElementById('giongLuoiBtn');
-  if (b) b.textContent = _giongLuoiMo ? '▦ Ẩn lưới thẻ' : '▦ Xem dạng lưới thẻ';
 }
 

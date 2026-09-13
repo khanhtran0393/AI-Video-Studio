@@ -6,7 +6,7 @@
  * UI đúng như người dùng (CDP click tab 🎙 Giọng nói), rồi xác minh:
  *   1) dropdown #voiceGiongDD hiển thị thật trong khối "Đọc thành giọng"
  *   2) trạng thái rỗng: nhãn "chưa có giọng nào" + gợi ý "＋ Thêm giọng"
- *   3) đồng bộ hai chiều dropdown ↔ Thư viện giọng (qua đúng hàm app: giongDDChon/giongBam/giongVe)
+ *   3) đồng bộ dropdown "Giọng đọc" ↔ nhãn "đang chọn" (qua đúng hàm app: giongDDChon/giongVe)
  *   4) không có exception renderer khi khởi động tool voice
  * Chạy: node nova/scripts/giong-dd-packaged-check.js [đường-dẫn-exe]
  */
@@ -151,7 +151,9 @@ async function main() {
     await cdp.evaluate(`(() => { document.body.click(); return true; })()`);
     await sleep(200);
 
-    // 3) Nạp 2 giọng qua đúng đường dữ liệu app (_giongDS + giongVe) rồi kiểm đồng bộ 2 chiều.
+    // 3) Nạp 2 giọng qua đúng đường dữ liệu app (_giongDS + giongVe) rồi kiểm đồng bộ
+    //    dropdown ↔ nhãn "đang chọn". Lưới thẻ ".gcard" của "Thư viện giọng" đã bị
+    //    xoá (2026-09-12) — chiều "thư viện → dropdown" không còn là đường người dùng.
     checks.twoWay = await cdp.evaluate(`(async () => {
       const kq = {};
       _giongDS = [
@@ -161,33 +163,31 @@ async function main() {
       _giongChon = 'omni:dd-a';
       giongVe();
       const ten = () => document.getElementById('voiceGiongTen').textContent.trim();
-      const the = (key) => document.querySelector('.gcard[onclick*="' + key + '"]');
+      const nhan = () => (document.getElementById('giongDangChon') || {}).textContent || '';
       kq.labelSauGiongVe = ten();
-      kq.soThe = document.querySelectorAll('#giongLuoi .gcard').length;
-      kq.theASang = !!(the('omni:dd-a') && the('omni:dd-a').classList.contains('sel'));
+      kq.nhanSauGiongVe = nhan().trim();
 
-      // dropdown → thư viện: chọn B qua đúng onclick của menu.
+      // dropdown → nhãn: chọn B qua đúng onclick của menu.
       giongDDMo();
       const itemB = document.querySelector('#voiceGiongMenu .be-item[onclick*="omni:dd-b"]');
       if (!itemB) { kq.loi = 'không có item B trong menu'; return kq; }
       itemB.click();
       kq.chonSauItem = _giongChon;
       kq.labelSauItem = ten();
-      kq.theBSang = !!(the('omni:dd-b') && the('omni:dd-b').classList.contains('sel'));
+      kq.nhanSauItem = nhan().trim();
       kq.menuDong = !document.getElementById('voiceGiongDD').classList.contains('mo');
 
-      // thư viện → dropdown: bấm thẻ A như người dùng (giongBam — phần nghe thử
-      // có thể fail vì không có backend, không liên quan chọn giọng). Đánh dấu
-      // backend đã được kiểm tra để giongBam không gọi voiceInit() và thay bộ dữ
-      // liệu UI giả lập bằng một response rỗng của clean-room backend.
-      _voiceReady = true;
-      try { await giongBam('omni:dd-a'); } catch (e) { kq.giongBamLoi = String(e).slice(0, 120); }
-      await new Promise(r => setTimeout(r, 300));
-      kq.chonSauThe = _giongChon;
-      kq.labelSauThe = ten();
-      kq.ok = kq.labelSauGiongVe === 'Giọng A (check đóng gói)'
-        && kq.chonSauItem === 'omni:dd-b' && kq.labelSauItem === 'Giọng B (check đóng gói)' && kq.theBSang
-        && kq.chonSauThe === 'omni:dd-a' && kq.labelSauThe === 'Giọng A (check đóng gói)';
+      // nhãn → dropdown: chọn lại A (giongVe vẽ lại menu theo _giongChon).
+      giongDDMo();
+      const itemA = document.querySelector('#voiceGiongMenu .be-item[onclick*="omni:dd-a"]');
+      if (!itemA) { kq.loi = 'không có item A trong menu khi chọn lại'; return kq; }
+      itemA.click();
+      kq.chonSauLai = _giongChon;
+      kq.labelSauLai = ten();
+      kq.nhanSauLai = nhan().trim();
+      kq.ok = kq.labelSauGiongVe === 'Giọng A (check đóng gói)' && kq.nhanSauGiongVe.includes('Giọng A')
+        && kq.chonSauItem === 'omni:dd-b' && kq.labelSauItem === 'Giọng B (check đóng gói)' && kq.nhanSauItem.includes('Giọng B') && kq.menuDong
+        && kq.chonSauLai === 'omni:dd-a' && kq.labelSauLai === 'Giọng A (check đóng gói)' && kq.nhanSauLai.includes('Giọng A');
       return kq;
     })()`);
 
