@@ -5529,3 +5529,19 @@ Trợ lý dựng báo đang chạy ngay + sửa preview 9:16/1:1 bị co nhỏ +
   (YouTube/TikTok/Facebook) — KHÔNG tự bịa dữ liệu (§6.6), cần user cung cấp key và
   duyệt chạy thật. Working tree còn NHIỀU gói đã xong chưa commit (xem nhật ký
   2026-09-12* → 2026-09-13a + tính năng này) — commit khi user duyệt.
+
+## 2026-09-13c — Tái cấu trúc lịch sử git: tách bulk-commit thành 9 commit logic theo mảng
+
+- Bulk-commit `b5d33800` ("feat: livestream đa nền tảng + viral-cut + voice + t7 + icon", tác giả
+  Auto-Fix, CHƯA push) được `git reset HEAD~1` làm lại thành 9 commit theo mảng để sạch lịch sử:
+  `aad3b4a9` viral-cut → `592bfc41` live → `fc61adcf` voice → `3300eabd` t7 → `0eb8c324`
+  tool2+toolflow → `b63541cf` va-resume → `3047fe39` sessnap → `eee7045d` media-protocol →
+  `b1da4ec1` branding, + chore `64327cee` (ipc-inventory 197 kênh + MEMORY + xoá file rác
+  `rcva…ForEach-Object…`).
+- Nguyên tắc tách: registry dùng chung (`nova/ipc-inventory.json`) đặt ở commit CUỐI vì nó trùm
+  kênh của nhiều mảng (livestream:*, voice-sample-list, viral-cut) — mỗi commit trước không tự phá
+  check:ipc; `package.json` + `AGENTS.md` giữ CÙNG một commit (cặp check:docs ↔ script).
+- Cây code KHÔNG đổi so với `b5d33800` đã kiểm định (npm run check EXIT 0, test:voice PASS) —
+  chỉ tách lịch sử; check chốt chạy lại trên HEAD mới.
+- Bài học vận hành: `npm run check 2>&1 | …` trong PowerShell 5.1 có thể báo exit 1 ẢO
+  (NativeCommandError của stderr pipeline) — chạy `npm run check *> $null` hoặc trực tiếp mới đáng tin.
