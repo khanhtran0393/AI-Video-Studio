@@ -47,7 +47,7 @@
     "test:t7-ai": "node nova/scripts/t7-ai-core-test.js"
   },
   "dependencies": {
-    "@remotion/bundler": "4.0.518",
+    "@remotion/bundler": "4.0.521",
     "@remotion/renderer": "4.0.518",
     "@remotion/transitions": "4.0.518",
     "electron-updater": "^6.3.9",
