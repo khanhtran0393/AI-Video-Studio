@@ -44,7 +44,11 @@ function mimeOf(p) {
   return i >= 0 ? (MIME[p.slice(i).toLowerCase()] || 'application/octet-stream') : 'application/octet-stream';
 }
 
-/* Response từ file với hỗ trợ Range (seek trong thẻ <video>). */
+/* Response từ file với hỗ trợ Range (seek trong thẻ <video>).
+   rangeHeader PHẢI lấy bằng req.headers.get('range') — `req.headers` trong
+   protocol.handle là object Headers (Fetch API), KHÔNG có property `.range`;
+   đọc `req.headers.range` luôn ra undefined → mọi request bị trả 200 toàn bộ file,
+   <video> mất seek và chết đen với MP4 có moov ở cuối (không faststart). */
 function fileResponse(p, rangeHeader) {
   const stat = fs.statSync(p);
   if (!stat.isFile()) return new Response(null, { status: 404 });
@@ -76,7 +80,11 @@ function installMediaProtocolHandler() {
     const p = pathFromUrl(req.url);
     if (!p) return new Response(JSON.stringify({ error: 'FFX_PROTO_URL: URL không hợp lệ — ' + req.url }), { status: 400, headers: { 'Content-Type': 'application/json' } });
     if (!fs.existsSync(p)) return new Response(JSON.stringify({ error: 'FFX_PROTO_NOT_FOUND: file không tồn tại — ' + p }), { status: 404, headers: { 'Content-Type': 'application/json' } });
-    try { return fileResponse(p, req.headers.range); }
+    /* Headers là object Fetch API → bắt buộc .get(); .range luôn undefined (bug mất Range). */
+    let range = '';
+    try { range = (req.headers && typeof req.headers.get === 'function') ? (req.headers.get('range') || '') : ''; }
+    catch (_) { range = ''; }
+    try { return fileResponse(p, range); }
     catch (e) {
       return new Response(JSON.stringify({ error: 'FFX_PROTO_READ: ' + (e.message || String(e)) }), { status: 500, headers: { 'Content-Type': 'application/json' } });
     }

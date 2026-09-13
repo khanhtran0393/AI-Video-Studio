@@ -216,6 +216,39 @@ async function step(name, fn) {
   await expectFail('insertAds đích format không hỗ trợ (.gif)', () => mt.insertAds({ inputPath: V_A, breaks: [{ atSec: 1, adPaths: [adA] }], outputPath: path.join(OUT, 'ads-x6.gif') }));
   await expectFail('insertAds điểm trùng nhau', () => mt.insertAds({ inputPath: V_A, breaks: [{ atSec: 3, adPaths: [adA] }, { atSec: 3, adPaths: [adA] }], outputPath: path.join(OUT, 'ads-x7.mp4') }));
 
+  // ── TIẾN ĐỘ (onProgress) — hồi quy 2026-09-12g: concatAuto nhánh re-encode crash
+  //    ReferenceError (viết `{ onProgress }` trong khi biến tên `onProg`), và 29/33 điểm
+  //    spawnRun nhận o.onProgress rồi BỎ RƠI → % UI đứng 0. Smoke cũ không truyền
+  //    onProgress nên KHÔNG bắt được. Từ nay BẮT BUỘC: op đã wire phải phát kiện,
+  //    % ĐƠN ĐIỆU không lùi (op nhiều giai đoạn chia ngân sách dải %) và nằm 0..99.
+  //    Op CÓ chủ đích không wire (detectScenes, makeThumb, extractFrames single —
+  //    ffmpeg không báo time=) chỉ cần chạy OK khi KHÔNG có onProgress. ──
+  async function progStep(name, run, minEvents) {
+    const need = Number.isFinite(minEvents) ? minEvents : 1;
+    const seq = [];
+    try {
+      const r = await run((p) => seq.push(Math.round(Number(p && p.pct) || 0)));
+      if (!r || !r.path || !fs.existsSync(r.path)) { results.push('  FAIL progress ' + name + ' — KHÔNG TỒN TẠI artifact'); return; }
+      let max = 0, back = 0;
+      for (const v of seq) { if (v < max) back++; else max = v; }
+      const inRange = seq.every((v) => v >= 0 && v <= 99);
+      const ok = seq.length >= need && back === 0 && inRange;
+      results.push('  ' + (ok ? 'PASS' : 'FAIL') + ' progress ' + name + ' — ' + seq.length + ' kiện' +
+        (seq.length ? ' ' + Math.min.apply(null, seq) + '..' + max + '%' : '') +
+        ', lùi=' + back + (inRange ? '' : ' NGOAI_RANGE 0..99') + (seq.length >= need ? '' : ' (can >= ' + need + ')'));
+    } catch (e) {
+      results.push('  FAIL progress ' + name + ' — ' + e.message);
+    }
+  }
+  await progStep('concatAuto nhánh re-encode (V_A + 240p)', (prog) => mt.concatAuto({ inputPaths: [V_A, small240], outputPath: path.join(OUT, 'prog-ca.mp4'), onProgress: prog }));
+  await progStep('cutVideo accurate', (prog) => mt.cutVideo({ inputPath: V_A, outputPath: path.join(OUT, 'prog-cut-acc.mp4'), startSec: 0, endSec: 3, mode: 'accurate', onProgress: prog }), 0);
+  await progStep('cutMulti 2 đoạn (cắt + ghép)', (prog) => mt.cutMulti({ inputPath: V_A, outputPath: path.join(OUT, 'prog-cm.mp4'), segments: [{ startSec: 0, endSec: 3 }, { startSec: 4, endSec: 7 }], mode: 'accurate', onProgress: prog }));
+  await progStep('compress size 2-pass', (prog) => mt.compressVideo({ inputPath: V_A, outputPath: path.join(OUT, 'prog-2p.mp4'), mode: 'size', targetMB: 5, onProgress: prog }));
+  await progStep('loopPingPong (dao nguoc + ghep)', (prog) => mt.loopPingPong({ inputPath: small240, outputPath: path.join(OUT, 'prog-pp.mp4'), times: 2, onProgress: prog }));
+  await progStep('normalizeAudio 2-pass', (prog) => mt.normalizeAudio({ inputPath: loopSrc, outputPath: path.join(OUT, 'prog-norm.mp3'), targetLU: -16, onProgress: prog }));
+  await progStep('insertAds 1 diem 2 clip', (prog) => mt.insertAds({ inputPath: V_A, breaks: [{ atSec: srcDur / 2, adPaths: [adA, adB] }], gapSec: 0.3, outputPath: path.join(OUT, 'prog-ads.mp4'), onProgress: prog }));
+  await step('concatAuto khong truyen onProgress (van phai chay)', () => mt.concatAuto({ inputPaths: [V_A, small240], outputPath: path.join(OUT, 'prog-off.mp4') }));
+
   console.log('\n  ── OPS ──');
   results.forEach((l) => console.log(l));
   console.log('\n  ── VALIDATE ──');
