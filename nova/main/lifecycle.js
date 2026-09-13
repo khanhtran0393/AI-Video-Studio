@@ -11,6 +11,7 @@ const watermarkNative = require('../watermark-native');
 const flowChrome = require('../flow-chrome');
 const scheduler = require('./scheduler');
 const { stopFlowAutoPush } = require('./ipc/flow');
+const { stopLiveStream } = require('./ipc/live-stream');
 
 let _shutdownDone = false;
 function shutdownOwnedResources() {
@@ -23,6 +24,7 @@ function shutdownOwnedResources() {
   try { mcpBridge.stopAll(); } catch (_) {}
   try { voiceNative.stop(); } catch (_) {}
   try { watermarkNative.cancel(); } catch (_) {}
+  stopLiveStream();           // dừng phiên phát trực tiếp đang chạy (idempotent, không có thì bỏ qua)
   try { flowChrome.closeGuestCaptcha && flowChrome.closeGuestCaptcha(); } catch (_) {}
 }
 

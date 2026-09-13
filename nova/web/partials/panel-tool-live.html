@@ -1,0 +1,140 @@
+    <!-- ══════ PHÁT TRỰC TIẾP — Livestream Studio (mô hình TikTok LIVE Studio) ══════
+         Đa nền tảng + Stream Key riêng. Nguồn: video có sẵn / webcam / cửa sổ ứng dụng.
+         FFmpeg tee đẩy song song. Logic trong src/toolbox/tool-live.js (tiền tố lstudio*),
+         IPC livestream:* qua window.native.liveStudio. -->
+    <div class="tool" id="tool-toollive">
+      <div class="tool-head">
+        <div class="tool-title">📺 Phát Trực Tiếp</div>
+        <div class="tool-subtitle">Live đa nền tảng cùng lúc như TikTok LIVE Studio — chọn nguồn (video có sẵn / webcam / cửa sổ ứng dụng), nhập Stream Key từng nền tảng rồi lên sóng song song bằng FFmpeg local.</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:14px;max-width:720px">
+
+        <!-- Nguồn phát -->
+        <div>
+          <label class="label">Nguồn phát</label>
+          <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end">
+            <div>
+              <select id="lstudioMode" onchange="lstudioOnModeChange()" style="max-width:220px">
+                <option value="video" selected>🎬 Video có sẵn</option>
+                <option value="camera">📷 Webcam / Camera</option>
+                <option value="window">🪟 Cửa sổ ứng dụng</option>
+              </select>
+            </div>
+            <div id="lstudioVideoBox">
+              <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                <button class="btn ghost sm" onclick="lstudioPickVideo()">📁 Chọn video</button>
+                <span id="lstudioVideoPath" style="font-size:11.5px;color:var(--text-muted);word-break:break-all">Chưa chọn</span>
+              </div>
+              <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px">
+                <label class="label" style="display:flex;gap:6px;align-items:center;cursor:pointer;margin:0">
+                  Lặp:
+                  <select id="lstudioLoopMode" onchange="lstudioOnLoopModeChange()" style="max-width:170px">
+                    <option value="none" selected>Phát 1 lần rồi dừng</option>
+                    <option value="infinite">Lặp vô hạn</option>
+                    <option value="finite">Lặp theo số lần</option>
+                  </select>
+                </label>
+                <span id="lstudioLoopCountBox" style="display:none;align-items:center;gap:4px">
+                  <input type="number" id="lstudioLoopCount" min="2" max="1000" value="3" style="width:72px" title="Tổng số lần phát video (2 = phát 2 lần)">
+                  <span style="font-size:11.5px;color:var(--text-muted)">lần</span>
+                </span>
+              </div>
+              <label class="label" style="display:flex;gap:6px;align-items:center;cursor:pointer;margin-top:6px">
+                <input type="checkbox" id="lstudioNoAudioVideo"> Video không có tiếng (chủ động)
+              </label>
+            </div>
+          </div>
+          <div id="lstudioCamBox" style="display:none;margin-top:8px">
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <label class="label" style="margin:0">Webcam</label>
+              <select id="lstudioCamSel" style="max-width:320px"><option value="">— bấm làm mới —</option></select>
+              <button class="btn ghost sm" onclick="lstudioRefreshCameras()">↻ Làm mới</button>
+            </div>
+          </div>
+          <div id="lstudioWinBox" style="display:none;margin-top:8px">
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <label class="label" style="margin:0">Cửa sổ phát (thêm nhiều ứng dụng để live song song)</label>
+              <button class="btn ghost sm" onclick="lstudioAddWindow()">+ Thêm cửa sổ</button>
+              <button class="btn ghost sm" onclick="lstudioRefreshWindows()">↻ Làm mới danh sách</button>
+            </div>
+            <div id="lstudioWinRows" style="display:flex;flex-direction:column;gap:6px;margin-top:6px"></div>
+          </div>
+          <div id="lstudioMicBox" style="display:none;margin-top:8px">
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <label class="label" style="margin:0">Micro</label>
+              <select id="lstudioMicSel" style="max-width:320px"><option value="">— bấm làm mới —</option></select>
+              <span id="lstudioMicSrcBox" style="display:none;align-items:center;gap:6px">
+                <label class="label" style="margin:0">nhận bởi</label>
+                <select id="lstudioMicSrcSel" onchange="lstudioOnMicSrcChange()" style="max-width:260px"></select>
+              </span>
+              <label class="label" style="display:flex;gap:6px;align-items:center;cursor:pointer;margin:0">
+                <input type="checkbox" id="lstudioNoAudioCap"> Phát không tiếng các nguồn không nhận micro (chủ động)
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Chất lượng -->
+        <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end">
+          <div>
+            <label class="label">Độ phân giải</label>
+            <select id="lstudioRes" style="max-width:160px">
+              <option value="854x480">480p — nhẹ máy</option>
+              <option value="1280x720" selected>720p — cân bằng</option>
+              <option value="1920x1080">1080p — nét nhất</option>
+            </select>
+          </div>
+          <div>
+            <label class="label">FPS</label>
+            <select id="lstudioFps" style="max-width:110px">
+              <option value="30" selected>30 fps</option>
+              <option value="60">60 fps</option>
+            </select>
+          </div>
+          <div>
+            <label class="label">Bitrate</label>
+            <select id="lstudioKbps" style="max-width:220px" onchange="lstudioOnQualityChange()">
+              <option value="2500">2500 kbps — ổn đường yếu</option>
+              <option value="4500" selected>4500 kbps — chuẩn 720p</option>
+              <option value="6000">6000 kbps — chuẩn 1080p</option>
+              <option value="9000">9000 kbps — 1080p60 mượt</option>
+            </select>
+          </div>
+          <div>
+            <label class="label">Bộ mã hóa</label>
+            <select id="lstudioEncSel" style="max-width:230px" onchange="lstudioSave()" title="NVENC đẩy encode sang GPU NVIDIA — chọn nhiều nguồn song song sẽ nhẹ CPU hơn nhiều. App dò trước: FFmpeg không có NVENC sẽ báo lỗi, không tự chuyển.">
+              <option value="x264" selected>x264 (CPU — tương thích mọi máy)</option>
+              <option value="nvenc">NVENC (GPU NVIDIA — nhẹ CPU)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Nền tảng + Stream Key -->
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+            <label class="label" style="margin:0">Nền tảng phát (bật nhiều nền tảng để lên sóng song song)</label>
+            <button class="btn ghost sm" onclick="lstudioAddPlatform('youtube')">+ Thêm nền tảng</button>
+          </div>
+          <div id="lstudioPlatforms" style="display:flex;flex-direction:column;gap:8px;margin-top:8px"></div>
+        </div>
+
+        <!-- Hành động + trạng thái -->
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+          <button class="btn primary sm" id="lstudioStartBtn" onclick="lstudioStart()">🔴 Bắt đầu phát</button>
+          <button class="btn ghost sm" id="lstudioStopBtn" onclick="lstudioStop()" style="display:none">⏹ Dừng phát</button>
+          <label class="label" style="display:flex;gap:6px;align-items:center;cursor:pointer;margin:0" title="FFmpeg rớt/mất kết nối giữa phiên sẽ được tự khởi chạy lại (backoff 5/10/20/30s, giới hạn số lần). Lặp video kết thúc bình thường KHÔNG bị thử lại.">
+            <input type="checkbox" id="lstudioRetryOn" onchange="lstudioOnRetryChange()"> Tự thử lại khi mất kết nối
+          </label>
+          <span id="lstudioRetryBox" style="display:none;align-items:center;gap:4px">
+            <input type="number" id="lstudioRetryMax" min="1" max="10" value="3" style="width:56px" onchange="lstudioSave()" title="Số lần thử lại tối đa cho mỗi nguồn">
+            <span style="font-size:11.5px;color:var(--text-muted)">lần</span>
+          </span>
+          <span id="lstudioStatus" style="font-size:11.5px"></span>
+        </div>
+        <div id="lstudioBw" style="font-size:11.5px;color:var(--text-muted)"></div>
+        <div id="lstudioStats" style="display:none;font-size:11.5px;color:var(--text-muted)">
+          <div id="lstudioStatHead"></div>
+          <div id="lstudioStatRows" style="display:flex;flex-direction:column;gap:2px"></div>
+        </div>
+      </div>
+    </div>

@@ -12,17 +12,21 @@
       'tooldash','tool1','toolscript','tool2',
       'tool3'  /* gộp vào Tool 2 — nav ẩn */,
       'tool8','tool5'  /* gộp vào Tool 2 — nav ẩn */,
-      'tool4','tool9','tool10',
+      // 5 khâu sản xuất — sidebar nhóm "Sản xuất video" (dời từ "Công cụ AI" 2026-09-12)
       'toolflow','tool6','tool7','toolupscale','toolvoice',
-      'toolniche','toolvideoagent','toolimzic','toolwhiteboard',
-      'toolhanddraw','toolsrttranslate','toolviralcut',
+      'tool4','tool9','tool10',
+      // Nhóm "Công cụ AI" — bám sát thứ tự nav trong partials/app-sidebar.html
+      // (toolimzic về đúng vị trí sau toollive; toolspy về cuối nhóm — 2026-09-12)
+      'toolniche','toolvideoagent','toolviralcut',
+      'toollive'  /* Phát Trực Tiếp — Livestream Studio đa nền tảng */,
+      'toolimzic','toolwhiteboard','toolhanddraw','toolsrttranslate',
+      'toolspy'  /* Spy Storyboard — roadmap P4.4, cuối nhóm "Công cụ AI" */,
       'toolffxaudio','toolffxcut','toolffxjoin','toolffxloop',
       'toolffxcompress','toolffxframes','toolffxmute','toolffxconvert',
       'toolffxmusic','toolffxgif','toolffxaudiofx','toolffxads',
       'toolffxhistory'  /* Công cụ FFmpeg (sidebar dropdown) */,
       'toolsettings','tooladmin','toollog',
-      'toolanim'  /* mồ côi: mở từ Tool 7 */,
-      'toolspy'  /* mồ côi: roadmap P4.4 Spy Storyboard */
+      'toolanim'  /* mồ côi: mở từ Tool 7, không có nav-item */
     ];
     // Lấy parent chứa các panel .tool (cùng parent với nav-item thường là .content hoặc body)
     var panels = {};

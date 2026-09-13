@@ -137,16 +137,9 @@
         <div class="nav-item" data-tool="tool5" onclick="switchTool('tool5')" style="display:none">
           <span class="num"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/><path d="M11 8v6M8 11h6"/></svg></span><span>Tìm Ảnh & Video Stock</span>
         </div>
-        <div class="nav-item" data-tool="tool4" onclick="switchTool('tool4')">
-          <span class="num"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7l3-3 3 3M7 4v9M20 17l-3 3-3-3M17 20v-9"/></svg></span><span>Đổi Tên Ảnh</span>
-        </div>
-        <div class="nav-item" data-tool="tool9" onclick="switchTool('tool9')">
-          <span class="num"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l9 4-9 4-9-4 9-4zM3 12l9 4 9-4M3 17l9 4 9-4"/></svg></span><span>YouTube SEO</span>
-        </div>
-        <div class="nav-item" data-tool="tool10" onclick="switchTool('tool10')">
-          <span class="num"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5L5 21"/></svg></span><span>Tạo Thumbnail</span>
-        </div>
-        <div class="nav-group">Công cụ AI</div>
+        <!-- 5 khâu sản xuất dời từ nhóm "Công cụ AI" lên đây, đặt ngay sau Phân Cảnh theo
+             đúng luồng Kịch bản → Phân cảnh → Ảnh → Video → Dựng (2026-09-12).
+             Thứ tự này là hợp đồng với ORDER trong src/toolbox/utility/panel-order.js. -->
         <div class="nav-item" data-tool="toolflow" onclick="switchTool('toolflow')">
           <span class="num"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.8"/><path d="M4 18l5-5 4 3 3-3 4 4"/></svg></span><span>Tạo Ảnh</span>
         </div>
@@ -164,6 +157,19 @@
         <div class="nav-item" data-tool="toolvoice" onclick="switchTool('toolvoice')">
           <span class="num"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg></span><span>Tạo giọng nói</span>
         </div>
+
+        <div class="nav-item" data-tool="tool4" onclick="switchTool('tool4')">
+          <span class="num"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7l3-3 3 3M7 4v9M20 17l-3 3-3-3M17 20v-9"/></svg></span><span>Đổi Tên Ảnh</span>
+        </div>
+        <div class="nav-item" data-tool="tool9" onclick="switchTool('tool9')">
+          <span class="num"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l9 4-9 4-9-4 9-4zM3 12l9 4 9-4M3 17l9 4 9-4"/></svg></span><span>YouTube SEO</span>
+        </div>
+        <div class="nav-item" data-tool="tool10" onclick="switchTool('tool10')">
+          <span class="num"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5L5 21"/></svg></span><span>Tạo Thumbnail</span>
+        </div>
+        <div class="nav-group">Công cụ AI</div>
+        <!-- 5 khâu Tạo Ảnh / Tạo Video / Dựng Video / Nâng cấp ảnh / Tạo giọng nói đã dời
+             lên nhóm "Sản xuất video" (2026-09-12) — nhóm này còn lại các tool AI phụ trợ. -->
         <div class="nav-item" data-tool="toolniche" onclick="switchTool('toolniche')" title="Nghiên cứu ngách + soi đối thủ: chủ đề hot, thẻ điểm kênh, thị trường chú ý, chấm ý tưởng">
           <span class="num"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/><path d="M11 8v6M8 11h6"/></svg></span><span>Nghiên cứu Ngách</span>
         </div>
@@ -172,6 +178,10 @@
         </div>
         <div class="nav-item" data-tool="toolviralcut" onclick="switchTool('toolviralcut')" title="Tách highlight viral từ video dài: AI/heuristic chọn đoạn hay nhất + best-hook → cắt nhiều clip ngắn (9:16 tuỳ chọn)">
           <span class="num"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4L8.12 15.88M14.47 14.48L20 20M8.12 8.12L12 12"/></svg></span><span>Viral Cut</span>
+        </div>
+        <!-- PHÁT TRỰC TIẾP (Livestream Studio): đa nền tảng RTMP, nguồn video/webcam/cửa sổ -->
+        <div class="nav-item" data-tool="toollive" onclick="switchTool('toollive')" title="Phát trực tiếp đa nền tảng (YouTube/TikTok/Facebook…) cùng lúc — nguồn video có sẵn, webcam hoặc cửa sổ ứng dụng">
+          <span class="num"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4.9 19.1a10 10 0 010-14.2M19.1 4.9a10 10 0 010 14.2M7.8 16.2a6 6 0 010-8.4M16.2 7.8a6 6 0 010 8.4"/><circle cx="12" cy="12" r="2"/></svg></span><span>Phát Trực Tiếp</span>
         </div>
         <div class="nav-item" data-tool="toolimzic" onclick="switchTool('toolimzic')">
           <span class="num"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 4h18M3 20h18"/><path d="M6 4v16"/></svg></span><span>I-MZic</span>
