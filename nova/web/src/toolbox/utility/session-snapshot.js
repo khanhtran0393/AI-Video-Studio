@@ -29,6 +29,9 @@
 var sessSnapKey = 'novaSession';
 var sessSnapTimer = null;
 var sessSnapDirty = false;
+/* Đang khôi phục → event input/change do restore bắn ra không được đánh dấu
+   bẩn (tránh chụp lại chính giá trị vừa trả lại). */
+var sessSnapRestoring = false;
 /* Giới hạn cứng kích thước snapshot (JSON string) — vượt thì bỏ phần
    input, giữ phần metadata (tool, patch của panel khác). */
 var SESSSNAP_MAX_BYTES = 256 * 1024;
@@ -71,7 +74,9 @@ function sessSnapCollect() {
       if (el.closest && el.closest('[data-sessnap-skip]')) continue;
       if (t === 'checkbox' || t === 'radio') { if (el.id) inputs[el.id] = !!el.checked; continue; }
       const v = el.value;
-      if (typeof v === 'string' && v.length > 0) inputs[el.id] = v.length > 64 * 1024 ? v.slice(0, 64 * 1024) : v;
+      /* Lưu cả chuỗi rỗng — nếu chỉ lưu khi khác rỗng, ô user CỐ TÌNH xoá trắng
+         sẽ bị "hồi sinh" giá trị cũ từ lần chụp trước. */
+      if (typeof v === 'string') inputs[el.id] = v.length > 64 * 1024 ? v.slice(0, 64 * 1024) : v;
     }
   } catch (e) { console.warn('[sessnap] collect inputs:', e); }
   const st = (typeof state !== 'undefined' && state && state.tool) ? state.tool : null;
@@ -94,6 +99,7 @@ function sessSnapFlush() {
 
 /** Đánh dấu bẩn + debounce 2s (gõ chữ không phải cứ mỗi phím lại ghi đĩa). */
 function sessSnapMarkDirty() {
+  if (sessSnapRestoring) return;   // event do chính restore bắn ra — bỏ qua
   sessSnapDirty = true;
   clearTimeout(sessSnapTimer);
   sessSnapTimer = setTimeout(sessSnapFlush, 2000);
@@ -113,38 +119,56 @@ function sessSnapGet(key) {
   return key ? snap[key] : snap;
 }
 
-/** Khôi phục input/checkbox/select + vị trí cuộn (idempotent — gọi lại được). */
-function sessSnapRestore() {
+/** Khôi phục tool + input/checkbox/select + vị trí cuộn (idempotent — gọi lại được).
+ *  opts.switchTool: chuyển về đúng tool đang mở lúc chụp (dùng cho lần restore
+ *  sau khi state/IDB nạp xong — boot chỉ switchTool với tool mặc định). */
+function sessSnapRestore(opts) {
   const snap = sessSnapRead();
-  const inputs = snap.inputs;
-  if (inputs && typeof inputs === 'object') {
-    for (const id of Object.keys(inputs)) {
-      let el = null;
-      try { el = document.getElementById(id); } catch (e) { continue; }
-      if (!el) continue;
-      const t = (el.type || '').toLowerCase();
-      try {
-        if (t === 'checkbox' || t === 'radio') { el.checked = !!inputs[id]; continue; }
-        if (t === 'file' || t === 'password') continue;
-        const v = inputs[id];
-        if (typeof v !== 'string' || v === el.value) continue;
-        if (el.tagName === 'SELECT') {
-          let has = false;
-          for (const opt of el.options) { if (opt.value === v) { has = true; break; } }
-          if (!has) continue;
-        }
-        el.value = v;
-      } catch (e) { /* phần tử lạ — bỏ qua, không chặn các input khác */ }
-    }
+  /* Chuyển tool TRƯỚC khi trả input — switchTool có thể render lại panel. */
+  if (opts && opts.switchTool && snap.tool) {
+    try {
+      const cur = (typeof state !== 'undefined' && state) ? state.tool : null;
+      if (typeof switchTool === 'function' && cur !== snap.tool) switchTool(snap.tool);
+    } catch (e) { console.warn('[sessnap] switchTool:', e); }
   }
+  sessSnapRestoring = true;
   try {
-    const sc = snap.scroll;
-    if (sc) {
-      const main = document.querySelector('.main');
-      if (main && sc.main) main.scrollTop = sc.main;
-      if (sc.win) window.scrollTo(0, sc.win);
+    const inputs = snap.inputs;
+    if (inputs && typeof inputs === 'object') {
+      for (const id of Object.keys(inputs)) {
+        let el = null;
+        try { el = document.getElementById(id); } catch (e) { continue; }
+        if (!el) continue;
+        const t = (el.type || '').toLowerCase();
+        try {
+          if (t === 'checkbox' || t === 'radio') {
+            el.checked = !!inputs[id];
+            /* Bắn event để panel/react-logic lắng nghe cập nhật theo (đếm, enable nút…). */
+            try { el.dispatchEvent(new Event('change', { bubbles: true })); } catch (e) {}
+            continue;
+          }
+          if (t === 'file' || t === 'password') continue;
+          const v = inputs[id];
+          if (typeof v !== 'string' || v === el.value) continue;
+          if (el.tagName === 'SELECT') {
+            let has = false;
+            for (const opt of el.options) { if (opt.value === v) { has = true; break; } }
+            if (!has) continue;
+          }
+          el.value = v;
+          try { el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); } catch (e) {}
+        } catch (e) { /* phần tử lạ — bỏ qua, không chặn các input khác */ }
+      }
     }
-  } catch (e) { /* */ }
+    try {
+      const sc = snap.scroll;
+      if (sc) {
+        const main = document.querySelector('.main');
+        if (main && sc.main) main.scrollTop = sc.main;
+        if (sc.win) window.scrollTo(0, sc.win);
+      }
+    } catch (e) { /* */ }
+  } finally { sessSnapRestoring = false; }
 }
 
 /* ── wire: ghi khi rời app + khi ẩn tab + debounce khi người dùng gõ ── */
@@ -160,4 +184,19 @@ function sessSnapRestore() {
       if (document.visibilityState === 'hidden') sessSnapFlush();
     });
   } catch (e) { /* */ }
+  /* Mỗi lần chuyển tool, input ĐỘNG (hàng prompt render theo scene, field sinh
+     sau boot) có thể vừa được tạo — khôi phục lại giá trị snapshot cho tool đó.
+     Wrap ở đây thay vì sửa thân switchTool trong nav.js (header nav.js cấm sửa). */
+  try {
+    if (typeof switchTool === 'function' && !switchTool.__sessSnapWrapped) {
+      const orig = switchTool;
+      var sessSnapWrappedSwitchTool = function (name) {
+        const r = orig.apply(this, arguments);
+        try { sessSnapRestore(); } catch (e) {}
+        return r;
+      };
+      sessSnapWrappedSwitchTool.__sessSnapWrapped = true;
+      switchTool = sessSnapWrappedSwitchTool;
+    }
+  } catch (e) { console.warn('[sessnap] wrap switchTool:', e); }
 })();

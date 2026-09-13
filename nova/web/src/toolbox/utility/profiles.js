@@ -78,8 +78,9 @@ async function loadCloudState(){
   renderTierBadge();
   if (typeof initAdminUI === 'function') initAdminUI();
   // Session Snapshot (lần 2 — sau khi state/IDB nạp + render xong): đè lại
-  // giá trị input "làm dở" mà các render ở trên có thể đã ghi đè.
-  if (typeof sessSnapRestore === 'function') { try { sessSnapRestore(); } catch (e) {} }
+  // giá trị input "làm dở" mà các render ở trên có thể đã ghi đè + trở về đúng
+  // tool đang mở lúc chụp (boot.js chỉ switchTool với tool mặc định).
+  if (typeof sessSnapRestore === 'function') { try { sessSnapRestore({ switchTool: true }); } catch (e) {} }
 }
 
 // uid kho IDB local: khi còn đăng nhập dùng uid thật (giữ nguyên key cũ);
