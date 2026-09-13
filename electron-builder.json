@@ -47,6 +47,9 @@
     "!nova/editor-pro/nova-remotion/bundle/assets/*-a*_*"
   ],
   "asar": true,
+  "extraResources": [
+    { "from": "build/icon.ico", "to": "novastudio.ico" }
+  ],
   "asarUnpack": [
     "nova/**/*.py",
     "nova/voice-backend/**/*",
