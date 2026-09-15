@@ -8,8 +8,8 @@ async function ttsDoc(text, onTien){
   for (const eng of thu){
     try {
       if (onTien && eng !== _voiceBackend) onTien('chuyển sang ' + _TTS_TEN[eng]);
-      const blob = await _ttsChay(eng, uu, text, giongDocTuyChon(), onTien);
-      return { blob, giong: uu, engine: eng, luiVe: eng !== _voiceBackend };
+      const r = await _ttsChay(eng, uu, text, giongDocTuyChon(), onTien);
+      return { blob: r.blob, srt: r.srt || '', giong: uu, engine: eng, luiVe: eng !== _voiceBackend };
     } catch (e){
       if (!loiDau) loiDau = e;
       // engine thật sự hỏng (chưa cài, lỗi model…) → chấm đỏ, đừng để xanh dối lòng.

@@ -1,5 +1,7 @@
 /* TF — Google Flow engine UI: tf*, bulk*, fc*, wm status, tfGenScenes/tfGenAssets
-   Tách verbatim từ src/toolbox/utility.js (2026-09-10) — không sửa thân hàm.
+   Tách verbatim từ src/toolbox/utility.js (2026-09-10). 2026-09-15: gắn P0 TobyFlow —
+   bulk ẢNH/VIDEO (POOL_GEN_VIDEO + chain khung đầu từ ảnh vừa gen), chế độ ref
+   all/seq/none + tag @tên, trợ lý prompt AI, thử lại / tải từng ô.
    Toàn bộ là function declaration: chỉ gọi lúc runtime, thứ tự nạp không ảnh hưởng. */
 function _t2AnalyzeSyncBtn(running){
   const b = document.getElementById('t2AnalyzeBtn'); if (!b) return;
@@ -27,6 +29,8 @@ function tfInit(){
   tfRefreshConn();
   tfRenderScenes();
   tfRenderAssets();
+  if (typeof tfSyncKindUI === 'function') tfSyncKindUI();
+  if (typeof _bulkModInit === 'function') _bulkModInit();   // catalog góc máy/hiệu ứng cho 2 ô "Chèn nhanh"
   if (typeof bulkUpdateCount === 'function') bulkUpdateCount();
   if (typeof bulkRenderRefs === 'function') bulkRenderRefs();
   if (typeof bulkRenderGrid === 'function') bulkRenderGrid();
@@ -80,13 +84,90 @@ function _bulkParse(){
     let name = '', prompt = ln;
     const m = ln.match(/^([^|]{1,60})\|(.+)$/);
     if (m) { name = _slug(m[1].trim()); prompt = m[2].trim(); }
-    if (!name) name = 'anh-' + String(i + 1).padStart(3, '0');
+    if (!name) name = (_bulkKind() === 'video' ? 'video-' : 'anh-') + String(i + 1).padStart(3, '0');
     if (seen[name]) { seen[name]++; name = name + '-' + seen[name]; } else seen[name] = 1;
     return { name, prompt };
   });
 }
 
-function bulkUpdateCount(){ const el = document.getElementById('bulkCount'); if (el) el.textContent = _bulkParse().length + ' ảnh'; }
+function _bulkKind(){ return (document.getElementById('tfKind')?.value === 'video') ? 'video' : 'anh'; }   // loại đầu ra của Tool Tạo Ảnh/Video Hàng Loạt
+
+function bulkUpdateCount(){ const el = document.getElementById('bulkCount'); if (el) el.textContent = _bulkParse().length + (_bulkKind() === 'video' ? ' video' : ' ảnh'); }
+
+// Đổi "Loại đầu ra" Ảnh ↔ Video: bật/tắt hàng cấu hình video, làm mờ ô chỉ dùng cho ảnh,
+// đổi placeholder ô prompt theo loại (không để "1 ảnh" hardcode khi đang ở chế độ video).
+function tfSyncKindUI(){
+  const vid = _bulkKind() === 'video';
+  const row = document.getElementById('tfVidRow'); if (row) row.style.display = vid ? '' : 'none';
+  ['tfModel', 'tfQuality'].forEach(id => { const c = document.getElementById(id)?.closest('div'); if (c) c.style.opacity = vid ? '.45' : ''; });
+  const ta = document.getElementById('bulkPrompts');
+  if (ta) ta.placeholder = vid
+    ? 'Mỗi dòng 1 prompt = 1 video.\nMuốn đặt tên file:  ten-file | prompt'
+    : 'Mỗi dòng 1 prompt = 1 ảnh.\nMuốn đặt tên file:  ten-file | prompt';
+  tfVidModelChange();
+  bulkUpdateCount();
+}
+
+// Model Veo/Omni tự chọn độ dài theo model — ẩn ô duration (giống Tool "Tạo video Flow").
+function tfVidModelChange(){ const m = document.getElementById('tfVidModel')?.value || ''; const w = document.getElementById('tfVidDurCell'); if (w) w.style.display = (/^veo/.test(m) || m === 'omni-flash') ? 'none' : ''; }
+
+// ── Catalog góc máy / hiệu ứng (P1 TobyFlow): chèn nhanh cụm tiếng Anh vào prompt tại vị trí con trỏ.
+//    Dữ liệu tĩnh, thứ tự ổn định (Luật 8) — nhãn tiếng Việt, cụm chèn tiếng Anh bám chuẩn prompt Flow.
+const _bulkAngles = [
+  ['Cận cảnh', 'extreme close-up shot, tight framing on the face'],
+  ['Trung cảnh', 'medium shot, waist-up framing'],
+  ['Toàn thân', 'full-body wide shot'],
+  ['Cảnh cực rộng', 'extreme wide establishing shot, subject small in a vast environment'],
+  ["Góc thấp (ngước lên)", 'dramatic low-angle shot looking up at the subject'],
+  ['Góc cao (nhìn xuống)', 'high-angle shot looking down on the subject'],
+  ["Từ trên thẳng xuống (bird's-eye)", "bird's-eye view from directly above"],
+  ['Qua vai', 'over-the-shoulder shot'],
+  ['Máy nghiêng (dutch angle)', 'dutch angle, tilted camera for tension'],
+  ['Ngang mắt', 'eye-level shot, straight-on composition'],
+  ['Theo sau (tracking)', 'tracking shot following behind the subject'],
+  ['Flycam từ trên cao', 'sweeping aerial drone shot over the scene'],
+];
+const _bulkEffects = [
+  ['Ánh vàng cuối ngày', 'golden hour warm backlight with long soft shadows'],
+  ['Hoàng hôn xanh', 'blue hour cool twilight tones'],
+  ['Neon ban đêm', 'neon-lit night scene, wet reflective streets'],
+  ['Tia sáng xuyên sương', 'volumetric god rays cutting through haze'],
+  ['Rim light tách chủ thể', 'strong rim light separating subject from background'],
+  ['Xoá phông (bokeh)', 'shallow depth of field, creamy bokeh background'],
+  ['Hạt phim 35mm', 'subtle 35mm film grain texture'],
+  ['Nhòe chuyển động', 'cinematic motion blur trails'],
+  ['Chậm (slow motion)', 'slow motion feel, smooth 120fps movement'],
+  ['Timelapse mây trôi', 'timelapse of clouds sweeping across the sky'],
+  ['Mưa phùn kèm sương', 'light rain with drifting mist'],
+  ['Sương mù thấp', 'low rolling fog across the ground'],
+  ['Đen trắng tương phản', 'high-contrast black and white'],
+  ['Macro chi tiết', 'macro lens detail, extreme texture close-up'],
+];
+// Đổ option cho 2 ô "Chèn nhanh" (chạy 1 lần — ô chưa có trong DOM thì bỏ qua, tfInit gọi lại được).
+function _bulkModInit(){
+  const fill = (sel, list, placeholder) => {
+    if (!sel || sel.options.length) return;
+    sel.innerHTML = '<option value="" selected>' + placeholder + '</option>'
+      + list.map(p => '<option value="' + escapeHtml(p[1]) + '">' + escapeHtml(p[0]) + '</option>').join('');
+  };
+  fill(document.getElementById('bulkModAngle'), _bulkAngles, '🎥 Góc máy…');
+  fill(document.getElementById('bulkModEffect'), _bulkEffects, '✨ Hiệu ứng…');
+}
+// Chèn cụm đã chọn vào ô Danh sách prompt TẠI CON TRỎ (giữ caret cũ nếu ô không focus),
+// tự thêm ", " nếu đứng sát chữ; sau chèn trả select về placeholder. KHÔNG ghi đè prompt.
+function bulkInsertSnippet(sel){
+  const snip = sel.value || ''; sel.value = '';
+  const ta = document.getElementById('bulkPrompts'); if (!snip || !ta) return;
+  let pos = ta.value.length;
+  if (document.activeElement === ta && typeof ta.selectionStart === 'number') pos = ta.selectionStart;
+  else if (ta.selectionStart || ta.selectionEnd) pos = ta.selectionStart;   // caret cũ còn lưu trên element
+  const before = ta.value.slice(0, pos), after = ta.value.slice(pos);
+  const sep = (before && !/[\s,]$/.test(before) && !/^\s/.test(after)) ? ', ' : '';
+  ta.value = before + sep + snip + after;
+  const np = pos + sep.length + snip.length;
+  try { ta.focus(); ta.setSelectionRange(np, np); } catch (e) {}
+  bulkUpdateCount();
+}
 
 function bulkImportFile(input){
   const f = input.files && input.files[0]; if (!f) return; input.value = '';
@@ -141,12 +222,15 @@ function _bulkAspect(){ const a = (document.getElementById('tfAspect')?.value ||
 
 function _bulkTile(it, i){
   const ar = _bulkAspect(), s = it.status;
+  const _vid = it.mime && it.mime.indexOf('video/') === 0;
   let im;
-  if (s === 'done') { const q = (document.getElementById('tfQuality')?.value || 'orig'); const qLbl = q === '2048' ? '2K' : q === '3840' ? '4K' : ''; const badge = qLbl ? (it.upscaled ? `<span style="position:absolute;top:5px;right:6px;font-size:9px;font-weight:700;padding:2px 6px;border-radius:5px;background:rgba(22,163,74,.92);color:#fff" title="Upscale thật của Flow">${qLbl}</span>` : `<span style="position:absolute;top:5px;right:6px;font-size:9px;font-weight:700;padding:2px 6px;border-radius:5px;background:rgba(0,0,0,.6);color:#fbbf24" title="Flow chưa nâng kịp — dùng ảnh gốc, không lỗi">gốc</span>`) : ''; im = `<div style="position:relative;aspect-ratio:${ar};cursor:zoom-in" onclick="bulkEnlarge(${i})"><img src="${it.dataUrl}" style="width:100%;height:100%;object-fit:cover"><span style="position:absolute;top:5px;left:6px;font-size:9px;font-weight:700;padding:2px 6px;border-radius:5px;background:rgba(0,0,0,.6);color:#fff">✓</span>${badge}</div>`; }
+  if (s === 'done' && _vid) im = `<div style="position:relative;aspect-ratio:${ar};background:#000"><video src="${it.videoUrl || ('data:' + it.mime + ';base64,' + it.b64)}" style="width:100%;height:100%;object-fit:cover" muted preload="metadata"></video><span onclick="bulkPlayVideo(${i})" style="position:absolute;inset:0;display:grid;place-items:center;cursor:pointer"><span style="width:34px;height:34px;border-radius:50%;background:rgba(0,0,0,.65);color:#fff;display:grid;place-items:center;font-size:15px">▶</span></span><span style="position:absolute;top:5px;left:6px;font-size:9px;font-weight:700;padding:2px 6px;border-radius:5px;background:rgba(0,0,0,.6);color:#fff">✓</span></div>`;
+  else if (s === 'done') { const q = (document.getElementById('tfQuality')?.value || 'orig'); const qLbl = q === '2048' ? '2K' : q === '3840' ? '4K' : ''; const badge = qLbl ? (it.upscaled ? `<span style="position:absolute;top:5px;right:6px;font-size:9px;font-weight:700;padding:2px 6px;border-radius:5px;background:rgba(22,163,74,.92);color:#fff" title="Upscale thật của Flow">${qLbl}</span>` : `<span style="position:absolute;top:5px;right:6px;font-size:9px;font-weight:700;padding:2px 6px;border-radius:5px;background:rgba(0,0,0,.6);color:#fbbf24" title="Flow chưa nâng kịp — dùng ảnh gốc, không lỗi">gốc</span>`) : ''; im = `<div style="position:relative;aspect-ratio:${ar};cursor:zoom-in" onclick="bulkEnlarge(${i})"><img src="${it.dataUrl}" style="width:100%;height:100%;object-fit:cover"><span style="position:absolute;top:5px;left:6px;font-size:9px;font-weight:700;padding:2px 6px;border-radius:5px;background:rgba(0,0,0,.6);color:#fff">✓</span>${badge}</div>`; }
   else if (s === 'gen') im = `<div style="aspect-ratio:${ar};background:linear-gradient(135deg,#3b3f45,#25282d);position:relative"><span id="bpct-${i}" style="position:absolute;top:7px;right:9px;color:#e8e8ea;font-size:13px;font-weight:700">${Math.round(it.pct || 0)}%</span><span id="bfill-${i}" style="position:absolute;left:0;bottom:0;height:3px;background:linear-gradient(90deg,var(--accent-2),var(--accent));width:${it.pct || 4}%"></span></div>`;
   else if (s === 'err') im = `<div title="${escapeHtml(it.err || '')}" style="aspect-ratio:${ar};background:color-mix(in srgb,var(--red) 12%,var(--surface-3));display:grid;place-items:center;color:var(--red);font-size:12px;font-weight:600;text-align:center;padding:6px">✗ lỗi<br><span style="font-size:9px;font-weight:400">${escapeHtml((it.err || '').slice(0, 60))}</span></div>`;
   else im = `<div style="aspect-ratio:${ar};background:var(--surface-3);display:grid;place-items:center;color:var(--text-dim);font-size:12px;opacity:.6">chờ…</div>`;
-  return `<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:10px;overflow:hidden">${im}<div style="padding:6px 8px;font-size:10.5px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(it.prompt || '')}">${escapeHtml(it.name)}</div></div>`;
+  const cap = `<div style="padding:6px 8px;font-size:10.5px;color:var(--text-muted);display:flex;gap:6px;align-items:center;white-space:nowrap;overflow:hidden"><span style="overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(it.prompt || '')}">${escapeHtml(it.name)}</span>${s === 'err' ? `<button class="btn ghost sm" style="margin-left:auto;padding:1px 7px;font-size:10px;flex:none" onclick="bulkRetryOne(${i})" title="Thử lại riêng mục này">↻</button>` : ''}${s === 'done' ? `<input type="checkbox" title="Chọn để tải" ${it._sel ? 'checked' : ''} onchange="bulkSelOne(${i}, this.checked)" style="flex:none;margin-left:auto">` : ''}</div>`;
+  return `<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:10px;overflow:hidden">${im}${cap}</div>`;
 }
 
 function bulkRenderGrid(){
@@ -158,6 +242,33 @@ function bulkRenderGrid(){
 }
 
 function bulkEnlarge(i){ const it = bulkState.items[i]; if (!it || !it.dataUrl) return; const m = document.createElement('div'); m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:flex;align-items:center;justify-content:center;cursor:zoom-out;padding:30px'; m.onclick = () => m.remove(); m.innerHTML = `<img src="${it.dataUrl}" style="max-width:100%;max-height:90vh;object-fit:contain;border-radius:8px">`; document.body.appendChild(m); }
+
+function bulkPlayVideo(i){
+  const it = bulkState.items[i]; if (!it || !(it.b64 || it.videoUrl)) return;
+  const src = it.videoUrl || ('data:' + (it.mime || 'video/mp4') + ';base64,' + it.b64);
+  const m = document.createElement('div'); m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:30px'; m.onclick = () => m.remove();
+  m.innerHTML = `<video src="${src}" controls autoplay style="max-width:100%;max-height:90vh;border-radius:8px;cursor:auto" onclick="event.stopPropagation()"></video>`;
+  document.body.appendChild(m);
+}
+
+function bulkSelOne(i, on){ const it = bulkState.items[i]; if (it) it._sel = !!on; }
+
+async function bulkDownloadSelected(){
+  const sel = bulkState.items.filter(x => x._sel && x.status === 'done');
+  if (!sel.length) { setStatusF('Chưa tick mục nào (tick ô dưới khung đã tạo xong).', 'error'); return; }
+  const n = await _bulkDownloadItems(sel);
+  setStatusF(`Đã tải ${n} mục đã chọn.`, 'ok');
+}
+
+// Thử lại riêng 1 ô lỗi: chạy lại đúng item đó qua machinery của bulkGenerate(retryOnly).
+async function bulkRetryOne(i){
+  const it = bulkState.items[i];
+  if (!it || bulkState.running) return;
+  if (it.status !== 'err') { setStatusF('Mục này không lỗi — không cần thử lại.', 'info'); return; }
+  const saved = bulkState.items;
+  bulkState.items = [it];
+  try { await bulkGenerate(true); } finally { bulkState.items = saved; bulkRenderGrid(); }
+}
 
 function bulkStop(){ bulkState.stop = true; setStatusF('Đang dừng…', 'info'); }
 
@@ -173,19 +284,26 @@ function _bulkSyncBtn(){
 
 function bulkRetryFailed(){ bulkGenerate(true); }
 
-function _bulkRefsFor(promptText, imgMap, allNames){
+function _bulkRefsFor(promptText, imgMap, allNames, mode, idx){
   const s = String(promptText || '');
-  const tags = s.match(/\[([^\[\]]+)\]/g) || [];
+  // Chế độ ref (P0 TobyFlow): 'all' = mọi dòng đính tất cả ref; 'seq' = từng dòng 1 ref theo thứ tự;
+  // 'none' = không đính ref nào. Tag [tên] / @tên khớp ref trong prompt luôn ghi đè (trừ none).
+  if (mode === 'none') return { refNames: [], text: s };
+  if (mode === 'seq'){
+    if (!allNames.length) return { refNames: [], text: s };
+    return { refNames: [allNames[(idx || 0) % allNames.length]], text: s };
+  }
+  const tags = s.match(/\[[^\[\]]+\]|@[^\s,\]]+/g) || [];
   if (!tags.length) return { refNames: allNames, text: s };
   const keys = Object.keys(imgMap);
   const matched = []; let text = s;
   for (const raw of tags){
-    const name = raw.slice(1, -1).trim().toLowerCase();
+    const name = (raw[0] === '[' ? raw.slice(1, -1) : raw.slice(1)).trim().toLowerCase();
     const hit = imgMap[name] ? name : (keys.find(k => k === name || k.startsWith(name + '-') || name.startsWith(k + '-')) || null);
     if (hit){ if (!matched.includes(hit)) matched.push(hit); text = text.split(raw).join(' '); }   // xoá tag khớp khỏi prompt
   }
   text = text.replace(/\s+/g, ' ').trim();
-  // Có [..] nhưng KHÔNG khớp ref nào (vd viết [close up] như ghi chú) → không coi là tag ref,
+  // Có [..]/@.. nhưng KHÔNG khớp ref nào (vd viết [close up] như ghi chú) → không coi là tag ref,
   // giữ nguyên prompt + đính TẤT CẢ ref (tránh vô tình bỏ hết ref).
   if (!matched.length) return { refNames: allNames, text: s };
   return { refNames: matched, text };
@@ -207,7 +325,7 @@ async function bulkGenerate(retryOnly){
   if (!retryOnly) bulkState.items = _bulkParse().map(x => ({ ...x, status: 'wait', pct: 0, err: '', dataUrl: null }));
   if (!bulkState.items.length) { setStatusF('Chưa có prompt. Nhập danh sách prompt trước.', 'error'); return; }
   const targets = retryOnly ? bulkState.items.filter(x => x.status === 'err') : bulkState.items;
-  if (!targets.length) { setStatusF('Không có ảnh nào cần tạo.', 'info'); return; }
+  if (!targets.length) { setStatusF('Không có mục nào cần tạo.', 'info'); return; }
   targets.forEach(x => { x.status = 'wait'; x.pct = 0; x.err = ''; });
   bulkRenderGrid();
   if (!(await flowBridge.waitReady(1500))) { setStatusF('Chưa kết nối. Thêm/đăng nhập tài khoản ở Cài đặt.', 'error'); return; }
@@ -219,12 +337,14 @@ async function bulkGenerate(retryOnly){
   const multi = flowBridge.mode === 'extension' ? (st.accountCount || 0) >= 1 : (st.accountCount || 0) > 1;
   bulkState.running = true; bulkState.stop = false; _bulkSyncBtn();
   let projectId = null;
-  try { if (multi) await flowBridge.call('POOL_RESET'); else projectId = await tfEnsureProject(); }
+  try { if (multi || cfg.kind === 'video') await flowBridge.call('POOL_RESET'); if (!multi && cfg.kind !== 'video') projectId = await tfEnsureProject(); }
   catch (e) { bulkState.running = false; _bulkSyncBtn(); setStatusF('Lỗi mở project: ' + (e.message || e), 'error'); return; }
   const conc = multi ? Math.max(1, st.accountCount) : cfg.conc;   // = số tài khoản (1 request/tài khoản): SONG SONG đủ, không quá tải (tránh reCAPTCHA)
+  const _noun = (cfg.kind === 'video') ? 'video' : 'ảnh';
+  const _emo = (cfg.kind === 'video') ? '🎬' : '🖼️';
   const _asImg = _autoSaveCfg();
   novaLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'acc');
-  novaLog('▶ Bắt đầu tạo ' + targets.length + ' ảnh', 'acc');
+  novaLog('▶ Bắt đầu tạo ' + targets.length + ' ' + _noun + (cfg.kind === 'video' ? (' · ' + ((typeof TV_MODEL_LABEL !== 'undefined' && TV_MODEL_LABEL[cfg.vidModel]) || cfg.vidModel) + ' · ' + cfg.vidDur + 's · ' + cfg.vidRes + (cfg.vidChain !== 'off' ? ' · chain khung đầu: ' + (cfg.vidChain === 'same' ? 'ảnh cùng tên' : 'ảnh dòng trước') : '')) : ''), 'acc');
   novaLog('  • Tài khoản: ' + (st.accountCount || 1) + ' · Luồng song song: ' + conc + (cfg.upscale && cfg.upscale !== '1' ? ' · Nâng nét: ' + cfg.upscale : ''), 'acc');
   novaLog('  • Lưu về máy: ' + (_asImg.enabled && _asImg.folder ? _asImg.folder : 'Tắt (chỉ hiện trong app, bấm ↓ để tải)'), 'acc');
   novaLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'acc');
@@ -239,15 +359,34 @@ async function bulkGenerate(retryOnly){
       if (bulkState.stop) return;
       const idx = bulkState.items.indexOf(it);
       it.status = 'gen'; it.pct = 6; bulkRenderGrid();
-      novaLog('🖼 ' + it.name + ' · gửi prompt: "' + _logClip(it.prompt) + '" → đang tạo…', 'acc');
+      novaLog(_emo + ' ' + it.name + ' · gửi prompt: "' + _logClip(it.prompt) + '" → đang tạo…', 'acc');
       const tick = setInterval(() => { if (it.status === 'gen') { it.pct = Math.min(92, it.pct + Math.random() * 9); const pe = document.getElementById('bpct-' + idx); if (pe) pe.textContent = Math.round(it.pct) + '%'; const fe = document.getElementById('bfill-' + idx); if (fe) fe.style.width = it.pct + '%'; } }, 500);
       try {
-        // Tag [tên-ref] trong prompt → chỉ đính ref khớp; không tag → đính tất cả (như cũ). Tag khớp bị xoá khỏi prompt.
-        const sel = _bulkRefsFor(it.prompt || '', imgMap, allRefNames);
-        const r = await tfDispatchGen(cleanPrompt(sel.text), sel.refNames, { multi, cfg, imgMap, projectId, tier });
+        // Chế độ ref: all/seq/none; tag [tên] hoặc @tên khớp ref trong prompt luôn ghi đè (trừ none). Tag khớp bị xoá khỏi prompt.
+        const sel = _bulkRefsFor(it.prompt || '', imgMap, allRefNames, cfg.refMode, idx);
+        // Video + chain: dùng ảnh đã tạo xong trong lượt này làm khung đầu (image→video).
+        const chainImg = (cfg.kind === 'video' && cfg.vidChain !== 'off') ? _bulkChainImage(it, idx) : null;
+        if (cfg.kind === 'video' && cfg.vidChain !== 'off' && !chainImg) novaLog('⚠️ ' + it.name + ' · không tìm được ảnh làm khung đầu → tạo video thuần văn bản (text→video)', 'warn');
+        const r = await tfDispatchGen(cleanPrompt(sel.text), sel.refNames, { multi, cfg, imgMap, projectId, tier, chainImage: chainImg, idx });
         it._acc = (r && r.account) || null;
         it._rotated = (r && Array.isArray(r.rotated)) ? r.rotated : [];
         clearInterval(tick);
+        if (cfg.kind === 'video'){
+          // Video: POOL_GEN_VIDEO trả { video:{b64,mime} | videoUrl | needsAppResolve | error }
+          if (r && r.error) { it.status = 'err'; it.err = _bulkFriendlyErr(String(r.error)); err++; }
+          else {
+            let rv = r;
+            try { if (typeof _videoAppResolve === 'function') rv = await _videoAppResolve(r, { resolution: cfg.vidRes, aspect: _tfVidAspect(cfg.aspect) }); } catch (eR) { rv = { error: 'App resolve lỗi: ' + (eR.message || eR) }; }
+            if (rv && !rv.error && (rv.video?.b64 || rv.videoUrl)){
+              it.status = 'done'; it.pct = 100; it.b64 = rv.video?.b64 || null; it.mime = rv.video?.mime || 'video/mp4'; it.videoUrl = rv.videoUrl || null;
+              it._vidRes = rv.resolution || null;
+              done++;
+              try { if (typeof autoSaveMedia === 'function' && it.b64) { const sv = await autoSaveMedia(it.name + '.mp4', it.b64, 'video'); if (sv && sv.path) it._savedPath = sv.path; } } catch (e2) {}
+            }
+            else { it.status = 'err'; it.err = _bulkFriendlyErr(String((rv && (rv.error || rv.raw)) || 'Không có video trả về — token hết hạn / model / bị lọc?')); err++; }
+          }
+        }
+        else {
         const entries = (r && r.media_entries) || [];
         const e0 = entries.find(e => e.dataUrl);
         if (r && r.error) { it.status = 'err'; it.err = _bulkFriendlyErr(String(r.error)); err++; }
@@ -268,18 +407,19 @@ async function bulkGenerate(retryOnly){
           console.warn('[bulk] "' + it.name + '" không ra ảnh — response:', r);
           err++;
         }
+        }
       } catch (e) { clearInterval(tick); it.status = 'err'; it.err = e.message || String(e); err++; }
       // Nhật ký per-account (như đối thủ)
       try {
         // Xoay tài khoản do hết lượt/credit → ghi rõ
         if (Array.isArray(it._rotated)) for (const ex of it._rotated) novaLog('⚠️ ' + ex + ' hết lượt hôm nay → chuyển ' + it.name + ' sang ' + (it._acc || 'tài khoản khác'), 'warn');
-        if (it.status === 'done') { novaLog('✅ ' + it.name + ' · tài khoản ' + (it._acc || '?') + ' · thành công' + (it.upscaled ? ' (2K/4K)' : ''), 'ok'); if (it._savedPath) novaLog('   💾 đã lưu: ' + it._savedPath, 'ok'); }
+        if (it.status === 'done') { novaLog('✅ ' + it.name + ((it.mime && it.mime.indexOf('video/') === 0) ? '.mp4' : '') + ' · tài khoản ' + (it._acc || '?') + ' · thành công' + (it.upscaled ? ' (2K/4K)' : '') + (it._vidRes ? (' · ' + it._vidRes) : ''), 'ok'); if (it._savedPath) novaLog('   💾 đã lưu: ' + it._savedPath, 'ok'); }
         else if (it.status === 'err') { const q = /429|QUOTA|EXHAUSTED|hết giới hạn/i.test(String(it.err)); novaLog((q ? '⚠️ ' : '❌ ') + it.name + ' · ' + (it._acc ? ('tài khoản ' + it._acc + ' · ') : '') + (q ? 'hết quota → chuyển tài khoản' : (it.err || 'lỗi')), q ? 'warn' : 'err'); }
       } catch (e3) {}
       bulkRenderGrid();
       const _rem = targets.length - done - err;
       const _eta = (done > 0 && _t0) ? _fmtEta(((performance.now() - _t0) / 1000 / done) * _rem) : '';
-      setStatusF(`Tạo ảnh: ${done} xong · ${err} lỗi · còn ${_rem}${_eta ? ' · ~' + _eta + ' nữa' : ''}`, 'working');
+      setStatusF(`Tạo ${_noun}: ${done} xong · ${err} lỗi · còn ${_rem}${_eta ? ' · ~' + _eta + ' nữa' : ''}`, 'working');
     }, conc, cfg.delay || 0);
   } catch (e) { setStatusF('Lỗi: ' + (e.message || e), 'error'); }
   // 📊 Tóm tắt: tách lỗi do QUOTA (tài khoản hết lượt) vs lỗi tạm thời (có thể tự thử lại).
@@ -287,21 +427,21 @@ async function bulkGenerate(retryOnly){
   const errItems = bulkState.items.filter(it => it.status === 'err');
   const quotaErr = errItems.filter(it => _reQuota.test(String(it.err))).length;
   const softErr = errItems.length - quotaErr;
-  novaLog('━━━ ' + (bulkState.stop ? '■ Đã dừng' : '✔ Hoàn tất') + ' · ' + done + '/' + targets.length + ' ảnh' + (err ? ' · ' + err + ' lỗi' : '') + ' ━━━', done && !err ? 'ok' : (err ? 'warn' : 'acc'));
-  if (quotaErr) novaLog('  • ' + quotaErr + ' ảnh lỗi do TÀI KHOẢN HẾT LƯỢT — thêm tài khoản Flow ở Cài đặt, hoặc thử lại sau khi quota hồi.', 'warn');
+  novaLog('━━━ ' + (bulkState.stop ? '■ Đã dừng' : '✔ Hoàn tất') + ' · ' + done + '/' + targets.length + ' ' + _noun + (err ? ' · ' + err + ' lỗi' : '') + ' ━━━', done && !err ? 'ok' : (err ? 'warn' : 'acc'));
+  if (quotaErr) novaLog('  • ' + quotaErr + ' ' + _noun + ' lỗi do TÀI KHOẢN HẾT LƯỢT — thêm tài khoản Flow ở Cài đặt, hoặc thử lại sau khi quota hồi.', 'warn');
   bulkState.running = false; _bulkSyncBtn();
   bulkRenderGrid();
   // ↻ AUTO-RETRY: chỉ lỗi TẠM THỜI (không phải quota), tối đa 2 lần, sau 2.5s.
   if (!retryOnly) bulkState._autoRetries = 0;
   if (!bulkState.stop && softErr > 0 && (bulkState._autoRetries || 0) < 2){
     bulkState._autoRetries = (bulkState._autoRetries || 0) + 1;
-    setStatusF(`↻ Tự thử lại ${softErr} ảnh lỗi tạm thời (lần ${bulkState._autoRetries})…`, 'working');
-    novaLog('↻ Tự thử lại ' + softErr + ' ảnh lỗi tạm thời (lần ' + bulkState._autoRetries + ')…', 'acc');
+    setStatusF(`↻ Tự thử lại ${softErr} ${_noun} lỗi tạm thời (lần ${bulkState._autoRetries})…`, 'working');
+    novaLog('↻ Tự thử lại ' + softErr + ' ' + _noun + ' lỗi tạm thời (lần ' + bulkState._autoRetries + ')…', 'acc');
     setTimeout(() => { if (!bulkState.running && !bulkState.stop) bulkGenerate(true); }, 2500);
     return;
   }
-  setStatusF(bulkState.stop ? `Đã dừng. ${done} ảnh.` : `✓ Xong ${done} ảnh${err ? `, ${err} lỗi${quotaErr ? ' (' + quotaErr + ' do hết quota)' : ''}` : ''}.`, err ? 'error' : 'ok');
-  try { if (typeof notifyDone === 'function') notifyDone('✓ Tạo ảnh hàng loạt xong', `${done} ảnh, ${err} lỗi.`); } catch (e) {}
+  setStatusF(bulkState.stop ? `Đã dừng. ${done} ${_noun}.` : `✓ Xong ${done} ${_noun}${err ? `, ${err} lỗi${quotaErr ? ' (' + quotaErr + ' do hết quota)' : ''}` : ''}.`, err ? 'error' : 'ok');
+  try { if (typeof notifyDone === 'function') notifyDone('✓ Tạo ' + _noun + ' hàng loạt xong', `${done} ${_noun}, ${err} lỗi.`); } catch (e) {}
 }
 
 function bulkUpsRender(st){
@@ -356,11 +496,58 @@ async function bulkFlowStatus(){
   } catch (e) { el.innerHTML = '<span style="color:var(--amber)">⚠️ Chưa kết nối</span> <span style="color:var(--text-muted)">— vào' + setg + '</span>'; }
 }
 
+// Tải 1 loạt mục done — cả ảnh (dataUrl) lẫn video (b64 → blob / videoUrl).
+async function _bulkDownloadItems(items){
+  let n = 0;
+  for (const it of items){
+    try {
+      if (it.mime && it.mime.indexOf('video/') === 0){
+        if (it.b64 && typeof _mvDownload === 'function' && typeof _b64ToBlob === 'function'){ _mvDownload(_b64ToBlob(it.b64, it.mime), it.name + '.mp4'); n++; }
+        else if (it.videoUrl && typeof novaDownloadUrl === 'function'){ novaDownloadUrl(it.videoUrl, it.name + '.mp4'); n++; }
+      } else if (it.dataUrl){
+        const a = document.createElement('a'); a.href = it.dataUrl; a.download = it.name + '.' + (((it.mime || 'image/png').split('/')[1] || 'png').replace('jpeg', 'jpg')); document.body.appendChild(a); a.click(); a.remove(); n++;
+      }
+    } catch (e) { console.warn('[bulk] tải xuống lỗi:', it.name, e); }
+    await new Promise(r => setTimeout(r, 120));
+  }
+  return n;
+}
+
 async function bulkDownloadAll(){
-  const done = bulkState.items.filter(x => x.status === 'done' && x.dataUrl);
-  if (!done.length) { setStatusF('Chưa có ảnh nào để tải.', 'error'); return; }
-  for (const it of done) { const a = document.createElement('a'); a.href = it.dataUrl; a.download = it.name + '.' + (((it.mime || 'image/png').split('/')[1] || 'png').replace('jpeg', 'jpg')); document.body.appendChild(a); a.click(); a.remove(); await new Promise(r => setTimeout(r, 120)); }
-  setStatusF(`Đã tải ${done.length} ảnh.`, 'ok');
+  const done = bulkState.items.filter(x => x.status === 'done');
+  if (!done.length) { setStatusF('Chưa có kết quả nào để tải.', 'error'); return; }
+  const n = await _bulkDownloadItems(done);
+  setStatusF(`Đã tải ${n} mục.`, 'ok');
+}
+
+// ✨ Trợ lý prompt (P0 TobyFlow): AI viết lại từng dòng prompt trong ô danh sách — giữ nguyên số dòng + tiền tố "tên |".
+async function bulkPromptAssist(){
+  if (bulkState.running) return;
+  const ta = document.getElementById('bulkPrompts'); if (!ta) return;
+  const lines = ta.value.split('\n');
+  const idxs = lines.map((s, i) => s.trim() ? i : -1).filter(i => i >= 0);
+  if (!idxs.length) { setStatusF('Chưa có prompt nào để cải thiện.', 'error'); return; }
+  if (idxs.length > 40 && !confirm('Trợ lý prompt sẽ viết lại ' + idxs.length + ' dòng bằng AI. Tiếp tục?')) return;
+  const kind = _bulkKind();
+  setStatusF('✨ Đang cải thiện ' + idxs.length + ' prompt bằng AI…', 'working');
+  const styleGuide = (kind === 'video')
+    ? 'Rewrite each line into ONE English Veo 3.1 video prompt in this exact order: camera movement + shot size, subject, small slow action, context, style & ambiance. No spoken lines, no on-screen text, under 80 words.'
+    : 'Rewrite each line into ONE rich English image-generation prompt: clear subject, composition and shot, lighting, colour palette, art medium, mood. One single scene, no text inside the image, under 80 words.';
+  const list = idxs.map(i => lines[i]);
+  const req = 'You are a prompt engineer for Google Flow (' + (kind === 'video' ? 'Veo video' : 'Nano Banana image') + ').\n'
+    + styleGuide + '\n'
+    + 'Keep every prompt self-contained. Preserve any leading "name | " prefix exactly as given. Do NOT merge or split lines — output EXACTLY ' + list.length + ' prompts, same order.\n'
+    + 'Return ONLY JSON: {"prompts": ["...", ...]}\n\nPROMPTS:\n'
+    + list.map((p, i) => (i + 1) + '. ' + p).join('\n');
+  try {
+    const data = await callLLMJson(req, { maxTokens: 8000, validate: d => d && Array.isArray(d.prompts) && d.prompts.length === list.length });
+    const np = data.prompts.map(s => String(s || '').trim());
+    idxs.forEach((li, k) => { if (np[k]) lines[li] = np[k]; });
+    ta.value = lines.join('\n');
+    bulkUpdateCount();
+    setStatusF('✓ Đã cải thiện ' + idxs.length + ' prompt. Rà lại trước khi bấm Tạo tất cả.', 'ok');
+    novaLog('✨ Trợ lý prompt: đã viết lại ' + idxs.length + ' prompt (' + (kind === 'video' ? 'video' : 'ảnh') + ')', 'ok');
+  } catch (e) { setStatusF('Trợ lý prompt lỗi: ' + (e.message || e), 'error'); }
 }
 
 function tfCfg(){
@@ -370,6 +557,13 @@ function tfCfg(){
     quality: document.getElementById('tfQuality').value,
     conc: parseInt(document.getElementById('tfConc').value) || 2,
     delay: (document.getElementById('tfDelay')?.value === 'rand510' ? -1 : (parseInt(document.getElementById('tfDelay')?.value) || 0)),   // độ trễ giữa các lần gọi ảnh (ms); -1 = ngẫu nhiên 5–10s
+    // P0 TobyFlow — bulk Ảnh/Video:
+    kind: (document.getElementById('tfKind')?.value === 'video') ? 'video' : 'image',
+    vidModel: document.getElementById('tfVidModel')?.value || 'omni-flash',
+    vidDur: parseInt(document.getElementById('tfVidDur')?.value, 10) || 8,
+    vidRes: document.getElementById('tfVidRes')?.value || '720p',
+    vidChain: document.getElementById('tfVidChain')?.value || 'off',
+    refMode: document.getElementById('tfRefMode')?.value || 'all',
   };
 }
 
@@ -1025,7 +1219,42 @@ function _refRoleNote(names){
     + '- Keep line work, shading, colour palette and overall art style consistent with the reference.';
 }
 
+function _tfVidAspect(a){ return /PORTRAIT/i.test(String(a || '')) ? 'VIDEO_ASPECT_RATIO_PORTRAIT' : 'VIDEO_ASPECT_RATIO_LANDSCAPE'; }
+
+function _tfVidModelKey(slug){
+  const dynamic = (typeof tvModelKeys !== 'undefined' && tvModelKeys) || {};
+  return dynamic[slug] || (typeof TV_BUILTIN_MODEL_KEYS !== 'undefined' ? TV_BUILTIN_MODEL_KEYS[slug] : null) || '';
+}
+
+// Video Veo qua pool — cùng luồng Tool "Tạo video Flow" (POOL_GEN_VIDEO, extension lẫn native đều chạy).
+// chainImage: { base64 (thô, không tiền tố data:), mime } — khung đầu image→video từ ảnh vừa gen.
+async function _tfDispatchVideo(prompt, o){
+  const cfg = o.cfg;
+  return flowBridge.call('POOL_GEN_VIDEO', {
+    prompt,
+    aspect: _tfVidAspect(cfg.aspect),
+    durationSecs: cfg.vidDur,
+    modelKey: _tfVidModelKey(cfg.vidModel),
+    resolution: cfg.vidRes,
+    sceneId: o.sceneId || ('tf-' + String(o.idx != null ? o.idx : 0)),
+    image: (o.chainImage && o.chainImage.base64) ? { base64: o.chainImage.base64, mime: o.chainImage.mime || 'image/png' } : undefined,
+    withData: true,
+  });
+}
+
+// Chain ảnh vừa gen làm khung đầu video: 'same' = ảnh done cùng tên (dòng "tên | …"), 'prev' = ảnh done của dòng liền trước.
+function _bulkChainImage(it, idx){
+  const mode = (document.getElementById('tfVidChain')?.value) || 'off';
+  let src = null;
+  if (mode === 'same') src = bulkState.items.find(x => x !== it && x.name === it.name && x.status === 'done' && x.dataUrl);
+  else if (mode === 'prev'){ for (let j = (idx || 0) - 1; j >= 0; j--){ const x = bulkState.items[j]; if (x && x.status === 'done' && x.dataUrl){ src = x; break; } } }
+  if (!src || !src.dataUrl) return null;
+  const b64 = String(src.dataUrl).startsWith('data:') ? src.dataUrl.slice(src.dataUrl.indexOf(',') + 1) : src.dataUrl;
+  return { base64: b64, mime: src.mime || 'image/png' };
+}
+
 async function tfDispatchGen(prompt, refNames, o){
+  if (o.cfg.kind === 'video') return _tfDispatchVideo(prompt, o);
   if (o.multi){
     const refs = (refNames || []).map(n => {
       const img = o.imgMap[n]; if (!img) return null;

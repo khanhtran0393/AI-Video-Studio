@@ -1,5 +1,9 @@
 /* TS — Tool kịch bản / novel architect (_tsNovel*), timer elapsed
-   Tách verbatim từ src/toolbox/utility.js (2026-09-10) — không sửa thân hàm.
+   Tách verbatim từ src/toolbox/utility.js (2026-09-10). 2026-09-15: rework
+   Bút pháp kể chuyện / Văn hóa bản địa / Đòn bẩy tâm lý / Kỹ năng viết / CTA —
+   prompt Novel bỏ CHANNEL STYLE (o.style), nhận o.skill / o.lever / o.cta;
+   diễn giải bút pháp dùng _tsButPhapNote() khai báo trong tool-ts.js (gọi lúc
+   runtime nên thứ tự nạp không ảnh hưởng).
    Toàn bộ là function declaration: chỉ gọi lúc runtime, thứ tự nạp không ảnh hưởng. */
 function setStatusScript(msg, type){
   const el = document.getElementById('statusScript'); if (!el) return;
@@ -27,8 +31,9 @@ function _tsClean(t){
 async function _tsNovelArchitect(o){
   const prompt =
 `You are the story ARCHITECT for a long multi-chapter faceless YouTube voiceover script.
-TOPIC: "${o.topic}". LANGUAGE: ${o.lang}. TONE: ${o.tone}. TOTAL: about ${o.words} words, split into ${o.n} chapters of ~${o.chWords} words each.
-${o.style ? 'CHANNEL STYLE (voice & tone only; ignore any word counts inside it):\n' + o.style.replace(/\{\{\s*WORDS\s*\}\}/gi, String(o.words)) + '\n' : ''}${o.rewrite ? 'Design a DIFFERENT angle and a different opening twist than the obvious approach.\n' : ''}
+TOPIC: "${o.topic}". LANGUAGE: ${o.lang}. NARRATIVE STYLE (bút pháp kể chuyện): ${o.tone} — ${_tsButPhapNote(o.tone)}.
+TOTAL: about ${o.words} words, split into ${o.n} chapters of ~${o.chWords} words each.
+${o.skill ? 'WRITING SKILL: the series will be written applying the "' + o.skill + '" method — factor it into the chapter goals and pacing.\n' : ''}${o.lever ? 'PSYCHOLOGICAL LEVER (opening hook — déjà vu effect): chapter 1 must open around this lever: "' + o.lever + '" — shape the premise so the déjà-vu hook works.\n' : ''}${o.cta ? 'CALL TO ACTION: the final chapter must end with ONE natural spoken CTA (like/subscribe/comment/watch next) woven into the narration — plan the ending to land right before it.\n' : ''}${o.rewrite ? 'Design a DIFFERENT angle and a different opening twist than the obvious approach.\n' : ''}
 Design the skeleton so later chapters CAN stay consistent with earlier ones.
 Return ONLY raw JSON, EXACTLY these keys:
 {"premise":"1-2 câu tiền đề","ending":"hướng kết cục (mở/đóng) + cảm xúc cuối","characters":[{"name":"","role":"","description":"1 câu"}],"threads":[{"id":"T1","name":"","description":"1 câu"}],"chapters":[{"title":"","goal":"1 câu — chương này đạt được gì để mạch truyện tiến","words":${o.chWords}}]}
@@ -67,8 +72,8 @@ function _tsNovelChapterPrompt(o, bible, mem, ch, i){
   const chars = (bible.characters || []).map((c) => `${c.name} (${c.role || '?'}) — ${c.description || ''}`).join('; ');
   return `You are a professional voiceover scriptwriter for faceless YouTube videos, writing ONE chapter of a multi-chapter story.
 TASK: Write ONLY chapter ${i + 1} of ${o.n} — "${ch.title}". CHAPTER GOAL: ${ch.goal || '(theo mạch truyện)'}.
-LANGUAGE: ${o.lang}. TONE: ${o.tone}. LENGTH: about ${ch.words} words (max 10% deviation).
-${o.style ? 'CHANNEL STYLE (giọng văn; quy tắc LENGTH dưới đây đè lên mọi số từ trong style):\n' + o.style.replace(/\{\{\s*WORDS\s*\}\}/gi, String(ch.words)) + '\n' : ''}
+LANGUAGE: ${o.lang}. NARRATIVE STYLE (bút pháp kể chuyện): ${o.tone} — ${_tsButPhapNote(o.tone)}. LENGTH: about ${ch.words} words (max 10% deviation).
+${o.skill ? 'WRITING SKILL: apply the "' + o.skill + '" method consistently in the structure and pacing of this chapter.\n' : ''}${i === 0 && o.lever ? 'PSYCHOLOGICAL LEVER (opening hook — déjà vu effect): build the opening of this first chapter around this lever: "' + o.lever + '". The first sentences must trigger a déjà-vu feeling — the viewer feels they have lived or seen this moment before — so they stay hooked. Subtle and honest, no fake claims.\n' : ''}${i === o.n - 1 && o.cta ? 'CALL TO ACTION: near the end of this final chapter, weave in ONE natural spoken CTA (like/subscribe/comment/watch next) that fits the story — 1-2 sentences, warm and not salesy, no URLs.\n' : ''}
 STORY BIBLE (khung cố định):
 - Tiền đề: ${bible.premise || ''}
 - Hướng kết cục: ${bible.ending || ''}
@@ -80,7 +85,7 @@ ABSOLUTE CONSISTENCY (quan trọng nhất):
 - Tuyến còn [open] thì chỉ ĐẨY TIẾN (thêm chi tiết mới, không lặp nguyên văn), chưa khép; khép các tuyến chính ở chương cuối.
 - Mỗi đoạn chỉ tiến THÊM 1 điều mới (biến cố/con số/hậu quả); cấm diễn giải lại ý cũ bằng lời khác.
 RETENTION:
-- Cấm: "ít ai biết rằng", xưng hô khán giả ("các bạn ơi"), kết kiểu đạo lý.
+- Cấm: "ít ai biết rằng", xưng hô khán giả ("các bạn ơi"), kết kiểu đạo lý${i === o.n - 1 && o.cta ? ' — NGOẠI TRỪ đúng 1 moment CTA ở gần cuối chương này' : ''}.
 OUTPUT RULES (very important):
 - Return ONLY the narration text of THIS chapter. First character = first letter of the opening sentence.
 - No chapter titles, no numbering, no [labels], no markdown, no emoji, no lead-in, no word counts.

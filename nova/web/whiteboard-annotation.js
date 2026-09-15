@@ -341,6 +341,15 @@
     if (ann.sceneDurationMs - lastEnd < HOLD_MS) {
       warnings.push('cảnh kết thúc thiếu >= ' + HOLD_MS + 'ms giữ hình trọn vẹn (hiện ' + (ann.sceneDurationMs - lastEnd) + 'ms)');
     }
+    // khung đầu = giấy trống (QA repo): nét vẽ đầu tiên phải sau LEAD_IN_MS
+    if (els.length) {
+      const firstStart = els.reduce((mn, el) => Math.min(mn, (el.reveal && el.reveal.startMs) || 0), Infinity);
+      if (firstStart <= 0) {
+        errors.push('khung đầu: có element bắt đầu lúc 0ms — nét vẽ lộ trên giấy trống');
+      } else if (firstStart < LEAD_IN_MS) {
+        warnings.push('khung đầu thiếu >= ' + LEAD_IN_MS + 'ms giấy trống trước nét vẽ (element bắt đầu lúc ' + firstStart + 'ms)');
+      }
+    }
     const uniq = new Set(els.map((e) => e.sequence));
     if (uniq.size !== els.length) errors.push('sequence bị trùng');
     return { ok: errors.length === 0, errors, warnings };

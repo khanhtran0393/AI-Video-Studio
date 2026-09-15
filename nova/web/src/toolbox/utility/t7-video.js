@@ -1,5 +1,8 @@
 /* T7 — Quản lý VIDEO của profile: new/switch/rename/delete video, video select, video manager, clearAllT3/T5
    Tách verbatim từ src/toolbox/utility/t7.js (2026-09-11, file gốc 2264 dòng quá ngưỡng) — không sửa thân hàm.
+   Ngoại lệ 2026-09-15 (tối ưu lag đổi profile/video): saveState CUỐI của newVideo/switchVideo
+   đổi thành saveState(true, true) (skipImages) — ảnh vừa đọc từ IDB, ghi lại là I/O lãng phí.
+   saveState TRƯỚC khi rời video (dòng 17/42) giữ nguyên full save — đó là chỗ lưu ảnh video cũ.
    Toàn bộ là function declaration: chỉ gọi lúc runtime, thứ tự nạp giữa các file t7-*.js không ảnh hưởng. */
 
 function _renumberVideos(p){
@@ -29,7 +32,7 @@ async function newVideo(){
   try { _t2ResetTimingAudio(); } catch (e) {}   // xoá MP3 căn timing của video cũ
   rerenderAllAfterProfileLoad();
   renderVideoSelect();
-  saveState(true);
+  saveState(true, true);   // video mới trắng ảnh — đừng ghi 8 key rỗng vào IDB (2026-09-15, tối ưu lag)
   if (typeof setStatus1 === 'function') setStatus1('✓ Đã tạo "' + v.name + '" — trắng tinh, dùng chung style + nhân vật/bối cảnh của kênh. Bắt đầu ở Phân Cảnh.', 'ok');
 }
 
@@ -48,7 +51,7 @@ async function switchVideo(id){
   try { await loadProfileImages(p.profileId, id); } catch (e) {}   // loadProfileImages tự nạp/xoá MP3 giọng đọc riêng của video này
   rerenderAllAfterProfileLoad();
   renderVideoSelect();
-  saveState(true);
+  saveState(true, true);   // ảnh vừa đọc từ IDB — KHÔNG ghi lại (I/O lãng phí gây lag khi đổi video, 2026-09-15)
 }
 
 async function renameVideo(){

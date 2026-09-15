@@ -65,6 +65,36 @@ async function main() {
   check('GET → 405 AVS_AGENT_METHOD_NOT_ALLOWED',
     getRes.status === 405 && getRes.json.error.code === 'AVS_AGENT_METHOD_NOT_ALLOWED', getRes.json);
 
+  // ── Browser agent (2026-09-15) — policy + lỗi lộ liễu KHÔNG cần Chrome/Electron ──
+  const ba = require(path.join(__dirname, '..', 'flow-chrome', 'browser-agent'));
+  check('browser-agent: allowlist host đúng (labs.google ✓ / youtube.com ✓ / evil.example ✗ / file: ✗)',
+    ba.isHostAllowed('https://labs.google/fx/tools/flow') === true
+    && ba.isHostAllowed('https://www.youtube.com/watch?v=x') === true
+    && ba.isHostAllowed('https://evil.example.com') === false
+    && ba.isHostAllowed('file:///C:/x') === false
+    && ba.isHostAllowed('khong-phai-url') === false);
+
+  const pingActions = ping.json.data.actions || [];
+  check('ping liệt kê cả browser.*',
+    ['browser.navigate', 'browser.eval', 'browser.screenshot', 'browser.record.start', 'browser.cancel']
+      .every((a) => pingActions.includes(a)), pingActions);
+
+  const denied = await request(port, 'POST', JSON.stringify({ action: 'browser.navigate', params: { url: 'https://evil.example.com' } }));
+  check('browser.navigate host lạ → AVS_BROWSER_HOST_DENIED (409, chặn TRƯỚC khi đụng Chrome)',
+    denied.status === 409 && denied.json.error.code === 'AVS_BROWSER_HOST_DENIED', denied.json);
+
+  const nosess = await request(port, 'POST', JSON.stringify({ action: 'browser.navigate', params: { url: 'https://labs.google/fx/tools/flow' } }));
+  check('browser.navigate host hợp lệ nhưng không có phiên Chrome → AVS_BROWSER_NO_SESSION (409)',
+    nosess.status === 409 && nosess.json.error.code === 'AVS_BROWSER_NO_SESSION', nosess.json);
+
+  const noEval = await request(port, 'POST', JSON.stringify({ action: 'browser.eval', params: { expression: '1+1' } }));
+  check('browser.eval không có phiên Chrome → AVS_BROWSER_NO_SESSION (409)',
+    noEval.status === 409 && noEval.json.error.code === 'AVS_BROWSER_NO_SESSION', noEval.json);
+
+  const unknownBrowser = await request(port, 'POST', JSON.stringify({ action: 'browser.nhay-cua-so', params: {} }));
+  check('browser.* lạ → AVS_AGENT_UNKNOWN_ACTION (400, không rơi vào browser-agent)',
+    unknownBrowser.status === 400 && unknownBrowser.json.error.code === 'AVS_AGENT_UNKNOWN_ACTION', unknownBrowser.json);
+
   console.log(fail === 0 ? 'ALL PASS' : fail + ' CASE(S) FAIL');
   process.exit(fail === 0 ? 0 : 1);
 }

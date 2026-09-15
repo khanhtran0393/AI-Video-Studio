@@ -10,14 +10,12 @@ function tsUpdateScale() {
    
    const nb = document.getElementById('tsNovelBtn');
    if(nb) {
-      // Đồng bộ ĐỦ 3 lớp khi QUY MÔ thay đổi. Novel cần ≥ 2 chương:
-      // CHƯƠNG > 1 → tự bật chip; CHƯƠNG quay về 1 → tự tắt + báo rõ.
-      const wasOn = nb.classList.contains('on');
+      // Đồng bộ ĐỦ khi QUY MÔ thay đổi. Novel cần ≥ 2 chương:
+      // CHƯƠNG > 1 → tự bật nút gạt; CHƯƠNG quay về 1 → tự tắt + báo rõ.
+      // Gạt trực tiếp .checked (không phát onchange — tự lưu state + hint tại đây).
+      const wasOn = !!nb.checked;
       const on = ch > 1;
-      nb.classList.toggle('on', on);
-      nb.style.borderColor = on ? 'var(--accent)' : '';
-      nb.style.color = on ? 'var(--accent)' : '';
-      nb.innerHTML = on ? '📖 Novel: <b style="color:var(--accent)">BẬT</b>' : '📖 Novel: TẮT';
+      nb.checked = on;
       try { localStorage.setItem('ts_novel_mode', on ? '1' : '0'); } catch (e) {}
       const h = document.getElementById('tsNovelHint'); if (h) h.style.display = on ? '' : 'none';
       if (wasOn && !on && typeof setStatusScript === 'function')

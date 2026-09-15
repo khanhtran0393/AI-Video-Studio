@@ -49,7 +49,7 @@ const ADMIN_UIDS = ['UxxIxoq6v1Zk1sa0oc40C7AMuVB3'];
 const setStatusAdm = (m, t) => setStatusBar('statusadm', m, t);
 
 // === L?: const _TF_CFG_IDS ===
-const _TF_CFG_IDS = ['tfModel', 'tfAspect', 'tfQuality', 'tfConc', 'tfDelay'];
+const _TF_CFG_IDS = ['tfModel', 'tfAspect', 'tfQuality', 'tfConc', 'tfDelay', 'tfKind', 'tfRefMode', 'tfVidModel', 'tfVidDur', 'tfVidRes', 'tfVidChain'];
 
 // === L?: let _updState, _appVer, _updDismissed ===
 let _updState = null, _appVer = '', _updDismissed = false;

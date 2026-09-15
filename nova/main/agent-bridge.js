@@ -11,6 +11,10 @@
  *   - ping   : xác nhận app đang chạy, trả danh sách action hợp lệ.
  *   - status : trạng thái runtime (cửa sổ chính, port server).
  *   - focus  : hiện & focus cửa sổ chính.
+ *   - browser.* : điều khiển Chrome flow-chrome ĐANG CHẠY qua CDP (navigate/
+ *     click/type/scroll/wait_for/eval/list_tabs/screenshot + record.start/
+ *     record.stop/cancel) — ủy thác cho nova/flow-chrome/browser-agent.js.
+ *     Mọi action browser.* là ASYNC: handleAgentCommand await kết quả.
  */
 const state = require('./state');
 
@@ -56,7 +60,7 @@ function actionPing() {
   return {
     app: 'AI Video Studio',
     commandPath: AGENT_COMMAND_PATH,
-    actions: ['ping', 'status', 'focus'],
+    actions: Object.keys(ACTIONS),
   };
 }
 
@@ -81,7 +85,31 @@ function actionFocus() {
   return { focused: true };
 }
 
-const ACTIONS = { ping: actionPing, status: actionStatus, focus: actionFocus };
+// ── Browser agent: ủy thác cho nova/flow-chrome/browser-agent.js ─────
+// Lazy-require BÊN TRONG hàm (không nạp flow-chrome khi server khởi động,
+// và để test Node thuần đi được nhánh lỗi không cần Electron).
+function browserAgent() { return require('../flow-chrome/browser-agent'); }
+
+function browserAction(commandName) {
+  return (params) => browserAgent().run(commandName, params || {});
+}
+
+const ACTIONS = {
+  ping: actionPing,
+  status: actionStatus,
+  focus: actionFocus,
+  'browser.navigate': browserAction('NAVIGATE'),
+  'browser.click': browserAction('CLICK'),
+  'browser.type': browserAction('TYPE'),
+  'browser.scroll': browserAction('SCROLL'),
+  'browser.wait_for': browserAction('WAIT_FOR'),
+  'browser.eval': browserAction('EVAL'),
+  'browser.list_tabs': browserAction('LIST_TABS'),
+  'browser.screenshot': browserAction('CAPTURE_TAB'),
+  'browser.record.start': browserAction('RECORD_START'),
+  'browser.record.stop': browserAction('RECORD_STOP'),
+  'browser.cancel': browserAction('CANCEL'),
+};
 
 async function handleAgentCommand(req, res) {
   if (req.method !== 'POST') {
@@ -126,13 +154,22 @@ async function handleAgentCommand(req, res) {
     });
   }
   try {
-    const data = fn(parsed.params || {});
+    const data = await fn(parsed.params || {});
     return sendJson(res, 200, { ok: true, data });
   } catch (e) {
-    // Lỗi nghiệp vụ (vd chưa có cửa sổ) — lộ liễu kèm error code (Luật 10).
+    // Lỗi nghiệp vụ — lộ liễu kèm error code (Luật 10).
+    // browser.* : nếu còn phiên ghi hình đang chạy → đóng + trả WebM kèm lỗi
+    // (dữ liệu phục hồi, KHÔNG che lỗi gốc).
+    let recording = null;
+    if (action.indexOf('browser.') === 0) {
+      try { recording = await browserAgent().finalizeOnError(); } catch (_) { recording = null; }
+    }
     return sendJson(res, 409, {
       ok: false,
-      error: { code: e.code || 'AVS_AGENT_ACTION_FAILED', message: e.message },
+      error: Object.assign(
+        { code: e.code || 'AVS_AGENT_ACTION_FAILED', message: e.message },
+        recording ? { recording } : {}
+      ),
     });
   }
 }

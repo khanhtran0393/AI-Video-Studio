@@ -169,8 +169,8 @@
     ============================================================ -->
     <div class="tool" id="tool-toolflow">
       <div class="tool-head">
-        <div class="tool-title">🖼️ Tạo Ảnh Hàng Loạt</div>
-        <div class="tool-subtitle">Nhập danh sách prompt → tạo ảnh loạt (đa tài khoản, chạy song song, tự lưu). Hợp làm thumbnail, ảnh minh hoạ, test prompt số lượng lớn.</div>
+        <div class="tool-title">🖼️ Tạo Ảnh / Video Hàng Loạt</div>
+        <div class="tool-subtitle">Nhập danh sách prompt → tạo ảnh hoặc video Veo loạt (đa tài khoản, chạy song song, tự lưu, chain được ảnh vừa gen làm khung đầu video).</div>
       </div>
 
       <div id="bulkAcctBar" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:11px 15px;margin-bottom:14px;font-size:12.5px"></div>
@@ -258,6 +258,11 @@
           </span>
         </div>
         <textarea id="bulkPrompts" oninput="bulkUpdateCount()" placeholder="Mỗi dòng 1 prompt = 1 ảnh.&#10;Muốn đặt tên file:  ten-file | prompt" style="width:100%;min-height:150px;background:var(--surface-2);line-height:1.6;border:1px solid var(--border);border-radius:11px;padding:12px 14px"></textarea>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap;font-size:11.5px;color:var(--text-dim)">
+          <span>⚡ Chèn nhanh vào prompt (tại con trỏ):</span>
+          <select id="bulkModAngle" onchange="bulkInsertSnippet(this)" style="max-width:220px"></select>
+          <select id="bulkModEffect" onchange="bulkInsertSnippet(this)" style="max-width:220px"></select>
+        </div>
         <div style="font-size:11.5px;color:var(--text-dim);margin-top:8px">💡 1 dòng = 1 ảnh. Thêm <code style="background:var(--surface-3);padding:1px 5px;border-radius:4px">tên | prompt</code> để tự đặt tên file. Dòng trống bỏ qua.</div>
       </div>
 
@@ -265,12 +270,26 @@
       <div class="fc">
         <div class="fc-step"><span class="n">2</span> Cấu hình</div>
         <div id="genCfgBlock">
+        <div style="display:flex;gap:12px;align-items:end;flex-wrap:wrap;margin-bottom:12px">
+          <div style="min-width:160px"><label class="label">Loại đầu ra</label><select id="tfKind" onchange="tfSyncKindUI()" style="width:100%"><option value="image" selected>🖼️ Ảnh</option><option value="video">🎬 Video (Veo)</option></select></div>
+          <div style="min-width:200px"><label class="label">Chế độ ref</label><select id="tfRefMode" style="width:100%"><option value="all" selected>Mọi dòng đính tất cả ref</option><option value="seq">Từng dòng 1 ref (theo thứ tự)</option><option value="none">Không dùng ref</option></select></div>
+          <div style="font-size:11px;color:var(--text-dim);flex:1;min-width:220px">💡 Gõ <code style="background:var(--surface-3);padding:1px 5px;border-radius:4px">[tên-ref]</code> hoặc <code style="background:var(--surface-3);padding:1px 5px;border-radius:4px">@tên-ref</code> trong dòng prompt → dòng đó chỉ đính ref khớp (ghi đè chế độ ref, trừ "Không dùng ref").</div>
+        </div>
         <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;align-items:end">
           <div><label class="label">Model</label><select id="tfModel" style="width:100%"><option value="GEM_PIX_2" selected>Nano Banana Pro</option><option value="NARWHAL">Nano Banana 2</option></select></div>
           <div><label class="label">Tỷ lệ</label><select id="tfAspect" style="width:100%"><option value="IMAGE_ASPECT_RATIO_LANDSCAPE" selected>16:9 (ngang)</option><option value="IMAGE_ASPECT_RATIO_PORTRAIT">9:16 (dọc)</option><option value="IMAGE_ASPECT_RATIO_SQUARE">1:1 (vuông)</option></select></div>
           <div><label class="label">Chất lượng</label><select id="tfQuality" style="width:100%"><option value="orig" selected>Gốc</option><option value="2048">2K</option><option value="3840">4K</option></select></div>
           <div><label class="label">Luồng song song</label><select id="tfConc" style="width:100%"><option value="1">1</option><option value="2" selected>2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="8">8</option><option value="10">10</option></select></div>
           <div><label class="label" title="Nghỉ giữa mỗi lần gọi ảnh để tránh Google nghi spam.">Độ trễ</label><select id="tfDelay" style="width:100%"><option value="0">Không</option><option value="600">0.6s</option><option value="1200">1.2s</option><option value="2500">2.5s</option><option value="5000">5s</option><option value="6000">6s</option><option value="8000">8s</option><option value="10000">10s ✋ (né chặn)</option><option value="rand510" selected>🎲 5–10s ngẫu nhiên ★ (né chặn tốt nhất)</option></select></div>
+        </div>
+        <div id="tfVidRow" style="display:none;margin-top:12px">
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;align-items:end;padding:11px 12px;background:var(--surface-2);border:1px solid var(--border);border-radius:10px">
+            <div><label class="label">Model video</label><select id="tfVidModel" onchange="tfVidModelChange()" style="width:100%"><option value="omni-flash" selected>Omni Flash (FREE)</option><option value="veo31-lite">Veo 3.1 - Lite</option><option value="veo31-fast">Veo 3.1 - Fast</option><option value="veo31-quality">Veo 3.1 - Quality</option></select></div>
+            <div id="tfVidDurCell"><label class="label">Độ dài</label><select id="tfVidDur" style="width:100%"><option value="8" selected>8s</option><option value="6">6s</option><option value="4">4s</option></select></div>
+            <div><label class="label">Độ nét tải về</label><select id="tfVidRes" style="width:100%"><option value="720p" selected>720p (gốc — nhanh)</option><option value="1080p">1080p (nâng — chậm hơn)</option></select></div>
+            <div><label class="label" title="Dùng ảnh đã tạo xong trong lượt này làm khung đầu (image→video)">Khung đầu (chain)</label><select id="tfVidChain" style="width:100%"><option value="off" selected>Tắt (text→video)</option><option value="same">Ảnh cùng tên (dòng "tên | …")</option><option value="prev">Ảnh dòng liền trước</option></select></div>
+          </div>
+          <div style="font-size:11px;color:var(--text-dim);margin-top:6px">💡 Chain: tạo ảnh trước, rồi tạo video dùng chính ảnh đó làm khung đầu — đặt tên video trùng tên ảnh (vd <code>scene-001 | …</code> cho cả 2 dòng) hoặc dùng ảnh của dòng liền trên.</div>
         </div>
         </div><!-- /genCfgBlock -->
         <div style="display:none;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap;font-size:11.5px">
@@ -283,7 +302,7 @@
           <span id="bulkRefThumbs" style="display:flex;gap:6px;flex-wrap:wrap"></span>
           <label class="btn ghost sm" style="cursor:pointer">＋ Thêm ref<input type="file" accept="image/*" multiple style="display:none" onchange="bulkAddRefs(this.files);this.value=''"></label>
         </div>
-        <div style="font-size:11px;color:var(--text-dim);margin-top:6px">💡 Không gõ gì → mọi ảnh dùng tất cả ref. Gõ <code>[tên-ref]</code> trong dòng prompt → dòng đó chỉ đính đúng ref đó (đặt tên ref ở ô dưới mỗi ảnh).</div>
+        <div style="font-size:11px;color:var(--text-dim);margin-top:6px">💡 Không gõ gì → theo "Chế độ ref" ở Cấu hình (mặc định: mọi ảnh dùng tất cả ref). Gõ <code>[tên-ref]</code> hoặc <code>@tên-ref</code> trong dòng prompt → dòng đó chỉ đính đúng ref đó (đặt tên ref ở ô dưới mỗi ảnh).</div>
         <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;font-size:12px;margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
           <label style="display:flex;gap:6px;align-items:center;cursor:pointer;white-space:nowrap"><input type="checkbox" class="asv-enabled" onchange="autoSaveToggle(this)"> 💾 <b>Tự động lưu ảnh về máy</b></label>
           <select class="asv-mode" onchange="autoSaveMode(this)" style="max-width:210px"><option value="perTask">Tạo thư mục theo Task</option><option value="flat">Lưu thẳng vào thư mục</option></select>
@@ -300,9 +319,11 @@
       <div class="fc">
         <div class="fc-step"><span class="n">3</span> Tạo &amp; Kết quả
           <span class="r">
+            <button class="btn ghost sm" onclick="bulkPromptAssist()" title="AI viết lại từng dòng prompt cho giàu chi tiết (giữ nguyên số dòng)">✨ Trợ lý prompt</button>
             <button class="btn primary sm" id="bulkGenBtn" onclick="bulkToggle()">▶ Tạo tất cả</button>
             <button class="btn ghost sm" onclick="bulkRetryFailed()">🔁 Thử lại lỗi</button>
             <button class="btn ghost sm" onclick="bulkDownloadAll()">⤓ Tải tất cả</button>
+            <button class="btn ghost sm" onclick="bulkDownloadSelected()" title="Chỉ tải các khung đã tick chọn">⤓ Tải đã chọn</button>
           </span>
         </div>
         <div id="bulkInfo" style="font-size:12px;color:var(--text-muted);margin-bottom:10px"></div>

@@ -15,11 +15,8 @@ function tsEstimate(){
 }
 
 function tsInit(){
-  const p = (typeof getProfile === 'function') ? getProfile() : null;
-  const nameEl = document.getElementById('tsProfName'); if (nameEl) nameEl.textContent = p?.tenKenh ? '· ' + p.tenKenh : '';
-  const pp = document.getElementById('tsProfPrompt');
-  if (pp) pp.textContent = (p?.scriptPrompt || '').trim() || 'Chưa có — bấm "Sửa ở Profile" để thêm phong cách viết kịch bản cho kênh.';
-  // Trạng thái nút Novel (giữ giữa các phiên app) — chỉ khôi phục khi QUY MÔ
+  // (Đã bỏ hiển thị "📋 Prompt kịch bản (từ Profile)" — tab này không còn đọc Profile.)
+  // Trạng thái nút gạt Novel (giữ giữa các phiên app) — chỉ khôi phục khi QUY MÔ
   // vẫn hợp lệ (≥ 2 chương); localStorage cũ lệch điều kiện thì xoá sạch.
   const nb = document.getElementById('tsNovelBtn');
   if (nb && localStorage.getItem('ts_novel_mode') === '1'){
@@ -27,11 +24,68 @@ function tsInit(){
     if (ch < 2){
       try { localStorage.setItem('ts_novel_mode', '0'); } catch (e) {}
     } else {
-      nb.classList.add('on');
+      nb.checked = true;
       const h = document.getElementById('tsNovelHint'); if (h) h.style.display = '';
     }
   }
   tsEstimate(); tsOutMeta();
+}
+
+/* ── 📺 NGUỒN YOUTUBE (source-brief · P1) ──────────────────────────────
+   Nạp hồ sơ nguồn thật từ video YouTube (metadata + chapters + heatmap +
+   transcript + bình luận) qua IPC `viralCut:buildBrief` — rồi tsGenerate
+   dùng làm NGUỒN viết kịch bản thay vì bịa từ đầu. Không có nguồn → hành
+   vi cũ giữ nguyên. Video không phụ đề → lỗi lộ liễu VC_YT_NO_CAPTION. */
+let tsYtBrief = null; // { title, durationSec, lang, text, jsonPath, txtPath, comments }
+
+async function tsNapNguon(){
+  const url = (document.getElementById('tsYtUrl')?.value || '').trim();
+  if (!url){ setStatusScript('Dán link video YouTube vào ô nguồn trước.', 'error'); return; }
+  if (!window.native || !window.native.viralCut || typeof window.native.viralCut.buildBrief !== 'function'){
+    setStatusScript('Nguồn YouTube chỉ chạy trong app Nova.', 'error');
+    return;
+  }
+  const btn = document.getElementById('tsYtBtn');
+  if (btn){ btn.disabled = true; btn.textContent = '⏳ Đang lấy nguồn…'; }
+  setStatusScript('Đang tạo hồ sơ nguồn YouTube (phụ đề + chương + heatmap + bình luận)…', 'working');
+  try {
+    const r = await window.native.viralCut.buildBrief({ url });
+    if (!r || !r.ok) throw new Error((r && r.error) || 'Không rõ lỗi.');
+    tsYtBrief = { title: r.title, durationSec: r.durationSec, lang: r.lang, text: r.text,
+      jsonPath: r.jsonPath, txtPath: r.txtPath, comments: r.comments };
+    const info = document.getElementById('tsYtInfo');
+    if (info){
+      const phut = Math.max(0, Math.round((r.durationSec || 0) / 60));
+      info.textContent = '📺 ' + r.title + ' · ' + phut + ' phút'
+        + (r.lang ? ' · phụ đề ' + r.lang : '')
+        + ' · ' + r.transcriptChars + ' ký tự transcript'
+        + ' · ' + r.comments + ' bình luận — đã sẵn sàng làm NGUỒN cho "Viết kịch bản".';
+    }
+    setStatusScript('✓ Đã nạp nguồn YouTube. Bấm "Viết kịch bản" — AI sẽ viết DỰA TRÊN nguồn này.', 'ok');
+  } catch (e){
+    tsYtBrief = null;
+    setStatusScript('Lỗi lấy nguồn YouTube: ' + String((e && e.message) || e).slice(0, 160), 'error');
+  }
+  if (btn){ btn.disabled = false; btn.textContent = '📺 Lấy nguồn'; }
+}
+
+function tsXoaNguon(){
+  tsYtBrief = null;
+  const inp = document.getElementById('tsYtUrl'); if (inp) inp.value = '';
+  const info = document.getElementById('tsYtInfo');
+  if (info) info.textContent = 'Khi có nguồn: AI viết kịch bản DỰA TRÊN hồ sơ nguồn (transcript + chương + đoạn được xem lại nhiều + bình luận) thay vì bịa từ đầu. Cần video có phụ đề.';
+  setStatusScript('Đã bỏ nguồn YouTube — viết theo chủ đề thuần như cũ.', 'info');
+}
+
+function tsNguonDangBat(){ return !!(tsYtBrief && tsYtBrief.text); }
+
+/* Ghi chú diễn giải cho từng Bút pháp kể chuyện (đưa vào prompt tiếng Anh). */
+function _tsButPhapNote(tone){
+  if (tone === 'Tự sự thuần') return 'pure flowing narration — one storyteller voice, no character dialogue, no direct address to the viewer';
+  if (tone === 'Review ở góc nhìn thứ 3') return 'third-person review/commentary — the narrator analyzes and reviews the subject from an outside perspective, no character dialogue';
+  if (tone === 'Tự sự - lời thoại của nhân vật') return 'narration woven with short character dialogue lines — dialogue appears inline inside the flowing narration, no speaker labels';
+  if (tone === 'Review - lời thoại') return 'third-person review mixed with short character/subject dialogue lines woven inline into the commentary, no speaker labels';
+  return 'natural storytelling voice';
 }
 
 async function tsGenerate(rewrite){
@@ -39,59 +93,72 @@ async function tsGenerate(rewrite){
   if (!topic){ setStatusScript('Nhập chủ đề / tiêu đề trước.', 'error'); return; }
   const words = parseInt(document.getElementById('tsWords')?.value) || 800;
   const lang = document.getElementById('tsLang')?.value || 'Tiếng Việt';
-  const tone = document.getElementById('tsTone')?.value || 'Kể chuyện cuốn hút';
-  const p = (typeof getProfile === 'function') ? getProfile() : null;
-  const sp = (p?.scriptPrompt || '').trim();
-  // Chế độ Novel (chip 📖 bật): pipeline viết theo chương + memory xuyên suốt.
-  // Luồng thường (1 lần gọi) giữ nguyên — tắt chip là quay về y như cũ.
+  const tone = document.getElementById('tsTone')?.value || 'Tự sự thuần';
+  const skill = (document.getElementById('tsSkill')?.value || '').trim();
+  const lever = (document.getElementById('tsLever')?.value || '').trim();
+  const cta = !!document.getElementById('tsCta')?.checked;
+  // Chế độ Novel (nút gạt 📖 bật): pipeline viết theo chương + memory xuyên suốt.
+  // Luồng thường (1 lần gọi) giữ nguyên — tắt gạt là quay về y như cũ.
+  const coNguon = (typeof tsNguonDangBat === 'function') && tsNguonDangBat();
   if (tsNovelOn()){
-    // Novel yêu cầu QUY MÔ ≥ 2 chương (chip đã chặn bật khi < 2 — tsToggleNovel).
+    // Nguồn YouTube (source-brief) chỉ cài cho luồng thường: pipeline Novel
+    // dựng truyện theo chương từ topic, không đọc hồ sơ nguồn → chặn lộ liễu,
+    // KHÔNG âm thầm bỏ nguồn (Luật 10).
+    if (coNguon){
+      setStatusScript('Nguồn YouTube (source-brief) chưa hỗ trợ chế độ Novel — bấm ✕ để bỏ nguồn hoặc tắt nút gạt Novel.', 'error');
+      return;
+    }
+    // Novel yêu cầu QUY MÔ ≥ 2 chương (nút gạt đã chặn bật khi < 2 — tsToggleNovel).
     // Nếu vẫn lọt vào đây do state lệch (vd localStorage cũ) → chết LỘ LIỄU,
     // KHÔNG tự tách chương ngầm (Luật 10).
     const n = parseInt(document.getElementById('tsChapters')?.value) || 0;
     if (n < 2){
-      setStatusScript('Chế độ Novel cần tối thiểu 2 chương trong khối QUY MÔ (đang là ' + (n || 1) + ') — chỉnh CHƯƠNG ≥ 2 hoặc tắt chip Novel.', 'error');
+      setStatusScript('Chế độ Novel cần tối thiểu 2 chương trong khối QUY MÔ (đang là ' + (n || 1) + ') — chỉnh CHƯƠNG ≥ 2 hoặc tắt nút gạt Novel.', 'error');
       return;
     }
     // chWords tính từ tổng words/n (không đọc trực tiếp tsWordsPerChapter) để
     // không lệch tổng khi user chọn số từ bằng chip tsSetWords().
     const chWords = Math.max(100, Math.round(words / n));
-    return tsGenerateNovel({ topic, words, lang, tone, style: sp, rewrite: !!rewrite,
-      n, chWords });
+    return tsGenerateNovel({ topic, words, lang, tone, skill, lever, cta,
+      rewrite: !!rewrite, n, chWords });
   }
-  const buildPrompt = (style) =>
+  const styleNote = _tsButPhapNote(tone);
+  // extras = Đòn bẩy tâm lý + Kỹ năng viết + CTA (do người dùng chọn trên UI).
+  const buildPrompt = (withExtras) =>
 `You are a professional voiceover scriptwriter for faceless YouTube videos.
-TASK: Write ONE complete voiceover script for this topic: "${topic}".
-LANGUAGE: ${lang}. TONE: ${tone}. LENGTH: about ${words} words (max 10% deviation).
-${style ? 'CHANNEL STYLE — MUST follow (but the LENGTH rules below override any word counts inside it):\n' + style.replace(/\{\{\s*WORDS\s*\}\}/gi, String(words)) + '\n' : ''}${rewrite ? 'Write a DIFFERENT version with a fresh angle and a new opening compared to the usual approach.\n' : ''}
-LENGTH — top priority, overrides any numbers found in the channel style:
-- Ignore any word counts written in the channel style.
-- The total script length MUST be about ${words} words (max 10% deviation). Rescale the number of sections and their proportions to fit ${words} words — keep the structure and voice of the channel style but compress or expand to hit ${words} words.
-RETENTION — ${style ? 'baseline; wherever the CHANNEL STYLE above says otherwise, follow the CHANNEL STYLE' : 'required'}:
-- First 15 seconds: the opening sentence must be at most 15 words and jump straight into the story. Do not open with a year, a setting, or a definition. Banned openers: "Hãy tưởng tượng", "Bạn có biết".
+TASK: Write ONE complete voiceover script for this topic: "${topic}".${coNguon ? ' The script must be BASED ON THE SOURCE MATERIAL below — use its real facts, story and numbers; do NOT invent contradictory facts.' : ''}
+LANGUAGE & NATIVE CULTURE: write in ${lang} — AND write FOR the native culture of ${lang}: idioms, sayings, customs, everyday habits, names, places and references native viewers instantly recognize. The goal is closeness and connection with the native audience; never a translated feel.
+NARRATIVE STYLE (bút pháp kể chuyện): ${tone} — ${styleNote}.
+${withExtras && skill ? 'WRITING SKILL: apply the "' + skill + '" method consistently through the structure and pacing of the script.\n' : ''}${withExtras && lever ? 'PSYCHOLOGICAL LEVER (opening hook — déjà vu effect): build the opening around this lever: "' + lever + '". The first sentences must trigger a déjà-vu feeling — the viewer feels they have lived or seen this moment before — so they stay hooked. Subtle and honest, no fake claims.\n' : ''}${withExtras && cta ? 'CALL TO ACTION: near the end, weave in ONE natural CTA (like/subscribe/comment/watch next) that fits the content — 1-2 sentences spoken as part of the narration, warm and not salesy, no URLs.\n' : ''}${coNguon ? 'SOURCE MATERIAL (source-brief: transcript verbatim + chapters + most-replayed windows + top viewer comments). The topic above is the ANGLE — this material is the FACTS:\n' + tsYtBrief.text + '\n' : ''}${rewrite ? 'Write a DIFFERENT version with a fresh angle and a new opening compared to the usual approach.\n' : ''}
+LENGTH — top priority:
+- The total script length MUST be about ${words} words (max 10% deviation). Rescale the number of sections and their proportions to fit ${words} words — keep the same structure and voice but compress or expand to hit ${words} words.
+RETENTION — required:
+- First 15 seconds: the opening sentence must be at most 15 words and jump straight into the story. Do not open with a year, a setting, or a definition. Banned openers: "Hãy tưởng tượng", "Bạn có biết".${lever ? ' (The psychological lever above shapes this opening.)' : ''}
 - Open loop: plant a contradiction or an unanswered question right in the hook. Call it back 2-3 times spread evenly through the script, each time adding a new detail (never repeat verbatim), and resolve it near the end.
 - Object through-line: pick one small concrete object or detail, plant it in the opening, bring it back at least twice, once near the end.
 - Every paragraph must push exactly ONE new thing (an event, a number, a consequence) — never restate the previous idea in different words.
-- Forbidden: transition signposts like "ít ai biết rằng", addressing the audience ("các bạn ơi"), moralizing, syrupy endings.
+- Forbidden: transition signposts like "ít ai biết rằng", addressing the audience ("các bạn ơi"), moralizing, syrupy endings${cta ? ' — EXCEPT the single CTA moment near the end' : ''}.
 OUTPUT RULES (very important):
 - Return ONLY the narration text as one flowing piece. The first character must be the first letter of the script's opening sentence.
 - Absolutely no lead-in such as "The script is complete...", "Here it is:", "Here is the script", "Đây là kịch bản", "Dưới đây là", and no word counts.
-- No titles, no "Kịch bản:" lines, no numbering, no [Intro]/[Hook]/[Kết] labels, no director notes, no emoji, no markdown, no bullet points.
-- Split into short paragraphs of 2-4 sentences, easy to read aloud for an AI voice (TTS). Start immediately with the hook; end with a closing line.
+- No titles, no "Kịch bản:" lines, no numbering, no [Intro]/[Hook]/[Kết] labels, no director notes, no emoji, no markdown, no bullet points.${tone.indexOf('lời thoại') >= 0 ? ' Character dialogue lines are written inline as flowing narration — quotes are fine, labels and speaker tags are not.' : ''}
+- Split into short paragraphs of 2-4 sentences, easy to read aloud for an AI voice (TTS). Start immediately with the hook; end with a closing line${cta ? ' (the CTA is the natural last beat before the final line)' : ''}.
 Return only the script content, nothing else.`;
   const btn = document.getElementById('tsGenBtn'); if (btn) btn.disabled = true;
   const _tk = _startElapsed('✍️ Đang viết kịch bản', setStatusScript,
     'bản dài / chạy bằng gói Claude-ChatGPT có thể chờ vài phút — cứ để yên');
   try {
     const maxT = Math.min(16000, Math.round(words * 2.5) + 600);
-    // Channel Style còn viết bằng tiếng Việt (tạo trước bản sửa prompt này) có thể bị content
-    // filter của gateway chặn cả prompt. Khi lỗi/rỗng mà có style → thử lại 1 lần KHÔNG kèm
-    // style, để user vẫn có kịch bản thay vì chết lỗi.
+    // Extras do người dùng nhập (đòn bẩy/skill/CTA) có thể bị content filter của
+    // gateway chặn cả prompt. Khi lỗi/rỗng mà CÓ extras → thử lại 1 lần KHÔNG kèm
+    // extras (degrade có chủ đích, báo rõ ở status), để user vẫn có kịch bản.
+    const coExtras = !!(lever || skill || cta);
     let raw = '';
-    try { raw = await callLLM(buildPrompt(sp), { maxTokens: maxT }); }
-    catch (e){ if (!sp) throw e; }
-    if ((!raw || !String(raw).trim()) && sp){
-      raw = await callLLM(buildPrompt(''), { maxTokens: maxT });
+    try { raw = await callLLM(buildPrompt(true), { maxTokens: maxT }); }
+    catch (e){ if (!coExtras) throw e; }
+    if ((!raw || !String(raw).trim()) && coExtras){
+      setStatusScript('⚠ Lần viết đầu bị lỗi/chặn — thử lại KHÔNG kèm đòn bẩy / kỹ năng viết / CTA…', 'info');
+      raw = await callLLM(buildPrompt(false), { maxTokens: maxT });
     }
     _stopElapsed(_tk);
     const clean = _tsClean(raw);
@@ -104,25 +171,24 @@ Return only the script content, nothing else.`;
 
 function tsNovelOn(){
   const b = document.getElementById('tsNovelBtn');
-  return !!(b && b.classList.contains('on'));
+  return !!(b && b.checked);
 }
 
 function tsToggleNovel(){
   const b = document.getElementById('tsNovelBtn'); if (!b) return;
-  const turningOn = !b.classList.contains('on');
+  const turningOn = b.checked;
   if (turningOn){
     // Điều kiện bật Novel: QUY MÔ tối thiểu 2 chương (memory xuyên suốt chỉ có
     // ý nghĩa từ chương 2 trở đi). Chặn bật + báo rõ, không tự tách chương ngầm.
     const ch = parseInt(document.getElementById('tsChapters')?.value) || 1;
     if (ch < 2){
+      b.checked = false;   // onchange đã gạt sẵn — hoàn tác về OFF và báo rõ
       setStatusScript('Chế độ Novel cần tối thiểu 2 chương — chỉnh CHƯƠNG trong khối QUY MÔ lên ≥ 2 rồi bật lại.', 'error');
       return;
     }
   }
-  b.classList.toggle('on');
-  const on = b.classList.contains('on');
-  try { localStorage.setItem('ts_novel_mode', on ? '1' : '0'); } catch (e) {}
-  const h = document.getElementById('tsNovelHint'); if (h) h.style.display = on ? '' : 'none';
+  try { localStorage.setItem('ts_novel_mode', b.checked ? '1' : '0'); } catch (e) {}
+  const h = document.getElementById('tsNovelHint'); if (h) h.style.display = b.checked ? '' : 'none';
 }
 
 async function tsGenerateNovel(o){
@@ -204,56 +270,5 @@ function tsToScenes(){
   switchTool('tool2');
 }
 
-async function tsAnalyzeCompetitor(files){
-  const arr = Array.from(files || []); if (!arr.length) return;
-  const p = getProfile(); if (!p){ alert('Chưa có Profile. Tạo Profile trước.'); return; }
-  const st = document.getElementById('pScriptAnalyzeStatus');
-  const setSt = (m, c) => { if (st){ st.textContent = m; st.style.color = c || 'var(--text-muted)'; } };
-  setSt('Đang đọc ' + arr.length + ' file…', 'var(--violet)');
-  // Đọc tối đa 6 file; cắt tổng ~48k ký tự để không tràn ngữ cảnh.
-  const picked = arr.slice(0, 6);
-  const perFile = Math.max(4000, Math.floor(48000 / picked.length));
-  const texts = [];
-  for (const f of picked){
-    try { const t = await f.text(); if (t && t.trim()) texts.push({ name: f.name, text: t.trim().slice(0, perFile) }); } catch (e) {}
-  }
-  if (!texts.length){ setSt('Không đọc được nội dung (chọn file .txt).', 'var(--red)'); return; }
-  const n = texts.length;
-  setSt('🤖 AI đang phân tích ' + n + ' kịch bản (9 lớp → prompt 8 khối)…', 'var(--violet)');
-  const joined = texts.map((x, i) => `━━━ KỊCH BẢN ${i + 1} (${x.name}) ━━━\n${x.text}`).join('\n\n');
-  const prompt =
-`You are an expert analyst of VIRAL faceless video scripts and a master META-PROMPT writer — you produce the detailed instruction set that another AI will use to write a NEW script in the same style. Below are ${n} SUCCESSFUL sample scripts from channel(s) in the same niche.
 
-${joined}
-
-Work in 2 steps. Output ONLY the result of Step 2.
-
-STEP 1 — ANALYZE (do it in your head, MEASURE WITH NUMBERS, do not output it; a trait only becomes a "rule" when it repeats in ${n > 1 ? 'most of the ' + n + ' scripts' : 'the script'}). Extract: genre & writer persona; emotional goal; narrative PERSON + TENSE; narration language. Structure: number of parts/chapters, PERCENTAGE split for opening/body/ending (use %, never fixed word counts). Hook: what the first 2-3 sentences do, opening pattern, first-sentence length, whether a year is mentioned. Body beats: the repeating formula per block + how invisible transitions are made. Voice: average sentence length, frequency of short punchy sentences, signature words/phrases, banned words, number of rhetorical questions. Retention devices: backbone mystery, open loop, object motif, reframe line, dramatic irony, sting line, micro-payoff. Energy curve (2 axes) + position of the emotional peak. Ending: closing pattern, final line. Guardrails: how real numbers/names/dates are used and hedged.
-
-STEP 2 — WRITE THE "SCRIPT PROMPT": a COMPLETE, DETAILED META-PROMPT, ready to paste for another AI to write a NEW script in this viral style. Write the INSTRUCTIONS IN ENGLISH (the narration itself will still be written in the language detected in Step 1 — state that language in block 2); quoted example lines stay in their original language verbatim. Use the NUMBERS/RATIOS extracted in Step 1, specific enough that reading it is enough to start writing. Include these numbered blocks:
-
-1. ROLE — writer persona + genre + emotional goal (one punchy paragraph, like "You are… The viewer does NOT learn about X; the viewer IS…").
-2. OUTPUT — absolute TTS rules: ONLY flowing narration; state the PERSON + TENSE extracted in Step 1; numbers & money SPELLED OUT as words; no titles/labels/emoji/markdown/symbols; standard punctuation only; state the narration language detected in Step 1 (e.g. Vietnamese).
-3. LENGTH & BUDGET — Total ≈ {{WORDS}} words (use the EXACT string {{WORDS}}, NEVER replace it with a number). Split into N parts by PERCENTAGE (e.g. hook ~13%, body ~74%, ending ~13%); each block states its % of the total, NEVER a fixed word count. Add an anti-shrink rule: the final blocks must keep the same budget as the first ones — do not compress just to finish early.
-4. HIDDEN SKELETON / FORMAT — the genre's beats spread evenly across the parts; NEVER name beats/format inside the narration. The viewer must only FEEL the structure, never see the map.
-5. LENS — 4-6 angles so no two videos feel the same; name the default lens + one "seasoning-only" lens. (The thumbnail already shouts — the narration must not.)
-6. ENERGY CURVE — 2 opposing axes fitting the genre; save the emotional peak for near the end; ANTI-FOG rule: every part must push ONE new thing, not just repaint the atmosphere.
-7. RETENTION DEVICES — keep only what fits the genre, each with 1 sentence on how: backbone mystery, quiet/hard open loop, OBJECT MOTIF (a small object planted in the opening, returning at least twice, once near the end), REFRAME LINE, NARRATIVE GAP/dramatic irony, STING LINE, micro-payoff.
-8. HOOK — first-15-seconds rules (first sentence ≤ ~15 words; no year in the opening; banned opener "Imagine you are"); 1 open loop planted in the hook, re-teased 2-3 times, resolved in the ending; include a HOOK-BANK of 8-10 rotating archetypes (a different one each video), written fresh, with short samples for "feel".
-9. VOICE & RHYTHM — person + tense; sentence length (in words); interspersed short sentences; syntactic repetition (anaphora); cap on rhetorical questions; signature vocabulary.
-10. BANNED — cliché openers; transition signposts ("little did you know"…); addressing the audience; preaching; syrupy endings; bragging; symbols that are hard to read for TTS.
-11. EVIDENCE & GUARDRAILS — use REAL numbers/names/dates + everyday comparisons; honest hedging; NEVER invent fake names–years–precise numbers.
-12. ENDING (anti-formula) — the closing sequence + 3-5 rotating ending patterns so no two videos end the same; a sample final line if any.
-13. FEW-SHOT — 2-3 short VERBATIM excerpts from the sample scripts (a hook, a transition line, the closing line) as exemplary models.
-14. SELF-CHECK — a silent checklist to run before submitting (does it hit {{WORDS}} words by ratio? right person/tense? strong enough hook? does the object motif return? clean for TTS? ending pattern not repeated?).
-
-OUTPUT: return ONLY the "SCRIPT PROMPT" content (the numbered blocks), do NOT print Step 1, no extra lead-in. You MUST keep the string {{WORDS}} verbatim in blocks 3 and 14 so the tool can inject the word count — NEVER replace {{WORDS}} with a number.`;
-  try {
-    const raw = await callLLM(prompt, { maxTokens: 8000 });
-    p.scriptPrompt = _tsCleanPrompt(raw);
-    if (typeof saveState === 'function') saveState(true);
-    renderProfileStyles();
-    if (typeof setStatus1 === 'function') setStatus1('✓ Đã phân tích ' + n + ' kịch bản → tạo Prompt kịch bản viral (9 lớp → 8 khối).' + (n < 3 ? ' 💡 Nên gửi ≥3 kịch bản để rút "luật" chuẩn hơn.' : ''), 'ok');
-  } catch (e){ setSt('Lỗi phân tích: ' + (e.message || e), 'var(--red)'); }
-}
 

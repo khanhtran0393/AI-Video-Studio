@@ -277,6 +277,24 @@ function cpsWindowsFromSentences(sentences, wins) {
   return buckets;
 }
 
+/* ── 3d. Scene density (số cảnh cắt keyframe/giây theo cửa sổ năng lượng): mỗi mốc
+   cut (ms, từ ffprobe packet cờ K — KHÔNG decode) đổ vào bucket cửa sổ chứa nó.
+   Proxy "nhịp độ hình ảnh": đoạn cao trào đạo diễn/editor cắt góc máy dồn dập.
+   Không nội suy ngoài dữ liệu: cuts nằm ngoài phạm vi cửa sổ → bỏ qua, KHÔNG bịa. */
+function sceneDensityWindows(cutsMs, wins) {
+  const list = Array.isArray(wins) ? wins : [];
+  if (!list.length) return [];
+  const wLen = (list.length > 1 ? Number(list[1].t) - Number(list[0].t) : 1) || 1;
+  const buckets = list.map((w) => ({ t: Number(w.t), cuts: 0 }));
+  for (const c of (Array.isArray(cutsMs) ? cutsMs : [])) {
+    const tSec = Number(c) / 1000;
+    if (!Number.isFinite(tSec) || tSec < 0) continue;
+    const i = Math.floor(tSec / wLen);
+    if (i >= 0 && i < buckets.length) buckets[i].cuts++;
+  }
+  return buckets;
+}
+
 /* Trượt cửa sổ các câu LIÊN TIẾP [i..j] có thời lượng trong [minLen, maxLen]; chấm điểm.
    opts.idf: Map term→idf do idfFromSentences(sentences) tạo — thiếu thì thành phần
    TF-IDF = 0 và KHAI BÁO qua parts.tfidf:false (không giả có dữ liệu từ vựng). */
@@ -1134,7 +1152,90 @@ function pitchWindowsFromFrames(frames, wins) {
   });
 }
 
-/* 13g. Fusion per-window: v = wE·energy + wP·pitchVar + wV·voiced (+ wC·CPS) ∈ [0,1].
+/* 13g-pre. Cross-correlation Energy×CPS CÓ LAG: bắt cặp "năng lượng lên trước /
+   nhịp words lên sau" (và ngược lại) — cấu trúc lệch pha mà co-occurrence trùng
+   cửa sổ (lag=0) KHÔNG thấy. Thuần JS, deterministic:
+   - Cổng Pearson: tương quan tuyến tính tối đa ở lag ±1..±2 (tính trên chuỗi
+     z-score) phải ≥ XC_PEARSON_MIN thì kênh mới có nghĩa; yếu hơn → BỎ kênh,
+     không giả tín hiệu (Luật 10).
+   - Điểm per-window = max tích e[i]·c[i±k] với k=1..XC_MAX_LAG, bỏ k=0 (trùng
+     cửa sổ đã được thưởng bởi co-occurrence — cộng thêm là double-count).
+   - Chuỗi kết quả chuẩn hoá max về [0,1]; kênh NHẸ (weight 0.1) và KHÔNG nằm
+     trong danh sách kênh co-occurrence (CO_BONUS) — chỉ cộng tuyến tính. */
+const XC_MIN_WINDOWS = 6;
+const XC_MAX_LAG = 2;
+const XC_PEARSON_MIN = 0.15;
+const XC_WEIGHT = 0.1;
+
+function xcorrEnergyCps(eSeries, cSeries, opts = {}) {
+  const es = Array.isArray(eSeries) ? eSeries : [];
+  const cs = Array.isArray(cSeries) ? cSeries : [];
+  const n = Math.min(es.length, cs.length);
+  const maxLag = Math.max(1, Math.min(5, Number(opts.maxLag) || XC_MAX_LAG));
+  const pearsonMin = Number.isFinite(opts.pearsonMin) ? opts.pearsonMin : XC_PEARSON_MIN;
+  if (!n || es.length !== cs.length) {
+    return { available: false, reason: 'Thiếu chuỗi energy/CPS cùng độ dài để tính tương quan lệch pha.' };
+  }
+  if (n < XC_MIN_WINDOWS) {
+    return { available: false, reason: 'Chưa đủ ' + XC_MIN_WINDOWS + ' cửa sổ (' + n + ') — tương quan lệch pha không có nghĩa thống kê.' };
+  }
+  const ze = zSeries(es), zc = zSeries(cs);
+  if (ze.flat || zc.flat) {
+    return { available: false, reason: 'Energy hoặc CPS gần như hằng số — tương quan lệch pha vô nghĩa.' };
+  }
+  /* Cổng Pearson ĐÚNG NGHĨA: r chuẩn hoá (cov/√(var·var) trên phần chồng lấn của
+     từng lag) ∈ [-1,1]; chỉ nhận r DƯƠNG — anti-correlation (năng lượng cao khi
+     words thưa) không phải tín hiệu highlight lệch pha. */
+  const pearsonAtLag = (k) => {
+    const a = [], b = [];
+    for (let i = 0; i < n; i++) {
+      const j = i + k;
+      if (j >= 0 && j < n) { a.push(es[i]); b.push(cs[j]); }
+    }
+    const m = a.length;
+    if (m < 3) return 0;
+    const ma = a.reduce((s, v) => s + v, 0) / m;
+    const mb = b.reduce((s, v) => s + v, 0) / m;
+    let cov = 0, va = 0, vb = 0;
+    for (let t = 0; t < m; t++) { const da = a[t] - ma, db = b[t] - mb; cov += da * db; va += da * da; vb += db * db; }
+    const den = Math.sqrt(va * vb);
+    return den > 0 ? cov / den : 0;
+  };
+  let bestK = 0, bestR = 0;
+  for (let k = -maxLag; k <= maxLag; k++) {
+    if (k === 0) continue;
+    const r = pearsonAtLag(k);
+    if (r > bestR) { bestR = r; bestK = k; }
+  }
+  if (bestR < pearsonMin) {
+    return { available: false, reason: 'Tương quan Energy×CPS lệch pha quá yếu (r_max=' + (Math.round(bestR * 100) / 100) + ' < ' + pearsonMin + ' ở lag ±' + maxLag + ') — bỏ kênh, không giả tín hiệu.' };
+  }
+  /* Điểm per-window: max tích theo ±lag; cả hai chuỗi đều ≥0 nên tích luôn dương.
+     e[i]·c[i-k] = năng lượng lên TRƯỚC, e[i]·c[i+k] = words lên TRƯỚC. */
+  const raw = new Array(n).fill(0);
+  let max = 0;
+  for (let i = 0; i < n; i++) {
+    let m = 0;
+    for (let k = 1; k <= maxLag; k++) {
+      if (i - k >= 0) m = Math.max(m, es[i] * cs[i - k]);
+      if (i + k < n) m = Math.max(m, es[i] * cs[i + k]);
+    }
+    raw[i] = m;
+    if (m > max) max = m;
+  }
+  if (!(max > 0)) {
+    return { available: false, reason: 'Không có tích Energy×CPS lệch pha nào khác 0 — bỏ kênh.' };
+  }
+  return {
+    available: true,
+    series: raw.map((v) => Math.round((v / max) * 1000) / 1000),
+    pearson: Math.round(bestR * 10000) / 10000,
+    lag: bestK,
+  };
+}
+
+/* 13g. Fusion per-window: v = wE·energy + wP·pitchVar + wV·voiced (+ wC·CPS)
+   (+ wD·sceneDensity) (+ wX·xcorr lệch pha) ∈ [0,1].
    Feature thiếu → trọng số RENORMALIZE công khai (trả về trong `weights`, tổng = 1)
    và giá trị tương ứng trả `null` — người dùng thấy rõ: không có pitch thì điểm chỉ
    là energy + voiced; không có cả hai thì thuần energy. Không bịa 0 để loãng điểm.
@@ -1145,28 +1246,42 @@ function pitchWindowsFromFrames(frames, wins) {
      `energyNorm:'max'` (audio đều thì Z vô nghĩa, không giả vờ có tương đối).
    - Crest factor cao (impulse: cốc bàn, clap đơn lẻ) → PHẠT energy, không bao giờ thưởng.
    - CPS (words/giây từ transcript) đưa vào làm kênh độc lập thứ 4 khi có SRT.
+   - Scene density (cut keyframe/giây, 2026-09-13) — kênh thị giác thứ 5 khi đã dò
+     keyframe. Density ĐỀU tuyệt đối (mọi cửa sổ cùng số cut, đặc trưng GOP encoder
+     cố định) thì kênh KHÔNG phân biệt được → bỏ (hasScene=false), không giả tín hiệu.
    - Co-occurrence: ≥2 kênh cùng nổi bật (chuẩn hoá ≥ CO_HIGH) → thưởng bội nhỏ,
      CÓ TRẦN và clamp v ≤ 1; số kênh thắng ghi trong `coHit` để người dùng thấy lý do. */
 const Z_MIN_WINDOWS = 6;
 const DYN_MIN_CV = 0.15;
 const CO_HIGH = 0.75;
-const CO_BONUS = { 2: 1.05, 3: 1.1, 4: 1.15 };
+const CO_BONUS = { 2: 1.05, 3: 1.1, 4: 1.15, 5: 1.2 };
 
 function fuseLocalScores(wins, opts = {}) {
   const list = Array.isArray(wins) ? wins : [];
   /* Không có window nào → trả đúng hợp đồng rỗng cũ (không bịa kênh/điagnostics). */
-  if (!list.length) return { feats: [], weights: null, hasPitch: false };
+  if (!list.length) return { feats: [], weights: null, hasPitch: false, hasScene: false, hasXcorr: false };
   const r4 = (x) => Math.round(x * 10000) / 10000;
   const pw = Array.isArray(opts.pitchWins) ? opts.pitchWins : null;
   const cw = Array.isArray(opts.cpsWins) ? opts.cpsWins : null;
+  const dw = Array.isArray(opts.cutWins) ? opts.cutWins : null;
   const rmsArr = list.map((w) => Number(w.rms) || 0);
   const maxRms = rmsArr.reduce((m, v) => Math.max(m, v), 0) || 1;
   const pVar = list.map((w, i) => (pw && pw[i] && Number.isFinite(pw[i].var) ? pw[i].var : null));
   const pVoice = list.map((w, i) => (pw && pw[i] && Number.isFinite(pw[i].voiced) ? pw[i].voiced : null));
   const pCps = list.map((w, i) => (cw && cw[i] && Number.isFinite(cw[i].cps) ? cw[i].cps : null));
+  const pCuts = list.map((w, i) => (dw && dw[i] && Number.isFinite(dw[i].cuts) ? dw[i].cuts : null));
   const hasPitch = pVar.some((v) => v != null && v > 0);   // var=0 mọi window → pitch không mang thông tin
   const hasVoiced = pVoice.some((v) => v != null);
   const hasCps = pCps.some((v) => v != null && v > 0);
+  /* scene density chỉ có nghĩa khi CÓ BIẾN ĐỘNG: đều tuyệt đối (mọi window cùng số
+     cut — GOP encoder cố định) thì kênh không phân biệt được đâu là cao trào → bỏ. */
+  let cutsMax = 0, cutsMin = Infinity;
+  for (const v of pCuts) {
+    if (v == null) continue;
+    if (v > cutsMax) cutsMax = v;
+    if (v < cutsMin) cutsMin = v;
+  }
+  const hasScene = cutsMax > 0 && cutsMin !== cutsMax;
   /* energy: Z khi có biến động thật, nếu không max-norm (khai báo qua energyNorm) */
   const zs = zSeries(rmsArr);
   const cv = zs.mean > 0 ? zs.std / zs.mean : 0;
@@ -1179,27 +1294,39 @@ function fuseLocalScores(wins, opts = {}) {
   const nP = hasPitch ? pVar.map((v) => (v != null && maxVar > 0 ? v / maxVar : 0)) : null;
   const maxCps = pCps.reduce((m, v) => (v != null && v > m ? v : m), 0);
   const nC = hasCps ? pCps.map((v) => (v != null && maxCps > 0 ? v / maxCps : 0)) : null;
+  const nD = hasScene ? pCuts.map((v) => (v != null && cutsMax > 0 ? v / cutsMax : 0)) : null;
+  /* kênh xcorr lệch pha Energy×CPS (chỉ khi có CPS; Pearson là cổng — yếu thì bỏ) */
+  const xc = hasCps ? xcorrEnergyCps(nE, nC) : { available: false, reason: 'Không có transcript SRT — không có nhịp words/giây.' };
+  const hasXcorr = xc.available === true;
+  const nX = hasXcorr ? xc.series : null;
   const raw = {
     energy: 0.6,
     pitch: hasPitch ? 0.25 : 0,
     voiced: hasVoiced ? 0.15 : 0,
     cps: hasCps ? 0.15 : 0,
+    scene: hasScene ? 0.2 : 0,
+    xcorr: hasXcorr ? XC_WEIGHT : 0,
   };
-  const sumRaw = raw.energy + raw.pitch + raw.voiced + raw.cps || 1;
-  /* weights CHỈ chứa kênh đang tồn tại thật (energy luôn có; pitch/voiced/cps khi có
+  const sumRaw = raw.energy + raw.pitch + raw.voiced + raw.cps + raw.scene + raw.xcorr || 1;
+  /* weights CHỈ chứa kênh đang tồn tại thật (energy luôn có; pitch/voiced/cps/scene/xcorr khi có
      dữ liệu) — tổng luôn = 1. Panel đọc weights.energy/pitch/voiced nên không được
      thêm key 0 thừa làm đổi hợp đồng cũ. */
   const weights = {
     energy: r4(raw.energy / sumRaw), pitch: r4(raw.pitch / sumRaw), voiced: r4(raw.voiced / sumRaw),
   };
   if (hasCps) weights.cps = r4(raw.cps / sumRaw);
+  if (hasScene) weights.scene = r4(raw.scene / sumRaw);
+  if (hasXcorr) weights.xcorr = r4(raw.xcorr / sumRaw);
   const feats = list.map((w, i) => {
-    const chans = [nE[i], nP ? nP[i] : null, pVoice[i] != null ? pVoice[i] : null, nC ? nC[i] : null]
+    /* co-occurrence CHỈ đếm các kênh trùng cửa sổ (lag=0) — xcorr lệch pha KHÔNG nằm
+       trong `chans` để tránh double-count (nó thưởng cấu trúc e[i]·c[i±k], k≠0). */
+    const chans = [nE[i], nP ? nP[i] : null, pVoice[i] != null ? pVoice[i] : null, nC ? nC[i] : null, nD ? nD[i] : null]
       .filter((v) => v != null);
     const hi = chans.filter((v) => v >= CO_HIGH).length;
-    const bonus = hi >= 2 ? (CO_BONUS[Math.min(4, hi)] || 1) : 1;
+    const bonus = hi >= 2 ? (CO_BONUS[Math.min(5, hi)] || 1) : 1;
     const base = nE[i] * weights.energy + (nP ? nP[i] * weights.pitch : 0) +
-      ((pVoice[i] || 0)) * weights.voiced + (nC ? nC[i] * weights.cps : 0);
+      ((pVoice[i] || 0)) * weights.voiced + (nC ? nC[i] * weights.cps : 0) +
+      (nD ? nD[i] * weights.scene : 0) + (nX ? nX[i] * weights.xcorr : 0);
     const v = Math.max(0, Math.min(1, base * bonus));
     return {
       t: Number(w.t),
@@ -1207,16 +1334,21 @@ function fuseLocalScores(wins, opts = {}) {
       pitch: nP ? Math.round(nP[i] * 1000) / 1000 : null,
       voiced: pVoice[i] != null ? Math.round(pVoice[i] * 1000) / 1000 : null,
       cps: nC ? Math.round(nC[i] * 1000) / 1000 : null,
+      scene: nD ? Math.round(nD[i] * 1000) / 1000 : null,
+      xcorr: nX ? Math.round(nX[i] * 1000) / 1000 : null,
       crest: Number.isFinite(Number(w.crest)) ? Math.round(Number(w.crest) * 100) / 100 : null,
       coHit: hi >= 2 ? hi : 0,
       v: Math.round(v * 1000) / 1000,
     };
   });
   return {
-    feats, weights, hasPitch, hasCps,
+    feats, weights, hasPitch, hasCps, hasScene, hasXcorr,
     energyNorm: useZ ? 'z' : 'max',
     coHit: feats.reduce((m, f) => Math.max(m, f.coHit), 0),
     crestRef: cr.ref == null ? null : Math.round(cr.ref * 100) / 100,
+    xcorrLag: hasXcorr ? xc.lag : null,
+    xcorrPearson: hasXcorr ? xc.pearson : null,
+    xcorrReason: hasXcorr ? null : (xc.reason || 'Kênh tương quan lệch pha không khả dụng.'),
   };
 }
 
@@ -1233,7 +1365,7 @@ function pickHighlightsByFusion(feats, opts = {}) {
   const vs = smoothSeries(list.map((f) => Math.max(0, Math.min(1, Number(f && f.v) || 0))), 3);
   const cands = [];
   for (let a = 0; a < vs.length; a++) {
-    let sE = 0, sP = 0, nP = 0, sV = 0, sC = 0, nC = 0, sCo = 0, sCr = 0, nCr = 0;
+    let sE = 0, sP = 0, nP = 0, sV = 0, sC = 0, nC = 0, sCo = 0, sCr = 0, nCr = 0, sD = 0, nD = 0, sX = 0, nX = 0;
     for (let b = a; b < vs.length; b++) {
       const dur = (b - a + 1) * windowSec;
       if (dur > maxLen) break;
@@ -1241,6 +1373,8 @@ function pickHighlightsByFusion(feats, opts = {}) {
       if (list[b].pitch != null) { sP += list[b].pitch; nP++; }
       sV += Number(list[b].voiced) || 0;
       if (list[b].cps != null) { sC += list[b].cps; nC++; }
+      if (list[b].scene != null) { sD += list[b].scene; nD++; }
+      if (list[b].xcorr != null) { sX += list[b].xcorr; nX++; }
       sCo += Number(list[b].coHit) || 0;
       if (list[b].crest != null) { sCr += list[b].crest; nCr++; }
       if (dur < minLen) continue;
@@ -1250,7 +1384,7 @@ function pickHighlightsByFusion(feats, opts = {}) {
       cands.push({
         a, b, startMs: Math.round(a * windowSec * 1000), endMs: Math.round((b + 1) * windowSec * 1000),
         score: s / n, avg: s / n, eAvg: sE / n, pAvg: nP ? sP / nP : null, vAvg: sV / n,
-        cAvg: nC ? sC / n : null, coAvg: sCo / n, crestAvg: nCr ? Math.round((sCr / nCr) * 100) / 100 : null,
+        cAvg: nC ? sC / n : null, dAvg: nD ? sD / nD : null, xAvg: nX ? sX / nX : null, coAvg: sCo / n, crestAvg: nCr ? Math.round((sCr / nCr) * 100) / 100 : null,
       });
     }
   }
@@ -1266,6 +1400,8 @@ function pickHighlightsByFusion(feats, opts = {}) {
       (c.pAvg != null ? ' · cao độ ' + Math.round(c.pAvg * 100) + '%' : ' · không có cao độ') +
       ' · giọng ' + Math.round(c.vAvg * 100) + '%' +
       (c.cAvg != null ? ' · nhịp words ' + Math.round(c.cAvg * 100) + '%' : '') +
+      (c.dAvg != null ? ' · nhịp cắt ' + Math.round(c.dAvg * 100) + '%' : '') +
+      (c.xAvg != null ? ' · lệch nhịp ' + Math.round(c.xAvg * 100) + '%' : '') +
       (c.coAvg >= 2 ? ' · ' + Math.round(c.coAvg) + ' tín hiệu cùng nổi bật' : '') +
       (c.crestAvg != null ? ' · crest ' + c.crestAvg : '') + ')'],
     coHit: Math.round(c.coAvg * 10) / 10,
@@ -1295,6 +1431,8 @@ module.exports = {
   idfFromSentences,
   tfidfWeight,
   cpsWindowsFromSentences,
+  sceneDensityWindows,
+  xcorrEnergyCps,
   scoreText,
   heuristicCandidates,
   pickTopNonOverlap,

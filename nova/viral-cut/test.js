@@ -10,8 +10,18 @@ const assert = require('assert');
 const E = require('./engine');
 
 let passed = 0;
+let pending = 0; // test async đang chờ (promise)
 function t(name, fn) {
-  try { fn(); passed++; console.log('  [OK] ' + name); }
+  try {
+    const r = fn();
+    if (r && typeof r.then === 'function') {
+      pending++;
+      return r.then(
+        () => { passed++; pending--; console.log('  [OK] ' + name); },
+        (e) => { pending--; console.error('  [FAIL] ' + name + ' → ' + (e && e.message)); process.exitCode = 1; });
+    }
+    passed++; console.log('  [OK] ' + name);
+  }
   catch (e) { console.error('  [FAIL] ' + name + ' → ' + (e && e.message)); process.exitCode = 1; }
 }
 
@@ -496,7 +506,144 @@ t('fuseLocalScores: trọng số 0.6/0.25/0.15; thiếu pitch → renormalize C�
   assert.strictEqual(onlyVoice.hasPitch, false, 'var=0 mọi window → pitch không mang thông tin');
   assert.deepStrictEqual(onlyVoice.weights, { energy: 0.8, pitch: 0, voiced: 0.2 }, '0.6/0.75 + 0.15/0.75');
   assert.ok(onlyVoice.feats.every((f) => f.pitch === null && f.voiced != null), 'giữ voiced, bỏ pitch');
-  assert.deepStrictEqual(E.fuseLocalScores([], {}), { feats: [], weights: null, hasPitch: false });
+  assert.deepStrictEqual(E.fuseLocalScores([], {}), { feats: [], weights: null, hasPitch: false, hasScene: false, hasXcorr: false });
+});
+t('sceneDensityWindows: đếm cut keyframe theo bucket cửa sổ; ngoài phạm vi bỏ qua, không bịa', () => {
+  const wins = [{ t: 0 }, { t: 1 }, { t: 2 }, { t: 3 }];
+  /* cut 500ms,900ms → bucket0; 1500ms → bucket1; 2999ms → bucket2; 4200ms → ngoài (bỏ) */
+  const d = E.sceneDensityWindows([500, 900, 1500, 2999, 4200], wins);
+  assert.deepStrictEqual(d, [
+    { t: 0, cuts: 2 }, { t: 1, cuts: 1 }, { t: 2, cuts: 1 }, { t: 3, cuts: 0 },
+  ]);
+  assert.deepStrictEqual(E.sceneDensityWindows([], wins), wins.map((w) => ({ t: w.t, cuts: 0 })), 'không cut → 0 thật, không null');
+  assert.deepStrictEqual(E.sceneDensityWindows([100, 200], []), [], 'không window → rỗng');
+  assert.deepStrictEqual(E.sceneDensityWindows(null, wins), wins.map((w) => ({ t: w.t, cuts: 0 })), 'đầu vào sai kiểu → 0, không ném');
+});
+t('fuseLocalScores + cutWins: kênh scene 0.2 renormalize; density ĐỀU → bỏ kênh (không mang thông tin)', () => {
+  const wins = [{ t: 0, rms: 1.0 }, { t: 1, rms: 0.5 }];
+  /* energy .6 + voiced .15 + scene .2 = .95 (pitch var=0 → không có) */
+  const sc = E.fuseLocalScores(wins, {
+    pitchWins: [{ t: 0, voiced: 1, var: 0 }, { t: 1, voiced: 0.4, var: 0 }],
+    cutWins: [{ t: 0, cuts: 4 }, { t: 1, cuts: 1 }],
+  });
+  assert.strictEqual(sc.hasScene, true);
+  const r4 = (x) => Math.round(x * 10000) / 10000;
+  assert.deepStrictEqual(sc.weights, {
+    energy: r4(0.6 / 0.95), pitch: 0, voiced: r4(0.15 / 0.95), scene: r4(0.2 / 0.95),
+  });
+  assert.strictEqual(sc.feats[0].scene, 1, '4/4 cut → chuẩn hoá 1');
+  assert.strictEqual(sc.feats[1].scene, 0.25, '1/4 cut → 0.25');
+  /* đủ 4 kênh (energy+pitch+voiced+scene) → sumRaw 1.2 */
+  const full = E.fuseLocalScores(wins, {
+    pitchWins: [{ t: 0, voiced: 1, var: 40 }, { t: 1, voiced: 0.5, var: 10 }],
+    cutWins: [{ t: 0, cuts: 4 }, { t: 1, cuts: 1 }],
+  });
+  assert.deepStrictEqual(full.weights, {
+    energy: 0.5, pitch: r4(0.25 / 1.2), voiced: 0.125, scene: r4(0.2 / 1.2),
+  });
+  /* density ĐỀU tuyệt đối (GOP encoder cố định) → không phân biệt được → bỏ kênh */
+  const uniform = E.fuseLocalScores(wins, { cutWins: [{ t: 0, cuts: 1 }, { t: 1, cuts: 1 }] });
+  assert.strictEqual(uniform.hasScene, false, 'density đều → kênh vô nghĩa');
+  assert.strictEqual(uniform.weights.scene, undefined, 'không thêm key 0 thừa');
+  assert.ok(uniform.feats.every((f) => f.scene === null), 'scene null — không bịa số');
+  /* không cutWins → hợp đồng cũ giữ nguyên (weights không có scene) */
+  const none = E.fuseLocalScores(wins, { pitchWins: [{ t: 0, voiced: 1, var: 40 }, { t: 1, voiced: 0.5, var: 10 }] });
+  assert.strictEqual(none.hasScene, false);
+  assert.deepStrictEqual(none.weights, { energy: 0.6, pitch: 0.25, voiced: 0.15 });
+  /* co-occurrence tính kênh scene: không pitchWins → không voiced → weights .75/.25.
+     Window 0: energy 1 + scene 1 → coHit 2, base 1 × 1.05 → CLAMP ở trần 1.
+     Window 1: energy .5 + scene .25 → không kênh nào ≥0.75 → không thưởng. */
+  const co = E.fuseLocalScores(wins, { cutWins: [{ t: 0, cuts: 4 }, { t: 1, cuts: 1 }] });
+  assert.deepStrictEqual(co.weights, { energy: 0.75, pitch: 0, voiced: 0, scene: 0.25 });
+  assert.strictEqual(co.feats[0].coHit, 2, 'energy + scene cùng ≥0.75');
+  assert.strictEqual(co.feats[0].v, 1, 'base 1 × 1.05 → clamp v ≤ 1 (bonus có trần)');
+  assert.strictEqual(co.feats[1].coHit, 0);
+  assert.strictEqual(co.feats[1].v, Math.round((0.5 * 0.75 + 0.25 * 0.25) * 1000) / 1000,
+    'không co-occurrence → thuần tổng trọng số');
+});
+t('xcorrEnergyCps: bắt cặp lệch pha ±lag (bỏ k=0), Pearson là cổng — yếu thì bỏ kênh, không bịa', () => {
+  /* energy nhọn ở cửa sổ 2, CPS nhọn ở cửa sổ 3 (words lên sau đúng 1 nhịp) */
+  const e = [0.1, 0.2, 1.0, 0.2, 0.1, 0.1, 0.1, 0.1];
+  const c = [0.1, 0.1, 0.2, 1.0, 0.2, 0.1, 0.1, 0.1];
+  const xc = E.xcorrEnergyCps(e, c);
+  assert.strictEqual(xc.available, true);
+  assert.strictEqual(xc.lag, 1, 'CPS lên sau energy đúng 1 cửa sổ: ' + xc.lag);
+  assert.ok(xc.pearson > 0.15, 'cổng Pearson mở: ' + xc.pearson);
+  assert.strictEqual(xc.series[2], 1, 'đỉnh trùng nơi energy cao × CPS cao ở cửa sổ kế tiếp');
+  assert.deepStrictEqual(E.xcorrEnergyCps(e, c), xc, 'deterministic (2 lần chạy cùng kết quả)');
+  /* CPS hằng số → tương quan vô nghĩa → bỏ kênh */
+  assert.strictEqual(E.xcorrEnergyCps(e, c.map(() => 0.5)).available, false);
+  /* quá ít cửa sổ → không có nghĩa thống kê */
+  assert.strictEqual(E.xcorrEnergyCps([0.1, 1, 0.2], [1, 0.2, 0.1]).available, false);
+  /* hai chuỗi lệch độ dài → lộ liễu, không cắt ngầm */
+  assert.strictEqual(E.xcorrEnergyCps(e, c.slice(0, 5)).available, false);
+  /* cổng Pearson khép (ngưỡng 0.99 — cặp có nhiễu chỉ đạt ~0.67) → bỏ kênh kèm lý do */
+  const noisy = E.xcorrEnergyCps([0.1, 0.2, 1.0, 0.2, 0.1, 0.1, 0.1, 0.1], [0.1, 0.1, 0.2, 1.0, 0.2, 0.1, 0.9, 0.1]);
+  assert.ok(noisy.available && noisy.pearson < 0.99, 'chuỗi có nhiễu → r < 0.99: ' + noisy.pearson);
+  const gated = E.xcorrEnergyCps([0.1, 0.2, 1.0, 0.2, 0.1, 0.1, 0.1, 0.1], [0.1, 0.1, 0.2, 1.0, 0.2, 0.1, 0.9, 0.1], { pearsonMin: 0.99 });
+  assert.strictEqual(gated.available, false);
+  assert.ok(/bỏ kênh/.test(gated.reason), 'lý do khai báo: ' + gated.reason);
+});
+
+t('fuseLocalScores + cpsWins: kênh xcorr 0.1 renormalize; KHÔNG đếm vào co-occurrence (không double-count)', () => {
+  const rms = [0.5, 0.5, 0.5, 0.65, 0.5, 0.5, 0.6, 0.5];
+  const wins = rms.map((rms, i) => ({ t: i, rms }));
+  const cps = [0.1, 0.1, 0.1, 0.1, 4.0, 0.1, 0.1, 2.0];
+  const fus = E.fuseLocalScores(wins, { cpsWins: cps.map((c, i) => ({ t: i, cps: c })) });
+  assert.strictEqual(fus.hasCps, true);
+  assert.strictEqual(fus.hasXcorr, true);
+  assert.strictEqual(fus.xcorrLag, 1, 'CPS lên sau energy 1 cửa sổ');
+  const r4 = (x) => Math.round(x * 10000) / 10000;
+  /* raw: energy .6 + cps .15 + xcorr .1 = .85 (không pitchWins → pitch/voiced 0) */
+  assert.deepStrictEqual(fus.weights, {
+    energy: r4(0.6 / 0.85), pitch: 0, voiced: 0, cps: r4(0.15 / 0.85), xcorr: r4(0.1 / 0.85),
+  });
+  /* window 3: energy 1.0 + xcorr 1.0 nhưng CHỈ energy đếm (xcorr không vào co-occurrence)
+     → hi=1 < 2 → coHit báo 0, KHÔNG có bonus 1.05 (nếu đếm xcorr thì hi=2, v ×1.05) */
+  assert.strictEqual(fus.feats[3].coHit, 0, 'xcorr không nằm trong co-occurrence → không đủ 2 kênh');
+  assert.strictEqual(fus.feats[3].xcorr, 1);
+  assert.strictEqual(fus.feats[3].v,
+    Math.round((1 * r4(0.6 / 0.85) + 0.025 * r4(0.15 / 0.85) + 1 * r4(0.1 / 0.85)) * 1000) / 1000,
+    'v = energy + cps + xcorr, KHÔNG có bonus co-occurrence: ' + fus.feats[3].v);
+  /* CPS flat → hasCps true nhưng cổng Pearson chặn xcorr — không bịa, khai báo lý do */
+  const flat = E.fuseLocalScores(wins, { cpsWins: wins.map((w) => ({ t: w.t, cps: 2.0 })) });
+  assert.strictEqual(flat.hasCps, true);
+  assert.strictEqual(flat.hasXcorr, false);
+  assert.strictEqual(flat.weights.xcorr, undefined, 'không thêm key 0 thừa');
+  assert.ok(flat.feats.every((f) => f.xcorr === null), 'xcorr null — không bịa số');
+  assert.ok(flat.xcorrReason && /hằng số/.test(flat.xcorrReason), 'lý do lộ liễu (Luật 10): ' + flat.xcorrReason);
+  /* không cpsWins → không có kênh xcorr, hợp đồng cũ giữ nguyên */
+  const none = E.fuseLocalScores(wins, {});
+  assert.strictEqual(none.hasXcorr, false);
+  assert.strictEqual(none.weights.xcorr, undefined);
+  assert.strictEqual(none.xcorrReason, 'Không có transcript SRT — không có nhịp words/giây.');
+});
+
+t('pickHighlightsByFusion: reasons khai báo lệch nhịp khi có kênh xcorr', () => {
+  const feats = [];
+  for (let i = 0; i < 90; i++) {
+    const core = i >= 55 && i < 65;           // vùng mạnh nhất
+    const e = core ? 1 : 0.2, x = core ? 1 : 0.2, v = core ? 1 : 0.5;
+    feats.push({ t: i, energy: e, pitch: null, voiced: v, xcorr: x, v: e * 0.6 + v * 0.15 + x * 0.25 });
+  }
+  const top = E.pickHighlightsByFusion(feats, { minLen: 15, maxLen: 30, maxClips: 1 });
+  assert.ok(top.length >= 1, 'phải có highlight');
+  assert.ok(/lệch nhịp \d+%/.test(top[0].reasons[0]), 'reason có lệch nhịp: ' + top[0].reasons[0]);
+  const noX = E.pickHighlightsByFusion(feats.map((f) => ({ t: f.t, energy: f.energy, pitch: null, voiced: f.voiced, xcorr: null, v: f.v })), { minLen: 15, maxLen: 30, maxClips: 1 });
+  assert.ok(!/lệch nhịp/.test(noX[0].reasons[0]), 'không xcorr → không khai báo: ' + noX[0].reasons[0]);
+});
+t('pickHighlightsByFusion: reasons khai báo nhịp cắt khi có kênh scene', () => {
+  const feats = [];
+  for (let i = 0; i < 90; i++) {
+    const core = i >= 55 && i < 65;           // vùng mạnh nhất
+    const e = core ? 1 : 0.2, s = core ? 1 : 0.2, v = core ? 1 : 0.5;
+    feats.push({ t: i, energy: e, pitch: null, voiced: v, scene: s, v: e * 0.6 + s * 0.2105 + v * 0.1579 });
+  }
+  const top = E.pickHighlightsByFusion(feats, { minLen: 15, maxLen: 30, maxClips: 1 });
+  assert.ok(top.length >= 1, 'phải có highlight');
+  assert.ok(/nhịp cắt \d+%/.test(top[0].reasons[0]), 'reason có nhịp cắt: ' + top[0].reasons[0]);
+  const noScene = E.pickHighlightsByFusion(feats.map((f) => ({ t: f.t, energy: f.energy, pitch: f.pitch, voiced: f.voiced, scene: null, v: f.v })), { minLen: 15, maxLen: 30, maxClips: 1 });
+  assert.ok(!/nhịp cắt/.test(noScene[0].reasons[0]), 'không scene → không khai báo nhịp cắt: ' + noScene[0].reasons[0]);
 });
 t('pickHighlightsByFusion: bắt đỉnh, floor 35% loại vùng yếu, non-overlap, deterministic', () => {
   const feats = [];
@@ -758,5 +905,207 @@ t('pickHighlightsByEnergy: crest cao tuyệt đối nhưng ĐỀU thì không ph
   assert.strictEqual(top._stat.crestRef, 4);
   assert.ok(!/bị phạt/.test(top.reasons[0]), 'không phạt thì không được nhắc đến phạt: ' + top.reasons[0]);
 });
+/* ── 15. PHỤ ĐỀ YOUTUBE → SRT (P0 "Tự lấy phụ đề") — thuần, không mạng ── */
+const YT = require('./youtube');
+t('captionTextToCues: VTT auto YouTube — bóc <c>, gộp roll-up trùng, kéo dài endMs', () => {
+  const vtt = [
+    'WEBVTT', 'Kind: captions', '',
+    '00:00:01.000 --> 00:00:03.000',
+    'Xin chào các bạn.', '',
+    '00:00:03.000 --> 00:00:05.000',
+    'Xin chào các bạn.', '', // roll-up: trùng ngay trước → bỏ, cue trước hết hạn 5s
+    '00:00:05.000 --> 00:00:07.500',
+    '<c>Hôm nay <00:00:06.359><c>ta học &amp; chia sẻ.</c>', '',
+  ].join('\n');
+  const cues = YT.captionTextToCues(vtt);
+  assert.strictEqual(cues.length, 2, 'cue trùng bị gộp: ' + cues.length);
+  assert.strictEqual(cues[0].startMs, 1000);
+  assert.strictEqual(cues[0].endMs, 5000, 'endMs kéo dài qua cue bị bỏ: ' + cues[0].endMs);
+  assert.strictEqual(cues[1].text, 'Hôm nay ta học & chia sẻ.');
+  assert.strictEqual(cues[1].endMs, 7500);
+});
+t('captionTextToCues: SRT thường đi qua nguyên vẹn (dấu phẩy mili-giây)', () => {
+  const srt = '1\n00:00:01,500 --> 00:00:02,750\nDòng một\n\n2\n00:01:02,000 --> 00:01:04,000\nDòng hai\n';
+  const cues = YT.captionTextToCues(srt);
+  assert.strictEqual(cues.length, 2);
+  assert.strictEqual(cues[0].startMs, 1500);
+  assert.strictEqual(cues[1].startMs, 62000);
+});
+t('captionTextToCues: rác / rỗng / null → [] (không bịa dòng thoại)', () => {
+  assert.deepStrictEqual(YT.captionTextToCues(''), []);
+  assert.deepStrictEqual(YT.captionTextToCues(null), []);
+  assert.deepStrictEqual(YT.captionTextToCues('WEBVTT\nkhông có mốc giờ nào'), []);
+});
+t('cuesToSrt: định dạng chuẩn SRT — parseSrtCues của engine đọc lại khớp', () => {
+  const srt = YT.cuesToSrt([{ startMs: 0, endMs: 4000, text: 'A' }, { startMs: 61000, endMs: 65000, text: 'B' }]);
+  assert.ok(/^\d+\n00:00:00,000 --> 00:00:04,000\nA\n\n\d+\n00:01:01,000 --> 00:01:05,000\nB\n$/.test(srt), srt);
+  const back = E.parseSrtCues(srt);
+  assert.strictEqual(back.length, 2);
+  assert.strictEqual(back[0].startMs, 0);
+  assert.strictEqual(back[1].text, 'B');
+});
+t('pickCaptionFile: ưu tiên vi > en > ngôn ngữ khác, .srt hơn .vtt', () => {
+  assert.strictEqual(YT.pickCaptionFile(['vc.en.vtt', 'vc.vi.vtt']), 'vc.vi.vtt');
+  assert.strictEqual(YT.pickCaptionFile(['vc.fr.vtt', 'vc.en.vtt']), 'vc.en.vtt');
+  assert.strictEqual(YT.pickCaptionFile(['vc.vi.vtt', 'vc.vi.srt']), 'vc.vi.srt');
+  assert.strictEqual(YT.pickCaptionFile(['vc.txt', 'note.bin']), null);
+});
+t('fetchYoutubeTranscript: URL không có video id → từ chối VC_YT_URL, không chạy yt-dlp', () => {
+  return YT.fetchYoutubeTranscript('https://example.com/video/xyz', { outDir: __dirname }).then(
+    () => { throw new Error('phải từ chối'); },
+    (e) => assert.strictEqual(e.code, 'VC_YT_URL'));
+});
+t('fetchYoutubeTranscript: thiếu outDir → VC_NO_OUTDIR lộ liễu', () => {
+  return YT.fetchYoutubeTranscript('https://youtu.be/dQw4w9WgXcQ', {}).then(
+    () => { throw new Error('phải từ chối'); },
+    (e) => assert.strictEqual(e.code, 'VC_NO_OUTDIR'));
+});
+t('HỢP ĐỒNG TĨNH P0: nút Tự lấy phụ đề — markup + bind + progress + IPC + preload', () => {
+  const fs2 = require('fs');
+  const path2 = require('path');
+  const rd = (p) => fs2.readFileSync(path2.join(__dirname, '..', p), 'utf8');
+  const panel = rd('web/viral-cut-panel.js');
+  const ipcSrc = rd('viral-cut/ipc.js');
+  const preload = rd('preload.js');
+  // panel: nút + handler + bind + cờ bận + nhánh progress 'transcript'
+  assert.ok(panel.includes('id="vcFetchSrt"'), 'thiếu nút vcFetchSrt trong markup');
+  assert.ok(panel.includes("on('vcFetchSrt', vcFetchSrt)"), 'thiếu bind vcFetchSrt');
+  assert.ok(panel.includes("fetchTranscript({ url })"), 'panel phải gọi viralCut.fetchTranscript');
+  assert.ok(panel.includes('fetchingCaptions'), 'thiếu cờ vcState.fetchingCaptions');
+  assert.ok(panel.includes("s.kind === 'transcript' && vcState.fetchingCaptions"), 'thiếu nhánh progress transcript');
+  // ipc: kênh + fail lộ liễu
+  assert.ok(ipcSrc.includes("handle('viralCut:fetchTranscript'"), 'thiếu kênh IPC viralCut:fetchTranscript');
+  assert.ok(ipcSrc.includes("guardRun('transcript')"), 'fetchTranscript phải nằm dưới guard đơn-luồng');
+  assert.ok(rd('viral-cut/youtube.js').includes('VC_YT_NO_CAPTION'), 'youtube.js phải khai báo VC_YT_NO_CAPTION');
+  assert.ok(!/(spawn|require)\([^)]*whisper|thuWhisper|_thuWhisper|whisper\.(exe|cpp|bin)/i.test(rd('viral-cut/youtube.js')), 'cấm fallback Whisper ngầm (Luật 10)');
+  // preload: bridge
+  assert.ok(preload.includes("invoke('viralCut:fetchTranscript'"), 'preload thiếu fetchTranscript');
+});
+/* ── 16. SOURCE-BRIEF (P1 "Hồ sơ nguồn YouTube") — thuần, không mạng ── */
+const SB = require('./source-brief');
+t('buildSourceBrief: URL không hợp lệ → VC_YT_URL, không đụng yt-dlp', () => {
+  return SB.buildSourceBrief('https://example.com/not-youtube', { outDir: __dirname }).then(
+    () => { throw new Error('phải từ chối'); },
+    (e) => assert.strictEqual(e.code, 'VC_YT_URL'));
+});
+t('buildSourceBrief: thiếu outDir → VC_NO_OUTDIR lộ liễu', () => {
+  return SB.buildSourceBrief('https://youtu.be/dQw4w9WgXcQ', {}).then(
+    () => { throw new Error('phải từ chối'); },
+    (e) => assert.strictEqual(e.code, 'VC_NO_OUTDIR'));
+});
+t('srtToPlainText: SRT → đoạn văn liền mạch, thu khoảng trắng', () => {
+  const srt = YT.cuesToSrt([
+    { startMs: 0, endMs: 2000, text: 'Xin chào   các bạn.' },
+    { startMs: 2000, endMs: 4000, text: 'Hôm nay ta học\nmột điều mới.' },
+  ]);
+  const txt = SB.srtToPlainText(srt);
+  assert.strictEqual(txt, 'Xin chào các bạn. Hôm nay ta học một điều mới.');
+  assert.strictEqual(SB.srtToPlainText(''), '');
+});
+t('topHeatWindows + topComments: xếp giảm theo value / likeCount, chặn số lượng', () => {
+  const heat = SB.topHeatWindows([
+    { start_time: 60, end_time: 90, value: 1.2 },
+    { start_time: 0, end_time: 30, value: 3.4 },
+    { start_time: 120, end_time: 150, value: 2.1 },
+  ], 2);
+  assert.deepStrictEqual(heat, ['0:00–0:30', '2:00–2:30']);
+  assert.deepStrictEqual(SB.topHeatWindows(null, 5), []);
+  const cmts = SB.topComments([
+    { text: 'hay quá', likeCount: 3 },
+    { text: '  đọc  \n lại  giúp ', likeCount: 99 },
+    { text: '', likeCount: 1000 },
+  ], 2);
+  assert.deepStrictEqual(cmts, ['đọc lại giúp', 'hay quá']);
+  assert.deepStrictEqual(SB.topComments([], 12), []);
+});
+t('briefToPromptText: đủ metadata + chapters + heatmap + bình luận + transcript nguyên văn', () => {
+  const brief = {
+    version: 1, videoId: 'abc123XYZ_-', url: 'https://www.youtube.com/watch?v=abc123XYZ_-',
+    title: 'Bí mật đồng tiền', durationSec: 185, lang: 'vi', captionAuto: false,
+    srtPath: 'D:/tmp/vc-cap-abc123XYZ_-.srt',
+    chapters: [{ start_time: 0, end_time: 60, title: 'Mở đầu' }, { start_time: 60, end_time: 185, title: 'Phân tích' }],
+    heatmap: [{ start_time: 30, end_time: 60, value: 9 }],
+    comments: [{ text: 'số liệu chuẩn', likeCount: 42 }],
+    transcript: 'Năm 2009, một giao dịch bí ẩn xảy ra.',
+    jsonPath: 'D:/tmp/source-brief-abc123XYZ_-.json', txtPath: 'D:/tmp/source-brief-abc123XYZ_-.txt',
+  };
+  const txt = SB.briefToPromptText(brief);
+  assert.ok(txt.includes('Bí mật đồng tiền'), 'thiếu tiêu đề');
+  assert.ok(txt.includes('3:05'), 'thiếu thời lượng mm:ss: ' + txt.split('\n')[2]);
+  assert.ok(txt.includes('[0:00] Mở đầu'), 'thiếu chapter');
+  assert.ok(txt.includes('0:30–1:00'), 'thiếu window heatmap');
+  assert.ok(txt.includes('số liệu chuẩn'), 'thiếu bình luận');
+  assert.ok(txt.includes('Năm 2009, một giao dịch bí ẩn xảy ra.'), 'thiếu transcript');
+  assert.ok(!txt.includes('CẮT'), 'transcript ngắn không được cắt');
+});
+t('briefToPromptText: transcript vượt trần → cắt RÕ RÀNG kèm đường dẫn file (không cắt ngầm)', () => {
+  const brief = { videoId: 'abc123XYZ_-', title: 'T', durationSec: 10, transcript: 'x'.repeat(3000), txtPath: 'D:/tmp/brief.txt' };
+  const txt = SB.briefToPromptText(brief, { maxChars: 1000 });
+  assert.ok(txt.includes('CẮT: transcript đầy đủ 3000 ký tự tại D:/tmp/brief.txt'), 'thiếu ghi chú cắt lộ liễu');
+  assert.ok(!txt.includes('x'.repeat(1500)), 'không được giữ quá trần');
+});
+t('briefToPromptText: hồ sơ thiếu videoId → VC_BRIEF_BAD', () => {
+  assert.throws(() => SB.briefToPromptText({ title: 'x' }), (e) => e.code === 'VC_BRIEF_BAD');
+});
+t('loadSourceBrief: JSON hợp lệ đọc lại đủ trường; hỏng/sai cấu trúc → VC_BRIEF_BAD', () => {
+  const fs2 = require('fs');
+  const path2 = require('path');
+  const os2 = require('os');
+  const dir = fs2.mkdtempSync(path2.join(os2.tmpdir(), 'vc-brief-'));
+  try {
+    const okPath = path2.join(dir, 'brief-ok.json');
+    fs2.writeFileSync(okPath, JSON.stringify({ version: 1, videoId: 'abc123XYZ_-', transcript: 'nội dung', title: 'T' }), 'utf8');
+    const j = SB.loadSourceBrief(okPath);
+    assert.strictEqual(j.videoId, 'abc123XYZ_-');
+    assert.strictEqual(j.transcript, 'nội dung');
+
+    const badPath = path2.join(dir, 'brief-bad.json');
+    fs2.writeFileSync(badPath, '{không phải json', 'utf8');
+    assert.throws(() => SB.loadSourceBrief(badPath), (e) => e.code === 'VC_BRIEF_BAD');
+
+    const thinPath = path2.join(dir, 'brief-thin.json');
+    fs2.writeFileSync(thinPath, JSON.stringify({ hello: 1 }), 'utf8');
+    assert.throws(() => SB.loadSourceBrief(thinPath), (e) => e.code === 'VC_BRIEF_BAD');
+
+    assert.throws(() => SB.loadSourceBrief(path2.join(dir, 'không-tồn-tại.json')), (e) => e.code === 'VC_BRIEF_BAD');
+  } finally {
+    for (const f of fs2.readdirSync(dir)) { try { fs2.unlinkSync(path2.join(dir, f)); } catch (_) {} }
+    try { fs2.rmdirSync(dir); } catch (_) {}
+  }
+});
+t('HỢP ĐỒNG TĨNH P1: nguồn YouTube — IPC + preload + UI Tạo Kịch Bản + cấm Whisper', () => {
+  const fs2 = require('fs');
+  const path2 = require('path');
+  const rd = (p) => fs2.readFileSync(path2.join(__dirname, '..', p), 'utf8');
+  const ipcSrc = rd('viral-cut/ipc.js');
+  const preload = rd('preload.js');
+  const sbSrc = rd('viral-cut/source-brief.js');
+  const tsHtml = rd('web/partials/panel-toolscript.html');
+  const tsJs = rd('web/src/toolbox/tool-ts.js');
+  // ipc: kênh mới + guard đơn-luồng + trả prompt text
+  assert.ok(ipcSrc.includes("handle('viralCut:buildBrief'"), 'thiếu kênh IPC viralCut:buildBrief');
+  assert.ok(ipcSrc.includes("guardRun('brief')"), 'buildBrief phải nằm dưới guard đơn-luồng');
+  assert.ok(ipcSrc.includes("kind: 'brief'"), 'buildBrief phải khai báo run.kind riêng');
+  assert.ok(ipcSrc.includes('SB.briefToPromptText'), 'ipc phải trả text prompt từ source-brief');
+  // preload: bridge
+  assert.ok(preload.includes("invoke('viralCut:buildBrief'"), 'preload thiếu buildBrief');
+  // engine: chữ ký lỗi lộ liễu
+  assert.ok(sbSrc.includes('VC_BRIEF_BAD'), 'source-brief phải khai báo VC_BRIEF_BAD');
+  assert.ok(!/(spawn|require)\([^)]*whisper|thuWhisper|_thuWhisper|whisper\.(exe|cpp|bin)/i.test(sbSrc), 'cấm fallback Whisper ngầm (Luật 10)');
+  // UI Tạo Kịch Bản: ô URL + nút lấy/xoá + ô thông tin
+  assert.ok(tsHtml.includes('id="tsYtUrl"'), 'thiếu ô tsYtUrl');
+  assert.ok(tsHtml.includes('onclick="tsNapNguon()"'), 'thiếu nút lấy nguồn');
+  assert.ok(tsHtml.includes('onclick="tsXoaNguon()"'), 'thiếu nút bỏ nguồn');
+  assert.ok(tsHtml.includes('id="tsYtInfo"'), 'thiếu ô tsYtInfo');
+  // logic ts: nạp qua IPC + bơm SOURCE MATERIAL vào prompt + chặn Novel lộ liễu
+  assert.ok(tsJs.includes('function tsNapNguon()'), 'thiếu tsNapNguon');
+  assert.ok(tsJs.includes('viralCut.buildBrief({ url })'), 'ts phải gọi viralCut.buildBrief');
+  assert.ok(tsJs.includes('SOURCE MATERIAL'), 'prompt phải nhét hồ sơ nguồn khi có');
+  assert.ok(tsJs.includes('tsYtBrief.text'), 'prompt phải dùng đúng text từ brief');
+  assert.ok(tsJs.includes('chưa hỗ trợ chế độ Novel'), 'Novel + nguồn phải chặn lộ liễu');
+});
 // __TAIL__
-console.log('\nViral Cut engine test: ' + passed + ' test PASS, exitCode=' + (process.exitCode || 0));
+// Test async (promise) chốt kết quả trong microtask — setTimeout(0) in summary SAU CÙNG.
+setTimeout(() => {
+  console.log('\nViral Cut engine test: ' + passed + ' test PASS' + (pending ? ' (CÒN ' + pending + ' test async chưa chốt!)' : '') + ', exitCode=' + (process.exitCode || 0));
+}, 0);

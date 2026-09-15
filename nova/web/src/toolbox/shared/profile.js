@@ -68,11 +68,52 @@ const IDB = {
       req.onerror = () => rej(req.error);
     });
   },
+  // Đọc HÀNG LOẠT key trong MỘT transaction (trước đây mỗi get() là 1 transaction riêng
+  // → đổi profile phải chờ 10 round-trip IDB nối tiếp). Trả về { [key]: value }.
+  async getMany(keys){
+    const db = await this.open();
+    return new Promise((res, rej) => {
+      const tx = db.transaction('blobs', 'readonly');
+      const store = tx.objectStore('blobs');
+      const out = {};
+      for (const k of keys){
+        const req = store.get(k);
+        req.onsuccess = () => { out[k] = req.result; };
+      }
+      tx.oncomplete = () => res(out);
+      tx.onerror = () => rej(tx.error);
+      tx.onabort = () => rej(tx.error || new Error('IDB.getMany aborted'));
+    });
+  },
+  // Ghi HÀNG LOẠT cặp [key, value] trong MỘT transaction readwrite.
+  async setMany(entries){
+    const db = await this.open();
+    return new Promise((res, rej) => {
+      const tx = db.transaction('blobs', 'readwrite');
+      const store = tx.objectStore('blobs');
+      for (const [k, v] of entries) store.put(v, k);
+      tx.oncomplete = () => res();
+      tx.onerror = () => rej(tx.error);
+      tx.onabort = () => rej(tx.error || new Error('IDB.setMany aborted'));
+    });
+  },
   async del(key){
     const db = await this.open();
     return new Promise((res) => {
       const tx = db.transaction('blobs', 'readwrite');
       tx.objectStore('blobs').delete(key);
+      tx.oncomplete = () => res();
+      tx.onerror = () => res();
+    });
+  },
+  // Xoá MỌI key có tiền tố trong MỘT transaction (delete với IDBKeyRange).
+  // Dùng để dọn toàn bộ dữ liệu một profile/video khi xoá — trước đây cleanup
+  // chỉ ghi null vào vài key legacy, mọi key blob thật bị bỏ lại thành rác vĩnh viễn.
+  async delRange(prefix){
+    const db = await this.open();
+    return new Promise((res) => {
+      const tx = db.transaction('blobs', 'readwrite');
+      tx.objectStore('blobs').delete(IDBKeyRange.bound(prefix, prefix + '\uffff'));
       tx.oncomplete = () => res();
       tx.onerror = () => res();
     });

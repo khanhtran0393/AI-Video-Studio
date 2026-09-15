@@ -83,6 +83,194 @@ File nÃ y ghi **tráº¡ng thÃ¡i dÃ i háº¡n vÃ  lá»‹ch sá»­ qu
   vulkan/d3d dllâ€¦) â€” khÃ´ng track, chá»‰ hiá»‡n trÃªn mÃ¡y dev.
 
 ## Nhật ký thay đổi
+## Nhật ký thay đổi
+## 2026-09-15j — Whiteboard Studio: 🤖 AI sinh ảnh theo câu (auto)
+
+- **Yêu cầu user**: đã có kịch bản → TTS → SRT; cần TRỌN LUỒNG tự động:
+  câu + khung thời gian SRT → prompt → **Flow sinh ảnh luôn từ prompt** →
+  gán ảnh vào đúng khung thời gian → AI tự khoanh vùng người/vật thể/sự kiện
+  để vẽ theo câu đó (không gắn ảnh tay).
+- **Giải pháp — TÁI DÙNG engine, không chế kênh mới** (AGENTS §4.1): whiteboard
+  panel chạy trong `index.html` nên dùng thẳng global của tab Tạo Ảnh Hàng Loạt:
+  `flowBridge` (`toolbox/shared/flow.js`), `tfDispatchGen`/`tfEnsureProject`/
+  `tfCfg` (`toolbox/utility/tf.js`) — `GEN_IMAGE`/`POOL_GEN` qua IPC `flow`
+  sẵn có, không thêm IPC.
+- **`wbAiGenImages`** (`whiteboard-studio-ai.js`, nút `wb-aiGenBtn` Bước 3):
+  (a) `wbAiPromptCore` (tách lõi từ `wbAiPrompts`) sinh prompt cho câu còn thiếu;
+  (b) Flow tạo ảnh từng câu — ép aspect 16:9 khớp canvas 1280×720, model/quality
+  theo tab Tạo Ảnh, multi-account (`accountCount>1`, extension ≥1) → `POOL_RESET`
+  + POOL round-robin, 1 account → `tfEnsureProject()`; retry lỗi mềm ≤2 lần /
+  traffic ≤3 lần (nhân bản chính sách `tfGenScenes`); pool tự viết `conc` luồng;
+  (c) lưu `saveFile` IPC vào `<av_save_dir>/whiteboard-anh/cau-NNN.png`
+  (chưa có thư mục → `pickFolder` 1 lần, nhớ localStorage);
+  (d) `C.setImageForScene` (mới expose vào `wbStudioCtx`) gán ảnh + probe canvas
+  → `wbAiRegionsCore` (tách lõi từ `wbAiRegions`) vision khoanh vùng +
+  `wbAiScheduleReveal` giờ vẽ theo share nhịp kể. Câu đã có ảnh → bỏ qua
+  (bấm lại = tạo tiếp câu thiếu). Quota hết → log lộ liễu (Luật 10).
+- **Cache-bust**: panel `?v=wbui4`, ai `?v=wbaigen1` (`index.html`).
+- **Verify**: `npm run check` EXIT 0; CDP 9336 trên app đang chạy — reload xong
+  nút tồn tại + đã bind, `wbAiGenImages`/`wbAiRegionsCore`/`setImageForScene`
+  = function, engine Flow global đầy đủ; errpath 0 cảnh → guard
+  "⚠ chưa có cảnh…" KHÔNG đụng Flow. **Chưa test E2E thật** (cần user bấm với
+  SRT + kịch bản thật và Flow đã đăng nhập — tốn quota Flow, không tự chạy).
+- README (`whiteboard-studio/README.md`) cập nhật Bước 3 + bảng file.
+## 2026-09-15i — GUI: dọn text giới thiệu dư ở 3 panel (Whiteboard Studio / Video Agent / Profile Kênh)
+
+- **Yêu cầu user**: xoá các dòng mô tả/greeting hiển thị sẵn gây nhiễu.
+- **Whiteboard Studio** (`partials/panels-small-a.html` + `whiteboard-studio-panel.js`):
+  bỏ tool-subtitle của tool; bỏ hero (🖊 mark, title "Whiteboard Studio", sub
+  "kịch bản → vẽ tay stream-ink → MP4…", chips engine repo/venv/deps/ffmpeg/whisper,
+  nút "⚙ Chuẩn bị Python"). Hero giữ lại dạng `wb-hide` chỉ chứa `#wb-engine` để
+  `refreshEngine()` không crash; log cảnh báo engine chưa sẵn sàng đổi hướng sang
+  nút "⚙ Chuẩn bị Python" ở tool ✏️ Vẽ Tay Ảnh (nút chuẩn bị venv duy nhất còn lại).
+- **Video Agent** (`partials/panels-small-a.html` + `src/va/va-main.js`): bỏ
+  tool-subtitle "Tạo phim tài liệu từng bước…" và notice chào "👋 Chào bạn!…"
+  (giữ nguyên refreshProjects + vaResumeCheck).
+- **Profile Kênh** (`partials/panel-dash-tool1.html`): bỏ info-box "💡 Quy trình:
+  Bước 1/2/3".
+- **Verify**: `npm run check` EXIT 0, `test:video-agent` 19 pass / 0 fail.
+
+
+## 2026-09-15h — Whiteboard Studio: bố trí lại UI thành accordion 7 bước
+
+- **Vấn đề**: sau khi thêm chia theo câu + AI + preview, panel lộn xộn — Bước 1 trộn
+  4 luồng nhập (SRT / voice→SRT / dán kịch bản / giọng đã tạo) 9 nút một chỗ, nút AI
+  rải rác, preview không có số bước.
+- **Bố trí lại** (`SHELL_HTML` trong `whiteboard-studio-panel.js`): 7 bước dạng
+  `<details>` accordion (chỉ Bước 1 mở mặc định, Log mở) — **mọi id giữ nguyên nên
+  logic JS/2 module mở rộng không đổi**:
+  1. Kịch bản → SRT (🎙 Dùng giọng đã tạo = nút chính · chọn SRT · voice→SRT local ·
+     dán kịch bản)
+  2. Phân cảnh theo câu (🧩 Chia theo câu = nút chính · phân cảnh 25–35s · danh sách
+     cảnh + cảnh thủ công/xoá)
+  3. Ảnh line-art (gắn ảnh · 🤖 AI sinh prompt)
+  4. Vùng vẽ (sinh phần tử · 🎯 AI khoanh vùng · soạn vùng · preview sơ đồ)
+  5. Voice-over & nhạc nền
+  6. Xem trước ghép (canvas + timeline CapCut-like — trước đây là nhóm "▶" không số)
+  7. Xuất MP4 (tuỳ chọn render · lưu/nạp dự án · export + progress)
+- **Thẻ trạng thái động** trên tiêu đề từng bước (`wb-st1..st6`, hàm `updateStepStatus()`
+  gọi trong `log()`/`renderSceneList()`/`checkAudioMatch()`): "✓ N cue", "N cảnh",
+  "N/M ảnh", "N/M vùng vẽ", "voice + nhạc", "sẵn sàng" — biết đang ở đâu mà không cần
+  mở từng bước.
+- **CSS** (`src/styles/base.css`, mục wb-root-v2): style `details.wb-step` (summary
+  cursor/mũi tên ▾ xoay, body padding, pill `.wb-step-st` + `.ok` xanh), thêm màu bước
+  6/7. `index.html` bump `?v=wbui2` cho panel + lần đầu gắn version cho base.css.
+- **Verify** (`nova/scripts/tmp/tmp-cdp-verify-wbui2.js`, CDP 9336 + Page.reload):
+  PASS đủ — 7 details + toggle mở/gập, step1 mở mặc định, đủ pill, binding module AI/
+  preview còn nguyên, cueScenesBtn nằm bước 2, pvCanvas nằm bước 6, canvas 1280×720;
+  errpath PASS (không cue → "⚠ chưa có cue", st2 "—"). `npm run check` EXIT 0.
+
+## 2026-09-15g — Whiteboard Studio: chia cảnh theo câu SRT + AI prompt ảnh/khoanh vùng + Xem trước ghép CapCut-like
+
+- **Mục tiêu** (theo yêu cầu user — workflow user từng làm tay trong Google Antigravity,
+  xem 2026-09-15b): từ SRT (sinh kèm TTS, đã có từ 15f) → chia cảnh THEO CÂU giữ nguyên
+  timing SRT → AI sinh prompt ảnh từng câu + nhận dạng vật thể để khoanh vùng vẽ theo
+  nhịp kể → ghép các đoạn thành preview tương tác chỉnh kiểu CapCut.
+- **Chia theo câu** (`buildCueScenes` trong `whiteboard-studio-panel.js`, nút
+  `#wb-cueScenesBtn` Bước 1): gom cue theo dấu câu `.!?…` (trần 15s, tách tại ranh giới
+  cue — KHÔNG cắt giữa cue vô nghĩa), mỗi câu 1 cảnh, startMs/endMs giữ nguyên SRT;
+  đuôi câu kéo dài tới khi câu sau bắt đầu (khoảng lặng giữ hình) → tổng liền mạch
+  khớp voice-over. Cảnh <1.5s bị log cảnh báo (engine export kẹp tối thiểu 1.5s).
+- **Module AI mới `nova/web/whiteboard-studio-ai.js`** (IIFE, `window.wbStudioCtx` do
+  panel expose — pattern hdPanelCtx): "🤖 AI prompt ảnh" (`wbAiPrompts`) — lô 6 câu qua
+  `callLLMJson` (global từ `src/toolbox/utility/llm.js`, nạp trước panel ở index.html)
+  → mỗi cảnh `imagePrompt` (Anh, line-art whiteboard, nhân vật nhất quán) + `objects`
+  (vật thể trong câu, share %; chuẩn hoá tổng 100 deterministic). "🎯 AI khoanh vùng
+  vật thể" (`wbAiRegions`) — port pattern vision `src/hd/hd-ai-export.js`: ảnh → base64
+  (cạnh dài 896) → polygon 0–1000 → `A.normalizeElement`; `wbAiScheduleReveal` phân bổ
+  reveal theo share (LEAD_IN 300ms đầu, HOLD 500ms cuối, mỗi vùng ≥600ms, số lượng
+  objects ≠ số vùng → chia đều + log khai báo). Không AI config → log lộ liễu, không
+  fallback ngầm (Luật 10).
+- **Module preview mới `nova/web/whiteboard-studio-preview.js`**: nhóm "▶ Xem trước
+  ghép" trong SHELL_HTML (giữa Bước 4 và 5) — canvas 1280×720 phát liên tục toàn cảnh,
+  master clock = audio voice-over (Audio qua /local-media; không voice → đồng hồ nội
+  bộ), seek slider, timeline khối cảnh (rộng ∝ durationMs, click = nhảy tới, KÉO MÉP
+  PHẢI = chỉnh durationMs ghi thẳng `state.scenes` → export dùng đúng giá trị đã chỉnh,
+  playhead vàng, khối đang chạy highlight). Canvas mô phỏng reveal bằng clip theo
+  `region` (polygon) — xấp xỉ stream-ink, KHÔNG thay render thật Bước 5; phụ đề vẽ đáy
+  khung. Panel lazy-mount qua nav.js → cả 2 module chờ nút bằng MutationObserver.
+- **index.html**: +2 script `whiteboard-studio-ai.js` / `whiteboard-studio-preview.js`
+  (`?v=wbprev1`) ngay sau `whiteboard-studio-panel.js` — thứ tự nạp = ngữ nghĩa.
+- **Live verify (CDP 9336, `nova/scripts/tmp/tmp-cdp-verify-wbai2.js`)**: đóng instance
+  cũ bằng WM_CLOSE (clean quit) → `khoidong.bat --silent` (exit 0, Agent Bridge OK) →
+  PROBE PASS đủ: ctx/ai/pv module, 4 nút bound (`wb-aiPromptsBtn`, `wb-aiRegionsBtn`,
+  `wb-cueScenesBtn`, `wb-pvPlay`), canvas 1280×720, `buildCueScenes` trong ctx; đường
+  lỗi lộ liễu PASS: `buildCueScenes()` không cue → "⚠ chưa có cue…", preview refresh
+  không cảnh → "✓ xem trước ghép sẵn sàng — chưa có cảnh" (không bịa dữ liệu, Luật §6.6).
+- **Kiểm định**: `npm run check` EXIT 0 (10/10, toplevel 112 đơn vị nạp không xung đột,
+  size 0 warn). `scan:lifecycle`: session test (boot 06:49/06:53 UTC) 0 finding —
+  finding duy nhất của ngày là WARN teardown 00:13Z trước buổi làm việc (nhóm vô hại §6.5).
+- **Còn treo**: chạy luồng THẬT với dữ liệu app (SRT từ giọng đã tạo → Chia theo câu →
+  AI prompt → gắn ảnh → AI khoanh vùng → preview → export) chờ user bấm trong app —
+  cần AI đã cấu hình ở tab Cài đặt + voice/SRT thật (Luật §6.6, không tự bịa).
+
+## 2026-09-15f — Whiteboard Studio dùng dữ liệu trong app (kịch bản + giọng đã tạo)
+
+- **Phát hiện mount**: `#whiteboardRoot` CÓ trong `nova/web/partials/panels-small-a.html:33`
+  (findstr trước đó miss do shell lỗi) — panel lazy-init qua nav.js, KHÔNG cần thêm container.
+- **2 kênh IPC mới** (inventory 203→205, đã regen):
+  - `voice-history-path` (`nova/main/ipc/voice.js`): trả đường dẫn file audio của 1
+    bản "Đã tạo" (khi + cache; thử `id.mp3`/`id.wav`); file đã xoá/prune → lỗi lộ liễu
+    `WB_VOICE_GONE`. Preload: `window.native.voiceHistoryPath(khi, cache)`.
+  - `whiteboard:importVoice` (`nova/whiteboard-studio/ipc.js`): nhận `{voicePath, srtText}`
+    — SRT do backend sinh KÈM bản giọng (timing thật); ghi SRT vào
+    `userData/whiteboard-studio/voice-import.srt` (đúng ownership, không ghi rác vào
+    voice-history), ffprobe duration, trả cues. Không SRT → `WB_VOICE_NO_SRT` lộ liễu,
+    KHÔNG fallback Whisper ngầm (Luật 10) — Whisper vẫn là nút "Voice → SRT" chủ động.
+- **Panel** (`nova/web/whiteboard-studio-panel.js`, SHELL_HTML Bước 1): 2 nút mới —
+  "📥 Nhận kịch bản" (`pullScriptFromTs`: nguồn trực tiếp `tsOutput`, degrade CÓ KHAI
+  BÁO sang `state.script` — pattern 2026-09-12a) và "🎙 Dùng giọng đã tạo"
+  (`useVoiceFromVoiceTab`: tự gọi `_giongSuNapDia()` vì nó chỉ chạy khi mở tab Giọng
+  nói; chọn bản mới nhất không-cache; nạp `state.audioTrack` + cues → `parseSrt` 25–35s).
+- Cảnh báo SRT cũ: user cảnh báo SRT cũ có thể lệch định dạng → luồng import dùng
+  SRT backend kèm bản giọng, không reuse SRT ghi đĩa của lần tạo cũ.
+- Kiểm định: `npm run check` PASS đủ 9 bước.
+## 2026-09-13 — Viral Cut: kênh xcorr lệch pha Energy×CPS vào fusion (bổ sung Scene Density sáng cùng ngày)
+
+- `nova/viral-cut/engine.js`: thêm `xcorrEnergyCps(eSeries, cSeries, opts)` — tương
+  quan chéo CÓ LAG giữa energy và nhịp words/giây (±1..±2 cửa sổ), bắt cấu trúc
+  "năng lượng lên trước / words lên sau" (và ngược lại) mà co-occurrence trùng
+  cửa sổ (lag=0) không thấy. Thuần JS, deterministic. Cổng = Pearson ĐÚNG NGHĨA
+  (cov/√(var·var) trên phần chồng lấn từng lag, ∈[-1,1], chỉ nhận r dương) ≥ 0.15;
+  yếu/hằng/thiếu 6 cửa sổ/độ dài lệch → `{available:false, reason}` lộ liễu (Luật 10).
+  Điểm per-window = max tích e[i]·c[i±k] (bỏ k=0 — đã có co-occurrence, tránh
+  double-count), chuẩn hoá max → [0,1]; kênh NHẸ raw weight 0.1 (renormalize qua
+  `weights.xcorr`), KHÔNG nằm trong `chans` co-occurrence. Return fusion thêm
+  `hasXcorr`/`xcorrLag`/`xcorrPearson`/`xcorrReason`; feats thêm `xcorr:null` khi
+  không có. Hợp đồng rỗng thêm `hasXcorr:false` (đổi CÓ CHỦ ĐÍCH, test cập nhật).
+  Export mới `xcorrEnergyCps` (viral-cut không thuộc exports-contract baseline).
+  `pickHighlightsByFusion` reasons khai báo ' · lệch nhịp X%' khi kênh hoạt động.
+- `nova/viral-cut/ipc.js`: `feats.xcorr` khai báo `{available, lag, pearson|reason}`
+  trong Tier A (Luật 10); nhánh fusion không chạy cũng khai báo reason.
+- `nova/web/viral-cut-panel.js`: Tier A info hiển thị trọng số lệch nhịp.
+- Test: 84 PASS (thêm 3: unit xcorr lag/Pearson-gate/deterministic, fusion
+  renormalize + không double-count co-occurrence + CPS-flat-bỏ-kênh, reasons lệch
+  nhịp có/không kênh). Bài học: phiên bản "Pearson" đầu là tích chéo chuỗi-z chưa
+  chuẩn hoá (vượt 1, luồn qua cổng 0.99) — bắt được nhờ test A/B cặp có nhiễu.
+- `npm run check` EXIT=0 toàn chuỗi. Close nợ "Cross-correlation có lag" từ entry
+  Scene Density cùng ngày.
+## 2026-09-13 — Viral Cut: kênh Scene Density (thị giác) vào fusion
+
+- `nova/viral-cut/engine.js`: thêm `sceneDensityWindows(cutsMs, wins)` (đếm cut
+  keyframe ffprobe theo bucket cửa sổ, O(N), không decode) + kênh `scene` thứ 5
+  trong `fuseLocalScores` (raw weight 0.2, renormalize công khai qua
+  `weights.scene`; density ĐỀU tuyệt đối — đặc trưng GOP encoder — thì
+  `hasScene=false`, bỏ kênh, không giả tín hiệu). Co-occurrence mở trần 5 kênh
+  (`CO_BONUS[5]=1.2`). `pickHighlightsByFusion` khai báo ' · nhịp cắt X%' trong
+  reasons. Export mới `sceneDensityWindows` (engine viral-cut không nằm trong
+  `exports-contract.json` — chỉ shim nova/*.js + nova/main/* — nên không phải
+  update baseline).
+- `nova/viral-cut/ipc.js`: tái dùng mảng `cutsMs` đã dò (không đọc lại file) →
+  `cutWins` truyền vào fusion; `feats.scene` khai báo available/reason (Luật 10).
+- `nova/web/viral-cut-panel.js`: Tier A info hiển thị thêm trọng số words/scene.
+- Hợp đồng rỗng của `fuseLocalScores` đổi: thêm `hasScene:false` (đổi CÓ CHỦ
+  ĐÍCH, test cập nhật theo). Test: 64 PASS (thêm 3 test mới: bucket counting,
+  renormalize/uniform-bỏ-kênh/clamp co-occurrence, reasons nhịp cắt).
+- `npm run check` PASS toàn chuỗi. Cross-correlation có lag giữa Energy×CPS chưa
+  làm — chờ đo hiệu quả co-occurrence trên dữ liệu thật (xem đánh giá fit).
+
+- [2026-09-13] **Panel Giọng nói — xuất phụ đề .srt (nút SRT trong khung "Đã tạo")**: phát hiện backend `voice-studio/backend/app.py` ĐÃ TỰ SINH `output.srt` từ timing thật từng khối đọc (`write_srt`) và trả `results.srt` trong task results từ lâu, nhưng renderer vứt đi (`_ttsLocal` chỉ fetch file audio) → user không có cách nào lấy phụ đề. Sửa: `_ttsLocal` fetch thêm `results.srt` trả `{blob, srt}` (backend cũ không có → `srt=''`, KHÔNG bịa timing — Luật 10); `_ttsChay`/`ttsDoc` chuyền tiếp `srt` (caller destructuring như `autopipe.js` không vỡ); `_giongLuuBan` nhận thêm tham số `srt`, persist qua meta JSON `voiceHistorySave` (main lưu meta nguyên bản — không đổi main, không đổi IPC); `_giongSuNapDia` nạp lại `m.srt`; thêm `giongSuTaiSrt(i)` (nút "SRT" LUÔN HIỆN trên mọi bản trong khung "Đã tạo" — bản chưa có dữ liệu thì mờ 45% + tooltip, bấm vào báo đỏ giải thích tạo lại bằng backend local là có; theo yêu cầu user mỗi file đều có nút) + helper `_giongSrtParse`/`_giongSrtXau`; `_giongGhepMuc` khi ghép nhiều đoạn: GHÉP SRT theo đúng điểm nối buffer (`offs` = thời lượng buffer thật, decodeAudioData) — chỉ ghép khi ĐỦ mọi bản có SRT, thiếu một thì bản gộp không có phụ đề (ghi log, không xuất sai vị trí). Kèm sửa phụ: `_giongGhepMuc` chấp nhận cả item dạng `{h}` lẫn trực tiếp `h` (nhánh "Ghép các mục đã chọn" `giongSuGhepChon` truyền `h` trần nhưng hàm cũ truy `it.h.blob` → crash tiềm ẩn, giờ chạy được). Kiểm chứng: `node --check` 2 file OK; test roundtrip parse/ghi/offset SRT bằng `nova/scripts/tmp/tmp-voice-srt-test.js` (6/6 PASS); `npm run check` EXIT=0; `npm run test:voice` PASS; `test:voice:ui` FAIL "Không tìm thấy page của app" ở bước dò CDP target TRƯỚC khi nạp script — lỗi môi trường/instance electron không mở remote-debugging, không liên quan thay đổi renderer (cần xem lại khi mở app bằng khoidong.bat). Bản ĐÃ TẠO cũ tạo trước chức năng này hoặc bằng engine đám mây không có SRT → bấm nút (nếu UI cũ còn hiển thị) sẽ báo đỏ rõ ràng, tạo lại bằng backend local là có.
+
 - [2026-09-12] **Panel Giọng nói — restructure: xoá panel "Thư viện giọng", thêm lọc "Giọng Clone", dời "＋ Thêm giọng" vào "Đọc thành giọng"** (user duyệt phương án giữ nút thêm giọng — cách duy nhất để clone — chuyển vào phần Đọc thành giọng, mọi thứ khác của thư viện xoá sạch). HTML `nova/web/partials/panels-upscale-voice.html`: xoá `tool-subtitle` + dòng trạng thái xanh "Giọng nói sẵn sàng" (`#voiceBackendStatus` giờ phải rỗng khi ready); xoá toàn bộ panel Thư viện giọng (head, `giongDem`, `giongLibDD`, `giongLuoiBtn`, hint, `giongLuoiWrap`/`giongChips`/`giongLuoi`); thêm `<option value="clone">Giọng Clone…</option>` vào `#voiceLang`; head "Giọng đọc" thành flex có nút "＋ Thêm giọng" (`giongThemBat()`); form `giongThemBox` dời nguyên vẹn xuống cuối panel. JS `nova/web/src/toolbox/utility/voice.js`: thay `_giongHop` (loc thẻ/chips) bằng `_giongDapUngLang(v, lang)` — `'all'` = tất cả, `'clone'` = `kind==='clone'`, còn lại so `lang`; `giongVe()` rút gọn chỉ còn nhãn đang chọn + sync `giongDDVe` + hàng tinh chỉnh (bỏ lưới thẻ/chips/dem); xoá `giongDatLoc`, `giongLibMo`, `giongLibChon`, `giongLibVe`, `giongLuoiBat`; `giongDDVe` + nhánh đổi backend `voiceBackendChon` lọc qua helper mới (hết giọng khớp → thôi lọc + ghi chú riêng cho 'clone'); `giongDDChon`/`giongTheoBackend` đồng bộ select Ngôn ngữ về `'clone'` khi chọn giọng clone; `voiceInit`/`r?.ok` ready → `st.innerHTML=''` (không chữ trạng thái). `giongTaiDS` không sinh option lang 'clone' từ dữ liệu (option tĩnh trong HTML, không xung đột). State mồ côi `_giongLoc`, `_giongLuoiMo` còn khai báo trong `web/src/toolbox/shared/voice.js` (không còn ai đọc — nợ dọn state chết, không chạm để giữ hợp đồng shared). `check:syntax`/`check:toplevel` sạch tham chiếu mồ côi; `npm run check` EXIT=0 (lần chạy đầu FAIL do leftover `nova/scripts/tmp/tmp-reorder-sim.js` liệt kê nhưng đã mất trên đĩa — lần sau PASS). `tool-tts.js` tự mở form thêm giọng vẫn hoạt động (`giongThemBox`/`giongThemBat` giữ nguyên, chỉ dời chỗ). `giong-dd-packaged-check.js` đã sửa theo UI mới: bỏ phần kiểm lưới thẻ `.gcard`/`giongLuoi`/`giongBam` (không còn tồn tại), thay bằng đồng bộ dropdown `#voiceGiongDD` ↔ nhãn `#giongDangChon` (chọn B → nhãn B → chọn lại A → nhãn A, menu đóng đúng) — chạy lại trên bản đóng gói dist qua CDP **passed** (report `smoke-results/giong-dd-2026-09-12T14-47-08-210Z/`; lưu ý dist hiện tại vẫn là bản build TRƯỚC restructure — muốn UI mới vào bản đóng gói cần `npm run build:win`). **Smoke app dev đạt (khoidong.bat --silent 14:52Z EXIT=0 → CDP 9336 probe tmp-voice-panel-smoke, đã xoá theo quy ước)**: vào tab 🎙 Giọng nói OK; option "Giọng Clone" có trong `#voiceLang`; nút "＋ Thêm giọng" + `giongThemBox` nằm trong panel; lưới thẻ/chips/dem đã biến mất; bật/tắt form OK; dữ liệu THẬT 57 giọng (2 clone "thùy tiên/thùy trang sample") — lọc clone đúng (menu clone hiện đúng 2 giọng clone; backend vieneu hiện tại chưa có giọng clone → rơi vào nhánh fallback ghi chú "Backend này chưa có giọng clone nào — đang hiện tất cả giọng." như thiết kế); `#voiceBackendStatus` RỖNG khi backend sẵn sàng (hành vi mới xác nhận); 0 exception renderer. `scan:lifecycle` exit 1 CHỈ do REAL lịch sử ≤ 2026-09-11T13:56 (đã ghi nhận từ trước) + WARN kill chủ đích khi kiểm định đóng gói; phiên 14:52Z sạch (chỉ gpu-feature-status).
 
 - [2026-09-12z] **Icon taskbar lần 4 — dùng ĐÚNG emblem NOVA lấy từ banner `build/icon.png` (theo yêu cầu user)**: user chỉ thẳng `build/icon.png` là icon chuẩn → xem lại kết luận "banner không crop được" của lần 3 và thấy SAI: banner 2048×768 có nền trong suốt chuẩn (alpha histogram: 60% = 0, 29.7% = 255, ~10% halo glow alpha 1–15; RGB lẫn trong pixel alpha=0 chỉ là rác bộ encode — lần 3 phân tích theo RGB thay vì alpha nên tưởng "nền glow gradient"). Emblem nằm sạch bbox x 34..895, y 27..721 (865×695, độ phân giải cao — tốt hơn hẳn nguồn 108×87 của `icon-square.png`). Script `nova/scripts/tmp/regen-icon-ico-v4.mjs`: crop bbox theo alpha>2 (giữ halo mềm), compose canvas 1024 fill 94%, box-filter premultiplied → 7 frame 16/24/32/48/64/128/256, png-to-ico pack → `build/icon.ico` + sync `nova/web/brand-logo.ico` (hash khớp); bản N-letter backup tại `nova/scripts/tmp/icon-nletter-backup.ico`. Đánh đổi đã biết: 256/128/32px emblem rõ đẹp chuẩn brand; **16px chỉ còn mảng màu xanh-tím + chấm vàng** (giới hạn vật lý của emblem chi tiết — không thể đọc chữ). Verify live: pack lần 1 FAIL `UNKNOWN` vì app đang chạy giữ khóa icon.ico → kill electron (Stop-Process chủ đích) → pack OK → `khoidong.bat --silent` EXIT=0 → WM_GETICON trên hwnd thật: ICON_BIG 32px = emblem rõ, ICON_SMALL 16px = mảng màu brand. `npm run check` PASS; scan:lifecycle 0 REAL mới (38 REAL đều lịch sử ≤ 2026-09-11T13:56; WARN 14:27Z 12/09 là cụm -1 do kill chủ đích khi restart). Nếu không chấp nhận 16px mờ → hybrid v3 (N-letter frame 16–24, backup đã giữ). Tile pinned cũ cần unpin/repin; `dist/` cần `npm run build:win` lại.
@@ -4991,6 +5179,16 @@ Trợ lý dựng báo đang chạy ngay + sửa preview 9:16/1:1 bị co nhỏ +
 
 ## 2026-09-12s — Tool 7 (Trợ lý dựng): dời thanh điều khiển preview ra khỏi khung xem
 
+
+## 2026-09-15a — Whiteboard Studio: region editor "kiểu preview.html" trong panel + sidecar .annotation.json
+
+- **Mục tiêu**: panel studio có trình soạn vùng vẽ như `preview.html` của repo engine (drag/resize trên ảnh) + nạp/lưu sidecar `.annotation.json` — trước đó "Sinh phần tử" chỉ auto-band ngang, không tạo được layout vùng tùy ý (vd 3 cột chủ đề).
+- **IPC thêm 2 kênh** (`nova/whiteboard-studio/ipc.js`): `whiteboard:pickAnnotation` (dialog `.json`, parse + cưỡng chế có `elements[]`, lệch → `ok:false` lộ liễu) và `whiteboard:saveAnnotation` (cần `path` đuôi `.annotation.json` — sidecar suy ra từ ảnh user đã chọn qua dialog trước đó; cưỡng chế đuôi, không nhận path bừa). Preload expose `whiteboard.pickAnnotation` / `whiteboard.saveAnnotation`. `npm run check:ipc` đã cập nhật inventory → **199 kênh** (commit kèm).
+- **Panel** (`nova/web/whiteboard-studio-panel.js`, ~+490 dòng, trong cùng IIFE): bước 3 có nút "✏️ Soạn vùng trên ảnh" → canvas vẽ ảnh cảnh qua `wbFileUrl()` (/local-media) + overlay các `region`; kéo = di chuyển, 8 handle (tl/t/tr/l/r/bl/b/br, min 20px, clamp biên canvas), click vùng = chọn; trường số X/Y/W/H + hướng reveal + bắt đầu/kết thúc (giây) + nhãn + phụ đề; nút ＋ Vùng mới / ✕ Xoá / 📥 Nạp / 💾 Lưu. Mọi sửa ghi thẳng `s.elements[i].region/reveal/handPath`, recompute `handPath` như preview.html, đánh dấu `elementsDirty` + xoá previewPath; bảng phần tử bước 3 vẫn đồng bộ 2 chiều. **Kéo vùng thay polygon `region.points` bằng hình chữ nhật (khai báo ở hint/log — không nuốt ngầm)**; nạp annotation với canvas lệch ảnh → FAIL lộ liễu (Luật 10); lưu qua `toAnnotation` + `validateAnnotation` trước khi ghi.
+- **syntax-check.js**: thêm `[\\/]nova[\\/]scripts[\\/]tmp[\\/]` vào IGNORE — file tmp dùng-một-lần (gitignored, AGENTS §8) không phải ".js nguồn"; trước đó `tmp/dump-save.js` rác của phiên cũ khiến check:syntax FAIL sai đối tượng (không xoá file của ai).
+- **Kiểm định**: `npm run check` EXIT 0 (10 bước, selftest 10 PASS). Chưa chạy app thật qua `khoidong.bat` — cần user test drag/resize + save/load sidecar trên ảnh thật của app.
+- Còn treo (tuỳ chọn sau): UI cho `region.points` (polygon) và `protectedRegions`.
+
 - **Vấn đề**: thanh điều khiển `.t7-pbar` (▶/1x/00:00/00:00/🔁/▢/⛶/16:9) absolute đè lên
   đáy khung xem trước, che hình + chữ "Chưa có ảnh cảnh".
 - **Sửa** (3 file renderer, không đụng main/IPC/state):
@@ -5545,3 +5743,229 @@ Trợ lý dựng báo đang chạy ngay + sửa preview 9:16/1:1 bị co nhỏ +
   chỉ tách lịch sử; check chốt chạy lại trên HEAD mới.
 - Bài học vận hành: `npm run check 2>&1 | …` trong PowerShell 5.1 có thể báo exit 1 ẢO
   (NativeCommandError của stderr pipeline) — chạy `npm run check *> $null` hoặc trực tiếp mới đáng tin.
+
+## 2026-09-14a — Topbar + Profile: nút tạo kênh khi chưa có profile (onchange không chạy)
+
+- **Lỗi**: `#profileSelect` empty-state chọn sẵn option `__new` (＋ Tạo Profile mới). Click lại cùng value → `onchange`/`switchProfile` không chạy → không tạo được kênh.
+- **Sửa**:
+  - Nút `#tb-newprof` (`onclick="newProfile()"`, class `tb-newvid`) cạnh select — cùng pattern `#tb-newvid` / `newVideo`.
+  - `renderProfileSelect`: bỏ option `__new`; empty → placeholder `— Chưa có Profile —` + `disabled`. Select chỉ đổi kênh.
+  - `switchProfile`: bỏ nhánh `val === '__new'`.
+  - `loadCloudState`: gọi `restoreUI()` sau khi nạp IDB (boot chạy `restoreUI` lúc `profiles: []` — nếu không vẽ lại, placeholder disabled kẹt dù IDB đã có kênh).
+- File: `nova/web/partials/shell-topbar.html`, `nova/web/src/toolbox/utility/profiles.js`. `__new` chỉ còn comment. `getMaxProfiles` không chặn tạo (trần gói).
+- Boot: `boot.js` → `initAppDirect` → `restoreUI` → `renderProfileSelect`; rồi `loadCloudState` (IDB) → `restoreUI` lần 2.
+- Kiểm định: `npm run check` exit 0. `__new` trong `nova/web` chỉ còn comment. HTML/JS phục vụ (47280) có `#tb-newprof` + placeholder, không còn `value="__new"`.
+- Verify renderer (CDP 9336, cửa sổ đang chạy từ trước khi sửa nên lần đầu còn DOM cũ `__new`; `Page.reload ignoreCache` mới nạp bản mới):
+  - Empty: select disabled + `— Chưa có Profile —`; nút `#tb-newprof` `onclick="newProfile()"` bật.
+  - Click nút khi 0 kênh → tạo Profile 1, select enabled, modal `show` tiêu đề `Profile mới`.
+  - Click lần 2 khi đã có kênh → tạo Profile 2 + mở modal; `change` select `0` chỉ đổi `currentProfileIdx`, không thêm kênh.
+  - Dọn 2 kênh rỗng do verify tạo → empty-state trở lại. `lifecycle.log` 2026-09-14: 0 `*-gone` / unresponsive (chỉ `gpu-feature-status` lúc 13:51).
+
+## 2026-09-15 — P0 "Tự lấy phụ đề YouTube" (Viral Cut): yt-dlp --write-subs → SRT, không Glasp
+
+- **Đã xong P0** của lộ trình Glasp-like native: nút `⤓ Tự lấy phụ đề YouTube…` trong Viral Cut tải caption CÓ SẴN của video YouTube (chính thức + tự động) về thành SRT sạch — người dùng không cần tìm file SRT tay nữa.
+- Luồng: panel `vcFetchSrt` (`nova/web/viral-cut-panel.js`) → preload `viralCut.fetchTranscript` → IPC `viralCut:fetchTranscript` (`nova/viral-cut/ipc.js`, guard đơn-luồng `run.kind='transcript'` + progress `kind:'transcript'`) → `fetchYoutubeTranscript(url, { outDir })` (`nova/viral-cut/youtube.js`).
+- `fetchYoutubeTranscript`: yt-dlp `--skip-download --write-subs --write-auto-subs --sub-langs vi.*,en.*,en --sub-format vtt/srt` + cookie `youtubeCookiesFile()`; ghi SRT vào `userData/viral-cut-tmp/vc-cap-<id>.srt` (cache theo video id — lần 2 không gọi yt-dlp); chuyển VTT→SRT tự viết (KHÔNG `--convert-subs` vì phụ thuộc ffmpeg).
+- Helpers mới xuất từ `youtube.js`: `captionTextToCues` (bóc thẻ `<c>`/entity, gộp roll-up trùng của auto-caption — cue trùng bị bỏ, cue trước kéo dài endMs), `cuesToSrt`, `pickCaptionFile` (ưu tiên vi > en, .srt > .vtt).
+- **Fail lộ liễu** (Luật 10): `VC_YT_URL` (URL không có video id), `VC_NO_OUTDIR`, `VC_YT_NO_CAPTION` (video không có phụ đề chính thức lẫn tự động — KHÔNG lùi về Whisper ngầm; Whisper vẫn chỉ trong `_thuWhisper` của khop-loi.js do người dùng tự bấm).
+- Panel bind `srtPath` y hệt `vcPickSrt` (hiện "SRT (YouTube tự động/chính thức · lang): tên (n dòng)"); cờ `vcState.fetchingCaptions` vào `vcSetBusy`.
+- Kiểm định: `npm run test:viral-cut` 72/72 PASS (tăng từ 64: 6 test chuyển đổi caption thuần + 2 test async fail lộ liễu + 1 hợp đồng tĩnh markup/bind/IPC/preload/anti-Whisper); `t()` trong test.js giờ hỗ trợ test trả promise (summary in qua setTimeout(0) sau microtask). `npm run check` 10/10 PASS; `ipc-inventory.json` đã có `viralCut:fetchTranscript`.
+- Dọn: xoá `nova/scripts/tmp/tmp-glasp-extract.js/.json`, `tmp-find-t2-web.js`, `fix-cap-regex.js`.
+- **Còn treo (P1–P3)**: P1 `source-brief` (title/duration/transcript/chapters/heatmap) đổ vào T2 (`t2-split.js` path thực tế chưa xác minh — các dump lần trước rỗng) + Video Agent analyze/import; P2/P3 theo spec session trước. Chưa test caption THẬT qua mạng (cần URL thật + app chạy) — theo Luật dữ liệu thật §6.6, dùng video app đã làm việc khi user chạy tiếp.
+
+## 2026-09-15a — Browser Agent: tầng lệnh CDP + Bridge `browser.*` (không nạp Google Antigravity)
+
+- **Mục tiêu**: AI agent ngoài điều khiển được Chrome flow-chrome ĐANG CHẠY (navigate/click/type/scroll/wait_for/eval/list_tabs/screenshot + ghi hình phiên + huỷ) qua Agent Bridge 47280, KHÔNG load extension Google Antigravity.
+- **Mới** `nova/flow-chrome/browser-agent.js` (additive-only): đọc `running` Map từ `tien-trinh` (id → {proc, port, cdp}); `cdp.on` của `nen-tang.cdpConnect` là MẢNG listeners (multi-listener an toàn — không đè listener bắt token). Allowlist host riêng `BROWSER_AGENT_HOSTS` = google.com / labs.google / youtube.com / youtu.be / localhost / 127.0.0.1 (KHÔNG tái dùng AUTH_HOSTS — phạm vi khác). Overlay huỷ = DOM + `Runtime.addBinding('avsAgentCancel')` (lỗi overlay → `overlay: 'unavailable'` khai báo, không cản lệnh — Luật 10). Ghi hình = `Page.startScreencast` JPEG → ffmpeg concat → `<userData>/session-recordings/<dir>/session.webm`. Screenshot QA tái dùng `video-agent/qa/vision.js` `frameStats(png,0)` (ffmpeg đọc thẳng PNG) → trống/đen → `VA_BROWSER_BLANK`.
+- **Agent Bridge** (`nova/main/agent-bridge.js`): +11 action `browser.*` (lazy-require browser-agent BÊN TRONG hàm để server/test Node thuần không nạp flow-chrome); `handleAgentCommand` giờ `await fn(...)` (action async); nhánh LỖI browser.* gọi `finalizeOnError()` đóng WebM treo và trả kèm `error.recording` (→ job.json khi video-agent dùng).
+- **IPC flowChrome**: `handle('BROWSER_*')` route thẳng sang browser-agent (`nova/flow-chrome/index.js` — module.exports KHÔNG đổi).
+- **Lỗi mới** (`video-agent/errors.js`): `VA_BROWSER_BLANK`, `FLOW_PAGE_NOT_READY` (wait_for timeout). Lỗi browser-agent khác: AVS_BROWSER_HOST_DENIED / NO_SESSION / NAV_TIMEOUT / SELECTOR_NOT_FOUND / CANCELLED / NO_APP / RECORD_* / FLOW_RECORD_NO_FRAMES / FLOW_RECORD_ENCODE_FAIL.
+- **P0 giới hạn có chủ đích**: chỉ điều khiển phiên Chrome đã chạy (không auto-open `openForOperation` — để thêm sau, tránh giả định signature); recording path trả về trong kết quả/lỗi, chưa tự ghi vào job.json (wiring orchestrator là bước sau).
+- **Kiểm định**: `agent-bridge-test.js` +8 case (allowlist, ping liệt kê browser.*, host lạ → HOST_DENIED trước khi đụng Chrome, NO_SESSION cho navigate/eval trong Node thuần, browser.* lạ vẫn UNKNOWN_ACTION của bridge).
+
+## 2026-09-15b — Tạo Ảnh/Video Hàng Loạt (tool-toolflow): gắn P0 TobyFlow — bulk VIDEO Veo + chain khung đầu + ref mode + trợ lý prompt
+
+- **Mục tiêu**: gắn các điểm thiếu P0/P1 từ đối chiếu TobyFlow vào pipeline Flow sẵn có
+  (`tool-toolflow` + `flow-native`), KHÔNG nhúng/copy extension, không đụng
+  `nova/chrome-extension/`, không đổi hợp đồng module.exports/IPC nào.
+- **Bulk Ảnh ↔ Video** (`nova/web/partials/panels-niche-flow.html` + `utility/tf.js`):
+  - Panel thêm "Loại đầu ra" (`tfKind` ảnh/video) + hàng cấu hình video (`tfVidModel`
+    omni-flash/veo31-lite/veo31-fast/veo31-quality, `tfVidDur` 8/6/4s, `tfVidRes` 720p/1080p,
+    `tfVidChain` off/same/prev). Model/Chất lượng ảnh mờ đi ở chế độ video; ô duration ẩn với
+    model Veo/Omni (tự chọn theo model — cùng hành vi Tool "Tạo video Flow").
+  - `tfDispatchGen` nhánh video → `_tfDispatchVideo` gọi `POOL_GEN_VIDEO`
+    `{ prompt, aspect VIDEO_*, durationSecs, modelKey (TV_BUILTIN_MODEL_KEYS + tvModelKeys),
+    resolution, sceneId, image?, withData }` — cùng luồng mvtv, extension lẫn native đều chạy.
+    Video mode luôn `POOL_RESET` (không cần project). Kết quả qua `_videoAppResolve` khi
+    `needsAppResolve`; tile done video render `<video>` + `bulkPlayVideo` modal; auto-save
+    `autoSaveMedia(name + '.mp4', b64, 'video')` đúng hợp đồng mvtv.
+  - **Chain ảnh vừa gen** (`_bulkChainImage`): 'same' = ảnh done cùng tên (dòng "tên | …"),
+    'prev' = ảnh done dòng liền trước → làm khung đầu image→video; không tìm được ảnh → log
+    WARN lộ liễu và rơi về text→video (không fallback ngầm).
+- **Chế độ ref + tag @tên** (`_bulkRefsFor(prompt, map, all, mode, idx)`): 'all' / 'seq'
+  (từng dòng 1 ref theo thứ tự) / 'none'; tag `[tên]` hoặc `@tên` khớp ref ghi đè chế độ
+  (trừ none); tag không khớp ref nào → coi là ghi chú, giữ nguyên prompt + đính tất cả.
+- **Trợ lý prompt + retry/tải từng ô**: `bulkPromptAssist()` viết lại từng dòng qua
+  `callLLMJson` (giữ số dòng + tiền tố "tên |", style guide khác cho ảnh/video, >40 dòng hỏi
+  confirm); `bulkRetryOne(i)` chạy lại đúng 1 ô lỗi qua `bulkGenerate(true)` với items tạm
+  `[it]`; checkbox chọn trên tile done + `bulkDownloadSelected()`; `bulkDownloadAll`/tải
+  xử lý cả video (b64→blob qua `_mvDownload`/`novaDownloadUrl`) qua `_bulkDownloadItems`.
+- **Persist**: `_TF_CFG_IDS` (shared/shell.js) +6 id: tfKind, tfRefMode, tfVidModel, tfVidDur,
+  tfVidRes, tfVidChain (restore chỉ set khi option tồn tại — an toàn).
+- **P1 — catalog góc máy/hiệu ứng** (tf.js + panel): `_bulkAngles` (12) + `_bulkEffects` (14)
+  — dữ liệu tĩnh thứ tự ổn định, nhãn tiếng Việt + cụm chèn tiếng Anh; 2 ô select "⚡ Chèn
+  nhanh vào prompt (tại con trỏ)" dưới textarea (`bulkModAngle`/`bulkModEffect`, đổ option
+  bằng `_bulkModInit` từ tfInit — fill idempotent); `bulkInsertSnippet` chèn tại caret
+  (caret cũ còn lưu khi textarea không focus), tự thêm ", " khi đứng sát chữ, trả select về
+  placeholder. Nhập `.txt` prompt đã có sẵn (`bulkImportFile`, accept .txt/.csv). Placeholder
+  ô prompt đổi theo loại đầu ra trong `tfSyncKindUI` (bỏ hardcode "1 ảnh" ở chế độ video).
+- **Không chạm**: video-agent, nova/chrome-extension/, engine `flow-native`/`flow-chrome`
+  (module.exports giữ nguyên), không thêm dependency, không thêm kênh IPC mới.
+- **Kiểm định**: `npm run check` EXIT 0 toàn chuỗi (syntax 485 file, ipc 200 kênh, exports
+  35 module khớp baseline, shared, shadow, size 0 warn, toplevel 1744 tên không xung đột,
+  docs, selftest 10/10) — chạy lại EXIT 0 sau khi thêm P1. Smoke app thật qua `khoidong.bat
+  --silent` 2 LẦN (trước + sau P1, restart để nạp code mới) — Agent Bridge OK, lifecycle
+  session mới sạch (không crash/teardown). Chưa test E2E gen video thật (cần
+  tài khoản/credit Flow thật + dữ liệu app thật — theo §6.6 không tự bịa dữ liệu; chờ user
+  chạy 1 lượt video nhỏ trong app để nghiệm thực địa).
+
+## 2026-09-15c — Tối ưu lag/freeze khi mở/đổi Profile & Video (toolbox): IDB batch + bỏ render trùng + bỏ ghi đè ảnh vừa đọc
+
+- **Root cause đã xác nhận bằng code + CDP 9336 (dữ liệu IDB thật)**:
+  1. `loadProfileImages` (utility/profiles.js) đọc **10 `IDB.get` TUẦN TỰ** — mỗi get mở
+     1 transaction riêng (shared/profile.js `get()`) → đổi profile chờ 10 round-trip nối tiếp.
+  2. `rerenderAllAfterProfileLoad` gọi `renderAllT2()` rồi gọi lại y nguyên
+     `renderTable/renderPreview/renderPromptsV/updateScriptCount` (renderAllT2 đã bao trùm
+     cả 4 — xác minh nguyên văn t2-audio.js:172) → vẽ bảng cảnh (innerHTML base64) 2 lần.
+  3. `switchProfile` kết thúc bằng `saveState(true)` → `saveCloudState` **ghi đè lại 8 key
+     ảnh blob vừa đọc từ IDB** + `_local/state` + workData mọi video = ~10 transaction
+     write thuần lãng phí ngay sau khi load xong. `switchVideo`/`newVideo` (t7-video.js)
+     và `newProfile` dính cùng lỗi ở lần save cuối.
+  4. `saveCloudState` ghi tuần tự 10 `IDB.set` riêng lẻ mỗi lần lưu.
+  5. `switchProfile` gọi `_syncChLang()` 2 lần (trong rerenderAllAfterProfileLoad + lặp cuối).
+- **Vá (renderer, không đổi export/IPC/state contract nào)**:
+  - shared/profile.js: thêm `IDB.getMany(keys)` / `IDB.setMany(entries)` — 1 transaction
+    cho cả batch, lỗi fail lộ liễu (onerror/onabort → reject), không fallback ngầm.
+  - `loadProfileImages`: 1 `IDB.getMany` cho 8 key ảnh + voiceMp3 (+ key legacy `prof*`
+    khi `v_main` để migrate); giữ nguyên semantics fallback cũ (giá trị rỗng mới đọc legacy).
+  - `saveCloudState`: gộp 9-10 `IDB.set` thành 1 `IDB.setMany` (luôn có `_local/state`
+    + workData hiện tại; ảnh chỉ khi `!skipImages`); vòng all-workData gộp thành 1
+    `IDB.setMany` thay vì N set tuần tự.
+  - Bỏ 4 lời gọi render trùng trong `rerenderAllAfterProfileLoad` (giữ `renderAllT2`,
+    `syncTool2FromProfile`, `renderProfileStyles` — không trùng).
+  - `switchProfile`: bỏ `_syncChLang()` trùng; save cuối → `saveState(true, true)`
+    (skipImages — ảnh vừa đọc từ IDB, ghi lại là I/O lãng phí). `newVideo`/`switchVideo`
+    (t7-video.js — ghi ngoại lệ vào header comment "không sửa thân hàm") và `newProfile`
+    cũng `saveState(true, true)` ở lần save SAU load; save TRƯỚC khi rời video (dòng 17/42)
+    giữ nguyên FULL save — đó là chỗ lưu ảnh video cũ (không mất dữ liệu).
+- **Benchmark read-only qua CDP 9336 trên video thật trong IDB** (`nova/scripts/tmp/tmp-cdp-bench-getmany.js`):
+  10 get tuần tự ~1.9ms vs 1 getMany ~0.8ms (**2.4×**) ngay khi blob rỗng; blob
+  base64 MB-scale chênh còn lớn hơn (mỗi round-trip tuần tự chờ deserial full blob).
+- **Kiểm định**: `npm run check` EXIT 0 (10/10 bước). App thật: đóng có kiểm soát qua CDP
+  `Browser.close` → `khoidong.bat --silent` (exit 0, Agent Bridge OK) → verify qua CDP
+  `typeof IDB.getMany/IDB.setMany === 'function'`, boot sạch "Loaded local state snapshot".
+  `scan:lifecycle --json`: 0 findings trong session mới (38 REAL cũ đều 03-09→11-09).
+- **Giới hạn (đã đóng)**: RAM ban đầu `profiles: []` → user tự tạo **3 kênh thật** trong app
+  (mỗi kênh 1 video). Đo vòng `switchProfile` THẬT qua CDP 9336
+  (`tmp-cdp-real-switch.js`, chuỗi cur→0→1→2 quay về đúng kênh gốc): từng vòng
+  **4.5 / 15.4 / 13.6 ms (tổng 33.6ms / 3 switch)**, state nhất quán, không lỗi console,
+  kết thúc đúng `currentProfileIdx` ban đầu. So trước vá: mỗi switch còn cộng ~10
+  transaction IDB read tuần tự + ~10 write (ghi lại ảnh blob) + 1 vòng render bảng
+  cảnh nặng lặp 2 lần — giờ còn **2 transaction + 1 lần render** cho mỗi switch.
+  Lưu ý: 3 kênh mới trắng ảnh (imgKeyCount=0) — với ảnh/clip thật MB-scale lợi
+  tương đối càng lớn vì bỏ hẳn phần ghi đè blob sau mỗi lần switch.
+- **Verify đúng-sắc-thái dữ liệu** (`tmp-cdp-verify-data-equal.js`, chỉ đọc): logic batch
+  mới (getMany + fallback legacy trong bag) vs logic cũ (10 get tuần tự + legacy get
+  riêng) trên toàn bộ 17 video thật trong IDB (gồm nhánh legacy `v_main`):
+  **136/136 OK, 0 mismatch**. Các key blob hiện hữu đều rỗng (nonEmpty=0) nên phép so
+  chủ yếu phủ nhánh rỗng+legacy; nhánh giá trị nặng dùng đúng cùng biểu thức
+  `isEmpty`/`pick` của bản cũ.
+- `mergeLocalWorkData` soi lại: chỉ 1 IDB.get (2 nếu legacy) — không cần batch.
+- **2026-09-15d — vá lag + sai lệch nhận thức khi XÓA profile** (`deleteProfile` profiles.js, `IDB.delRange` shared/profile.js):
+  - Bệnh 1 (lag): cuối hàm chạy `saveState(true)` full-save → ghi lại toàn bộ blob ảnh
+    của kênh được chọn (vừa mới đọc từ IDB) — cùng bệnh đã vá ở switchProfile. → `saveState(true, true)`.
+  - Bệnh 2 (rác IDB): cleanup cũ chỉ ghi `null` vào 3 key legacy gốc profile; mọi key thật
+    của từng video (8 khoá ảnh blob + workData…) bị bỏ lại vĩnh viễn → IDB phình to theo
+    số lần tạo/xoá, càng dùng càng lag. → `IDB.delRange(prefix)` xoá mọi key
+    `uid/<profileId>/*` trong MỘT transaction (IDBKeyRange.bound … `'\uffff'`), gồm cả key legacy.
+  - Bệnh 3 (nhận thức "xoá không theo profile đang chọn"): code xoá đúng profile hiện hành,
+    nhưng (a) confirm chỉ hiện `tenKenh||'unnamed'` — kênh trống tên thì confirm giống hệt nhau;
+    (b) sau xoá selection NHẢY về kênh #0; (c) danh sách đánh số lại (kênh #3 cũ thành #2) →
+    tưởng xoá nhầm. → confirm nêu rõ `KÊNH #N ("tên")`; giữ selection tại cùng vị trí (kẹp cuối);
+    thêm `mergeLocalWorkData` cho kênh được chọn mới (đồng bộ switchProfile).
+  - Verify: `npm run check` EXIT 0 (10/10); reload app qua CDP+khoidong --silent —
+    `IDB.delRange` = function trong trang; boot sạch. Snapshot `_local/state` sau user tự xoá
+    cả 3 kênh test: profiles:0 cur:-1 — dữ liệu khớp, không mất ngoài ý muốn. Chưa đo được
+    vòng xoá E2E (cần ≥1 kênh thật — chờ user tạo kênh test mới).
+  - **Verify E2E xoá thật** (user duyệt tạo kênh test trống, `tmp-cdp-real-delete4.js`):
+    newProfile → workData 40+ key có trong IDB → deleteProfile (confirm override tạm trong
+    trang) → vòng trọn **9.8ms**; sau xoá RAM n=0 cur=-1, snapshot n=0, key workData của
+    kênh XOÁ SẠCH khỏi IDB → range delete chạy thật. Orphan-check 3 kênh test đều sạch
+    (pid2 sót do dialog bị bấm Huỷ → deleteProfile trả sớm trước cleanup — đúng luồng;
+    đã dọn tay bằng IDB.delRange). Lifecycle session hôm nay: 0 findings.
+    Ghi chú kỹ thuật: confirm() Electron là dialog NATIVE — CDP
+    Page.handleJavaScriptDialog không điều khiển được; phải override window.confirm tạm
+    thời khi tự động hoá đo. CDP chẩn đoán bật qua env `NOVA_CDP_PORT=9336` trước
+    `khoidong.bat --silent` (identity.js chỉ mở port khi env được đặt rõ); đóng app
+    an toàn từ automation bằng WM_CLOSE tới MainWindowHandle (không taskkill).
+
+
+## 2026-09-15b — Workflow sản xuất dùng Google Antigravity NGOÀI app (qua MCP)
+
+- **User minh hoạ bằng video** (tải xuống (1).mp4, 2026-09-15): workflow thật = ném file kịch bản/SRT vào **Google Antigravity** (agent IDE, composer "Ask anything", model Gemini Flash High) → agent đạo diễn: đọc SRT chia khung thời lượng, viết prompt ảnh (nhân vật ADAM, style vẽ tay), rồi điều khiển giao diện web của app (tab TOOL_CAPCUT / Whiteboard Animation → Tạo Ảnh Flow AI → Biên tập video → Xuất video) tới video hoàn chỉnh.
+- **Phân biệt với 2026-09-15a**: app KHÔNG bundle/nạp extension Antigravity (Browser Agent đi CDP thuần cho flow-chrome — vẫn đúng). Nhưng **Antigravity là một phần workflow sản xuất BÊN NGOÀI app**: agent này thao tác app qua web UI/MCP. Hệ quả: mọi thay đổi UI app (panel/tool trong `nova/web/`) có thể bị agent ngoài điều khiển → giữ id/selector/binding nút ổn định, không phá hợp đồng UI khi refactor renderer.
+- Video cho thấy composer Antigravity đang báo **"⚠ MCP Error"** — chưa rõ lỗi MCP nào (config server MCP hay tool call). Chờ user xác nhận có cần điều tra/kết nối Agent Bridge (47280) làm MCP server cho Antigravity không.
+## 2026-09-15c — Whiteboard Studio: relax `wbEdCur`/`wbEdAdd` — thêm vùng được ngay trên cảnh mới
+
+- **Vấn đề**: `wbEdCur()` cũ yêu cầu `s.elements.length > 0` → lần bấm "＋ Vùng mới" đầu tiên trên cảnh chưa "Sinh phần tử" / chưa nạp annotation luôn fail.
+- **Sửa** (`nova/web/whiteboard-studio-panel.js`): `wbEdCur()` giờ chỉ yêu cầu `image` + `canvas` đã probe; nếu `elements` chưa phải mảng thì khởi tạo `[]`. `wbEdAdd()` đổi lời cảnh báo thành "cảnh cần ảnh + canvas đã probe (bước 2)". Các caller khác (wbEdRender/SyncFields/ApplyField/PointerDown) đã an toàn sẵn với mảng rỗng / `edSel = -1`.
+- **Kiểm định**: `npm run check` EXIT 0 (10/10 bước, selftest 10 PASS). `khoidong.bat --silent` exit 0 (app đang chạy — focus cửa sổ; renderer CẦN reload Ctrl+R / restart để nhận file mới). `scan:lifecycle`: 38 REAL đều là finding cũ 03-09→11-09, session hiện tại sạch (boot 22:12 UTC, chỉ gpu-feature-status).
+- **Còn lại**: chờ user verify trong app (kéo/thả, resize, trường số, nạp/lưu sidecar). Sau đó tùy chọn: UI cho `region.points` (polygon) + `protectedRegions`.
+
+## 2026-09-15d — Viral Cut P1: source-brief (hồ sơ nguồn YouTube) → Tạo Kịch Bản
+
+- **Mục tiêu P1 hoàn tất**: biến 1 URL YouTube thành **hồ sơ nguồn** (metadata + chapters + heatmap "most replayed" + transcript từ P0 + bình luận top) — NGUỒN thật để AI **viết kịch bản dựa trên tư liệu** thay vì bịa (đúng tinh thần "đứng trên vai người khổng lồ").
+- **Engine mới `nova/viral-cut/source-brief.js`** (main, thuần Node, chỉ phụ thuộc `youtube.js`): `buildSourceBrief(url,{outDir,commentsMax,withComments,onProgress})` → probe + `fetchYoutubeTranscript` + `fetchYoutubeComments` → ghi `source-brief-<id>.json` (máy đọc) + `source-brief-<id>.txt` (người đọc) vào `viral-cut-tmp`; `briefToPromptText(brief,{maxChars=14000})` → khối "NGUỒN THAM CHIẾU" cho prompt (transcript vượt trần → **cắt LỘ LIỄU** kèm ghi chú + đường dẫn file đầy đủ, không cắt ngầm — Luật 10); `loadSourceBrief(jsonPath)` validate `version/videoId/transcript` → `VC_BRIEF_BAD`; helper `srtToPlainText`/`topHeatWindows`/`topComments` (lọc comment rỗng TRƯỚC khi cắt top-N — test bắt được bug này). Fail lộ liễu: `VC_YT_URL`/`VC_NO_OUTDIR`/`VC_YT_NO_CAPTION`/`VC_BRIEF_BAD`. Không Whisper, không bịa.
+- **IPC mới `viralCut:buildBrief`** (`nova/viral-cut/ipc.js`): guard đơn-luồng `run.kind='brief'` (chung guard với analyze/export/transcript — không chạy chồng), progress riêng `kind:'brief'` (probe→caption→comments→done), trả `{jsonPath,txtPath,title,durationSec,lang,transcriptChars,comments,text}`. Preload: `viralCut.buildBrief`. Inventory `nova/ipc-inventory.json` đã cập nhật (201 kênh) — kiểm chứng có `viralCut:buildBrief`. `exports-contract.json` KHÔNG cần đổi (viral-cut không thuộc baseline shim/main).
+- **UI tool Tạo Kịch Bản (ts)** — điểm nối "into T2" đúng kiến trúc: `panel-toolscript.html` thêm hàng "📺 Nguồn YouTube (source-brief)" (`#tsYtUrl` + nút `tsNapNguon()`/`tsXoaNguon()` + `#tsYtInfo`); `tool-ts.js` thêm `tsNapNguon`/`tsXoaNguon`/`tsNguonDangBat` + state `tsYtBrief` — khi có nguồn, `tsGenerate` bơm block `SOURCE MATERIAL` vào prompt (topic = GÓC nhìn, nguồn = SỰ THẬT). Kịch bản viết xong chảy vào `#scriptInput` của T2/Phân Cảnh qua pattern có sẵn (giống tool-ts cũ). **Novel mode + nguồn → chặn lộ liễu** (pipeline Novel chưa đọc hồ sơ nguồn — không âm thầm bỏ nguồn). VA (va-easy) KHÔNG sửa: import box của VA đã tự nhận `st.script` từ tool Tạo Kịch Bản — bơm dossier thẳng vào narration là sai hợp đồng (narration = lời đọc TTS).
+- **Test**: `nova/viral-cut/test.js` section 16 — 9 test mới (72 → **81/81 PASS**): thuần/không mạng (fixture brief object là unit test hàm thuần, không phải dữ liệu app giả) + hợp đồng tĩnh P1 (kênh IPC, guard, preload, markup tsYt*, prompt SOURCE MATERIAL, chặn Novel, cấm Whisper trong source-brief.js).
+- **Kiểm định**: `npm run check` EXIT 0 (10/10 — cả `handler-shadow-check`: 0 lỗi, 86 warn id-tham-chiếu C2 có guard là SẴN, không liên quan `tsYt*`). `test:viral-cut` 81/81.
+- **Còn treo**: (1) live smoke nút "Lấy nguồn" trong app cần restart app + URL YouTube thật có phụ đề (Luật §6.6 — chờ user, không tự bịa URL); (2) P1 góc còn lại: cho Phân tích kịch bản (T2) dùng chapters/heatmap của hồ sơ nguồn để gợi nhịp cảnh — chưa làm; (3) ~~`vcFetchSrt` disable condition~~ **ĐÃ XÁC MINH ĐÚNG** (2026-09-15d): `viral-cut-panel.js:94` là `busy || !url.trim() && !sourceUrl` — theo precedence `&&` > `||` ≡ `busy || !(url.trim() || sourceUrl)` (De Morgan), flag cũ chỉ là nhầm precedence.
+- **App thật (2026-09-15d)**: đóng instance cũ có kiểm soát qua CDP `Browser.close` → `khoidong.bat --silent` khởi chạy instance mới (exit 0, Agent Bridge 47280 OK). Verify P1 LIVE qua CDP `Runtime.evaluate`: `window.native.viralCut.buildBrief` = function, `#tsYtUrl/#tsYtBtn/#tsYtInfo` tồn tại, `tsNapNguon`/`tsXoaNguon` = function, P0 `fetchTranscript` vẫn nguyên. `scan:lifecycle`: session mới sạch (đóng cũ = teardown `before-quit→quit` vô hại nhóm a; 38 REAL/WARN đều ≤ 13-09). Chỉ còn thiếu: bấm nút "Lấy nguồn" với URL YouTube THẬT có phụ đề do user cung cấp.
+
+## 2026-09-15e — Whiteboard Studio: bind gridEdge, lưu/nạp dự án (userData), khoanh vùng 8-handle
+
+- **gridEdge**: option `--grid-edge` đã có sẵn trong `py-backend.js` (`DEFAULTS.gridEdge=null` = mặc định engine) nhưng panel chưa bind → thêm `<input id="wb-gridEdge" type="number">` ở Bước 5 (trống/0 → `null`, không bịa giá trị); `exportVideo` truyền `options.gridEdge: parseInt(...) || null` — py-backend chỉ push `--grid-edge` khi số > 0 (nguyên trạng).
+- **Lưu/nạp dự án qua userData**: 2 kênh IPC mới `whiteboard:saveProject` / `whiteboard:loadProject` (`nova/whiteboard-studio/ipc.js`) — ghi/đọc `userData/whiteboard-studio/project.json` (1 slot, KHÔNG dialog: vị trí do app quản, khác hợp đồng "media phải qua dialog" vì path không đến từ GUI). Fail lộ liễu: `WB_PROJECT_EMPTY` (≥1 cảnh), `WB_NO_SAVED_PROJECT`, `WB_PROJECT_BAD` — không fallback ngầm (Luật 10). Preload: `whiteboard.saveProject/loadProject`.
+- **Panel** (`nova/web/whiteboard-studio-panel.js`): `projectSnapshot()` — scenes/cues/srtPath/selected/audioTrack/musicTrack + `opts` (inkPath, colorFill, capLongEdge, musicVolume, gridEdge); `saveProject()`/`loadProject()` + 2 nút `#wb-saveProjectBtn`/`#wb-loadProjectBtn` ở Bước 5. Nạp: khôi phục state + select/tuỳ chọn + nhãn media (srt/audio/music), `checkAudioMatch`, chặn lộ liễu scene thiếu `canvas`.
+- **HD khoanh vùng 8-handle** (`nova/web/src/hd/hd-canvas.js`): `pvHandles` 4 góc → **8** (4 góc + 4 cạnh giữa) trả `{x,y,kind,cur}`; `pvHit` trả `{kind,cur}` thay anchor; `pvPointerDown` giữ rect gốc lúc bắt đầu kéo (`rx0..ry1`); `pvPointerMove`: góc = hộp bao đỉnh đối diện ↔ con trỏ (cho lật chiều như cũ), cạnh = kẹp đúng 1 trục giữ cạnh đối diện (trần min 8px annotation không cho sập âm); cursor riêng từng handle (ns/ew/nesw/nwse); overlay vẽ 8 chấm (cạnh r=3, góc r=4). Vùng lasso (khoanh tay) vẫn không resize theo handle.
+- **Kiểm định**: `node --check` 4 file OK; `check:ipc` 201 → **203 kênh** (đủ 2 kênh mới); `npm run check` **EXIT 0** (10/10 — size 0 warn, toplevel không xung đột, exports 35 module khớp baseline).
+- **Live verify (2026-09-15e, sau restart)**: app đóng cũ → `khoidong.bat --silent` khởi chạy instance mới nạp preload/IPC mới (exit 0, Agent Bridge OK). CDP `Runtime.evaluate` (`nova/scripts/tmp/tmp-cdp-verify-wbsave.js`): `window.native.whiteboard.saveProject/loadProject` = **function**, `#wb-gridEdge` + `#wb-saveProjectBtn`/`#wb-loadProjectBtn` tồn tại trong DOM; 2 đường lỗi lộ liễu ĐÚNG HỢP ĐỒNG qua IPC thật: `loadProject()` khi chưa có file → `{ok:false, error:'WB_NO_SAVED_PROJECT (chưa lưu dự án nào)'}`, `saveProject({data:{}})` → `{ok:false, error:'WB_PROJECT_EMPTY …'}` (KHÔNG bịa dữ liệu dự án — Luật §6.6). `project.json` chưa tồn tại (đúng — chưa ai lưu). `scan:lifecycle`: session mới **0 findings** (finding duy nhất mới là WARN teardown `Network Service reason=killed 0xc000013a` lúc user đóng app — nhóm vô hại §6.5).
+- **Còn treo (cũ — đã xử lý 2026-09-15f, xem dưới)**: bấm Lưu dự án với dữ liệu Whiteboard Studio THẬT (SRT/ảnh/voice user tạo) để xác nhận end-to-end ghi `project.json` + nạp lại — chờ user có dữ liệu, không tự bịa (Luật §6.6).
+
+### 2026-09-15f — Test gridEdge + 8-handle bằng dữ liệu thật có sẵn của app
+
+User chọn hướng "test bằng dữ liệu hiện có" thay vì chờ SRT/ảnh Whiteboard riêng. **Nguồn dữ liệu thật**: frame PNG trích từ `output/gen-e2e/native-video-veo31-fast.mp4` (video app TỰ sinh trong smoke e2e) qua ffmpeg hệ → `%TEMP%\hd-real-frame.png` (916KB, 1280×720) — không bịa dữ liệu, chỉ trích khung từ artifact app đã tạo.
+
+- **8-handle resize — 5/5 PASS trong app đang chạy** (`nova/scripts/tmp/tmp-cdp-hd-8handle.js`, CDP port 9336): scene nạp bằng public API `window.HanddrawPanel.loadImages([path])` (path-based, không cần dialog); region rect dựng bằng `window.hdPanelCtx.pvCreateElement` (hàm app thật); kéo handle bằng **PointerEvent thật** trên `#hd-editCanvas`. Phát hiện kỹ thuật: panel phải `switchTool('toolhanddraw')` trước thì canvas mới có layout (canvas ẩn → rect 0×0, `pvLoad` không chạy); điều kiện chờ phải loại canvas 300×150 mặc định. Kết quả: (E) hover cạnh n → cursor `ns-resize` ✓; (A) góc se tăng 2 trục, góc đối giữ nguyên ✓; (B) cạnh n chỉ trục dọc ✓; (C) cạnh w kéo quá east → kẹp min 8px annotation, east giữ ✓; (D) góc nw kéo chéo quá đỉnh se → lật chiều, dims dương ✓. Cuối test `clearAll()` dọn state in-memory.
+- **Phát hiện ±1px (đã ghi nhận, chấp nhận)**: trục "giữ nguyên" khi resize lệch tối đa 1px do làm tròn qua lại annotation↔canvas (`pvRect` round `(x+w)*sx` → `pvSetRegion` chia `/sx` round lại). Artefact này CÓ SẴN trên đường move từ trước, **bão hoà ±1px, không cộng dồn** qua các lần kéo (đã kiểm chứng giá trị ổn định). Trục thao tác chính xác tuyệt đối.
+- **gridEdge — render THẬT qua engine** (`nova/scripts/tmp/tmp-wb-gridedge-render.js`): engine Python sẵn sàng ngay trong repo (`srt-whiteboard-animation/.venv`, status ✓ đủ). `pb.exportVideo` (Node thuần, electron optional) với scene = ảnh thật + elements từ `A.buildAnnotation(..., {bands:1})` (module `nova/web/whiteboard-annotation.js` — cùng hàm panel gọi; **lưu ý**: bands mặc định với durationMs 2000 sinh 3 band vượt thời lượng → validator fail-loud đúng `startMs + durationMs > sceneDurationMs`, phải truyền `bands:1`). Kết quả: `gridEdge:40` → OK (492KB, dur=2.00s, 120 khung 60fps, H.264); `gridEdge:null` → OK (454KB) — **kích thước khác nhau chứng minh flag `--grid-edge` thật sự thay đổi đầu ra engine**. `probeMediaDuration` trả SỐ giây trực tiếp (không phải object).
+- **Kiểm định**: `npm run check` EXIT 0 (10/10) sau toàn bộ; không đổi source nào trong leg này (chỉ script tmp trong `nova/scripts/tmp/` — đã gitignore). `scan:lifecycle`: session hiện tại (06:26Z) **0 finding** — các REAL=38/WARN=52 của scan đều là lịch sử 09-03→09-08 (trước task), 09-15 chỉ có WARN teardown 00:13 khi user đóng app (nhóm vô hại §6.5). Test 8-handle chạy lặp lại lần 2 sau `clearAll()` vẫn 5/5 PASS.
+- **Còn treo duy nhất**: Lưu/Nạp dự án Whiteboard Studio bằng dữ liệu user tự tạo trong GUI (cần dialog chọn SRT/ảnh — không tự động hoá được, không bịa dữ liệu). Mọi tính năng của task (gridEdge UI + save/load IPC + 8-handle) đã verify end-to-end.
+
+## 2026-09-15k — Rework tab "Tạo Kịch Bản": Bút Pháp 4 lựa chọn, Văn Hoá bản địa, Đòn bẩy tâm lý, Kỹ năng viết, CTA; bỏ Profile "Prompt kịch bản"
+
+- **Markup** (`nova/web/partials/panel-toolscript.html`): xoá toàn bộ nhóm option tone cũ (~200 lựa chọn) + block `tsProfPrompt`/`tsProfName`; thay bằng card "BÚT PHÁP KỂ CHUYỆN" với `#tsTone` 4 option (`Tự sự thuần` / `Review ở góc nhìn thứ 3` / `Tự sự - lời thoại của nhân vật` / `Review - lời thoại`), `#tsLever` (textarea — đòn bẩy tâm lý/déjà vu), `#tsSkill` (6 phương thức viết + để trống = AI tự chọn), toggle `#tsCta` (checkbox `.ts-switch`).
+- **Novel chip → nút gạt**: `#tsNovelBtn` giờ là `input[type=checkbox]` trong `.ts-switch`; `tsNovelOn()` đọc `.checked`, `tsToggleNovel()` chặn bật khi CHƯƠNG < 2 (revert checkbox + thông báo), hint `#tsNovelHint` ẩn/hiện theo trạng thái. Restore localStorage trong `tsInit` chỉ khi QUY MÔ vẫn ≥ 2 chương.
+- **Prompt** (`tool-ts.js`): `_tsButPhapNote(tone)` diễn giải 4 bút pháp sang tiếng Anh; `buildPrompt(withExtras)` thêm mệnh đề "write FOR the native culture of ${lang}" (Văn Hoá bản địa), block WRITING SKILL / PSYCHOLOGICAL LEVER (déjà vu) / CALL TO ACTION; degrade có chủ đích: LLM lỗi/trống → retry 1 lần KHÔNG extras + status nói rõ. Novel pipeline truyền `skill`/`lever`/`cta` xuống `utility/ts.js` (architect + chapter prompt dùng `_tsButPhapNote(o.tone)`, `o.skill`, `o.lever` ch1, `o.cta`).
+- **Bỏ feature Profile "Prompt kịch bản"**: `utility/profiles.js` không còn trường prompt kịch bản; `modal-profile.html` bỏ block tương ứng. Tab không còn đọc Profile.
+- **Kiểm định**: `node --check` CLEAN; `npm run check` **EXIT 0** (10/10 — toplevel không xung đột, size 0 warn, exports/docs/selftest đạt). `khoidong.bat --silent` exit 0 (app đang chạy → focus, không mở instance 2). `scan:lifecycle`: phiên hiện tại sạch — toàn bộ 38 REAL/52 WARN đều lịch sử 09-03→09-12 (trước task).
+
+### 2026-09-15l — Video Agent: xoá banner hero chế độ Dễ
+
+- Xoá block "🎬 NOVA VIDEO AGENT / Lắp ráp video faceless trong 4 bước / 4 hero-chip" trong `buildEasy()` (`nova/web/src/va/va-easy-ui.js`) — biến `hero` + tham chiếu `box.append(hero, rail, steps)` (giờ chỉ `rail, steps`).
+- Xoá luôn 13 rule CSS chết `.va-hero*` trong `nova/web/src/styles/video-agent.css` (vùng REFRESH 2026-09-06) — duy nhất DOM dùng chúng là block vừa xoá.
+- Kiểm định: `node --check` OK; `npm run check` trọn chuỗi đạt (selftest 10 PASS, không FAIL mới); không còn tham chiếu `va-hero` trong `nova/web/src/`.
+
+- **Còn treo**: smoke UI thật của tab (mở app → reload renderer để nạp file mới → thấy 4 bút pháp + 3 trường mới + toggle CTA/Novel) và 1 lần "Viết kịch bản" với chủ đề thật — chờ user, không tự bịa chủ đề (Luật §6.6).
+

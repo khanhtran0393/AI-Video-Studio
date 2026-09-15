@@ -128,25 +128,11 @@
         #tool-toolvideoagent .va-btn.va-cta:hover:not(:disabled){ filter:brightness(1.08);transform:translateY(-1px); }
         @media(max-width:760px){ #tool-toolvideoagent .va-rail-lbl{ display:none; }
           #tool-toolvideoagent .va-src-grid{ grid-template-columns:1fr; } }
-        /* ── REFRESH 2026-09-06: hero + rail + thẻ nguồn + thẻ luồng (chế độ Dễ) ── */
+        /* ── REFRESH 2026-09-06: rail + thẻ nguồn + thẻ luồng (chế độ Dễ) ── */
         #tool-toolvideoagent .va-tabs{ display:inline-flex;background:var(--surface);border:1px solid var(--border);
           border-radius:12px;padding:4px;gap:4px;margin-bottom:16px; }
         #tool-toolvideoagent .va-tab{ border:1px solid transparent;background:transparent;border-radius:9px; }
         #tool-toolvideoagent .va-tab.active{ background:var(--accent);color:var(--on-accent); }
-        #tool-toolvideoagent .va-hero{ position:relative;overflow:hidden;border-radius:16px;padding:22px 24px;margin-bottom:14px;
-          background:linear-gradient(120deg,color-mix(in srgb,var(--accent) 26%,#101322) 0%,#181030 55%,color-mix(in srgb,var(--accent) 20%,#0d1020) 100%);
-          border:1px solid color-mix(in srgb,var(--accent) 38%,var(--border)); }
-        #tool-toolvideoagent .va-hero::after{ content:'';position:absolute;inset:0;pointer-events:none;
-          background:radial-gradient(620px 200px at 88% -30%,color-mix(in srgb,var(--accent) 30%,transparent),transparent 70%); }
-        #tool-toolvideoagent .va-hero-in{ position:relative;z-index:1;max-width:660px; }
-        #tool-toolvideoagent .va-hero-badge{ display:inline-block;font-size:10.5px;font-weight:800;letter-spacing:1.2px;
-          color:var(--accent);text-transform:uppercase;background:color-mix(in srgb,var(--accent) 15%,transparent);
-          border:1px solid color-mix(in srgb,var(--accent) 42%,transparent);border-radius:999px;padding:3px 10px;margin-bottom:10px; }
-        #tool-toolvideoagent .va-hero-title{ margin:0 0 6px;font-size:22px;line-height:1.25;font-weight:800;color:#fff; }
-        #tool-toolvideoagent .va-hero-sub{ margin:0;font-size:12.5px;line-height:1.6;color:rgba(255,255,255,.82); }
-        #tool-toolvideoagent .va-hero-chips{ display:flex;gap:6px;flex-wrap:wrap;margin-top:12px; }
-        #tool-toolvideoagent .va-hero-chip{ font-size:11.5px;color:#fff;background:rgba(255,255,255,.09);
-          border:1px solid rgba(255,255,255,.18);border-radius:999px;padding:3px 10px; }
         #tool-toolvideoagent .va-rail{ position:relative;display:grid;grid-template-columns:repeat(4,1fr);gap:8px;
           margin:0 0 16px;padding:14px 12px 10px;background:var(--surface);border:1px solid var(--border);border-radius:14px; }
         #tool-toolvideoagent .va-rail::before{ content:'';position:absolute;top:26px;left:12.5%;right:12.5%;height:2px;

@@ -95,6 +95,7 @@ const DEFAULTS = {
   capLongEdge: 1080,
   fps: null,                 // null = mặc định renderer
   pause: null,               // null = mặc định renderer (heavy)
+  gridEdge: null,            // null = mặc định renderer (--grid-edge)
   musicVolume: 0.16,         // âm lượng nhạc nền khi mix với voice (0.01–1)
 };
 
@@ -566,6 +567,7 @@ async function exportVideo({ scenes, outputPath, audioTracks, musicTrack, option
       if (opt.brushRadius) args.push('--brush-radius', String(Math.max(1, Math.round(opt.brushRadius))));
       if (opt.fps) args.push('--fps', String(Math.round(opt.fps)));
       if (opt.pause) args.push('--pause', String(opt.pause));
+      if (opt.gridEdge) args.push('--grid-edge', String(Math.max(1, Math.round(opt.gridEdge))));
 
       report(5 + Math.round((i / scenes.length) * 80),
         'cảnh ' + (i + 1) + '/' + scenes.length + ' · khởi động engine…');

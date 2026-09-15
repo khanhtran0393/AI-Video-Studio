@@ -1186,6 +1186,18 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
   .wb-root-v2 .wb-group-title{ display:flex;align-items:center;gap:8px;flex-wrap:wrap;
     font-size:12.5px;font-weight:700;color:var(--text);text-transform:none;letter-spacing:.2px; }
   .wb-root-v2 .wb-step-hint{ font-size:10.5px;font-weight:500;color:var(--text-muted); }
+  /* accordion từng bước — tiêu đề click để gập/mở, thẻ trạng thái wb-step-st */
+  .wb-root-v2 details.wb-step{ padding:0;gap:0; }
+  .wb-root-v2 details.wb-step > summary.wb-group-title{ cursor:pointer;user-select:none;list-style:none;padding:12px 14px; }
+  .wb-root-v2 details.wb-step > summary.wb-group-title::-webkit-details-marker{ display:none; }
+  .wb-root-v2 details.wb-step > summary.wb-group-title::after{ content:'▾';margin-left:auto;font-size:11px;color:var(--text-muted);transition:transform .15s; }
+  .wb-root-v2 details.wb-step:not([open]) > summary.wb-group-title::after{ transform:rotate(-90deg); }
+  .wb-root-v2 details.wb-step > summary.wb-group-title:hover{ color:var(--accent); }
+  .wb-root-v2 details.wb-step > .wb-step-body{ padding:2px 14px 14px;display:flex;flex-direction:column;gap:8px; }
+  .wb-root-v2 .wb-step-st{ font-size:10.5px;font-weight:600;color:var(--text-muted);background:var(--surface-2,var(--surface-1));border:1px solid var(--border);border-radius:999px;padding:1px 9px;text-transform:none;letter-spacing:0; }
+  .wb-root-v2 .wb-step-st.ok{ color:#4ade80;border-color:rgba(74,222,128,.35); }
+  .wb-root-v2 .wb-step-6{ --step:#e11d48; }
+  .wb-root-v2 .wb-step-7{ --step:#7c3aed; }
   .wb-root-v2 .wb-media-row{ margin-top:2px; }
   .wb-root-v2 .wb-script-in{ border-style:dashed;border-radius:9px; }
   .wb-root-v2 .wb-script-in:focus{ border-style:solid; }

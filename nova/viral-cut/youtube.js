@@ -143,4 +143,131 @@ async function fetchYoutubeComments(url, { maxComments = 100, timeoutMs = 120000
     .filter((c) => c.text);
 }
 
-module.exports = { probeYoutube, downloadYoutubeVideo, fetchYoutubeComments, ytIdOf, YT_URL_RE };
+/* ── PHỤ ĐỀ YOUTUBE → SRT (P0 — "Tự lấy phụ đề"): yt-dlp --write-subs tải
+   caption có sẵn (chính thức + tự động) → chuẩn hoá thành SRT sạch.
+   Video KHÔNG có phụ đề → lỗi lộ liễu VC_YT_NO_CAPTION — KHÔNG lùi về
+   Whisper/không tự bịa transcript (Luật 10; Whisper là luồng riêng của
+   khop-loi.js do người dùng tự bấm). Thuần Node — KHÔNG electron. */
+
+/* Bóc thẻ caption YouTube (<c>, <c.color…>, <00:00:01.359><c>) + entity → text thường. */
+function stripCaptionTags(s) {
+  return String(s || '')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, ' ')
+    .replace(/\s+/g, ' ').trim();
+}
+
+/* VTT/SRT thô → [{startMs, endMs, text}].
+   - Header WEBVTT / NOTE / STYLE / khối không có mốc giờ → bỏ tự nhiên (không match -->).
+   - Caption TỰ ĐỘNG của YouTube lặp dòng liên tiếp (roll-up): cue giống ngay trước
+     bị BỎ, cue trước được kéo dài endMs để không mất thời lượng (giống docPhuDe
+     của khop-loi.js — "bóc sạch rồi mới gộp"). */
+function captionTextToCues(raw) {
+  if (raw == null) return [];
+  const text = String(raw).replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const giay = (s) => {
+    const m = String(s).trim().match(/(?:(\d+):)?(\d{1,2}):(\d{2})[.,](\d{1,3})/);
+    if (!m) return null;
+    const ms = Number(m[4].padEnd(3, '0'));
+    return (((+(m[1] || 0)) * 60) + (+m[2])) * 60000 + (+m[3]) * 1000 + ms;
+  };
+  const out = [];
+  for (const kh of text.split(/\n\s*\n/)) {
+    const d = kh.split('\n');
+    const iM = d.findIndex((x) => x.includes('-->'));
+    if (iM < 0) continue;
+    const [a, b] = d[iM].split('-->');
+    const s = giay(a), e = giay(b);
+    if (s === null || e === null) continue;
+    const t = stripCaptionTags(d.slice(iM + 1).join(' '));
+    if (!t) continue;
+    const prev = out[out.length - 1];
+    if (prev && prev.text === t) { if (e > prev.endMs) prev.endMs = e; continue; } // roll-up trùng lặp
+    out.push({ startMs: s, endMs: Math.max(e, s), text: t });
+  }
+  return out;
+}
+
+/* Cues → SRT chuẩn (số thứ tự + dấu phẩy mili-giây) — parseSrtCues đọc lại được. */
+function cuesToSrt(cues) {
+  const stamp = (ms) => {
+    const v = Math.max(0, Math.round(Number(ms) || 0));
+    const h = Math.floor(v / 3600000), m = Math.floor((v % 3600000) / 60000),
+      s = Math.floor((v % 60000) / 1000), r = v % 1000;
+    return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0') + ':' +
+      String(s).padStart(2, '0') + ',' + String(r).padStart(3, '0');
+  };
+  return (Array.isArray(cues) ? cues : []).map((c, i) =>
+    (i + 1) + '\n' + stamp(c.startMs) + ' --> ' + stamp(c.endMs) + '\n' + String(c.text || '')).join('\n\n') + '\n';
+}
+
+/* Chọn file phụ đề tốt nhất trong các file yt-dlp vừa ghi:
+   ưu tiên NGÔN NGỮ vi → en → khác; .srt ổn định hơn .vtt (không phải convert). */
+function pickCaptionFile(names) {
+  const list = (Array.isArray(names) ? names : [])
+    .filter((n) => /\.(vtt|srt)$/i.test(String(n)));
+  const score = (n) => {
+    let k = 0;
+    if (/\.vi\./i.test(n)) k -= 40;
+    else if (/\.en(-orig)?\./i.test(n)) k -= 30;
+    if (/\.srt$/i.test(n)) k -= 5;
+    return k;
+  };
+  return list.sort((a, b) => score(a) - score(b) || a.localeCompare(b))[0] || null;
+}
+
+/* Lấy phụ đề YouTube → 1 file SRT sạch trong outDir (cache theo video id).
+   Trả { path, name, count, lang, auto, cached }. Không có phụ đề → VC_YT_NO_CAPTION. */
+async function fetchYoutubeTranscript(url, { outDir, timeoutMs = 90000 } = {}) {
+  const id = ytIdOf(url);
+  if (!id) throw Object.assign(new Error('URL YouTube không nhận dạng được video id.'), { code: 'VC_YT_URL' });
+  if (!outDir) throw Object.assign(new Error('Thiếu thư mục đích khi lấy phụ đề YouTube.'), { code: 'VC_NO_OUTDIR' });
+  fs.mkdirSync(outDir, { recursive: true });
+  const finalPath = path.join(outDir, 'vc-cap-' + id + '.srt');
+  if (fs.existsSync(finalPath) && fs.statSync(finalPath).size > 0) {
+    const cues = captionTextToCues(fs.readFileSync(finalPath, 'utf8'));
+    if (cues.length) {
+      return { path: finalPath, name: path.basename(finalPath), count: cues.length, lang: '', auto: false, cached: true };
+    }
+    try { fs.unlinkSync(finalPath); } catch (_) {} // cache hỏng → lấy lại
+  }
+  const ck = await youtubeCookiesFile().catch(() => null);
+  const stem = 'vc-sub-' + id;
+  const args = ['--skip-download', '--no-warnings', '--no-playlist',
+    '--write-subs', '--write-auto-subs', '--sub-langs', 'vi.*,en.*,en', '--sub-format', 'vtt/srt',
+    '-o', path.join(outDir, stem + '.%(ext)s'), String(url)];
+  if (ck) args.push('--cookies', ck);
+  try {
+    await runYtdlp(args, timeoutMs);
+  } catch (err) {
+    // yt-dlp thoát ≠0: phân biệt "video không có phụ đề" với lỗi thật (mạng/chặn).
+    const msg = String((err && err.message) || err);
+    if (/subtitles?|captions?|không có phụ đề/i.test(msg)) {
+      throw Object.assign(new Error('Video này không có phụ đề (chính thức lẫn tự động) để lấy.'), { code: 'VC_YT_NO_CAPTION' });
+    }
+    throw err;
+  }
+  const names = fs.readdirSync(outDir).filter((f) => f.startsWith(stem) && /\.(vtt|srt)$/i.test(f));
+  if (!names.length) {
+    throw Object.assign(new Error('Video này không có phụ đề (chính thức lẫn tự động) để lấy.'), { code: 'VC_YT_NO_CAPTION' });
+  }
+  let lastParseErr = null;
+  const tries = [].concat(pickCaptionFile(names) || [], names.sort()).filter((v, i, a) => v && a.indexOf(v) === i);
+  for (const name of tries) {
+    let cues;
+    try { cues = captionTextToCues(fs.readFileSync(path.join(outDir, name), 'utf8')); }
+    catch (e2) { lastParseErr = e2; continue; }
+    if (!cues.length) continue;
+    fs.writeFileSync(finalPath, cuesToSrt(cues), 'utf8');
+    let lang = name.slice(stem.length + 1).replace(/\.auto\./i, '.').replace(/\.(vtt|srt)$/i, '');
+    for (const f of names) { if (f !== path.basename(finalPath)) { try { fs.unlinkSync(path.join(outDir, f)); } catch (_) {} } }
+    return { path: finalPath, name: path.basename(finalPath), count: cues.length, lang, auto: /\.auto\./i.test(name) };
+  }
+  if (lastParseErr) {
+    throw Object.assign(new Error('Phụ đề tải về không đọc được: ' + lastParseErr.message), { code: 'VC_YT_NO_CAPTION' });
+  }
+  throw Object.assign(new Error('Phụ đề tải về không có dòng thoại nào.'), { code: 'VC_YT_NO_CAPTION' });
+}
+
+module.exports = { probeYoutube, downloadYoutubeVideo, fetchYoutubeComments, fetchYoutubeTranscript, captionTextToCues, cuesToSrt, pickCaptionFile, ytIdOf, YT_URL_RE };

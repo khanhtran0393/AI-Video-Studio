@@ -299,7 +299,7 @@ async function _giongTTS(v, text){
   const thu = _giongThuTu(v);
   let loiDau = null;
   for (const eng of thu){
-    try { return { blob: await _ttsChay(eng, v, text, giongDocTuyChon(), null), engine: eng }; }
+    try { const r = await _ttsChay(eng, v, text, giongDocTuyChon(), null); return { blob: r.blob, engine: eng }; }
     catch (e){
       if (!loiDau) loiDau = e;
       // engine thật sự hỏng → chấm đỏ, đừng để xanh dối lòng (giống ttsDoc).
@@ -514,7 +514,17 @@ async function _ttsLocal(eng, v, text, o, onTien){
       if (!fileRes.ok) throw new Error('Không tải được file giọng (HTTP ' + fileRes.status + ').');
       const blob = await fileRes.blob();
       if (!blob || !blob.size) throw new Error('File giọng rỗng.');
-      return blob;
+      // Backend tự sinh output.srt từ timing thật của từng khối đọc (write_srt).
+      // Backend cũ không trả results.srt → srt = '' (bản này không có phụ đề,
+      // nút SRT vẫn hiện nhưng mờ — bấm vào báo lỗi rõ ràng) — KHÔNG tự bịa timing thay thế.
+      let srt = '';
+      if (s.results.srt){
+        try {
+          const sr = await fetch(VOICE_URL + s.results.srt);
+          if (sr.ok) srt = await sr.text();
+        } catch (_){}
+      }
+      return { blob, srt };
     }
     if (s.status === 'failed' || s.status === 'error') throw new Error(s.error || 'Backend báo lỗi.');
   }
@@ -524,10 +534,10 @@ async function _ttsLocal(eng, v, text, o, onTien){
 // === L9990 (068263fe^): sync 5-arg engine-based — SSOT bản split ===
 async function _ttsChay(eng, v, text, o, onTien){
   if (!_TTS_TEN[eng]) throw new Error('Engine lạ: ' + eng);
-  const blob = await _ttsLocal(eng, v, text, o, onTien);
+  const { blob, srt } = await _ttsLocal(eng, v, text, o, onTien);
   // Đọc ra file là bằng chứng mạnh hơn mọi phép thăm dò — nâng chấm lên xanh.
   if (_giongTT[eng] !== 'ok'){ _giongTT[eng] = 'ok'; try { giongKiemEngineVe(); } catch (_){} }
-  return blob;
+  return { blob, srt };
 }
 
 function giongBao(msg, mau){
@@ -574,11 +584,11 @@ function _giongTachDoan(text, maxTu){
   return ds;
 }
 
-async function _giongLuuBan(blob, giong, engine, text, nhan, laSanPhamCuoi){
+async function _giongLuuBan(blob, giong, engine, text, nhan, laSanPhamCuoi, srt){
   const url = URL.createObjectURL(blob);
   const au = new Audio(url);
   const giay = await new Promise(r => { au.onloadedmetadata = () => r(au.duration || 0); au.onerror = () => r(0); });
-  const h = { url, blob, ten: (nhan ? nhan + ' · ' : '') + giong.name, engine, giay, text, khi: Date.now(), cache: !laSanPhamCuoi };
+  const h = { url, blob, ten: (nhan ? nhan + ' · ' : '') + giong.name, engine, giay, text, khi: Date.now(), cache: !laSanPhamCuoi, srt: srt || '' };
   _giongSu.unshift(h);
   _giongSu = _giongSu.slice(0, 40);   // kịch bản tách nhiều đoạn cần nhiều slot hơn 12
   try { _voiceLog((laSanPhamCuoi ? 'Đã lưu vào "Đã tạo" (SẢN PHẨM CUỐI — lưu đĩa): ' : 'Đã lưu vào "Đã tạo" (cache — tắt mở app vẫn còn): ') + '"' + h.ten + '" · ' + Math.floor(h.giay / 60) + ':' + String(Math.round(h.giay % 60)).padStart(2, '0')); } catch (_){}
@@ -603,7 +613,9 @@ async function _giongSuLuuDia(h, cache){
     const buf = new Uint8Array(await h.blob.arrayBuffer());
     await window.native.voiceHistorySave({
       khi: h.khi, ext, buf, cache: !!cache,
-      meta: { khi: h.khi, ten: h.ten || '', engine: h.engine || '', giay: h.giay || 0, text: h.text || '', ext },
+      // srt: phụ đề đồng bộ do backend sinh (timing thật) — main lưu meta nguyên
+      // bản, thêm trường không cần đổi gì phía main. Vài KB, không đụng trần 64MB.
+      meta: { khi: h.khi, ten: h.ten || '', engine: h.engine || '', giay: h.giay || 0, text: h.text || '', ext, srt: h.srt || '' },
     });
   } catch (_){}
 }
@@ -626,7 +638,7 @@ async function _giongSuNapDia(){
         if (!m.khi || _giongSu.some(x => x.khi === m.khi)) continue;   // bản vừa tạo trong phiên đã có
         try {
           const blob = new Blob([it.buf], { type: m.ext === '.mp3' ? 'audio/mpeg' : 'audio/wav' });
-          _giongSu.push({ url: URL.createObjectURL(blob), blob, ten: m.ten || '', engine: m.engine || '', giay: m.giay || 0, text: m.text || '', khi: m.khi, cache: laCache });
+          _giongSu.push({ url: URL.createObjectURL(blob), blob, ten: m.ten || '', engine: m.engine || '', giay: m.giay || 0, text: m.text || '', khi: m.khi, cache: laCache, srt: m.srt || '' });
           nap++;
         } catch (_){}
       }
@@ -656,8 +668,8 @@ async function voiceGenerate(){
     if (doan.length <= 1){
       // Ngắn — giữ nguyên luồng cũ: 1 task trọn vẹn.
       giongBao('Đang tạo giọng…');
-      const { blob, giong, engine, luiVe } = await ttsDoc(text, s => giongBao('Đang tạo… ' + s));
-      await _giongLuuBan(blob, giong, engine, text, '', true);   // bản đơn lẻ = sản phẩm cuối → lưu đĩa
+      const { blob, giong, engine, luiVe, srt } = await ttsDoc(text, s => giongBao('Đang tạo… ' + s));
+      await _giongLuuBan(blob, giong, engine, text, '', true, srt);   // bản đơn lẻ = sản phẩm cuối → lưu đĩa
       try { _voiceLog('Xong 1 bản duy nhất sau ' + Math.round((Date.now() - t0) / 1000) + ' giây.'); } catch (_){}
       giongBao('✓ Xong sau ' + Math.round((Date.now() - t0) / 1000) + ' giây' + (luiVe ? ' (đã lui về ' + _TTS_TEN[engine] + ')' : ''), 'green');
       return;
@@ -671,8 +683,8 @@ async function voiceGenerate(){
       for (let thu = 1; thu <= 2; thu++){   // thử tối đa 2 lần mỗi đoạn
         try {
           giongBao('Đang tạo ' + nhan + ' (~' + _giongDemTu(doan[i]) + ' từ)' + (thu > 1 ? ' · thử lần ' + thu : '') + '…');
-          const { blob, giong, engine } = await ttsDoc(doan[i], s => giongBao(nhan + ' · ' + s));
-          await _giongLuuBan(blob, giong, engine, doan[i], nhan, false);   // đoạn tách = cache phiên, chỉ bản gộp mới lưu đĩa
+          const { blob, giong, engine, srt } = await ttsDoc(doan[i], s => giongBao(nhan + ' · ' + s));
+          await _giongLuuBan(blob, giong, engine, doan[i], nhan, false, srt);   // đoạn tách = cache phiên, chỉ bản gộp mới lưu đĩa
           xong++;
           try { _voiceLog(nhan + ' xong (' + xong + '/' + doan.length + ').'); } catch (_){}
           giongBao('✓ ' + nhan + ' xong (' + xong + '/' + doan.length + ')' + (i + 1 < doan.length ? ' — đang sang đoạn tiếp…' : ''), 'green');
@@ -725,6 +737,7 @@ function giongSuVe(){
         <div class="gh-meta">${escapeHtml(h.ten)}${h.engine ? ' · ' + (_TTS_TEN[h.engine] || '') : ''} · ${ph}:${String(gi).padStart(2,'0')} · ${_giongKhiNao(h.khi)}${h.cache ? ' · <span style="color:var(--text-dim)" title="Đoạn tách lưu ở cache riêng của app — tắt mở vẫn còn, khác kho sản phẩm cuối">cache</span>' : ''}</div>
       </div>
       <div class="gh-act">
+        <button class="btn sm ghost" ${h.srt ? '' : 'style="opacity:.45" title="Bản này chưa có phụ đề (engine đám mây, hoặc tạo trước khi có SRT) — bấm để xem giải thích"'} onclick="event.stopPropagation();giongSuTaiSrt(${i})" ${h.srt ? 'title="Xuất phụ đề .srt đồng bộ với giọng đọc này"' : ''}>SRT</button>
         <button class="btn sm ghost" onclick="event.stopPropagation();giongSuTai(${i})">Tải</button>
         <button class="btn sm ghost" onclick="event.stopPropagation();giongSuDungChoVideo(${i})">Dùng cho video</button>
         <button class="btn sm ghost" style="color:var(--red)" onclick="event.stopPropagation();giongSuXoa(${i})">Xoá</button>
@@ -788,6 +801,56 @@ function giongSuTai(i){
   a.click();
 }
 
+// Xuất phụ đề SRT của 1 bản "Đã tạo" — dùng nguyên nội dung backend sinh từ
+// timing thật của từng khối đọc (không ước lượng lại trên renderer).
+function giongSuTaiSrt(i){
+  const h = _giongSu[i]; if (!h) return;
+  if (!h.srt){
+    giongBao('Bản này chưa có phụ đề SRT (tạo bằng engine đám mây, hoặc tạo trước khi có chức năng SRT). Tạo lại giọng bằng backend trong máy là có SRT.', 'red');
+    return;
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([h.srt], { type: 'application/x-subrip' }));
+  a.download = 'giong-noi-' + h.khi + '.srt';
+  a.click();
+  try { setTimeout(() => URL.revokeObjectURL(a.href), 5000); } catch (_){}
+  const soKhoi = h.srt.replace(/\r/g, '').split(/\n{2,}/).filter(Boolean).length;
+  try { _voiceLog('Đã xuất SRT: ' + (h.ten || '') + ' (' + soKhoi + ' khối phụ đề).'); } catch (_){}
+  giongBao('✓ Đã xuất file .srt (' + soKhoi + ' khối phụ đề đồng bộ với giọng đọc).', 'green');
+}
+
+// ── SRT parse/ghi dùng cho ghép đoạn (renderer, không import) ────────────────
+// Parse SRT/VTT-kiểu timestamp → [{st, en, tx}] (giây). Khối sai cấu trúc bỏ qua.
+function _giongSrtParse(txt){
+  const giay = (s) => {
+    const m = /(\d+):(\d+):(\d+)[,.](\d+)/.exec(String(s || '').trim());
+    if (!m) return 0;
+    return (+m[1]) * 3600 + (+m[2]) * 60 + (+m[3]) + (+m[4].padEnd(3, '0')) / 1000;
+  };
+  const cues = [];
+  for (const khoi of String(txt || '').replace(/\r/g, '').split(/\n{2,}/)){
+    const dong = khoi.split('\n').filter(d => d.trim());
+    const vi = dong.findIndex(d => d.includes('-->'));
+    if (vi < 0 || vi + 1 >= dong.length) continue;
+    const m = /(\S+)\s+-->\s+(\S+)/.exec(dong[vi]);
+    if (!m) continue;
+    cues.push({ st: giay(m[1]), en: giay(m[2]), tx: dong.slice(vi + 1).join('\n') });
+  }
+  return cues;
+}
+
+// Ghi mảng [{st, en, tx}] → nội dung SRT chuẩn (dấu phẩy mili-giây).
+function _giongSrtXau(cues){
+  const ts = (t) => {
+    const ms = Math.round(Math.max(0, t) * 1000);
+    const pad = (n, w) => String(n).padStart(w, '0');
+    return pad(Math.floor(ms / 3600000), 2) + ':' + pad(Math.floor(ms % 3600000 / 60000), 2) + ':'
+      + pad(Math.floor(ms % 60000 / 1000), 2) + ',' + pad(ms % 1000, 3);
+  };
+  if (!cues || !cues.length) return '';
+  return cues.map((c, i) => (i + 1) + '\n' + ts(c.st) + ' --> ' + ts(c.en) + '\n' + c.tx).join('\n\n') + '\n';
+}
+
 function giongSuDungChoVideo(i){
   const h = _giongSu[i]; if (!h) return;
   const mp3 = /(mpeg|mp3)/.test(h.blob.type);
@@ -842,24 +905,43 @@ async function _giongGhepMuc(items, ten){
   const AC = window.AudioContext || window.webkitAudioContext;
   const ctx = new AC();
   const bufs = [];
-  for (const it of items) bufs.push(await ctx.decodeAudioData(await it.h.blob.arrayBuffer()));
+  const hds = [];   // bản lịch sử của từng mục — chấp nhận cả {h} lẫn trực tiếp h
+  for (const it of items){
+    const H = it.h || it;
+    hds.push(H);
+    bufs.push(await ctx.decodeAudioData(await H.blob.arrayBuffer()));
+  }
   try { ctx.close(); } catch (_){ }
   const sr = Math.max(...bufs.map(b => b.sampleRate));
   const nCh = Math.max(...bufs.map(b => b.numberOfChannels));
   const total = bufs.reduce((a, b) => a + b.length, 0);
   const off = new OfflineAudioContext(nCh, total, sr);
   let t = 0;
+  const offs = [];   // điểm nối thật của từng buffer trong timeline gộp
   for (const b of bufs){
+    offs.push(t);
     const s = off.createBufferSource(); s.buffer = b;
     s.connect(off.destination); s.start(t);
     t += b.length / b.sampleRate;
   }
   const out = await off.startRendering();
+  // Ghép SRT: mỗi bản mang SRT do backend sinh (timing thật trong khối của nó) →
+  // dồn theo đúng điểm nối buffer (offs). Chỉ ghép khi ĐỦ mọi bản đều có SRT —
+  // thiếu một là phụ đề sai vị trí, không xuất phụ đề nửa chừng.
+  let srtGhep = '';
+  if (hds.length && hds.every(H => H.srt)){
+    const cues = [];
+    hds.forEach((H, i) => { for (const c of _giongSrtParse(H.srt)) cues.push({ st: c.st + offs[i], en: c.en + offs[i], tx: c.tx }); });
+    cues.sort((a, b) => a.st - b.st);
+    srtGhep = _giongSrtXau(cues);
+  } else if (hds.some(H => H.srt)){
+    try { _voiceLog('Ghép: có bản chưa mang SRT → bản gộp không xuất phụ đề (tránh sai vị trí).'); } catch (_){}
+  }
   const blob = _giongWav16(out);
   const hGhep = {
     url: URL.createObjectURL(blob), blob,
-    ten, engine: items[0].h.engine, giay: out.duration,
-    text: items.map(x => x.h.text).join(' '), khi: Date.now(),
+    ten, engine: hds[0].engine, giay: out.duration,
+    text: hds.map(x => x.text).join(' '), khi: Date.now(), srt: srtGhep,
   };
   _giongSu.unshift(hGhep);
   _giongSu = _giongSu.slice(0, 40);

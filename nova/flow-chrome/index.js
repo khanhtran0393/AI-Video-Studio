@@ -6,8 +6,11 @@ const { statusPayload, accounts, setUse, setLogSink, restore } = require('./nen-
 const { getAllTokens, genTest, genImageAccount, resolveVideoForApp, armVideoUpscale, videoUpscaleStatus, videoUpscaleDump, armWatermarkLearn, watermarkStatus, watermarkDump, applyWatermarkAll, upsampleVideo, genVideo } = require('./gen');
 const { loginStart, loginCancel, loginFinish, loginAuto, reloginAuto, reloginStart, reloginFinish, refreshOne, setEnabled, setProxy, removeAccount } = require('./dang-nhap');
 const { setCaptchaMode, getCaptchaMode, ensureLive, rotateCaptcha, ensureCaptcha, _closeGuest, getTokenFresh, pageEval, pageFetchImage, getToken } = require('./token-captcha');
+const browserAgent = require('./browser-agent');
 
 async function handle(action, payload = {}) {
+  // Browser agent (2026-09-15): BROWSER_NAVIGATE / BROWSER_CLICK / ... → browser-agent.js
+  if (/^BROWSER_/.test(action)) return browserAgent.run(action.replace(/^BROWSER_/, ''), payload);
   switch (action) {
     case 'PING':          return { ok: true, engine: 'chrome' };
     case 'GET_ACCOUNTS':  return statusPayload();

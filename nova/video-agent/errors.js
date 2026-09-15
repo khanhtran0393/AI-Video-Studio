@@ -30,6 +30,8 @@ const VI_MESSAGES = {
   VA_S3_NO_CONFIG: 'Chưa cấu hình bucket S3 để tải lên. Hãy khai báo bucket trong phần cài đặt upload.',
   VA_S3_NO_CREDS: 'Thiếu khoá S3 (access key / secret) để tải lên. Hãy khai báo VA_S3_ACCESS_KEY_ID và VA_S3_SECRET_ACCESS_KEY.',
   VA_BUSY: 'Đang có một job Video Agent khác chạy. Vui lòng đợi job hiện tại xong rồi thử lại.',
+  VA_BROWSER_BLANK: 'Trang web trong trình duyệt hiển thị trống/đen hoặc không có nội dung (có thể chưa đăng nhập hoặc trang chưa tải xong). Hãy thử lại sau khi trang hiển thị bình thường.',
+  FLOW_PAGE_NOT_READY: 'Trang Flow chưa sẵn sàng — không tìm thấy phần tử/chữ cần thiết trong thời gian chờ. Hãy thử lại; nếu vẫn lỗi, đăng nhập lại tài khoản Chrome trong app.',
   VA_UNKNOWN: 'Lỗi không xác định. Vui lòng chạy lại; nếu vẫn lỗi, gửi báo cáo lỗi kèm chi tiết bên dưới.',
 };
 

@@ -77,6 +77,9 @@ async function loadCloudState(){
   // 3. Render tier-dependent UI
   renderTierBadge();
   if (typeof initAdminUI === 'function') initAdminUI();
+  // restoreUI lúc boot chạy khi profiles còn [] — vẽ lại #profileSelect sau IDB.
+  // Nếu bỏ bước này, empty-state disabled (placeholder) kẹt dù IDB đã có kênh.
+  if (typeof restoreUI === 'function') restoreUI();
   // Session Snapshot (lần 2 — sau khi state/IDB nạp + render xong): đè lại
   // giá trị input "làm dở" mà các render ở trên có thể đã ghi đè + trở về đúng
   // tool đang mở lúc chụp (boot.js chỉ switchTool với tool mặc định).
@@ -111,37 +114,42 @@ async function saveCloudState(immediate = false, skipImages = false){
     try {
       // Snapshot state nhẹ (profiles + workData + text) → IDB. Khi đã gỡ auth,
       // đây là persistence DUY NHẤT cho danh sách profile (trước đây đi lên Firestore).
-      await IDB.set('_local/state', lightState);
+      // GỘP MỘT transaction: trước đây 10 IDB.set tuần tự = 10 transaction → lag khi đổi profile.
+      const puts = [['_local/state', lightState]];
       if (pid) {
         const b = uid + '/' + pid + '/' + vid + '/';
         // workData (kịch bản/cảnh/prompt) LUÔN lưu, kể cả light save → sống qua restart, không dính giới hạn 1MB Firestore.
-        try { const _cv = getCurrentVideo(curP); if (_cv && _cv.workData) await IDB.set(b + 'workData', _cv.workData); } catch (e) { console.warn('IDB workData save failed:', e); }
+        const _cv = getCurrentVideo(curP);
+        if (_cv && _cv.workData) puts.push([b + 'workData', _cv.workData]);
         if (!skipImages) {
           // Mỗi VIDEO có bộ ảnh riêng (chỉ Style TEXT dùng chung — nằm trong profile object).
-          await IDB.set(b + 'styleRefImages', styleRefImages || []);
-          await IDB.set(b + 'characterImages', characterImages || {});
-          await IDB.set(b + 'backgroundImages', backgroundImages || {});
-          await IDB.set(b + 'sceneImages', sceneImages || {});
-          await IDB.set(b + 'sceneImagesB', sceneImagesB || {});
-          await IDB.set(b + 'sceneVideoBlobs', mvVideoBlobs || {});
-          await IDB.set(b + 'sceneVideosMeta', sceneVideos || {});
-          await IDB.set(b + 'motionPrompts', motionPrompts || {});
+          puts.push([b + 'styleRefImages', styleRefImages || []]);
+          puts.push([b + 'characterImages', characterImages || {}]);
+          puts.push([b + 'backgroundImages', backgroundImages || {}]);
+          puts.push([b + 'sceneImages', sceneImages || {}]);
+          puts.push([b + 'sceneImagesB', sceneImagesB || {}]);
+          puts.push([b + 'sceneVideoBlobs', mvVideoBlobs || {}]);
+          puts.push([b + 'sceneVideosMeta', sceneVideos || {}]);
+          puts.push([b + 'motionPrompts', motionPrompts || {}]);
         }
       }
+      await IDB.setMany(puts);
     } catch (e) { console.warn('IDB save failed:', e); try { setSyncStatus('⚠️ Lưu máy LỖI (ảnh/clip) — ' + String(e && e.message || e).slice(0, 60), 'error'); } catch (_) {} }
     // Lưu workData các video xuống IDB — CHỈ khi workData ĐẦY ĐỦ (có cảnh) HOẶC là video ĐANG MỞ.
     // ⛔ TUYỆT ĐỐI KHÔNG ghi bản NHẸ (từ cloud, video chưa mở) đè lên bản đầy đủ trong IDB → tránh mất dữ liệu video đã làm xong.
     try {
+      const wdPuts = [];
       for (const P of (state.profiles || [])){
         if (!P.profileId || !Array.isArray(P.videos)) continue;
         for (const v of P.videos){
           if (!v || !v.id || !v.workData) continue;
           const isCur = (P.profileId === pid && v.id === vid);
           const isFull = Array.isArray(v.workData.scenes) && v.workData.scenes.length > 0;   // CÓ cảnh = bản đầy đủ (bản nhẹ từ cloud KHÔNG có scenes)
-          if (isCur || isFull) await IDB.set(uid + '/' + P.profileId + '/' + v.id + '/workData', v.workData);
+          if (isCur || isFull) wdPuts.push([uid + '/' + P.profileId + '/' + v.id + '/workData', v.workData]);
           // else: bản NHẸ (video chưa mở phiên này, chỉ có script/metadata) → GIỮ NGUYÊN bản đầy đủ trong IDB, KHÔNG đè.
         }
       }
+      if (wdPuts.length) await IDB.setMany(wdPuts);   // một transaction thay vì N set tuần tự
     } catch (e) { console.warn('IDB all-workData save failed:', e); try { setSyncStatus('⚠️ Lưu máy LỖI — dữ liệu có thể mất khi tải lại: ' + String(e && e.message || e).slice(0, 60), 'error'); } catch (_) {} }
     // ② Rồi lưu cloud (state nhẹ) — chỉ khi CÒN đăng nhập. Đã gỡ auth → bỏ qua,
     // IDB ở trên là persistence chính (2026-09-12f).
@@ -439,29 +447,35 @@ async function loadProfileImages(profileId, videoId){
   const prof = uid + '/' + profileId + '/';             // key cũ (trước khi tách video)
   const vbase = uid + '/' + profileId + '/' + vid + '/'; // dữ liệu RIÊNG từng video
   const useLegacy = (vid === 'v_main');                  // chỉ Video 1 (migrate) kế thừa ảnh cũ
-  const g = async (name, empty) => {
-    let v = await IDB.get(vbase + name);
-    const isEmpty = v == null || (typeof v === 'object' && !Array.isArray(v) && !Object.keys(v).length) || (Array.isArray(v) && !v.length);
-    if (isEmpty && useLegacy){ const lg = await IDB.get(prof + name); if (lg != null) v = lg; }
-    return v == null ? empty : v;
-  };
+  const IMG_NAMES = ['characterImages','backgroundImages','styleRefImages','sceneImages','sceneImagesB','sceneVideoBlobs','sceneVideosMeta','motionPrompts'];
   try {
+    // MỘT transaction cho TOÀN BỘ blob (trước đây 10 IDB.get tuần tự = 10 transaction → lag khi đổi profile).
+    const keys = IMG_NAMES.map(n => vbase + n);
+    keys.push(vbase + 'voiceMp3');
+    if (useLegacy) keys.push(...IMG_NAMES.map(n => prof + n), prof + 'voiceMp3');
+    const bag = await IDB.getMany(keys);
+    const pick = (name, empty) => {
+      let v = bag[vbase + name];
+      const isEmpty = v == null || (typeof v === 'object' && !Array.isArray(v) && !Object.keys(v).length) || (Array.isArray(v) && !v.length);
+      if (isEmpty && useLegacy && bag[prof + name] != null) v = bag[prof + name];
+      return v == null ? empty : v;
+    };
     // Tất cả ảnh đều RIÊNG từng video (chỉ Style TEXT dùng chung).
-    state.characterImages = await g('characterImages', {});
-    state.backgroundImages = await g('backgroundImages', {});
-    state.styleRefImages = await g('styleRefImages', []);
-    state.sceneImages = await g('sceneImages', {});
-    state.sceneImagesB = await g('sceneImagesB', {});
+    state.characterImages = pick('characterImages', {});
+    state.backgroundImages = pick('backgroundImages', {});
+    state.styleRefImages = pick('styleRefImages', []);
+    state.sceneImages = pick('sceneImages', {});
+    state.sceneImagesB = pick('sceneImagesB', {});
     try {
-      mvVideoBlobs = await g('sceneVideoBlobs', {});
-      state.sceneVideos = await g('sceneVideosMeta', {});
-      state.motionPrompts = await g('motionPrompts', {});
+      mvVideoBlobs = pick('sceneVideoBlobs', {});
+      state.sceneVideos = pick('sceneVideosMeta', {});
+      state.motionPrompts = pick('motionPrompts', {});
       if (typeof mvVideoRender === 'function') mvVideoRender();
     } catch (e){ /* */ }
     // 🎙 Giọng đọc (MP3) RIÊNG từng video → nạp lại; không có thì xoá cho sạch (mỗi video 1 MP3).
     try {
-      let mp3 = await IDB.get(vbase + 'voiceMp3');
-      if (mp3 == null && useLegacy) mp3 = await IDB.get(prof + 'voiceMp3');
+      let mp3 = bag[vbase + 'voiceMp3'];
+      if (mp3 == null && useLegacy) mp3 = bag[prof + 'voiceMp3'];
       if (mp3){
         const f = (mp3 instanceof File) ? mp3 : new File([mp3], (mp3.name || 'voice.mp3'), { type: mp3.type || 'audio/mpeg' });
         _autoAudioFile = f; _autoAudioWords = null;
@@ -541,10 +555,9 @@ function rerenderAllAfterProfileLoad(){
   // Tool 6 Veo settings
   const v6Vs = document.getElementById('v6VisualStyle'); if (v6Vs) v6Vs.value = p?.visualStyle || '';
   // Unified textareas + lists
+  // renderAllT2 đã bao trùm renderPreview/renderTable/renderPromptsV/updateScriptCount…
+  // — KHÔNG gọi lại từng hàm ngoài (trước đây vẽ bảng cảnh 2 lần liên tiếp gây lag khi đổi profile).
   if (typeof renderAllT2 === 'function') renderAllT2();
-  if (typeof renderTable === 'function') renderTable();
-  if (typeof renderPreview === 'function') renderPreview();
-  if (typeof renderPromptsV === 'function') renderPromptsV();
   if (typeof renderVeoPrompts === 'function') renderVeoPrompts();
   if (state.tool === 'tool7' && typeof t7Build === 'function') { try { t7Build(); } catch (e) {} }
   if (typeof updateStats === 'function') updateStats();
@@ -562,8 +575,7 @@ function rerenderAllAfterProfileLoad(){
   // Tool 3 character image gallery
   if (typeof renderCharImageGallery === 'function') renderCharImageGallery();
   if (typeof renderStyleImageGallery === 'function') renderStyleImageGallery();
-  // Char count display
-  if (typeof updateScriptCount === 'function') updateScriptCount();
+  // Char count display (renderAllT2 đã gọi updateScriptCount — chỉ giữ syncTool2FromProfile).
   syncTool2FromProfile();
   renderProfileStyles();
 }
@@ -571,9 +583,19 @@ function rerenderAllAfterProfileLoad(){
 function renderProfileSelect(){
   const sel = document.getElementById('profileSelect');
   if (!sel) return;
-  sel.innerHTML = state.profiles.map((p, i) =>
-      `<option value="${i}" ${i === state.currentProfileIdx ? 'selected' : ''}>${escapeHtml(p.tenKenh || 'Profile ' + (i + 1))}</option>`
-    ).join('') + '<option value="__new">＋ Tạo Profile mới</option>';
+  const list = state.profiles || [];
+  // Empty: placeholder + disable — KHÔNG chọn sẵn __new (onchange không chạy khi click lại cùng value).
+  // Tạo profile đi qua nút #tb-newprof (onclick), giống #tb-newvid / newVideo.
+  if (!list.length){
+    sel.innerHTML = '<option value="">— Chưa có Profile —</option>';
+    sel.disabled = true;
+    return;
+  }
+  sel.disabled = false;
+  const idx = state.currentProfileIdx;
+  sel.innerHTML = list.map((p, i) =>
+      `<option value="${i}" ${i === idx ? 'selected' : ''}>${escapeHtml(p.tenKenh || 'Profile ' + (i + 1))}</option>`
+    ).join('');
 }
 
 function _profileLang(){ const p = getProfile(); return (p && p.ngonNgu) || 'Tiếng Việt'; }
@@ -605,7 +627,7 @@ function setChannelLang(v){
 }
 
 async function switchProfile(val){
-  if (val === '__new'){ if (typeof newProfile === 'function') newProfile(); else renderProfileSelect(); return; }   // option "＋ Tạo Profile mới"
+  // Tạo profile đi qua nút #tb-newprof (onclick) — không còn option __new (onchange không chạy khi đã chọn sẵn).
   const newIdx = val === '' ? -1 : parseInt(val);
   // Save current profile's workData trước khi switch
   if (state.currentProfileIdx >= 0 && state.currentProfileIdx !== newIdx) {
@@ -624,8 +646,10 @@ async function switchProfile(val){
   rerenderAllAfterProfileLoad();
   if (typeof t10OnProfileSwitch === 'function') t10OnProfileSwitch();
   if (typeof applyChannelCfg === 'function') applyChannelCfg();   // nạp cấu hình Tool 2 + giọng của kênh vừa chọn
-  if (typeof _syncChLang === 'function') _syncChLang();            // đồng bộ ngôn ngữ kênh vào topbar + các tool
-  saveState(true);
+  // (_syncChLang đã chạy trong rerenderAllAfterProfileLoad — bỏ lặp thứ 2.)
+  // Ảnh vừa đọc xong từ IDB là dữ liệu đã được ghi đúng trước đó → saveState KHÔNG ghi lại
+  // (skipImages=true). Ghi lại toàn bộ blob chỉ là I/O thuần lãng phí gây lag khi đổi profile.
+  saveState(true, true);
 }
 
 async function newProfile(){
@@ -641,27 +665,33 @@ async function newProfile(){
   renderProfileSelect();
   rerenderAllAfterProfileLoad();
   openProfile();
-  saveState(true);
+  saveState(true, true);   // profile mới trắng ảnh — đừng ghi bộ ảnh của profile cũ đè lên key video mới trong IDB
 }
 
 async function deleteProfile(){
   if (state.currentProfileIdx < 0) return;
+  const idx = state.currentProfileIdx;
   const p = getProfile();
-  if (!confirm('Xoá profile "' + (p.tenKenh || 'unnamed') + '"?\nTOÀN BỘ kịch bản, cảnh, prompt, ảnh storyboard của profile này sẽ mất. Không hoàn tác được.')) return;
-  // Cleanup IDB images cho profile này
+  // Confirm nêu RÕ vị trí + tên kênh đang chọn (kênh không đặt tên → "Profile N")
+  // — trước đây chỉ hiện tenKenh||'unnamed', các kênh trống tên có confirm giống hệt nhau.
+  const label = (p.tenKenh && p.tenKenh.trim()) || ('Profile ' + (idx + 1));
+  if (!confirm('Xoá KÊNH #' + (idx + 1) + ' ("' + label + '") — kênh đang chọn?\nTOÀN BỘ kịch bản, cảnh, prompt, ảnh storyboard của kênh này sẽ mất. Không hoàn tác được.')) return;
+  // Dọn TOÀN BỘ key IDB của kênh trong MỘT transaction theo prefix uid/<profileId>/
+  // (mọi video: 8 khoá ảnh blob + workData + voiceMp3…, gồm cả 3 key legacy gốc profile
+  // vì cùng tiền tố). Trước đây chỉ ghi null vào 3 key legacy — toàn bộ key blob thật
+  // của từng video bị bỏ lại thành rác vĩnh viễn, IDB phình to gây lag dần.
   const uid = _tbUid();
   if (p.profileId) {
-    try {
-      await IDB.set(uid + '/' + p.profileId + '/characterImages', null);
-      await IDB.set(uid + '/' + p.profileId + '/sceneImages', null);
-      await IDB.set(uid + '/' + p.profileId + '/styleRefImages', null);
-    } catch(e) {}
+    try { await IDB.delRange(uid + '/' + p.profileId + '/'); } catch(e) { console.warn('IDB delRange profile failed:', e); }
   }
-  state.profiles.splice(state.currentProfileIdx, 1);
-  state.currentProfileIdx = state.profiles.length > 0 ? 0 : -1;
+  state.profiles.splice(idx, 1);
+  // Giữ selection tại CÙNG vị trí trong danh sách (kẹp về cuối) — không nhảy về kênh #0:
+  // nhảy về 0 + danh sách đánh số lại làm tưởng xoá nhầm kênh khác.
+  state.currentProfileIdx = state.profiles.length > 0 ? Math.min(idx, state.profiles.length - 1) : -1;
   if (state.currentProfileIdx >= 0) {
     const newP = state.profiles[state.currentProfileIdx];
     _ensureVideos(newP);
+    await mergeLocalWorkData(newP);   // nạp workData local của kênh được chọn — đồng bộ switchProfile
     loadStateFromProfile(newP);
     await loadProfileImages(newP.profileId, _curVideoId(newP));
   } else {
@@ -670,7 +700,9 @@ async function deleteProfile(){
   renderProfileSelect();
   closeProfile();
   rerenderAllAfterProfileLoad();
-  saveState(true);
+  // skipImages=true: ảnh vừa đọc từ IDB là dữ liệu đã ghi đúng trước đó — saveState(true)
+  // full-save ghi lại toàn bộ blob của kênh được chọn là I/O thuần lãng phí gây lag khi xoá.
+  saveState(true, true);
 }
 
 function openProfile(){
@@ -692,7 +724,6 @@ function openProfile(){
   document.getElementById('pBgStyle').value = p.backgroundStyle || '';
   document.getElementById('pSceneStyle').value = p.sceneStyle || '';
   document.getElementById('pPromptRules').value = p.promptRules || '';
-  if (document.getElementById('pScriptPrompt')) document.getElementById('pScriptPrompt').value = p.scriptPrompt || '';
   document.getElementById('pStyleGuide').value = p.styleGuide || '';
   document.getElementById('pDnaKenh').value = p.dnaKenh || '';
   document.getElementById('pChuDe').value = p.chuDe || '';
@@ -719,7 +750,6 @@ function saveProfile(){
   p.backgroundStyle = document.getElementById('pBgStyle').value;
   p.sceneStyle = document.getElementById('pSceneStyle').value;
   p.promptRules = document.getElementById('pPromptRules').value;
-  if (document.getElementById('pScriptPrompt')) p.scriptPrompt = document.getElementById('pScriptPrompt').value;
   p.styleGuide = document.getElementById('pStyleGuide').value;
   p.dnaKenh = document.getElementById('pDnaKenh').value;
   p.chuDe = document.getElementById('pChuDe').value;
@@ -853,26 +883,6 @@ function _profileStyleCard(field, label, kind){
   </div>`;
 }
 
-function _profileScriptCard(){
-  const base = _profileStyleCard('scriptPrompt', 'Prompt kịch bản', 'script');
-  if (state.editingProfileStyle === 'scriptPrompt') return base;
-  const tools = `
-    <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-      <input type="file" id="pScriptFiles" accept=".txt,text/plain" multiple style="display:none" onchange="tsAnalyzeCompetitor(this.files)">
-      <span style="font-size:11.5px;color:var(--text-muted)">Gửi <b>nhiều kịch bản đối thủ</b> (.txt, nên ≥3) → AI phân tích 9 lớp → tạo <b>prompt viral</b> 8 khối tự điền:</span>
-      <button class="btn ghost sm" onclick="document.getElementById('pScriptFiles').click()">📄 Chọn file kịch bản</button>
-      <span id="pScriptAnalyzeStatus" style="font-size:11.5px;color:var(--text-muted)"></span>
-    </div>`;
-  return base.replace(/<\/div>\s*$/, tools + '</div>');
-}
-
-function _tsCleanPrompt(t){
-  let s = String(t || '').trim();
-  s = s.replace(/^```[a-z]*\n?/i, '').replace(/```$/,'').trim();          // bỏ code fence
-  s = s.replace(/^\s*(prompt kịch bản|đây là prompt|kết quả)\s*[:：].*$/i, '').trim();  // bỏ dòng dẫn đầu
-  return s;
-}
-
 function renderProfileStyles(){
   const box = document.getElementById('profileStylesDisplay');
   if (!box) return;
@@ -892,7 +902,6 @@ function renderProfileStyles(){
         ${_profileStyleCard('backgroundStyle', 'Background Style', 'bg')}
         ${_profileStyleCard('sceneStyle', 'Scene Style / Aesthetic', 'scene')}
         ${_profileStyleCard('promptRules', 'Prompt Rules / Negative', 'rule')}
-        <div style="grid-column:1 / -1">${_profileScriptCard()}</div>
       </div>
       <div class="pf-side">
         <div class="pf-panel"><div class="ph">Thông tin profile</div><div class="pb">

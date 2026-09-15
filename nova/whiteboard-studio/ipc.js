@@ -15,7 +15,7 @@
    ============================================================ */
 const fs = require('fs');
 const path = require('path');
-const { dialog } = require('electron');
+const { dialog, app } = require('electron');
 const Annotation = require('../web/whiteboard-annotation.js');
 const { FFPROBE, FFMPEG, ffmpegAvailable } = require('./ff-runtime');
 const PyBackend = require('./py-backend');
@@ -203,6 +203,105 @@ function registerWhiteboardIpc(ipcMain, { getState } = {}) {
       const cues = Annotation.parseSrtCues(fs.readFileSync(r.path, 'utf8'));
       relayProgress({ percent: 100, status: 'done' });
       return { ok: true, path: r.path, cues, count: cues.length };
+    } catch (err) { return { ok: false, error: errOf(err) }; }
+  });
+
+  /* ── nhận voice ĐÃ TẠO ở tab 🎙 Giọng nói (KHÔNG dialog) ──
+     voicePath do kênh voice-history-path (main/ipc/voice.js) cung cấp — vị trí
+     do app quản, KHÔNG phải hard-code từ GUI (cùng ngoại lệ với saveProject).
+     srtText là SRT do backend sinh KÈM bản giọng (timing thật từng khối đọc);
+     ghi vào thư mục riêng whiteboard-studio/ (ownership của module này, không
+     ghi rác vào voice-history) rồi trả cues để panel nạp thẳng vào parseSrt.
+     Không có SRT → lỗi lộ liễu — KHÔNG fallback Whisper ngầm (Luật 10);
+     Whisper vẫn là nút "Voice → SRT" chủ động với file ngoài. */
+  handle('whiteboard:importVoice', async (_e, p = {}) => {
+    try {
+      const voice = String((p && p.voicePath) || '');
+      if (!voice || !fs.existsSync(voice)) return { ok: false, error: 'WB_VOICE_NOT_FOUND: không tìm thấy file voice: ' + voice };
+      if (!AUD_EXT.test(voice)) return { ok: false, error: 'WB_VOICE_BAD_EXT: không phải file audio: ' + voice };
+      const srtText = String((p && p.srtText) || '');
+      if (!srtText.trim()) return { ok: false, error: 'WB_VOICE_NO_SRT: bản giọng chưa có SRT — tạo lại giọng bằng backend trong máy, hoặc dùng nút "Voice → SRT" (Whisper).' };
+      const cues = Annotation.parseSrtCues(srtText);
+      if (!cues.length) return { ok: false, error: 'WB_VOICE_SRT_RONG: SRT kèm bản giọng không có cue hợp lệ.' };
+      const srtDir = path.join(app.getPath('userData'), 'whiteboard-studio');
+      fs.mkdirSync(srtDir, { recursive: true });
+      const srtPath = path.join(srtDir, 'voice-import.srt');
+      fs.writeFileSync(srtPath, srtText, 'utf8');
+      const durationSec = await PyBackend.probeMediaDuration(voice);
+      return { ok: true, path: voice, srtPath, cues, count: cues.length, durationSec };
+    } catch (err) { return { ok: false, error: errOf(err) }; }
+  });
+
+  /* ── annotation sidecar: NẠP .annotation.json của cảnh (dialog thật) ──
+     Cho region editor: nạp vùng vẽ đã soạn (kiểu preview.html của repo engine). */
+  handle('whiteboard:pickAnnotation', async () => {
+    try {
+      const r = await dialog.showOpenDialog(ownerWin(), {
+        title: 'Nạp annotation.json (vùng vẽ của cảnh)',
+        properties: ['openFile'],
+        filters: [{ name: 'Annotation JSON', extensions: ['json'] }],
+      });
+      if (r.canceled || !r.filePaths || !r.filePaths.length) return { canceled: true };
+      const p = r.filePaths[0];
+      let ann;
+      try { ann = JSON.parse(fs.readFileSync(p, 'utf8')); }
+      catch (e) { return { ok: false, error: 'JSON lỗi: ' + errOf(e) + ' → ' + p }; }
+      if (!ann || typeof ann !== 'object' || !Array.isArray(ann.elements) || !ann.elements.length) {
+        return { ok: false, error: 'File không phải annotation.json hợp lệ (thiếu elements[]) → ' + p };
+      }
+      return { ok: true, path: p, annotation: ann, elements: ann.elements.length };
+    } catch (err) { return { ok: false, error: errOf(err) }; }
+  });
+
+  /* ── annotation sidecar: LƯU .annotation.json cạnh ảnh ──
+     Path là sidecar suy ra từ ảnh do user chọn qua dialog trước đó
+     (không nhận đường dẫn hard-code khác; cưỡng chế đuôi .annotation.json). */
+  handle('whiteboard:saveAnnotation', async (_e, p = {}) => {
+    try {
+      const ann = p && p.annotation;
+      if (!ann || typeof ann !== 'object' || !Array.isArray(ann.elements) || !ann.elements.length) {
+        return { ok: false, error: 'Annotation thiếu elements[] — không lưu (Luật 10: fail lộ liễu)' };
+      }
+      const target = (p && typeof p.path === 'string' && p.path.trim()) ? p.path.trim() : null;
+      if (!target) return { ok: false, error: 'saveAnnotation cần path sidecar (.annotation.json cạnh ảnh)' };
+      if (!/\.annotation\.json$/i.test(target)) {
+        return { ok: false, error: 'Path lưu phải có đuôi .annotation.json → ' + target };
+      }
+      fs.writeFileSync(target, JSON.stringify(ann, null, 2), 'utf8');
+      return { ok: true, path: target, elements: ann.elements.length };
+    } catch (err) { return { ok: false, error: errOf(err) }; }
+  });
+
+  /* ── lưu / nạp dự án (userData — KHÔNG dialog: vị trí do app quản, 1 slot
+     project.json). Lỗi fail lộ liễu WB_* — không fallback ngầm (Luật 10).
+     Path ở đây là path nội bộ của app, không phải path repo do GUI truyền. ── */
+  const projectFile = () => {
+    const dir = path.join(app.getPath('userData'), 'whiteboard-studio');
+    fs.mkdirSync(dir, { recursive: true });
+    return path.join(dir, 'project.json');
+  };
+  handle('whiteboard:saveProject', async (_e, payload = {}) => {
+    try {
+      const data = payload && payload.data;
+      if (!data || typeof data !== 'object' || !Array.isArray(data.scenes) || !data.scenes.length) {
+        return { ok: false, error: 'WB_PROJECT_EMPTY (dự án trống — cần ≥1 cảnh)' };
+      }
+      const target = projectFile();
+      fs.writeFileSync(target, JSON.stringify(data, null, 2), 'utf8');
+      return { ok: true, path: target, scenes: data.scenes.length };
+    } catch (err) { return { ok: false, error: errOf(err) }; }
+  });
+  handle('whiteboard:loadProject', async () => {
+    try {
+      const target = projectFile();
+      if (!fs.existsSync(target)) {
+        return { ok: false, error: 'WB_NO_SAVED_PROJECT (chưa lưu dự án nào)' };
+      }
+      const data = JSON.parse(fs.readFileSync(target, 'utf8'));
+      if (!data || !Array.isArray(data.scenes) || !data.scenes.length) {
+        return { ok: false, error: 'WB_PROJECT_BAD (file không có scenes)' };
+      }
+      return { ok: true, path: target, data };
     } catch (err) { return { ok: false, error: errOf(err) }; }
   });
 

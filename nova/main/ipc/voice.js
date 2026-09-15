@@ -234,6 +234,24 @@ ipcMain.handle('voice-engines', () => require('../../voice-native/engines').list
     try { return voiceZoneDelete(khi, !!cache); }
     catch (e) { return { error: String((e && e.message) || e) }; }
   });
+  // Đường dẫn file audio của 1 bản "Đã tạo" (khi + cache) — cho tính năng khác
+  // (vd Whiteboard Studio "🎙 Dùng giọng đã tạo") dùng lại giọng ĐÃ SINH mà không
+  // mở dialog chọn file. Không đọc/ghi nội dung — chỉ trả path nếu file còn tồn
+  // tại; bị xoá/prune → lỗi lộ liễu (không fallback ngầm — Luật 10).
+  function voiceZonePath(khi, cache){
+    const id = String(khi || '').replace(/[^0-9]/g, '').slice(0, 16);
+    if (!id) return { error: 'DỮ_LIỆU_KHÔNG_HỢP_LỆ' };
+    const dir = voiceZoneDir(!!cache);
+    for (const f of [id + '.mp3', id + '.wav']){
+      const p = path.join(dir, f);
+      if (fs.existsSync(p)) return { ok: true, path: p };
+    }
+    return { error: 'WB_VOICE_GONE: bản giọng không còn trên đĩa (đã bị xoá/prune) — tạo lại giọng.' };
+  }
+  ipcMain.handle('voice-history-path', (_e, khi, cache) => {
+    try { return voiceZonePath(khi, !!cache); }
+    catch (e) { return { error: String((e && e.message) || e) }; }
+  });
 
   voiceNative.onLog((line) => { try { if (state.mainWindow && !state.mainWindow.isDestroyed()) state.mainWindow.webContents.send('voice-log', line); } catch {} });
 }

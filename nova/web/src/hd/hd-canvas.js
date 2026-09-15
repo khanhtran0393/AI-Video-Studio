@@ -94,7 +94,7 @@
   /* ========= KHOANH VUNG TREN CANVAS -- chon khu vuc ve truoc/sau =========
      - keo chuot tren vung trong -> tao vung ve MOI (xep ve cuoi, tu canh startMs,
        tu keo dai canh neu thieu thoi gian)
-     - keo giua vung co san -> di chuyen - keo goc tron -> resize
+     - keo giua vung co san -> di chuyen - keo handle goc/canh -> resize
      - chuot phai len vung -> xoa - click vung -> chon (hien handles)
      Vung ve hien thi so thu tu + mau theo trang thai thoi gian:
      xanh = da ve xong - cam = dang ve - xanh xam net dut = chua toi luot. */
@@ -110,8 +110,20 @@
     };
   }
 
+  /* 8 handle: 4 góc (kéo tự do, cho lật chiều qua normalize) + 4 cạnh giữa
+     (chỉ kéo đúng 1 trục, giữ cạnh đối diện — trần min xử lý trong pvPointerMove) */
   function pvHandles(R) {
-    return [[R.x0, R.y0], [R.x1, R.y0], [R.x0, R.y1], [R.x1, R.y1]];   // nw ne sw se
+    const mx = (R.x0 + R.x1) / 2, my = (R.y0 + R.y1) / 2;
+    return [
+      { x: R.x0, y: R.y0, kind: 'nw', cur: 'nwse-resize' },
+      { x: R.x1, y: R.y0, kind: 'ne', cur: 'nesw-resize' },
+      { x: R.x0, y: R.y1, kind: 'sw', cur: 'nesw-resize' },
+      { x: R.x1, y: R.y1, kind: 'se', cur: 'nwse-resize' },
+      { x: mx,   y: R.y0, kind: 'n',  cur: 'ns-resize' },
+      { x: mx,   y: R.y1, kind: 's',  cur: 'ns-resize' },
+      { x: R.x0, y: my,   kind: 'w',  cur: 'ew-resize' },
+      { x: R.x1, y: my,   kind: 'e',  cur: 'ew-resize' },
+    ];
   }
 
   /* điểm có nằm trong polygon khoanh tay không (toạ độ preview) — ray casting */
@@ -141,13 +153,12 @@
     const list = s.elements;
     if (pv.sel >= 0 && pv.sel < list.length) {
       const selReg = list[pv.sel].region;
-      // vùng khoanh tay không resize theo góc → bỏ handles
+      // vùng khoanh tay không resize theo handle → bỏ handles
       if (!selReg.points || selReg.points.length < 3) {
         const R = pvRect(selReg);
-        const hs = pvHandles(R);
-        for (let k = 0; k < 4; k++) {
-          if (Math.abs(p.x - hs[k][0]) <= PV_HANDLE && Math.abs(p.y - hs[k][1]) <= PV_HANDLE) {
-            return { i: pv.sel, mode: 'resize', anchor: hs[(k + 2) % 4] };   // neo góc đối diện
+        for (const h of pvHandles(R)) {
+          if (Math.abs(p.x - h.x) <= PV_HANDLE && Math.abs(p.y - h.y) <= PV_HANDLE) {
+            return { i: pv.sel, mode: 'resize', kind: h.kind, cur: h.cur };
           }
         }
       }
@@ -390,11 +401,12 @@
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(txt, bx + bw / 2, by + bh / 2 + 0.5);
-      // handles góc khi đang chọn (chỉ vùng rect — vùng khoanh tay không resize góc)
+      // 8 handle (4 góc lớn + 4 cạnh nhỏ) khi đang chọn — chỉ vùng rect
+      // (vùng khoanh tay không resize theo handle)
       if (i === pv.sel && !(el.region.points && el.region.points.length >= 3)) {
-        pvHandles(R).forEach((pt) => {
+        pvHandles(R).forEach((h) => {
           ctx.beginPath();
-          ctx.arc(pt[0], pt[1], 4, 0, Math.PI * 2);
+          ctx.arc(h.x, h.y, h.kind.length === 2 ? 4 : 3, 0, Math.PI * 2);
           ctx.fillStyle = '#fff';
           ctx.fill();
           ctx.stroke();
@@ -436,7 +448,7 @@
       const el = s.elements[hit.i];
       const R = pvRect(el.region);
       pv.drag = hit.mode === 'resize'
-        ? { mode: 'resize', i: hit.i, ax: hit.anchor[0], ay: hit.anchor[1] }
+        ? { mode: 'resize', i: hit.i, kind: hit.kind, rx0: R.x0, rx1: R.x1, ry0: R.y0, ry1: R.y1 }
         : (el.region.points && el.region.points.length >= 3
           // vùng khoanh tay: lưu polygon gốc để dịch cả nét theo chuột
           ? { mode: 'move', i: hit.i, px: p.x, py: p.y, pts0: el.region.points.map((q) => [q[0], q[1]]) }
@@ -458,7 +470,7 @@
     if (!d) {   // chưa kéo → chỉ đổi cursor + hover
       if (!pv.imgOk) return;
       const hit = pvHit(p);
-      c.style.cursor = hit ? (hit.mode === 'resize' ? 'nwse-resize' : 'move') : 'crosshair';
+      c.style.cursor = hit ? (hit.mode === 'resize' ? (hit.cur || 'nwse-resize') : 'move') : 'crosshair';
       const h = hit ? hit.i : -1;
       if (h !== pv.hover) { pv.hover = h; pvRender(); }
       return;
@@ -481,12 +493,24 @@
         const ny = Math.max(0, Math.min(pv.H - d.h, p.y - d.oy));
         pvSetRegion(el, nx, ny, nx + d.w, ny + d.h);
       }
-    } else {    // resize: rect = hộp bao của góc neo + con trỏ, tối thiểu 8px annotation
+    } else {    // resize 8 handle: góc = hộp bao đỉnh đối diện (lúc bắt đầu kéo) ↔ con
+                // trỏ (cho lật chiều); cạnh = kẹp đúng 1 trục, giữ cạnh đối diện,
+                // trần min 8px annotation chống sập âm sang phía kia
       const minW = 8 * pv.sx, minH = 8 * pv.sy;
-      let x0 = Math.min(d.ax, p.x), x1 = Math.max(d.ax, p.x);
-      let y0 = Math.min(d.ay, p.y), y1 = Math.max(d.ay, p.y);
-      if (x1 - x0 < minW) x1 = x0 + minW;
-      if (y1 - y0 < minH) y1 = y0 + minH;
+      const k = d.kind;
+      let x0 = d.rx0, x1 = d.rx1, y0 = d.ry0, y1 = d.ry1;
+      if (k === 'w') x0 = Math.min(p.x, d.rx1 - minW);
+      else if (k === 'e') x1 = Math.max(p.x, d.rx0 + minW);
+      else if (k === 'n') y0 = Math.min(p.y, d.ry1 - minH);
+      else if (k === 's') y1 = Math.max(p.y, d.ry0 + minH);
+      else {    // góc nw/ne/sw/se
+        const ax = (k === 'nw' || k === 'sw') ? d.rx1 : d.rx0;
+        const ay = (k === 'nw' || k === 'ne') ? d.ry1 : d.ry0;
+        x0 = Math.min(ax, p.x); x1 = Math.max(ax, p.x);
+        y0 = Math.min(ay, p.y); y1 = Math.max(ay, p.y);
+        if (x1 - x0 < minW) x1 = x0 + minW;
+        if (y1 - y0 < minH) y1 = y0 + minH;
+      }
       pvSetRegion(el, x0, y0, x1, y1);
     }
     s.previewPath = null;

@@ -19,6 +19,7 @@ const mediaTools = require('../native-tools/media-tools');
 const { FFMPEG, FFPROBE, probeDur } = require('../native-tools/ffmpeg');
 const { claude } = require('../editor-pro/niche');
 const YT = require('./youtube');
+const SB = require('./source-brief');
 
 const MODELS = { gemini: 'gemini-2.5-flash-lite', claude: 'claude-sonnet-4-20250514' };
 
@@ -71,6 +72,68 @@ function registerViralCutIpc(ipcMain, { getState } = {}) {
       if (!cues.length) return { ok: false, error: 'File SRT không đọc được dòng thoại nào.', code: 'VC_SRT_EMPTY' };
       return { ok: true, path: r.filePaths[0], name: path.basename(r.filePaths[0]), count: cues.length };
     } catch (err) {
+      return { ok: false, error: errOf(err), code: codeOf(err) };
+    }
+  });
+
+  /* ── TỰ LẤY PHỤ ĐỀ YOUTUBE (P0): yt-dlp --write-subs → SRT sạch trong tmp.
+     Không cần người dùng tìm file tay. Video không có phụ đề → FAIL lộ liễu
+     VC_YT_NO_CAPTION (không Whisper, không bịa transcript — Luật 10). ── */
+  handle('viralCut:fetchTranscript', async (e, p = {}) => {
+    try {
+      guardRun('transcript');
+      const url = String((p && p.url) || '').trim();
+      if (!url || !YT.YT_URL_RE.test(url)) return { ok: false, error: 'Chưa có link YouTube hợp lệ để lấy phụ đề.', code: 'VC_YT_URL' };
+      run = { kind: 'transcript', cancelRequested: false, child: null };
+      sendProgress(e, { kind: 'transcript', step: 'caption', pct: 10, message: 'Lấy phụ đề YouTube (yt-dlp)…' });
+      try {
+        const r = await YT.fetchYoutubeTranscript(url, { outDir: tmpDir() });
+        sendProgress(e, { kind: 'transcript', step: 'done', pct: 100, message: 'Đã lấy phụ đề: ' + r.count + ' dòng thoại (' + (r.auto ? 'tự động' : 'chính thức') + (r.lang ? ' · ' + r.lang : '') + (r.cached ? ' · cache' : '') + ').' });
+        return { ok: true, path: r.path, name: r.name, count: r.count, lang: r.lang || '', auto: !!r.auto };
+      } finally {
+        run = null;
+      }
+    } catch (err) {
+      run = null;
+      return { ok: false, error: errOf(err), code: codeOf(err) };
+    }
+  });
+
+  /* ── HỒ SƠ NGUỒN (P1): URL YouTube → source-brief JSON + TXT (tmp).
+     Metadata + chapters + heatmap + transcript + bình luận — NGUỒN viết
+     kịch bản cho tool Tạo Kịch Bản (ts) / tham khảo. Thiếu phụ đề →
+     FAIL lộ liễu VC_YT_NO_CAPTION; không Whisper, không bịa (Luật 10). ── */
+  handle('viralCut:buildBrief', async (e, p = {}) => {
+    try {
+      guardRun('brief');
+      const url = String((p && p.url) || '').trim();
+      if (!url || !YT.YT_URL_RE.test(url)) return { ok: false, error: 'Chưa có link YouTube hợp lệ để tạo hồ sơ nguồn.', code: 'VC_YT_URL' };
+      run = { kind: 'brief', cancelRequested: false, child: null };
+      sendProgress(e, { kind: 'brief', step: 'probe', pct: 5, message: 'Đọc hồ sơ nguồn YouTube (metadata · chapters · heatmap)…' });
+      try {
+        const r = await SB.buildSourceBrief(url, {
+          outDir: tmpDir(),
+          commentsMax: Number(p.commentsMax) || 40,
+          withComments: (p && p.withComments) !== false,
+          onProgress: (s) => sendProgress(e, Object.assign({ kind: 'brief' }, s)),
+        });
+        return {
+          ok: true,
+          jsonPath: r.jsonPath,
+          txtPath: r.txtPath,
+          title: r.brief.title,
+          durationSec: r.brief.durationSec,
+          lang: r.brief.lang,
+          transcriptChars: r.brief.transcriptChars,
+          comments: (r.brief.comments || []).length,
+          withComments: !!(p && p.withComments !== false),
+          text: SB.briefToPromptText(r.brief),
+        };
+      } finally {
+        run = null;
+      }
+    } catch (err) {
+      run = null;
       return { ok: false, error: errOf(err), code: codeOf(err) };
     }
   });
@@ -175,6 +238,8 @@ function registerViralCutIpc(ipcMain, { getState } = {}) {
             silence: { available: false, reason: 'Không bật (silenceAware=false).' },
             pitch: { available: false, reason: 'Không bật (pitch=false).' },
             cps: { available: false, reason: sentences.length ? 'Chưa tính (fusion không chạy).' : 'Không có transcript SRT — không có nhịp words/giây.' },
+            scene: { available: false, reason: 'Không bật (sceneSnap=false).' },
+            xcorr: { available: false, reason: sentences.length ? 'Chưa tính (fusion không chạy).' : 'Không có transcript SRT — không có nhịp words/giây.' },
           };
           tierA = { enabled: true, options: opts, features: feats, weights: null, snappedEdges: 0, used: '' };
           let cutsMs = [];
@@ -189,6 +254,16 @@ function registerViralCutIpc(ipcMain, { getState } = {}) {
               feats.keyframe = { available: false, reason: pk.ok ? 'Không đọc được keyframe nào của luồng video.' : pk.reason };
               warnings.push({ code: 'VC_TIERA_CUTS', message: 'Tier A không có cảnh cắt (degrade có khai báo): ' + feats.keyframe.reason });
             }
+          }
+          /* Scene density (số cut keyframe/giây) từ CÙNG mảng keyframe đã dò ở trên —
+             không đọc lại file. Kênh thị giác của fusion; không dò keyframe → null
+             (kênh bị bỏ trong fuseLocalScores, khai báo qua feats.scene — Luật 10). */
+          let cutWins = null;
+          if (cutsMs.length >= 2) {
+            cutWins = E.sceneDensityWindows(cutsMs, wins);
+            feats.scene = { available: true, totalCuts: cutsMs.length, windows: cutWins.filter((w) => w.cuts > 0).length };
+          } else if (opts.sceneSnap) {
+            feats.scene = { available: false, reason: 'Không đọc được keyframe nào của luồng video — không có nhịp cắt.' };
           }
           let silGaps = [];
           if (opts.silenceAware) {
@@ -206,13 +281,16 @@ function registerViralCutIpc(ipcMain, { getState } = {}) {
               const pw = E.pitchWindowsFromFrames(pr.frames, wins);
               const varMax = pw.reduce((m, w) => Math.max(m, w.var), 0);
               if (voiced >= 8 && varMax > 0) {
-                const fus = E.fuseLocalScores(wins, { pitchWins: pw, cpsWins: cpsWins || undefined });
+                const fus = E.fuseLocalScores(wins, { pitchWins: pw, cpsWins: cpsWins || undefined, cutWins: cutWins || undefined });
                 fusionFeats = fus.feats;
                 tierA.weights = fus.weights;
                 tierA.energyNorm = fus.energyNorm;   // 'z' = tương đối nội video, 'max' = audio đều
                 tierA.coHitMax = fus.coHit;
                 tierA.crestRef = fus.crestRef;       // median crest của video (null → không phạt được impuls)
                 if (fus.crestRef == null) warnings.push({ code: 'VC_TIERA_CREST', message: 'Tier A: không đo được crest tham chiếu (mọi cửa sổ im lặng hoặc thiếu peak) — bỏ qua phạt tín hiệu impuls.' });
+                feats.xcorr = fus.hasXcorr
+                  ? { available: true, lag: fus.xcorrLag, pearson: fus.xcorrPearson }
+                  : { available: false, reason: fus.xcorrReason || (cpsWins ? 'Tương quan Energy×CPS lệch pha quá yếu — bỏ kênh (không giả tín hiệu).' : 'Không có transcript SRT — không có nhịp words/giây.') };
                 feats.pitch = {
                   available: true, frames: pr.frames.length, voicedFrames: voiced, rate: pr.rate,
                   analyzedSec: pr.analyzedSec, truncated: pr.truncated, ms: Date.now() - t0,
@@ -279,7 +357,7 @@ function registerViralCutIpc(ipcMain, { getState } = {}) {
         }
         if (!highlights.length) {
           if (fusionFeats) {
-            prog('fusion-select', 65, 'Chọn highlight theo đa tín hiệu local (năng lượng + cao độ)…');
+            prog('fusion-select', 65, 'Chọn highlight theo đa tín hiệu local (năng lượng + cao độ + nhịp cắt)…');
             const top = E.pickHighlightsByFusion(fusionFeats, { minLen, maxLen, maxClips });
             if (!top.length) return { ok: false, error: 'Không ghép được cửa sổ đa tín hiệu nào đủ ' + minLen + '–' + maxLen + ' giây — thử nới khoảng độ dài clip.', code: 'VC_NO_FUSION_WINDOW' };
             tier = 'fusion';

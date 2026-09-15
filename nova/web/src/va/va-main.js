@@ -67,7 +67,6 @@
     // Phát hiện công việc dang dở của lần mở trước (session snapshot → job.json)
     // và thông báo/bật nút chạy lại. Async, không chặn boot panel.
     if (typeof C.vaResumeCheck === 'function') { try { C.vaResumeCheck(); } catch (e) { console.warn('[video-agent-panel] resume check:', e); } }
-    notice('👋 Chào bạn! Nhận kịch bản/giọng đọc/ảnh từ các tool phía trên ở Bước 1 (hoặc dán kịch bản) rồi bấm "🎬 Tạo video của tôi" — Agent lo phần còn lại.', 'info');
   }
 
   /* Public API — index.html gọi videoAgentPanel.init() khi mở tab.

@@ -165,9 +165,17 @@ contextBridge.exposeInMainWorld('native', {
     // voice → SRT tiếng Việt (faster-whisper local, script của Nova)
     whisperPrepare: () => ipcRenderer.invoke('whiteboard:whisperPrepare'),
     generateSrt: (voicePath, model) => ipcRenderer.invoke('whiteboard:generateSrt', { voicePath, model }),
+    // voice ĐÃ TẠO ở tab Giọng nói (đường dẫn từ voice-history-path + SRT backend)
+    importVoice: (payload) => ipcRenderer.invoke('whiteboard:importVoice', payload || {}),
     parseSrt: (srtPath, opts) => ipcRenderer.invoke('whiteboard:parseSrt', { srtPath, opts }),
     probeImage: (path) => ipcRenderer.invoke('whiteboard:probeImage', { path }),
     annotationPreview: (image, annotation) => ipcRenderer.invoke('whiteboard:annotationPreview', { image, annotation }),
+    // region editor: nạp/lưu sidecar .annotation.json của cảnh
+    pickAnnotation: () => ipcRenderer.invoke('whiteboard:pickAnnotation'),
+    saveAnnotation: (payload) => ipcRenderer.invoke('whiteboard:saveAnnotation', payload),
+    // dự án: lưu/nạp vào userData (không dialog) — 1 slot project.json
+    saveProject: (payload) => ipcRenderer.invoke('whiteboard:saveProject', payload || {}),
+    loadProject: () => ipcRenderer.invoke('whiteboard:loadProject'),
     export: (payload) => ipcRenderer.invoke('whiteboard:export', payload),
     exportCancel: () => ipcRenderer.invoke('whiteboard:exportCancel'),
     onExportProgress: (cb) => {
@@ -192,6 +200,11 @@ contextBridge.exposeInMainWorld('native', {
     analyze: (payload) => ipcRenderer.invoke('viralCut:analyze', payload || {}),
     analyzeYoutube: (payload) => ipcRenderer.invoke('viralCut:analyzeYoutube', payload || {}),
     downloadSource: (payload) => ipcRenderer.invoke('viralCut:downloadSource', payload || {}),
+    // Tự lấy phụ đề YouTube (P0): yt-dlp --write-subs → SRT sạch trong tmp.
+    fetchTranscript: (payload) => ipcRenderer.invoke('viralCut:fetchTranscript', payload || {}),
+    // Hồ sơ nguồn YouTube (P1): URL → source-brief JSON+TXT (metadata,
+    // chapters, heatmap, transcript, bình luận) — NGUỒN viết kịch bản.
+    buildBrief: (payload) => ipcRenderer.invoke('viralCut:buildBrief', payload || {}),
     exportClips: (payload) => ipcRenderer.invoke('viralCut:export', payload || {}),
     cancel: () => ipcRenderer.invoke('viralCut:cancel'),
     onProgress: (cb) => {
@@ -323,6 +336,8 @@ contextBridge.exposeInMainWorld('native', {
   voiceHistorySave: (payload) => ipcRenderer.invoke('voice-history-save', payload),
   voiceHistoryList: (cache) => ipcRenderer.invoke('voice-history-list', !!cache),   // cache=true → vùng voice-cache (đoạn tách)
   voiceHistoryDelete: (khi, cache) => ipcRenderer.invoke('voice-history-delete', khi, !!cache),
+  // Đường dẫn file audio của 1 bản "Đã tạo" — cho Whiteboard Studio dùng lại giọng
+  voiceHistoryPath: (khi, cache) => ipcRenderer.invoke('voice-history-path', khi, !!cache),
   flowExtExport: () => ipcRenderer.invoke('flow-ext-export'),
   onVoiceLog: (cb) => ipcRenderer.on('voice-log', (_e, s) => cb(s)),
   // Cập nhật app (thông báo hiện ở góc trên phải).

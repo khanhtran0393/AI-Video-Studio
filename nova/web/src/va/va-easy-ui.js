@@ -212,18 +212,7 @@
   /* ════════ CHẾ ĐỘ DỄ ════════ */
   const RAIL_LABELS = ['Nguyên liệu', 'Ảnh', 'Tạo video', 'Xem video'];
   function buildEasy(box) {
-    /* ── banner chế độ Dễ + thanh tiến trình 4 bước (va-rail) ── */
-    const hero = el('div', { class: 'va-hero' },
-      el('div', { class: 'va-hero-in' },
-        el('span', { class: 'va-hero-badge' }, '🎬 NOVA VIDEO AGENT'),
-        el('h2', { class: 'va-hero-title' }, 'Lắp ráp video faceless trong 4 bước'),
-        el('p', { class: 'va-hero-sub' },
-          'Nhận kịch bản, giọng đọc (TTS), ảnh nhân vật & ảnh đã tạo từ prompt ở các tool phía trên — Agent tự chia cảnh theo timeline giọng đọc, xếp ảnh đúng từng câu, rồi render MP4.'),
-        el('div', { class: 'va-hero-chips' },
-          el('span', { class: 'va-hero-chip' }, '📝 Kịch bản đã có'),
-          el('span', { class: 'va-hero-chip' }, '🎙 Giọng đọc TTS làm đồng hồ'),
-          el('span', { class: 'va-hero-chip' }, '🖼 Ảnh đã tạo từ prompt'),
-          el('span', { class: 'va-hero-chip' }, '⚙ Pipeline 17 bước (tuỳ chọn)'))));
+    /* ── thanh tiến trình 4 bước (va-rail) ── */
     const rail = el('div', { class: 'va-rail' });
     ui.rail = RAIL_LABELS.map((lbl, i) => {
       const dot = el('span', { class: 'va-rail-dot' }, String(i + 1));
@@ -318,7 +307,7 @@
     s4.body.append(ui.resultBox);
 
     steps.append(s1.card, s2.card, s3.card, s4.card);
-    box.append(hero, rail, steps);
+    box.append(rail, steps);
     setStepState(ui.step1, 'active');
     C.renderChips();
   }

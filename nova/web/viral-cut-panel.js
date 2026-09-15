@@ -25,6 +25,7 @@
     sourceUrl: '',        // URL YouTube nguồn (chế độ heatmap)
     heatmap: null,        // mảng {start_time,end_time,value} "Most Replayed"
     downloading: false,   // đang tải nguồn YouTube về máy
+    fetchingCaptions: false, // đang tự lấy phụ đề YouTube (P0 — fetchTranscript)
     tierA: null,          // diagnostics Tier A của lần phân tích gần nhất (null = không dùng)
     pickedIdx: null,      // highlight đang chọn trong khung Tổng quan (đoạn đang phát/xem)
     loopPreview: false,   // lặp lại đúng đoạn đã chọn khi gặp mốc dừng
@@ -84,12 +85,13 @@
   };
   const vcSetLog = (msg) => { const el = vcEl('vcLog'); if (el) el.textContent = msg; };
   const vcSetBusy = () => {
-    const busy = vcState.analyzing || vcState.exporting || vcState.downloading;
+    const busy = vcState.analyzing || vcState.exporting || vcState.downloading || vcState.fetchingCaptions;
     if (vcEl('vcAnalyze')) vcEl('vcAnalyze').disabled = busy;
     if (vcEl('vcAnalyzeYt')) vcEl('vcAnalyzeYt').disabled = busy;
     if (vcEl('vcExport')) vcEl('vcExport').disabled = busy || !vcState.highlights.length || !vcState.outDir;
     if (vcEl('vcCancel')) vcEl('vcCancel').disabled = !busy;
     if (vcEl('vcGetSrc')) vcEl('vcGetSrc').disabled = busy || !vcState.sourceUrl;
+    if (vcEl('vcFetchSrt')) vcEl('vcFetchSrt').disabled = busy || !((vcEl('vcUrl') || {}).value || '').trim() && !vcState.sourceUrl;
   };
   const vcSetProg = (pct, msg) => {
     const wrap = vcEl('vcProgWrap');
@@ -434,6 +436,7 @@
         <button class="vc-btn" id="vcPickVideo">🎞 Chọn video gốc…</button>
         <button class="vc-btn" id="vcPickSrt">📝 Chọn SRT transcript (tuỳ chọn)…</button>
         <button class="vc-btn" id="vcClearSrt">✕ Bỏ SRT</button>
+        <button class="vc-btn" id="vcFetchSrt" title="Tải phụ đề có sẵn của video YouTube (chính thức hoặc tự động) về thành SRT — không cần tìm file tay. Dán link YouTube vào ô URL trước.">⤓ Tự lấy phụ đề YouTube…</button>
       </div>
       <div class="vc-row" style="margin-top:8px">
         <input class="vc-num" id="vcUrl" type="text" placeholder="…hoặc dán link YouTube (dùng heatmap “Most Replayed”)" style="flex:1;width:auto;min-width:220px">
@@ -602,6 +605,35 @@
     if (el) el.textContent = 'Chưa chọn SRT — chế độ Auto sẽ dùng năng lượng âm thanh khi thiếu transcript.';
   };
 
+  /* ── TỰ LẤY PHỤ ĐỀ YOUTUBE (P0): yt-dlp tải caption có sẵn → SRT sạch →
+     bind vào srtPath y hệt vcPickSrt. Video không có phụ đề → lỗi lộ liễu
+     VC_YT_NO_CAPTION (không Whisper ngầm — Luật 10). ── */
+  const vcFetchSrt = async () => {
+    if (vcState.fetchingCaptions) return;
+    const url = ((vcEl('vcUrl') || {}).value || '').trim() || vcState.sourceUrl;
+    if (!url) { vcSetLog('Dán link YouTube vào ô URL trước (nút Tự lấy phụ đề cần link video).'); return; }
+    vcState.fetchingCaptions = true;
+    vcSetBusy();
+    vcSetProg(10, 'Lấy phụ đề YouTube (yt-dlp)…');
+    try {
+      const r = await window.native.viralCut.fetchTranscript({ url });
+      if (!r || !r.ok) {
+        vcSetProg(null, 'Lỗi phụ đề: ' + ((r && r.error) || 'không rõ') + ((r && r.code) ? ' [' + r.code + ']' : ''));
+        return;
+      }
+      vcState.srtPath = r.path;
+      vcState.srtName = r.name;
+      const el = vcEl('vcSrtInfo');
+      if (el) el.innerHTML = 'SRT (YouTube ' + (r.auto ? 'tự động' : 'chính thức') + (r.lang ? ' · ' + r.lang : '') + '): <b>' + r.name + '</b> (' + r.count + ' dòng thoại)';
+      vcSetProg(100, 'Đã lấy phụ đề từ YouTube — ' + r.count + ' dòng thoại. Có thể phân tích ngay (LLM/Heuristic/Auto).');
+    } catch (err) {
+      vcSetProg(null, 'Lỗi IPC lấy phụ đề: ' + ((err && err.message) || err));
+    } finally {
+      vcState.fetchingCaptions = false;
+      vcSetBusy();
+    }
+  };
+
   /* ── TIER A: tuỳ chọn gửi xuống IPC + diễn giải diagnostics (fail khai báo, không đoán mò) ── */
   const vcTierAOptions = () => {
     const main = (vcEl('vcTierA') || {}).checked;
@@ -623,7 +655,13 @@
     parts.push('đã dùng: ' + (ta.used || 'không rõ'));
     parts.push('neo ' + (ta.anchorCount || 0) + ' điểm (' + (ta.cutCount || 0) + ' cảnh cắt + ' + (ta.silenceGapCount || 0) + ' im lặng)');
     parts.push('đã neo ' + (ta.snappedEdges || 0) + ' biên clip');
-    if (ta.weights) parts.push('trọng số năng lượng ' + ta.weights.energy + ' / cao độ ' + ta.weights.pitch + ' / giọng ' + ta.weights.voiced);
+    if (ta.weights) {
+      let ws = 'trọng số năng lượng ' + ta.weights.energy + ' / cao độ ' + ta.weights.pitch + ' / giọng ' + ta.weights.voiced;
+      if (ta.weights.cps != null) ws += ' / words ' + ta.weights.cps;
+      if (ta.weights.scene != null) ws += ' / nhịp cắt ' + ta.weights.scene;
+      if (ta.weights.xcorr != null) ws += ' / lệch nhịp ' + ta.weights.xcorr;
+      parts.push(ws);
+    }
     const st = (name, feat) => name + ': ' + (feat && feat.available ? 'OK' : 'KHÔNG (' + ((feat && feat.reason) || 'không rõ') + ')');
     const short = (s) => (s.length > 150 ? s.slice(0, 150) + '…' : s);
     const lines = ['🧠 Tier A — ' + parts.join(' · ')];
@@ -819,6 +857,7 @@
     on('vcPickVideo', vcPickVideo);
     on('vcPickSrt', vcPickSrt);
     on('vcClearSrt', vcClearSrt);
+    on('vcFetchSrt', vcFetchSrt);
     on('vcAnalyze', vcAnalyze);
     on('vcAnalyzeYt', vcAnalyzeYt);
     on('vcGetSrc', vcGetSrc);
@@ -939,6 +978,7 @@
         if (s.kind === 'analyze' && vcState.analyzing) vcSetProg(s.pct, s.message);
         else if (s.kind === 'export' && vcState.exporting) vcSetProg(s.pct, s.message);
         else if (s.kind === 'download' && vcState.downloading) vcSetProg(s.pct, s.message);
+        else if (s.kind === 'transcript' && vcState.fetchingCaptions) vcSetProg(s.pct, s.message);
       });
       vcMounted = true;
       vcSetLog('Sẵn sàng — chọn video nguồn để bắt đầu.');
