@@ -69,6 +69,7 @@
 - **Commit `[9c26f81b]`**: 2 file changed, 27+/97-.
 - **PS escape hell**: `node -e` với PS bị nuốt `;` và `&&` — viết script tạm qua `editor` rồi `node file` là cách ổn định nhất. PS redirection `> file` ghi UTF-16 LE (không phải UTF-8) → phải `buf.toString('utf16le')` khi đọc lại.
 - **Còn lại (treo)**: B2 đã hết; có thể tiếp tục verify panel khác (Tạo Ảnh Hàng Loạt / Vẽ Tay Ảnh / Tạo Kịch Bản) theo cùng pattern, hoặc chuyển sang task khác.
+- **Cleanup script tmp**: KHÔNG xoá tay — đã verify `git check-ignore -v` match rule `tmp*` (.gitignore line 89, `tmp*` ở bất kỳ path segment nào) cho toàn bộ file: `nova/scripts/tmp/cdp-verify-wb.js`, `entries/*.js` (59), `ico-dump/*.png/*.bin` (14), `ico-frames/*.png` (6), `wb-ref-frames/*.jpg` (25), `gen-*.js` (28). `git ls-files nova/scripts/tmp` trả rỗng → không có rủi ro commit nhầm. Theo §8 AGENTS, script tmp đặt trong `nova/scripts/tmp/` là pattern chuẩn — `tmp*` rule đã cover đủ. Khi muốn "chính thức hoá" một script, dùng `check:docs` để nhắc tên trong §3.
 
 
 # MEMORY.md â€” Bá»™ nhá»› trÆ°á»ng tá»“n cá»§a dá»± Ã¡n
@@ -6710,3 +6711,22 @@ User chọn hướng "test bằng dữ liệu hiện có" thay vì chờ SRT/ả
 - User đã sửa skill mẫu (đổi `instructions`, giữ tên) → vẫn được bảo vệ, không bị ghi đè.
 - Skill không phải catalog (user tự tạo) → key = `name+@v1` (thiếu version), không trùng với catalog nếu khác tên. Nếu user tự tạo trùng tên với catalog → catalog skip (giống logic cũ).
 - `localStorage` cũ (nếu có) backward compat: các trường mới (`role/voice/...`) là optional, code đọc trường không tồn tại → trả về `undefined` → `if (it.role)` skip → ghép prompt chỉ với phần có.
+
+---
+
+## 2026-09-16 — Phục hồi mojibake Whiteboard Studio (`panel` + `ai.js`)
+
+**Vấn đề**: `nova/web/whiteboard-studio-panel.js` hỏng tiếng Việt mojibake CP1252 nhiều tầng (đảo ngược được); `nova/web/whiteboard-studio-ai.js` có 475 U+FFFD. Dump đối chiếu: HEAD của ai.js hỏng giống hệt worktree → **e359ce21 là nguồn sạch duy nhất**.
+
+**Cách sửa**:
+- Panel: `nova/scripts/tmp/tmp-wb-moji-fix3.js --apply` — reverse-transform CP1252; regex run phải phủ U+0080–00FF + U+0192 (ƒ) + U+201A (‚), C1 passthrough (byte C1 không hiện được thành U+FFFD làm đứt run). Kết quả: fail=0/1665 runs, VN_REAL 0→1153, FFFD=0, `node --check` OK. Backup `%TEMP%\wbsp-panel.bak-*.js`.
+- ai.js: `nova/scripts/tmp/tmp-wb-ai-restore.js` **v3** — khớp "bộ xương ASCII **bỏ toàn bộ whitespace**" với e359ce21 + HEAD; tiêu chí dòng sạch = không FFFD / C1 / bộ cp1252-only (ƒ‚„†‡Š‹ŒžŸ€™… hơn) / bigram [ÃÂ]+cont / box-drawing **kề chữ** (kieu OEM); CHO PHÉP emoji + ký tự hợp lệ (⚡🖼⚠❌ℹ✓ → · × ═ ━ ─ – — … " " ' '). Hai bug của v2 đã fix: (1) skeleton v2 tính cả khoảng trắng → khối 2b mới thụt 6 spaces vs e359 8 spaces → mất hết candidate khối Flow-gen; (2) regex ORPHAN cũ cấm box-drawing/emoji → từ chối cả dòng sạch.
+- Kết quả ai.js: **63 dòng auto từ e359 + 20 dòng sửa tay = 83/83, skipped=0, FFFD=0**, `node --check` OK. Backup `%TEMP%\wbsp-ai.bak-1789579048798.js`.
+- 20 dòng tay = khối mới hơn e359 (header `1b · PHÂN TÍCH PROMPT`, `2b · SẮP XẾP DỮ LIỆU`, luồng 6 bước rút gọn, log Bước 3/4). Emoji decode từ byte, không đoán: 🧠 = F0 9F A7 A0 (khớp nút `wb-analyzePromptBtn` "🧠 Phân tích prompt" trong panel), 🗺 = F0 9F 97 BA (nút `wb-arrangeBtn`), 🖼 = F0 9F 96 BC (cùng kiểu log "gửi prompt → đang tạo" trong `tf.js` L1355/1478), ⚡ xác nhận từ e359 L373 (cùng câu "Flow bắt đầu tạo" nguyên văn).
+- L127/L376-type ambiguity: 2 candidate chỉ khác thụt lề → dedup theo text-bỏ-thụt-lề + chọn candidate cùng indentation với dòng hiện tại.
+
+**Kiểm định**: `npm run check` đủ 10 bước → **EXITCODE=0**. `node --check` cả 2 file OK. FFFD=0, C1=0, cp1252-only=0, VN chars sống (panel 1153, ai.js 571 ký tự có dấu).
+
+**Bài học mojibake**: (a) xác nhận emoji/glyph bằng code point (`codePointAt`) thay vì nhìn console — PowerShell thường render sai/garbled; (b) console của agent hay lỗi PSReadLine → mọi output dài phải ghi ra file `%TEMP%` rồi `Get-Content -Encoding UTF8` đọc lại; (c) khớp skeleton phải bỏ whitespace vì khối code mới có thể thụt lề khác bản cũ.
+
+**Chờ user (§6.6)**: mở app → Whiteboard Studio → kiểm tra giao diện + log tiếng Việt ở Bước 3 "🧠 Phân tích prompt" và Bước 4 "🗺 Sắp xếp dữ liệu" hiển thị đúng, không còn ô � hay ký tự lạ.
