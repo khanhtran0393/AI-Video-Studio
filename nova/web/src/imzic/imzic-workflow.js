@@ -1,8 +1,8 @@
 'use strict';
 
-/* imzic-workflow.js — Reset toàn bộ tool + 🎲 Tự động chọn hiệu ứng + Hàng chờ
- * xuất video nhiều sản phẩm. Thêm ngày 2026-09-15 (KHÔNG thuộc 12 file tách từ
- * img-to-vid-panel.js) — nạp CUỐI CÙNG trong img-to-vid.html, sau imzic-export.js:
+/* imzic-workflow.js — Reset toàn bộ tool + 🗑 Xoá dữ liệu (giữ cài đặt) + 🎲 Tự động
+ * chọn hiệu ứng + Hàng chờ xuất video nhiều sản phẩm. Thêm ngày 2026-09-15 (KHÔNG
+ * thuộc 12 file tách từ img-to-vid-panel.js) — nạp CUỐI CÙNG trong img-to-vid.html, sau imzic-export.js:
  * mọi lệnh chạy ngay ở đây chỉ đọc tên ($, state, isExporting, imzNative,
  * applySettingsInputs, exportOffline…) đã khai báo ở các file trước — đúng ràng
  * buộc thứ tự nạp của AGENTS.md §8. Không import/export (renderer không build step).
@@ -24,6 +24,71 @@ $('resetBtn').addEventListener('click', ()=>{
   try{ localStorage.removeItem(SETTINGS_KEY); }catch(e){}
   // reload iframe = trạng thái sạch tuyệt đối, không tự "suy đoán" giá trị mặc định
   location.reload();
+});
+
+// ---- 🗑 XOÁ DỮ LIỆU ----
+// Khác 🧹 Reset: CHỈ bỏ dữ liệu đang chọn (ảnh/slideshow/nhạc/lời/logo) + cache
+// của phiên (phân tích offline, raster/blur khung, lịch slideshow) — GIỮ NGUYÊN
+// mọi cài đặt và KHÔNG reload trang. Muốn reset cả cài đặt dùng 🧹 Reset.
+$('clearDataBtn').addEventListener('click', ()=>{
+  if(isExporting){ setStatus('Đang ghi video — không xoá dữ liệu giữa chừng. Chờ ghi xong (hoặc bấm ✕ Huỷ ghi) đã nhé.', true); return; }
+  if(imzicQueueRunning){ setStatus('Hàng chờ đang chạy — chờ xong rồi xoá dữ liệu nhé.', true); return; }
+  const hasData = !!(state.imgFile || state.slides.length || state.audioFile
+    || (state.lyricsCues && state.lyricsCues.length) || state.bgFile || state.wmImg);
+  if(!hasData){ setStatus('Chưa có dữ liệu nào để xoá — chọn ảnh + nhạc trước đã.', false); return; }
+  const ok = window.confirm('Xoá toàn bộ dữ liệu đang dùng?\n\n'
+    + '• Bỏ ảnh / slideshow / nhạc / lời bài hát / logo đang chọn\n'
+    + '• Xoá cache phân tích nhịp + cache dựng khung (tool tự tính lại khi cần)\n'
+    + '• GIỮ NGUYÊN mọi cài đặt (muốn reset cả cài đặt thì dùng 🧹 Reset)\n\nTiếp tục?');
+  if(!ok) return;
+
+  // 1) nhạc: dừng phát + thu hồi object URL + bỏ file
+  try{ audioEl.pause(); }catch(e){}
+  state.playing = false; $('playBtn').textContent = '▶ Phát thử';
+  state.audioFile = null; state.audioReady = false;
+  if(audObjUrl){ try{ URL.revokeObjectURL(audObjUrl); }catch(e){} audObjUrl = null; }
+  audioEl.removeAttribute('src'); audioEl.load();
+  $('audName').textContent = 'Chọn file nhạc';
+  if($('audInput')) $('audInput').value = '';
+
+  // 2) ảnh + slideshow + ảnh nền riêng
+  state.img = null; state.imgFile = null; state.slides = [];
+  if(imgObjUrl){ try{ URL.revokeObjectURL(imgObjUrl); }catch(e){} imgObjUrl = null; }
+  $('imgName').textContent = 'Chọn ảnh nền';
+  if($('imgInput')) $('imgInput').value = '';
+  if($('slidesInput')) $('slidesInput').value = '';
+  if($('slidesHint')) $('slidesHint').textContent = '';
+  state.bgImg = null; state.bgFile = null;
+  $('bgName').textContent = 'Chọn ảnh nền riêng (tuỳ chọn)';
+  if($('bgInput')) $('bgInput').value = '';
+  if($('bgClearBtn')) $('bgClearBtn').style.display = 'none';
+
+  // 3) logo / watermark
+  state.wmImg = null; state.wmName = '';
+  if($('wmName')) $('wmName').textContent = '(chưa chọn)';
+  if($('wmInput')) $('wmInput').value = '';
+
+  // 4) lời bài hát (lyricsVersion++ hạ cache wrap lời + lịch slideshow 'cue')
+  state.lyricsCues = []; state._lastLyricIdx = -2; lyricsVersion++;
+  $('srtName').textContent = 'Chọn file .srt / .lrc';
+  if($('srtInput')) $('srtInput').value = '';
+  if($('srtPaste')) $('srtPaste').value = '';
+
+  // 5) cache: phân tích offline (nhịp/envelope) + raster/blur khung + lịch slideshow
+  offlineAnalysis = null; offlineAnalysisPromise = null;
+  slideRasterCache.clear(); slideBlurCache.clear(); squareBlurCache.clear();
+  slideSchedule = { key:'', list:[] };
+  rebuildParticles();
+
+  // 6) UI về trạng thái trống như mới mở tool (giữ nguyên cài đặt)
+  emptyState.style.display = '';
+  const seek = $('seekBar'); seek.value = 0; seek.disabled = true;
+  $('tCur').textContent = '0:00'; $('tDur').textContent = '0:00';
+  ['playBtn','restartBtn','exportAudioBtn','exportSilentBtn','exportOfflineBtn','snapshotBtn'].forEach(id=>{ $(id).disabled = true; });
+  $('exportOpts').style.display = 'none';
+  if(typeof refreshSectionHints === 'function') refreshSectionHints();
+  if(typeof saveSettingsSoon === 'function') saveSettingsSoon();
+  setStatus('Đã xoá toàn bộ dữ liệu + cache. Cài đặt giữ nguyên — chọn lại ảnh + nhạc là xem tiếp được.', false);
 });
 
 // ---- 🎲 TỰ ĐỘNG CHỌN HIỆU ỨNG ----
@@ -50,16 +115,15 @@ function imzicAutoEffect(){
   $('density').value = String(density); dispatch('density', 'input');
   $('pspeed').value = String(speed); dispatch('pspeed', 'input');
   $('alpha').value = String(alpha); dispatch('alpha', 'input');
-  // 4) sóng nhạc: ~2/3 lần bật, kiểu lấy từ danh sách 14 kiểu có sẵn
-  const waveOn = (Math.random() < 0.65) ? 'on' : 'off';
-  $('waveOnSel').value = waveOn; dispatch('waveOnSel', 'change');
-  let waveStyle = '';
-  if(waveOn === 'on'){
+  // 4) sóng nhạc: ~2/3 lần bật — bật/tắt nằm ngay "Kiểu sóng" ('off' = tắt)
+  const waveOn = (Math.random() < 0.65);
+  let waveStyle = 'off';
+  if(waveOn){
     waveStyle = pick(['line', 'ribbon', 'bars', 'circular', 'bottombars', 'arc', 'glow', 'twin', 'spiral', 'neon', 'curved']);
-    $('waveStyleSel').value = waveStyle; dispatch('waveStyleSel', 'change');
     $('waveColor').value = pick(['#9b8bff', '#7dd3fc', '#fca5a5', '#86efac', '#fcd34d', '#f0abfc', '#a5b4fc', '#5eead4']);
     dispatch('waveColor', 'input');
   }
+  $('waveStyleSel').value = waveStyle; dispatch('waveStyleSel', 'change');
   // 5) FX toàn khung — danh sách an toàn cho xuất nhanh
   const fx = pick(['none', 'none', 'none', 'pulse', 'godrays', 'lightleak', 'zoomblur', 'aurora', 'huecycle', 'motionblur']);
   $('fxSel').value = fx; dispatch('fxSel', 'change');
@@ -74,7 +138,7 @@ function imzicAutoEffect(){
          hearts: 'tim bay', bokeh: 'bokeh mờ', sparks: 'tia lửa' })[eff];
   const fxLabel = (fx === 'none') ? 'không FX' : 'FX ' + fx;
   setStatus('🎲 Đã chọn bộ hiệu ứng: ' + effLabel + ' (mật độ ' + density + ', tốc ' + speed
-    + '%)' + (waveOn === 'on' ? ' + sóng nhạc "' + waveStyle + '"' : ' + không sóng')
+    + '%)' + (waveOn ? ' + sóng nhạc "' + waveStyle + '"' : ' + không sóng')
     + ' + ' + fxLabel + '. Bấm lại để đổi bộ khác.', false);
 }
 $('autoFxBtn').addEventListener('click', imzicAutoEffect);
@@ -301,5 +365,3 @@ function imzicQueueSetStatus(item, status, resultPath){
   item.status = status;
   if(resultPath !== undefined) item.resultPath = resultPath;
 }
-
-$('autoFxBtn').addEventListener('click', imzicAutoEffect);

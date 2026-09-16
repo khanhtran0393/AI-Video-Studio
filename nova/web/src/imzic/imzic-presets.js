@@ -24,7 +24,17 @@ const SECTION_HINTS = {
   secFiles(){ return (state.imgFile ? 'Ảnh ✓' : 'Ảnh ✗') + ' · ' + (state.audioFile ? 'Nhạc ✓' : 'Nhạc ✗'); },
   secZoom(){ return state.zoomMin.toFixed(2) + '–' + state.zoomMax.toFixed(2) + 'x'; },
   secEffect(){ return state.effect === 'none' ? 'Không' : (selOptionText('effectSel') || 'Có'); },
-  waveSection(){ if(!state.waveOn) return 'Tắt'; return selOptionText('waveStyleSel') || 'Bật'; },
+  waveSection(){
+    if(!state.waveOn) return 'Tắt';
+    const base = selOptionText('waveStyleSel') || 'Bật';
+    // E5: cột uốn cong — ghép mức uốn + hướng vào hint section cho gọn
+    if(state.waveStyle === 'curved'){
+      const c = Math.round((state.waveCurve == null ? 0 : +state.waveCurve) * 100);
+      const dir = (state.waveCurveDir === 'rev') ? '↺' : '↻';
+      return base + ' · ' + dir + ' ' + c + '%';
+    }
+    return base;
+  },
   secLead(){ const v = $('v-lead'); return v ? v.textContent.trim() : ''; },
   secFx(){ return state.fx === 'none' ? 'Tắt' : (selOptionText('fxSel') || 'Bật'); },
   secFrame(){ return selOptionText('ratioSel'); },
@@ -41,7 +51,7 @@ const SECTION_HINT_SOURCES = {
   secFiles:    ['imgInput','audInput'],
   secZoom:     ['zoomMin','zoomMax'],
   secEffect:   ['effectSel'],
-  waveSection: ['waveOnSel','waveStyleSel'],
+  waveSection: ['waveStyleSel','waveCurve','waveCurveDirSel'],
   secLead:     ['leadMs'],
   secFx:       ['fxSel'],
   secFrame:    ['ratioSel'],

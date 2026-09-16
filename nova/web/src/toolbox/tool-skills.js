@@ -173,6 +173,78 @@ function sklRender(){
   box.innerHTML = html;
 }
 
+/* ── Catalog: nạp trọn bộ skill mẫu (SKL_CATALOG — skill-catalog.js) ──────── */
+/* Chỉ THÊM MỚI: skill trùng key (name+version) trong kho bị bỏ qua — tuyệt đối
+   không ghi đè lên skill người dùng tự tạo hay tự sửa.
+
+   Versioning (2026-09-16d): key so sánh = name+version. Bản catalog cũ thiếu
+   `version` → coi như v1, key = name+@v1. Bản catalog mới có `version: 'v2'`,
+   nếu user đã có bản v1 cùng tên → thêm bản v2 với hậu tố " (v2)" ở tên để
+   user chọn. Nếu catalog name đã có "(v2)" sẵn thì giữ nguyên. Trùng key
+   → skip (đã nạp từ phiên trước). */
+function sklImportCatalog(){
+  var cat = (typeof SKL_CATALOG === 'undefined' || !Array.isArray(SKL_CATALOG)) ? [] : SKL_CATALOG;
+  if (!cat.length){
+    sklSetStatus('Không tìm thấy bộ skill mẫu (src/toolbox/skill-catalog.js chưa được nạp).', 'error');
+    return;
+  }
+  var list = sklLoadAll();
+  var byKey = {};
+  list.forEach(function (s){
+    byKey[String(s.name) + '@' + (s.version || 'v1')] = true;
+  });
+  var added = 0, skipped = 0, upgraded = 0;
+  cat.forEach(function (c){
+    var rawName = String(c.name || '').trim();
+    if (!rawName || !c.instructions){ skipped++; return; }
+    var cver = c.version || 'v1';
+    var key = rawName + '@' + cver;
+    if (byKey[key]){ skipped++; return; }     // trùng key (cùng name+version) → skip
+
+    // Nếu trùng name nhưng khác version → thêm với hậu tố "(v2)" nếu catalog
+    // name chưa có (giúp user phân biệt v1 vs v2 ngay trong dropdown).
+    var finalName = rawName;
+    if (cver === 'v2' && !/\(v\d+\)\s*$/.test(rawName)){
+      // Chỉ thêm "(v2)" khi bản v1 cùng tên đã tồn tại trong kho.
+      var v1Key = rawName + '@v1';
+      if (byKey[v1Key]){
+        finalName = rawName + ' (v2)';
+        upgraded++;
+      }
+    }
+
+    var entry = {
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+      name: finalName,
+      version: cver,
+      topic: c.topic || 'Tất cả chủ đề',
+      style: c.style || 'Tất cả phong cách',
+      instructions: String(c.instructions || '').trim(),
+      createdAt: new Date().toISOString(),
+    };
+    // Mang theo trường v2 (role/audience/voice/structure/hookTemplates/rules/
+    // antiPatterns/examples) nếu có — dùng cho sklGuideFor mở rộng prompt.
+    ['role', 'audience', 'voice', 'structure', 'hookTemplates', 'rules', 'antiPatterns', 'examples'].forEach(function (k){
+      if (c[k] !== undefined && c[k] !== null && c[k] !== ''){
+        entry[k] = c[k];
+      }
+    });
+    list.push(entry);
+    byKey[key] = true;
+    if (finalName !== rawName) byKey[finalName + '@' + cver] = true;
+    added++;
+  });
+  if (!added){
+    sklSetStatus('Bộ skill mẫu đã có sẵn trong kho — bỏ qua ' + skipped + ' skill trùng key, không ghi đè.', 'ok');
+    return;
+  }
+  sklSaveAll(list); sklRender();
+  var msg = '✓ Đã nạp ' + added + ' skill mẫu' + (skipped ? ' (bỏ qua ' + skipped + ' trùng key)' : '');
+  if (upgraded){ msg += ' — trong đó ' + upgraded + ' bản v2 được thêm song song với v1 cùng tên'; }
+  msg += '. Skill đã có trong kho KHÔNG bị ghi đè.';
+  sklSetStatus(msg, 'ok');
+}
+
 /* ── Cầu nối sang Tạo Kịch Bản (tool-ts) ─────────────────────────────────── */
 /* Chèn skill đã lưu vào <select id="tsSkill"> dưới 1 optgroup riêng.
    Rebuild mỗi lần gọi: xoá optgroup cũ trước khi thêm lại (idempotent). */
@@ -196,12 +268,61 @@ function sklSyncTsOptions(){
 }
 
 /* Trả HƯỚNG DẪN VIẾT của skill theo TÊN (tool-ts ghép vào prompt WRITING SKILL).
-   Không tìm thấy → rỗng (prompt chỉ dùng tên như cũ). */
+   Không tìm thấy → rỗng (prompt chỉ dùng tên như cũ).
+
+   v2 (2026-09-16d): nếu entry có version 'v2' và đủ 8 trường mở rộng
+   (role/audience/voice/structure/hookTemplates/rules/antiPatterns/examples),
+   ghép thành prompt chuyên gia (writer frame) thay vì chỉ trả về
+   `instructions` ngắn. Mục đích: AI học được giọng văn + structure + anti-
+   pattern của persona, không chỉ hướng dẫn chung chung. */
 function sklGuideFor(name){
   var n = String(name || '').trim();
   if (!n) return '';
   var it = sklLoadAll().find(function (s){ return s.name === n; });
-  return it ? String(it.instructions || '').trim() : '';
+  if (!it) return '';
+
+  // Bản cũ (v1 hoặc thiếu version, không có trường mở rộng) → trả về instructions.
+  if ((it.version || 'v1') !== 'v2'){
+    return String(it.instructions || '').trim();
+  }
+
+  // Bản v2 — ghép prompt chuyên gia.
+  var lines = [];
+  if (it.role)        lines.push('▶ VAI TRÒ: ' + String(it.role).trim());
+  if (it.audience)    lines.push('\n▶ ĐỐI TƯỢNG XEM: ' + String(it.audience).trim());
+  if (it.voice)       lines.push('\n▶ GIỌNG VĂN: ' + String(it.voice).trim());
+  if (Array.isArray(it.structure) && it.structure.length){
+    lines.push('\n▶ CẤU TRÚC:');
+    it.structure.forEach(function (s, i){
+      lines.push('  ' + (i + 1) + '. ' + String(s).trim());
+    });
+  }
+  if (Array.isArray(it.hookTemplates) && it.hookTemplates.length){
+    lines.push('\n▶ CÂU MỞ ĐẦU MẪU:');
+    it.hookTemplates.forEach(function (h){
+      lines.push('  • ' + String(h).trim());
+    });
+  }
+  if (Array.isArray(it.rules) && it.rules.length){
+    lines.push('\n▶ QUY TẮC CỨNG:');
+    it.rules.forEach(function (r){
+      lines.push('  ✓ ' + String(r).trim());
+    });
+  }
+  if (Array.isArray(it.antiPatterns) && it.antiPatterns.length){
+    lines.push('\n▶ CẤM (anti-pattern):');
+    it.antiPatterns.forEach(function (a){
+      lines.push('  ✗ ' + String(a).trim());
+    });
+  }
+  if (it.examples && (it.examples.hook || it.examples.outro)){
+    lines.push('\n▶ VÍ DỤ MẪU:');
+    if (it.examples.hook)  lines.push('  — Mở đầu: ' + String(it.examples.hook).trim());
+    if (it.examples.outro) lines.push('  — Kết: ' + String(it.examples.outro).trim());
+  }
+  if (it.instructions) lines.push('\n▶ GHI CHÚ THÊM: ' + String(it.instructions).trim());
+
+  return lines.join('\n');
 }
 
 /* ── Boot: panel markup đã parse trước script (script nằm cuối body) ─────── */

@@ -71,6 +71,7 @@
 <!-- Libraries -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <link rel="stylesheet" href="src/styles/base.css?v=wbui2">
+<link rel="stylesheet" href="src/styles/agent-copilot.css">
 </head>
 <body>
 
@@ -100,6 +101,8 @@
   </main>
   </div>
 </div>
+
+<!--#include "partials/agent-copilot.html" -->
 
 <!--#include "partials/modals-library-upgrade.html" -->
 <!--#include "partials/modals-gate-update.html" -->
@@ -135,6 +138,7 @@
 <script src="src/toolbox/utility/nav.js"></script>
 <script src="src/toolbox/utility/upscale.js"></script>
 <script src="src/toolbox/utility/ts.js"></script>
+<script src="src/toolbox/utility/ts-prompt.js"></script>
 <script src="src/toolbox/utility/voice.js"></script>
 <script src="src/toolbox/utility/mvtv.js"></script>
 <script src="src/toolbox/utility/promptlib.js"></script>
@@ -185,6 +189,9 @@
 <script src="src/toolbox/tool-t8.js"></script>
 <script src="src/toolbox/tool-t9.js"></script>
 <script src="src/toolbox/tool-ts.js"></script>
+<!-- Skill Catalog: bộ skill mẫu pre-authored phủ 100 chủ đề Tạo Kịch Bản —
+     nạp TRƯỚC tool-skills.js (SKL_CATALOG được sklImportCatalog đọc toàn cục) -->
+<script src="src/toolbox/skill-catalog.js"></script>
 <!-- Skill Panel: kho skill viết kịch bản theo chủ đề & phong cách — sidebar nhóm "Cài đặt" (nạp SAU tool-ts vì chèn option vào #tsSkill) -->
 <script src="src/toolbox/tool-skills.js"></script>
 <script src="src/toolbox/tool-tts.js"></script>
@@ -246,5 +253,6 @@
 
 <script src="src/toolbox/utility/boot.js"></script>
 <script src="src/toolbox/utility/panel-order.js"></script>
+<script src="src/toolbox/agent-copilot-ui.js"></script>
 </body>
 </html>

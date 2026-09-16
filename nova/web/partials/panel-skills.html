@@ -42,6 +42,10 @@
         <section class="settings-col">
           <div class="settings-h">📚 Skill đã lưu <span id="sklCount" style="font-weight:400;color:var(--text-dim);font-size:11px"></span></div>
           <div style="background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:16px 18px">
+            <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+              <button class="btn ghost sm" onclick="sklImportCatalog()" title="Nạp trọn bộ 100 skill mẫu phủ kín 100 chủ đề của tab Tạo Kịch Bản. Skill trùng tên đã có trong kho bị bỏ qua — KHÔNG ghi đè lên skill bạn đã tự sửa.">📥 Nạp bộ skill mẫu (100 chủ đề)</button>
+              <span style="font-size:11px;color:var(--text-dim)">Chỉ thêm mới — không ghi đè skill đã sửa.</span>
+            </div>
             <div class="grid-2" style="gap:10px;margin-bottom:10px">
               <input type="text" id="sklFilterTopic" placeholder="Lọc theo chủ đề…" autocomplete="off" oninput="sklRender()">
               <input type="text" id="sklFilterStyle" placeholder="Lọc theo phong cách…" autocomplete="off" oninput="sklRender()">

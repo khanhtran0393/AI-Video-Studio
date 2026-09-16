@@ -26,6 +26,7 @@ const { registerLiveStreamIpc } = require('./live-stream');
 const { registerWhiteboardIpc } = require('../../whiteboard-studio/ipc');
 const { registerSrtTranslateIpc } = require('../../srt-translate/ipc');
 const { registerViralCutIpc } = require('../../viral-cut/ipc');
+const { registerAgentCopilotIpc } = require('./agent-copilot');
 
 function registerAllIpc() {
   registerFlowIpc();
@@ -41,6 +42,7 @@ function registerAllIpc() {
   registerSpyIpc();
   registerFfmpegToolsIpc();   // Công cụ FFmpeg (sidebar): tách MP3, cắt, ghép, loop video
   registerLiveStreamIpc();    // Phát Trực Tiếp (Livestream Studio): đa nền tảng RTMP + video/webcam/cửa sổ
+  registerAgentCopilotIpc();  // Agent Copilot
 
   // ── Whiteboard Studio (port TPL Studio Stories) — module độc lập,
   //    runtime ffmpeg nội bộ riêng, không phụ thuộc app cũ ──

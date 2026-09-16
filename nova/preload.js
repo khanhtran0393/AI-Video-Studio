@@ -359,6 +359,7 @@ contextBridge.exposeInMainWorld('native', {
   onUpdate: (cb) => ipcRenderer.on('update-status', (_e, s) => cb(s)),
   updateDownload: () => ipcRenderer.invoke('update-download'),
   updateInstall: () => ipcRenderer.invoke('update-install'),
+  agentCopilotChat: (history, apiConfig) => ipcRenderer.invoke('agentCopilot:chat', history, apiConfig),
   // Secret Vault — kho credential MÃ HOÁ (safeStorage) trong <userData>/secure.
   // Key phải nằm trong TOP_LEVEL_SECRET_KEYS (nova/main/secret-vault.js); key lạ
   // sẽ bị main từ chối lộ liễu (rejected invoke).

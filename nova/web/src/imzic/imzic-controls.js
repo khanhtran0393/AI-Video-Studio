@@ -74,8 +74,12 @@ setupSel('dirSel','direction', ()=>{ state.dirTouched = true; rebuildParticles()
 $('pcolor').addEventListener('change', ()=>{ state.colorTouched = true; });
 
 // ---- audio wave controls ----
-setupSel('waveOnSel','waveOnRaw', ()=>{ state.waveOn = (state.waveOnRaw === 'on'); });
+// Bật/tắt sóng hợp nhất vào "Kiểu sóng" (2026-09-16): 'off' = tắt — không vẽ
+// sóng + ẩn khối tham số waveParams. Hợp đồng vẽ giữ nguyên: drawWave vẫn đọc
+// state.waveOn; state.waveStyle chỉ có nghĩa khi bật (AGENTS §4 Luật 1).
 setupSel('waveStyleSel','waveStyle', ()=>{
+  state.waveOn = (state.waveStyle !== 'off');
+  const wp = $('waveParams'); if(wp) wp.style.display = state.waveOn ? '' : 'none';
   // chỉ kiểu 'curved' mới hiện slider mức uốn + hướng uốn
   const f = $('waveCurveField'); const h = $('waveCurveHint');
   const on = state.waveStyle === 'curved';
@@ -466,6 +470,19 @@ setupSel('lyricShadowSel','lyricShadowRaw', ()=>{ state.lyricShadow = (state.lyr
 $('lyricPosX').addEventListener('input', e=>{ state.lyricPosX = +e.target.value; $('v-lposx').textContent = e.target.value+'%'; });
 $('lyricPosY').addEventListener('input', e=>{ state.lyricPosY = +e.target.value; $('v-lposy').textContent = e.target.value+'%'; });
 
+// đồng bộ UI waveCurve (label + field ẩn/hiện) ngay khi khởi tạo — phòng
+// trường hợp settings cũ đã lưu waveStyle='curved' nhưng field mặc định ẩn
+(function(){
+  const sl = $('waveCurve'); if(!sl) return;
+  const v = Math.round((state.waveCurve == null ? 0 : +state.waveCurve) * 100);
+  sl.value = String(v);
+  const lbl = $('v-wcurve'); if(lbl) lbl.textContent = v + '%';
+  const f = $('waveCurveField'); const h = $('waveCurveHint');
+  const on = state.waveStyle === 'curved';
+  if(f) f.style.display = on ? '' : 'none';
+  if(h) h.style.display = on ? '' : 'none';
+})();
+
 rebuildParticles();
 
 // ---- #4: nhớ cài đặt giữa các lần mở tool (localStorage, best-effort) ----
@@ -474,10 +491,11 @@ rebuildParticles();
 const SETTINGS_KEY = 'imzic:settings:v1';
 const SETTINGS_RANGE_IDS = ['zoomMin','zoomMax','sensitivity','smoothness','density','pspeed','sizeMin','sizeMax','alpha','wavePos','wavePosX','waveSize','waveHeight','waveWidth','leadMs','fxLevel','lyricSize','lyricPosX','lyricPosY','slideSecs','wmSize','wmAlpha','waveCurve','bgBlur','bgBlurSide','sqSize','sqTilt','sqSkew'];
 const SETTINGS_COLOR_IDS = ['pcolor','waveColor','lyricColor','lyricAccent'];
-const SETTINGS_SELECT_IDS = ['lyricFont','effectSel','dirSel','waveOnSel','waveStyleSel','ratioSel','lyricShadowSel','fxSel','slideModeSel','slideOrderSel','transSel','fitSel','lyricKaraokeSel','lyricStyleSel','lyricAnimSel','exportFpsSel','qualitySel','exportResSel','bcPresetSel','loudnormSel','slideBeatSel','wmPosSel'];
+const SETTINGS_SELECT_IDS = ['lyricFont','effectSel','dirSel','waveStyleSel','ratioSel','lyricShadowSel','fxSel','slideModeSel','slideOrderSel','transSel','fitSel','lyricKaraokeSel','lyricStyleSel','lyricAnimSel','exportFpsSel','qualitySel','exportResSel','bcPresetSel','loudnormSel','slideBeatSel','wmPosSel','waveCurveDirSel'];
 const SETTINGS_NUMBER_IDS = ['customW','customH','trimStart','trimEnd','fadeIn','fadeOut'];
-// chip-group đã gom thành dropdown — bản lưu cũ có {chips:{}} được đổi tên ở loadSettings
-const LEGACY_CHIP_TO_SEL = { effectChips:'effectSel', dirChips:'dirSel', waveChips:'waveOnSel', waveStyleChips:'waveStyleSel', ratioChips:'ratioSel', lyricShadowChips:'lyricShadowSel' };
+// chip-group đã gom thành dropdown — bản lưu cũ có {chips:{}} được đổi tên ở loadSettings.
+// waveChips bản cũ là bật/tắt ('on'/'off') → hợp nhất vào waveStyleSel ('off' = tắt).
+const LEGACY_CHIP_TO_SEL = { effectChips:'effectSel', dirChips:'dirSel', waveChips:'waveStyleSel', waveStyleChips:'waveStyleSel', ratioChips:'ratioSel', lyricShadowChips:'lyricShadowSel' };
 
 function collectSettingsInputs(){
   const inputs = {};
@@ -508,6 +526,9 @@ function applySettingsInputs(inp){
   // 2) chips bản cũ (trước khi gom dropdown) — đổi tên sang select rồi dispatch
   //    change để listener sẵn có tự chạy callback (đổi khổ, màu mặc định…)
   if(inp.chips){
+    // waveChips bản cũ là bật/tắt: 'off' → kiểu 'off'; 'on' → bỏ (giữ kiểu sóng
+    // đã lưu trong waveStyleChips để không bật sóng kiểu rỗng)
+    if(typeof inp.chips.waveChips === 'string' && inp.chips.waveChips !== 'off') delete inp.chips.waveChips;
     Object.keys(LEGACY_CHIP_TO_SEL).forEach(gid=>{
       const v = inp.chips[gid];
       const el = v !== undefined ? $(LEGACY_CHIP_TO_SEL[gid]) : null;
@@ -517,6 +538,12 @@ function applySettingsInputs(inp){
   // 3) khổ ngang: áp kích thước tuỳ chỉnh đã lưu
   if(state.orientation === 'landscape'){
     ['customW','customH'].forEach(id=>{ if(inp[id] !== undefined && $(id)) $(id).dispatchEvent(new Event('change')); });
+  }
+  // 3b) bản lưu cũ (era dropdown, trước 2026-09-16): bật/tắt sóng là select riêng
+  //     waveOnSel — đã gỡ khỏi UI nên hợp nhất vào waveStyleSel ('off' = tắt)
+  if(inp.waveOnSel !== undefined){
+    if(inp.waveOnSel === 'off' && inp.waveStyleSel !== undefined) inp.waveStyleSel = 'off';
+    delete inp.waveOnSel;
   }
   // 4) range + màu + select — dispatch để listener cũ tự cập nhật state/nhãn
   SETTINGS_RANGE_IDS.forEach(id=>{ if(inp[id] !== undefined && $(id)){ $(id).value = inp[id]; $(id).dispatchEvent(new Event('input')); } });

@@ -1,0 +1,36 @@
+<!-- Agent Copilot Bubble -->
+<div id="agentCopilotBubble" title="Trợ lý Đạo diễn AI" onclick="acToggleWindow()">
+  <svg viewBox="0 0 24 24">
+    <path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-1H1a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-1.02-1-1.73a2 2 0 0 1 2-2zm-3.5 10a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm7 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z"/>
+  </svg>
+</div>
+
+<!-- Agent Copilot Window -->
+<div id="agentCopilotWindow">
+  <div class="ac-header">
+    <span>Trợ lý Đạo diễn AI</span>
+    <div class="ac-header-actions">
+      <button class="ac-btn-icon" onclick="acClearChat()" title="Xoá lịch sử">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+      </button>
+      <button class="ac-btn-icon" onclick="acToggleWindow()" title="Đóng">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+  </div>
+  
+  <div class="ac-body" id="acBody">
+    <div class="ac-msg agent">
+      Xin chào sếp! Em là Antigravity, được tích hợp làm trợ lý riêng của sếp ở đây. Sếp có thể yêu cầu em đọc/ghi file, thực thi lệnh, hoặc phân tích ứng dụng. Sếp cần em giúp gì ạ?
+    </div>
+  </div>
+  
+  <div class="ac-footer">
+    <div class="ac-input-wrapper">
+      <textarea id="acInput" placeholder="Nhắn cho trợ lý AI..." rows="1" onkeydown="acHandleKey(event)" oninput="acAutoGrow(this)"></textarea>
+    </div>
+    <button id="acSendBtn" onclick="acSendMessage()">
+      <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+    </button>
+  </div>
+</div>

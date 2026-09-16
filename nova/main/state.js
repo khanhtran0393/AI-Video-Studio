@@ -53,6 +53,9 @@ module.exports = {
   unregisterErrorBridge: null,
   reporterShutdownPromise: null,
   reporterQuitReady: false,
+  // GPU policy (main/gpu-policy.js): mode dò GPU hiện tại của máy
+  // { mode, decidedAt, escalations } — 'auto'|'gpu'|'force'|'software'.
+  gpuPolicy: null,
   // Scheduler (main/scheduler.js): danh sách job tự động, cache bộ nhớ của file
   // nova-schedules.json — null = chưa nạp từ đĩa.
   schedules: null,

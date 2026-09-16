@@ -539,6 +539,9 @@
             "name": "reporterQuitReady"
           },
           {
+            "name": "gpuPolicy"
+          },
+          {
             "name": "schedules"
           },
           {

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * AI Video Studio Desktop (Electron) — Cách B: đóng gói UI vào app + auto-update.
  * - Production: phục vụ web/index.html qua local server chỉ lắng nghe trên 127.0.0.1.
  * - Dev: đặt NOVA_STUDIO_DEV_URL=http://localhost:5500 để load bản đang sửa.
@@ -47,8 +47,9 @@ if (!ensureSingleInstance()) {
 // Tắt bớt log rác nội bộ của Chromium (vd "ffmpeg_common Unsupported pixel format") cho terminal sạch.
 // KHÔNG ảnh hưởng log console.log của app (Node) — vẫn thấy các dòng [flow].
 try { app.commandLine.appendSwitch('log-level', '3'); } catch (e) { /* */ }
-// GPU policy (main/gpu-policy.js): --disable-gpu tường minh — software rendering
-// là cấu hình chủ đích trên máy đích (Chromium 149 đã tự tắt GPU; MEMORY 2026-09-11j).
+// GPU policy (main/gpu-policy.js): TỰ DÒ GPU trên từng PC — 'auto' thử GPU thật,
+// bị chặn thì 'force' 1 lần, crash thì circuit breaker về 'software' SwiftShader.
+// Quyết định lưu userData/gpu-policy-mode.json (MEMORY 2026-09-16b).
 try { require('./main/gpu-policy').installGpuPolicy(app); } catch (e) {
   console.warn('[gpu-policy] lỗi nạp module:', (e && e.message) || e);
 }

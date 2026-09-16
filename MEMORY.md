@@ -18,6 +18,29 @@
   - `npm run scan:lifecycle`: chỉ thấy crash lịch sử 2026-09-11 (exitCode=2) và 1 WARN 2026-09-16T13:28 (kill main từ ngoài trước khi sửa) — KHÔNG có crash mới sau khi áp B1.
 - **Tiếp theo**: B2 (CDP verify Whiteboard) + B3 (CDP verify T7) chờ user bật app thật qua `khoidong.bat` rồi thảo luận tiếp.
 
+## B3 — 2026-09-16: CDP verify T7 nút retry lẻ (hết) + app.eval
+
+- **Vấn đề**: B1 đã viết `t7AiRetryOne(i)` + test 83/0 PASS, nhưng CHƯA verify trên app thật — chỉ test trong `vm` sandbox (không có DOM thật, không có `_t7AiRender`/`_t7AiSave` thật). Theo §6.6 AGENTS phải test bằng dữ liệu THẬT trong app.
+- **Giải pháp**: thêm action `app.eval` vào Agent Bridge (HTTP local 47280 → ủy thác `webContents.executeJavaScript`) để chạy script trong renderer app chính, dùng verify tự động. Mặc định TẮT — bật bằng env `AI_VIDEO_STUDIO_AGENT_EVAL=1` khi khởi động. Khác với `browser.eval` (chỉ chạy trong Chrome flow-chrome), `app.eval` chạy trong renderer cửa sổ chính (Electron BrowserWindow).
+- **File sửa**:
+  - `nova/main/agent-bridge.js`: thêm `actionAppEval(params)` + `safeStringify(v)` (JSON-safe replacer: function→[Function], DOM→[DOM tagName], Error→{name,message,code}, circular→[Circular], bigint→string). Hằng số `APP_EVAL_MAX_BYTES=4096`, `APP_EVAL_TIMEOUT_MS=10000`. Wire vào `ACTIONS['app.eval']` + cập nhật comment header.
+- **Quyết định kỹ thuật (ghi nhớ)**:
+  1. **Không dùng closure `(async () => {...}).toString()` để truyền `script` vào renderer** — closure của main process BỊ MẤT khi `executeJavaScript` chạy string ở renderer (`script is not defined`). Cách đúng: inline `JSON.stringify(script)` thành literal rồi nội suy vào body `eval(...)`. JSON.stringify escape đúng `\ " \n \r \u2028 \u2029`.
+  2. **Bọc try/catch ở cả 2 phía**: script user throw → renderer bọc thành `{__err:...}` để main phân biệt "lỗi script" vs "lỗi hạ tầng". Phía verify script (`cdp-verify-t7.js`) bọc `(function(){ try { ... } catch(e){ return "ERR:"+e.message } })()` để lỗi thành string thay vì unhandled rejection (làm result null).
+  3. **Expression cuối trong sync script KHÔNG return tự động** — phải chèn `return ` vào biểu thức cuối (`lastIndexOf(';')` rồi nối). Arrow `(()=>{...})()` cũng không return — phải dùng `(function(){...})()` thường.
+- **Verify (qua Agent Bridge app.eval trên app thật chạy ở port 47280)**:
+  - T1 (null ctx) → "Chưa có ngữ cảnh phân tích — bấm ↻ Phân tích lại." ✓
+  - T2 (busy) → "Trợ lý đang chạy — chờ xong đã." ✓
+  - T3 (empty hong) → "Cảnh này không còn trong nhóm lỗi." ✓
+  - T4 (sceneId không có trong clips) → 'Cảnh "B" không còn trên dòng thời gian.' ✓
+  - T5 (success path, mock `_t7AiAskScenes`/`_t7AiVision`/`_t7AiRender`/`_t7AiSave`) → `{hongLen:0, busy:false}` → splice đúng vị trí i, finally reset busy ✓
+  - 5/5 PASS, exit 0. `npm run check` 0 lỗi sau khi sửa agent-bridge.js (size 0 warn/0 err, selftest 10/10).
+  - `npm run scan:lifecycle` chỉ thấy crash lịch sử + kill từ session trước — KHÔNG có crash mới sau khi áp B3.
+- **Helper reusable cho tương lai**:
+  - `cdp-verify-t7.js` (script tmp, đã `.gitignore`): pattern chung để verify renderer code qua Agent Bridge. Mỗi test = `{name, expect, script, async?}` trong `cdp-tests.json`. Sync script bọc `(function(){try{...body với return ở expr cuối...}catch(e){return "ERR:"+e.message}})()`. Async script bọc `(async()=>{try{...return expr...}catch(e){return "ERR:"+e.message}})()`.
+  - **Test data thật dùng từ app đang chạy** (renderer state, DOM `status7` textContent) — không bịa, đúng §6.6 AGENTS.
+- **Còn lại (treo)**: app hiện đang chạy ở port 47280 với env `AI_VIDEO_STUDIO_AGENT_EVAL=1`. Nếu cần restart bình thường (không bật EVAL), tắt env hoặc kill app rồi `khoidong.bat` thường. Script `app.eval` MẶC ĐỊNH TẮT khi không có env — không cần lo lộ.
+
 
 # MEMORY.md â€” Bá»™ nhá»› trÆ°á»ng tá»“n cá»§a dá»± Ã¡n
 
@@ -6609,3 +6632,52 @@ User chọn hướng "test bằng dữ liệu hiện có" thay vì chờ SRT/ả
   - Lifecycle.log session test mới: chỉ `gpu-policy-mode/probe` (mode=gpu), không crash.
 
 - **Chờ user (§6.6)**: mở app → `Cài đặt · Skill` → bấm `📥 Nạp bộ skill mẫu` → danh sách 100 skill xuất hiện → bấm `✍️ Dùng` một vài skill → mở `Tạo Kịch Bản` chọn đúng chủ đề tương ứng → viết kịch bản thật để xác nhận prompt ghép đúng hướng dẫn. Sau khi sửa skill mẫu, bấm `📥 Nạp` lần nữa → confirm skill đã sửa KHÔNG bị ghi đè.
+
+## 2026-09-16d — Nâng cấp skill-catalog lên persona chuyên gia v2 + versioning
+
+**Bối cảnh**: 100 entry `skill-catalog.js` hiện chỉ có `{name, topic, style, instructions}` — phẳng, khó ra persona. Cần nâng cấp lên schema 12 trường (có `role/audience/voice/structure/hookTemplates/rules/antiPatterns/examples`) để `sklGuideFor` ghép prompt chuyên gia thay vì chỉ trả `instructions` ngắn. Cơ chế versioning: trùng `name` khác `version` → thêm bản `(v2)` song song, user tự chọn.
+
+**Quyết định merge** (user chốt 2026-09-16): **giữ 100 cũ (v1) + thêm 8 mới (v2, hậu tố "(v2)")** — an toàn, validator OK, có thể so sánh v1 vs v2.
+
+**File sửa**:
+- `nova/web/src/toolbox/skill-catalog.js` (212 → 222 dòng): append 8 entry v2 ngay trước `/* __CATALOG_END__ */`. Cấu trúc 12 trường: `name, version, topic, style, role, audience, voice, structure, hookTemplates, rules, antiPatterns, examples, instructions`. 8 persona mẫu: Trinh Thám (Conan Doyle × Christie), Y Học (Gawande × House), Kinh Dị (King × Ito), Thương Chiến (Sun Tzu × Porter), Tâm Trí (Kahneman × Cialdini), Hài Hước (Seinfeld × Chaplin), Showbiz (Capote × Caro), Sinh Tồn (Bear Grylls × Attenborough). Mỗi persona có **DISCLAIMER** "writing frame, không phải xác nhận tư cách chuyên môn".
+- `nova/web/src/toolbox/tool-skills.js`:
+  - `sklImportCatalog` (180→248): key so sánh = `name+version` (bản thiếu `version` coi như `v1`). Trùng key → skip. Trùng `name` nhưng khác `version` và `cver==='v2'` → thêm với hậu tố ` (v2)`. Mang theo 8 trường mở rộng (`role/audience/voice/structure/hookTemplates/rules/antiPatterns/examples`) khi lưu vào localStorage.
+  - `sklGuideFor` (278→325): nếu entry `version === 'v2'` → ghép prompt chuyên gia dùng markers `▶ VAI TRÒ / ĐỐI TƯỢNG / GIỌNG VĂN / CẤU TRÚC / CÂU MỞ ĐẦU MẪU / QUY TẮC CỨNG / CẤM (anti-pattern) / VÍ DỤ MẪU / GHI CHÚ THÊM`. Bản v1 giữ nguyên (chỉ trả `instructions`).
+
+**File tạm** (đã xong, đặt trong `nova/scripts/tmp/` theo AGENTS.md §8 — gitignore):
+- `entries/01..08-*.js` — 8 file entry riêng (mỗi file ~3KB, đủ 12 trường + DISCLAIMER).
+- `build-preview.js` — ghép 8 entry → `skill-catalog-v2-preview.js`.
+- `skill-catalog-v2-preview.js` (41KB, 400 dòng) — bản xem trước trước khi merge. `node --check` PASS.
+- `check-skill-catalog.js` — validator: syntax + đủ 12 trường + disclaimer check + count v1/v2. PASS cả file gốc (100/100) và preview (8/8).
+- `export-v2-entries.js` — regex match `name: '...'` an toàn với tên có dấu nháy kép bên trong; xuất `v2-append-string.txt` 37460 chars.
+- `append-v2-to-catalog.js` — chèn 8 entry v2 vào `skill-catalog.js` (idempotent, có marker guard). Đã backup `skill-catalog.backup-2026-09-16d.js`.
+- `test-skl-import.js` — test thực nghiệm với mock DOM + localStorage. **5/5 PASS**:
+  - T1: `sklImportCatalog` kho trống → 108 entry (100 v1 + 8 v2).
+  - T2: gọi lại lần 2 → "bỏ qua 108 skill trùng key, không ghi đè" (không bị ghi đè).
+  - T3: v1 → trả `instructions` nguyên văn (470 chars mẫu).
+  - T4: v2 → ghép prompt 4004 chars (gấp 10.5× so với 380 chars gốc) với markers đầy đủ.
+  - T5: cả 8 entry v2 đều có hậu tố "(v2)".
+
+**Kiểm định**:
+- `node --check` 2 file: OK.
+- `node nova/scripts/tmp/check-skill-catalog.js nova/web/src/toolbox/skill-catalog.js` → 108 entry hợp lệ (100 v1 + 8 v2).
+- `npm run check` đủ 10 bước: 9/10 PASS, 1 chỉ warning (C1 từ `profiles.js:843` — code cũ, không liên quan). Không có lỗi tôi gây ra.
+- App thật qua `khoidong.bat --silent`: Agent Bridge 47280 lên sau ~30s, lifecycle.log cap ở `gpu-policy-probe` (mode=gpu), không crash. Bridge Test-NetConnection True. Đóng gọn bằng `Stop-Process electron` (5 process).
+
+**Hệ quả người dùng**:
+- Kho skill: tăng từ 100 → 108 entry (chỉ user chưa nạp lần nào) hoặc 200 → 208 (user đã nạp v1 rồi, lần nạp tiếp theo sẽ thêm 8 v2 mới, không đụng 100 v1 đã có).
+- Dropdown `<select id="tsSkill">`: xuất hiện 2 entry cùng thể loại (v1 ngắn gọn + v2 chuyên gia), user tự chọn.
+- Prompt trong Tạo Kịch Bản: với skill v2, ghép 9 markers (VAI TRÒ / ĐỐI TƯỢNG / GIỌNG VĂN / CẤU TRÚC / CÂU MỞ ĐẦU MẪU / QUY TẮC CỨNG / CẤM / VÍ DỤ MẪU / GHI CHÚ THÊM) → AI học được giọng văn + structure + anti-pattern, không chỉ hướng dẫn chung.
+
+**Chờ user (§6.6)**:
+1. Mở app → `Cài đặt · Skill` → bấm `📥 Nạp bộ skill mẫu` → confirm có **108 entry** (hoặc 208 nếu đã nạp v1 trước đó).
+2. Mở `Tạo Kịch Bản` → chọn skill v2 bất kỳ (vd "Trinh Thám (v2)") → viết thử kịch bản → xác nhận prompt ghép đủ 9 markers.
+3. Sửa 1 skill mẫu (đổi tên) → bấm `📥 Nạp` lần nữa → confirm skill đã sửa KHÔNG bị ghi đè.
+4. Duyệt chất lượng 8 persona mẫu → nếu OK, viết tiếp **92 entry còn lại** theo pattern 12 trường (chia block 8-10 nhóm thể loại tương tự 8 mẫu đã có: Khoa Học, Lịch Sử, Tôn Giáo, Thể Thao, Ẩm Thực, Du Lịch, Công Nghệ, Tài Chính, Giáo Dục, Văn Hóa, Địa Lý, Thiên Nhiên...).
+
+**Backward compat**:
+- Bản cũ 100 entry thiếu `version` → key = `name+@v1`, hoàn toàn tương thích với logic mới.
+- User đã sửa skill mẫu (đổi `instructions`, giữ tên) → vẫn được bảo vệ, không bị ghi đè.
+- Skill không phải catalog (user tự tạo) → key = `name+@v1` (thiếu version), không trùng với catalog nếu khác tên. Nếu user tự tạo trùng tên với catalog → catalog skip (giống logic cũ).
+- `localStorage` cũ (nếu có) backward compat: các trường mới (`role/voice/...`) là optional, code đọc trường không tồn tại → trả về `undefined` → `if (it.role)` skip → ghép prompt chỉ với phần có.

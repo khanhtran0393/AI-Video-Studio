@@ -1,36 +1,32 @@
-/* whiteboard-studio-ai.js �€” AI cho Whiteboard Studio (renderer)
+/* whiteboard-studio-ai.js — AI cho Whiteboard Studio (renderer)
    ------------------------------------------------------------
-   3 tính n�ƒng, TÁI D�™NG b�™ gọi AI sẵn có của app (callLLMJson �€”
-   src/toolbox/utility/llm.js, �‘i qua window.native.llmFetch) và
+   2 khối chức năng, TÁI DÙNG bộ gọi AI sẵn có của app (callLLMJson —
+   src/toolbox/utility/llm.js, đi qua window.native.llmFetch) và
    engine Flow sẵn có của tab Tạo Ảnh Hàng Loạt (flowBridge +
-   tfDispatchGen �€” src/toolbox/utility/tf.js):
+   tfDispatchGen — src/toolbox/utility/tf.js):
 
-   1) wbAiPrompts �€” "�Ÿ�– AI sinh prompt ảnh": AI �‘ọc TỪNG C�‚U k�‹ch bản
-      (cảnh �‘ã chia theo timing SRT �€” nút �Ÿ�� Chia theo câu) �†’ m�—i
-      cảnh nhận: imagePrompt (tiếng Anh, line-art whiteboard nhất
-      quán) + objects (vật th�ƒ AI nhận dạng trong câu �‘�ƒ vẽ, kèm
-      share = t�‰ trọng nh�‹p k�ƒ �†’ dùng phân b�• giờ vẽ).
+   1) wbAiPrompts — sinh prompt ảnh: AI đọc TỪNG CÂU kịch bản
+      (cảnh đã chia theo timing SRT ở Bước 2) → mỗi cảnh nhận
+      imagePrompt (tiếng Anh, line-art whiteboard nhất quán) +
+      objects (vật thể AI nhận dạng trong câu để vẽ, kèm share =
+      tỷ trọng nhịp kẻ → dùng phân bố giờ vẽ). Gọi nội bộ từ Bước 3.
 
-   2) wbAiGenImages �€” "�Ÿ�– AI sinh ảnh theo câu (auto)": TR�ŒN LU�’NG
-      tự �‘�™ng �€” (a) sinh prompt cho câu còn thiếu, (b) Flow sinh ảnh
-      line-art cho TỪNG câu theo prompt (aspect ép 16:9 kh�›p canvas
-      1280�—720; model/quality theo tab Tạo Ảnh; multi-account dùng
+   2) wbAnalyzePromptData — Bước 3, nút "Phân tích prompt" (nút duy
+      nhất của luồng AI): chạy trọn chuỗi wbAiPrompts() →
+      wbAiGenImages(): (a) sinh prompt cho câu còn thiếu, (b) Flow
+      sinh ảnh line-art cho TỪNG câu (aspect ép 16:9 khớp canvas
+      1280×720; model/quality theo tab Tạo Ảnh; multi-account dùng
       POOL, 1 account dùng project riêng), (c) lưu ảnh vào
-      <thư mục lưu>/whiteboard-anh/cau-NNN.png (saveFile IPC) r�“i
-      gán vào cảnh �‘úng khung thời gian SRT, (d) wbAiRegionsCore tự
-      khoanh vùng người/vật th�ƒ/sự ki�‡n trên ảnh �‘ó + giờ vẽ theo
-      nh�‹p k�ƒ. Câu �‘ã có ảnh �‘ược bỏ qua �€” bấm lại �‘�ƒ tạo tiếp.
-
-   3) wbAiRegions �€” "�ŸŽ� AI khoanh vùng vật th�ƒ": AI vision soi ảnh
-      của cảnh �‘ang chọn �†’ polygon toạ �‘�™ chuẩn hoá 0�€“1000 �†’ phần
-      tử vẽ (schema whiteboard-annotation.js), giờ reveal phân b�•
-      theo share của objects (nếu kh�›p s�‘ lượng) hoặc �‘ều.
+      <thư mục lưu>/whiteboard-anh/cau-NNN.png (saveFile IPC) rồi
+      gán vào cảnh đúng khung thời gian SRT, (d) wbAiRegionsCore tự
+      khoanh vùng người/vật thể/sự kiện trên ảnh đó + giờ vẽ theo
+      nhịp kẻ. Câu đã có ảnh được bỏ qua — chạy lại để tạo tiếp.
 
    Pattern vision port từ src/hd/hd-ai-export.js (không copy chéo
-   state �€” m�—i panel context riêng). Module nạp SAU
+   state — mỗi panel context riêng). Module nạp SAU
    whiteboard-studio-panel.js, lấy context qua window.wbStudioCtx;
-   panel lazy-mount �†’ chờ nút xuất hi�‡n bằng MutationObserver.
-   KH�”NG import/export (AGENTS.md §4). */
+   panel lazy-mount → chờ nút xuất hiện bằng MutationObserver.
+   KHÔNG import/export (AGENTS.md §4). */
 
 'use strict';
 
@@ -122,22 +118,18 @@
   }
 
   async function wbAiPrompts() {
-    if (!state.scenes.length) { log('�š� chưa có cảnh �€” bấm "�Ÿ�� Chia theo câu (SRT)" hoặc phân cảnh trư�›c'); return; }
+    if (!state.scenes.length) { log('\u26a0 ch\u01b0a c\u00f3 c\u1ea3nh \u2014 c\u1ea7n chia c\u00e2u SRT (B\u01b0\u1edbc 2) tr\u01b0\u1edbc'); return; }
     if (typeof callLLMJson !== 'function') { log('�š� chưa có b�™ gọi AI (callLLMJson) �€” chạy panel trong app Nova'); return; }
     const targets = state.scenes
       .map((s, idx) => ({ s, idx }))
       .filter((x) => x.s.text && x.s.text.length > 3);
     if (!targets.length) { log('�š� cảnh nào cũng chưa có lời thoại (text) �€” cần SRT/k�‹ch bản trư�›c'); return; }
-    const btn = C.els.aiPromptsBtn;
-    const btnOld = btn ? { disabled: btn.disabled, text: btn.textContent } : null;
-    if (btn) { btn.disabled = true; btn.textContent = '�Ÿ�– AI �‘ang �‘ọc k�‹ch bản�€�'; }
     try {
       const done = await wbAiPromptCore(targets);
-      log('�œ“ xong prompt ảnh cho ' + done + ' cảnh �€” bấm "�Ÿ�– AI sinh ảnh theo câu (auto)" �‘�ƒ Flow tạo ảnh + khoanh vùng luôn.');
+      log('\u2705 xong prompt \u1ea3nh cho ' + done + ' c\u1ea3nh \u2014 Flow s\u1ebd sinh \u1ea3nh + khoanh v\u00f9ng ngay sau \u0111\u00f3.');
     } catch (err) {
       log('�Œ AI prompt l�—i: ' + String((err && err.message) || err));
     } finally {
-      if (btn && btnOld) { btn.disabled = btnOld.disabled; btn.textContent = btnOld.text; }
       C.renderSceneList(); C.renderSceneDetail();
     }
   }
@@ -394,57 +386,48 @@
       if (skipN) log('�„� bỏ qua ' + skipN + ' câu �‘ã có ảnh (xoá ảnh của cảnh �‘�ƒ tạo lại)');
       if (!gen.length) { log('�œ“ tất cả câu �‘ã có ảnh �€” không tạo thêm'); return; }
 
-      const btn = document.getElementById('wb-aiGenBtn');
-      const btnOld = btn ? { disabled: btn.disabled, text: btn.textContent } : null;
-      if (btn) { btn.disabled = true; btn.textContent = '�Ÿ–� AI �‘ang sinh ảnh 0/' + gen.length + '�€�'; }
-      let done = 0, failed = 0;
-      try {
-        /* (b) cấu hình Flow �€” model/quality theo tab Tạo Ảnh, ép 16:9 kh�›p canvas 1280�—720;
-           multi-account �†’ POOL round-robin, 1 account �†’ project riêng (gi�‘ng tfGenScenes) */
-        const cfg = (typeof tfCfg === 'function') ? tfCfg() : { model: '', aspect: '16:9', quality: '', conc: 2, delay: 0 };
-        cfg.kind = 'image';
-        cfg.aspect = '16:9';
-        const multi = flowBridge.mode === 'extension' ? (st.accountCount || 0) >= 1 : (st.accountCount || 0) > 1;
-        let projectId = null;
-        if (multi) await flowBridge.call('POOL_RESET');
-        else projectId = await tfEnsureProject();
-        const ctx = { multi, cfg, imgMap: {}, projectId, tier: st.paygateTier };
-        const conc = multi ? Math.max(1, st.accountCount) : Math.max(1, cfg.conc || 2);
-        log('�Ÿ–� Flow bắt �‘ầu tạo ' + gen.length + ' ảnh' + (multi ? ' (�š� ' + st.accountCount + ' tài khoản, ' + conc + ' lu�“ng)' : (' · ' + conc + ' lu�“ng')) + '�€�');
+      /* (b) cấu hình Flow �€” model/quality theo tab Tạo Ảnh, ép 16:9 kh�›p canvas 1280�—720;
+         multi-account �†’ POOL round-robin, 1 account �†’ project riêng (gi�‘ng tfGenScenes) */
+      const cfg = (typeof tfCfg === 'function') ? tfCfg() : { model: '', aspect: '16:9', quality: '', conc: 2, delay: 0 };
+      cfg.kind = 'image';
+      cfg.aspect = '16:9';
+      const multi = flowBridge.mode === 'extension' ? (st.accountCount || 0) >= 1 : (st.accountCount || 0) > 1;
+      let projectId = null;
+      if (multi) await flowBridge.call('POOL_RESET');
+      else projectId = await tfEnsureProject();
+      const ctx = { multi, cfg, imgMap: {}, projectId, tier: st.paygateTier };
+      const conc = multi ? Math.max(1, st.accountCount) : Math.max(1, cfg.conc || 2);
+      log('�Ÿ–� Flow bắt �‘ầu tạo ' + gen.length + ' ảnh' + (multi ? ' (�š� ' + st.accountCount + ' tài khoản, ' + conc + ' lu�“ng)' : (' · ' + conc + ' lu�“ng')) + '�€�');
 
-        /* (c)+(d) pool �‘ơn giản: m�—i câu �€” gen �†’ lưu �†’ gán �†’ AI khoanh vùng */
-        let i = 0;
-        const runner = async () => {
-          while (i < gen.length) {
-            const my = i++;
-            const { s, idx } = gen[my];
-            const label = 'Câu ' + (idx + 1);
-            try {
-              if (btn) btn.textContent = '�Ÿ–� AI �‘ang sinh ảnh ' + (done + failed + 1) + '/' + gen.length + '�€�';
-              log('�Ÿ–� ' + label + ' [' + ((s.startMs || 0) / 1000).toFixed(1) + 's �†’ ' + ((s.endMs || 0) / 1000).toFixed(1) + 's] gửi prompt �†’ Flow �‘ang tạo�€�');
-              const { e0, err, rotated } = await wbAiGenOne(String(s.imagePrompt), ctx);
-              if (Array.isArray(rotated)) for (const ex of rotated) log('�š� ' + ex + ' hết lượt �†’ chuy�ƒn tài khoản');
-              if (!e0) throw new Error(err || 'Flow không trả ảnh');
-              const path = await wbAiGenSave(e0.dataUrl, idx);
-              await C.setImageForScene(idx, path);
-              if (!s.canvas) throw new Error('ảnh lưu xong nhưng không �‘ọc �‘ược kích thư�›c');
-              await wbAiRegionsCore(s);
-              done++;
-              log('�œ“ ' + label + ' xong: ảnh gán �‘úng khung thời gian + vùng vẽ theo nh�‹p k�ƒ (' + path.split(/[\\/]/).pop() + ')');
-            } catch (e2) {
-              failed++;
-              const msg = String((e2 && e2.message) || e2);
-              log((_wbQuotaRe.test(msg) ? '�š� ' : '�Œ ') + label + ' · ' + msg +
-                (_wbQuotaRe.test(msg) ? ' (tài khoản hết lượt �€” thêm account Flow �Ÿ Tạo Ảnh Hàng Loạt hoặc thử lại sau)' : ''));
-            }
+      /* (c)+(d) pool �‘ơn giản: m�—i câu �€” gen �†’ lưu �†’ gán �†’ AI khoanh vùng */
+      let i = 0;
+      const runner = async () => {
+        while (i < gen.length) {
+          const my = i++;
+          const { s, idx } = gen[my];
+          const label = 'Câu ' + (idx + 1);
+          try {
+            log('�Ÿ–� ' + label + ' [' + ((s.startMs || 0) / 1000).toFixed(1) + 's �†’ ' + ((s.endMs || 0) / 1000).toFixed(1) + 's] gửi prompt �†’ Flow �‘ang tạo�€�');
+            const { e0, err, rotated } = await wbAiGenOne(String(s.imagePrompt), ctx);
+            if (Array.isArray(rotated)) for (const ex of rotated) log('�š� ' + ex + ' hết lượt �†’ chuy�ƒn tài khoản');
+            if (!e0) throw new Error(err || 'Flow không trả ảnh');
+            const path = await wbAiGenSave(e0.dataUrl, idx);
+            await C.setImageForScene(idx, path);
+            if (!s.canvas) throw new Error('ảnh lưu xong nhưng không �‘ọc �‘ược kích thư�›c');
+            await wbAiRegionsCore(s);
+            done++;
+            log('�œ“ ' + label + ' xong: ảnh gán �‘úng khung thời gian + vùng vẽ theo nh�‹p k�ƒ (' + path.split(/[\\/]/).pop() + ')');
+          } catch (e2) {
+            failed++;
+            const msg = String((e2 && e2.message) || e2);
+            log((_wbQuotaRe.test(msg) ? '�š� ' : '�Œ ') + label + ' · ' + msg +
+              (_wbQuotaRe.test(msg) ? ' (tài khoản hết lượt �€” thêm account Flow �Ÿ Tạo Ảnh Hàng Loạt hoặc thử lại sau)' : ''));
           }
-        };
-        await Promise.all(Array.from({ length: Math.min(conc, gen.length) }, runner));
-      } finally {
-        if (btn && btnOld) { btn.disabled = btnOld.disabled; btn.textContent = btnOld.text; }
-      }
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(conc, gen.length) }, runner));
       log('�”��”��”� Sinh ảnh xong: ' + done + '/' + gen.length + ' câu' + (failed ? ' · ' + failed + ' l�—i' : '') + ' �”��”��”�');
-      if (failed) log('�„� bấm lại "�Ÿ�– AI sinh ảnh theo câu (auto)" �‘�ƒ TẠO TIẾP các câu còn thiếu (câu �‘ã có ảnh �‘ược giữ nguyên)');
+      if (failed) log('\u2139 ch\u1ea1y l\u1ea1i B\u01b0\u1edbc 3 (Ph\u00e2n t\u00edch prompt) \u0111\u1ec3 T\u1ea0O TI\u1ebeP c\u00e1c c\u00e2u c\u00f2n thi\u1ebfu (c\u00e2u \u0111\u00e3 c\u00f3 \u1ea3nh \u0111\u01b0\u1ee3c gi\u1eef nguy\u00ean)');
     } catch (err) {
       log('�Œ AI sinh ảnh l�—i: ' + String((err && err.message) || err));
     } finally {
