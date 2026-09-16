@@ -32,16 +32,16 @@
 
 (function () {
   const C = window.wbStudioCtx;
-  if (!C || !C.state) return;                     // panel chưa nạp �€” module này vô dụng nếu thiếu ctx
+  if (!C || !C.state) return;                     // panel chưa nạp — module này vô dụng nếu thiếu ctx
   const { state, log, wbFileUrl, A } = C;
 
-  const BATCH = 6;          // câu / lần gọi LLM (lô nhỏ �€” tránh token trần, l�—i thử lại nhanh)
+  const BATCH = 6;          // câu / lần gọi LLM (lô nhỏ — tránh token trần, lỗi thử lại nhanh)
   const MAX_OBJECTS = 8;
 
-  /* �”€�”€ ảnh �†’ base64 (giảm cạnh dài �‘�ƒ gửi vision) �”€�”€ */
+  /* ── ảnh → base64 (giảm cạnh dài để gửi vision) ── */
   async function wbAiDataUrl(imagePath, maxEdge) {
     const resp = await fetch(wbFileUrl(imagePath));
-    if (!resp || !resp.ok) throw new Error('không tải �‘ược ảnh (HTTP ' + (resp && resp.status) + ')');
+    if (!resp || !resp.ok) throw new Error('không tải được ảnh (HTTP ' + (resp && resp.status) + ')');
     const blob = await resp.blob();
     const bmp = await createImageBitmap(blob);
     const sc = Math.min(1, maxEdge / Math.max(bmp.width, bmp.height));
@@ -52,14 +52,14 @@
     c.getContext('2d').drawImage(bmp, 0, 0, w, h);
     const du = c.toDataURL('image/jpeg', 0.86);
     const m = /^data:(image\/[a-z0-9.+-]+);base64,(.+)$/i.exec(du);
-    if (!m) throw new Error('không mã hoá �‘ược ảnh base64');
+    if (!m) throw new Error('không mã hoá được ảnh base64');
     return { mediaType: m[1], data: m[2] };
   }
 
-  /* �•��•��•��•��•��•��•��•� 1 · AI SINH PROMPT ẢNH THEO C�‚U �•��•��•��•��•��•��•��•� */
+  /* ════════ 1 · AI SINH PROMPT ẢNH THEO CÂU ════════ */
 
   function wbAiNormalizeShares(objects) {
-    // chuẩn hoá share về t�•ng 100 (deterministic �€” không tin tư�Ÿng AI giữ t�•ng)
+    // chuẩn hoá share về tổng 100 (deterministic — không tin tưởng AI giữ tổng)
     const arr = (objects || []).slice(0, MAX_OBJECTS);
     if (!arr.length) return [];
     const sum = arr.reduce((t, o) => t + Math.max(1, Number(o.share) || 0), 0);
@@ -86,8 +86,8 @@
       'Return ONLY JSON: {"scenes":[{"i":<same number>,"prompt":"...","objects":[{"label":"short Vietnamese label","share":30},...]}]}\n\n' +
       'Sentences:\n' + list;
   }
-  /* lõi sinh prompt cho danh sách targets [{s, idx}] �€” dùng chung cho
-     nút �Ÿ�– AI prompt ảnh và lu�“ng auto �Ÿ�– AI sinh ảnh theo câu */
+  /* lõi sinh prompt cho danh sách targets [{s, idx}] — dùng chung cho
+     nút 🤖 AI prompt ảnh và luồng auto 🤖 AI sinh ảnh theo câu */
   async function wbAiPromptCore(targets) {
     let done = 0;
     for (let base = 0; base < targets.length; base += BATCH) {
@@ -99,7 +99,7 @@
           if (!o || !Array.isArray(o.scenes) || !o.scenes.length) throw new Error('AI thiếu mảng scenes');
           const want = new Set(batch.map((x) => x.idx + 1));
           o.scenes.forEach((sc, k) => {
-            if (!sc || !want.has(sc.i)) throw new Error('scenes[' + k + '] sai s�‘ thứ tự câu (i=' + sc.i + ')');
+            if (!sc || !want.has(sc.i)) throw new Error('scenes[' + k + '] sai số thứ tự câu (i=' + sc.i + ')');
             if (typeof sc.prompt !== 'string' || sc.prompt.trim().length < 20) throw new Error('scenes[' + k + '] prompt quá ngắn');
           });
           return o;
@@ -112,40 +112,40 @@
         t.objects = wbAiNormalizeShares(sc.objects);
         done++;
       });
-      log('�œ“ AI prompt: ' + Math.min(base + BATCH, targets.length) + '/' + targets.length + ' câu');
+      log('✓ AI prompt: ' + Math.min(base + BATCH, targets.length) + '/' + targets.length + ' câu');
     }
     return done;
   }
 
   async function wbAiPrompts() {
     if (!state.scenes.length) { log('\u26a0 ch\u01b0a c\u00f3 c\u1ea3nh \u2014 c\u1ea7n chia c\u00e2u SRT (B\u01b0\u1edbc 2) tr\u01b0\u1edbc'); return; }
-    if (typeof callLLMJson !== 'function') { log('�š� chưa có b�™ gọi AI (callLLMJson) �€” chạy panel trong app Nova'); return; }
+    if (typeof callLLMJson !== 'function') { log('⚠ chưa có bộ gọi AI (callLLMJson) — chạy panel trong app Nova'); return; }
     const targets = state.scenes
       .map((s, idx) => ({ s, idx }))
       .filter((x) => x.s.text && x.s.text.length > 3);
-    if (!targets.length) { log('�š� cảnh nào cũng chưa có lời thoại (text) �€” cần SRT/k�‹ch bản trư�›c'); return; }
+    if (!targets.length) { log('⚠ cảnh nào cũng chưa có lời thoại (text) — cần SRT/kịch bản trước'); return; }
     try {
       const done = await wbAiPromptCore(targets);
       log('\u2705 xong prompt \u1ea3nh cho ' + done + ' c\u1ea3nh \u2014 Flow s\u1ebd sinh \u1ea3nh + khoanh v\u00f9ng ngay sau \u0111\u00f3.');
     } catch (err) {
-      log('�Œ AI prompt l�—i: ' + String((err && err.message) || err));
+      log('❌ AI prompt lỗi: ' + String((err && err.message) || err));
     } finally {
       C.renderSceneList(); C.renderSceneDetail();
     }
   }
 
-  /* �•��•��•��•��•��•��•��•� 1b · PH�‚N TÍCH PROMPT (Bư�›c 3 của lu�“ng 6 bư�›c) �•��•��•��•��•��•��•��•�
-     Nút "�Ÿ�� Phân tích prompt": tách k�‹ch bản (Bư�›c 1) thành câu có nghĩa +
-     �‘�‘i chiếu .SRT (Bư�›c 2) �‘�ƒ m�—i câu có thời lượng �‘ọc chính xác �€” logic
-     chia/kh�›p nằm �Ÿ wbAnalyzePromptData (panel, deterministic �€” Luật 8);
+  /* ════════ 1b · PHÂN TÍCH PROMPT (Bước 3 của luồng 6 bước) ════════
+     Nút "🧠 Phân tích prompt": tách kịch bản (Bước 1) thành câu có nghĩa +
+     đối chiếu .SRT (Bước 2) để mỗi câu có thời lượng đọc chính xác — logic
+     chia/khớp nằm ở wbAnalyzePromptData (panel, deterministic — Luật 8);
      xong thì AI sinh prompt ảnh cho các câu còn thiếu (dùng lại wbAiPrompts). */
   async function wbAnalyzePrompt() {
     const btn = document.getElementById('wb-analyzePromptBtn');
     const btnOld = btn ? { disabled: btn.disabled, text: btn.textContent } : null;
-    if (btn) { btn.disabled = true; btn.textContent = '�Ÿ�� Đang tách câu + kh�›p timing .SRT�€�'; }
+    if (btn) { btn.disabled = true; btn.textContent = '🧠 Đang tách câu + khớp timing .SRT…'; }
     try {
       const r = C.wbAnalyzePromptData();
-      if (!r) return; // l�—i l�™ li�…u (WB_NO_SCRIPT / WB_NO_SRT) �‘ã log trong panel
+      if (!r) return; // lỗi lộ liễu (WB_NO_SCRIPT / WB_NO_SRT) đã log trong panel
       await wbAiPrompts();
       await wbAiGenImages();
     } finally {
@@ -153,7 +153,7 @@
     }
   }
 
-  /* �•��•��•��•��•��•��•��•� 2 · AI VISION KHOANH V�™NG VẬT TH�‚ TR�ŠN ẢNH �•��•��•��•��•��•��•��•� */
+  /* ════════ 2 · AI VISION KHOANH VÙNG VẬT THỂ TRÊN ẢNH ════════ */
 
   function wbAiRegionToElement(raw, idx, s) {
     const W = s.canvas.width, H = s.canvas.height;
@@ -188,9 +188,9 @@
     }, idx, s.canvas);
   }
 
-  /* giờ reveal theo NH�ŠP K�‚: span = durationMs - LEAD_IN - HOLD; m�—i phần tử
-     nhận share/100 * span (min 600ms), n�‘i tiếp nhau từ LEAD_IN. Không có
-     objects / s�‘ lượng l�‡ch �†’ chia �‘ều. */
+  /* giờ reveal theo NHỊP KỂ: span = durationMs - LEAD_IN - HOLD; mỗi phần tử
+     nhận share/100 * span (min 600ms), nối tiếp nhau từ LEAD_IN. Không có
+     objects / số lượng lệch → chia đều. */
   function wbAiScheduleReveal(elements, s) {
     const span = Math.max(1000, (s.durationMs || 0) - A.LEAD_IN_MS - A.HOLD_MS);
     const n = elements.length;
@@ -206,11 +206,11 @@
       t += d;
     });
   }
-  /* lõi vision cho 1 cảnh �€” dùng chung cho nút �ŸŽ� AI khoanh vùng và
-     lu�“ng auto �Ÿ�– AI sinh ảnh theo câu. s.image + s.canvas phải có. */
+  /* lõi vision cho 1 cảnh — dùng chung cho nút 🎯 AI khoanh vùng và
+     luồng auto 🤖 AI sinh ảnh theo câu. s.image + s.canvas phải có. */
   async function wbAiRegionsCore(s) {
-    log('�ŸŽ� AI vision �‘ang nhìn: ' + s.image.split(/[\\/]/).pop() +
-      (s.objects && s.objects.length ? ' (vật th�ƒ theo lời thoại: ' + s.objects.map((o) => o.label).join(', ') + ')' : ''));
+    log('🎯 AI vision đang nhìn: ' + s.image.split(/[\\/]/).pop() +
+      (s.objects && s.objects.length ? ' (vật thể theo lời thoại: ' + s.objects.map((o) => o.label).join(', ') + ')' : ''));
     const img = await wbAiDataUrl(s.image, 896);
     const focus = (Array.isArray(s.objects) && s.objects.length)
       ? 'The narration of this scene mentions these objects: ' + s.objects.map((o) => o.label).join(', ') +
@@ -245,26 +245,26 @@
     out.regions.forEach((r, i) => {
       const e2 = wbAiRegionToElement(r, built.length, s);
       if (e2) built.push(e2);
-      else log('�š� vùng AI ' + (i + 1) + ' points không dùng �‘ược �€” bỏ qua');
+      else log('⚠ vùng AI ' + (i + 1) + ' points không dùng được — bỏ qua');
     });
-    if (!built.length) throw new Error('AI không trả vùng nào dùng �‘ược');
+    if (!built.length) throw new Error('AI không trả vùng nào dùng được');
     s.elements = built;
     s.previewPath = null;
     s.elementsDirty = false;
     wbAiScheduleReveal(built, s);
-    log('�ŸŽ� AI khoanh ' + built.length + ' vùng: ' + built.map((e2) => e2.label).join(' · ') +
-      (Array.isArray(s.objects) && s.objects.length === built.length ? ' �€” giờ vẽ theo share nh�‹p k�ƒ' : ' �€” giờ vẽ chia �‘ều (objects không kh�›p s�‘ vùng)'));
+    log('🎯 AI khoanh ' + built.length + ' vùng: ' + built.map((e2) => e2.label).join(' · ') +
+      (Array.isArray(s.objects) && s.objects.length === built.length ? ' — giờ vẽ theo share nhịp kể' : ' — giờ vẽ chia đều (objects không khớp số vùng)'));
     return built;
   }
 
-  /* �•��•��•��•��•��•��•��•� 3 · SINH ẢNH TỰ Đ�˜NG THEO C�‚U (Flow) �•��•��•��•��•��•��•��•� */
-  /* Trọn lu�“ng: prompt cho câu còn thiếu �†’ Flow sinh ảnh line-art từng
-     câu �†’ lưu + gán �‘úng khung thời gian SRT �†’ AI vision khoanh vùng +
-     giờ vẽ theo nh�‹p k�ƒ. TÁI D�™NG engine Flow của tab Tạo Ảnh Hàng Loạt
-     (flowBridge + tfDispatchGen + tfEnsureProject + tfCfg �€” global của
-     index.html, panel này chạy trong cùng trang). KH�”NG chế kênh m�›i. */
+  /* ════════ 3 · SINH ẢNH TỰ ĐỘNG THEO CÂU (Flow) ════════ */
+  /* Trọn luồng: prompt cho câu còn thiếu → Flow sinh ảnh line-art từng
+     câu → lưu + gán đúng khung thời gian SRT → AI vision khoanh vùng +
+     giờ vẽ theo nhịp kể. TÁI DÙNG engine Flow của tab Tạo Ảnh Hàng Loạt
+     (flowBridge + tfDispatchGen + tfEnsureProject + tfCfg — global của
+     index.html, panel này chạy trong cùng trang). KHÔNG chế kênh mới. */
 
-  const _wbQuotaRe = /429|QUOTA|EXHAUSTED|hết lượt|hết quota|hết gi�›i hạn|ALL_ACCOUNTS/i;
+  const _wbQuotaRe = /429|QUOTA|EXHAUSTED|hết lượt|hết quota|hết giới hạn|ALL_ACCOUNTS/i;
   const _wbSoftRe = /FILTER|SAFETY|PROMINENT|UNAUTHENT|API_401|MODEL_ACCESS/i;
   const _wbTrafficRe = /TOO_MUCH_TRAFFIC|UNUSUAL_ACTIVITY|reCAPTCHA|RATE_?LIMIT|\b429\b|invalid authentication|login cooki/i;
   const wbAiSleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -272,27 +272,27 @@
   function wbAiGenEngine() {
     if (typeof flowBridge === 'undefined' || flowBridge === null ||
         typeof tfDispatchGen !== 'function' || typeof tfEnsureProject !== 'function') {
-      throw new Error('thiếu engine Flow (flowBridge/tfDispatchGen) �€” panel phải chạy trong index.html của app');
+      throw new Error('thiếu engine Flow (flowBridge/tfDispatchGen) — panel phải chạy trong index.html của app');
     }
   }
 
   async function wbAiGenStatus() {
-    if (!(await flowBridge.waitReady(1500))) throw new Error('chưa kết n�‘i Flow');
+    if (!(await flowBridge.waitReady(1500))) throw new Error('chưa kết nối Flow');
     const st = await flowBridge.call('GET_STATUS');
     if (!st || (!st.hasToken && !((st.accountCount || 0) > 0))) {
-      throw new Error('chưa �‘�ƒng nhập Flow �€” m�Ÿ tab "Tạo Ảnh Hàng Loạt" �‘�ƒ thêm/�‘�ƒng nhập tài khoản r�“i thử lại');
+      throw new Error('chưa đăng nhập Flow — mở tab "Tạo Ảnh Hàng Loạt" để thêm/đăng nhập tài khoản rồi thử lại');
     }
     return st;
   }
 
   async function wbAiGenSave(dataUrl, idx) {
     const m = /^data:([^;]+);base64,(.+)$/.exec(String(dataUrl || ''));
-    if (!m) throw new Error('phản h�“i Flow không có ảnh �‘ọc �‘ược (thiếu dataUrl)');
+    if (!m) throw new Error('phản hồi Flow không có ảnh đọc được (thiếu dataUrl)');
     let dir = '';
     try { dir = localStorage.getItem('av_save_dir') || ''; } catch (e) {}
     if (!dir) {
       if (!window.native || typeof window.native.pickFolder !== 'function') {
-        throw new Error('chưa có thư mục lưu ảnh �€” chọn "Lưu về máy" �Ÿ Dashboard hoặc cho phép chọn thư mục');
+        throw new Error('chưa có thư mục lưu ảnh — chọn "Lưu về máy" ở Dashboard hoặc cho phép chọn thư mục');
       }
       const r = await window.native.pickFolder();
       if (!r || !r.path) throw new Error('chưa chọn thư mục lưu ảnh');
@@ -302,24 +302,24 @@
     const ext = ((m[1] || 'image/png').split('/')[1] || 'png').replace('jpeg', 'jpg');
     const name = 'cau-' + String(idx + 1).padStart(3, '0') + '.' + ext;
     const sv = await window.native.saveFile({ dir, subdir: 'whiteboard-anh', name, base64: m[2] });
-    if (!sv || !sv.path) throw new Error('lưu ảnh l�—i: ' + ((sv && sv.error) || 'không rõ'));
+    if (!sv || !sv.path) throw new Error('lưu ảnh lỗi: ' + ((sv && sv.error) || 'không rõ'));
     return sv.path;
   }
 
-  /* gen 1 ảnh + retry l�—i mềm (gi�‘ng tfGenScenes: mềm �‰�2 lần, b�‹ chặn traffic �‰�3 lần) */
+  /* gen 1 ảnh + retry lỗi mềm (giống tfGenScenes: mềm ≤2 lần, bị chặn traffic ≤3 lần) */
   async function wbAiGenOne(prompt, ctx) {
     let e0 = null, err = '', rotated = null;
     for (let att = 0; ; att++) {
       const r = await tfDispatchGen(prompt, [], ctx);
       e0 = ((r && r.media_entries) || []).find((e) => e && e.dataUrl) || null;
-      err = (r && r.error) || (!e0 ? 'phản h�“i không có ảnh' : '');
+      err = (r && r.error) || (!e0 ? 'phản hồi không có ảnh' : '');
       rotated = (r && r.rotated) || null;
       if (e0) break;
       const soft = !_wbQuotaRe.test(err) && !_wbSoftRe.test(err);
       const traffic = _wbTrafficRe.test(err);
       if (!soft || att >= (traffic ? 3 : 2)) break;
       const wait = traffic ? (6000 + att * 4000) : 1500;
-      log('�†� l�—i mềm (' + String(err).slice(0, 140) + ') �†’ ngh�‰ ' + Math.round(wait / 1000) + 's r�“i thử lại lần ' + (att + 1));
+      log('↻ lỗi mềm (' + String(err).slice(0, 140) + ') → nghỉ ' + Math.round(wait / 1000) + 's rồi thử lại lần ' + (att + 1));
       await wbAiSleep(wait);
     }
     return { e0, err, rotated };
@@ -327,19 +327,19 @@
 
   window.wbStudioAi = { wbAiPrompts, wbAiGenImages, wbAiRegionsCore, wbAiScheduleReveal, wbAnalyzePrompt, wbArrangeRegions };
 
-  /* �•��•��•��•��•��•��•��•� 2b · SẮP XẾP DỮ LI�†U (Bư�›c 4 của lu�“ng 6 bư�›c) �•��•��•��•��•��•��•��•�
-     Nút "�Ÿ—� Sắp xếp dữ li�‡u": AI vision khoanh vùng TẤT CẢ cảnh có ảnh.
-     Giờ vẽ (start/duration) do wbAiScheduleReveal phân b�• �€” neo theo khung
-     thời lượng câu (startMs/endMs từ SRT �Ÿ Bư�›c 3) nên giờ vẽ kh�›p �‘úng
-     thời lượng �‘ọc từng câu. Cảnh thiếu ảnh �†’ l�—i l�™ li�…u từng cụm
-     (WB_ARRANGE_NO_IMAGE), KH�”NG bỏ qua ngầm (Luật 10). */
+  /* ════════ 2b · SẮP XẾP DỮ LIỆU (Bước 4 của luồng 6 bước) ════════
+     Nút "🗺 Sắp xếp dữ liệu": AI vision khoanh vùng TẤT CẢ cảnh có ảnh.
+     Giờ vẽ (start/duration) do wbAiScheduleReveal phân bổ — neo theo khung
+     thời lượng câu (startMs/endMs từ SRT ở Bước 3) nên giờ vẽ khớp đúng
+     thời lượng đọc từng câu. Cảnh thiếu ảnh → lỗi lộ liễu từng cụm
+     (WB_ARRANGE_NO_IMAGE), KHÔNG bỏ qua ngầm (Luật 10). */
   async function wbArrangeRegions() {
-    if (!state.scenes.length) { log('[WB_LOI] WB_NO_SCENES �€” chưa có cảnh nào. Bấm "�Ÿ�� Phân tích prompt" �Ÿ Bư�›c 3 trư�›c.'); return; }
-    if (typeof callLLMJson !== 'function') { log('�š� chưa có b�™ gọi AI (callLLMJson) �€” chạy panel trong app Nova'); return; }
+    if (!state.scenes.length) { log('[WB_LOI] WB_NO_SCENES — chưa có cảnh nào. Bấm "🧠 Phân tích prompt" ở Bước 3 trước.'); return; }
+    if (typeof callLLMJson !== 'function') { log('⚠ chưa có bộ gọi AI (callLLMJson) — chạy panel trong app Nova'); return; }
     const missing = [];
     state.scenes.forEach((s, i) => { if (!s.image || !s.canvas) missing.push(i + 1); });
     if (missing.length) {
-      log('[WB_LOI] WB_ARRANGE_NO_IMAGE �€” ' + missing.length + '/' + state.scenes.length + ' cảnh chưa có ảnh (câu: ' + missing.join(', ') + '). Hoàn tất "�Ÿ�– AI sinh ảnh theo prompt (Flow)" hoặc gán ảnh tay �Ÿ Bư�›c 3 trư�›c.');
+      log('[WB_LOI] WB_ARRANGE_NO_IMAGE — ' + missing.length + '/' + state.scenes.length + ' cảnh chưa có ảnh (câu: ' + missing.join(', ') + '). Hoàn tất "🖼 AI sinh ảnh theo prompt (Flow)" hoặc gán ảnh tay ở Bước 3 trước.');
       return;
     }
     const btn = document.getElementById('wb-arrangeBtn');
@@ -349,7 +349,7 @@
     try {
       for (let i = 0; i < state.scenes.length; i++) {
         const s = state.scenes[i];
-        if (btn) btn.textContent = '�Ÿ—� AI �‘ang sắp xếp cảnh ' + (i + 1) + '/' + state.scenes.length + '�€�';
+        if (btn) btn.textContent = '🗺 AI đang sắp xếp cảnh ' + (i + 1) + '/' + state.scenes.length + '…';
         try {
           await wbAiRegionsCore(s);
           ok++;
@@ -361,33 +361,33 @@
       if (btn && btnOld) { btn.disabled = btnOld.disabled; btn.textContent = btnOld.text; }
       C.renderSceneList(); C.renderSceneDetail();
     }
-    log('�”��”��”� Sắp xếp dữ li�‡u xong: ' + ok + '/' + state.scenes.length + ' cảnh có vùng vẽ kh�›p khung thời lượng câu �”��”��”�');
-    if (errs.length) log('�Œ ' + errs.length + ' cảnh l�—i (l�™ li�…u, sửa r�“i bấm lại): ' + errs.join(' | '));
+    log('━━━ Sắp xếp dữ liệu xong: ' + ok + '/' + state.scenes.length + ' cảnh có vùng vẽ khớp khung thời lượng câu ━━━');
+    if (errs.length) log('❌ ' + errs.length + ' cảnh lỗi (lộ liễu, sửa rồi bấm lại): ' + errs.join(' | '));
   }
 
   async function wbAiGenImages() {
-    if (!state.scenes.length) { log('�š� chưa có cảnh �€” bấm "�Ÿ�� Chia theo câu (SRT)" trư�›c'); return; }
-    if (typeof callLLMJson !== 'function') { log('�š� chưa có b�™ gọi AI (callLLMJson) �€” chạy panel trong app Nova'); return; }
+    if (!state.scenes.length) { log('⚠ chưa có cảnh — bấm "🧩 Chia theo câu (SRT)" trước'); return; }
+    if (typeof callLLMJson !== 'function') { log('⚠ chưa có bộ gọi AI (callLLMJson) — chạy panel trong app Nova'); return; }
     try {
       wbAiGenEngine();
       const st = await wbAiGenStatus();
       /* (a) prompt cho câu còn thiếu */
       const targets = state.scenes.map((s, idx) => ({ s, idx })).filter((x) => x.s.text && x.s.text.length > 3);
-      if (!targets.length) { log('�š� cảnh nào cũng chưa có lời thoại (text) �€” cần SRT/k�‹ch bản trư�›c'); return; }
+    if (!targets.length) { log('⚠ cảnh nào cũng chưa có lời thoại (text) — cần SRT/kịch bản trước'); return; }
       const needP = targets.filter((x) => !x.s.imagePrompt);
       if (needP.length) {
-        log('�Ÿ�– AI sinh prompt cho ' + needP.length + ' câu chưa có prompt�€�');
+        log('🤖 AI sinh prompt cho ' + needP.length + ' câu chưa có prompt…');
         await wbAiPromptCore(needP);
       }
       const units = targets.filter((x) => x.s.imagePrompt);
-      if (!units.length) { log('�š� không có câu nào có prompt ảnh �€” AI prompt l�—i?'); return; }
+      if (!units.length) { log('⚠ không có câu nào có prompt ảnh — AI prompt lỗi?'); return; }
       const gen = units.filter((x) => !x.s.image);
       const skipN = units.length - gen.length;
-      if (skipN) log('�„� bỏ qua ' + skipN + ' câu �‘ã có ảnh (xoá ảnh của cảnh �‘�ƒ tạo lại)');
-      if (!gen.length) { log('�œ“ tất cả câu �‘ã có ảnh �€” không tạo thêm'); return; }
+      if (skipN) log('ℹ bỏ qua ' + skipN + ' câu đã có ảnh (xoá ảnh của cảnh để tạo lại)');
+      if (!gen.length) { log('✓ tất cả câu đã có ảnh — không tạo thêm'); return; }
 
-      /* (b) cấu hình Flow �€” model/quality theo tab Tạo Ảnh, ép 16:9 kh�›p canvas 1280�—720;
-         multi-account �†’ POOL round-robin, 1 account �†’ project riêng (gi�‘ng tfGenScenes) */
+        /* (b) cấu hình Flow — model/quality theo tab Tạo Ảnh, ép 16:9 khớp canvas 1280×720;
+           multi-account → POOL round-robin, 1 account → project riêng (giống tfGenScenes) */
       const cfg = (typeof tfCfg === 'function') ? tfCfg() : { model: '', aspect: '16:9', quality: '', conc: 2, delay: 0 };
       cfg.kind = 'image';
       cfg.aspect = '16:9';
@@ -397,9 +397,9 @@
       else projectId = await tfEnsureProject();
       const ctx = { multi, cfg, imgMap: {}, projectId, tier: st.paygateTier };
       const conc = multi ? Math.max(1, st.accountCount) : Math.max(1, cfg.conc || 2);
-      log('�Ÿ–� Flow bắt �‘ầu tạo ' + gen.length + ' ảnh' + (multi ? ' (�š� ' + st.accountCount + ' tài khoản, ' + conc + ' lu�“ng)' : (' · ' + conc + ' lu�“ng')) + '�€�');
+        log('🖼 Flow bắt đầu tạo ' + gen.length + ' ảnh' + (multi ? ' (⚡ ' + st.accountCount + ' tài khoản, ' + conc + ' luồng)' : (' · ' + conc + ' luồng')) + '…');
 
-      /* (c)+(d) pool �‘ơn giản: m�—i câu �€” gen �†’ lưu �†’ gán �†’ AI khoanh vùng */
+        /* (c)+(d) pool đơn giản: mỗi câu — gen → lưu → gán → AI khoanh vùng */
       let i = 0;
       const runner = async () => {
         while (i < gen.length) {
@@ -407,39 +407,39 @@
           const { s, idx } = gen[my];
           const label = 'Câu ' + (idx + 1);
           try {
-            log('�Ÿ–� ' + label + ' [' + ((s.startMs || 0) / 1000).toFixed(1) + 's �†’ ' + ((s.endMs || 0) / 1000).toFixed(1) + 's] gửi prompt �†’ Flow �‘ang tạo�€�');
+              log('🖼 ' + label + ' [' + ((s.startMs || 0) / 1000).toFixed(1) + 's → ' + ((s.endMs || 0) / 1000).toFixed(1) + 's] gửi prompt → Flow đang tạo…');
             const { e0, err, rotated } = await wbAiGenOne(String(s.imagePrompt), ctx);
-            if (Array.isArray(rotated)) for (const ex of rotated) log('�š� ' + ex + ' hết lượt �†’ chuy�ƒn tài khoản');
+              if (Array.isArray(rotated)) for (const ex of rotated) log('⚠ ' + ex + ' hết lượt → chuyển tài khoản');
             if (!e0) throw new Error(err || 'Flow không trả ảnh');
             const path = await wbAiGenSave(e0.dataUrl, idx);
             await C.setImageForScene(idx, path);
-            if (!s.canvas) throw new Error('ảnh lưu xong nhưng không �‘ọc �‘ược kích thư�›c');
+              if (!s.canvas) throw new Error('ảnh lưu xong nhưng không đọc được kích thước');
             await wbAiRegionsCore(s);
             done++;
-            log('�œ“ ' + label + ' xong: ảnh gán �‘úng khung thời gian + vùng vẽ theo nh�‹p k�ƒ (' + path.split(/[\\/]/).pop() + ')');
+              log('✓ ' + label + ' xong: ảnh gán đúng khung thời gian + vùng vẽ theo nhịp kể (' + path.split(/[\\/]/).pop() + ')');
           } catch (e2) {
             failed++;
             const msg = String((e2 && e2.message) || e2);
-            log((_wbQuotaRe.test(msg) ? '�š� ' : '�Œ ') + label + ' · ' + msg +
-              (_wbQuotaRe.test(msg) ? ' (tài khoản hết lượt �€” thêm account Flow �Ÿ Tạo Ảnh Hàng Loạt hoặc thử lại sau)' : ''));
+              log((_wbQuotaRe.test(msg) ? '⚠ ' : '❌ ') + label + ' · ' + msg +
+                (_wbQuotaRe.test(msg) ? ' (tài khoản hết lượt — thêm account Flow ở Tạo Ảnh Hàng Loạt hoặc thử lại sau)' : ''));
           }
         }
       };
       await Promise.all(Array.from({ length: Math.min(conc, gen.length) }, runner));
-      log('�”��”��”� Sinh ảnh xong: ' + done + '/' + gen.length + ' câu' + (failed ? ' · ' + failed + ' l�—i' : '') + ' �”��”��”�');
+      log('━━━ Sinh ảnh xong: ' + done + '/' + gen.length + ' câu' + (failed ? ' · ' + failed + ' lỗi' : '') + ' ━━━');
       if (failed) log('\u2139 ch\u1ea1y l\u1ea1i B\u01b0\u1edbc 3 (Ph\u00e2n t\u00edch prompt) \u0111\u1ec3 T\u1ea0O TI\u1ebeP c\u00e1c c\u00e2u c\u00f2n thi\u1ebfu (c\u00e2u \u0111\u00e3 c\u00f3 \u1ea3nh \u0111\u01b0\u1ee3c gi\u1eef nguy\u00ean)');
     } catch (err) {
-      log('�Œ AI sinh ảnh l�—i: ' + String((err && err.message) || err));
+      log('❌ AI sinh ảnh lỗi: ' + String((err && err.message) || err));
     } finally {
       C.renderSceneList(); C.renderSceneDetail();
     }
   }
 
-  /* �”€�”€ boot: panel lazy-mount �†’ chờ nút xuất hi�‡n (MutationObserver) �”€�”€ */
+  /* ── boot: panel lazy-mount → chờ nút xuất hiện (MutationObserver) ── */
   function boot() {
-    /* Luồng 6 bước r�t gọn: Bước 3 chỉ c�n "Ph�n t�ch prompt" (chuỗi đầy đủ
-       t�ch c�u + SRT + prompt + Flow sinh ảnh + khoanh v�ng), Bước 4 chỉ c�n
-       "Sắp xếp dữ liệu". C�c n�t AI rời (prompt/gen/khoanh v�ng đơn) đ� gỡ. */
+    /* Luồng 6 bước rút gọn: Bước 3 chỉ còn "Phân tích prompt" (chuỗi đầy đủ
+       tách câu + SRT + prompt + Flow sinh ảnh + khoanh vùng), Bước 4 chỉ còn
+       "Sắp xếp dữ liệu". Các nút AI rời (prompt/gen/khoanh vùng đơn) đã gỡ. */
     const b4 = document.getElementById('wb-analyzePromptBtn');
     const b5 = document.getElementById('wb-arrangeBtn');
     if (b4 && !b4.dataset.wbAiBound) { b4.dataset.wbAiBound = '1'; b4.addEventListener('click', wbAnalyzePrompt); }

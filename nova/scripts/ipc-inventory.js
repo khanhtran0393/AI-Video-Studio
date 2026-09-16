@@ -7,7 +7,7 @@ const ROOT = path.resolve(__dirname, '..');
 // IGNORE: node_modules, bundle/remotion, runtime binary vendored. `\\bin(?:\\|$)` loại
 // cây *-bin/ (PyInstaller onedir ~1,5 GB — file .js của torch trong đó từng sinh
 // kênh ma trong inventory).
-const IGNORE = /(?:node_modules|\\bundle(?:\\|$)|\\bin(?:\\|$)|remotion-browser|app\.asar\.unpacked|scripts[\/]tmp[\/])/i;
+const IGNORE = /(?:node_modules|\\bundle(?:\\|$)|\\bin(?:\\|$)|remotion-browser|app\.asar\.unpacked|scripts[\/\\]tmp[\/\\])/i;
 const SOURCE = /\.js$/i;
 const invoke = /ipc(?:Main|Renderer)\.(?:handle|on|invoke|send|sendSync)\(\s*['"]([^'"]+)['"]/g;
 const event = /(?:sender|webContents)\.send\(\s*['"]([^'"]+)['"]/g;
