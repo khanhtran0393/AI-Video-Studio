@@ -41,6 +41,35 @@
   - **Test data thật dùng từ app đang chạy** (renderer state, DOM `status7` textContent) — không bịa, đúng §6.6 AGENTS.
 - **Còn lại (treo)**: app hiện đang chạy ở port 47280 với env `AI_VIDEO_STUDIO_AGENT_EVAL=1`. Nếu cần restart bình thường (không bật EVAL), tắt env hoặc kill app rồi `khoidong.bat` thường. Script `app.eval` MẶC ĐỊNH TẮT khi không có env — không cần lo lộ.
 
+## B2 — 2026-09-16: CDP verify Whiteboard Studio Bước 3 (hết)
+
+- **Mục tiêu**: verify Whiteboard Studio panel Bước 3 ("Phân tích prompt") chạy đúng trên app THẬT — bám sát pattern B3 (T7 retry lẻ đã có helper `cdp-verify-t7.js`).
+- **Hệ thống Whiteboard Studio** (`nova/web/whiteboard-studio-{ai,panel,preview}.js`):
+  - Panel lazy-mount khi user mở tab `toolwhiteboard` (cần `#whiteboardRoot`).
+  - `wbStudioCtx` exposed bởi panel (state + log + wbAnalyzePromptData + setImageForScene + …).
+  - `wb-ai.js` boot bằng MutationObserver: chờ nút `#wb-analyzePromptBtn` + `#wb-arrangeBtn` xuất hiện → bind `data-wbAiBound='1'`.
+  - 2 khối chức năng: (1) `wbAiPrompts` — gọi LLM sinh prompt ảnh theo câu SRT, (2) `wbAiGenImages` — gọi Flow sinh ảnh + `wbAiRegionsCore` AI vision khoanh vùng.
+- **File tạo**:
+  - `nova/scripts/tmp/cdp-verify-wb.js` (228 dòng) — 6 test case: T1 mount + lazy-bind, T2 state default, T3 click khi không script → `WB_NO_SCRIPT`, T4 có script không SRT → `WB_NO_SRT`, T5 mock script+cues → `wbAnalyzePromptData()` non-null + scenes.length>0, T6 AI fallback / AI prompt chạy thật.
+  - Boot logic: tự `switchTool('toolwhiteboard')` rồi poll `#whiteboardRoot` tối đa 6s.
+  - Helper `agentCall()`: fix bug **double-wrap** (response `{ok:true, data:{ok:true, result:…}}` — lần 1 ở server success wrapper, lần 2 ở `app.eval` trả `{ok, result}`).
+- **Phát hiện khi chạy B2 (không có trong B3 doc)**:
+  - `app.eval` **KHÔNG nhận base64** — dòng 147 `nova/main/agent-bridge.js`: `params.script` lấy RAW string. B3 helper (`cdp-verify-t7.js`) gửi script thuần, đúng; B2 tôi viết `b64()` ban đầu sai → eval hiểu `KHthOjEsYjo… is not defined`. **Đã sửa bỏ `b64()`**.
+  - `wbAiBound` trên button dùng `dataset.wbAiBound === '1'` (string) — không phải boolean. Lazy-mount bind đúng 1 lần.
+  - T6 log thật: `hasCallLLM=true` → AI chạy thật (`"✓ Phân tích prompt: 2 câu từ kịch bản … 2 câu khớp timing .SRT chính xác"` + `"→ tiếp theo: 🤖 AI sinh prompt ảnh"`). Pattern regex `/AI prompt|AI sinh prompt|AI lỗi/i` để bắt log AI đa dạng.
+- **Bug phát hiện ngẫu nhiên**: `nova/scripts/ipc-inventory.js` **scan cả `nova/scripts/tmp/`** (regex `IGNORE` chỉ loại `node_modules|bundle|bin|remotion-browser|app.asar.unpacked`). Kết quả: inventory có 4 file `scripts/tmp/*.js` không tồn tại → drift 96 dòng thừa.
+- **Fix kèm theo B2**:
+  - `nova/scripts/ipc-inventory.js` dòng 10: thêm `scripts[\/]tmp[\/]` vào IGNORE + comment giải thích.
+  - `nova/ipc-inventory.json`: regen → `24+/96-` dòng (210 kênh → 209 kênh, bỏ kênh ma từ file tmp đã xoá).
+- **Verify (kết quả thật trên app đang chạy env EVAL=1)**:
+  - `cdp-verify-wb.js` chạy trên app thật: **13/13 PASS, 0 FAIL** (đủ 6 test case).
+  - AI prompt chạy thật (callLLMJson có sẵn trong app) — không bịa, đúng §6.6.
+  - `node --check` cả 3 file sửa OK.
+  - `npm run check`: 8/10 PASS đúng nghĩa; 2 WARN pre-existing (handler-shadow 86 id-tham-chiếu C2 — đã MEMORY 2026-09-11t).
+- **Commit `[9c26f81b]`**: 2 file changed, 27+/97-.
+- **PS escape hell**: `node -e` với PS bị nuốt `;` và `&&` — viết script tạm qua `editor` rồi `node file` là cách ổn định nhất. PS redirection `> file` ghi UTF-16 LE (không phải UTF-8) → phải `buf.toString('utf16le')` khi đọc lại.
+- **Còn lại (treo)**: B2 đã hết; có thể tiếp tục verify panel khác (Tạo Ảnh Hàng Loạt / Vẽ Tay Ảnh / Tạo Kịch Bản) theo cùng pattern, hoặc chuyển sang task khác.
+
 
 # MEMORY.md â€” Bá»™ nhá»› trÆ°á»ng tá»“n cá»§a dá»± Ã¡n
 
