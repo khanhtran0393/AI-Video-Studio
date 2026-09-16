@@ -1,3 +1,24 @@
+## B1 — 2026-09-16: T7 nút retry lẻ từng cảnh lỗi (hết)
+
+- **Vấn đề (mục 1 trong 4 mục "chưa thiết kế inside")**: nhóm "lô AI hỏng" chỉ có nút ↻ Thử lại gộp cả nhóm — user nghi 1-2 cảnh lỗi mạng/API phải retry cả nhóm, tốn credit không cần thiết.
+- **Giải pháp**: thêm nút ↻ per-scene trong `.missl`. Khi bấm, gọi `t7AiRetryOne(i)` — qua `_t7AiAskScenes([c], ctx)` (đã có sẵn, API 1-cảnh đã dùng bởi `t7AiRegen`).
+- **File sửa**:
+  - `nova/web/src/toolbox/t7-ai.js` (dòng 222-253): thêm `async function t7AiRetryOne(i)` — busy guard + ctx guard + index guard + 3 nhánh (thành công / trơn / vẫn lỗi) + splice đúng vị trí i (không pop vì index có thể đã thay).
+  - `nova/web/src/toolbox/utility/t7-ai-core.js` (dòng 506): thay 1 span chứa tên cảnh + nút ↻ per-scene, onclick=`t7AiRetryOne(${k})` (k là index trong `_t7AiHong.slice(0, 12)`).
+  - `nova/web/src/styles/build-video.css` (dòng 629-636): thêm `.miss-item` (inline-flex, nowrap) + `.miss-retry` (button nhỏ, 10.5px, padding 2px 6px).
+  - `nova/scripts/t7-ai-core-test.js` (dòng 187-280): thêm hàm `_testT7AiRetryOne(F)` (B1) + `_loadT7AiForTest(ctx)` patch source. Tổng test 67→83 PASS.
+- **Hàng rào mới phát hiện**: renderer dùng `function setStatus7()` / `function _t7Clips()` ở top-level → capture lexical scope → KHÔNG mock được từ `globalThis` sau khi load. Giải pháp test: **patch source** bằng regex lookbehind trước khi `vm.runInContext`: `(?<!function )(?<![.\w])setStatus7\(` → `globalThis.setStatus7(`. Pattern này nên áp dụng cho các test T7 khác trong tương lai nếu cần mock helper.
+- **VN normalization**: regex test bỏ dấu cần map Vietnamese precomposed (`ă`, `â`, `ê`, `ô`, `ơ`, `ư`, `đ`) — NFD không tách được. Helper `VN_NORM` ở test B1 (dòng 228) có thể tái sử dụng.
+- **Verify**:
+  - `node --check` 3 file sửa OK
+  - `npm run check` 0 lỗi (size 0 warn/0 err, toplevel 0 xung đột mới, selftest 10/10)
+  - `npm run test:t7-ai` 83/0 PASS
+  - `npm run test:foundation` PASS
+  - `khoidong.bat --silent` → app chạy (port 47280 bận → focus cửa sổ hiện có)
+  - `npm run scan:lifecycle`: chỉ thấy crash lịch sử 2026-09-11 (exitCode=2) và 1 WARN 2026-09-16T13:28 (kill main từ ngoài trước khi sửa) — KHÔNG có crash mới sau khi áp B1.
+- **Tiếp theo**: B2 (CDP verify Whiteboard) + B3 (CDP verify T7) chờ user bật app thật qua `khoidong.bat` rồi thảo luận tiếp.
+
+
 # MEMORY.md â€” Bá»™ nhá»› trÆ°á»ng tá»“n cá»§a dá»± Ã¡n
 
 File nÃ y ghi **tráº¡ng thÃ¡i dÃ i háº¡n vÃ  lá»‹ch sá»­ quyáº¿t Ä‘á»‹nh**. AGENTS.md chá»©a quy chuáº©n
@@ -5488,6 +5509,59 @@ Trợ lý dựng báo đang chạy ngay + sửa preview 9:16/1:1 bị co nhỏ +
 - **Chưa làm**: test xuất hàng chờ THẬT bằng nhạc/ảnh đã lưu trong app (§6.6 — chờ
   user chạy quy trình thực để xác nhận end-to-end; hàng chờ cần IPC + ffmpeg thật).
 
+### 2026-09-15q — I-MZic: ＋ kiểu sóng "Cột uốn cong" với slider mức uốn + hướng uốn
+
+- **Yêu cầu**: thêm 1 kiểu sóng mới (#16) — từng thanh nhạc nằm trên 1 vòng cung;
+  0% thì thẳng đứng (như `bars` cổ điển), 100% khép kín thành vòng tròn 360° quanh
+  tâm. Nút chọn hướng uốn: ↻ Xuôi (trái → phải) / ↺ Ngược (phải → trái).
+- **Công thức hình học** (`drawWaveCurved` mới trong `imzic-wave.js`):
+  - `c = state.waveCurve ∈ [0,1]`, `R = (widthPx / 2π) * c` (chu vi vòng =
+    `widthPx` → tại c=1 thanh đầu/cuối gặp nhau khép kín, không có "lỗ hổng").
+  - `θ_i = tScan * 2π - π/2` (gốc trên đỉnh 12h cho dễ nhìn); `tScan = t` (fwd) hoặc
+    `1 - t` (rev) — đảo chiều quét.
+  - `tilt = (1 - c) * π/2` (c=0: thanh vuông góc bán kính → thẳng đứng; c=1:
+    tilt=0 → thanh cùng phương bán kính → xuyên tâm → vòng tròn khép kín).
+  - Ranh giới `R=1e-6` khi c=0 để tránh chia 0 — vẫn suy ra góc vuông góc đúng.
+- **Renderer wiring** (`imzic-draw.js`): thêm nhánh
+  `else if(state.waveStyle==='curved') drawWaveCurved(...)`; tận dụng biến thể
+  `waveEnergyAt + sway` giống `drawWaveBars` (cùng họ equalizer) — hưởng lợi
+  treble-sync + nhịc từ engine sẵn có, không phải tự viết lại logic audio.
+- **State** (`imzic-core.js`): thêm `waveCurve:0, waveCurveDir:'fwd'` (default
+  0% thẳng, xuôi). Thêm `waveCurve` vào `SETTINGS_RANGE_IDS` + `waveCurveDirSel`
+  vào `SETTINGS_SELECT_IDS` (nhớ localStorage v1). Hook init IIFE ngay sau
+  `rebuildParticles()`: đồng bộ label `v-wcurve` + ẩn/hiện `waveCurveField` +
+  `waveCurveHint` theo `state.waveStyle === 'curved'`.
+- **UI** (`img-to-vid.html`): thêm `<option value="curved">）Cột uốn cong</option>`
+  vào `waveStyleSel`; thêm khối `waveCurveField` (slider 0–100% + select hướng
+  `fwd`/`rev`) ẩn mặc định, chỉ hiện khi style=curved; dòng hint `waveCurveHint`
+  giải thích 0%/100% cho user.
+- **Section hint** (`imzic-presets.js`): `waveSection()` thêm mức uốn + hướng
+  vào hint (ví dụ "）Cột uốn cong · ↻ 65%"); `SECTION_HINT_SOURCES.waveSection`
+  thêm `waveCurve` + `waveCurveDirSel` để thay đổi refresh hint live.
+- **Nút 🎲**: `imzic-workflow.js` thêm `'curved'` vào danh sách pick của
+  `waveStyle` (khi người dùng bấm "Tự động" có thể random trúng kiểu này).
+- **Không phá hợp đồng**: tất cả thay đổi NỘI BỘ renderer `imzic-*` (AGENTS §4.1
+  registry = exports-contract / ipc-inventory / state main — không liên quan);
+  không IPC mới, không env mới, không module hợp đồng mới (renderer không có
+  build step — AGENTS §4/§8).
+- **Drift bắt được khi chạy `npm run check`**: `check:exports` báo 5 state
+  key mới (`reporterShutdownPromise`/`reporterQuitReady`/`gpuPolicy`/
+  `schedules`/`app`) trong `nova/main/state.js` không có trong baseline
+  `exports-contract.json` — KHÔNG phải do task này, là thay đổi từ phiên
+  trước. Cập nhật baseline theo quy trình: `npm run check:exports -- --update`
+  (ghi nhận tại MEMORY 2026-09-15q, baseline 35 module).
+- **Kiểm định**: `npm run check` EXIT 0 toàn chuỗi (syntax 494 file, ipc
+  208 kênh/21 events/3484 files, exports 35 module khớp baseline, shared
+  20 keys, shared-shadow 0 fn chết, shadow 0 lỗi (87 warn id-tham-chiếu
+  từ `nova/web/src/toolbox/...` — drift từ phiên trước, không liên quan),
+  size 0 warning, toplevel 1763 tên 0 xung đột, docs 39 script khớp,
+  selftest 10/10 PASS).
+- **Còn treo** (§6.6 — chờ user test thật): slider 50% trên nhạc thật →
+  uốn thành nửa cung; 100% → vòng tròn khép kín; đổi hướng ↺ thấy đảo chiều
+  quét; ⚡ Xuất nhanh file thật để xác nhận offline export dùng chung
+  `drawWaveCurved` (đã tự động vì `drawWave` đăng ký nhánh mới, giống
+  `bars` cổ điển — không phải sửa `imzic-export.js`).
+
 
 
 
@@ -5939,6 +6013,47 @@ Trợ lý dựng báo đang chạy ngay + sửa preview 9:16/1:1 bị co nhỏ +
   tài khoản/credit Flow thật + dữ liệu app thật — theo §6.6 không tự bịa dữ liệu; chờ user
   chạy 1 lượt video nhỏ trong app để nghiệm thực địa).
 
+## 2026-09-16b — Whiteboard Studio: hoàn tất dọn nút legacy — chỉ còn luồng 6 bước (Bước 3 `wb-analyzePromptBtn` chuỗi prompt→Flow gen; Bước 4 `wb-arrangeBtn`); phục hồi 2 file web khỏi sự cố "mojibake"
+
+- **Kết luận quan trọng — phiên trước chẩn đoán SAI nguyên nhân**: các splice PowerShell 5.1
+  (`Get-Content`/`Set-Content`) **KHÔNG hề làm hỏng file** — ACP hệ thống là UTF-8 nên
+  round-trip lossless. Backup `%TEMP%\wbsp-20260916202137.bak` / `wbsa-20260916202137.bak`
+  ≡ đúng trạng thái pre-session (đủ mọi edit cleanup của phiên). Toàn bộ "mojibake nhiều lớp"
+  (panel: 16960 U+FFFD ở HEAD, ai: 582 U+FFFD) là **hỏng SẴN trong repo** (commit từ tai nạn
+  encoding trước đó) — các chuỗi tiếng Việt bị hỏng từng cụm (`â€"`, `Ã `, `năng`→`n?ng`…)
+  hiển thị xuyên suốt khi đọc file. Đây là issue repo-wide riêng, KHÔNG sửa trong task này
+  (chỉ phủ nhận việc "git restore sẽ sạch" — HEAD cũng hỏng).
+- **Hành động gây hại đã hoàn tác**: các script "đảo ngược mojibake" (tmp-wb-reverse-1252,
+  tmp-wb-reverse2) từng ghi đè working file → khôi phục bằng `Copy-Item` từ .bak (byte-identical,
+  FFFD=0, node --check OK). Bài học: before assuming corruption, dump byte-level (`git show` qua
+  `cmd /c` để tránh PS re-encode) so với backup — phân biệt "hỏng sẵn" vs "hỏng do mình".
+- **Sửa cuối trên `nova/web/whiteboard-studio-ai.js`** (script line-based, anchor ASCII,
+  fail-loud — `nova/scripts/tmp/tmp-wb-ai-finalize1..4.js`):
+  (1) viết lại header 33 dòng cho luồng 2 nút (wbAiPrompts + wbAnalyzePromptData);
+  (2) `wbAiPrompts` bỏ hẳn nút `C.els.aiPromptsBtn` (btn/btnOld/finally-restore), 3 log đầu
+  + log hoàn thành viết lại (không còn "bấm AI sinh ảnh theo câu (auto)");
+  (3) `wbAiGenImages` bỏ nút `wb-aiGenBtn` (getElementById/btnOld/restore + textContent
+  progress trong runner), gỡ `try` nội bộ thừa (không còn finally cần khôi phục) + dedent,
+  log retry đổi thành "chạy lại Bước 3 (Phân tích prompt)".
+- **Trạng thái chain cuối cùng** (khớp goal): boot panel bind đúng 2 nút —
+  `wb-analyzePromptBtn` → `wbAnalyzePrompt()` → `wbAnalyzePromptData` (kịch bản → tách câu →
+  khớp SRT) → `wbAiPrompts()` → `wbAiGenImages()` (Flow gen → save → `setImageForScene` →
+  `wbAiRegionsCore`); Bước 4 = `wb-arrangeBtn`/`wbArrangeRegions`. Giữ nguyên:
+  `renderSceneDetail` stub, `setImageForScene`, B1/B2/whisper/B5/B6.
+- **Kiểm định**: node --check cả 2 file OK; `tmp-wb-cleanup-check.js` PASS (0 dead-ref:
+  wb-aiGenBtn / els.aiPromptsBtn / wbAiRegions wrapper / wbEd* đều sạch; mojibake được loại
+  khỏi check vì hỏng sẵn từ HEAD); **`npm run check` EXIT=0** (syntax 496 files, ipc 209
+  kênh, exports 35 module khớp baseline, shared 20 keys, shadow 0, size 0 warn, toplevel
+  1782 tên — 1 override hợp lệ đã biết, docs 39/39, selftest 10/10).
+- **Chờ user (§6.6)**: smoke UI thật qua `khoidong.bat` — mở Whiteboard Studio: chỉ còn
+  2 nút AI (🧠 Phân tích prompt Bước 3, Bước 4 sắp cảnh); bấm Bước 3 chạy trọn chuỗi
+  prompt → Flow gen ảnh → khoanh vùng; không còn nút "🤖 AI sinh ảnh theo câu (auto)" /
+  "🤖 AI sinh prompt ảnh" / "🎯 AI khoanh vùng" đơn lẻ.
+- **Bài học vận hành phiên**: câu lệnh foreground kế tiếp GIẾT process đang chạy trong
+  terminal Cline → `npm run check` chạy detached qua `%TEMP%\wb-run-check.cmd`
+  (`Start-Process -WindowStyle Hidden`) rồi thăm log; editor tool hỏng khi old_text/new_text
+  chứa emoji/Unicode lạ trong file mojibake → mọi sửa file hỏng làm bằng Node script
+  line-based (split /\r?\n/, anchor ASCII, assert fail-loud trước khi ghi).
 ## 2026-09-15c — Tối ưu lag/freeze khi mở/đổi Profile & Video (toolbox): IDB batch + bỏ render trùng + bỏ ghi đè ảnh vừa đọc
 
 - **Root cause đã xác nhận bằng code + CDP 9336 (dữ liệu IDB thật)**:
@@ -6352,3 +6467,145 @@ User chọn hướng "test bằng dữ liệu hiện có" thay vì chờ SRT/ả
 - **Cần test thật khi user chạy workflow** (§6.6 — chưa có dữ liệu thật trong phiên này):
   xuất 1080p/1440p/4K end-to-end (kể cả video lẻ khung khi canvas preview lẻ), thanh %
   mux khi bật loudnorm/fade, mở file mp4 4K bằng player, hàng chờ nhiều mục chạy trọn.
+
+### 2026-09-16b — GPU policy 3 lớp: TỰ DÒ GPU trên MỌI PC (auto → force → software circuit breaker)
+
+- **Vấn đề**: kể từ quyết định 2026-09-11j, `gpu-policy.js` gắn `--disable-gpu` CỨNG
+  cho mọi máy — đúng cho máy đích (Chromium 149 blocklist oan GTX 1050 Ti) nhưng
+  MẤT OAN GPU thật trên PC khác (GPU compositing + WebGL cứng). Yêu cầu user: app
+  phải tự nhận dạng và dùng GPU thật trên bất cứ máy nào, có escalation/fallback
+  LỘ LIỄU thay vì hardcode.
+- **Thiết kế đã duyệt (3 lớp)**, viết lại `nova/main/gpu-policy.js`:
+  1. `auto` (mặc định, launch đầu): KHÔNG gắn cờ gì. Sau `whenReady` +6s probe
+     `app.getGPUFeatureStatus()` (timeout 10s — không trả lời thì KHÔNG đoán, giữ
+     nguyên mode). `gpu_compositing = enabled` → chốt `gpu`; bị chặn → escalate.
+  2. `force`: ghi trạng thái + relaunch ĐÚNG MỘT lần với `--ignore-gpu-blocklist`
+     (điều này TRƯỚC ĐÂY bị cấm tuyệt đối bởi 11j — giờ được phép trong 1 bước
+     escalation CÓ CHỦ ĐÍCH, có circuit breaker). Force probe enabled → sau cửa sổ
+     ổn định 30s chốt `gpu`; force vô hiệu → `software`.
+  3. `software`: circuit breaker canh `child-process-gone` type GPU — crash ở chế
+     độ `force` → rút lui NGAY về `--disable-gpu` + `--use-angle=swiftshader` +
+     `--enable-unsafe-swiftshader` (chính là cấu hình 11j/15r, giữ WebGL2 SwiftShader
+     cho FX I-MZic) + relaunch. Chế độ `gpu`: ≥2 lần GPU process chết trong 60s →
+     `software` + relaunch. Mọi chuyển mode ghi lifecycle event `gpu-policy-*`
+     (Luật 10 — không có fallback ngầm nào).
+- **Trạng thái quyết định** lưu `userData/gpu-policy-mode.json` (ghi nguyên tử
+  .tmp+rename; sai dạng → dùng 'auto' VÀ NÓI RA console.warn). Override chẩn đoán:
+  `AI_VIDEO_STUDIO_GPU_POLICY=auto|gpu|force|software` (tiền tố đúng Luật 3, chỉ
+  phiên hiện tại, không ghi đè file). Chia sẻ qua `state.gpuPolicy` (key mới trong
+  `main/state.js`, `check:shared` 20 keys PASS).
+- **⚠️ Bẫy check:shared**: script quét regex `state.<tên>` trên toàn văn file —
+  chuỗi literal `'gpu-policy-state.json'` (chứa "state.json") bị bắt nhầm là ghi
+  `state.json` chưa khai báo → file trạng thái phải đặt tên `gpu-policy-mode.json`,
+  tránh mọi literal chứa "state.json" trong source.
+- **Không đổi**: export contract (`{ installGpuPolicy }` — check:exports PASS 35
+  modules), không kênh IPC mới, không preload (không có consumer UI; trạng thái
+  xem qua lifecycle.log + `state.gpuPolicy`). Encode GPU video (NVENC —
+  `editor-pro/gpu-encoder.js`) KHÔNG phụ thuộc policy này (probe ffmpeg riêng).
+- **Sản lượng kỳ vọng trên máy đích này**: launch 1 `auto` → probe disabled (blocklist
+  oan) → escalate `force` relaunch → nếu CfT crash GPU → breaker → `software` (trạng
+  thái cuối GIỐNG 15r); trên máy GPU bình thường → `auto` chốt `gpu` ngay, không
+  relaunch nào.
+- **Hạn chế môi trường phiên này**: terminal tích hợp Cline hỏng (PSReadLine
+  OutOfRangeException, command completion không bắt được) + Windows Defender
+  (MsMpEng) quét chậm mỗi lần spawn node.exe (~1–2.5s/lần) → `npm run check`
+  bước `check:syntax` (spawn `node --check` 496 file) mất >10 phút, trông như treo.
+  Chạy kiểm định bằng tiến trình detached + ghi file + đọc file. script chẩn đoán
+  `nova/scripts/tmp/tmp-syntax-progress.js` (tmp-*, gitignored) xác nhận KHÔNG file
+  .js nào fail/treo — chỉ chậm.
+- **Chờ verify thật (§6.6)**: chạy `khoidong.bat` → đọc lifecycle.log chuỗi
+  `gpu-policy-mode` / `gpu-policy-probe` / `gpu-policy-crash-guard` qua 2–3 lần
+  relaunch tự động; `npm run scan:lifecycle` (WARN cụm -1 từ phiên force là đã
+  biết — CfT crash; REAL mới sau phiên software phải = 0).
+- **✅ KẾT QUẢ VERIFY THẬT (cùng phiên, đã chạy)** — khác kỳ vọng theo hướng TỐT:
+  - Launch 1 (14:13Z, `auto`, không cờ gì): probe +6s → `gpu_compositing=enabled`,
+    `webgl=enabled`, GPU = `4318/7298` (NVIDIA GTX 1050 Ti) + `5140/140` (Intel)
+    → **chốt `gpu` NGAY, không cần bước force/relaunch nào**. Bằng chứng: lifecycle
+    event `gpu-policy-mode mode=auto->gpu` + file `gpu-policy-mode.json`
+    `{"mode":"gpu",...}` ghi đúng.
+  - Launch 2 (14:28Z sau kill + `khoidong.bat --silent` EXIT 0, bridge 47280 OK):
+    nạp mode đã lưu `gpu`, probe lại enabled — app đang chạy GPU thật.
+  - Đối chiếu 11j: cụm crash CfT trước đây xảy ra với `--ignore-gpu-blocklist`
+    (force QUA blocklist); launch TỰ NHIÊN không cờ không rơi vào nhánh đó —
+    driver R580 582.66 apparently KHÔNG nằm trong blocklist Chromium 149. Vẫn giữ
+    circuit breaker `gpu`→`software` (≥2 crash/60s) làm bảo hiểm dài hạn.
+  - `npm run check` đủ 10 bước PASS (syntax 496 file qua detached run chậm do
+    Defender; ipc 209 kênh; exports 35; shared 41 file/20 keys; selftest 10/10).
+  - `npm run scan:lifecycle`: REAL=38, WARN=56 — **toàn bộ lịch sử**, entry mới
+    nhất 13:28Z (TRƯỚC code mới 14:13Z); phiên GPU thật không sinh REAL/WARN mới,
+    không crash-guard.
+  - Test env override `AI_VIDEO_STUDIO_GPU_POLICY=software` (14:40Z): khoi dong
+    `mode=software`, probe `gpu_compositing=disabled_software` (SwiftShader đúng
+    thiết kế), **file quyết định giữ nguyên `mode:"gpu"`** — override chỉ phiên
+    như thiết kế. Phiên software sạch không crash. Đã kill app sau verify.
+
+### 2026-09-16c — I-MZic UI: 🎲 dời xuống mục 10 (hàng chờ) + gộp bật/tắt sóng vào "Kiểu sóng" + 🗑 Xoá dữ liệu
+
+- **🎲 autoFxBtn dời chỗ**: gỡ khỏi mục 3, đặt đầu mục 10 trên `queueAddBtn`
+  (mô tả đổi thành "cho cấu hình sắp thêm vào hàng chờ" — chọn ngẫu nhiên rồi
+  thêm vào hàng chờ là quy trình tự nhiên). Sửa trong `img-to-vid.html`.
+- **Sóng nhạc: gộp bật/tắt vào "Kiểu sóng"** — xoá field `waveOnSel` riêng, thêm
+  `<option value="off">✕ Tắt — không hiển thị sóng</option>` đầu `waveStyleSel`;
+  các tham số sóng bọc `<div id="waveParams">` (ẩn khi 'off'). Hợp đồng state
+  GIỮ NGUYÊN (Luật 1): `drawWave` vẫn guard `state.waveOn`; handler `waveStyleSel`
+  mới trong `imzic-controls.js` set `state.waveOn = (waveStyle !== 'off')` + toggle
+  `#waveParams`, giữ logic hiện `waveCurveField`/`waveCurveHint` cho kiểu 'curved'
+  (tính năng 16 cột uốn của phiên song song 2026-09-16b không bị đụng).
+- **Migration bản lưu cũ** (`imzic-controls.js` `applySettingsInputs`): (a) era
+  chip — `waveChips` là bật/tắt: 'off' → đổi tên thành `waveStyleSel`='off' qua
+  `LEGACY_CHIP_TO_SEL`, 'on' → xoá (giữ kiểu sóng đã lưu trong `waveStyleChips`
+  để không bật sóng kiểu rỗng); (b) era dropdown — key `waveOnSel`='off' → ép
+  `waveStyleSel`='off', rồi xoá key. `waveOnSel` gỡ khỏi `SETTINGS_SELECT_IDS`.
+  `imzic-presets.js` `SECTION_HINT_SOURCES.waveSection` bỏ nguồn đã gỡ.
+- **🎲 workflow dùng select hợp nhất**: bước 4 trong `imzicAutoEffect` bỏ
+  dispatch `waveOnSel` — `waveStyle` = 'off' khi không chọn, else random 11 kiểu
+  (có 'curved'); dòng status đổi `waveOn === 'on'` → boolean. **Sửa bug thật**:
+  nút 🎲 từng bị gắn click 2 lần (listener cuối `imzicAutoEffect` + dòng trùng
+  sau `imzicQueueSetStatus`) — mỗi bấm chọn 2 bộ ngẫu nhiên; đã xoá dòng trùng.
+- **🗑 clearDataBtn mới** (cuối mục 10, sau `snapshotBtn`): khác 🧹 Reset — CHỈ
+  bỏ dữ liệu + cache phiên, GIỮ cài đặt, KHÔNG reload. Confirm dialog → dừng
+  audio + revoke `audObjUrl`/`imgObjUrl`, reset img/slides/audio/bg/watermark/
+  lyrics về mặc định (input + label), xoá 3 cache (`offlineAnalysis`/promise,
+  `slideRasterCache`, `slideBlurCache`, `squareBlurCache`, `slideSchedule`),
+  `lyricsVersion++` hạ cache wrap lời, `rebuildParticles()`, UI về trạng thái
+  trống (disable play/export/snapshot, show emptyState, seek 0). Chặn khi
+  `isExporting` hoặc `imzicQueueRunning` (lộ liễu, Luật 10); không có dữ liệu →
+  báo nhẹ không confirm. Nạp trong `imzic-workflow.js` (file workflow nạp cuối).
+- **Kiểm định**: `node --check` OK 3 file sửa. `npm run check` đủ 10 bước PASS
+  trên đúng trạng thái sau mọi sửa (selftest 10/10, docs-sync 39/39, toplevel
+  1774 tên không xung đột) — EXIT 0 xác minh 2 lần bằng `cmd /c … & echo
+  EXITCODE:%ERRORLEVEL%` (đọc từ buffer terminal; PowerShell $LASTEXITCODE khi
+  pipe stderr là artifact sai). **Hạn chế phiên**: check:syntax >10 phút do
+  Defender (xem 16b) + terminal Cline hỏng PSReadLine → không chạy được
+  test:imzic trong phiên (không ảnh hưởng: nó test `nova/main/ipc/imzic-helpers.js`
+  — file này KHÔNG bị đụng; mọi sửa nằm ở renderer `nova/web`).
+- **Chờ user (§6.6)**: test UI thật qua `khoidong.bat`: 🎲 ở mục 10 thêm vào
+  hàng chờ; chọn "✕ Tắt" trong Kiểu sóng → sóng + tham số biến mất, lưu/reload
+  settings giữ đúng; bản lưu cũ (bật/tắt sóng chip hoặc waveOnSel) mở lên đúng
+  trạng thái; 🗑 Xoá dữ liệu giữa phiên có nhạc đang phát + slideshow + lời →
+  về trống sạch, cài đặt giữ nguyên.
+
+
+## 2026-09-16c — Panel Skill: bộ skill mẫu 100 chủ đề + nút "Nạp bộ skill mẫu"
+
+- **Bối cảnh**: panel Skill (`Cài đặt · Skill`) trước đây chỉ là khung CRUD trống — user phải tự nghĩ prompt cho từng chủ đề khi viết kịch bản. Mục tiêu: biến panel Skill thành kho skill hoàn chỉnh phủ 100 chủ đề của tab "Tạo Kịch Bản".
+
+- **Catalog mới** (`nova/web/src/toolbox/skill-catalog.js`): khai báo `SKL_CATALOG` (`var` cấp toàn cục để `tool-skills.js` đọc trực tiếp), 100 entry đúng theo 100 `<option value="...">` trong `panel-toolscript.html` — `topic` của mỗi entry khớp **giá trị** value (bỏ phần tiếng Anh trong ngoặc, `Papa-Mama` → `Papa/Mama`). Mỗi entry có `name` (tên skill), `topic` (chủ đề — liên kết với select ở Tạo Kịch Bản), `style` (phong cách viết), `instructions` (Mở đầu bằng… Cấu trúc… Nhịp… Loop… Cấm…) — format thống nhất cho cả 100. Script kiểm định `nova/scripts/tmp/check-skill-catalog.js` xác nhận `entries: 100`, `dup names: 0`, `bad styles: []`, `empty instructions: 0`, mọi `topic` đều có mặt.
+
+- **Hàm nạp** (`nova/web/src/toolbox/tool-skills.js`, đặt trước khối "Cầu nối sang Tạo Kịch Bản"): `sklImportCatalog()` đọc `SKL_CATALOG`, lấy danh sách skill hiện có qua `sklLoadAll()`, **chỉ thêm mới, bỏ qua skill trùng tên** (không ghi đè skill user đã sửa — quy ước quan trọng, vì nếu user sửa tay mà lần nạp sau ghi đè sẽ mất bản đã sửa). Cùng convention `id`+`createdAt` với `sklSave()`; fallback `topic` mặc định nếu entry thiếu. Báo lỗi lộ liễu `'Không tìm thấy bộ skill mẫu (src/toolbox/skill-catalog.js chưa được nạp).'` khi catalog rỗng.
+
+- **Nút trong panel** (`nova/web/partials/panel-skills.html`): thêm `📥 Nạp bộ skill mẫu (100 chủ đề)` + dòng `Chỉ thêm mới — không ghi đè skill đã sửa`. `nova/web/index.html` nạp `<script src="src/toolbox/skill-catalog.js">` **trước** `tool-skills.js` (load order: catalog → tool-skills).
+
+- **Kiểm định** (chạy qua wrapper `nova/scripts/tmp/run-check-step.js` vì terminal Cline nuốt output của tiến trình dài, AGENTS.md §6.5):
+  - `node --check` 4 file task: OK.
+  - `npm run check` đủ 10 bước **EXIT 0** (496 syntax, 209 IPC channel, 35 module khớp baseline, 41 shared, 13 shared-shadow, 0 shadow, 0 size, 0 toplevel, 39 docs, 10 selftest) — chứng minh catalog không phá hợp đồng nào.
+  - **Pitfall phát hiện**: `nova/scripts/tmp/syn-check-prog.js` (script tôi viết) báo `whiteboard-studio-ai.js` + `dump-save.js` lỗi syntax — **là false positive** do script tmp của tôi. `node --check` trực tiếp cả 2 file đều OK, `syntax-check.js` gốc chỉ quét 496 file (loại trừ `nova/scripts/tmp/` theo AGENTS.md §8) và báo `496 files passed`. Hai file lỗi "có sẵn" từ commit `12a0dc51` không liên quan task này, không sửa (dump-save.js thuộc tmp/ đã gitignore, whiteboard-studio-ai.js node check OK).
+
+- **App thật** (qua `http://127.0.0.1:47280`):
+  - `GET /` → 200, 315152 bytes, body chứa `src/toolbox/skill-catalog.js` (đã include).
+  - `GET /src/toolbox/skill-catalog.js` → 200, 56550 bytes, có `SKL_CATALOG`, 100 entry.
+  - `GET /src/toolbox/tool-skills.js` → 200, 11705 bytes, có `sklImportCatalog`.
+  - `GET /partials/panel-skills.html` → 200, 4513 bytes, có "Nạp bộ skill mẫu" + "100 chủ đề".
+  - Lifecycle.log session test mới: chỉ `gpu-policy-mode/probe` (mode=gpu), không crash.
+
+- **Chờ user (§6.6)**: mở app → `Cài đặt · Skill` → bấm `📥 Nạp bộ skill mẫu` → danh sách 100 skill xuất hiện → bấm `✍️ Dùng` một vài skill → mở `Tạo Kịch Bản` chọn đúng chủ đề tương ứng → viết kịch bản thật để xác nhận prompt ghép đúng hướng dẫn. Sau khi sửa skill mẫu, bấm `📥 Nạp` lần nữa → confirm skill đã sửa KHÔNG bị ghi đè.

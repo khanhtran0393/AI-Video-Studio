@@ -503,7 +503,7 @@ function _t7AiRender(){
   // lượt gọi, trong khi lỗi kiểu này thường do mạng/API → thử cả nhóm một lần là đủ.
   + (_t7AiHong.length ? `<div class="miss">
       <div class="missh">⚠️ ${_t7AiHong.length} cảnh không lấy được đề xuất (lô AI hỏng)</div>
-      <div class="missl">${_t7AiHong.slice(0, 12).map(h => escapeHtml(h.name || String(h.sceneId))).join(' · ')}</div>
+      <div class="missl">${_t7AiHong.slice(0, 12).map((h, k) => `<span class="miss-item" title="${escapeHtml(h.name || String(h.sceneId))}">${escapeHtml(h.name || String(h.sceneId))}<button class="miss-retry" onclick="t7AiRetryOne(${k})" title="Thử lại riêng cảnh này — đỡ tốn credit hơn thử cả nhóm nếu chỉ 1-2 cảnh lỗi mạng">↻</button></span>`).join('')}</div>
       <button onclick="t7AiRetryFailed()">↻ Thử lại ${_t7AiHong.length} cảnh này</button></div>` : '');
   _t7AiTally();
   _t7AiPvHook();

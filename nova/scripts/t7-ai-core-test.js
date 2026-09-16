@@ -184,6 +184,105 @@ const two = T._t7AiFixLayers([{ type: 'text', text: 'Chữ', box: { x: 5, y: 40,
   { type: 'shape', box: { x: 60, y: 10, w: 20, h: 20 } }], 3);
 ok(two[0].type === 'shape', 'xếp lại: shape (nền) nằm DƯỚI chữ');
 
+// B1 (2026-09-16): test t7AiRetryOne — nút retry lẻ từng cảnh lỗi. Hàm sống trong t7-ai.js
+// (cấp global renderer). Để test, ta tạo sandbox RIÊNG (không dùng F.ctx của phần 2 — phần 2
+// không thể mock được vì t7-ai.js capture setStatus7/_t7Clips v.v. qua lexical scope khi load).
+// Cách: đọc t7-ai.js, regex-replace các lệnh gọi helper SANG globalThis.*, rồi nạp vào vm.
+function _loadT7AiForTest(ctx){
+  let src = read(path.join(WEB, 'src/toolbox/t7-ai.js'));
+  // Patch: setStatus7(...) → globalThis.setStatus7(...), _t7Clips() → globalThis._t7Clips(),
+  // _t7AiAskScenes(...) → globalThis._t7AiAskScenes(...), _t7AiAfterAsk → globalThis._t7AiAfterAsk,
+  // _t7AiRender/_t7AiSave → globalThis.*. Lookbehind âm bỏ qua "function " phía trước
+  // (không patch vào khai báo hàm gốc), giữ nguyên declaration của file.
+  src = src.replace(/(?<!function )(?<![.\w])setStatus7\(/g, 'globalThis.setStatus7(');
+  src = src.replace(/(?<!function )(?<![.\w])_t7Clips\(/g, 'globalThis._t7Clips(');
+  src = src.replace(/(?<!function )(?<![.\w])_t7AiAskScenes\(/g, 'globalThis._t7AiAskScenes(');
+  src = src.replace(/(?<!function )(?<![.\w])_t7AiAfterAsk\(/g, 'globalThis._t7AiAfterAsk(');
+  src = src.replace(/(?<!function )(?<![.\w])_t7AiRender\(/g, 'globalThis._t7AiRender(');
+  src = src.replace(/(?<!function )(?<![.\w])_t7AiSave\(/g, 'globalThis._t7AiSave(');
+  vm.runInContext(src, ctx, { filename: 'src/toolbox/t7-ai.js#patched' });
+}
+async function _testT7AiRetryOne(F){
+  // Sandbox riêng (không dùng F.ctx vì file đã load ở đó KHÔNG thể mock do lexical scope)
+  const ctx = vm.createContext({
+    console, setStatus7: () => {},
+    _t7Clips: () => [], _t7AiRender: () => {}, _t7AiSave: () => {},
+  });
+  _loadT7AiForTest(ctx);
+  const statusLog = []; ctx.__statusLog = statusLog;
+  ctx.__askArgs = null; ctx.__askCalled = 0; ctx.__afterCalled = 0; ctx.__kqNext = null;
+  vm.runInContext('globalThis.setStatus7 = (m, lvl) => __statusLog.push([m, lvl]);', ctx);
+  vm.runInContext('globalThis._t7AiAskScenes = async (cs, c) => { __askCalled = (__askCalled || 0) + 1; __askArgs = { clips: cs, ctx: c }; return __kqNext; };', ctx);
+  vm.runInContext('globalThis._t7AiAfterAsk = async () => { __afterCalled = (__afterCalled || 0) + 1; };', ctx);
+
+  // Cung cấp clip có sceneId="1" để _t7Clips() trả về [c{sceneId:1}] cho mọi cảnh trong Hong.
+  vm.runInContext('globalThis._t7Clips = () => [{sceneId: "1"}, {sceneId: "2"}, {sceneId: "3"}];', ctx);
+
+  // Bối cảnh: 3 cảnh lỗi + ctx trơn (chỉ cần .cat để vượt guard)
+  vm.runInContext('globalThis._t7AiCtx = { cat: [{}], allowed: new Map(), catLine: "", topic: "Test", index: {}, clips: [] };', ctx);
+  vm.runInContext('globalThis._t7AiHong = [{sceneId: "1", name: "Canh 1"}, {sceneId: "2", name: "Canh 2"}, {sceneId: "3", name: "Canh 3"}];', ctx);
+  vm.runInContext('globalThis._t7AiBusy = false;', ctx);
+
+  // Helper: lấy message gần nhất (bỏ dấu để regex đơn giản). Vietnamese precomposed
+  // (ă, â, ê, ô, ơ, ư, đ) không bị NFD tách — cần map thủ công.
+  const VN_NORM = s => (s || '').toLowerCase()
+    .replace(/[ăâ]/g, 'a').replace(/[êếềệểễ]/g, 'e').replace(/[ôốồộổỗ]/g, 'o')
+    .replace(/[ơớờợởỡ]/g, 'o').replace(/[ưứừựửữ]/g, 'u').replace(/[ýỳỷỹỵ]/g, 'y')
+    .replace(/đ/g, 'd').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const lastMsg = () => VN_NORM((statusLog[statusLog.length - 1] || [""])[0] || "");
+  const has = (re) => re.test(lastMsg());
+
+  // (1) Busy guard
+  vm.runInContext('globalThis._t7AiBusy = true;', ctx);
+  await vm.runInContext('t7AiRetryOne(0)', ctx);
+  ok(ctx.__askCalled === 0, 'busy: KHONG goi _t7AiAskScenes');
+  ok(has(/dang chay/), 'busy: setStatus7 thong bao');
+  vm.runInContext('globalThis._t7AiBusy = false;', ctx);
+  statusLog.length = 0;
+
+  // (2) Thieu _t7AiCtx
+  vm.runInContext('globalThis._t7AiCtx = null;', ctx);
+  await vm.runInContext('t7AiRetryOne(0)', ctx);
+  ok(has(/chua co ngu canh/), 'ctx rong: bao loi');
+  vm.runInContext('globalThis._t7AiCtx = { cat: [{}], allowed: new Map(), catLine: "", topic: "Test", index: {}, clips: [] };', ctx);
+  statusLog.length = 0;
+
+  // (3) Index ngoai range
+  await vm.runInContext('t7AiRetryOne(99)', ctx);
+  ok(has(/khong con trong nhom loi/), 'i ngoai range: bao');
+  statusLog.length = 0;
+
+  // (4) Thanh cong
+  ctx.__kqNext = { them: 1, hong: [] }; ctx.__askCalled = 0; ctx.__afterCalled = 0;
+  const before = vm.runInContext('globalThis._t7AiHong.length', ctx);
+  await vm.runInContext('t7AiRetryOne(0)', ctx);
+  ok(ctx.__askCalled === 1, 'thanh cong: goi 1 lan');
+  ok(ctx.__askArgs && ctx.__askArgs.clips && ctx.__askArgs.clips.length === 1 && ctx.__askArgs.clips[0].sceneId === "1", 'thanh cong: truyen 1 canh sceneId=1');
+  ok(ctx.__afterCalled === 1, 'thanh cong: _t7AiAfterAsk goi');
+  ok(vm.runInContext('globalThis._t7AiHong.length', ctx) === before - 1, 'thanh cong: xoa khoi Hong');
+  ok(vm.runInContext('!!globalThis._t7AiHong.find(h => h.sceneId === "1")', ctx) === false, 'thanh cong: sceneId=1 roi Hong');
+  statusLog.length = 0;
+
+  // (5) Tron (AI de xuat 0, khong loi)
+  ctx.__kqNext = { them: 0, hong: [] }; ctx.__afterCalled = 0;
+  vm.runInContext('globalThis._t7AiHong = [{sceneId: "1", name: "Canh 1"}, {sceneId: "2", name: "Canh 2"}, {sceneId: "3", name: "Canh 3"}];', ctx);
+  await vm.runInContext('t7AiRetryOne(1)', ctx);
+  ok(vm.runInContext('globalThis._t7AiHong.length', ctx) === 2, 'tron: van xoa khoi Hong');
+  ok(vm.runInContext('!!globalThis._t7AiHong.find(h => h.sceneId === "2")', ctx) === false, 'tron: sceneId=2 roi Hong');
+  ok(has(/xet/) && has(/tron/), 'tron: thong bao xet de tron');
+  ok(ctx.__afterCalled === 0, 'tron: KHONG goi _t7AiAfterAsk');
+  statusLog.length = 0;
+
+  // (6) Van loi → giu nguyen
+  ctx.__kqNext = { them: 0, hong: [{sceneId: "1", name: "Canh 1"}] }; ctx.__afterCalled = 0;
+  vm.runInContext('globalThis._t7AiHong = [{sceneId: "1", name: "Canh 1"}, {sceneId: "2", name: "Canh 2"}, {sceneId: "3", name: "Canh 3"}];', ctx);
+  await vm.runInContext('t7AiRetryOne(0)', ctx);
+  ok(vm.runInContext('globalThis._t7AiHong.length', ctx) === 3, 'van loi: KHONG xoa khoi Hong');
+  ok(ctx.__afterCalled === 0, 'van loi: KHONG goi _t7AiAfterAsk');
+  ok(has(/van loi/), 'van loi: setStatus7 lo liêu ly do');
+}
+
+
 // ────────────────────────────────────────────────────────────────────────────
 // PHẦN 2 — LUỒNG THẬT: nạp cả bộ file renderer vào sandbox rồi chạy trọn
 // t7AiPropose với AI giả lập CỐ TÌNH vi phạm. Bắt được loại lỗi mà node --check
@@ -252,7 +351,7 @@ else {
   // (a) Mọi hàm điều phối PHẢI là function cấp global. Đây chính là phép thử bắt lỗi
   //     "hàm bị nuốt vào template literal" — node --check không bao giờ thấy.
   const FUNCS = ['t7AiPropose','_t7AiProposeRun','_t7AiPrompt','_t7AiIngest','_t7AiAskScenes','_t7AiAfterAsk',
-    't7AiRegen','t7AiRestore','t7AiRetryFailed','_t7AiSetCtx','t7AiDecide','t7AiAll','_t7AiApply','_t7AiRender',
+    't7AiRegen','t7AiRestore','t7AiRetryFailed','t7AiRetryOne','_t7AiSetCtx','t7AiDecide','t7AiAll','_t7AiApply','_t7AiRender',
     '_t7AiVision','_t7AiCritic','_t7AiTrans','_t7AiMap','t7AiDesign','t7AiDesignClearAsk'];
   eq(FUNCS.filter(n => vm.runInContext('typeof ' + n, ctx) !== 'function'), [],
     'mọi hàm Trợ lý dựng tồn tại ở cấp global (không hàm nào bị lồng nhầm)');
@@ -289,6 +388,9 @@ else {
     const kq = vm.runInContext('(() => { let g=0,l=0; (state.aiQueue||[]).forEach(q => {'
       + ' const h=_t7AiEntrySig(q); if (h==null || (q.h!=null && q.h!==h)) l++; else g++; }); return {g,l}; })()', ctx);
     ok(kq.l > 0, 'sửa lời thoại → ' + kq.l + ' đề xuất được nhận diện là hết hiệu lực (#1)');
+
+    // B1: test t7AiRetryOne — gọi SAU khi t7AiPropose chạy xong, tận dụng cùng ctx đã nạp.
+    await _testT7AiRetryOne(F);
   })().then(finish).catch(e => { ok(false, 'luong sandbox ném lỗi bất ngờ: ' + e.message); finish(); });
 }
 

@@ -220,6 +220,40 @@ async function t7AiRetryFailed(){
   } finally { _t7AiBusy = false; }
 }
 
+// Nút "↻" trên từng cảnh trong nhóm "lô AI hỏng" — thử lại RIÊNG cảnh đó, không kéo cả nhóm.
+// Dùng khi user nghi 1 cảnh cụ thể bị lỗi mạng/API trong khi các cảnh khác vẫn ổn. Đi đúng qua
+// _t7AiAskScenes([c], ctx) — API đã hỗ trợ 1 cảnh từ trước (xem t7AiRegen). Nếu hỏi thành công
+// thì xoá khỏi _t7AiHong; hỏi hỏng thì giữ nguyên, setStatus lộ liễu lý do (Luật 10).
+async function t7AiRetryOne(i){
+  if (_t7AiBusy){ setStatus7('Trợ lý đang chạy — chờ xong đã.', 'info'); return; }
+  const ctx = _t7AiCtx;
+  if (!ctx || !ctx.cat){ setStatus7('Chưa có ngữ cảnh phân tích — bấm ↻ Phân tích lại.', 'error'); return; }
+  const ten = _t7AiHong[i]; if (!ten){ setStatus7('Cảnh này không còn trong nhóm lỗi.', 'info'); return; }
+  const clips = (typeof _t7Clips === 'function') ? _t7Clips() : [];
+  const c = clips.find(x => x && x.sceneId === ten.sceneId);
+  if (!c){ setStatus7('Cảnh "' + (ten.name || '') + '" không còn trên dòng thời gian.', 'error'); return; }
+  _t7AiBusy = true;
+  setStatus7('✨ Đang hỏi lại cảnh "' + (ten.name || '') + '"…', 'working');
+  try {
+    const kq = await _t7AiAskScenes([c], ctx);
+    if (kq.them){
+      // Thành công → xoá khỏi nhóm lỗi (splice đúng vị trí i, không pop vì index có thể đã thay)
+      _t7AiHong.splice(i, 1);
+      await _t7AiAfterAsk(kq.them, ctx, '✓ Đã hỏi lại được cảnh "' + (ten.name || '') + '".');
+    } else if (!kq.hong.length){
+      // Trợ lý xét cảnh này nên để trơn — xoá khỏi nhóm lỗi, không phải lỗi
+      _t7AiHong.splice(i, 1);
+      setStatus7('Trợ lý xét cảnh "' + (ten.name || '') + '" nên để trơn — đã bỏ khỏi nhóm lỗi.', 'info');
+      _t7AiRender(); _t7AiSave();
+    } else {
+      // Vẫn lỗi → giữ nguyên, nói rõ lý do, KHÔNG tự ý xoá
+      setStatus7('Cảnh "' + (ten.name || '') + '" vẫn lỗi — kiểm tra kết nối/API rồi thử lại.', 'error');
+    }
+  } finally { _t7AiBusy = false; }
+}
+
+
+
 // Ghi lại ngữ cảnh của một lượt/phên nạp hàng đợi để các nút "↻ Tạo lại" / "↻ Thử lại" hỏi lại
 // ĐÚNG như lúc phân tích đầy đủ (cùng danh mục, cùng trần chữ, cùng bản đồ vai trò).
 function _t7AiSetCtx(cat, map, clips){
