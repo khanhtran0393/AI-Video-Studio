@@ -360,22 +360,27 @@ function applyFx(bassEnergy){
       ctx.globalCompositeOperation = 'screen';
       ctx.globalAlpha = 0.10 + 0.14 * L;
       ctx.fillRect(0, 0, W, H);
-    } else if(f === 'godrays-gl' || f === 'ntsc-gl'){
+    } else if(f === 'godrays-gl' || f === 'ntsc-gl' || f === 'hue-gl'){
       // Shader thật qua mini WebGL engine (imzic-glsl.js — vai glea.js):
       //  - godrays-gl: volumetric scattering shadertoy ls2Xzd (thuật gốc Vizzy)
       //  - ntsc-gl: composite encode→decode 1-pass chưng cất từ MAME ntsc.fx
+      //  - hue-gl: xoay sắc màu toàn khung trong HSV — cùng công thức shift với
+      //    FX 'huecycle' cũ nhưng chạy GPU thay vì HSV per-pixel trên CPU
       // LỖI WebGL2/compile → fail-loud có chủ đích (báo đúng 1 lần, code rõ —
       // Luật 10), khung tiếp tục vẽ nội dung gốc; lỗi khác KHÔNG nuốt.
       try{
-        const out = imzGLRender(f, f === 'ntsc-gl' ? imzGL_FRAG_NTSC : imzGL_FRAG_GODRAYS, canvas, W, H, { time: fr, bass: Math.min(1, bassEnergy || 0), level: L });
+        const frag = (f === 'ntsc-gl') ? imzGL_FRAG_NTSC
+                   : (f === 'hue-gl') ? imzGL_FRAG_HUE
+                   : imzGL_FRAG_GODRAYS;
+        const out = imzGLRender(f, frag, canvas, W, H, { time: fr, bass: Math.min(1, bassEnergy || 0), level: L });
         ctx.globalCompositeOperation = 'source-over';
         ctx.globalAlpha = 1;
         ctx.drawImage(out, 0, 0, W, H);
       }catch(err){
-        if(err && (err.code === 'IMZIC_NO_WEBGL2' || err.code === 'IMZIC_GL_COMPILE' || err.code === 'IMZIC_GL_LINK')){
+        if(err && (err.code === 'IMZIC_NO_WEBGL2' || err.code === 'IMZIC_GL_COMPILE' || err.code === 'IMZIC_GL_LINK' || err.code === 'IMZIC_GL_CONTEXT_LOST')){
           if(fxGLErrCode !== err.code){
             fxGLErrCode = err.code;
-            setStatus('FX ' + f + ' cần WebGL2 (' + err.code + ') — máy đang chạy --disable-gpu hoặc driver cũ. Khung đang chỉ vẽ nội dung gốc. Chọn lại FX để thử lại.', true);
+            setStatus('FX ' + f + ' cần WebGL2 (' + err.code + ') — máy đang chạy --disable-gpu hoặc driver cũ/GPU vừa reset. Khung đang chỉ vẽ nội dung gốc.' + (err.code === 'IMZIC_GL_CONTEXT_LOST' ? ' Context khôi phục thì shader tự chạy lại.' : ' Chọn lại FX để thử lại.'), true);
           }
         } else {
           throw err;

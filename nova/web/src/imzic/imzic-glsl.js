@@ -22,6 +22,7 @@ const imzGL_VERT = '#version 300 es\n' +
 let imzGLCtx = null;               // {gl, canvas}
 let imzGLPrograms = Object.create(null);
 let imzGLTex = null;
+let imzGLLost = false;             // GPU reset/tab nền → context vừa bị mất
 
 function imzGLEnsure(){
   if(imzGLCtx) return imzGLCtx;
@@ -33,6 +34,20 @@ function imzGLEnsure(){
     err.code = 'IMZIC_NO_WEBGL2';
     throw err;
   }
+  // GPU reset / driver crash → webglcontextlost. Chặn default (hủy mọi Event
+  // Listener), đánh dấu LOST — imzGLRender ném IMZIC_GL_CONTEXT_LOST để caller
+  // báo 1 lần rồi vẽ khung gốc; khi context restore → xoá sạch cache program/
+  // texture (đã invalid) để frame kế recompile và render lại như thường.
+  canvas.addEventListener('webglcontextlost', (e) => {
+    e.preventDefault();
+    imzGLLost = true;
+    imzGLPrograms = Object.create(null);
+    try { gl.deleteTexture(imzGLTex); } catch (err2) {}
+    imzGLTex = null;
+  }, false);
+  canvas.addEventListener('webglcontextrestored', () => {
+    imzGLLost = false;
+  }, false);
   imzGLCtx = { gl: gl, canvas: canvas };
   return imzGLCtx;
 }
@@ -123,9 +138,43 @@ const imzGL_FRAG_NTSC = '#version 300 es\n' +
 '  fragColor = vec4(clamp(outc, 0.0, 1.0), 1.0);\n' +
 '}\n';
 
+// Hue rotate GL — thay tính HSV per-pixel trên CPU (đắt ở 1080×1920 mỗi frame)
+// bằng shader. Cùng công thức lệch hue với FX 'huecycle' cũ: shift = fract(
+// fr*0.0016 + 0.06*bass) (uTime = số frame — deterministic, Luật 8). Xoay hue
+// trong không gian HSV; pixel xám (s≈0) giữ nguyên như nhánh skip của bản CPU.
+const imzGL_FRAG_HUE = '#version 300 es\n' +
+'precision highp float;\n' +
+'uniform sampler2D uTex; uniform vec2 uRes; uniform float uTime, uBass, uLevel;\n' +
+'out vec4 fragColor;\n' +
+'vec3 rgb2hsv(vec3 c){\n' +
+'  vec4 K = vec4(0.0, -1.0/3.0, 2.0/3.0, -1.0);\n' +
+'  vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));\n' +
+'  vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));\n' +
+'  float d = q.x - min(q.w, q.y);\n' +
+'  return vec3(abs(q.z + (q.w - q.y)/(6.0*d + 1.0e-10)), d/(q.x + 1.0e-10), q.x);\n' +
+'}\n' +
+'vec3 hsv2rgb(vec3 c){\n' +
+'  vec4 K = vec4(1.0, 2.0/3.0, 1.0/3.0, 3.0);\n' +
+'  vec3 p = abs(fract(c.xxx + K.xyz)*6.0 - K.www);\n' +
+'  return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);\n' +
+'}\n' +
+'void main(){\n' +
+'  vec2 uv = gl_FragCoord.xy / uRes;\n' +
+'  vec3 hsv = rgb2hsv(texture(uTex, uv).rgb);\n' +
+'  hsv.x = fract(hsv.x + fract(uTime*0.0016 + 0.06*uBass));\n' +
+'  fragColor = vec4(hsv2rgb(hsv), 1.0);\n' +
+'}\n';
+
 function imzGLRender(name, frag, srcCanvas, w, h, uni){
   const c = imzGLEnsure();
   const gl = c.gl;
+  // context đang lost (GPU reset) — ném lỗi có code để caller báo 1 lần rồi vẽ
+  // khung gốc; khi restore xong frame kế sẽ tự render lại shader bình thường
+  if(imzGLLost){
+    const err = new Error('Ngữ cảnh WebGL2 vừa bị mất (GPU reset) — đợi khôi phục.');
+    err.code = 'IMZIC_GL_CONTEXT_LOST';
+    throw err;
+  }
   if(c.canvas.width !== w || c.canvas.height !== h){ c.canvas.width = w; c.canvas.height = h; }
   const prog = imzGLCompile(name, frag);
   gl.useProgram(prog);

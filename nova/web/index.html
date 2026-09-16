@@ -29,7 +29,7 @@
   var W = window.novaStore;
   if (!W || !W.seed || !window.localStorage) return;   // chạy trên web thường: giữ nguyên hành vi cũ
   // Chỉ giữ nhóm CẤU HÌNH/API. Dữ liệu nặng (hàng đợi, lịch sử, project…) vẫn nằm yên ở localStorage.
-  var PREFIX = ['api_', 'json_fb_', 't8_'];
+  var PREFIX = ['api_', 'json_fb_', 't8_', 'skl_'];
   var EXACT = { 'yt_api_key': 1, 'pexels-key': 1, 'pixabay-key': 1, 'unsplash-key': 1 };
   function persisted(k) {
     if (EXACT[k]) return true;
@@ -96,6 +96,7 @@
 <!--#include "partials/panels-ffmpeg-tools.html" -->
 <!--#include "partials/panel-tool-live.html" -->
 <!--#include "partials/panels-admin-settings.html" -->
+<!--#include "partials/panel-skills.html" -->
   </main>
   </div>
 </div>
@@ -184,6 +185,8 @@
 <script src="src/toolbox/tool-t8.js"></script>
 <script src="src/toolbox/tool-t9.js"></script>
 <script src="src/toolbox/tool-ts.js"></script>
+<!-- Skill Panel: kho skill viết kịch bản theo chủ đề & phong cách — sidebar nhóm "Cài đặt" (nạp SAU tool-ts vì chèn option vào #tsSkill) -->
+<script src="src/toolbox/tool-skills.js"></script>
 <script src="src/toolbox/tool-tts.js"></script>
 <script src="src/toolbox/tool-upg.js"></script>
 <!-- Công cụ FFmpeg (sidebar dropdown): Tách MP3 / Cắt / Ghép / Loop — IPC ffx:* -->

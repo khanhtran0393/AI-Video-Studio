@@ -64,6 +64,10 @@ setupSel('effectSel','effect', ()=>{
   if(state.effect==='rain' && !state.dirTouched){
     setSelValue('dirSel','direction','down');
   }
+  if(state.effect==='bubbles' && !state.dirTouched){
+    // bong bóng nổi lên tự nhiên — mặc định bay lên (vẫn đổi được tay như rain)
+    setSelValue('dirSel','direction','up');
+  }
   rebuildParticles();
 });
 setupSel('dirSel','direction', ()=>{ state.dirTouched = true; rebuildParticles(); });
@@ -71,7 +75,18 @@ $('pcolor').addEventListener('change', ()=>{ state.colorTouched = true; });
 
 // ---- audio wave controls ----
 setupSel('waveOnSel','waveOnRaw', ()=>{ state.waveOn = (state.waveOnRaw === 'on'); });
-setupSel('waveStyleSel','waveStyle');
+setupSel('waveStyleSel','waveStyle', ()=>{
+  // chỉ kiểu 'curved' mới hiện slider mức uốn + hướng uốn
+  const f = $('waveCurveField'); const h = $('waveCurveHint');
+  const on = state.waveStyle === 'curved';
+  if(f) f.style.display = on ? '' : 'none';
+  if(h) h.style.display = on ? '' : 'none';
+});
+$('waveCurve').addEventListener('input', e=>{
+  state.waveCurve = Math.max(0, Math.min(1, (+e.target.value || 0) / 100));
+  const lbl = $('v-wcurve'); if(lbl) lbl.textContent = e.target.value + '%';
+});
+setupSel('waveCurveDirSel','waveCurveDir');
 
 // ---- FX toàn khung ----
 $('fxSel').addEventListener('change', e=>{
@@ -125,6 +140,12 @@ function bcEnsure(){
       bcCanvas = null; bcViz = null;
       throw Object.assign(new Error('Trình duyệt không cấp được WebGL2 — FX Milkdrop (Butterchurn) cần WebGL2.'), { code:'IMZIC_NO_WEBGL2' });
     }
+    // GPU reset → context lost: vứt viz + canvas (đối tượng butterchurn gắn với
+    // context cũ đã invalid), frame kế bcEnsure tự dựng lại trên context mới
+    bcCanvas.addEventListener('webglcontextlost', (e)=>{
+      e.preventDefault();
+      bcViz = null; bcCanvas = null; bcVizPreset = '';
+    }, false);
     bcViz = window.butterchurn.createVisualizer(audioCtx, bcCanvas, { width: W, height: H, pixelRatio: 1, textureRatio: 1 });
     bcViz.connectAudio(sourceNode);
     bcVizPreset = '';
@@ -153,6 +174,8 @@ $('wavePos').addEventListener('input', e=>{ state.wavePos = +e.target.value; $('
 $('waveSize').addEventListener('input', e=>{ state.waveSize = +e.target.value; $('v-wsize').textContent = e.target.value+'px'; });
 $('waveHeight').addEventListener('input', e=>{ state.waveHeight = +e.target.value; $('v-wamp').textContent = e.target.value+'px'; });
 $('waveWidth').addEventListener('input', e=>{ state.waveWidth = +e.target.value; $('v-wwidth').textContent = e.target.value+'%'; });
+// vị trí ngang sóng nhạc (trái ↔ phải) — 50% = giữa khung như mặc định
+$('wavePosX').addEventListener('input', e=>{ state.wavePosX = +e.target.value; $('v-wposx').textContent = e.target.value+'%'; });
 $('waveColor').addEventListener('input', e=>{ state.waveColor = e.target.value; });
 
 // ---- slideshow nhiều ảnh (#slideshow) ----
@@ -162,10 +185,20 @@ let slideLoadToken = 0;
 function updateSlideFields(){
   const on = state.slides.length > 0;
   $('slideModeField').style.display = on ? '' : 'none';
+  $('slideOrderField').style.display = on ? '' : 'none';
+  $('slideShuffleBtn').style.display = (on && state.slideOrder === 'shuffle') ? '' : 'none';
   $('slideSecsField').style.display = (on && state.slideMode === 'time') ? '' : 'none';
+  $('slideBeatField').style.display = (on && state.slideMode === 'time') ? '' : 'none';
   $('slideLookField').style.display = on ? '' : 'none';
-  $('slideFitField').style.display = on ? '' : 'none';
+  // fitMode dùng được cho CẢ ảnh đơn lẫn slideshow — hiện khi có ảnh bất kỳ
+  $('slideFitField').style.display = (on || state.img) ? '' : 'none';
+  updateSquareFields();
   $('slidesClearBtn').style.display = on ? '' : 'none';
+}
+// hiện/ẩn khối tuỳ chọn "Ô vuông giữa + nền mờ" theo fitMode đang chọn
+function updateSquareFields(){
+  const el = $('squareFields');
+  if(el) el.style.display = (state.fitMode === 'square') ? '' : 'none';
 }
 $('slidesInput').addEventListener('change', async e=>{
   const files = [...e.target.files];
@@ -212,13 +245,44 @@ $('slidesClearBtn').addEventListener('click', ()=>{
   setStatus('Đã xoá slideshow — trở lại dùng ảnh nền đơn.', false);
 });
 setupSel('slideModeSel','slideMode', ()=>{ updateSlideFields(); slideSchedule = {key:'', list:[]}; });
+setupSel('slideOrderSel','slideOrder', ()=>{ updateSlideFields(); slideSchedule = {key:'', list:[]}; });
+$('slideShuffleBtn').addEventListener('click', ()=>{
+  if(isExporting){ setStatus('Đang ghi video — không xáo lại ảnh giữa chừng (bản ghi sẽ hỏng).', true); return; }
+  if(!state.slides.length) return;
+  state.slideShuffleSeed++;
+  slideSchedule = {key:'', list:[]};
+  saveSettingsSoon();
+  setStatus('Đã xáo lại thứ tự ảnh slideshow.', false);
+});
 $('slideSecs').addEventListener('input', e=>{
   state.slideSecs = +e.target.value;
   $('v-ssecs').textContent = e.target.value + 's';
   slideSchedule = {key:'', list:[]};
 });
 setupSel('transSel','transition');
-setupSel('fitSel','fitMode', ()=>{ slideRasterCache.clear(); slideBlurCache.clear(); });
+setupSel('fitSel','fitMode', ()=>{
+  slideRasterCache.clear(); slideBlurCache.clear();
+  if(typeof squareBlurCache !== 'undefined' && squareBlurCache.clear) squareBlurCache.clear();
+  updateSquareFields();
+});
+
+// ---- tuỳ chọn bố cục "Ô vuông giữa + nền mờ" (fitMode 'square') ----
+// state key trùng id slider; đổi blur/lệch blur → xoá cache nền mờ để dựng lại
+const SQUARE_FMT = {
+  bgBlur:     v => v + 'px',
+  bgBlurSide: v => (v === 0 ? 'đều 2 bên' : (v < 0 ? 'trái +' + (-v) : 'phải +' + v)),
+  sqSize:     v => v + '%',
+  sqTilt:     v => v + '°',
+  sqSkew:     v => v + '°'
+};
+['bgBlur','bgBlurSide','sqSize','sqTilt','sqSkew'].forEach(id=>{
+  $(id).addEventListener('input', e=>{
+    state[id] = +e.target.value;
+    const lab = $('v-' + id);
+    if(lab) lab.textContent = SQUARE_FMT[id](+e.target.value);
+    if(typeof squareBlurCache !== 'undefined' && squareBlurCache.clear) squareBlurCache.clear();
+  });
+});
 
 // ---- lyric: karaoke / kiểu chữ / hiệu ứng dòng (bổ sung cho section 9) ----
 setupSel('lyricKaraokeSel','lyricKaraoke');
@@ -260,6 +324,63 @@ function refreshTrimHint(){
 // ---- tuỳ chọn xuất: fps + chất lượng ----
 $('exportFpsSel').addEventListener('change', e=>{ state.exportFps = +e.target.value; saveSettingsSoon(); });
 $('qualitySel').addEventListener('change', e=>{ state.exportQuality = e.target.value; saveSettingsSoon(); });
+$('exportResSel').addEventListener('change', e=>{ state.exportRes = e.target.value; saveSettingsSoon(); });
+
+// ---- C3: chuẩn hoá âm lượng (áp cho bước ghép FFmpeg của "⚡ Xuất nhanh") ----
+$('loudnormSel').addEventListener('change', e=>{
+  state.loudnorm = e.target.value === 'on';
+  setStatus(state.loudnorm ? 'Sẽ chuẩn hoá âm lượng -14 LUFS khi "⚡ Xuất nhanh" (loudnorm một-pass).'
+                           : 'Đã tắt chuẩn hoá âm lượng — giữ nguyên âm lượng gốc.', false);
+  saveSettingsSoon();
+});
+
+// ---- E1: căn chuyển cảnh slideshow theo nhịp ----
+$('slideBeatSel').addEventListener('change', e=>{
+  state.slideBeatSnap = e.target.value === 'on';
+  saveSettingsSoon();
+});
+
+// ---- E4: logo / watermark ----
+// Lưu ý: ảnh logo KHÔNG nằm trong settings lưu localStorage (File object không
+// persist được) — mở lại trang phải chọn lại logo; vị trí/cỡ/độ mờ thì được lưu.
+let wmObjUrl = null;
+$('wmInput').addEventListener('change', e=>{
+  const f = e.target.files[0];
+  if(wmObjUrl){ URL.revokeObjectURL(wmObjUrl); wmObjUrl = null; }
+  if(!f){
+    state.wmImg = null; state.wmName = '';
+    $('wmName').textContent = '(chưa chọn)';
+    $('secWmHint').textContent = 'Chưa chọn logo';
+    return;
+  }
+  if(!(f.type && f.type.startsWith('image'))){
+    setStatus('File này không phải ảnh — chọn logo dạng PNG/JPG (PNG trong suốt là đẹp nhất).', true);
+    e.target.value = '';
+    return;
+  }
+  const url = URL.createObjectURL(f);
+  const img = new Image();
+  img.onload = ()=>{
+    state.wmImg = img; state.wmName = f.name;
+    $('wmName').textContent = f.name;
+    $('secWmHint').textContent = f.name;
+  };
+  img.onerror = ()=>{
+    setStatus('Không đọc được ảnh logo này — chọn file ảnh khác nhé.', true);
+    URL.revokeObjectURL(url);
+    e.target.value = '';
+  };
+  img.src = url; wmObjUrl = url;
+});
+$('wmPosSel').addEventListener('change', e=>{ state.wmPos = e.target.value; saveSettingsSoon(); });
+$('wmSize').addEventListener('input', e=>{
+  state.wmSize = +e.target.value || 18;
+  $('v-wmsize').textContent = state.wmSize + '%';
+});
+$('wmAlpha').addEventListener('input', e=>{
+  state.wmAlpha = Math.max(0.05, Math.min(1, (+e.target.value || 60) / 100));
+  $('v-wmalpha').textContent = e.target.value + '%';
+});
 
 // ---- lead / early-sync ----
 $('leadMs').addEventListener('input', e=>{
@@ -351,9 +472,9 @@ rebuildParticles();
 // Khôi phục bằng cách set giá trị rồi dispatch lại event — listener sẵn có
 // sẽ tự cập nhật state + nhãn + rebuild, nên không phải nhân bản logic.
 const SETTINGS_KEY = 'imzic:settings:v1';
-const SETTINGS_RANGE_IDS = ['zoomMin','zoomMax','sensitivity','smoothness','density','pspeed','sizeMin','sizeMax','alpha','wavePos','waveSize','waveHeight','waveWidth','leadMs','fxLevel','lyricSize','lyricPosX','lyricPosY','slideSecs'];
+const SETTINGS_RANGE_IDS = ['zoomMin','zoomMax','sensitivity','smoothness','density','pspeed','sizeMin','sizeMax','alpha','wavePos','wavePosX','waveSize','waveHeight','waveWidth','leadMs','fxLevel','lyricSize','lyricPosX','lyricPosY','slideSecs','wmSize','wmAlpha','waveCurve','bgBlur','bgBlurSide','sqSize','sqTilt','sqSkew'];
 const SETTINGS_COLOR_IDS = ['pcolor','waveColor','lyricColor','lyricAccent'];
-const SETTINGS_SELECT_IDS = ['lyricFont','effectSel','dirSel','waveOnSel','waveStyleSel','ratioSel','lyricShadowSel','fxSel','slideModeSel','transSel','fitSel','lyricKaraokeSel','lyricStyleSel','lyricAnimSel','exportFpsSel','qualitySel','bcPresetSel'];
+const SETTINGS_SELECT_IDS = ['lyricFont','effectSel','dirSel','waveOnSel','waveStyleSel','ratioSel','lyricShadowSel','fxSel','slideModeSel','slideOrderSel','transSel','fitSel','lyricKaraokeSel','lyricStyleSel','lyricAnimSel','exportFpsSel','qualitySel','exportResSel','bcPresetSel','loudnormSel','slideBeatSel','wmPosSel'];
 const SETTINGS_NUMBER_IDS = ['customW','customH','trimStart','trimEnd','fadeIn','fadeOut'];
 // chip-group đã gom thành dropdown — bản lưu cũ có {chips:{}} được đổi tên ở loadSettings
 const LEGACY_CHIP_TO_SEL = { effectChips:'effectSel', dirChips:'dirSel', waveChips:'waveOnSel', waveStyleChips:'waveStyleSel', ratioChips:'ratioSel', lyricShadowChips:'lyricShadowSel' };

@@ -1,19 +1,19 @@
 /* ============================================================
-   WHITEBOARD STUDIO — panel UI (renderer)
+   WHITEBOARD STUDIO �ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚ panel UI (renderer)
    ------------------------------------------------------------
-   Viết lại theo workflow repo "srt-whiteboard-animation"
-   (khanhtran0393, vendored — KHÔNG sửa nguồn repo):
-   1) SRT → chia cảnh 25–35s (parse_srt)
-   2) mỗi cảnh gắn 1 ảnh line-art (dialog thật, IPC main)
-   3) tự sinh elements (region + sequence + reveal) — schema
-      annotation.json của repo — và cho sửa trực tiếp
-   4) preview sơ đồ vùng (render_annotation_preview.py)
-   5) render từng cảnh (render_stream_whiteboard.py) → merge
-      (merge_scenes.py) → ghép voice (ffmpeg nội bộ) → MP4
-   Logic annotation dùng chung với main process qua
-   web/whiteboard-annotation.js (UMD, load bằng <script src>).
-   KHÔNG còn: prompt/caption canvas pipeline, frame PNG
-   exporter, auto-band logic của bản cũ.
+   Vi�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¿t l�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡i theo workflow repo "srt-whiteboard-animation"
+   (khanhtran0393, vendored �ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚ KH�ƒ�’�†�€™�ƒ¢â�€š¬�‚NG s�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚­a ngu�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�…�€œn repo):
+   1) SRT �ƒ�’�‚¢�ƒ¢â�€š¬�‚ �ƒ¢â�€š¬â�€ž¢ chia c�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£nh 25�ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�…�€œ35s (parse_srt)
+   2) m�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬â�‚�i c�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£nh g�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¯n 1 �ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£nh line-art (dialog th�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚­t, IPC main)
+   3) t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚± sinh elements (region + sequence + reveal) �ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚ schema
+      annotation.json c�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚§a repo �ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚ v�ƒ�’�†�€™�ƒ�€š�‚  cho s�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚­a tr�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚±c ti�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¿p
+   4) preview s�ƒ�’â�‚� �ƒ�€š�‚¡ �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�…�€œ v�ƒ�’�†�€™�ƒ�€š�‚¹ng (render_annotation_preview.py)
+   5) render t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚«ng c�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£nh (render_stream_whiteboard.py) �ƒ�’�‚¢�ƒ¢â�€š¬�‚ �ƒ¢â�€š¬â�€ž¢ merge
+      (merge_scenes.py) �ƒ�’�‚¢�ƒ¢â�€š¬�‚ �ƒ¢â�€š¬â�€ž¢ gh�ƒ�’�†�€™�ƒ�€š�‚©p voice (ffmpeg n�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�‚�ž�‚¢i b�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�‚�ž�‚¢) �ƒ�’�‚¢�ƒ¢â�€š¬�‚ �ƒ¢â�€š¬â�€ž¢ MP4
+   Logic annotation d�ƒ�’�†�€™�ƒ�€š�‚¹ng chung v�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºi main process qua
+   web/whiteboard-annotation.js (UMD, load b�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚±ng <script src>).
+   KH�ƒ�’�†�€™�ƒ¢â�€š¬�‚NG c�ƒ�’�†�€™�ƒ�€š�‚²n: prompt/caption canvas pipeline, frame PNG
+   exporter, auto-band logic c�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚§a b�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£n c�ƒ�’â�‚�¦�ƒ�€š�‚©.
    ============================================================ */
 'use strict';
 (function () {
@@ -33,35 +33,28 @@
     scenes: [],
     selected: -1,
     audioTrack: null,
-    musicTrack: null,      // nhạc nền (lặp tới hết video, mix nhỏ hơn voice)
+    musicTrack: null,      // nh�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡c n�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚n (l�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚·p t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºi h�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¿t video, mix nh�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚ h�ƒ�’â�‚� �ƒ�€š�‚¡n voice)
     exporting: false,
-    /* region editor */
-    edSel: -1,             // phần tử đang chọn trong editor
-    edScene: -1,           // cảnh đang nạp ảnh trong editor (tránh reload lặp)
-    edImgKey: '',          // đường dẫn ảnh đã nạp
-    edImg: null,           // Image element đã load
-    edDrag: null,          // trạng thái kéo/resize hiện tại
+    engineOk: false,       // engine Python s�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚µn s�ƒ�’�†�€™�ƒ�€š�‚ ng (refreshEngine c�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚­p nh�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚­t �ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚ checklist �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚c)
+    scriptRaw: null,       // k�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¹ch b�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£n �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�†�€™�ƒ�€š�‚£ nh�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚­n t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚« tab T�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡o K�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¹ch B�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£n (B�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºc 1) �ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚ ch�ƒ�’â�‚� �ƒ�€š�‚°a ph�ƒ�’�†�€™�ƒ�€š�‚¢n t�ƒ�’�†�€™�ƒ�€š�‚­ch
+    scriptSource: '',      // ngu�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�…�€œn k�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¹ch b�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£n (tsOutput / state.script)
+    ttsName: '',           // t�ƒ�’�†�€™�ƒ�€š�‚ªn b�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£n TTS �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�†�€™�ƒ�€š�‚£ nh�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚­n (B�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºc 2)
   };
 
-  /* ── nạp phần tử UI (index.html) ── */
+  /* �ƒ�’�‚¢�ƒ¢â�€š¬�‚�ƒ¢â�‚�š�‚¬�ƒ�’�‚¢�ƒ¢â�€š¬�‚�ƒ¢â�‚�š�‚¬ n�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡p ph�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚§n t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚­ UI (index.html) �ƒ�’�‚¢�ƒ¢â�€š¬�‚�ƒ¢â�‚�š�‚¬�ƒ�’�‚¢�ƒ¢â�€š¬�‚�ƒ¢â�‚�š�‚¬ */
   function bind() {
     const ids = [
       'engine', 'srtLabel', 'sceneList',
       'st1', 'st2', 'st3', 'st4', 'st5', 'st6',
-      'pickSrtBtn', 'addSceneBtn', 'clearBtn', 'parseBtn', 'cueScenesBtn',
-      'scriptText', 'buildTimelineBtn', 'tsPullBtn',
+      'pickSrtBtn', 'tsPullBtn', 'checklist', 'srtExtractRow',
       'pickVoiceSrtBtn', 'voicePullBtn', 'whisperPrepareBtn', 'modelSel',
-      'sceneImageLabel', 'sceneCanvasLabel', 'genElementsBtn', 'previewBtn',
-      'elementsBody', 'previewImg', 'elementsTable',
+      'analyzePromptBtn', 'arrangeBtn',
       'pickAudioBtn', 'audioLabel', 'audioWarn',
       'pickMusicBtn', 'musicLabel', 'musicVolSel',
       'inkPathSel', 'colorFillSel', 'capSel',
       'gridEdge', 'saveProjectBtn', 'loadProjectBtn',
       'exportBtn', 'stopBtn', 'cancelXBtn', 'progressBar', 'progressPct', 'progressMsg', 'logBox',
-      'addImageToSceneBtn', 'pickImagesBtn', 'pickImagesDirBtn', 'pyPrepareBtn',
-      // region editor (soạn vùng trên ảnh — port preview.html)
-      'regionEditorBtn', 'regionEditor', 'edCanvas', 'edX', 'edY', 'edW', 'edH', 'edDir',
-      'edStart', 'edEnd', 'edDur', 'edLabel', 'edSub', 'edAddBtn', 'edDelBtn', 'edLoadBtn', 'edSaveBtn', 'edHint',
+      'pyPrepareBtn',
     ];
     ids.forEach((id) => { els[id] = document.getElementById('wb-' + id); });
   }
@@ -71,8 +64,8 @@
     if (!els.logBox) return;
     const line = document.createElement('div');
     line.textContent = msg;
-    // màu log tự động theo tiền tố (✓ xanh / ❌ đỏ / ⚠ vàng) — CSS wb-log.ok/err/warn
-    const cls = /^\s*[✓✔]/.test(msg) ? ' ok' : /^\s*[❌✖]/.test(msg) ? ' err' : /^\s*⚠/.test(msg) ? ' warn' : '';
+    // m�ƒ�’�†�€™�ƒ�€š�‚ u log t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚± �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�‚�ž�‚¢ng theo ti�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚n t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‹�“ (�ƒ�’�‚¢�ƒ�€�â�‚��“�ƒ¢â�€š¬�…�€œ xanh / �ƒ�’�‚¢�ƒ�€š�‚�ƒ�€�â�‚��„� �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚ / �ƒ�’�‚¢�ƒ�€��‚¡�ƒ�€š�‚  v�ƒ�’�†�€™�ƒ�€š�‚ ng) �ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚ CSS wb-log.ok/err/warn
+    const cls = /^\s*[�ƒ�’�‚¢�ƒ�€�â�‚��“�ƒ¢â�€š¬�…�€œ�ƒ�’�‚¢�ƒ�€�â�‚��“�ƒ¢â�€š¬�‚]/.test(msg) ? ' ok' : /^\s*[�ƒ�’�‚¢�ƒ�€š�‚�ƒ�€�â�‚��„��ƒ�’�‚¢�ƒ�€�â�‚��“�ƒ¢â�€š¬â�‚��“]/.test(msg) ? ' err' : /^\s*�ƒ�’�‚¢�ƒ�€��‚¡�ƒ�€š�‚ /.test(msg) ? ' warn' : '';
     line.className = 'wb-log' + cls;
     els.logBox.appendChild(line);
     while (els.logBox.children.length > 300) els.logBox.removeChild(els.logBox.firstChild);
@@ -81,35 +74,77 @@
   const show = (e) => { if (e) e.classList.remove('wb-hide'); };
   const hide = (e) => { if (e) e.classList.add('wb-hide'); };
 
-  /* ── thẻ trạng thái trên tiêu đề từng bước (accordion 1→7):
-        tính từ state, gọi sau mỗi hành động (log / render danh sách) ── */
+  /* �ƒ�’�‚¢�ƒ¢â�€š¬�‚�ƒ¢â�‚�š�‚¬�ƒ�’�‚¢�ƒ¢â�€š¬�‚�ƒ¢â�‚�š�‚¬ th�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚» tr�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡ng th�ƒ�’�†�€™�ƒ�€š�‚¡i tr�ƒ�’�†�€™�ƒ�€š�‚ªn ti�ƒ�’�†�€™�ƒ�€š�‚ªu �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚ t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚«ng b�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºc (accordion 1�ƒ�’�‚¢�ƒ¢â�€š¬�‚ �ƒ¢â�€š¬â�€ž¢7):
+        t�ƒ�’�†�€™�ƒ�€š�‚­nh t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚« state, g�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚i sau m�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬â�‚�i h�ƒ�’�†�€™�ƒ�€š�‚ nh �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�‚�ž�‚¢ng (log / render danh s�ƒ�’�†�€™�ƒ�€š�‚¡ch) �ƒ�’�‚¢�ƒ¢â�€š¬�‚�ƒ¢â�‚�š�‚¬�ƒ�’�‚¢�ƒ¢â�€š¬�‚�ƒ¢â�‚�š�‚¬ */
   function updateStepStatus() {
     if (!els.st1) return;
     const set = (id, txt, ok) => { els[id].textContent = txt; els[id].className = 'wb-step-st' + (ok ? ' ok' : ''); };
     const nImg = state.scenes.filter((s) => s.image).length;
     const nEl = state.scenes.filter((s) => s.elements && s.elements.length).length;
-    const hasSrt = !!(state.srtPath || state.cues.length);
-    set('st1', hasSrt ? '✓ ' + state.cues.length + ' cue' : '—', hasSrt);
-    set('st2', state.scenes.length ? state.scenes.length + ' cảnh' : '—', state.scenes.length > 0);
-    set('st3', state.scenes.length ? nImg + '/' + state.scenes.length + ' ảnh' : '—', state.scenes.length > 0 && nImg >= state.scenes.length);
-    set('st4', state.scenes.length ? nEl + '/' + state.scenes.length + ' vùng vẽ' : '—', state.scenes.length > 0 && nEl >= state.scenes.length);
-    const aud = (state.audioTrack ? 'voice' : '') + (state.musicTrack ? ' + nhạc' : '');
-    set('st5', aud || '—', !!aud);
-    set('st6', state.scenes.length ? 'sẵn sàng' : '—', state.scenes.length > 0);
+    const nPr = state.scenes.filter((s) => s.imagePrompt).length;
+    const n = state.scenes.length;
+    const words = state.scriptRaw ? state.scriptRaw.split(/\s+/).length : 0;
+    set('st1', words ? '�ƒ�’�‚¢�ƒ�€�â�‚��“�ƒ¢â�€š¬�…�€œ ' + words + ' t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚«' : '�ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚', words > 0);
+    set('st2', state.audioTrack
+      ? '�ƒ�’�‚¢�ƒ�€�â�‚��“�ƒ¢â�€š¬�…�€œ TTS' + (state.cues.length ? ' �ƒ�’â�‚�š�ƒ�€š�‚· ' + state.cues.length + ' cue' : '') + (state.musicTrack ? ' + nh�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡c' : '')
+      : (state.musicTrack ? 'nh�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡c' : '�ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚'), !!state.audioTrack);
+    set('st3', n ? nPr + '/' + n + ' prompt' : '�ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚', n > 0 && nPr >= n);
+    set('st4', n ? nImg + '/' + n + ' �ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£nh �ƒ�’â�‚�š�ƒ�€š�‚· ' + nEl + '/' + n + ' v�ƒ�’�†�€™�ƒ�€š�‚¹ng' : '�ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚', n > 0 && nImg >= n && nEl >= n);
+    set('st5', (n && nImg >= n && nEl >= n) ? 's�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚µn s�ƒ�’�†�€™�ƒ�€š�‚ ng' : '�ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚', n > 0 && nImg >= n && nEl >= n);
+    set('st6', state.engineOk ? 'engine OK' : '�ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚', !!state.engineOk);
+    renderChecklist();
   }
 
-  /* ── URL ảnh an toàn cho origin http://localhost ──
-     App chạy UI trên http://localhost (local server của Nova) nên trình duyệt
-     CHẶN <img src="file:///..."> — sơ đồ vùng preview hiện lỗi/không lên.
-     Đường dẫn đĩa trỏ qua route /local-media của server Nova (cùng origin):
-     đồng bộ, không IPC/base64, không cache, không race-condition. */
+  /* �ƒ�’�‚¢�ƒ¢â�€š¬�‚�ƒ¢â�‚�š�‚¬�ƒ�’�‚¢�ƒ¢â�€š¬�‚�ƒ¢â�‚�š�‚¬ checklist �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“i�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚u ki�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¡n: t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚«ng �ƒ�’�†�€™�ƒ�€š�‚´ �ƒ�’�‚¢�ƒ�€�â�‚��“�ƒ¢â�€š¬�…�€œ khi �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�†�€™�ƒ�€š�‚£ �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚§ (t�ƒ�’�†�€™�ƒ�€š�‚­nh t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚« state + engine),
+        render c�ƒ�’�†�€™�ƒ�€š�‚¹ng nh�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¹p v�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºi updateStepStatus (g�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚i sau m�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬â�‚�i h�ƒ�’�†�€™�ƒ�€š�‚ nh �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�‚�ž�‚¢ng) �ƒ�’�‚¢�ƒ¢â�€š¬�‚�ƒ¢â�‚�š�‚¬�ƒ�’�‚¢�ƒ¢â�€š¬�‚�ƒ¢â�‚�š�‚¬ */
+  function renderChecklist() {
+    if (!els.checklist) return;
+    const nImg = state.scenes.filter((s) => s.image).length;
+    const nEl = state.scenes.filter((s) => s.elements && s.elements.length).length;
+    const nPr = state.scenes.filter((s) => s.imagePrompt).length;
+    const n = state.scenes.length;
+    const items = [
+      { ok: !!state.scriptRaw, label: 'K�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¹ch b�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£n t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚« T�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡o K�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¹ch B�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£n' },
+      { ok: !!state.audioTrack, label: 'TTS t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚« Gi�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚ng n�ƒ�’�†�€™�ƒ�€š�‚³i' + (state.audioTrack ? (state.audioTrack.durationSec ? ' (' + state.audioTrack.durationSec.toFixed(1) + 's)' : '') : '') },
+      { ok: !!(state.srtPath || state.cues.length), label: '.SRT �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�†�€™�ƒ�€š�‚£ tr�ƒ�’�†�€™�ƒ�€š�‚­ch xu�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¥t' + (state.cues.length ? ' (' + state.cues.length + ' cue)' : '') },
+      { ok: n > 0 && nPr >= n, label: 'Ph�ƒ�’�†�€™�ƒ�€š�‚¢n t�ƒ�’�†�€™�ƒ�€š�‚­ch prompt t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚«ng c�ƒ�’�†�€™�ƒ�€š�‚¢u' + (n ? ' (' + nPr + '/' + n + ')' : '') },
+      { ok: n > 0 && nImg >= n, label: '�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¢nh t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚«ng c�ƒ�’�†�€™�ƒ�€š�‚¢u' + (n ? ' (' + nImg + '/' + n + ')' : '') },
+      { ok: n > 0 && nEl >= n, label: 'V�ƒ�’�†�€™�ƒ�€š�‚¹ng v�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚½ kh�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºp th�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚i l�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚£ng' + (n ? ' (' + nEl + '/' + n + ')' : '') },
+      { ok: !!state.musicTrack, label: 'Nh�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡c n�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚n', optional: true },
+      { ok: !!state.engineOk, label: 'Engine Python (repo �ƒ�’â�‚�š�ƒ�€š�‚· venv �ƒ�’â�‚�š�ƒ�€š�‚· deps �ƒ�’â�‚�š�ƒ�€š�‚· ffmpeg)' },
+    ];
+    els.checklist.innerHTML =
+      '<div class="wb-checklist-title">Checklist �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“i�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚u ki�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¡n</div>' +
+      items.map((it) =>
+        '<div class="wb-checklist-item' + (it.ok ? ' ok' : '') + (it.optional ? ' opt' : '') + '">' +
+        '<span class="wb-ck-mark">' + (it.ok ? '�ƒ�’�‚¢�ƒ�€�â�‚��“�ƒ¢â�€š¬�…�€œ' : '') + '</span><span class="wb-ck-label">' +
+        it.label + (it.optional ? ' (tu�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚³ ch�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚n)' : '') + '</span></div>'
+      ).join('');
+  }
+
+  /* �ƒ�’�‚¢�ƒ¢â�€š¬�‚�ƒ¢â�‚�š�‚¬�ƒ�’�‚¢�ƒ¢â�€š¬�‚�ƒ¢â�‚�š�‚¬ n�ƒ�’�†�€™�ƒ�€š�‚ºt tr�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡ng th�ƒ�’�†�€™�ƒ�€š�‚¡i B�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºc 1/2: xanh khi �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�†�€™�ƒ�€š�‚£ nh�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚­n (Lu�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚­t: tr�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡ng th�ƒ�’�†�€™�ƒ�€š�‚¡i l�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�‚�ž�‚¢ li�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¦u) �ƒ�’�‚¢�ƒ¢â�€š¬�‚�ƒ¢â�‚�š�‚¬�ƒ�’�‚¢�ƒ¢â�€š¬�‚�ƒ¢â�‚�š�‚¬ */
+  function wbSetBtnOk(btn, ok) {
+    if (!btn) return;
+    btn.classList.toggle('wb-btn-ok', !!ok);
+  }
+
+  /* �ƒ�’�‚¢�ƒ¢â�€š¬�‚�ƒ¢â�‚�š�‚¬�ƒ�’�‚¢�ƒ¢â�€š¬�‚�ƒ¢â�‚�š�‚¬ t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚± m�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€��‚¸ kh�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‹�“i "Tr�ƒ�’�†�€™�ƒ�€š�‚­ch xu�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¥t .SRT" (B�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºc 2) khi nh�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚­n TTS m�ƒ�’�†�€™�ƒ�€š�‚  ch�ƒ�’â�‚� �ƒ�€š�‚°a c�ƒ�’�†�€™�ƒ�€š�‚³ SRT �ƒ�’�‚¢�ƒ¢â�€š¬�‚�ƒ¢â�‚�š�‚¬�ƒ�’�‚¢�ƒ¢â�€š¬�‚�ƒ¢â�‚�š�‚¬ */
+  function wbRevealSrtExtract() {
+    if (els.srtExtractRow) els.srtExtractRow.classList.remove('wb-hide');
+  }
+
+  /* �ƒ�’�‚¢�ƒ¢â�€š¬�‚�ƒ¢â�‚�š�‚¬�ƒ�’�‚¢�ƒ¢â�€š¬�‚�ƒ¢â�‚�š�‚¬ URL �ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£nh an to�ƒ�’�†�€™�ƒ�€š�‚ n cho origin http://localhost �ƒ�’�‚¢�ƒ¢â�€š¬�‚�ƒ¢â�‚�š�‚¬�ƒ�’�‚¢�ƒ¢â�€š¬�‚�ƒ¢â�‚�š�‚¬
+     App ch�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡y UI tr�ƒ�’�†�€™�ƒ�€š�‚ªn http://localhost (local server c�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚§a Nova) n�ƒ�’�†�€™�ƒ�€š�‚ªn tr�ƒ�’�†�€™�ƒ�€š�‚¬nh duy�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¡t
+     CH�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¶N <img src="file:///..."> �ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚ s�ƒ�’â�‚� �ƒ�€š�‚¡ �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�…�€œ v�ƒ�’�†�€™�ƒ�€š�‚¹ng preview hi�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¡n l�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬â�‚�i/kh�ƒ�’�†�€™�ƒ�€š�‚´ng l�ƒ�’�†�€™�ƒ�€š�‚ªn.
+     �ƒ�’â�‚�ž�ƒ�€š�‚�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚ng d�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚«n �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’â�‚�ž�ƒ�€š�‚©a tr�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚ qua route /local-media c�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚§a server Nova (c�ƒ�’�†�€™�ƒ�€š�‚¹ng origin):
+     �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�…�€œng b�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�‚�ž�‚¢, kh�ƒ�’�†�€™�ƒ�€š�‚´ng IPC/base64, kh�ƒ�’�†�€™�ƒ�€š�‚´ng cache, kh�ƒ�’�†�€™�ƒ�€š�‚´ng race-condition. */
   function wbFileUrl(p) {
     if (!p) return '';
     if (/^(https?:|data:|blob:|file:)/i.test(p)) return p;
     return '/local-media?p=' + encodeURIComponent(String(p).replace(/\\/g, '/'));
   }
 
-  /* ── tiến trình render (IPC main → renderer) ── */
+  /* �ƒ�’�‚¢�ƒ¢â�€š¬�‚�ƒ¢â�‚�š�‚¬�ƒ�’�‚¢�ƒ¢â�€š¬�‚�ƒ¢â�‚�š�‚¬ ti�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¿n tr�ƒ�’�†�€™�ƒ�€š�‚¬nh render (IPC main �ƒ�’�‚¢�ƒ¢â�€š¬�‚ �ƒ¢â�€š¬â�€ž¢ renderer) �ƒ�’�‚¢�ƒ¢â�€š¬�‚�ƒ¢â�‚�š�‚¬�ƒ�’�‚¢�ƒ¢â�€š¬�‚�ƒ¢â�‚�š�‚¬ */
   function listenProgress() {
     if (!window.native || !window.native.whiteboard || !window.native.whiteboard.onExportProgress) return;
     window.native.whiteboard.onExportProgress((s) => {
@@ -124,257 +159,214 @@
     });
   }
 
-  /* ════════ BƯỚC 1 · SRT → PHÂN CẢNH ════════ */
+  /* �ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚ B�ƒ�’â�‚� �ƒ�€š�‚¯�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€��‚¡C 1 �ƒ�’â�‚�š�ƒ�€š�‚· SRT �ƒ�’�‚¢�ƒ¢â�€š¬�‚ �ƒ¢â�€š¬â�€ž¢ PH�ƒ�’�†�€™�ƒ¢â�€š¬�…¡N C�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¢NH �ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚ */
 
   async function pickSrt() {
     const r = await window.native.whiteboard.pickSrt();
     if (r.canceled) return;
-    if (!r.count) { log('⚠ SRT không có cue nào hợp lệ: ' + r.path); return; }
+    if (!r.count) { log('�ƒ�’�‚¢�ƒ�€��‚¡�ƒ�€š�‚  SRT kh�ƒ�’�†�€™�ƒ�€š�‚´ng c�ƒ�’�†�€™�ƒ�€š�‚³ cue n�ƒ�’�†�€™�ƒ�€š�‚ o h�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚£p l�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¡: ' + r.path); return; }
     state.srtPath = r.path;
     state.cues = r.cues;
-    els.srtLabel.textContent = r.path + ' — ' + r.count + ' cue';
+    els.srtLabel.textContent = r.path + ' �ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚ ' + r.count + ' cue';
     els.srtLabel.title = r.path;
-    await parseSrt(r.path);
+    log('�ƒ�’�‚¢�ƒ�€�â�‚��“�ƒ¢â�€š¬�…�€œ �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�†�€™�ƒ�€š�‚£ n�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡p SRT: ' + r.count + ' cue �ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚ timing n�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚±m ch�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚, b�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¥m B�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºc 3 "Ph�ƒ�’�†�€™�ƒ�€š�‚¢n t�ƒ�’�†�€™�ƒ�€š�‚­ch prompt"');
   }
 
-  async function parseSrt(srtPath) {
-    const opts = { targetSec: 30, minSec: 25, maxSec: 35 };
-    const r = await window.native.whiteboard.parseSrt(srtPath, opts);
-    if (!r.ok) { log('❌ parse SRT lỗi: ' + r.error); return; }
-    state.scenes = (r.data.scenes || []).map((s, i) => ({
-      sceneId: 'scene-' + String(i + 1).padStart(2, '0'),
-      startMs: s.startMs, endMs: s.endMs,
-      durationMs: Math.max(1500, s.endMs - s.startMs),
-      durationSec: (s.endMs - s.startMs) / 1000,
-      text: s.text || '',
-      cues: state.cues.slice((s.cueRange ? s.cueRange[0] : 1) - 1, s.cueRange ? s.cueRange[1] : state.cues.length),
-      image: null, canvas: null, elements: null, elementsDirty: false, previewPath: null,
-    }));
-    if (r.engine === 'js-fallback') log('ℹ venv chưa có — chia cảnh bằng port JS (same algorithm 25–35s)');
-    log('✓ ' + state.scenes.length + ' cảnh (' + r.engine + '), tổng ' + sec(state.scenes.reduce((t, s) => t + s.durationMs, 0)));
-    state.selected = state.scenes.length ? 0 : -1;
-    renderSceneList(); renderSceneDetail();
-  }
-
-  /* ── "Chia theo câu (SRT)": gom cue theo RANH GIỚI CÂU — mỗi câu 1 cảnh,
-     thời gian hiển thị ảnh GIỮ NGUYÊN thời gian câu trong SRT (không cắt từ
-     thành vô nghĩa). Câu = các cue liên tiếp kết thúc bằng dấu câu (.!?…);
-     cue quá dài không có dấu câu → tách tại ranh giới cue (trần 15s).
-     Đuôi câu được kéo dài tới khi câu sau bắt đầu (khoảng lặng im lặng vẫn
-     giữ hình) → tổng thời lượng liền mạch, khớp voice-over. */
-  function buildCueScenes() {
-    if (!state.cues.length) { log('⚠ chưa có cue — chọn SRT hoặc "🎙 Dùng giọng đã tạo" trước'); return; }
-    const SENT_END = /[.!?…]["”')\]]*\s*$/;
-    const MAX_SENT_MS = 15000;   // 1 câu quá dài → tách tại ranh giới cue, KHÔNG cắt giữa cue
-    const groups = [];
-    let cur = [];
-    const flush = () => { if (cur.length) { groups.push(cur); cur = []; } };
-    for (const cue of state.cues) {
-      if (!cue) continue;
-      cur.push(cue);
-      const span = cue.endMs - cur[0].startMs;
-      if (SENT_END.test((cue.text || '').trim()) || span >= MAX_SENT_MS) flush();
+  /* �ƒ�’�‚¢�ƒ¢â�€š¬�‚�ƒ¢â�‚�š�‚¬�ƒ�’�‚¢�ƒ¢â�€š¬�‚�ƒ¢â�‚�š�‚¬ B�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºc 3 "Ph�ƒ�’�†�€™�ƒ�€š�‚¢n t�ƒ�’�†�€™�ƒ�€š�‚­ch prompt" �ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚ tr�ƒ�’�†�€™�ƒ�€š�‚¡i tim lu�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�…�€œng 6 b�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºc:
+     t�ƒ�’�†�€™�ƒ�€š�‚¡ch k�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¹ch b�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£n (state.scriptRaw) th�ƒ�’�†�€™�ƒ�€š�‚ nh C�ƒ�’�†�€™�ƒ¢â�€š¬�…¡U C�ƒ�’�†�€™�ƒ¢â�€š¬�…�€œ NGH�ƒ�’â�‚�ž�ƒ�€š�‚¨A, r�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�…�€œi �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‹�“i chi�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¿u TU�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¦N T�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚°
+     v�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºi .SRT �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€�â�‚��„� m�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬â�‚�i c�ƒ�’�†�€™�ƒ�€š�‚¢u c�ƒ�’�†�€™�ƒ�€š�‚³ th�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚i l�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚£ng �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚c CH�ƒ�’�†�€™�ƒ�€š�‚NH X�ƒ�’�†�€™�ƒ�€š�‚C (gom cue theo t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚° l�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¡ kh�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºp t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚«,
+     kh�ƒ�’�†�€™�ƒ�€š�‚´ng c�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¯t t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚« v�ƒ�’�†�€™�ƒ�€š�‚´ ngh�ƒ�’â�‚�ž�ƒ�€š�‚©a). C�ƒ�’�†�€™�ƒ�€š�‚¢u = k�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¿t th�ƒ�’�†�€™�ƒ�€š�‚ºc b�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚±ng d�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¥u c�ƒ�’�†�€™�ƒ�€š�‚¢u .!?�ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ�€š�‚¦ ; m�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£nh qu�ƒ�’�†�€™�ƒ�€š�‚¡ ng�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¯n
+     gh�ƒ�’�†�€™�ƒ�€š�‚©p v�ƒ�’�†�€™�ƒ�€š�‚ o c�ƒ�’�†�€™�ƒ�€š�‚¢u tr�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºc. Cue �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚£c c�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¥p ph�ƒ�’�†�€™�ƒ�€š�‚¡t kh�ƒ�’�†�€™�ƒ�€š�‚´ng quay l�ƒ�’�†�€™�ƒ�€š�‚¹i (voice �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚c tu�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚§n t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚±)
+     �ƒ�’�‚¢�ƒ¢â�€š¬�‚ �ƒ¢â�€š¬â�€ž¢ timing kh�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºp th�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚­t c�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚§a TTS, �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“u�ƒ�’�†�€™�ƒ�€š�‚´i c�ƒ�’�†�€™�ƒ�€š�‚¢u k�ƒ�’�†�€™�ƒ�€š�‚©o t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºi c�ƒ�’�†�€™�ƒ�€š�‚¢u sau. C�ƒ�’�†�€™�ƒ�€š�‚¢u kh�ƒ�’�†�€™�ƒ�€š�‚´ng t�ƒ�’�†�€™�ƒ�€š�‚¬m th�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¥y
+     �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚§ t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚« trong SRT (di�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¦n gi�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£i l�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡i) �ƒ�’�‚¢�ƒ¢â�€š¬�‚ �ƒ¢â�€š¬â�€ž¢ c�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£nh b�ƒ�’�†�€™�ƒ�€š�‚¡o + �ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºc l�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚£ng theo nh�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¹p ~2.5 t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚«/s
+     neo t�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡i con tr�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚ SRT (l�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�‚�ž�‚¢ li�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¦u, kh�ƒ�’�†�€™�ƒ�€š�‚´ng im l�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚·ng).
+     Deterministic �ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚ Lu�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚­t 8: kh�ƒ�’�†�€™�ƒ�€š�‚´ng AI, ch�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚° chia + kh�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºp. */
+  function wbAnalyzePromptData() {
+    if (!state.scriptRaw) { log('[WB_LOI] WB_NO_SCRIPT �ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚ ch�ƒ�’â�‚� �ƒ�€š�‚°a nh�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚­n k�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¹ch b�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£n (B�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºc 1 "Nh�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚­n k�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¹ch b�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£n").'); return null; }
+    if (!state.cues.length) { log('[WB_LOI] WB_NO_SRT �ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚ ch�ƒ�’â�‚� �ƒ�€š�‚°a c�ƒ�’�†�€™�ƒ�€š�‚³ .SRT (B�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºc 2 "Nh�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚­n TTS" ho�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚·c "Tr�ƒ�’�†�€™�ƒ�€š�‚­ch xu�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¥t .SRT").'); return null; }
+    /* 1) t�ƒ�’�†�€™�ƒ�€š�‚¡ch c�ƒ�’�†�€™�ƒ�€š�‚¢u c�ƒ�’�†�€™�ƒ�€š�‚³ ngh�ƒ�’â�‚�ž�ƒ�€š�‚©a */
+    const paras = state.scriptRaw.split(/\n+/).map((t) => t.trim()).filter(Boolean);
+    const sentences = [];
+    for (const para of paras) {
+      const parts = para.match(/[^.!?�ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ�€š�‚¦]+[.!?�ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ�€š�‚¦]+["�ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ�€š�‚')\]]*|[^.!?�ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ�€š�‚¦]+$/g) || [];
+      for (let p of parts) {
+        p = p.replace(/\s+/g, ' ').trim();
+        if (!p) continue;
+        // m�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£nh qu�ƒ�’�†�€™�ƒ�€š�‚¡ ng�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¯n (vi�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¿t t�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¯t, s�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‹�“ th�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚© t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚±�ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ�€š�‚¦) gh�ƒ�’�†�€™�ƒ�€š�‚©p v�ƒ�’�†�€™�ƒ�€š�‚ o c�ƒ�’�†�€™�ƒ�€š�‚¢u tr�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºc
+        const words = p.split(/\s+/);
+        if (sentences.length && (words.length < 3 || p.length < 15)) {
+          sentences[sentences.length - 1] += ' ' + p;
+        } else {
+          sentences.push(p);
+        }
+      }
     }
-    flush();
-    if (!groups.length) { log('⚠ SRT không gom được câu nào'); return; }
-    state.scenes = groups.map((g, i) => {
-      const startMs = g[0].startMs;
-      const ownEnd = g[g.length - 1].endMs;
-      const next = groups[i + 1];
-      // kéo đuôi qua khoảng lặng tới câu sau (không bao giờ lùi lại)
-      const endMs = next ? Math.max(ownEnd, next[0].startMs) : ownEnd;
-      return {
+    if (!sentences.length) { log('[WB_LOI] WB_SCRIPT_EMPTY �ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚ k�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¹ch b�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£n kh�ƒ�’�†�€™�ƒ�€š�‚´ng c�ƒ�’�†�€™�ƒ�€š�‚³ c�ƒ�’�†�€™�ƒ�€š�‚¢u n�ƒ�’�†�€™�ƒ�€š�‚ o h�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚£p l�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¡.'); return null; }
+    /* 2) c�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¥p ph�ƒ�’�†�€™�ƒ�€š�‚¡t cue tu�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚§n t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚± theo t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚° l�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¡ kh�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºp t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚« (gi�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚¯ ch�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚¯/s�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‹�“, lowercase, ti�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¿ng Vi�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¡t gi�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚¯ d�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¥u) */
+    const wordsOf = (t) => (t.toLowerCase().match(/[a-z�ƒ�’�†�€™�ƒ�€š�‚ -�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚¹�ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“0-9]+/gi) || []);
+    const scenes = [];
+    let ci = 0;           // con tr�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚ cue (ch�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚° ti�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¿n, kh�ƒ�’�†�€™�ƒ�€š�‚´ng quay l�ƒ�’�†�€™�ƒ�€š�‚¹i)
+    let cursorMs = state.cues[0].startMs;
+    const warn = [];
+    for (let si = 0; si < sentences.length; si++) {
+      const sWords = wordsOf(sentences[si]);
+      if (!sWords.length) { warn.push('c�ƒ�’�†�€™�ƒ�€š�‚¢u ' + (si + 1) + ' kh�ƒ�’�†�€™�ƒ�€š�‚´ng c�ƒ�’�†�€™�ƒ�€š�‚³ t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚« kho�ƒ�’�†�€™�ƒ�€š�‚¡ kh�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºp �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚£c �ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚ b�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚ qua'); continue; }
+      const target = sWords.length;
+      let best = { idx: ci - 1, hit: 0 };
+      // c�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚­a s�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¢ cue m�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€��‚¸ r�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�‚�ž�‚¢ng d�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚§n; ch�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚n c�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚­a s�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¢ �ƒ�’â�‚�ž�ƒ�€š�‚�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¦U TI�ƒ�’�†�€™�ƒ�€��‚ N �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡t �ƒ�’�‚¢�ƒ¢â�€š¬�‚°�ƒ�€š�‚¥70% t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚«, ho�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚·c r�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�‚�ž�‚¢ng nh�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¥t trong tr�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚§n 8 cue
+      for (let j = ci; j < state.cues.length && j - ci < 8; j++) {
+        const winWords = wordsOf(state.cues.slice(ci, j + 1).map((c) => c.text || '').join(' '));
+        const set = new Set(winWords);
+        let hit = 0;
+        for (const w of sWords) if (set.has(w)) hit++;
+        const ratio = hit / target;
+        if (ratio > best.hit) best = { idx: j, hit: ratio };
+        if (ratio >= 0.7) break;
+      }
+      let startMs, endMs, matched, cueEndIdx;
+      if (best.hit >= 0.5 && best.idx >= ci) {
+        matched = true;
+        startMs = state.cues[ci].startMs;
+        endMs = state.cues[best.idx].endMs;
+        cueEndIdx = best.idx;
+        ci = best.idx + 1;
+      } else {
+        // kh�ƒ�’�†�€™�ƒ�€š�‚´ng kh�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºp �ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚ �ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºc l�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚£ng theo nh�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¹p ~2.5 t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚«/s, neo t�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡i con tr�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚ (l�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�‚�ž�‚¢ li�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¦u)
+        matched = false;
+        warn.push('c�ƒ�’�†�€™�ƒ�€š�‚¢u ' + (si + 1) + ' ("' + sentences[si].slice(0, 40) + '�ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ�€š�‚¦") kh�ƒ�’�†�€™�ƒ�€š�‚´ng kh�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºp SRT �ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚ �ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºc l�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚£ng ' + Math.max(1.2, sWords.length / 2.5).toFixed(1) + 's');
+        startMs = cursorMs;
+        endMs = startMs + Math.max(1200, Math.round(sWords.length / 2.5 * 1000));
+        cueEndIdx = -1;
+      }
+      scenes.push({ sentence: sentences[si], startMs, endMs, matched, cueEndIdx });
+      cursorMs = Math.max(cursorMs, endMs);
+    }
+    /* 3) d�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚±ng c�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£nh: �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“u�ƒ�’�†�€™�ƒ�€š�‚´i c�ƒ�’�†�€™�ƒ�€š�‚¢u k�ƒ�’�†�€™�ƒ�€š�‚©o t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºi c�ƒ�’�†�€™�ƒ�€š�‚¢u sau (kho�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£ng l�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚·ng gi�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚¯ h�ƒ�’�†�€™�ƒ�€š�‚¬nh) */
+    let cueLo = 0;
+    const built = [];
+    for (let i = 0; i < scenes.length; i++) {
+      const sc = scenes[i];
+      const next = scenes[i + 1];
+      const endMs = next ? Math.max(sc.endMs, next.startMs) : sc.endMs;
+      const cues = sc.matched ? state.cues.slice(cueLo, sc.cueEndIdx + 1) : [];
+      if (sc.matched) cueLo = sc.cueEndIdx + 1;
+      built.push({
         sceneId: 'scene-' + String(i + 1).padStart(2, '0'),
-        startMs, endMs,
-        durationMs: Math.max(500, endMs - startMs),
-        durationSec: (endMs - startMs) / 1000,
-        text: g.map((c) => c.text || '').join(' ').replace(/\s+/g, ' ').trim(),
-        cues: g,
+        startMs: sc.startMs, endMs,
+        durationMs: Math.max(500, endMs - sc.startMs),
+        durationSec: Math.max(500, endMs - sc.startMs) / 1000,
+        text: sc.sentence,
+        cues,
         image: null, canvas: null, elements: null, elementsDirty: false, previewPath: null,
-      };
-    });
-    const short = state.scenes.filter((s) => s.durationMs < 1500).length;
-    state.selected = state.scenes.length ? 0 : -1;
-    log('✓ chia theo câu: ' + state.scenes.length + ' cảnh (đúng timing SRT), tổng ' +
-        sec(state.scenes.reduce((t, s) => t + s.durationMs, 0)) +
-        (short ? ' — ⚠ ' + short + ' câu < 1.5s (engine render sẽ kẹp tối thiểu 1.5s)' : ''));
+      });
+    }
+    state.scenes = built;
+    state.selected = built.length ? 0 : -1;
+    const matchedN = built.filter((s) => s.cues.length).length;
+    log('�ƒ�’�‚¢�ƒ�€�â�‚��“�ƒ¢â�€š¬�…�€œ Ph�ƒ�’�†�€™�ƒ�€š�‚¢n t�ƒ�’�†�€™�ƒ�€š�‚­ch prompt: ' + built.length + ' c�ƒ�’�†�€™�ƒ�€š�‚¢u t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚« k�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¹ch b�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£n (' + state.scriptSource + '), ' + matchedN + ' c�ƒ�’�†�€™�ƒ�€š�‚¢u kh�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºp timing .SRT ch�ƒ�’�†�€™�ƒ�€š�‚­nh x�ƒ�’�†�€™�ƒ�€š�‚¡c, t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¢ng ' +
+        sec(built.reduce((t, s) => t + s.durationMs, 0)) + '.');
+    if (warn.length) log('�ƒ�’�‚¢�ƒ�€��‚¡�ƒ�€š�‚  ' + warn.length + ' c�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£nh b�ƒ�’�†�€™�ƒ�€š�‚¡o kh�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºp: ' + warn.join(' | '));
+    log('�ƒ�’�‚¢�ƒ¢â�€š¬�‚ �ƒ¢â�€š¬â�€ž¢ ti�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¿p theo: "�ƒ�’�‚°�ƒ�€��‚¸�ƒ�€š�‚¤�ƒ¢â�€š¬â�‚��“ AI sinh prompt �ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£nh" cho t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚«ng c�ƒ�’�†�€™�ƒ�€š�‚¢u (B�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºc 3).');
     renderSceneList(); renderSceneDetail();
+    return { n: built.length, matched: matchedN, warn: warn.length };
   }
 
-  /* ── "Tạo timeline" từ kịch bản dán: mỗi đoạn cách dòng trống = 1 cảnh.
-     Không cần SRT — thời lượng ước lượng theo số từ (~2.5 từ/giây tiếng Việt),
-     làm tròn 0.5s, kẹp 2.5–20s (deterministic — Luật 8). Sau đó nạp ảnh
-     từng cảnh như luồng SRT thường. */
-  function buildTimelineFromScript() {
-    const raw = (els.scriptText && els.scriptText.value || '').trim();
-    if (!raw) { log('⚠ dán kịch bản vào ô kịch bản trước'); return; }
-    const paras = raw
-      .split(/\n\s*\n+/)                          // đoạn cách nhau ≥1 dòng trống
-      .map((t) => t.replace(/\s+/g, ' ').trim())
-      .filter(Boolean);
-    if (!paras.length) { log('⚠ kịch bản không có đoạn nào hợp lệ'); return; }
-    state.cues = [];
-    state.srtPath = null;
-    els.srtLabel.textContent = 'timeline từ kịch bản dán — ' + paras.length + ' cảnh';
-    els.srtLabel.title = 'kịch bản dán (không dùng file SRT)';
-    let t = 0;
-    state.scenes = paras.map((text, i) => {
-      const words = text.split(/\s+/).length;
-      const durationMs = Math.max(2500, Math.min(20000, Math.round((words * 400) / 500) * 500));
-      const s = {
-        sceneId: 'scene-' + String(i + 1).padStart(2, '0'),
-        startMs: t, endMs: t + durationMs,
-        durationMs, durationSec: durationMs / 1000,
-        text, cues: [],
-        image: null, canvas: null, elements: null, elementsDirty: false, previewPath: null,
-      };
-      t += durationMs;
-      return s;
-    });
-    state.selected = 0;
-    log('✓ ' + state.scenes.length + ' cảnh từ kịch bản dán (ước lượng ~2.5 từ/s) — gán ảnh từng cảnh rồi "Sinh phần tử"');
-    renderSceneList(); renderSceneDetail();
-  }
-
-  /* ── Voice → SRT tiếng Việt local (faster-whisper): chọn voice, nhận diện
-     trên máy (không cloud), lưu SRT rồi nạp thẳng vào luồng parseSrt. */
+  /* �ƒ�’�‚¢�ƒ¢â�€š¬�‚�ƒ¢â�‚�š�‚¬�ƒ�’�‚¢�ƒ¢â�€š¬�‚�ƒ¢â�‚�š�‚¬ Voice �ƒ�’�‚¢�ƒ¢â�€š¬�‚ �ƒ¢â�€š¬â�€ž¢ SRT ti�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¿ng Vi�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¡t local (faster-whisper): ch�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚n voice, nh�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚­n di�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¡n
+     tr�ƒ�’�†�€™�ƒ�€š�‚ªn m�ƒ�’�†�€™�ƒ�€š�‚¡y (kh�ƒ�’�†�€™�ƒ�€š�‚´ng cloud), l�ƒ�’â�‚� �ƒ�€š�‚°u SRT r�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�…�€œi n�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡p th�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚³ng v�ƒ�’�†�€™�ƒ�€š�‚ o lu�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�…�€œng phan tich prompt (B3). */
   async function generateSrtFromVoice() {
     const pick = await window.native.whiteboard.pickAudio();
     if (pick.canceled) return;
-    if (pick.ok === false) { log('❌ ' + pick.error); return; }
+    if (pick.ok === false) { log('�ƒ�’�‚¢�ƒ�€š�‚�ƒ�€�â�‚��„� ' + pick.error); return; }
     const model = els.modelSel ? els.modelSel.value : 'small';
     els.pickVoiceSrtBtn.disabled = true;
-    setProgress(2, 'nhận diện tiếng Việt local (' + model + ')…');
+    setProgress(2, 'nh�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚­n di�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¡n ti�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¿ng Vi�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¡t local (' + model + ')�ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ�€š�‚¦');
     try {
-      log('🎤 voice: ' + pick.path.split(/[\\/]/).pop() + ' — nhận diện local bằng faster-whisper (' + model + ', lần đầu có thể tải model)');
+      log('�ƒ�’�‚°�ƒ�€��‚¸�ƒ�€��‚½�ƒ�€š�‚¤ voice: ' + pick.path.split(/[\\/]/).pop() + ' �ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚ nh�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚­n di�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¡n local b�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚±ng faster-whisper (' + model + ', l�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚§n �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚§u c�ƒ�’�†�€™�ƒ�€š�‚³ th�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€�â�‚��„� t�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£i model)');
       const r = await window.native.whiteboard.generateSrt(pick.path, model);
-      if (r.canceled) { setProgress(0, '—'); return; }
+      if (r.canceled) { setProgress(0, '�ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚'); return; }
       if (!r.ok) {
-        log('❌ tạo SRT lỗi: ' + (r.error || 'không rõ'));
-        if (r.whisperMissing && els.whisperPrepareBtn) log('→ bấm nút "Cài Whisper" (🧠) ở Bước 1 trước.');
-        setProgress(0, 'lỗi');
+        log('�ƒ�’�‚¢�ƒ�€š�‚�ƒ�€�â�‚��„� t�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡o SRT l�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬â�‚�i: ' + (r.error || 'kh�ƒ�’�†�€™�ƒ�€š�‚´ng r�ƒ�’�†�€™�ƒ�€š�‚µ'));
+        if (r.whisperMissing && els.whisperPrepareBtn) log('�ƒ�’�‚¢�ƒ¢â�€š¬�‚ �ƒ¢â�€š¬â�€ž¢ b�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¥m n�ƒ�’�†�€™�ƒ�€š�‚ºt "C�ƒ�’�†�€™�ƒ�€š�‚ i Whisper" (�ƒ�’�‚°�ƒ�€��‚¸�ƒ�€š�‚§�ƒ�€š�‚ ) �ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€��‚¸ B�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºc 1 tr�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºc.');
+        setProgress(0, 'l�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬â�‚�i');
         return;
       }
       state.srtPath = r.path;
       state.cues = r.cues || [];
-      els.srtLabel.textContent = r.path + ' — ' + r.count + ' cue (tự tạo từ voice)';
+      els.srtLabel.textContent = r.path + ' �ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚ ' + r.count + ' cue (t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚± t�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡o t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚« voice)';
       els.srtLabel.title = r.path;
-      log('✓ SRT tự tạo: ' + r.path.split(/[\\/]/).pop() + ' (' + r.count + ' cue)');
+      log('�ƒ�’�‚¢�ƒ�€�â�‚��“�ƒ¢â�€š¬�…�€œ SRT t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚± t�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡o: ' + r.path.split(/[\\/]/).pop() + ' (' + r.count + ' cue)');
       setProgress(100, 'SRT xong');
-      await parseSrt(r.path);
     } finally {
       els.pickVoiceSrtBtn.disabled = false;
-      setProgress(0, '—');
+      setProgress(0, '�ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚');
     }
   }
 
-  /* ── "Nhận kịch bản" từ tab Tạo Kịch Bản (pattern 2026-09-12a của Tool 9):
-     nguồn trực tiếp `tsOutput` ghi đè luôn; degrade CÓ KHAI BÁO sang
-     state.script của app (kịch bản đã đưa vào Phân Cảnh) khi tsOutput trống. */
+  /* �ƒ�’�‚¢�ƒ¢â�€š¬�‚�ƒ¢â�‚�š�‚¬�ƒ�’�‚¢�ƒ¢â�€š¬�‚�ƒ¢â�‚�š�‚¬ "Nh�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚­n k�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¹ch b�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£n" t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚« tab T�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡o K�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¹ch B�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£n (pattern 2026-09-12a c�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚§a Tool 9):
+     ngu�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�…�€œn tr�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚±c ti�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¿p `tsOutput` ghi �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�†�€™�ƒ�€š�‚¨ lu�ƒ�’�†�€™�ƒ�€š�‚´n; degrade C�ƒ�’�†�€™�ƒ¢â�€š¬�…�€œ KHAI B�ƒ�’�†�€™�ƒ�€š�‚O sang
+     state.script c�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚§a app (k�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¹ch b�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£n �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�†�€™�ƒ�€š�‚£ �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’â�‚� �ƒ�€š�‚°a v�ƒ�’�†�€™�ƒ�€š�‚ o Ph�ƒ�’�†�€™�ƒ�€š�‚¢n C�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£nh) khi tsOutput tr�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‹�“ng.
+     Lu�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�…�€œng 6 b�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºc: ch�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚° L�ƒ�’â�‚� �ƒ�€š�‚¯U k�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¹ch b�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£n + �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¢i n�ƒ�’�†�€™�ƒ�€š�‚ºt xanh �ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚ KH�ƒ�’�†�€™�ƒ¢â�€š¬�‚NG chia c�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£nh �ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€��‚¸ �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�†�€™�ƒ�€š�‚¢y
+     (vi�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¡c t�ƒ�’�†�€™�ƒ�€š�‚¡ch c�ƒ�’�†�€™�ƒ�€š�‚¢u + kh�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºp timing SRT thu�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�‚�ž�‚¢c B�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºc 3 "Ph�ƒ�’�†�€™�ƒ�€š�‚¢n t�ƒ�’�†�€™�ƒ�€š�‚­ch prompt"). */
   function pullScriptFromTs() {
     let raw = ((document.getElementById('tsOutput') || {}).value || '').trim();
-    let nguon = 'tab Tạo Kịch Bản (tsOutput)';
+    let nguon = 'tab T�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡o K�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¹ch B�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£n (tsOutput)';
     if (!raw) {
       const st = window.state || {};
-      if (typeof st.script === 'string' && st.script.trim()) { raw = st.script.trim(); nguon = 'state.script (kịch bản đã sang Phân Cảnh)'; }
-      else { log('❌ Chưa có kịch bản: tab Tạo Kịch Bản đang trống (tsOutput) và state.script cũng rỗng — tạo kịch bản trước.'); return; }
+      if (typeof st.script === 'string' && st.script.trim()) { raw = st.script.trim(); nguon = 'state.script (k�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¹ch b�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£n �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�†�€™�ƒ�€š�‚£ sang Ph�ƒ�’�†�€™�ƒ�€š�‚¢n C�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£nh)'; }
+      else { log('�ƒ�’�‚¢�ƒ�€š�‚�ƒ�€�â�‚��„� Ch�ƒ�’â�‚� �ƒ�€š�‚°a c�ƒ�’�†�€™�ƒ�€š�‚³ k�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¹ch b�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£n: tab T�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡o K�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¹ch B�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£n �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“ang tr�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‹�“ng (tsOutput) v�ƒ�’�†�€™�ƒ�€š�‚  state.script c�ƒ�’â�‚�¦�ƒ�€š�‚©ng r�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬â�‚�ng �ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚ t�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡o k�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¹ch b�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£n tr�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºc.'); return; }
     }
-    if (els.scriptText) els.scriptText.value = raw;
-    log('✓ Đã nhận kịch bản từ ' + nguon + ' (' + raw.split(/\s+/).length + ' từ). Bước tiếp: "🎙 Dùng giọng đã tạo" để căn SRT từ TTS, hoặc "📋 Tạo timeline từ kịch bản" nếu chưa có giọng.');
+    state.scriptRaw = raw;
+    state.scriptSource = nguon;
+    wbSetBtnOk(els.tsPullBtn, true);
+    log('�ƒ�’�‚¢�ƒ�€�â�‚��“�ƒ¢â�€š¬�…�€œ �ƒ�’â�‚�ž�ƒ�€š�‚�ƒ�’�†�€™�ƒ�€š�‚£ nh�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚­n k�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¹ch b�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£n t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚« ' + nguon + ' (' + raw.split(/\s+/).length + ' t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚«). �ƒ�’�‚¢�ƒ¢â�€š¬�‚ �ƒ¢â�€š¬â�€ž¢ sang B�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºc 3 "Ph�ƒ�’�†�€™�ƒ�€š�‚¢n t�ƒ�’�†�€™�ƒ�€š�‚­ch prompt" �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€�â�‚��„� t�ƒ�’�†�€™�ƒ�€š�‚¡ch c�ƒ�’�†�€™�ƒ�€š�‚¢u + kh�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºp timing .SRT.');
+    updateStepStatus();
   }
 
-  /* ── "Dùng giọng đã tạo" từ tab 🎙 Giọng nói (KHÔNG dialog): lấy bản mới nhất
-     trong "Đã tạo" (ưu tiên bản sản phẩm cuối, không phải đoạn tách cache),
-     lấy đường dẫn đĩa qua voice-history-path, nạp audio + SRT backend (timing
-     thật) vào luồng parseSrt. Bản không có SRT → lỗi lộ liễu (Luật 10). */
+    /* �ƒ�’�‚¢�ƒ¢â�€š¬�‚�ƒ¢â�‚�š�‚¬�ƒ�’�‚¢�ƒ¢â�€š¬�‚�ƒ¢â�‚�š�‚¬ "Nh�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚­n TTS" t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚« tab �ƒ�’�‚°�ƒ�€��‚¸�ƒ�€��‚½�ƒ¢â�‚�ž�‚¢ Gi�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚ng n�ƒ�’�†�€™�ƒ�€š�‚³i (KH�ƒ�’�†�€™�ƒ¢â�€š¬�‚NG dialog): l�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¥y b�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£n m�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºi nh�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¥t trong
+      "�ƒ�’â�‚�ž�ƒ�€š�‚�ƒ�’�†�€™�ƒ�€š�‚£ t�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡o" (�ƒ�’â�‚� �ƒ�€š�‚°u ti�ƒ�’�†�€™�ƒ�€š�‚ªn b�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£n s�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£n ph�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚©m cu�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‹�“i, kh�ƒ�’�†�€™�ƒ�€š�‚´ng ph�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£i �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“o�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡n t�ƒ�’�†�€™�ƒ�€š�‚¡ch cache), l�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¥y
+      �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚ng d�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚«n �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’â�‚�ž�ƒ�€š�‚©a qua voice-history-path, n�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡p audio + SRT backend (timing
+      th�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚­t) v�ƒ�’�†�€™�ƒ�€š�‚ o lu�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�…�€œng phan tich prompt (B3). N�ƒ�’�†�€™�ƒ�€š�‚ºt �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¢i XANH khi �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�†�€™�ƒ�€š�‚£ nh�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚­n.
+      B�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£n kh�ƒ�’�†�€™�ƒ�€š�‚´ng k�ƒ�’�†�€™�ƒ�€š�‚¨m SRT �ƒ�’�‚¢�ƒ¢â�€š¬�‚ �ƒ¢â�€š¬â�€ž¢ l�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬â�‚�i l�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�‚�ž�‚¢ li�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¦u (Lu�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚­t 10) + T�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚° �ƒ�’â�‚�ž�ƒ�€š�‚�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€��…�€œNG hi�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€�â�‚��„�n th�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¹ kh�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‹�“i
+      "Tr�ƒ�’�†�€™�ƒ�€š�‚­ch xu�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¥t .SRT" �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€�â�‚��„� ng�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚i d�ƒ�’�†�€™�ƒ�€š�‚¹ng ch�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚n c�ƒ�’�†�€™�ƒ�€š�‚¡ch tr�ƒ�’�†�€™�ƒ�€š�‚­ch (whisper local / file c�ƒ�’�†�€™�ƒ�€š�‚³ s�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚µn). */
   async function useVoiceFromVoiceTab() {
     try { if (typeof _giongSuNapDia === 'function') await _giongSuNapDia(); } catch (_) {}
     const ds = (typeof _giongSu !== 'undefined') ? _giongSu : null;
-    if (!ds || !ds.length) { log('❌ Tab 🎙 Giọng nói chưa có bản nào trong "Đã tạo" — tạo giọng (TTS) cho kịch bản trước.'); return; }
+    if (!ds || !ds.length) { log('�ƒ�’�‚¢�ƒ�€š�‚�ƒ�€�â�‚��„� Tab �ƒ�’�‚°�ƒ�€��‚¸�ƒ�€��‚½�ƒ¢â�‚�ž�‚¢ Gi�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚ng n�ƒ�’�†�€™�ƒ�€š�‚³i ch�ƒ�’â�‚� �ƒ�€š�‚°a c�ƒ�’�†�€™�ƒ�€š�‚³ b�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£n n�ƒ�’�†�€™�ƒ�€š�‚ o trong "�ƒ�’â�‚�ž�ƒ�€š�‚�ƒ�’�†�€™�ƒ�€š�‚£ t�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡o" �ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚ t�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡o gi�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚ng (TTS) cho k�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¹ch b�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£n tr�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºc.'); return; }
     const ban = ds.find((h) => !h.cache) || ds[0];
-    if (ban.cache) log('⚠ chỉ còn các bản "đoạn tách" (cache) — nên tạo lại bản gộp (sản phẩm cuối) cho cả kịch bản.');
+    if (ban.cache) log('�ƒ�’�‚¢�ƒ�€��‚¡�ƒ�€š�‚  ch�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚° c�ƒ�’�†�€™�ƒ�€š�‚²n c�ƒ�’�†�€™�ƒ�€š�‚¡c b�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£n "�ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“o�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡n t�ƒ�’�†�€™�ƒ�€š�‚¡ch" (cache) �ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚ n�ƒ�’�†�€™�ƒ�€š�‚ªn t�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡o l�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡i b�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£n g�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�‚�ž�‚¢p (s�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£n ph�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚©m cu�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‹�“i) cho c�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£ k�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¹ch b�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£n.');
     if (!ban.srt) {
-      log('❌ Bản "' + (ban.ten || '') + '" chưa có SRT (engine đám mây, hoặc tạo trước khi có SRT). Tạo lại giọng bằng backend trong máy là có SRT, hoặc dùng nút "Voice → SRT" (Whisper).');
+      log('�ƒ�’�‚¢�ƒ�€š�‚�ƒ�€�â�‚��„� B�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£n "' + (ban.ten || '') + '" ch�ƒ�’â�‚� �ƒ�€š�‚°a c�ƒ�’�†�€™�ƒ�€š�‚³ SRT (engine �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�†�€™�ƒ�€š�‚¡m m�ƒ�’�†�€™�ƒ�€š�‚¢y, ho�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚·c t�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡o tr�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºc khi c�ƒ�’�†�€™�ƒ�€š�‚³ SRT). �ƒ�’�‚¢�ƒ¢â�€š¬�‚ �ƒ¢â�€š¬â�€ž¢ hi�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€�â�‚��„�n th�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¹ kh�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‹�“i "Tr�ƒ�’�†�€™�ƒ�€š�‚­ch xu�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¥t .SRT": d�ƒ�’�†�€™�ƒ�€š�‚¹ng "Voice �ƒ�’�‚¢�ƒ¢â�€š¬�‚ �ƒ¢â�€š¬â�€ž¢ SRT (local)" ho�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚·c "Ch�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚n file SRT".');
+      wbRevealSrtExtract();
       return;
     }
     if (els.voicePullBtn) els.voicePullBtn.disabled = true;
-    setProgress(2, 'nạp giọng từ tab Giọng nói…');
+    setProgress(2, 'n�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡p gi�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚ng t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚« tab Gi�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚ng n�ƒ�’�†�€™�ƒ�€š�‚³i�ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ�€š�‚¦');
     try {
       const pr = await window.native.voiceHistoryPath(ban.khi, !!ban.cache);
-      if (!pr || !pr.ok) { log('❌ ' + ((pr && pr.error) || 'không lấy được đường dẫn bản giọng trên đĩa')); setProgress(0, '—'); return; }
+      if (!pr || !pr.ok) { log('�ƒ�’�‚¢�ƒ�€š�‚�ƒ�€�â�‚��„� ' + ((pr && pr.error) || 'kh�ƒ�’�†�€™�ƒ�€š�‚´ng l�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¥y �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚£c �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚ng d�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚«n b�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£n gi�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚ng tr�ƒ�’�†�€™�ƒ�€š�‚ªn �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’â�‚�ž�ƒ�€š�‚©a')); setProgress(0, '�ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚'); return; }
       const r = await window.native.whiteboard.importVoice({ voicePath: pr.path, srtText: ban.srt });
-      if (!r.ok) { log('❌ ' + r.error); setProgress(0, '—'); return; }
-      // voice-over cho export (cùng dạng {path, durationSec} với pickAudio)
+      if (!r.ok) { log('�ƒ�’�‚¢�ƒ�€š�‚�ƒ�€�â�‚��„� ' + r.error); setProgress(0, '�ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚'); return; }
+      // voice-over cho export (c�ƒ�’�†�€™�ƒ�€š�‚¹ng d�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡ng {path, durationSec} v�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºi pickAudio)
       state.audioTrack = { path: r.path, durationSec: (typeof r.durationSec === 'number' && r.durationSec > 0) ? r.durationSec : (ban.giay || 0) };
-      if (els.audioLabel) els.audioLabel.textContent = r.path.split(/[\\/]/).pop() + ' (từ Giọng nói) · ' + (state.audioTrack.durationSec ? state.audioTrack.durationSec.toFixed(1) + 's' : '?');
+      state.ttsName = ban.ten || r.path.split(/[\\/]/).pop();
+      if (els.audioLabel) els.audioLabel.textContent = r.path.split(/[\\/]/).pop() + ' (t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚« Gi�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚ng n�ƒ�’�†�€™�ƒ�€š�‚³i) �ƒ�’â�‚�š�ƒ�€š�‚· ' + (state.audioTrack.durationSec ? state.audioTrack.durationSec.toFixed(1) + 's' : '?');
       if (els.audioLabel) els.audioLabel.title = r.path;
       state.srtPath = r.srtPath;
       state.cues = r.cues;
-      els.srtLabel.textContent = r.srtPath + ' — ' + r.count + ' cue (SRT kèm bản giọng)';
+      els.srtLabel.textContent = r.srtPath + ' �ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚ ' + r.count + ' cue (SRT k�ƒ�’�†�€™�ƒ�€š�‚¨m b�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£n gi�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚ng)';
       els.srtLabel.title = r.srtPath;
-      log('✓ Đã dùng giọng "' + (ban.ten || '') + '" — ' + r.count + ' cue, voice-over gán sẵn (Bước 4). Tiếp: gán ảnh từng cảnh (Bước 2) → "Sinh phần tử" → soạn vùng.');
-      setProgress(100, 'nạp giọng xong');
-      await parseSrt(r.srtPath);
+      wbSetBtnOk(els.voicePullBtn, true);
+      log('�ƒ�’�‚¢�ƒ�€�â�‚��“�ƒ¢â�€š¬�…�€œ �ƒ�’â�‚�ž�ƒ�€š�‚�ƒ�’�†�€™�ƒ�€š�‚£ nh�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚­n TTS "' + state.ttsName + '" �ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚ ' + r.count + ' cue, voice-over g�ƒ�’�†�€™�ƒ�€š�‚¡n s�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚µn (B�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºc 5). SRT t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚± �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�‚�ž�‚¢ng tr�ƒ�’�†�€™�ƒ�€š�‚­ch xu�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¥t xong �ƒ�’�‚¢�ƒ¢â�€š¬�‚ �ƒ¢â�€š¬â�€ž¢ B�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºc 3 "Ph�ƒ�’�†�€™�ƒ�€š�‚¢n t�ƒ�’�†�€™�ƒ�€š�‚­ch prompt".');
+      setProgress(100, 'n�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡p gi�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚ng xong');
+      wbSetBtnOk(els.voicePullBtn, true);
+      updateStepStatus();
     } finally {
       if (els.voicePullBtn) els.voicePullBtn.disabled = false;
-      setProgress(0, '—');
+      setProgress(0, '�ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚');
     }
   }
 
-  function addManualScene() {
-    state.scenes.push({
-      sceneId: 'scene-' + String(state.scenes.length + 1).padStart(2, '0'),
-      startMs: null, endMs: null, durationSec: 5, durationMs: 5000,
-      text: 'Cảnh thủ công (không SRT)', cues: [],
-      image: null, canvas: null, elements: null, elementsDirty: false, previewPath: null,
-    });
-    state.selected = state.scenes.length - 1;
-    log('✓ thêm cảnh thủ công — chọn ảnh rồi bấm "Sinh phần tử"');
-    renderSceneList(); renderSceneDetail();
-  }
-
-  function clearAll() {
-    state.cues = [];
-    state.srtPath = null;
-    state.scenes = [];
-    state.selected = -1;
-    state.musicTrack = null;
-    els.srtLabel.textContent = 'chưa chọn';
-    els.srtLabel.title = '';
-    if (els.audioWarn) els.audioWarn.textContent = '';
-    if (els.musicLabel) { els.musicLabel.textContent = 'chưa chọn'; els.musicLabel.title = ''; }
-    log('— xoá toàn bộ cảnh');
-    renderSceneList(); renderSceneDetail();
-  }
-
-  /* ════════ BƯỚC 2 · CẢNH ↔ ẢNH ════════ */
-
-  async function pickImageForScene(i) {
-    const r = await window.native.whiteboard.pickImage();
-    if (r.canceled || !r.path) return;
-    await setImageForScene(i, r.path);
-  }
-
-  /* Nhập ảnh hàng loạt (IPC pickImages / pickImagesDir có sẵn từ trước): gán tuần tự
-     vào các cảnh chưa có ảnh; ảnh dư thì tạo thêm cảnh mới (mỗi ảnh 1 cảnh, 6s). */
-  async function assignImages(paths) {
-    if (!paths || !paths.length) return;
-    let idx = 0;
-    for (let i = 0; i < state.scenes.length && idx < paths.length; i++) {
-      if (!state.scenes[i].image) await setImageForScene(i, paths[idx++]);
-    }
-    while (idx < paths.length) {
-      state.scenes.push({
-        sceneId: 'scene-' + String(state.scenes.length + 1).padStart(2, '0'),
-        startMs: null, endMs: null, durationSec: 6, durationMs: 6000,
-        text: 'Cảnh từ ảnh (không SRT)', cues: [],
-        image: null, canvas: null, elements: null, elementsDirty: false, previewPath: null,
-      });
-      await setImageForScene(state.scenes.length - 1, paths[idx++]);
-    }
-    log('✓ gán ' + paths.length + ' ảnh → ' + state.scenes.length + ' cảnh');
-    renderSceneList(); renderSceneDetail();
-  }
+  /* �ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚ C�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¢NH �ƒ�’�‚¢�ƒ¢â�€š¬�‚ �ƒ¢â�€š¬�‚ �ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¢NH (�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£nh do AI Flow sinh �ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€��‚¸ B�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºc 3 �ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚ kh�ƒ�’�†�€™�ƒ�€š�‚´ng c�ƒ�’�†�€™�ƒ�€š�‚²n ch�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚n �ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£nh tay) �ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚ */
 
   async function setImageForScene(i, imagePath) {
     const s = state.scenes[i];
@@ -386,85 +378,25 @@
     const pr = await window.native.whiteboard.probeImage(imagePath);
     if (pr && pr.ok) {
       s.canvas = { width: pr.width, height: pr.height };
-      log('✓ cảnh ' + (i + 1) + ' ← ' + imagePath.split(/[\\/]/).pop() + ' (' + pr.width + '×' + pr.height + ')');
-      await generateElements(i, true);
+      log('�ƒ�’�‚¢�ƒ�€�â�‚��“�ƒ¢â�€š¬�…�€œ c�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£nh ' + (i + 1) + ' �ƒ�’�‚¢�ƒ¢â�€š¬�‚ �ƒ�€š�‚ ' + imagePath.split(/[\\/]/).pop() + ' (' + pr.width + '�ƒ�’�†�€™�ƒ¢â�€š¬â�‚�' + pr.height + ')');
     } else {
       s.canvas = null;
-      log('❌ không đọc được ảnh: ' + imagePath);
+      log('�ƒ�’�‚¢�ƒ�€š�‚�ƒ�€�â�‚��„� kh�ƒ�’�†�€™�ƒ�€š�‚´ng �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚c �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚£c �ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£nh: ' + imagePath);
     }
     renderSceneList(); renderSceneDetail();
   }
 
-  /* ════════ BƯỚC 3 · ANNOTATION (phần tử vẽ) ════════ */
-
-  async function generateElements(i, quiet) {
-    const s = state.scenes[i];
-    if (!s || !s.canvas) { log('⚠ cần ảnh trước khi sinh phần tử'); return; }
-    const ann = A.buildAnnotation(
-      { sceneId: s.sceneId, durationMs: s.durationMs, subtitle: s.text, cues: s.cues || [] },
-      s.canvas
-    );
-    s.elements = ann.elements;
-    s.elementsDirty = false;
-    s.previewPath = null;
-    if (!quiet) log('✓ sinh ' + s.elements.length + ' phần tử (sequence + reveal + handPath)');
-    renderSceneDetail();
-  }
-
-  function moveElement(i, d) {
-    const s = state.scenes[state.selected];
-    if (!s || !s.elements) return;
-    const els2 = s.elements;
-    const j = i + d;
-    if (j < 0 || j >= els2.length) return;
-    const t = els2[i]; els2[i] = els2[j]; els2[j] = t;
-    els2.forEach((e, k) => { e.sequence = k + 1; });
-    s.elementsDirty = true;
-    s.previewPath = null;
-    renderSceneDetail();
-  }
-
-  function removeElement(i) {
-    const s = state.scenes[state.selected];
-    if (!s || !s.elements) return;
-    s.elements.splice(i, 1);
-    s.elements.forEach((e, k) => { e.sequence = k + 1; });
-    s.elementsDirty = true;
-    s.previewPath = null;
-    renderSceneDetail();
-  }
-
-  function elementEdited() {
-    const s = state.scenes[state.selected];
-    if (s) { s.elementsDirty = true; s.previewPath = null; }
-  }
-
-  async function previewRegion() {
-    const s = state.scenes[state.selected];
-    if (!s || !s.image || !s.elements) { log('⚠ cần ảnh + phần tử trước khi preview vùng'); return; }
-    els.previewBtn.disabled = true;
-    try {
-      const annotation = A.toAnnotation({ sceneId: s.sceneId, durationMs: s.durationMs, elements: s.elements }, s.canvas);
-      const v = A.validateAnnotation(annotation);
-      (v.warnings || []).forEach((w) => log('⚠ ' + w));
-      if (!v.ok) { log('❌ ' + v.errors.join('; ')); return; }
-      const r = await window.native.whiteboard.annotationPreview(s.image, annotation);
-      if (r.ok) { s.previewPath = r.previewPath; renderSceneDetail(); log('✓ sơ đồ vùng: ' + r.previewPath.split(/[\\\/]/).pop()); }
-      else log('❌ preview lỗi: ' + r.error);
-    } finally { els.previewBtn.disabled = false; }
-  }
-
-  /* ════════ BƯỚC 4 · VOICE-OVER ════════ */
+  /* �ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚ B�ƒ�’â�‚� �ƒ�€š�‚¯�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€��‚¡C 4 �ƒ�’â�‚�š�ƒ�€š�‚· VOICE-OVER �ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚ */
 
   async function pickAudio() {
     const r = await window.native.whiteboard.pickAudio();
     if (r.canceled) return;
-    if (r.ok === false) { log('❌ ' + r.error); return; }
+    if (r.ok === false) { log('�ƒ�’�‚¢�ƒ�€š�‚�ƒ�€�â�‚��„� ' + r.error); return; }
     state.audioTrack = r;
-    els.audioLabel.textContent = r.path.split(/[\\/]/).pop() + ' · ' + (r.durationSec ? r.durationSec.toFixed(1) + 's' : '?');
+    els.audioLabel.textContent = r.path.split(/[\\/]/).pop() + ' �ƒ�’â�‚�š�ƒ�€š�‚· ' + (r.durationSec ? r.durationSec.toFixed(1) + 's' : '?');
     els.audioLabel.title = r.path;
     checkAudioMatch();
-    log('✓ voice-over: ' + r.path);
+    log('�ƒ�’�‚¢�ƒ�€�â�‚��“�ƒ¢â�€š¬�…�€œ voice-over: ' + r.path);
   }
 
   function checkAudioMatch() {
@@ -475,33 +407,33 @@
     const d = state.audioTrack.durationSec - total;
     els.audioWarn.textContent = Math.abs(d) <= 1.5
       ? ''
-      : '⚠ audio ' + (d > 0 ? 'dài hơn' : 'ngắn hơn') + ' video ' + Math.abs(d).toFixed(1) + 's — video sẽ theo cảnh dài hơn';
+      : '�ƒ�’�‚¢�ƒ�€��‚¡�ƒ�€š�‚  audio ' + (d > 0 ? 'd�ƒ�’�†�€™�ƒ�€š�‚ i h�ƒ�’â�‚� �ƒ�€š�‚¡n' : 'ng�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¯n h�ƒ�’â�‚� �ƒ�€š�‚¡n') + ' video ' + Math.abs(d).toFixed(1) + 's �ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚ video s�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚½ theo c�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£nh d�ƒ�’�†�€™�ƒ�€š�‚ i h�ƒ�’â�‚� �ƒ�€š�‚¡n';
   }
 
-  /* ── nhạc nền: chọn file (dialog thật) — lặp vô hạn tới hết video,
-     mix nhỏ hơn voice theo select âm lượng (mặc định 0.16) ── */
+  /* �ƒ�’�‚¢�ƒ¢â�€š¬�‚�ƒ¢â�‚�š�‚¬�ƒ�’�‚¢�ƒ¢â�€š¬�‚�ƒ¢â�‚�š�‚¬ nh�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡c n�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚n: ch�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚n file (dialog th�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚­t) �ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚ l�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚·p v�ƒ�’�†�€™�ƒ�€š�‚´ h�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡n t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºi h�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¿t video,
+     mix nh�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚ h�ƒ�’â�‚� �ƒ�€š�‚¡n voice theo select �ƒ�’�†�€™�ƒ�€š�‚¢m l�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚£ng (m�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚·c �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¹nh 0.16) �ƒ�’�‚¢�ƒ¢â�€š¬�‚�ƒ¢â�‚�š�‚¬�ƒ�’�‚¢�ƒ¢â�€š¬�‚�ƒ¢â�‚�š�‚¬ */
   async function pickMusic() {
     const r = await window.native.whiteboard.pickMusic();
     if (r.canceled) return;
-    if (r.ok === false) { log('❌ ' + r.error); return; }
+    if (r.ok === false) { log('�ƒ�’�‚¢�ƒ�€š�‚�ƒ�€�â�‚��„� ' + r.error); return; }
     state.musicTrack = r;
-    els.musicLabel.textContent = r.path.split(/[\\/]/).pop() + ' · ' + (r.durationSec ? r.durationSec.toFixed(1) + 's (lặp)' : '? (lặp)');
+    els.musicLabel.textContent = r.path.split(/[\\/]/).pop() + ' �ƒ�’â�‚�š�ƒ�€š�‚· ' + (r.durationSec ? r.durationSec.toFixed(1) + 's (l�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚·p)' : '? (l�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚·p)');
     els.musicLabel.title = r.path;
-    log('✓ nhạc nền: ' + r.path + ' — lặp tới hết video, âm lượng mix theo select');
+    log('�ƒ�’�‚¢�ƒ�€�â�‚��“�ƒ¢â�€š¬�…�€œ nh�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡c n�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚n: ' + r.path + ' �ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚ l�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚·p t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºi h�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¿t video, �ƒ�’�†�€™�ƒ�€š�‚¢m l�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚£ng mix theo select');
   }
 
-  /* ════════ BƯỚC 5 · RENDER → MERGE → MP4 ════════ */
+  /* �ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚ B�ƒ�’â�‚� �ƒ�€š�‚¯�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€��‚¡C 5 �ƒ�’â�‚�š�ƒ�€š�‚· RENDER �ƒ�’�‚¢�ƒ¢â�€š¬�‚ �ƒ¢â�€š¬â�€ž¢ MERGE �ƒ�’�‚¢�ƒ¢â�€š¬�‚ �ƒ¢â�€š¬â�€ž¢ MP4 �ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚ */
 
   async function exportVideo() {
-    if (!state.scenes.length) { log('⚠ chưa có cảnh nào'); return; }
+    if (!state.scenes.length) { log('�ƒ�’�‚¢�ƒ�€��‚¡�ƒ�€š�‚  ch�ƒ�’â�‚� �ƒ�€š�‚°a c�ƒ�’�†�€™�ƒ�€š�‚³ c�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£nh n�ƒ�’�†�€™�ƒ�€š�‚ o'); return; }
     const bad = state.scenes.filter((s) => !s.image);
-    if (bad.length) { log('❌ còn ' + bad.length + ' cảnh chưa gắn ảnh (bước 2)'); return; }
-    // validate annotation từng cảnh
+    if (bad.length) { log('�ƒ�’�‚¢�ƒ�€š�‚�ƒ�€�â�‚��„� c�ƒ�’�†�€™�ƒ�€š�‚²n ' + bad.length + ' c�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£nh ch�ƒ�’â�‚� �ƒ�€š�‚°a g�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¯n �ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£nh (b�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºc 2)'); return; }
+    // validate annotation t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚«ng c�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£nh
     for (let i = 0; i < state.scenes.length; i++) {
       const s = state.scenes[i];
       const ann = A.toAnnotation({ sceneId: s.sceneId, durationMs: s.durationMs, elements: s.elements || [] }, s.canvas);
       const v = A.validateAnnotation(ann);
-      if (!v.ok) { log('❌ cảnh ' + (i + 1) + ': ' + v.errors.join('; ')); state.selected = i; renderSceneList(); renderSceneDetail(); return; }
+      if (!v.ok) { log('�ƒ�’�‚¢�ƒ�€š�‚�ƒ�€�â�‚��„� c�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£nh ' + (i + 1) + ': ' + v.errors.join('; ')); state.selected = i; renderSceneList(); renderSceneDetail(); return; }
     }
     const out = await window.native.whiteboard.pickOutput({ defaultName: 'whiteboard_stream_ink.mp4' });
     if (r2(out) || !out.path) return;
@@ -517,29 +449,29 @@
         inkPath: els.inkPathSel.value,
         colorFill: els.colorFillSel.value,
         capLongEdge: parseInt(els.capSel.value, 10) || 1080,
-        gridEdge: parseInt(els.gridEdge && els.gridEdge.value, 10) || null,   // trống/0 → null = mặc định engine (--grid-edge)
+        gridEdge: parseInt(els.gridEdge && els.gridEdge.value, 10) || null,   // tr�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‹�“ng/0 �ƒ�’�‚¢�ƒ¢â�€š¬�‚ �ƒ¢â�€š¬â�€ž¢ null = m�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚·c �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¹nh engine (--grid-edge)
         musicVolume: els.musicVolSel ? (parseFloat(els.musicVolSel.value) || 0.16) : 0.16,
       },
     };
     state.exporting = true;
     syncButtons();
-    setProgress(0, 'khởi động…');
-    log('▶ render ' + payload.scenes.length + ' cảnh → ' + out.path);
+    setProgress(0, 'kh�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€��‚¸i �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�‚�ž�‚¢ng�ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ�€š�‚¦');
+    log('�ƒ�’�‚¢�ƒ¢â�€š¬â�‚��“�ƒ�€š�‚¶ render ' + payload.scenes.length + ' c�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£nh �ƒ�’�‚¢�ƒ¢â�€š¬�‚ �ƒ¢â�€š¬â�€ž¢ ' + out.path);
     const r = await window.native.whiteboard.export(payload);
     state.exporting = false;
     syncButtons();
     if (r.ok) {
       setProgress(100, 'xong');
-      log('✓ hoàn tất: ' + r.path + (r.durationSec ? ' (' + r.durationSec.toFixed(1) + 's)' : ''));
+      log('�ƒ�’�‚¢�ƒ�€�â�‚��“�ƒ¢â�€š¬�…�€œ ho�ƒ�’�†�€™�ƒ�€š�‚ n t�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¥t: ' + r.path + (r.durationSec ? ' (' + r.durationSec.toFixed(1) + 's)' : ''));
     } else {
-      setProgress(0, 'lỗi');
-      log('❌ export lỗi: ' + (r.error || 'không rõ'));
+      setProgress(0, 'l�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬â�‚�i');
+      log('�ƒ�’�‚¢�ƒ�€š�‚�ƒ�€�â�‚��„� export l�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬â�‚�i: ' + (r.error || 'kh�ƒ�’�†�€™�ƒ�€š�‚´ng r�ƒ�’�†�€™�ƒ�€š�‚µ'));
     }
   }
 
-  /* ════════ LƯU / NẠP DỰ ÁN (userData qua IPC — 1 slot project.json) ════════
-     Không dialog: vị trí do app quản (userData/whiteboard-studio/project.json).
-     Lỗi fail lộ liễu WB_* từ main — không fallback ngầm (Luật 10). */
+  /* �ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚ L�ƒ�’â�‚� �ƒ�€š�‚¯U / N�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚ P D�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚° �ƒ�’�†�€™�ƒ�€š�‚N (userData qua IPC �ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚ 1 slot project.json) �ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚
+     Kh�ƒ�’�†�€™�ƒ�€š�‚´ng dialog: v�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¹ tr�ƒ�’�†�€™�ƒ�€š�‚­ do app qu�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£n (userData/whiteboard-studio/project.json).
+     L�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬â�‚�i fail l�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�‚�ž�‚¢ li�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¦u WB_* t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚« main �ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚ kh�ƒ�’�†�€™�ƒ�€š�‚´ng fallback ng�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚§m (Lu�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚­t 10). */
 
   function projectSnapshot() {
     return {
@@ -562,22 +494,22 @@
   }
 
   async function saveProject() {
-    if (!state.scenes.length) { log('⚠ chưa có gì để lưu — tạo cảnh ở Bước 1 trước'); return; }
+    if (!state.scenes.length) { log('�ƒ�’�‚¢�ƒ�€��‚¡�ƒ�€š�‚  ch�ƒ�’â�‚� �ƒ�€š�‚°a c�ƒ�’�†�€™�ƒ�€š�‚³ g�ƒ�’�†�€™�ƒ�€š�‚¬ �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€�â�‚��„� l�ƒ�’â�‚� �ƒ�€š�‚°u �ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚ t�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡o c�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£nh �ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€��‚¸ B�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºc 1 tr�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºc'); return; }
     const r = await window.native.whiteboard.saveProject({ data: projectSnapshot() });
-    if (r.ok) log('✓ đã lưu dự án (' + r.scenes + ' cảnh) → ' + r.path);
-    else log('❌ lưu dự án lỗi: ' + (r.error || 'không rõ'));
+    if (r.ok) log('�ƒ�’�‚¢�ƒ�€�â�‚��“�ƒ¢â�€š¬�…�€œ �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�†�€™�ƒ�€š�‚£ l�ƒ�’â�‚� �ƒ�€š�‚°u d�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚± �ƒ�’�†�€™�ƒ�€š�‚¡n (' + r.scenes + ' c�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£nh) �ƒ�’�‚¢�ƒ¢â�€š¬�‚ �ƒ¢â�€š¬â�€ž¢ ' + r.path);
+    else log('�ƒ�’�‚¢�ƒ�€š�‚�ƒ�€�â�‚��„� l�ƒ�’â�‚� �ƒ�€š�‚°u d�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚± �ƒ�’�†�€™�ƒ�€š�‚¡n l�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬â�‚�i: ' + (r.error || 'kh�ƒ�’�†�€™�ƒ�€š�‚´ng r�ƒ�’�†�€™�ƒ�€š�‚µ'));
   }
 
   async function loadProject() {
     const r = await window.native.whiteboard.loadProject();
-    if (!r.ok) { log('❌ nạp dự án: ' + (r.error || 'không rõ')); return; }
+    if (!r.ok) { log('�ƒ�’�‚¢�ƒ�€š�‚�ƒ�€�â�‚��„� n�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡p d�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚± �ƒ�’�†�€™�ƒ�€š�‚¡n: ' + (r.error || 'kh�ƒ�’�†�€™�ƒ�€š�‚´ng r�ƒ�’�†�€™�ƒ�€š�‚µ')); return; }
     const d = r.data;
     if (!d || !Array.isArray(d.scenes) || !d.scenes.length) {
-      log('❌ dự án đã lưu không hợp lệ (không có cảnh): ' + r.path);
+      log('�ƒ�’�‚¢�ƒ�€š�‚�ƒ�€�â�‚��„� d�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚± �ƒ�’�†�€™�ƒ�€š�‚¡n �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�†�€™�ƒ�€š�‚£ l�ƒ�’â�‚� �ƒ�€š�‚°u kh�ƒ�’�†�€™�ƒ�€š�‚´ng h�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚£p l�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¡ (kh�ƒ�’�†�€™�ƒ�€š�‚´ng c�ƒ�’�†�€™�ƒ�€š�‚³ c�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£nh): ' + r.path);
       return;
     }
     const badScene = d.scenes.findIndex((s) => !s || !s.canvas || !s.canvas.width);
-    if (badScene >= 0) { log('❌ cảnh ' + (badScene + 1) + ' trong dự án thiếu canvas — file hỏng, không nạp'); return; }
+    if (badScene >= 0) { log('�ƒ�’�‚¢�ƒ�€š�‚�ƒ�€�â�‚��„� c�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£nh ' + (badScene + 1) + ' trong d�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚± �ƒ�’�†�€™�ƒ�€š�‚¡n thi�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¿u canvas �ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚ file h�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚ng, kh�ƒ�’�†�€™�ƒ�€š�‚´ng n�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡p'); return; }
     state.srtPath = d.srtPath || null;
     state.cues = Array.isArray(d.cues) ? d.cues : [];
     state.scenes = d.scenes;
@@ -591,23 +523,23 @@
       if (d.opts.musicVolume && els.musicVolSel) els.musicVolSel.value = String(d.opts.musicVolume);
       if (d.opts.gridEdge && els.gridEdge) els.gridEdge.value = String(d.opts.gridEdge);
     }
-    // đồng bộ nhãn media theo state đã nạp
+    // �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�…�€œng b�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�‚�ž�‚¢ nh�ƒ�’�†�€™�ƒ�€š�‚£n media theo state �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�†�€™�ƒ�€š�‚£ n�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡p
     if (els.srtLabel) {
       els.srtLabel.textContent = state.srtPath
-        ? (state.srtPath + ' — ' + state.cues.length + ' cue')
-        : 'timeline từ kịch bản dán — ' + state.scenes.length + ' cảnh';
-      els.srtLabel.title = state.srtPath || 'kịch bản dán (không dùng file SRT)';
+        ? (state.srtPath + ' �ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚ ' + state.cues.length + ' cue')
+        : 'timeline t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚« k�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¹ch b�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£n �ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚ ' + state.scenes.length + ' c�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£nh';
+      els.srtLabel.title = state.srtPath || 'k�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¹ch b�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£n nh�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚­n t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚« tab T�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡o K�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¹ch B�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£n / state.script (kh�ƒ�’�†�€™�ƒ�€š�‚´ng d�ƒ�’�†�€™�ƒ�€š�‚¹ng file SRT)';
     }
     if (els.audioLabel && state.audioTrack && state.audioTrack.path) {
-      els.audioLabel.textContent = state.audioTrack.path.split(/[\\/]/).pop() + ' · ' + (state.audioTrack.durationSec ? state.audioTrack.durationSec.toFixed(1) + 's' : '?');
+      els.audioLabel.textContent = state.audioTrack.path.split(/[\\/]/).pop() + ' �ƒ�’â�‚�š�ƒ�€š�‚· ' + (state.audioTrack.durationSec ? state.audioTrack.durationSec.toFixed(1) + 's' : '?');
       els.audioLabel.title = state.audioTrack.path;
     }
     if (els.musicLabel && state.musicTrack && state.musicTrack.path) {
-      els.musicLabel.textContent = state.musicTrack.path.split(/[\\/]/).pop() + ' · ' + (state.musicTrack.durationSec ? state.musicTrack.durationSec.toFixed(1) + 's (lặp)' : '? (lặp)');
+      els.musicLabel.textContent = state.musicTrack.path.split(/[\\/]/).pop() + ' �ƒ�’â�‚�š�ƒ�€š�‚· ' + (state.musicTrack.durationSec ? state.musicTrack.durationSec.toFixed(1) + 's (l�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚·p)' : '? (l�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚·p)');
       els.musicLabel.title = state.musicTrack.path;
     }
     checkAudioMatch();
-    log('✓ đã nạp dự án: ' + state.scenes.length + ' cảnh' + (d.savedAt ? ' (lưu lúc ' + d.savedAt + ')' : ''));
+    log('�ƒ�’�‚¢�ƒ�€�â�‚��“�ƒ¢â�€š¬�…�€œ �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�†�€™�ƒ�€š�‚£ n�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡p d�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚± �ƒ�’�†�€™�ƒ�€š�‚¡n: ' + state.scenes.length + ' c�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£nh' + (d.savedAt ? ' (l�ƒ�’â�‚� �ƒ�€š�‚°u l�ƒ�’�†�€™�ƒ�€š�‚ºc ' + d.savedAt + ')' : ''));
     renderSceneList(); renderSceneDetail(); syncButtons();
   }
 
@@ -619,19 +551,18 @@
     if (els.progressMsg) els.progressMsg.textContent = msg || '';
   }
 
-  /* ════════ RENDER UI ════════ */
+  /* �ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚ RENDER UI �ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚ */
 
   function renderSceneList() {
     updateStepStatus();
     const box = els.sceneList;
     if (!box) return;
     box.textContent = '';
-    // empty-state: chưa có cảnh thì hướng dẫn tạo cảnh ở Bước 1 trước —
-    // nút chọn ảnh chỉ xuất hiện khi có cảnh (mỗi cảnh 1 ảnh line-art).
+    // empty-state: ch�ƒ�’â�‚� �ƒ�€š�‚°a c�ƒ�’�†�€™�ƒ�€š�‚³ c�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£nh th�ƒ�’�†�€™�ƒ�€š�‚¬ h�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºng d�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚«n ch�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡y B�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºc 3 (Ph�ƒ�’�†�€™�ƒ�€š�‚¢n t�ƒ�’�†�€™�ƒ�€š�‚­ch prompt)
     if (!state.scenes.length) {
       const empty = document.createElement('div');
       empty.className = 'wb-items-empty';
-      empty.textContent = 'Chưa có cảnh nào — tạo ở Bước 1 (📂 SRT / 🎤 Voice → SRT / 📋 dán kịch bản), hoặc bấm 🖼🖼 Chọn nhiều ảnh ngay: mỗi ảnh tự thành 1 cảnh.';
+      empty.textContent = 'Ch�ƒ�’â�‚� �ƒ�€š�‚°a c�ƒ�’�†�€™�ƒ�€š�‚³ c�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£nh n�ƒ�’�†�€™�ƒ�€š�‚ o �ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚ nh�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚­n k�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¹ch b�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£n (B�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºc 1) + TTS/SRT (B�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºc 2) r�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�…�€œi b�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¥m "�ƒ�’�‚°�ƒ�€��‚¸�ƒ�€š�‚§�ƒ�€š�‚  Ph�ƒ�’�†�€™�ƒ�€š�‚¢n t�ƒ�’�†�€™�ƒ�€š�‚­ch prompt" �ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€��‚¸ B�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºc 3: AI t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚± t�ƒ�’�†�€™�ƒ�€š�‚¡ch c�ƒ�’�†�€™�ƒ�€š�‚¢u, sinh prompt + �ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£nh Flow cho t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚«ng c�ƒ�’�†�€™�ƒ�€š�‚¢u.';
       box.appendChild(empty);
       return;
     }
@@ -642,10 +573,10 @@
       const head = document.createElement('div');
       head.className = 'wb-item-head';
       const meta = document.createElement('span');
-      meta.textContent = '#' + (i + 1) + ' · ' + (s.startMs != null ? fmtTime(s.startMs) + '–' + fmtTime(s.endMs) : '—') + ' · ' + sec(s.durationMs);
+      meta.textContent = '#' + (i + 1) + ' �ƒ�’â�‚�š�ƒ�€š�‚· ' + (s.startMs != null ? fmtTime(s.startMs) + '�ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�…�€œ' + fmtTime(s.endMs) : '�ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚') + ' �ƒ�’â�‚�š�ƒ�€š�‚· ' + sec(s.durationMs);
       meta.style.fontWeight = '600';
       const imgMark = document.createElement('span');
-      imgMark.textContent = s.image ? '🖼' : '⚠ chưa có ảnh';
+      imgMark.textContent = s.image ? '�ƒ�’�‚°�ƒ�€��‚¸�ƒ¢â�€š¬â�‚��“�ƒ�€š�‚¼' : '�ƒ�’�‚¢�ƒ�€��‚¡�ƒ�€š�‚  ch�ƒ�’â�‚� �ƒ�€š�‚°a c�ƒ�’�†�€™�ƒ�€š�‚³ �ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£nh';
       imgMark.style.cssText = 'margin-left:8px;font-size:12px';
       head.appendChild(meta); head.appendChild(imgMark);
       const text = document.createElement('div');
@@ -654,12 +585,8 @@
       row.appendChild(head); row.appendChild(text);
       const actions = document.createElement('div');
       actions.className = 'wb-item-actions';
-      const pick = document.createElement('button');
-      pick.textContent = s.image ? '🔄 đổi ảnh' : '🖼 chọn ảnh';
-      pick.addEventListener('click', (e) => { e.stopPropagation(); pickImageForScene(i); });
-      actions.appendChild(pick);
       const del = document.createElement('button');
-      del.textContent = '✕ xoá';
+      del.textContent = '�ƒ�’�‚¢�ƒ�€�â�‚��“�ƒ¢â�€š¬�‚¢ xo�ƒ�’�†�€™�ƒ�€š�‚¡';
       del.addEventListener('click', (e) => {
         e.stopPropagation();
         state.scenes.splice(i, 1);
@@ -674,470 +601,19 @@
     checkAudioMatch();
   }
 
-  function renderSceneDetail() {
-    const s = state.selected >= 0 ? state.scenes[state.selected] : null;
-    els.sceneImageLabel.textContent = s && s.image ? s.image.split(/[\\/]/).pop() : '—';
-    els.sceneCanvasLabel.textContent = s && s.canvas ? s.canvas.width + '×' + s.canvas.height : '—';
-    els.genElementsBtn.disabled = !(s && s.image && s.canvas);
-    els.previewBtn.disabled = !(s && s.image && s.elements && s.elements.length);
-    // Sơ đồ vùng: đường dẫn đĩa trỏ qua route /local-media (file:/// bị chặn
-    // vì trang chạy http://localhost). Đồng bộ nên không cần guard race-condition.
-    if (els.previewImg) {
-      hide(els.previewImg);
-      if (els.previewImg.getAttribute('src')) els.previewImg.removeAttribute('src');
-    }
-    if (s && s.previewPath && els.previewImg) {
-      els.previewImg.src = wbFileUrl(s.previewPath);
-      show(els.previewImg);
-    }
-    renderElementsTable(s);
-    wbEdSyncScene();
-  }
+  /* �ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚ INIT �ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚ */
 
-  function renderElementsTable(s) {
-    const body = els.elementsBody;
-    if (!body) return;
-    body.textContent = '';
-    if (!s || !s.elements || !s.elements.length) {
-      if (els.elementsTable) els.elementsTable.classList.add('wb-hide');
-      return;
-    }
-    if (els.elementsTable) els.elementsTable.classList.remove('wb-hide');
-    const optionsHtml = (arr, cur) => arr.map((d) => '<option value="' + d + '"' + (d === cur ? ' selected' : '') + '>' + d + '</option>').join('');
-    s.elements.forEach((e, i) => {
-      const tr = document.createElement('tr');
-      const html =
-        '<td class="wb-seq">' + e.sequence + '</td>' +
-        '<td><input type="text" class="wb-label-in" value="' + (e.label || '').replace(/"/g, '&quot;') + '" data-i="' + i + '" data-k="label"></td>' +
-        '<td><input type="number" min="0" step="0.1" class="wb-num-in" value="' + ((e.reveal.startMs || 0) / 1000).toFixed(1) + '" data-i="' + i + '" data-k="start"></td>' +
-        '<td><input type="number" min="0.1" step="0.1" class="wb-num-in" value="' + ((e.reveal.durationMs || 0) / 1000).toFixed(1) + '" data-i="' + i + '" data-k="dur"></td>' +
-        '<td><select class="wb-dir-in" data-i="' + i + '" data-k="dir">' + optionsHtml(A.REVEAL_DIRECTIONS, e.reveal.direction) + '</select></td>' +
-        '<td class="wb-act">' +
-          '<button data-act="up" data-i="' + i + '">▲</button>' +
-          '<button data-act="down" data-i="' + i + '">▼</button>' +
-          '<button data-act="del" data-i="' + i + '">✕</button>' +
-        '</td>';
-      tr.innerHTML = html;
-      body.appendChild(tr);
-    });
-    body.querySelectorAll('input,select').forEach((input) => {
-      input.addEventListener('change', () => {
-        const i = parseInt(input.dataset.i, 10);
-        const e = s.elements[i];
-        const k = input.dataset.k;
-        if (k === 'label') e.label = input.value.slice(0, 80);
-        else if (k === 'start') e.reveal.startMs = Math.max(0, Math.round(parseFloat(input.value) * 1000) || 0);
-        else if (k === 'dur') e.reveal.durationMs = Math.max(100, Math.round(parseFloat(input.value) * 1000) || 100);
-        else if (k === 'dir') e.reveal.direction = input.value;
-        elementEdited();
-        wbEdSyncFields();
-      });
-    });
-    body.querySelectorAll('button').forEach((b) => {
-      b.addEventListener('click', () => {
-        const i = parseInt(b.dataset.i, 10);
-        if (b.dataset.act === 'up') moveElement(i, -1);
-        else if (b.dataset.act === 'down') moveElement(i, 1);
-        else removeElement(i);
-        wbEdSyncFields();
-        wbEdRender();
-      });
-    });
-  }
-
-  /* ════════ REGION EDITOR — soạn vùng trực tiếp trên ảnh ════════
-     Port hành vi preview.html của repo engine (vendored — KHÔNG sửa nguồn
-     repo): kéo di chuyển, 8 handle co giãn, click chọn vùng, trường số.
-     Sửa thẳng s.elements[i].region/reveal/handPath — schema
-     web/whiteboard-annotation.js giữ nguyên; toAnnotation + validateAnnotation
-     chuẩn hoá/QA ở bước lưu và render. Kéo vùng sẽ thay polygon
-     (region.points) bằng hình chữ nhật — khai báo rõ ở hint, không nuốt ngầm. */
-  function wbEdCur() {
-    const s = state.selected >= 0 ? state.scenes[state.selected] : null;
-    if (!s || !s.image || !s.canvas) return null;
-    if (!Array.isArray(s.elements)) s.elements = []; // thêm vùng được ngay trên cảnh chưa có phần tử
-    return s;
-  }
-
-  function wbEdSyncHandPath(e) {
-    const r = e.region, d = e.reveal.direction;
-    e.handPath = e.handPath || {};
-    e.handPath.start = [Math.round(r.x + r.width / 2), Math.round(r.y + r.height / 2)];
-    e.handPath.end = d === 'left_to_right' ? [r.x + r.width, r.y + Math.round(r.height / 2)]
-      : d === 'right_to_left' ? [r.x, r.y + Math.round(r.height / 2)]
-      : d === 'bottom_to_top' ? [r.x + Math.round(r.width / 2), r.y]
-      : [r.x + Math.round(r.width / 2), r.y + r.height];
-    e.handPath.easing = e.handPath.easing || 'easeInOut';
-  }
-
-  function wbEdHandles(r) {
-    return {
-      tl: [r.x, r.y], t: [r.x + r.width / 2, r.y], tr: [r.x + r.width, r.y],
-      l: [r.x, r.y + r.height / 2], r: [r.x + r.width, r.y + r.height / 2],
-      bl: [r.x, r.y + r.height], b: [r.x + r.width / 2, r.y + r.height], br: [r.x + r.width, r.y + r.height],
-    };
-  }
-
-  function wbEdRender() {
-    const c = els.edCanvas;
-    if (!c || !c.getContext) return;
-    const s = wbEdCur();
-    const ctx = c.getContext('2d');
-    if (!s) {
-      ctx.clearRect(0, 0, c.width, c.height);
-      return;
-    }
-    if (c.width !== s.canvas.width || c.height !== s.canvas.height) {
-      c.width = s.canvas.width;
-      c.height = s.canvas.height;
-    }
-    ctx.clearRect(0, 0, c.width, c.height);
-    if (state.edImg) ctx.drawImage(state.edImg, 0, 0, c.width, c.height);
-    else { ctx.fillStyle = '#e2e8f0'; ctx.fillRect(0, 0, c.width, c.height); }
-    s.elements.forEach((e, i) => {
-      const r = e.region;
-      if (!r) return;
-      const focus = i === state.edSel;
-      ctx.save();
-      ctx.strokeStyle = focus ? '#3b82f6' : '#e97036';
-      ctx.fillStyle = focus ? 'rgba(59,130,246,.12)' : 'rgba(233,112,54,.07)';
-      ctx.lineWidth = focus ? 5 : 3;
-      ctx.setLineDash(focus ? [] : [10, 7]);
-      ctx.fillRect(r.x, r.y, r.width, r.height);
-      ctx.strokeRect(r.x, r.y, r.width, r.height);
-      ctx.setLineDash([]);
-      ctx.fillStyle = focus ? '#3b82f6' : '#e97036';
-      ctx.beginPath();
-      ctx.arc(r.x + 18, r.y + 18, 15, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold 18px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(String(i + 1), r.x + 18, r.y + 18);
-      if (focus) {
-        ctx.fillStyle = '#fff';
-        ctx.strokeStyle = '#3b82f6';
-        ctx.lineWidth = 3;
-        Object.values(wbEdHandles(r)).forEach(([hx, hy]) => {
-          ctx.fillRect(hx - 10, hy - 10, 20, 20);
-          ctx.strokeRect(hx - 10, hy - 10, 20, 20);
-        });
-      }
-      ctx.restore();
-    });
-  }
-
-  function wbEdSyncFields() {
-    const s = wbEdCur();
-    const e = s ? s.elements[state.edSel] : null;
-    const on = !!e;
-    [els.edX, els.edY, els.edW, els.edH, els.edDir, els.edStart, els.edEnd, els.edLabel, els.edSub].forEach((f) => { if (f) f.disabled = !on; });
-    if (els.edDur) els.edDur.value = on ? ((e.reveal.durationMs || 0) / 1000).toFixed(1) + 's' : '';
-    if (els.edDelBtn) els.edDelBtn.disabled = !on;
-    if (!on) {
-      [els.edX, els.edY, els.edW, els.edH, els.edStart, els.edEnd, els.edLabel, els.edSub].forEach((f) => { if (f) f.value = ''; });
-      return;
-    }
-    els.edX.value = Math.round(e.region.x);
-    els.edY.value = Math.round(e.region.y);
-    els.edW.value = Math.round(e.region.width);
-    els.edH.value = Math.round(e.region.height);
-    els.edDir.value = e.reveal.direction;
-    els.edStart.value = ((e.reveal.startMs || 0) / 1000).toFixed(1);
-    els.edEnd.value = (((e.reveal.startMs || 0) + (e.reveal.durationMs || 0)) / 1000).toFixed(1);
-    els.edLabel.value = e.label || '';
-    els.edSub.value = e.subtitle || '';
-  }
-
-  function wbEdApplyField(input) {
-    const s = wbEdCur();
-    const e = s ? s.elements[state.edSel] : null;
-    if (!e) return;
-    const num = (v, def) => { const n = parseFloat(v); return Number.isFinite(n) ? n : def; };
-    const r = e.region;
-    if (input === els.edX) r.x = Math.round(num(input.value, r.x));
-    if (input === els.edY) r.y = Math.round(num(input.value, r.y));
-    if (input === els.edW) r.width = Math.round(num(input.value, r.width));
-    if (input === els.edH) r.height = Math.round(num(input.value, r.height));
-    if (input === els.edDir) e.reveal.direction = input.value;
-    if (input === els.edStart) e.reveal.startMs = Math.max(0, Math.round(num(input.value, (e.reveal.startMs || 0) / 1000) * 1000));
-    if (input === els.edEnd) {
-      const start = e.reveal.startMs || 0;
-      const end = Math.max(start + 100, Math.round(num(input.value, (start + (e.reveal.durationMs || 0)) / 1000) * 1000));
-      e.reveal.durationMs = end - start;
-    }
-    if (input === els.edLabel) e.label = input.value.slice(0, 80);
-    if (input === els.edSub) e.subtitle = input.value.slice(0, 200);
-    // kẹp biên canvas + số nguyên (validateAnnotation cưỡng chế ở lưu/render)
-    r.x = Math.max(0, Math.round(r.x));
-    r.y = Math.max(0, Math.round(r.y));
-    r.width = Math.max(1, Math.min(Math.round(r.width), s.canvas.width - r.x));
-    r.height = Math.max(1, Math.min(Math.round(r.height), s.canvas.height - r.y));
-    wbEdSyncHandPath(e);
-    elementEdited();
-    wbEdRender();
-    wbEdSyncFields();
-  }
-
-  function wbEdPoint(evt) {
-    const c = els.edCanvas;
-    const b = c.getBoundingClientRect();
-    return { x: (evt.clientX - b.left) * c.width / b.width, y: (evt.clientY - b.top) * c.height / b.height };
-  }
-
-  function wbEdHandleAt(pt, r) {
-    for (const [name, [hx, hy]] of Object.entries(wbEdHandles(r))) {
-      if (Math.abs(pt.x - hx) <= 16 && Math.abs(pt.y - hy) <= 16) return name;
-    }
-    return null;
-  }
-
-  function wbEdPointerDown(evt) {
-    const s = wbEdCur();
-    if (!s) return;
-    const p = wbEdPoint(evt);
-    const cur = s.elements[state.edSel];
-    let handle = cur && cur.region ? wbEdHandleAt(p, cur.region) : null;
-    if (!handle) {
-      let hit = -1;
-      s.elements.forEach((e, i) => {
-        const r = e.region;
-        if (r && p.x >= r.x && p.x <= r.x + r.width && p.y >= r.y && p.y <= r.y + r.height) hit = i;
-      });
-      if (hit < 0) return;
-      if (hit !== state.edSel) {
-        state.edSel = hit;
-        wbEdRender();
-        wbEdSyncFields();
-        return;
-      }
-      handle = 'move';
-    }
-    state.edDrag = {
-      handle,
-      idx: state.edSel,
-      sx: p.x,
-      sy: p.y,
-      r0: { x: cur.region.x, y: cur.region.y, w: cur.region.width, h: cur.region.height },
-    };
-    try { els.edCanvas.setPointerCapture(evt.pointerId); } catch (_) {}
-  }
-
-  function wbEdPointerMove(evt) {
-    const d = state.edDrag;
-    if (!d) return;
-    const s = state.selected >= 0 ? state.scenes[state.selected] : null;
-    const e = s && s.elements ? s.elements[d.idx] : null;
-    if (!e || !e.region) return;
-    const p = wbEdPoint(evt);
-    const W = s.canvas.width, H = s.canvas.height, MIN = 20;
-    const dx = p.x - d.sx, dy = p.y - d.sy;
-    let x = d.r0.x, y = d.r0.y, w = d.r0.w, h = d.r0.h;
-    if (d.handle === 'move') {
-      x = d.r0.x + dx;
-      y = d.r0.y + dy;
-    } else {
-      if (d.handle.includes('l')) { x = Math.min(d.r0.x + dx, d.r0.x + d.r0.w - MIN); w = d.r0.w + (d.r0.x - x); }
-      if (d.handle.includes('r')) { w = d.r0.w + dx; }
-      if (d.handle.includes('t')) { y = Math.min(d.r0.y + dy, d.r0.y + d.r0.h - MIN); h = d.r0.h + (d.r0.y - y); }
-      if (d.handle.includes('b')) { h = d.r0.h + dy; }
-    }
-    x = Math.max(0, Math.min(Math.round(x), W - MIN));
-    y = Math.max(0, Math.min(Math.round(y), H - MIN));
-    w = Math.max(MIN, Math.min(Math.round(w), W - x));
-    h = Math.max(MIN, Math.min(Math.round(h), H - y));
-    e.region = { x, y, width: w, height: h };
-    if (e.region.points) delete e.region.points; // kéo → hình chữ nhật thay polygon (đã khai báo ở hint)
-    wbEdSyncHandPath(e);
-    wbEdRender();
-    wbEdSyncFields();
-  }
-
-  function wbEdPointerUp(evt) {
-    if (!state.edDrag) return;
-    state.edDrag = null;
-    try { els.edCanvas.releasePointerCapture(evt.pointerId); } catch (_) {}
-    elementEdited();
-    renderSceneDetail();
-  }
-
-  function wbEdToggle() {
-    const s = state.selected >= 0 ? state.scenes[state.selected] : null;
-    if (!s) { log('⚠ chọn một cảnh (bước 2) trước'); return; }
-    if (!s.image || !s.canvas) { log('⚠ cảnh cần ảnh (bước 2) trước khi soạn vùng'); return; }
-    const opening = els.regionEditor.classList.contains('wb-hide');
-    if (opening) {
-      if (els.edDir && !els.edDir.options.length) {
-        (A.REVEAL_DIRECTIONS || ['top_to_bottom', 'bottom_to_top', 'left_to_right', 'right_to_left']).forEach((d) => {
-          const o = document.createElement('option');
-          o.value = d;
-          o.textContent = d;
-          els.edDir.appendChild(o);
-        });
-      }
-      show(els.regionEditor);
-      els.regionEditorBtn.textContent = '✏️ Đóng soạn vùng';
-      state.edScene = -1;
-      state.edImgKey = '';
-      wbEdSyncScene();
-      log('✏ soạn vùng: kéo = di chuyển, chấm = co giãn, click = chọn. Kéo vùng sẽ thay polygon (region.points) bằng hình chữ nhật.');
-    } else {
-      hide(els.regionEditor);
-      els.regionEditorBtn.textContent = '✏️ Soạn vùng trên ảnh';
-    }
-  }
-
-  /* đồng bộ editor theo cảnh đang chọn (được renderSceneDetail gọi) —
-     nạp ảnh qua wbFileUrl (route /local-media, cùng origin http://localhost) */
-  function wbEdSyncScene() {
-    const box = els.regionEditor;
-    if (!box || box.classList.contains('wb-hide')) return;
-    const s = state.selected >= 0 ? state.scenes[state.selected] : null;
-    if (!s || !s.image || !s.canvas) return;
-    if (state.edScene === state.selected && state.edImgKey === s.image) {
-      if (s.elements && s.elements.length && state.edSel >= s.elements.length) state.edSel = s.elements.length - 1;
-      wbEdRender();
-      wbEdSyncFields();
-      return;
-    }
-    state.edScene = state.selected;
-    state.edImgKey = s.image;
-    state.edSel = (s.elements && s.elements.length) ? 0 : -1;
-    const img = new Image();
-    img.onload = () => {
-      if (state.edImgKey !== s.image) return; // đổi cảnh trong lúc chờ load
-      state.edImg = img;
-      wbEdRender();
-      wbEdSyncFields();
-    };
-    img.onerror = () => log('❌ editor: không nạp được ảnh ' + s.image);
-    img.src = wbFileUrl(s.image);
-  }
-
-  function wbEdAdd() {
-    const s = wbEdCur();
-    if (!s) { log('⚠ cảnh cần ảnh + canvas đã probe (bước 2) trước khi thêm vùng'); return; }
-    const W = s.canvas.width, H = s.canvas.height;
-    const arr = s.elements;
-    const lastEnd = arr.length ? Math.max.apply(null, arr.map((e) => (e.reveal.startMs || 0) + (e.reveal.durationMs || 0))) : 300;
-    const e = {
-      id: 'region_' + (arr.length + 1),
-      label: 'Vùng mới',
-      sequence: arr.length + 1,
-      narrativeRole: 'diễn tiến',
-      subtitle: '',
-      type: 'illustration',
-      region: { x: Math.round(W * 0.1), y: Math.round(H * 0.1), width: Math.round(W * 0.25), height: Math.round(H * 0.3) },
-      reveal: { direction: 'top_to_bottom', startMs: lastEnd + 200, durationMs: 2000, maskPaddingPx: 16, protectedRegions: [] },
-      handPath: {},
-    };
-    wbEdSyncHandPath(e);
-    arr.push(e);
-    state.edSel = arr.length - 1;
-    elementEdited();
-    wbEdRender();
-    wbEdSyncFields();
-    renderSceneDetail();
-  }
-
-  function wbEdDel() {
-    const s = wbEdCur();
-    if (!s || state.edSel < 0 || state.edSel >= s.elements.length) return;
-    s.elements.splice(state.edSel, 1);
-    s.elements.forEach((e, k) => { e.sequence = k + 1; });
-    state.edSel = Math.max(0, state.edSel - 1);
-    elementEdited();
-    wbEdRender();
-    wbEdSyncFields();
-    renderSceneDetail();
-  }
-
-  /* Nạp sidecar .annotation.json (IPC dialog thật). Canvas annotation phải
-     khớp canvas ảnh đã probe — lệch thì fail lộ liễu (Luật 10). */
-  async function wbEdLoadAnn() {
-    const s = state.selected >= 0 ? state.scenes[state.selected] : null;
-    if (!s) { log('⚠ chọn một cảnh trước khi nạp annotation'); return; }
-    const r = await window.native.whiteboard.pickAnnotation();
-    if (r.canceled) return;
-    if (r.ok === false) { log('❌ ' + r.error); return; }
-    const ann = r.annotation;
-    if (s.canvas && ann.canvas && (Math.round(ann.canvas.width) !== s.canvas.width || Math.round(ann.canvas.height) !== s.canvas.height)) {
-      log('❌ canvas annotation ' + ann.canvas.width + '×' + ann.canvas.height + ' khác ảnh ' + s.canvas.width + '×' + s.canvas.height + ' — nạp vào ảnh đúng kích thước');
-      return;
-    }
-    if (ann.canvas && s.canvas && s.canvas.width !== Math.round(ann.canvas.width)) {
-      s.canvas = { width: Math.round(ann.canvas.width), height: Math.round(ann.canvas.height) };
-    }
-    if (Number(ann.sceneDurationMs) > 0) {
-      s.durationMs = Math.round(ann.sceneDurationMs);
-      s.durationSec = s.durationMs / 1000;
-    }
-    s.elements = ann.elements.map((e, i) => {
-      e.sequence = Number(e.sequence) || i + 1;
-      return e;
-    });
-    s.elementsDirty = true;
-    s.previewPath = null;
-    state.edSel = 0;
-    state.edScene = -1;
-    state.edImgKey = '';
-    wbEdSyncScene();
-    renderSceneList();
-    renderSceneDetail();
-    log('✓ nạp annotation: ' + s.elements.length + ' phần tử từ ' + r.path.split(/[\\/]/).pop());
-  }
-
-  /* Lưu sidecar cạnh ảnh: img.png → img.annotation.json (path suy ra từ ảnh
-     user đã chọn qua dialog; main cưỡng chế đuôi .annotation.json). */
-  async function wbEdSaveAnn() {
-    const s = state.selected >= 0 ? state.scenes[state.selected] : null;
-    if (!s || !s.image || !s.elements || !s.elements.length) {
-      log('⚠ cần ảnh + phần tử trước khi lưu annotation');
-      return;
-    }
-    const ann = A.toAnnotation({ sceneId: s.sceneId, durationMs: s.durationMs, subtitle: s.text, elements: s.elements }, s.canvas);
-    const v = A.validateAnnotation(ann);
-    if (!v.ok) {
-      log('❌ không lưu: ' + v.errors.join('; '));
-      return;
-    }
-    const sidecar = s.image.replace(/\.(png|jpe?g|webp|bmp|gif)$/i, '') + '.annotation.json';
-    const r = await window.native.whiteboard.saveAnnotation({ path: sidecar, annotation: ann });
-    if (r.canceled) return;
-    if (r.ok === false) { log('❌ ' + r.error); return; }
-    log('✓ lưu annotation.json: ' + r.path + ' (' + r.elements + ' phần tử)');
-  }
-
-  /* ════════ INIT ════════ */
+  /* Đã gỡ panel chi tiết cảnh + bảng phần tử + region editor (lu�“ng cũ):
+     ảnh từng cảnh do Bư�›c 3 "Phân tích prompt" sinh tự �‘�™ng. Giữ hàm r�—ng vì
+     renderSceneList và nhiều lu�“ng vẫn gọi; ctx vẫn export cho module m�Ÿ r�™ng. */
+  function renderSceneDetail() {}
 
   function wireEvents() {
     els.pickSrtBtn.addEventListener('click', pickSrt);
-    els.addSceneBtn.addEventListener('click', addManualScene);
-    els.clearBtn.addEventListener('click', clearAll);
-    els.genElementsBtn.addEventListener('click', () => generateElements(state.selected, false));
-    els.previewBtn.addEventListener('click', previewRegion);
-    if (els.regionEditorBtn) els.regionEditorBtn.addEventListener('click', wbEdToggle);
-    if (els.edAddBtn) els.edAddBtn.addEventListener('click', wbEdAdd);
-    if (els.edDelBtn) els.edDelBtn.addEventListener('click', wbEdDel);
-    if (els.edLoadBtn) els.edLoadBtn.addEventListener('click', wbEdLoadAnn);
-    if (els.edSaveBtn) els.edSaveBtn.addEventListener('click', wbEdSaveAnn);
-    [els.edX, els.edY, els.edW, els.edH, els.edDir, els.edStart, els.edEnd, els.edLabel, els.edSub].forEach((f) => {
-      if (!f) return;
-      f.addEventListener('input', () => wbEdApplyField(f));
-      f.addEventListener('change', () => renderSceneDetail());
-    });
-    if (els.edCanvas) {
-      els.edCanvas.addEventListener('pointerdown', wbEdPointerDown);
-      els.edCanvas.addEventListener('pointermove', wbEdPointerMove);
-      els.edCanvas.addEventListener('pointerup', wbEdPointerUp);
-      els.edCanvas.addEventListener('pointercancel', wbEdPointerUp);
-    }
     els.pickAudioBtn.addEventListener('click', pickAudio);
     els.exportBtn.addEventListener('click', exportVideo);
     els.stopBtn.addEventListener('click', stopExport);
     if (els.cancelXBtn) els.cancelXBtn.addEventListener('click', stopExport);
-    if (els.buildTimelineBtn) els.buildTimelineBtn.addEventListener('click', buildTimelineFromScript);
     if (els.tsPullBtn) els.tsPullBtn.addEventListener('click', pullScriptFromTs);
     if (els.pickVoiceSrtBtn) els.pickVoiceSrtBtn.addEventListener('click', generateSrtFromVoice);
     if (els.voicePullBtn) els.voicePullBtn.addEventListener('click', useVoiceFromVoiceTab);
@@ -1147,49 +623,17 @@
     if (els.whisperPrepareBtn) els.whisperPrepareBtn.addEventListener('click', async () => {
       els.whisperPrepareBtn.disabled = true;
       try {
-        log('🧠 cài faster-whisper vào venv (lần đầu, vài phút)…');
+        log('�ƒ�’�‚°�ƒ�€��‚¸�ƒ�€š�‚§�ƒ�€š�‚  c�ƒ�’�†�€™�ƒ�€š�‚ i faster-whisper v�ƒ�’�†�€™�ƒ�€š�‚ o venv (l�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚§n �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚§u, v�ƒ�’�†�€™�ƒ�€š�‚ i ph�ƒ�’�†�€™�ƒ�€š�‚ºt)�ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ�€š�‚¦');
         const r = await window.native.whiteboard.whisperPrepare();
-        log(r && r.ok ? '✓ faster-whisper sẵn sàng — có thể dùng Voice → SRT' : '❌ cài Whisper lỗi: ' + (r && r.error));
+        log(r && r.ok ? '�ƒ�’�‚¢�ƒ�€�â�‚��“�ƒ¢â�€š¬�…�€œ faster-whisper s�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚µn s�ƒ�’�†�€™�ƒ�€š�‚ ng �ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚ c�ƒ�’�†�€™�ƒ�€š�‚³ th�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€�â�‚��„� d�ƒ�’�†�€™�ƒ�€š�‚¹ng Voice �ƒ�’�‚¢�ƒ¢â�€š¬�‚ �ƒ¢â�€š¬â�€ž¢ SRT' : '�ƒ�’�‚¢�ƒ�€š�‚�ƒ�€�â�‚��„� c�ƒ�’�†�€™�ƒ�€š�‚ i Whisper l�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬â�‚�i: ' + (r && r.error));
         refreshEngine();
       } finally { els.whisperPrepareBtn.disabled = false; }
-    });
-    if (els.parseBtn) els.parseBtn.addEventListener('click', () => {
-      if (state.srtPath) parseSrt(state.srtPath);
-      else log('⚠ chưa chọn file SRT (bước 1)');
-    });
-    if (els.cueScenesBtn) els.cueScenesBtn.addEventListener('click', buildCueScenes);
-    if (els.addImageToSceneBtn) els.addImageToSceneBtn.addEventListener('click', () => {
-      if (!state.scenes.length) {
-        log('⚠ chưa có cảnh nào — bấm 🖼🖼 Chọn nhiều ảnh (mỗi ảnh tự thành 1 cảnh) hoặc tạo cảnh ở Bước 1');
-        return;
-      }
-      // chưa click chọn cảnh nào → tự chọn cảnh đầu tiên chưa có ảnh (không chặn kẹt user)
-      if (state.selected < 0) {
-        let idx = state.scenes.findIndex((s) => !s.image);
-        if (idx < 0) idx = 0;
-        state.selected = idx;
-        log('ℹ tự chọn cảnh ' + (idx + 1) + ' — click vào dòng cảnh khác để đổi');
-        renderSceneList(); renderSceneDetail();
-      }
-      pickImageForScene(state.selected);
-    });
-    if (els.pickImagesBtn) els.pickImagesBtn.addEventListener('click', async () => {
-      const r = await window.native.whiteboard.pickImages();
-      if (r.canceled || !r.paths || !r.paths.length) return;
-      await assignImages(r.paths);
-    });
-    if (els.pickImagesDirBtn) els.pickImagesDirBtn.addEventListener('click', async () => {
-      const r = await window.native.whiteboard.pickImagesDir();
-      if (r.canceled || !r.path) return;
-      if (!r.images || !r.images.length) { log('⚠ thư mục không có ảnh: ' + r.path); return; }
-      log('📁 ' + r.count + ' ảnh: ' + r.path.split(/[\\/]/).pop());
-      await assignImages(r.images);
     });
     if (els.pyPrepareBtn) els.pyPrepareBtn.addEventListener('click', async () => {
       els.pyPrepareBtn.disabled = true;
       try {
         const r = await window.native.whiteboard.pyPrepare();
-        log(r && r.ok ? '✓ engine Python sẵn sàng' : '❌ prepare lỗi: ' + (r && r.error));
+        log(r && r.ok ? '�ƒ�’�‚¢�ƒ�€�â�‚��“�ƒ¢â�€š¬�…�€œ engine Python s�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚µn s�ƒ�’�†�€™�ƒ�€š�‚ ng' : '�ƒ�’�‚¢�ƒ�€š�‚�ƒ�€�â�‚��„� prepare l�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬â�‚�i: ' + (r && r.error));
         refreshEngine();
       } finally { els.pyPrepareBtn.disabled = false; }
     });
@@ -1197,9 +641,9 @@
 
   async function refreshEngine() {
     const r = await window.native.whiteboard.pyStatus().catch(() => null);
-    if (!r) { els.engine.innerHTML = '<span class="wb-chip bad">engine ?</span>'; return; }
-    // engine status dạng chips màu trên hero (repo/venv/deps/ffmpeg/whisper)
-    const chip = (n, ok) => '<span class="wb-chip ' + (ok ? 'ok' : 'bad') + '">' + n + ' ' + (ok ? '✓' : '✗') + '</span>';
+    if (!r) { els.engine.innerHTML = '<span class="wb-chip bad">engine ?</span>'; state.engineOk = false; updateStepStatus(); return; }
+    // engine status d�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡ng chips m�ƒ�’�†�€™�ƒ�€š�‚ u tr�ƒ�’�†�€™�ƒ�€š�‚ªn hero (repo/venv/deps/ffmpeg/whisper)
+    const chip = (n, ok) => '<span class="wb-chip ' + (ok ? 'ok' : 'bad') + '">' + n + ' ' + (ok ? '�ƒ�’�‚¢�ƒ�€�â�‚��“�ƒ¢â�€š¬�…�€œ' : '�ƒ�’�‚¢�ƒ�€�â�‚��“�ƒ¢â�€š¬â�‚�') + '</span>';
     const chips = [
       chip('repo', r.repoPresent),
       chip('venv', r.venvReady),
@@ -1208,17 +652,19 @@
     ];
     if (r.whisper === true || r.whisper === false) chips.push(chip('whisper', r.whisper === true));
     els.engine.innerHTML = chips.join('');
+    state.engineOk = !!r.ok;   // checklist �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“i�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚u ki�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¡n �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚c t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚« �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�†�€™�ƒ�€š�‚¢y
+    updateStepStatus();
     const parts = [];
-    parts.push(r.repoPresent ? 'repo ✓' : 'repo ✗');
-    parts.push(r.venvReady ? 'venv ✓' : 'venv ✗');
-    parts.push(r.deps ? 'deps ✓' : 'deps ✗');
-    parts.push(r.ffmpeg ? 'ffmpeg ✓' : 'ffmpeg ✗');
-    if (r.whisper === true) parts.push('whisper ✓');
-    else if (r.whisper === false) parts.push('whisper ✗');
+    parts.push(r.repoPresent ? 'repo �ƒ�’�‚¢�ƒ�€�â�‚��“�ƒ¢â�€š¬�…�€œ' : 'repo �ƒ�’�‚¢�ƒ�€�â�‚��“�ƒ¢â�€š¬â�‚�');
+    parts.push(r.venvReady ? 'venv �ƒ�’�‚¢�ƒ�€�â�‚��“�ƒ¢â�€š¬�…�€œ' : 'venv �ƒ�’�‚¢�ƒ�€�â�‚��“�ƒ¢â�€š¬â�‚�');
+    parts.push(r.deps ? 'deps �ƒ�’�‚¢�ƒ�€�â�‚��“�ƒ¢â�€š¬�…�€œ' : 'deps �ƒ�’�‚¢�ƒ�€�â�‚��“�ƒ¢â�€š¬â�‚�');
+    parts.push(r.ffmpeg ? 'ffmpeg �ƒ�’�‚¢�ƒ�€�â�‚��“�ƒ¢â�€š¬�…�€œ' : 'ffmpeg �ƒ�’�‚¢�ƒ�€�â�‚��“�ƒ¢â�€š¬â�‚�');
+    if (r.whisper === true) parts.push('whisper �ƒ�’�‚¢�ƒ�€�â�‚��“�ƒ¢â�€š¬�…�€œ');
+    else if (r.whisper === false) parts.push('whisper �ƒ�’�‚¢�ƒ�€�â�‚��“�ƒ¢â�€š¬â�‚�');
     if (!r.ok) {
-      log('⚠ engine chưa sẵn sàng (' + parts.join(' ') + ') — dùng nút "⚙ Chuẩn bị Python" ở tool ✏️ Vẽ Tay Ảnh để dựng venv lần đầu');
+      log('�ƒ�’�‚¢�ƒ�€��‚¡�ƒ�€š�‚  engine ch�ƒ�’â�‚� �ƒ�€š�‚°a s�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚µn s�ƒ�’�†�€™�ƒ�€š�‚ ng (' + parts.join(' ') + ') �ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚ d�ƒ�’�†�€™�ƒ�€š�‚¹ng n�ƒ�’�†�€™�ƒ�€š�‚ºt "�ƒ�’�‚¢�ƒ�€��‚¡�ƒ¢â�‚�ž�‚¢ Chu�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚©n b�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¹ Python" �ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€��‚¸ tool �ƒ�’�‚¢�ƒ�€�â�‚��“�ƒ�€š�‚�ƒ�’�‚¯�ƒ�€š�‚¸�ƒ�€š�‚ V�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚½ Tay �ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¢nh �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€�â�‚��„� d�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚±ng venv l�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚§n �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚§u');
     } else if (r.whisper === false) {
-      log('ℹ voice → SRT chưa dùng được (thiếu faster-whisper) — bấm "Cài Whisper" (🧠) ở Bước 1 để bật (chỉ 1 lần)');
+      log('�ƒ�’�‚¢�ƒ¢â�€š¬�…¾�ƒ�€š�‚¹ voice �ƒ�’�‚¢�ƒ¢â�€š¬�‚ �ƒ¢â�€š¬â�€ž¢ SRT ch�ƒ�’â�‚� �ƒ�€š�‚°a d�ƒ�’�†�€™�ƒ�€š�‚¹ng �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚£c (thi�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¿u faster-whisper) �ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚ b�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¥m "C�ƒ�’�†�€™�ƒ�€š�‚ i Whisper" (�ƒ�’�‚°�ƒ�€��‚¸�ƒ�€š�‚§�ƒ�€š�‚ ) �ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€��‚¸ B�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºc 2 �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€�â�‚��„� b�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚­t (ch�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚° 1 l�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚§n)');
     }
   }
 
@@ -1229,14 +675,14 @@
     renderSceneDetail();
     listenProgress();
     syncButtons();
-    setProgress(0, '—');
-    log('Whiteboard Studio (rewrite) — workflow srt-whiteboard-animation: SRT → cảnh 25–35s → ảnh → annotation → preview vùng → render từng cảnh → merge → voice + nhạc nền. Bổ sung: Voice → SRT local (faster-whisper), tạo timeline từ kịch bản dán');
+    setProgress(0, '�ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚');
+    log('Whiteboard Studio (lu�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�…�€œng 6 b�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºc): 1 Nh�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚­n k�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¹ch b�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£n �ƒ�’�‚¢�ƒ¢â�€š¬�‚ �ƒ¢â�€š¬â�€ž¢ 2 Nh�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚­n TTS (SRT t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚± tr�ƒ�’�†�€™�ƒ�€š�‚­ch xu�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¥t) �ƒ�’�‚¢�ƒ¢â�€š¬�‚ �ƒ¢â�€š¬â�€ž¢ 3 Ph�ƒ�’�†�€™�ƒ�€š�‚¢n t�ƒ�’�†�€™�ƒ�€š�‚­ch prompt (t�ƒ�’�†�€™�ƒ�€š�‚¡ch c�ƒ�’�†�€™�ƒ�€š�‚¢u + kh�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºp timing .SRT + AI prompt/�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£nh) �ƒ�’�‚¢�ƒ¢â�€š¬�‚ �ƒ¢â�€š¬â�€ž¢ 4 S�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¯p x�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¿p d�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚¯ li�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¡u (AI khoanh v�ƒ�’�†�€™�ƒ�€š�‚¹ng, gi�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚ v�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚½ kh�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºp c�ƒ�’�†�€™�ƒ�€š�‚¢u) �ƒ�’�‚¢�ƒ¢â�€š¬�‚ �ƒ¢â�€š¬â�€ž¢ 5 Xem tr�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºc (timeline 2 d�ƒ�’�†�€™�ƒ�€š�‚²ng: video + �ƒ�’�†�€™�ƒ�€š�‚¢m thanh) �ƒ�’�‚¢�ƒ¢â�€š¬�‚ �ƒ¢â�€š¬â�€ž¢ 6 Xu�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¥t Video. N�ƒ�’�†�€™�ƒ�€š�‚ºt B�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºc 1/2 �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¢i XANH khi �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�†�€™�ƒ�€š�‚£ nh�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚­n.');
     refreshEngine();
   }
 
   async function stopExport() {
     const r = await window.native.whiteboard.exportCancel();
-    log(r && r.ok ? '■ đã huỷ render' : '■ không có tiến trình nào đang chạy');
+    log(r && r.ok ? '�ƒ�’�‚¢�ƒ¢â�€š¬â�‚��“�ƒ�€š�‚  �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�†�€™�ƒ�€š�‚£ hu�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚· render' : '�ƒ�’�‚¢�ƒ¢â�€š¬â�‚��“�ƒ�€š�‚  kh�ƒ�’�†�€™�ƒ�€š�‚´ng c�ƒ�’�†�€™�ƒ�€š�‚³ ti�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¿n tr�ƒ�’�†�€™�ƒ�€š�‚¬nh n�ƒ�’�†�€™�ƒ�€š�‚ o �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“ang ch�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡y');
     state.exporting = false;
     syncButtons();
   }
@@ -1247,176 +693,127 @@
     if (els.cancelXBtn) els.cancelXBtn.classList.toggle('wb-hide', !state.exporting);
   }
 
-  /* ════════ SHELL — panel tự dựng UI (wb-*) trong root của tool
-     v2 "identity bảng vẽ": hero tối + engine chips + 5 bước = 5 màu bút.
-     Hợp đồng ID giữ nguyên tuyệt đối (bind() đọc #wb-*) ════════ */
+  /* �ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚ SHELL �ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚ panel t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚± d�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚±ng UI (wb-*) trong root c�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚§a tool
+      v3 "lu�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�…�€œng 6 b�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºc": nh�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚­n k�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¹ch b�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£n �ƒ�’�‚¢�ƒ¢â�€š¬�‚ �ƒ¢â�€š¬â�€ž¢ nh�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚­n TTS (+SRT auto) �ƒ�’�‚¢�ƒ¢â�€š¬�‚ �ƒ¢â�€š¬â�€ž¢ ph�ƒ�’�†�€™�ƒ�€š�‚¢n t�ƒ�’�†�€™�ƒ�€š�‚­ch prompt
+      �ƒ�’�‚¢�ƒ¢â�€š¬�‚ �ƒ¢â�€š¬â�€ž¢ s�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¯p x�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¿p d�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚¯ li�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¡u �ƒ�’�‚¢�ƒ¢â�€š¬�‚ �ƒ¢â�€š¬â�€ž¢ xem tr�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºc (timeline 2 d�ƒ�’�†�€™�ƒ�€š�‚²ng) �ƒ�’�‚¢�ƒ¢â�€š¬�‚ �ƒ¢â�€š¬â�€ž¢ xu�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¥t video.
+      N�ƒ�’�†�€™�ƒ�€š�‚ºt B�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºc 1/2 �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¢i XANH (.wb-btn-ok) khi �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�†�€™�ƒ�€š�‚£ nh�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚­n d�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚¯ li�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¡u.
+      H�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚£p �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�…�€œng ID gi�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚¯ nguy�ƒ�’�†�€™�ƒ�€š�‚ªn tuy�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¡t �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‹�“i (bind() �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚c #wb-*) �ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚�ƒ�’�‚¢�ƒ¢â�€š¬�‚¢�ƒ�€š�‚ */
   const SHELL_HTML = `
     <div class="wb-root wb-root-v2">
       <div class="wb-hero wb-hide">
         <div class="wb-hero-text">
-          <div class="wb-chips" id="wb-engine"><span class="wb-chip">engine …</span></div>
+          <div class="wb-chips" id="wb-engine"><span class="wb-chip">engine �ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ�€š�‚¦</span></div>
         </div>
       </div>
 
+      <div class="wb-checklist" id="wb-checklist"></div>
+
       <details class="wb-group wb-step wb-step-1" id="wb-step1" open>
-        <summary class="wb-group-title"><span class="wb-step-num">1</span><span class="wb-step-name">Kịch bản → SRT</span><span class="wb-step-st" id="wb-st1">—</span><span class="wb-step-hint">giọng đã tạo · chọn SRT · voice→SRT · dán kịch bản</span></summary>
+        <summary class="wb-group-title"><span class="wb-step-num">1</span><span class="wb-step-name">K�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¹ch b�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£n</span><span class="wb-step-st" id="wb-st1">�ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚</span><span class="wb-step-hint">nh�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚­n k�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¹ch b�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£n t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚« tab �ƒ�’�‚°�ƒ�€��‚¸�ƒ¢â�€š¬�…�€œ�ƒ�€š�‚ T�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡o K�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¹ch B�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£n</span></summary>
         <div class="wb-step-body">
         <div class="wb-media-row">
-          <button id="wb-voicePullBtn" class="wb-btn-primary" title="Dùng bản giọng MỚI NHẤT trong 'Đã tạo' của tab 🎙 Giọng nói: nạp voice-over + SRT do backend sinh (timing thật) → phân cảnh luôn. Không cần chọn file.">🎙 Dùng giọng đã tạo</button>
-          <button id="wb-pickSrtBtn" title="Chọn file SRT có sẵn">📂 Chọn file SRT</button>
-          <span class="wb-media-label" id="wb-srtLabel">chưa chọn</span>
-        </div>
-        <div class="wb-media-row">
-          <button id="wb-pickVoiceSrtBtn" title="Chọn file voice → tự tạo SRT tiếng Việt bằng faster-whisper (chạy local, không cloud)">🎤 Voice → SRT (local)</button>
-          <select id="wb-modelSel" title="Mô hình Whisper (base nhanh / small cân bằng / medium chính xác)">
-            <option value="base">base (nhanh)</option>
-            <option value="small" selected>small (cân bằng)</option>
-            <option value="medium">medium (chính xác, chậm)</option>
-          </select>
-          <button id="wb-whisperPrepareBtn" title="Cài faster-whisper vào venv (chỉ 1 lần, vài phút)">🧠 Cài Whisper</button>
-        </div>
-        <div class="wb-media-label">Hoặc dán kịch bản (mỗi đoạn cách nhau bằng dòng trống = 1 cảnh):</div>
-        <textarea id="wb-scriptText" class="wb-script-in" rows="3" placeholder="Dán kịch bản vào đây — mỗi đoạn cách nhau bằng dòng trống sẽ thành 1 cảnh (thời lượng ước lượng theo số từ)"></textarea>
-        <div class="wb-media-row">
-          <button id="wb-tsPullBtn" title="Nhận kịch bản đã viết ở tab Tạo Kịch Bản (tsOutput) vào ô bên trên">📥 Nhận kịch bản</button>
-          <button id="wb-buildTimelineBtn" title="Chia kịch bản dán thành danh sách cảnh theo dòng trống">📋 Tạo timeline từ kịch bản</button>
+          <button id="wb-tsPullBtn" class="wb-btn-primary" title="Nh�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚­n k�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¹ch b�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£n �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�†�€™�ƒ�€š�‚£ vi�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¿t �ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€��‚¸ tab T�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡o K�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¹ch B�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£n (tsOutput) ho�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚·c state.script �ƒ�’�‚¢�ƒ¢â�€š¬�‚ �ƒ¢â�€š¬â�€ž¢ n�ƒ�’�†�€™�ƒ�€š�‚ºt �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¢i XANH. Vi�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¡c t�ƒ�’�†�€™�ƒ�€š�‚¡ch c�ƒ�’�†�€™�ƒ�€š�‚¢u + kh�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºp timing .SRT th�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚±c hi�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¡n �ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€��‚¸ B�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºc 3 'Ph�ƒ�’�†�€™�ƒ�€š�‚¢n t�ƒ�’�†�€™�ƒ�€š�‚­ch prompt'.">�ƒ�’�‚°�ƒ�€��‚¸�ƒ¢â�€š¬�…�€œ�ƒ�€š�‚¥ Nh�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚­n k�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¹ch b�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£n</button>
+          <span class="wb-media-label">k�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¹ch b�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£n l�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¥y th�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚³ng t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚« tab T�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡o K�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¹ch B�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£n (kh�ƒ�’�†�€™�ƒ�€š�‚´ng c�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚§n d�ƒ�’�†�€™�ƒ�€š�‚¡n tay) �ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚ n�ƒ�’�†�€™�ƒ�€š�‚ºt �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¢i XANH khi �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�†�€™�ƒ�€š�‚£ nh�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚­n</span>
         </div>
         </div>
       </details>
 
       <details class="wb-group wb-step wb-step-2" id="wb-step2">
-        <summary class="wb-group-title"><span class="wb-step-num">2</span><span class="wb-step-name">Phân cảnh theo câu</span><span class="wb-step-st" id="wb-st2">—</span><span class="wb-step-hint">🧩 mỗi câu 1 cảnh · đúng timing SRT</span></summary>
+        <summary class="wb-group-title"><span class="wb-step-num">2</span><span class="wb-step-name">Gi�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚ng �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚c (TTS) �ƒ�’�‚¢�ƒ¢â�€š¬�‚ �ƒ¢â�€š¬â�€ž¢ SRT</span><span class="wb-step-st" id="wb-st2">�ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚</span><span class="wb-step-hint">nh�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚­n TTS t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚« tab �ƒ�’�‚°�ƒ�€��‚¸�ƒ�€��‚½�ƒ¢â�‚�ž�‚¢ Gi�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚ng n�ƒ�’�†�€™�ƒ�€š�‚³i �ƒ�’â�‚�š�ƒ�€š�‚· SRT t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚± tr�ƒ�’�†�€™�ƒ�€š�‚­ch xu�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¥t</span></summary>
         <div class="wb-step-body">
         <div class="wb-media-row">
-          <button id="wb-cueScenesBtn" class="wb-btn-primary" title="Chia cảnh THEO CÂU từ SRT: mỗi câu 1 cảnh, thời gian hiển thị ảnh đúng bằng thời gian câu trong SRT (gom cue theo dấu câu, không cắt từ vô nghĩa). Cảnh cũ sẽ được tạo lại.">🧩 Chia theo câu (SRT)</button>
-          <button id="wb-parseBtn" title="Chia lại cảnh 25–35s theo phương pháp cũ (nhiều câu 1 cảnh)">🔁 Phân cảnh 25–35s</button>
-          <button id="wb-addSceneBtn">＋ Cảnh thủ công</button>
-          <button id="wb-clearBtn">🗑 Xoá hết</button>
+          <button id="wb-voicePullBtn" class="wb-btn-primary" title="D�ƒ�’�†�€™�ƒ�€š�‚¹ng b�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£n gi�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚ng M�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€��‚¡I NH�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¤T trong '�ƒ�’â�‚�ž�ƒ�€š�‚�ƒ�’�†�€™�ƒ�€š�‚£ t�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡o' c�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚§a tab �ƒ�’�‚°�ƒ�€��‚¸�ƒ�€��‚½�ƒ¢â�‚�ž�‚¢ Gi�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚ng n�ƒ�’�†�€™�ƒ�€š�‚³i: n�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡p voice-over + .SRT do backend sinh (timing th�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚­t). N�ƒ�’�†�€™�ƒ�€š�‚ºt �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¢i XANH khi �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�†�€™�ƒ�€š�‚£ nh�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚­n.">�ƒ�’�‚°�ƒ�€��‚¸�ƒ�€��‚½�ƒ¢â�‚�ž�‚¢ Nh�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚­n TTS</button>
+          <span class="wb-media-label" id="wb-srtLabel">ch�ƒ�’â�‚� �ƒ�€š�‚°a ch�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚n</span>
+        </div>
+        <div class="wb-media-row wb-hide" id="wb-srtExtractRow" title="Tr�ƒ�’�†�€™�ƒ�€š�‚­ch xu�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¥t .SRT �ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚ t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚± hi�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€�â�‚��„�n th�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¹ khi b�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£n TTS ch�ƒ�’â�‚� �ƒ�€š�‚°a k�ƒ�’�†�€™�ƒ�€š�‚¨m SRT">
+          <span class="wb-media-label">Tr�ƒ�’�†�€™�ƒ�€š�‚­ch xu�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¥t .SRT:</span>
+          <button id="wb-pickVoiceSrtBtn" title="Ch�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚n file voice �ƒ�’�‚¢�ƒ¢â�€š¬�‚ �ƒ¢â�€š¬â�€ž¢ t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚± t�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡o SRT ti�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¿ng Vi�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¡t b�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚±ng faster-whisper (ch�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡y local, kh�ƒ�’�†�€™�ƒ�€š�‚´ng cloud)">�ƒ�’�‚°�ƒ�€��‚¸�ƒ�€��‚½�ƒ�€š�‚¤ Voice �ƒ�’�‚¢�ƒ¢â�€š¬�‚ �ƒ¢â�€š¬â�€ž¢ SRT (local)</button>
+          <select id="wb-modelSel" title="M�ƒ�’�†�€™�ƒ�€š�‚´ h�ƒ�’�†�€™�ƒ�€š�‚¬nh Whisper (base nhanh / small c�ƒ�’�†�€™�ƒ�€š�‚¢n b�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚±ng / medium ch�ƒ�’�†�€™�ƒ�€š�‚­nh x�ƒ�’�†�€™�ƒ�€š�‚¡c)">
+            <option value="base">base (nhanh)</option>
+            <option value="small" selected>small (c�ƒ�’�†�€™�ƒ�€š�‚¢n b�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚±ng)</option>
+            <option value="medium">medium (ch�ƒ�’�†�€™�ƒ�€š�‚­nh x�ƒ�’�†�€™�ƒ�€š�‚¡c, ch�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚­m)</option>
+          </select>
+          <button id="wb-whisperPrepareBtn" title="C�ƒ�’�†�€™�ƒ�€š�‚ i faster-whisper v�ƒ�’�†�€™�ƒ�€š�‚ o venv (ch�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚° 1 l�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚§n, v�ƒ�’�†�€™�ƒ�€š�‚ i ph�ƒ�’�†�€™�ƒ�€š�‚ºt)">�ƒ�’�‚°�ƒ�€��‚¸�ƒ�€š�‚§�ƒ�€š�‚  C�ƒ�’�†�€™�ƒ�€š�‚ i Whisper</button>
+          <button id="wb-pickSrtBtn" title="Ch�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚n file SRT c�ƒ�’�†�€™�ƒ�€š�‚³ s�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚µn">�ƒ�’�‚°�ƒ�€��‚¸�ƒ¢â�€š¬�…�€œ�ƒ¢â�€š¬�…¡ Ch�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚n file SRT</button>
+        </div>
+        </div>
+      </details>
+
+      <details class="wb-group wb-step wb-step-3" id="wb-step3">
+        <summary class="wb-group-title"><span class="wb-step-num">3</span><span class="wb-step-name">Ph�ƒ�’�†�€™�ƒ�€š�‚¢n t�ƒ�’�†�€™�ƒ�€š�‚­ch prompt</span><span class="wb-step-st" id="wb-st3">�ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚</span><span class="wb-step-hint">t�ƒ�’�†�€™�ƒ�€š�‚¡ch c�ƒ�’�†�€™�ƒ�€š�‚¢u k�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¹ch b�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£n �ƒ�’â�‚�š�ƒ�€š�‚· kh�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºp timing SRT �ƒ�’â�‚�š�ƒ�€š�‚· AI sinh prompt + �ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£nh</span></summary>
+        <div class="wb-step-body">
+        <div class="wb-media-row">
+          <button id="wb-analyzePromptBtn" class="wb-btn-primary" title="TR�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€�â�‚��„�N LU�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬â�€ž¢NG B�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºc 3: t�ƒ�’�†�€™�ƒ�€š�‚¡ch k�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¹ch b�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£n (B�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºc 1) th�ƒ�’�†�€™�ƒ�€š�‚ nh C�ƒ�’�†�€™�ƒ¢â�€š¬�…¡U C�ƒ�’�†�€™�ƒ¢â�€š¬�…�€œ NGH�ƒ�’â�‚�ž�ƒ�€š�‚¨A �ƒ�’�‚¢�ƒ¢â�€š¬�‚ �ƒ¢â�€š¬â�€ž¢ �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‹�“i chi�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¿u .SRT (B�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºc 2) �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€�â�‚��„� M�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬â�‚��“I C�ƒ�’�†�€™�ƒ¢â�€š¬�…¡U c�ƒ�’�†�€™�ƒ�€š�‚³ th�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚i l�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚£ng �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚c ch�ƒ�’�†�€™�ƒ�€š�‚­nh x�ƒ�’�†�€™�ƒ�€š�‚¡c �ƒ�’�‚¢�ƒ¢â�€š¬�‚ �ƒ¢â�€š¬â�€ž¢ t�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡o c�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£nh theo c�ƒ�’�†�€™�ƒ�€š�‚¢u �ƒ�’�‚¢�ƒ¢â�€š¬�‚ �ƒ¢â�€š¬â�€ž¢ AI sinh prompt �ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£nh line-art cho t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚«ng c�ƒ�’�†�€™�ƒ�€š�‚¢u �ƒ�’�‚¢�ƒ¢â�€š¬�‚ �ƒ¢â�€š¬â�€ž¢ Flow sinh �ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£nh + g�ƒ�’�†�€™�ƒ�€š�‚¡n �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�†�€™�ƒ�€š�‚ºng khung th�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚i gian. C�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚§n c�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¥u h�ƒ�’�†�€™�ƒ�€š�‚¬nh AI �ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€��‚¸ tab C�ƒ�’�†�€™�ƒ�€š�‚ i �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚·t + �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’â�‚�ž�ƒ�€�â�‚��„�ng nh�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚­p Flow �ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€��‚¸ tab T�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡o �ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¢nh H�ƒ�’�†�€™�ƒ�€š�‚ ng Lo�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡t.">�ƒ�’�‚°�ƒ�€��‚¸�ƒ�€š�‚§�ƒ�€š�‚  Ph�ƒ�’�†�€™�ƒ�€š�‚¢n t�ƒ�’�†�€™�ƒ�€š�‚­ch prompt</button>
         </div>
         <div class="wb-items" id="wb-sceneList"></div>
         </div>
       </details>
 
-      <details class="wb-group wb-step wb-step-3" id="wb-step3">
-        <summary class="wb-group-title"><span class="wb-step-num">3</span><span class="wb-step-name">Ảnh line-art</span><span class="wb-step-st" id="wb-st3">—</span><span class="wb-step-hint">mỗi câu 1 ảnh theo khung thời gian SRT · 🤖 AI sinh ảnh auto</span></summary>
-        <div class="wb-step-body">
-        <div class="wb-media-row">
-          <button id="wb-aiGenBtn" title="TỰ ĐỘNG trọn luồng: AI sinh prompt cho câu còn thiếu → Flow sinh ảnh line-art cho TỪNG câu (đúng khung thời gian SRT) → lưu + gán vào cảnh → AI vision khoanh vùng người/vật thể/sự kiện → giờ vẽ theo nhịp kể. Cần đăng nhập Flow ở tab Tạo Ảnh Hàng Loạt. Câu đã có ảnh được giữ nguyên — bấm lại để tạo tiếp câu còn thiếu.">🤖 AI sinh ảnh theo câu (auto)</button>
-        </div>
-        <div class="wb-media-row">
-          <button id="wb-aiPromptsBtn" title="AI đọc TỪNG CÂU (theo timing SRT) → sinh prompt ảnh line-art whiteboard + nhận dạng VẬT THỂ trong câu để vẽ (kèm tỉ trọng nhịp kể). Cần đã cấu hình AI ở tab Cài đặt.">🤖 AI sinh prompt ảnh</button>
-          <span class="wb-media-label" id="wb-sceneImageLabel">—</span>
-          <span class="wb-media-label" id="wb-sceneCanvasLabel">—</span>
-        </div>
-        <div class="wb-media-row">
-          <button id="wb-addImageToSceneBtn">🖼 Ảnh cho cảnh đang chọn</button>
-          <button id="wb-pickImagesBtn" title="Chọn nhiều ảnh một lần — gán tuần tự vào các cảnh chưa có ảnh, ảnh dư thì tự tạo cảnh mới">🖼🖼 Chọn nhiều ảnh</button>
-          <button id="wb-pickImagesDirBtn" title="Chọn cả thư mục ảnh — mỗi ảnh thành 1 cảnh">📁 Thư mục ảnh</button>
-        </div>
-        </div>
-      </details>
-
       <details class="wb-group wb-step wb-step-4" id="wb-step4">
-        <summary class="wb-group-title"><span class="wb-step-num">4</span><span class="wb-step-name">Vùng vẽ</span><span class="wb-step-st" id="wb-st4">—</span><span class="wb-step-hint">sequence + reveal · 🎯 AI khoanh vùng</span></summary>
+        <summary class="wb-group-title"><span class="wb-step-num">4</span><span class="wb-step-name">S�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¯p x�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¿p d�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚¯ li�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¡u</span><span class="wb-step-st" id="wb-st4">�ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚</span><span class="wb-step-hint">AI khoanh v�ƒ�’�†�€™�ƒ�€š�‚¹ng �ƒ�’â�‚�š�ƒ�€š�‚· gi�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚ v�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚½ kh�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºp th�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚i l�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚£ng c�ƒ�’�†�€™�ƒ�€š�‚¢u</span></summary>
         <div class="wb-step-body">
         <div class="wb-media-row">
-          <button id="wb-genElementsBtn" disabled>✨ Sinh phần tử</button>
-          <button id="wb-aiRegionsBtn" title="AI vision soi ảnh cảnh đang chọn → tự khoanh vùng VẬT THỂ (polygon) → phân bổ giờ vẽ theo nhịp kể (share của objects nếu có)">🎯 AI khoanh vùng vật thể</button>
-          <button id="wb-previewBtn" disabled>🧭 Preview sơ đồ vùng</button>
-          <button id="wb-regionEditorBtn" title="Soạn vùng vẽ trực tiếp trên ảnh: kéo di chuyển, 8 chấm co giãn, trường số x/y/w/h (như preview.html của repo engine)">✏️ Soạn vùng trên ảnh</button>
+          <button id="wb-arrangeBtn" class="wb-btn-primary" title="AI vision soi T�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¤T C�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¢ �ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£nh c�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£nh (c�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£nh thi�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¿u �ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£nh �ƒ�’�‚¢�ƒ¢â�€š¬�‚ �ƒ¢â�€š¬â�€ž¢ l�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬â�‚�i l�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�‚�ž�‚¢ li�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¦u, kh�ƒ�’�†�€™�ƒ�€š�‚´ng b�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚ qua ng�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚§m) �ƒ�’�‚¢�ƒ¢â�€š¬�‚ �ƒ¢â�€š¬â�€ž¢ khoanh v�ƒ�’�†�€™�ƒ�€š�‚¹ng V�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¬T TH�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�…¡ (polygon) �ƒ�’�‚¢�ƒ¢â�€š¬�‚ �ƒ¢â�€š¬â�€ž¢ ph�ƒ�’�†�€™�ƒ�€š�‚¢n b�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¢ gi�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚ v�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚½ theo nh�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¹p k�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€�â�‚��„�, KH�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€��‚¡P �ƒ�’â�‚�ž�ƒ�€š�‚�ƒ�’�†�€™�ƒ�€��‚¡NG khung th�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚i l�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚£ng c�ƒ�’�†�€™�ƒ�€š�‚¢u (start/end t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚« SRT �ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€��‚¸ B�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºc 3).">�ƒ�’�‚°�ƒ�€��‚¸�ƒ¢â�€š¬â�‚��ƒ�€š�‚º S�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¯p x�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¿p d�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚¯ li�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¡u</button>
         </div>
-        <div id="wb-regionEditor" class="wb-hide">
-          <canvas id="wb-edCanvas" class="wb-canvas" style="touch-action:none;cursor:crosshair;background:#f8fafc"></canvas>
-          <div style="display:flex;flex-wrap:wrap;gap:6px 12px;align-items:end;margin:6px 0">
-            <label style="font-size:12px">X <input id="wb-edX" type="number" step="1" class="wb-num-in" style="width:72px"></label>
-            <label style="font-size:12px">Y <input id="wb-edY" type="number" step="1" class="wb-num-in" style="width:72px"></label>
-            <label style="font-size:12px">W <input id="wb-edW" type="number" min="1" step="1" class="wb-num-in" style="width:72px"></label>
-            <label style="font-size:12px">H <input id="wb-edH" type="number" min="1" step="1" class="wb-num-in" style="width:72px"></label>
-            <label style="font-size:12px">Hướng <select id="wb-edDir" class="wb-dir-in"></select></label>
-            <label style="font-size:12px">Bắt đầu (s) <input id="wb-edStart" type="number" min="0" step="0.1" class="wb-num-in" style="width:64px"></label>
-            <label style="font-size:12px">Kết thúc (s) <input id="wb-edEnd" type="number" min="0" step="0.1" class="wb-num-in" style="width:64px"></label>
-            <label style="font-size:12px">Thời lượng <input id="wb-edDur" type="text" readonly class="wb-num-in" style="width:56px"></label>
-            <label style="font-size:12px">Nhãn <input id="wb-edLabel" type="text" class="wb-label-in" style="width:110px"></label>
-            <label style="font-size:12px">Phụ đề <input id="wb-edSub" type="text" class="wb-label-in" style="width:160px"></label>
-          </div>
-          <div class="wb-media-row">
-            <button id="wb-edAddBtn">＋ Vùng mới</button>
-            <button id="wb-edDelBtn">✕ Xoá vùng đang chọn</button>
-            <button id="wb-edLoadBtn" title="Nạp file .annotation.json đã soạn cho cảnh này">📥 Nạp .annotation.json</button>
-            <button id="wb-edSaveBtn" title="Lưu .annotation.json cạnh file ảnh (sidecar — để lần sau nạp lại)">💾 Lưu .annotation.json</button>
-          </div>
-          <div class="wb-media-label" id="wb-edHint">Kéo = di chuyển · chấm vuông = co giãn · click vùng = chọn. Kéo vùng sẽ thay polygon (region.points) bằng hình chữ nhật.</div>
-        </div>
-        <table id="wb-elementsTable" class="wb-el-table wb-hide">
-          <thead><tr><th>#</th><th>Phần tử</th><th>Bắt đầu (s)</th><th>Dài (s)</th><th>Hướng reveal</th><th></th></tr></thead>
-          <tbody id="wb-elementsBody"></tbody>
-        </table>
-        <img id="wb-previewImg" class="wb-canvas wb-hide" alt="Sơ đồ vùng annotation">
         </div>
       </details>
 
       <details class="wb-group wb-step wb-step-5" id="wb-step5">
-        <summary class="wb-group-title"><span class="wb-step-num">5</span><span class="wb-step-name">Voice-over &amp; nhạc nền</span><span class="wb-step-st" id="wb-st5">—</span></summary>
+        <summary class="wb-group-title"><span class="wb-step-num">5</span><span class="wb-step-name">Xem tr�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºc</span><span class="wb-step-st" id="wb-st5">�ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚</span><span class="wb-step-hint">timeline 2 d�ƒ�’�†�€™�ƒ�€š�‚²ng (video v�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚½ + �ƒ�’�†�€™�ƒ�€š�‚¢m thanh) �ƒ�’â�‚�š�ƒ�€š�‚· ph�ƒ�’�†�€™�ƒ�€š�‚¡t/tua �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�…�€œng b�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�‚�ž�‚¢</span></summary>
         <div class="wb-step-body">
         <div class="wb-media-row">
-          <button id="wb-pickAudioBtn">🔊 Chọn voice-over</button>
-          <span class="wb-media-label" id="wb-audioLabel">chưa chọn</span>
+          <button id="wb-pickAudioBtn">�ƒ�’�‚°�ƒ�€��‚¸�ƒ¢â�€š¬�‚�ƒ�€��‚  Ch�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚n voice-over</button>
+          <span class="wb-media-label" id="wb-audioLabel">ch�ƒ�’â�‚� �ƒ�€š�‚°a ch�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚n</span>
         </div>
         <div class="wb-media-row">
-          <button id="wb-pickMusicBtn" title="Nhạc nền lặp vô hạn tới hết video, mix nhỏ hơn voice">🎵 Chọn nhạc nền</button>
-          <select id="wb-musicVolSel" title="Âm lượng nhạc nền khi mix (0.16 = nhỏ hơn voice nhiều)">
-            <option value="0.10">nhạc 0.10</option>
-            <option value="0.16" selected>nhạc 0.16</option>
-            <option value="0.25">nhạc 0.25</option>
-            <option value="0.40">nhạc 0.40</option>
+          <button id="wb-pickMusicBtn" title="Nh�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡c n�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚n l�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚·p v�ƒ�’�†�€™�ƒ�€š�‚´ h�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡n t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºi h�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¿t video, mix nh�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚ h�ƒ�’â�‚� �ƒ�€š�‚¡n voice">�ƒ�’�‚°�ƒ�€��‚¸�ƒ�€��‚½�ƒ�€š�‚µ Ch�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚n nh�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡c n�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚n</button>
+          <select id="wb-musicVolSel" title="�ƒ�’�†�€™�ƒ¢â�€š¬�…¡m l�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚£ng nh�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡c n�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚n khi mix (0.16 = nh�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚ h�ƒ�’â�‚� �ƒ�€š�‚¡n voice nhi�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚u)">
+            <option value="0.10">nh�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡c 0.10</option>
+            <option value="0.16" selected>nh�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡c 0.16</option>
+            <option value="0.25">nh�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡c 0.25</option>
+            <option value="0.40">nh�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡c 0.40</option>
           </select>
-          <span class="wb-media-label" id="wb-musicLabel">chưa chọn</span>
+          <span class="wb-media-label" id="wb-musicLabel">ch�ƒ�’â�‚� �ƒ�€š�‚°a ch�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚n</span>
         </div>
         <div class="wb-media-label" id="wb-audioWarn"></div>
+        <canvas id="wb-pvCanvas" class="wb-canvas" style="width:100%;background:#0b0f14;border-radius:8px" height="360"></canvas>
+        <div class="wb-media-row" style="margin-top:6px">
+          <button id="wb-pvPlay">�ƒ�’�‚¢�ƒ¢â�€š¬â�‚��“�ƒ�€š�‚¶ Ph�ƒ�’�†�€™�ƒ�€š�‚¡t</button>
+          <span class="wb-media-label" id="wb-pvTime">0:00.0 / 0:00.0</span>
+          <span class="wb-media-label" id="wb-pvScene">�ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚</span>
+        </div>
+        <input id="wb-pvSeek" type="range" min="0" max="1000" value="0" style="width:100%" title="Tua preview">
+        <div class="wb-media-label" id="wb-pvSub"></div>
+        <div id="wb-pvTimeline" title="D�ƒ�’�†�€™�ƒ�€š�‚²ng VIDEO: kh�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‹�“i = c�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£nh �ƒ�’â�‚�š�ƒ�€š�‚· click = nh�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£y t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºi c�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£nh �ƒ�’â�‚�š�ƒ�€š�‚· k�ƒ�’�†�€™�ƒ�€š�‚©o m�ƒ�’�†�€™�ƒ�€š�‚©p ph�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£i kh�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‹�“i = ch�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚°nh th�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚i l�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚£ng (gi�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‹�“ng CapCut). D�ƒ�’�†�€™�ƒ�€š�‚²ng �ƒ�’�†�€™�ƒ¢â�€š¬�…¡M THANH: voice + nh�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡c n�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚n."></div>
         </div>
       </details>
 
       <details class="wb-group wb-step wb-step-6" id="wb-step6">
-        <summary class="wb-group-title"><span class="wb-step-num">6</span><span class="wb-step-name">Xem trước ghép</span><span class="wb-step-st" id="wb-st6">—</span><span class="wb-step-hint">phát/tua đồng bộ voice · kéo mép khối = chỉnh thời lượng</span></summary>
-        <div class="wb-step-body">
-        <canvas id="wb-pvCanvas" class="wb-canvas" style="width:100%;background:#0b0f14;border-radius:8px" height="360"></canvas>
-        <div class="wb-media-row" style="margin-top:6px">
-          <button id="wb-pvPlay">▶ Phát</button>
-          <span class="wb-media-label" id="wb-pvTime">0:00.0 / 0:00.0</span>
-          <span class="wb-media-label" id="wb-pvScene">—</span>
-        </div>
-        <input id="wb-pvSeek" type="range" min="0" max="1000" value="0" style="width:100%" title="Tua preview">
-        <div class="wb-media-label" id="wb-pvSub"></div>
-        <div id="wb-pvTimeline" title="Khối = cảnh · click = nhảy tới cảnh · kéo mép phải khối = chỉnh thời lượng (giống CapCut)"></div>
-        </div>
-      </details>
-
-      <details class="wb-group wb-step wb-step-7" id="wb-step7">
-        <summary class="wb-group-title"><span class="wb-step-num">7</span><span class="wb-step-name">Xuất MP4</span><span class="wb-step-hint">stream-ink → merge → ghép voice</span></summary>
+        <summary class="wb-group-title"><span class="wb-step-num">6</span><span class="wb-step-name">Xu�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¥t Video</span><span class="wb-step-st" id="wb-st6">�ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚</span><span class="wb-step-hint">stream-ink �ƒ�’�‚¢�ƒ¢â�€š¬�‚ �ƒ¢â�€š¬â�€ž¢ merge �ƒ�’�‚¢�ƒ¢â�€š¬�‚ �ƒ¢â�€š¬â�€ž¢ gh�ƒ�’�†�€™�ƒ�€š�‚©p voice + nh�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡c</span></summary>
         <div class="wb-step-body">
         <div class="wb-media-row">
           <select id="wb-inkPathSel" title="Ink path"><option value="grid">grid</option><option value="skeleton">skeleton</option></select>
           <select id="wb-colorFillSel" title="Color fill"><option value="contour-wipe">contour-wipe</option><option value="brush">brush</option></select>
-          <select id="wb-capSel" title="Cap cạnh dài"><option value="720">720</option><option value="1080" selected>1080</option><option value="1440">1440</option></select>
-          <input id="wb-gridEdge" type="number" min="1" step="1" style="width:90px" title="Cỡ ô lưới --grid-edge (px). Để trống = mặc định engine" placeholder="grid edge px">
+          <select id="wb-capSel" title="Cap c�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡nh d�ƒ�’�†�€™�ƒ�€š�‚ i"><option value="720">720</option><option value="1080" selected>1080</option><option value="1440">1440</option></select>
+          <input id="wb-gridEdge" type="number" min="1" step="1" style="width:90px" title="C�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚¡ �ƒ�’�†�€™�ƒ�€š�‚´ l�ƒ�’â�‚� �ƒ�€š�‚°�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚ºi --grid-edge (px). �ƒ�’â�‚�ž�ƒ�€š�‚�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€�â�‚��„� tr�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‹�“ng = m�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚·c �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¹nh engine" placeholder="grid edge px">
         </div>
         <div class="wb-media-row">
-          <button id="wb-saveProjectBtn" title="Lưu toàn bộ dự án (cảnh, vùng vẽ, voice, nhạc, tuỳ chọn render) vào dữ liệu app">💾 Lưu dự án</button>
-          <button id="wb-loadProjectBtn" title="Nạp lại dự án đã lưu gần nhất">📂 Nạp dự án</button>
+          <button id="wb-saveProjectBtn" title="L�ƒ�’â�‚� �ƒ�€š�‚°u to�ƒ�’�†�€™�ƒ�€š�‚ n b�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�‚�ž�‚¢ d�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚± �ƒ�’�†�€™�ƒ�€š�‚¡n (c�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚£nh, v�ƒ�’�†�€™�ƒ�€š�‚¹ng v�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚½, voice, nh�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡c, tu�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚³ ch�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚n render) v�ƒ�’�†�€™�ƒ�€š�‚ o d�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚¯ li�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‚¡u app">�ƒ�’�‚°�ƒ�€��‚¸�ƒ¢â�€š¬â�€ž¢�ƒ�€š�‚¾ L�ƒ�’â�‚� �ƒ�€š�‚°u d�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚± �ƒ�’�†�€™�ƒ�€š�‚¡n</button>
+          <button id="wb-loadProjectBtn" title="N�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡p l�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡i d�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚± �ƒ�’�†�€™�ƒ�€š�‚¡n �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�†�€™�ƒ�€š�‚£ l�ƒ�’â�‚� �ƒ�€š�‚°u g�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚§n nh�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¥t">�ƒ�’�‚°�ƒ�€��‚¸�ƒ¢â�€š¬�…�€œ�ƒ¢â�€š¬�…¡ N�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡p d�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚± �ƒ�’�†�€™�ƒ�€š�‚¡n</button>
         </div>
         <div class="wb-export-bar">
-          <button id="wb-exportBtn" class="wb-btn-primary">🎬 Xuất MP4</button>
-          <button id="wb-stopBtn" disabled>■ Huỷ render</button>
-          <button id="wb-cancelXBtn" class="wb-hide">✕</button>
+          <button id="wb-exportBtn" class="wb-btn-primary">�ƒ�’�‚°�ƒ�€��‚¸�ƒ�€��‚½�ƒ�€š�‚¬ Xu�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¥t Video</button>
+          <button id="wb-stopBtn" disabled>�ƒ�’�‚¢�ƒ¢â�€š¬â�‚��“�ƒ�€š�‚  Hu�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚· render</button>
+          <button id="wb-cancelXBtn" class="wb-hide">�ƒ�’�‚¢�ƒ�€�â�‚��“�ƒ¢â�€š¬�‚¢</button>
           <span class="wb-time" id="wb-progressPct">0%</span>
         </div>
         <div class="wb-prog"><div class="wb-prog-fill" id="wb-progressBar"></div></div>
-        <div class="wb-prog-label" id="wb-progressMsg">—</div>
+        <div class="wb-prog-label" id="wb-progressMsg">�ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚</div>
         </div>
       </details>
 
       <details class="wb-group wb-step wb-step-log" open>
-        <summary class="wb-group-title"><span class="wb-step-name">📋 Log</span></summary>
+        <summary class="wb-group-title"><span class="wb-step-name">�ƒ�’�‚°�ƒ�€��‚¸�ƒ¢â�€š¬�…�€œ�ƒ¢â�€š¬�‚¹ Log</span></summary>
         <div class="wb-step-body"><div class="wb-logs" id="wb-logBox"></div></div>
       </details>
     </div>`;
@@ -1438,16 +835,16 @@
     init: (root) => boot(root || document.getElementById('whiteboardRoot')),
   };
 
-  /* Context dùng chung cho các module mở rộng nạp SAU panel (whiteboard-studio-ai.js,
-     whiteboard-studio-preview.js) — pattern hdPanelCtx của src/hd: renderer không có
-     build step, chia module bằng IIFE góp tên vào context chung (AGENTS.md §4/§8). */
+  /* Context d�ƒ�’�†�€™�ƒ�€š�‚¹ng chung cho c�ƒ�’�†�€™�ƒ�€š�‚¡c module m�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€��‚¸ r�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�‚�ž�‚¢ng n�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡p SAU panel (whiteboard-studio-ai.js,
+     whiteboard-studio-preview.js) �ƒ�’�‚¢�ƒ¢â�‚�š�‚¬�ƒ¢â�€š¬�‚ pattern hdPanelCtx c�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚§a src/hd: renderer kh�ƒ�’�†�€™�ƒ�€š�‚´ng c�ƒ�’�†�€™�ƒ�€š�‚³
+     build step, chia module b�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚±ng IIFE g�ƒ�’�†�€™�ƒ�€š�‚³p t�ƒ�’�†�€™�ƒ�€š�‚ªn v�ƒ�’�†�€™�ƒ�€š�‚ o context chung (AGENTS.md �ƒ�’â�‚�š�ƒ�€š�‚§4/�ƒ�’â�‚�š�ƒ�€š�‚§8). */
   window.wbStudioCtx = {
     state, els, A, log, sec, fmtTime, wbFileUrl,
-    renderSceneList, renderSceneDetail, generateElements, checkAudioMatch,
-    buildCueScenes, setImageForScene,
+    renderSceneList, renderSceneDetail, checkAudioMatch,
+    setImageForScene, wbAnalyzePromptData, wbSetBtnOk, wbRevealSrtExtract,
   };
 
-  // script nằm cuối <body> → DOM đã parse xong; tự khởi động khi root tồn tại
+  // script n�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚±m cu�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�‹�“i <body> �ƒ�’�‚¢�ƒ¢â�€š¬�‚ �ƒ¢â�€š¬â�€ž¢ DOM �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�†�€™�ƒ�€š�‚£ parse xong; t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€š�‚± kh�ƒ�’�‚¡�ƒ�€š�‚»�ƒ�€��‚¸i �ƒ�’â�‚�ž�ƒ¢â�€š¬�‹�“�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�‚�ž�‚¢ng khi root t�ƒ�’�‚¡�ƒ�€š�‚»�ƒ¢â�€š¬�…�€œn t�ƒ�’�‚¡�ƒ�€š�‚º�ƒ�€š�‚¡i
   const _wbRoot = document.getElementById('whiteboardRoot');
   if (_wbRoot) boot(_wbRoot);
 })();

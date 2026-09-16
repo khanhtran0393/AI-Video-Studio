@@ -221,15 +221,35 @@
     if (dom.playhead) dom.playhead.style.left = (total ? (t / total * 100) : 0) + '%';
     if (dom.blocks) dom.blocks.forEach((b, i) => b.classList.toggle('wb-pv-cur', i === info.si));
   }
-  /* ── timeline CapCut-like: khối cảnh + mép kéo phải ── */
+  /* ── timeline 2 DÒNG (CapCut-like):
+     dòng VIDEO: khối cảnh + mép kéo phải (chỉnh thời lượng);
+     dòng ÂM THANH: voice-over (Master Clock) + nhạc nền (lặp);
+     playhead chung chạy dọc cả 2 dòng, click khối = tua. ── */
   const WB_PV_COLORS = ['#1d4ed8', '#b45309', '#047857', '#7c3aed', '#be123c', '#0e7490'];
   function wbPvRenderTimeline() {
     if (!dom.tl) return;
     const { starts, total } = wbPvLayout();
     dom.tl.innerHTML = '';
-    if (!total) { dom.blocks = null; return; }
-    const wrap = document.createElement('div');
-    wrap.style.cssText = 'position:relative;height:44px;background:#111827;border-radius:6px;overflow:hidden;margin-top:6px;user-select:none;touch-action:none';
+    dom.blocks = null;
+    if (!total) return;
+    const outer = document.createElement('div');
+    outer.style.cssText = 'display:flex;gap:6px;margin-top:6px;user-select:none;touch-action:none';
+    const labels = document.createElement('div');
+    labels.style.cssText = 'flex:0 0 64px;display:flex;flex-direction:column;gap:4px';
+    const tracks = document.createElement('div');
+    tracks.style.cssText = 'position:relative;flex:1;display:flex;flex-direction:column;gap:4px';
+    const mkTrack = (label, h) => {
+      const lab = document.createElement('div');
+      lab.style.cssText = 'display:flex;align-items:center;font:600 10px sans-serif;color:#94a3b8;height:' + h + 'px';
+      lab.textContent = label;
+      labels.appendChild(lab);
+      const track = document.createElement('div');
+      track.style.cssText = 'position:relative;height:' + h + 'px;background:#111827;border-radius:6px;overflow:hidden';
+      tracks.appendChild(track);
+      return track;
+    };
+    /* ── Dòng 1 · VIDEO ── */
+    const trackVideo = mkTrack('🎬 Video', 44);
     dom.blocks = [];
     state.scenes.forEach((s, i) => {
       const b = document.createElement('div');
@@ -254,7 +274,7 @@
       h.addEventListener('pointerdown', (ev) => {
         ev.preventDefault();
         ev.stopPropagation();
-        dragging = { i, rect: wrap.getBoundingClientRect(), total };
+        dragging = { i, rect: trackVideo.getBoundingClientRect(), total };
         if (h.setPointerCapture) { try { h.setPointerCapture(ev.pointerId); } catch (_) {} }
       });
       h.addEventListener('pointermove', (ev) => {
@@ -275,14 +295,56 @@
         log('✓ chỉnh thời lượng cảnh ' + (i + 1) + ' → ' + (((state.scenes[i] && state.scenes[i].durationMs) || 0) / 1000).toFixed(1) + 's (export sẽ dùng giá trị này)');
       });
       h.addEventListener('pointercancel', () => { dragging = null; wbPvRenderTimeline(); });
-      wrap.appendChild(b);
+      trackVideo.appendChild(b);
       dom.blocks.push(b);
     });
+    /* ── Dòng 2 · ÂM THANH (voice = Master Clock + nhạc nền lặp) ── */
+    const trackAudio = mkTrack('🔊 Âm thanh', 30);
+    const voice = state.audioTrack;
+    const music = state.musicTrack;
+    if (voice && voice.durationSec) {
+      const b = document.createElement('div');
+      b.style.cssText = 'position:absolute;top:3px;bottom:3px;left:0;border-radius:4px;overflow:hidden;cursor:pointer;' +
+        'background:#0e7490cc;border:1px solid #ffffff33;box-sizing:border-box';
+      b.style.width = Math.max(0.4, Math.min(100, voice.durationSec * 1000 / total * 100)) + '%';
+      b.title = 'Voice-over (Master Clock) ' + voice.durationSec.toFixed(1) + 's' + (voice.path ? ' · ' + voice.path.split(/[\\/]/).pop() : '');
+      const lab = document.createElement('div');
+      lab.style.cssText = 'font:600 9px sans-serif;color:#fff;padding:1px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+      lab.textContent = '🎙 voice ' + voice.durationSec.toFixed(1) + 's';
+      b.appendChild(lab);
+      b.addEventListener('click', (ev) => {
+        if (dragging) return;
+        const r = b.getBoundingClientRect();
+        const ratio = Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width));
+        wbPvSeekTo(ratio * Math.min(voice.durationSec * 1000, total));
+        ev.stopPropagation();
+      });
+      trackAudio.appendChild(b);
+    }
+    if (music && music.path) {
+      const m = document.createElement('div');
+      m.style.cssText = 'position:absolute;top:3px;bottom:3px;left:0;right:0;border-radius:4px;box-sizing:border-box;' +
+        'background:#7c3aed44;border:1px solid #7c3aed66;overflow:hidden;pointer-events:none';
+      const lab = document.createElement('div');
+      lab.style.cssText = 'font:600 9px sans-serif;color:#ddd6fe;padding:1px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+      lab.textContent = '🎵 nhạc nền (lặp) · ' + music.path.split(/[\\/]/).pop();
+      m.appendChild(lab);
+      trackAudio.appendChild(m);
+    }
+    if (!voice && !music) {
+      const ph2 = document.createElement('div');
+      ph2.style.cssText = 'font:10px sans-serif;color:#64748b;padding:6px 8px';
+      ph2.textContent = 'chưa có âm thanh — nhận TTS ở Bước 2 hoặc 🔊 chọn voice-over';
+      trackAudio.appendChild(ph2);
+    }
+    /* ── playhead chung 2 dòng ── */
     const ph = document.createElement('div');
     ph.style.cssText = 'position:absolute;top:0;bottom:0;width:2px;background:#fbbf24;pointer-events:none;left:0';
-    wrap.appendChild(ph);
+    tracks.appendChild(ph);
     dom.playhead = ph;
-    dom.tl.appendChild(wrap);
+    outer.appendChild(labels);
+    outer.appendChild(tracks);
+    dom.tl.appendChild(outer);
   }
 
   window.wbStudioPreview = { refresh: () => { wbPvRenderTimeline(); wbPvFrame(); } };

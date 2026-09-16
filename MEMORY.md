@@ -84,6 +84,38 @@ File nÃ y ghi **tráº¡ng thÃ¡i dÃ i háº¡n vÃ  lá»‹ch sá»­ qu
 
 ## Nhật ký thay đổi
 ## Nhật ký thay đổi
+## 2026-09-15k — I-MZic: bố cục "Ô vuông giữa + nền mờ" + sóng nhạc dịch ngang
+
+- **Yêu cầu user**: (1) ảnh thu nhỏ thành ô vuông giữa khung (= 1/3 chiều cao
+  video 16:9), căn giữa (chia điều tâm), chỉnh được xoay/nghiêng; (2) nền full
+  màn hình mờ hơn, chỉnh được độ mờ + mờ lệch trái/phải; (3) sóng nhạc chưa
+  chỉnh được vị trí trái/phải.
+- **Chốt design (hỏi user)**: chọn phương án 2 chế độ — ô "Ảnh nền riêng
+  (tuỳ chọn)" mới (`bgInput`); có chọn → nền mờ dùng ảnh đó, không → nền tự
+  dùng chính ảnh đang phát (ảnh đơn hoặc ảnh slide hiện tại).
+- **Triển khai**: fitMode mới `'square'` trong `fitSel` (option "🔲 Ô vuông
+  giữa + nền mờ"), áp dụng cho CẢ ảnh đơn (nhánh mới trong `drawBackground`,
+  imzic-render.js) lẫn slideshow (nhánh mới trong `drawSlideLayer`,
+  imzic-slideshow.js) qua `drawSquareLayout()` + `getSquareBlurBg()` (cache
+  LRU 4, key = img|kích thước|blur|side; blur dựng trên canvas nhỏ w/10 rồi
+  phóng — rẻ mà giống blur to; lệch trái/phải bằng lớp blur mạnh hơn mask
+  gradient `destination-in`; tối nền 0.28 như `getSlideBlurBg` cũ).
+  State mới: `bgImg/bgFile/bgBlur(12)/bgBlurSide(0)/sqSize(100)/sqTilt(0)/
+  sqSkew(0)/wavePosX(50)`. Sóng: `startX = w*wavePosX/100 - widthPx/2` +
+  sửa 2 kiểu circular/spiral bỏ tâm cứng `w/2`. UI: khối `squareFields`
+  (Độ mờ nền / Mờ lệch trái↔phải / Cỡ ô vuông / Xoay / Nghiêng), slider
+  "Vị trí ngang" sóng, nút "🗑 Bỏ ảnh nền riêng"; `slideFitField` giờ hiện
+  cho cả ảnh đơn; hết thêm vào `SETTINGS_RANGE_IDS` (nhớ localStorage).
+  Không đổi export/IPC/state main — không đụng registry (Luật 1, §4.1).
+- **Export**: "⚡ Xuất nhanh" + ghi realtime đi qua cùng `drawBackground`/
+  `drawWave` → hiệu ứng mới có trong file xuất, không cần sửa imzic-export.js.
+- **Kiểm định**: `node --check` 6 file PASS; `npm run check` EXIT 0.
+- **Phát hiện**: lần chạy `npm run check` đầu FAIL ở `whiteboard-studio-panel.js`
+  (bản WIP Whiteboard Studio 2026-09-15j đang được ghi song song) — chạy lại
+  khi file đã ghi xong thì PASS; không phải lỗi của thay đổi I-MZic.
+- **Còn treo**: user chưa test thật end-to-end (chọn ảnh → fitMode square →
+  phát thử + ⚡ Xuất nhanh; kéo slider mờ lệch trái/phải; sóng dịch ngang).
+
 ## 2026-09-15j — Whiteboard Studio: 🤖 AI sinh ảnh theo câu (auto)
 
 - **Yêu cầu user**: đã có kịch bản → TTS → SRT; cần TRỌN LUỒNG tự động:
@@ -5414,6 +5446,49 @@ Trợ lý dựng báo đang chạy ngay + sửa preview 9:16/1:1 bị co nhỏ +
   16:9 rồi đối chiếu `ffprobe` kích thước ảnh) — bắt buộc theo §6.5+§6.6; chưa có xác nhận của
   user nên chưa kết luận "đạt".
 
+### 2026-09-15o — I-MZic: 🧹 Reset + 🎲 Tự động hiệu ứng + Hàng chờ xuất video
+
+- **3 tính năng mới cho tool img-to-vid**, logic gom vào module renderer mới
+  `nova/web/src/imzic/imzic-workflow.js` (nạp CUỐI CÙNG trong img-to-vid.html, sau
+  imzic-export.js; không thuộc bộ 12 file tách 2026-09-11 — header ghi rõ ràng buộc
+  thứ tự nạp). Không import/export (renderer không build step — AGENTS.md §4/§8).
+- **🧹 Reset** (nút `resetBtn` trên transport bar): chặn khi `isExporting`; confirm →
+  `localStorage.removeItem(SETTINGS_KEY)` + `location.reload()` — trạng thái sạch
+  tuyệt đối, không "suy đoán" giá trị mặc định; preset đã lưu giữ nguyên.
+- **🎲 Tự động chọn hiệu ứng** (nút `autoFxBtn` trong section 3 "Hiệu ứng bay"):
+  ghép ngẫu nhiên 1 bộ hài hoà — hạt bay (effectSel + dirSel + density/pspeed/alpha),
+  sóng nhạc (waveOn/waveStyle/waveColor, ~65% bật), FX toàn khung (`fxSel` mức 30–70).
+  CỐ Ý loại `milkdrop` (không dùng được với xuất nhanh) và `chromakey` (cần nền xanh)
+  khỏi danh sách. dispatch Event change/input để đúng luồng listener + saveSettings.
+- **Hàng chờ xuất video** (section 10 mới `secQueue`): ➕ thêm mục = snapshot
+  imgFile/slideshow (Image đã decode, copy mảng) + audioFile (File object) +
+  `collectSettingsInputs()`; ▲▼ đổi thứ tự, ✕ bỏ mục, 🗑 xoá hết; 📁 chọn thư mục
+  lưu 1 lần (lưu localStorage `imzic:queueDir:v1`); ▶ chạy tuần tự — mỗi mục:
+  `applySettingsInputs` → `imzicLoadImageFile`/`imzicLoadAudioFile` →
+  `loadLyricsFromText(settings.srtPaste)` → `exportOffline({autoSave:{dir,name}})`;
+  lỗi/huỷ → DỪNG ngay tại mục đó (fail-loud Luật 10), mục lỗi được xuất lại khi ▶
+  chạy tiếp; ⏹ dừng sau mục đang chạy. Hàng chờ chỉ tồn tại trong phiên (File object
+  không persist được — ghi rõ trong UI).
+- **Refactor phục vụ hàng chờ**: `imzic-render.js` tách handler nạp file thành
+  `imzicLoadImageFile(f, inputEl)` / `imzicLoadAudioFile(f, inputEl)` trả Promise,
+  reject với code lộ liễu `IMZIC_NOT_IMAGE`/`IMZIC_BAD_IMAGE`/`IMZIC_NOT_AUDIO`/
+  `IMZIC_BAD_AUDIO` (một luồng, không nhân bản logic). `imzic-export.js`
+  `exportOffline(opts)` nhận `opts.autoSave` (click thường truyền Event → undefined,
+  an toàn) và giờ trả `{ok, canceled?, path?}`.
+- **IPC**: `imzic-offline-export` nhận thêm `saveDir`+`saveName` → bỏ dialog, tự lưu
+  vào thư mục, KHÔNG ghi đè file có sẵn (hậu tố " (2)"…), statSync thư mục + tên file
+  qua `safeBaseName()` (chống path traversal; sai dir → `IMZIC_BAD_SAVEDIR` lộ liễu);
+  kênh MỚI `imzic-pick-dir` (showOpenDialog openDirectory) + preload `imzicPickDir`;
+  `ipc-inventory.json` cập nhật (207 kênh).
+- **Kiểm định**: `npm run check` EXIT 0 (syntax/ipc/exports/shared/shared-shadow/
+  shadow/size/toplevel/docs/selftest đều PASS — toplevel 112 đơn vị nạp gồm
+  imzic-workflow.js, 0 xung đột tên). Lưu ý: repo có thay đổi song song từ phiên
+  khác (A1–B3 2026-09-15n trong imzic.js/preload/MEMORY) — merge tự nhiên, không
+  đụng chéo logic.
+- **Chưa làm**: test xuất hàng chờ THẬT bằng nhạc/ảnh đã lưu trong app (§6.6 — chờ
+  user chạy quy trình thực để xác nhận end-to-end; hàng chờ cần IPC + ffmpeg thật).
+
+
 
 
 
@@ -5576,6 +5651,41 @@ Trợ lý dựng báo đang chạy ngay + sửa preview 9:16/1:1 bị co nhỏ +
 - **Kiểm định**: `npm run check` EXIT 0; `khoidong.bat --silent` OK (app đang chạy → focus,
   cần reload/restart app để nút xuất hiện); `scan:lifecycle` REAL chỉ là lịch sử 11/09,
   phiên hiện tại sạch sau thay đổi.
+
+## 2026-09-16a — Sidebar nhóm "Cài đặt": mục mới "Skill" — kho skill viết kịch bản theo chủ đề & phong cách
+
+- **Yêu cầu user**: thêm mục "Skill" ở nhóm Cài đặt trên thanh bên trái — nơi thêm các skill viết
+  kịch bản cho từng chủ đề & phong cách phù hợp.
+- **Renderer-only** (không đụng exports/IPC/state — 3 registry giữ nguyên):
+  - `nova/web/partials/app-sidebar.html` — nav-item "Skill" (`data-tool="toolskill"`) ngay sau
+    "API & Tài khoản" trong nhóm Cài đặt.
+  - `nova/web/partials/panel-skills.html` (MỚI) — panel `#tool-toolskill`: form thêm/sửa skill
+    (tên *, chủ đề, phong cách, hướng dẫn viết cho AI *) + danh sách skill đã lưu có lọc theo
+    chủ đề/phong cách, nút ✍️ Dùng (nhảy sang Tạo Kịch Bản + chọn skill) / ✏️ Sửa / 🗑 Xoá.
+  - `nova/web/src/toolbox/tool-skills.js` (MỚI, tiền tố `skl` — check:toplevel PASS): CRUD vào
+    localStorage `skl_library_v1`; `sklSyncTsOptions()` chèn skill đã lưu vào `<select id="tsSkill">`
+    dưới optgroup "✍️ Skill của tôi" (idempotent — rebuild xoá optgroup cũ); `sklGuideFor(name)`
+    trả hướng dẫn chi tiết. Datalist Chủ Đề / Phong cách lấy RUNTIME từ tab Tạo Kịch Bản
+    (optgroup "1. CHỦ ĐỀ" + `#tsTone`) — không nhân bản dữ liệu UI. HTML-escape mọi dữ liệu user.
+  - `nova/web/index.html` — include `partials/panel-skills.html` sau panels-admin-settings;
+    script `tool-skills.js` ngay sau `tool-ts.js`; whitelist persist tiền tố thêm `'skl_'` →
+    skill được ghi kèm ra nova-settings.json (không mất khi port/origin đổi).
+  - `nova/web/src/toolbox/utility/panel-order.js` — ORDER thêm 'toolskill' sau 'toolsettings'.
+  - `nova/web/src/toolbox/tool-ts.js` — đọc thêm `sklGuide` (guard `typeof sklGuideFor`) và ghép
+    vào mệnh đề WRITING SKILL của prompt luồng thường: "Follow this skill guidance in your
+    writing: …". Skill cài sẵn chỉ có tên → guide rỗng, prompt giữ nguyên như cũ. Luồng Novel
+    vẫn truyền `skill` theo tên như trước (chưa ghép guide — không đổi hợp đồng pipeline novel).
+- **Kiểm định**: `npm run check` EXIT 0 (10/10 — toplevel 1763 tên không xung đột, size 0 warn,
+  docs 39 script khớp). `khoidong.bat --silent` EXIT 0 — app khởi chạy, Agent Bridge 47280 OK;
+  fetch `http://localhost:47280/index.html` xác nhận sidebar có mục "Skill" + partial include
+  lắp đúng (không WEB_INCLUDE_*), `src/toolbox/tool-skills.js` phục vụ đủ các hàm skl*.
+  `scan:lifecycle`: phiên 13:28Z có 1 `render-process-gone exitCode=-1` ĐƠN LẺ ngay lúc mở →
+  `render-recovery auto-reload` (1/3) thành công, main sống tiếp — đúng mẫu crash đơn lẻ đã
+  được render-recovery xử lý, cùng chữ ký với 09-12T08:27 và 09-15T14:59 (TRƯỚC thay đổi —
+  không do code mới; nghi mã nguồn SwiftShader/GPU-disabled). Phần còn lại của phiên sạch.
+- **Chờ user** (§6.6): mở app → Cài đặt · Skill → thêm skill thật theo chủ đề/phong cách → bấm
+  "✍️ Dùng" → về Tạo Kịch Bản thấy skill xuất hiện trong ô "Kỹ năng viết" → viết kịch bản thật
+  để xác nhận prompt ghép hướng dẫn skill đúng ý.
 
 ## 2026-09-12Ω — Trợ lý dựng: tái verify 12 cải tiến sau resumption (không đổi code)
 
@@ -5969,3 +6079,276 @@ User chọn hướng "test bằng dữ liệu hiện có" thay vì chờ SRT/ả
 
 - **Còn treo**: smoke UI thật của tab (mở app → reload renderer để nạp file mới → thấy 4 bút pháp + 3 trường mới + toggle CTA/Novel) và 1 lần "Viết kịch bản" với chủ đề thật — chờ user, không tự bịa chủ đề (Luật §6.6).
 
+
+### 2026-09-15m — Whiteboard Studio: checklist điều kiện + bỏ khung dán kịch bản
+
+- **Checklist điều kiện** (`nova/web/whiteboard-studio-panel.js` + `base.css`): block `.wb-checklist` (#wb-checklist) chèn sau hero, render 7 ô ✓/chưa đủ — SRT/cue · phân cảnh · ảnh từng cảnh (n/n) · vùng vẽ (n/n) · voice-over · nhạc nền (tuỳ chọn, `.opt`) · engine Python. `renderChecklist()` gọi cuối `updateStepStatus()` (cùng nhịp log/hành động); `state.engineOk` do `refreshEngine()` ghi (`pyStatus` — cả nhánh r=null → false rồi `updateStepStatus()`). CSS mới trong vùng `.wb-root-v2` (title/item/`wb-ck-mark` ✓ nền #16a34a).
+- **Bỏ khung "Hoặc dán kịch bản (mỗi đoạn cách nhau bằng dòng trống = 1 cảnh):"**: xoá label + `<textarea id="wb-scriptText">` + nút `#wb-buildTimelineBtn`. Nút `#wb-tsPullBtn` đổi thành "📥 Nhận kịch bản → tạo cảnh" (wb-btn-primary): `pullScriptFromTs()` (nguồn tsOutput, degrade có khai báo sang state.script — giữ nguyên pattern 2026-09-12a) → gọi thẳng `buildTimelineFromRaw(raw)` tạo cảnh luôn theo dòng trống (thuật toán ước lượng ~2.5 từ/s, kẹp 2.5–20s giữ nguyên — Luật 8). `buildTimelineFromScript()` → `buildTimelineFromRaw(raw)`; bind() bỏ id `scriptText`/`buildTimelineBtn`, thêm `checklist`; wording label/log đồng bộ ("timeline từ kịch bản").
+- **Kiểm định**: `node --check` OK; `npm run check` **EXIT 0** (10/10 — selftest 10 PASS). Ghi chú: một lần chạy FAIL `check:shadow` do `img-to-vid.html` trùng id `slideSecsField` — là trạng thái tạm của tác vụ khác đang sửa file đó ĐỒNG THỜI (hash diff đổi giữa 2 lần chạy), không liên quan thay đổi này; lần chạy sau tác vụ đó đã tự hết.
+- **Còn treo**: smoke UI thật (khoidong.bat → mở Whiteboard Studio thấy checklist + nút nhận kịch bản hoạt động với dữ liệu thật) — chờ mở app, không tự bịa dữ liệu (Luật §6.6).
+
+
+
+### 2026-09-15m — I-MZic: thêm chọn "Ngẫu nhiên" cho Slideshow nhiều ảnh
+
+- **Yêu cầu**: mục "Slideshow nhiều ảnh (tuỳ chọn)" của tool I-MZic
+  (`nova/web/img-to-vid.html`) chưa có chọn xáo trộn thứ tự ảnh — trước giờ
+  ảnh luôn chạy tuần tự theo thứ tự chọn (`idx: i%n` trong lịch phát).
+- **Thêm field "Thứ tự ảnh"** (`#slideOrderField`/`#slideOrderSel` + nút
+  `#slideShuffleBtn` "🔄 Xáo lại thứ tự") đặt sau "Chuyển cảnh theo":
+  `order` = theo thứ tự đã chọn (mặc định, giữ nguyên hành vi cũ) /
+  `shuffle` = ngẫu nhiên xáo trộn. Nút xáo lại chỉ hiện khi đang chọn shuffle.
+- **State** (`imzic-core.js`): thêm `slideOrder:'order'`,
+  `slideShuffleSeed:0` — hợp đồng state mới, không đụng key cũ.
+- **Lịch phát** (`imzic-slideshow.js`): thêm `slideNamesSeed()` (FNV-1a hash
+  tên file) + `slideShuffleOrder(n, seed)` (Fisher–Yates với PRNG LCG seed
+  cố định — **Luật 8 deterministic, KHÔNG Math.random vào render**). Seed =
+  hash tên file ^ (seed xáo lại + 1) → đổi bộ ảnh hoặc bấm "Xáo lại" đều ra
+  hoán vị khác; trong MỘT lần render/xuất thứ tự giữ nguyên (preview khớp
+  file xuất). `getSlideSchedule()` áp `idxAt(i)` cho CẢ mode `time` lẫn `cue`;
+  schedule key thêm `slideOrder|slideShuffleSeed|namesSeed` để cache đúng.
+  Ảnh không lặp lại cho tới khi hết một vòng đầy đủ.
+- **Wire + settings** (`imzic-controls.js`): `setupSel('slideOrderSel')`,
+  handler nút xáo lại (chặn khi `isExporting`, clear schedule),
+  `updateSlideFields()` hiện/ẩn, thêm `slideOrderSel` vào
+  `SETTINGS_SELECT_IDS` → nhớ lựa chọn giữa các lần mở tool (localStorage);
+  seed xáo lại chỉ theo session (tên file khác tự xáo khác).
+- **Kiểm định**: `npm run check` EXIT 0 (10 bước; lần đầu FAIL do chỉnh HTML
+  làm id `slideSecsField` trùng 2 dòng — `check:shadow` bắt đúng "id xuat hien
+  2 lan", đã sửa). Test logic bằng sandbox vm nạp NGUYÊN VĂN
+  `imzic-slideshow.js` (tmp script `nova/scripts/tmp/tmp-imzic-shuffle-test.js`,
+  đã dọn sau task): 10/10 PASS — order tuần tự giữ nguyên, shuffle là hoán vị
+  đầy đủ + deterministic + đổi theo seed/bộ ảnh, mode cue áp được, cache key
+  đúng. Lỗi C1 có sẵn ở `web/src/toolbox/utility/profiles.js:843`
+  (`#pCharStyleB` không guard) chỉ là warn id-tham-chiều tồn tại từ trước —
+  check:shadow vẫn exit 0, không thuộc phạm vi task này.
+- **Chưa làm**: smoke UI thật qua `khoidong.bat` (chờ user test trên dữ liệu
+  slideshow đã lưu trong app — §6.6, không tự bịa ảnh để test hộ).
+
+### 2026-09-15n — I-MZic: ảnh nền đơn ⟷ slideshow loại trừ lẫn nhau + làm rõ hàng chờ
+
+- **Feedback user**: (1) chế độ 1 ảnh và slideshow nhiều ảnh phải CHỈ chọn 1;
+  (2) hàng chờ xuất video phải xuất đúng cài đặt đã lưu — thắc mắc vì sao có
+  "⚡ Xuất nhanh".
+- **Fix loại trừ lẫn nhau** (`imzic-render.js` — `imzicLoadImageFile`): chọn
+  ảnh nền đơn giờ XOÁ slideshow đang có (slides + raster/blur cache + schedule
+  + hint + updateSlideFields), báo status rõ. Chiều ngược lại
+  (`slidesInput` xoá img) đã có từ trước. Fix này đồng thời chữa bug hàng chờ:
+  mục ảnh đơn nạp ngay sau mục slideshow trước đó kế thừa slideshow cũ → xuất
+  sai nội dung.
+- **Hàng chờ giữ "⚡ Xuất nhanh"** (user chốt qua hỏi đáp): exportOffline ĐÃ
+  dùng đúng `state.exportFps` (fps) + `state.exportQuality` (bitrate
+  QUALITY_BITRATE) + toàn bộ settings nạp lại qua `applySettingsInputs` của
+  từng mục — không có lệch cài đặt. Chỉ làm rõ text mô tả section 10
+  (`img-to-vid.html`): ghi rõ nạp đủ nguyên cài đặt từng mục, cơ chế render
+  từng khung → .mp4 H.264, không cần giữ tab, fps/chất lượng vẫn theo mục.
+- **Kiểm định**: `npm run check` EXIT 0 sau cả 2 thay đổi (chỉ sửa renderer,
+  không đụng export/IPC/state main). Chưa smoke UI thật — chờ user (§6.6).
+
+
+### 2026-09-15n — I-MZic: gói ổn định + hiệu năng (A1–A7, B1–B3)
+
+- **A1 vòng render chống chết âm thầm** (`imzic-render.js`): tách `renderFrame()` + wrapper `render()` có try/catch — exception 1 frame báo lộ liễu `IMZIC_RENDER_LOOP` và chạy tiếp (glitch tự hồi), lỗi 5 frame LIÊN TIẾP → dừng hẳn; nếu đang export → `activeExportCancel()` ngay frame lỗi đầu để không chốt file hỏng. Wrapper là nơi DUY NHẤT lập nhịp rAF.
+- **A2 ffmpeg timeout + huỷ** (`nova/main/ipc/imzic.js`): `runFfmpeg(args, {cancelId, timeoutMs})` — watchdog kill (mux 5 phút / offline 10 phút, code `IMZIC_FFMPEG_TIMEOUT`); kênh mới `imzic-cancel` (registry cancelId→ChildProcess; kill khi có lệnh → `IMZIC_FFMPEG_CANCELLED`; không thấy id → `{ok:true, found:false}` khai báo rõ). Preload thêm `imzicCancel` + `imzicAudioPath` (webUtils.getPathForFile — Electron 43 không còn File.path); ipc-inventory.json cập nhật (206 kênh).
+- **A3 dọn tmp tồn đọng**: `sweepStaleImzicTmp()` chạy 1 lần trong `registerImzicIpc` — xoá dir `imzic-mux-*`/`imzic-offline-*` cũ >24h trong os.tmpdir (crash/mất điện giữa export không còn rác vĩnh viễn); best-effort, warn console nếu quét lỗi.
+- **A4 nhạc gửi theo ĐƯỜNG DẪN**: renderer ưu tiên `audioPath` qua preload webUtils (`imzAudioPathOf`), không lấy được mới gửi bytes — khác biệt môi trường khai báo rõ, main `prepareAudioTmp()` nhận cả hai, path không tồn tại → `IMZIC_BAD_PAYLOAD` lộ liễu. Bớt 1 lần copy file nhạc lớn qua IPC (video vẫn bytes — không tránh được).
+- **A5 WebGL context loss tự hồi** (`imzic-glsl.js` + `imzic-controls.js`): webglcontextlost → preventDefault + xoá cache program/texture (`IMZIC_GL_CONTEXT_LOST` vào danh sách code được chấp nhận của applyFx — báo 1 lần, vẽ khung gốc, restore xong frame kế tự render lại); Butterchurn: vứt viz+canvas khi lost, bcEnsure dựng lại.
+- **A6 phân tích nhạc nhường nhịp**: `analyzeAudioOffline` await setTimeout(0) mỗi 400 khung (~13s nhạc) — bài dài không khoá UI; không đổi kết quả tính toán (deterministic).
+- **A7 tab ẩn giữa ghi realtime → huỷ SẠCH** (`imzic-export.js`): visibilitychange hidden + isExporting (không phải offline) → `activeExportCancel()` + hướng dẫn sang "⚡ Xuất nhanh" (render theo đồng hồ logic không phụ thuộc tab) thay vì cảnh báo để video hỏng đoạn tab ẩn.
+- **B1 FX mới `hue-gl`** (`imzic-glsl.js` shader HSV rotate + nhánh trong `imzic-fx.js` + option `img-to-vid.html`): cùng công thức shift với `huecycle` CPU (fract(fr*0.0016 + 0.06*bass)) nhưng chạy GPU — thay per-pixel HSV CPU ở 1080×1920; `huecycle` CPU giữ nguyên. Deterministic (uTime = số frame).
+- **B2 sóng**: sprite glow 128×128 dựng sẵn theo (màu, alpha mép) thay 24–46 radial gradient/frame (`drawWaveGlow`/`drawWaveDots`); `buildWaveGradient` cache theo (màu, drift làm tròn 1°, vị trí) — drift 14°/s nên mắt không thấy khác; cache clear ở 1024 mục.
+- **B3** `imzic-render.js` bỏ `sched.indexOf(seg)` mỗi frame (for có idx trong vòng tìm).
+- **B4/B5 giữ nguyên** (queue encoder offline + raster cache đã đúng — raster key gồm canvas.width/height vật lý nên export 1.5× nét đúng).
+- **Kiểm định**: `npm run check` EXIT 0 (đã chạy lại từng bước — lần đầu exit 1 là artifact pipe stderr PowerShell); `npm run check:ipc` cập nhật inventory commit; `khoidong.bat --silent` EXIT 0 (app đã chạy → focus, kill instance cũ + restart để nạp main mới, bridge OK, renderer nạp panels sạch); lifecycle.log sau restart 2026-09-15T14:52Z không có crash mới (REAL duy nhất `scan:lifecycle` báo là entry lịch sử 2026-09-11 render-recovery-stopped — đã tồn tại từ trước, không thuộc session này).
+- **Chưa làm**: test xuất video thật bằng dữ liệu nhạc/ảnh đã lưu trong app (§6.6 — chờ user chạy quy trình thực để xác nhận end-to-end; các nhánh timeout/cancel cần ffmpeg thật mới kích hoạt).
+
+### 2026-09-15o — I-MZic: thêm 6 hiệu ứng hạt bay mới (10 loại tổng)
+
+- **Feedback user**: mục "3. Hiệu ứng bay" chỉ có 4 loại — quá ít. Chốt thêm bộ
+  đề xuất 6 loại: bong bóng, cánh hoa, đom đóm, tim, bokeh, tia lửa.
+- **Chỉ sửa renderer, không đụng export/IPC/state main** — engine hạt tái dùng
+  nguyên hệ spawn/motion/hướng/mật độ/tốc độ/nhịp treble của 4 hạt cũ:
+  - `nova/web/img-to-vid.html`: 6 `<option>` mới trong `effectSel`
+    (bubbles/petals/fireflies/hearts/bokeh/sparks).
+  - `imzic-particles.js`: 6 draw primitive mới — `drawBubble` (vành mỏng + vệt
+    sáng, thân alpha 0.2), `drawPetal` (bezier rộng hơn `drawLeaf`),
+    `drawFirefly` (shadowBlur glow + lõi trắng), `drawHeart`, `drawBokeh`
+    (2 lớp radial gradient: vành màu + lõi trắng), `drawSpark` (vệt sáng theo
+    hướng bay, độ dài deterministic sin-hash theo toạ độ — không Math.random
+    lúc vẽ, đúng tinh thần Luật 8 của FX). Header comment cập nhật danh sách.
+  - `imzic-draw.js`: 6 nhánh render trong `drawParticles` — bokeh vẽ to 2.4×
+    và alpha ×0.45 để không lóa khung; fireflies nhận `twinkle` sẵn có;
+    sparks tái dùng công thức hướng như rain.
+  - `imzic-core.js`: `defaultColors` thêm 6 màu (bubbles #9fdcff, petals
+    #f7a8c4, fireflies #d8ff9e, hearts #ff6b8a, bokeh #ffe9b0, sparks #ffc06e).
+  - `imzic-controls.js`: bubbles mặc định hướng "up" khi user chưa đụng
+    `dirSel` (cùng pattern rain mặc định "down").
+  - `imzic-workflow.js`: nút 🎲 Tự động chọn thêm 6 id vào list + label hiển thị.
+- **Settings/preset/hàng chờ "free"**: lưu/khôi phục settings đi qua select id
+  generic (`SETTINGS_SELECT_IDS`), preset + hàng chờ xuất nạp lại qua
+  `applySettingsInputs` → không cần sửa gì thêm.
+- **Kiểm định**: `npm run check` EXIT 0 (10/10 bước, selftest 10 PASS). Chưa
+  smoke UI thật — chờ user mở I-MZic chọn từng hiệu ứng mới (§6.6).
+
+### 2026-09-15p — I-MZic: bug logo/watermark MẤT khi "⚡ Xuất nhanh" (kể cả hàng chờ)
+
+- **User hỏi** "chức năng hình như chưa có logo" → soi lại E4: chức năng
+  Logo/Watermark CÓ SẴN (section `secWm` trong `img-to-vid.html`: 9 vị trí, cỡ
+  % chiều ngang, độ mờ; text ghi "áp cho cả xem trước, 2 nút ghi realtime và
+  ⚡ Xuất nhanh") nhưng **thiếu thật ở offline export**.
+- **Bug**: `drawWatermark()` chỉ được gọi trong vòng render preview/ghi realtime
+  (`imzic-render.js:185`, sau `applyFx`). Vòng lặp khung của exportOffline
+  (`imzic-export.js`) vẽ `drawBackground → drawWave → drawParticles →
+  drawLyrics → applyFx` rồi encode — KHÔNG có `drawWatermark` → mọi file xuất
+  bằng "⚡ Xuất nhanh" (và hàng chờ, vì dùng cùng đường offline) MẤT logo, dù
+  preview có. Lệch cam kết trong text HTML.
+- **Fix** (`imzic-export.js`): thêm `drawWatermark()` ngay sau `applyFx()` —
+  đúng thứ tự "logo vẽ SAU CÙNG trên mọi FX" như preview. File logo là
+  File object không persist được (đã ghi chú sẵn trong imzic-controls.js) nên
+  hạn chế cũ giữ nguyên: mở lại trang/hàng chờ nạp settings cũ phải chọn lại
+  logo, chỉ vị trí/cỡ/độ mờ được khôi phục.
+- **Kiểm định**: `npm run check` EXIT 0. Chưa xác nhận end-to-end bằng file
+  xuất thật có logo — chờ user chạy xuất nhanh với logo đã chọn (§6.6).
+
+### 2026-09-15q — Whiteboard Studio: rework 6 bước (pull script + TTS xanh lá, phân tích prompt theo SRT, sắp xếp dữ liệu, timeline 2 dòng)
+
+- **Mục tiêu**: luồng 6 bước mới — ① Kịch bản → ② TTS→SRT → ③ Phân tích
+  prompt → ④ Sắp xếp dữ liệu → ⑤ Xem trước (timeline 2 dòng) → ⑥ Xuất Video.
+- **panel (`whiteboard-studio-panel.js`)**: thêm state `scriptRaw`,
+  `scriptSource`, `ttsName` + els `srtExtractRow`/`analyzePromptBtn`/
+  `arrangeBtn`; `updateStepStatus`/`renderChecklist` viết lại cho 6 bước;
+  helper `wbSetBtnOk` (nút Bước 1/2 đổi xanh lá `.wb-btn-ok` khi nhận dữ
+  liệu) + `wbRevealSrtExtract` (bật hàng trích SRT khi TTS không kèm SRT);
+  `pullScriptFromTs` chỉ nhận kịch bản (KHÔNG chia cảnh nữa);
+  `useVoiceFromVoiceTab` nạp TTS mới nhất + reveal SRT row;
+  `wbAnalyzePromptData()` (lõi Bước 3, deterministic): tách câu kịch bản
+  (regex `.!?…`, gộp mảnh <3 từ/<15 ký tự) → khớp cue SRT tuần tự
+  (word-overlap ≥0.7 dừng sớm / ≥0.5 nhận, cửa sổ 8 cue, pointer không lùi)
+  → fallback ước lượng ~2.5 từ/s neo con trỏ + cảnh báo lộ liễu;
+  tail-extend từng cảnh tới đầu câu kế; 3 helper expose qua
+  `window.wbStudioCtx`. SHELL_HTML lắp lại 6 bước, giữ nguyên toàn bộ `wb-*` ID.
+- **ai (`whiteboard-studio-ai.js`)**: `wbAnalyzePrompt()` — nút Bước 3 gọi
+  `ctx.wbAnalyzePromptData()` rồi nối `wbAiPrompts()` (sinh prompt câu thiếu);
+  `wbArrangeRegions()` — nút Bước 4 chạy `wbAiRegionsCore` cho TẤT CẢ cảnh
+  (chặn lộ liễu `WB_ARRANGE_NO_IMAGE`/`WB_NO_SCENES` trước, KHÔNG bỏ qua
+  ngầm — Luật 10); giờ vẽ do `wbAiScheduleReveal` neo khung startMs/endMs
+  từ SRT nên khớp thời lượng đọc từng câu; cả 2 expose thêm vào
+  `window.wbStudioAi` + bind trong `boot()` (dataset guard, MutationObserver).
+- **preview (`whiteboard-studio-preview.js`)**: `wbPvRenderTimeline` viết
+  lại thành 2 dòng — 🎬 Video (khối cảnh + mép kéo phải chỉnh thời lượng,
+  logic giữ verbatim) và 🔊 Âm thanh (voice-over Master Clock + nhạc nền lặp
+  + placeholder khi trống); playhead chung chạy dọc 2 dòng (container
+  tracks position:relative); click khối voice = tua theo tỷ lệ.
+- **base.css**: `.wb-root .wb-btn-ok` xanh lá (#166534/#22c55e).
+- **Kiểm định**: `node --check` OK cả 3 file; `npm run check` — xem cuối
+  entry. Chưa smoke app thật (khoidong.bat) — chờ user test luồng với
+  kịch bản/TTS đã lưu trong app (§6.6).
+
+### 2026-09-15r — GPU policy: bật SwiftShader WebGL2 cho FX shader I-MZic (fix "IMZIC_NO_WEBGL2")
+
+- **User báo** "hiệu ứng fx toàn khung dường như bị lỗi" → chẩn đoán cùng user:
+  triệu chứng thật là thông báo đỏ `FX … cần WebGL2 (IMZIC_NO_WEBGL2 …)` và FX
+  shader không chạy. KHÔNG phải bug renderer — code FX/GLSL rà kỹ đều nguyên vẹn
+  (17 nhánh FX đủ, tham chiếu chéo imzic-glsl.js ↔ imzic-fx.js khớp, node --check PASS).
+- **Nguyên nhân gốc**: `gpu-policy.js` gắn `--disable-gpu` (quyết định chủ đích
+  MEMORY 2026-09-11j — Chromium 149 blocklist GPU GTX 1050 Ti/driver R580) tắt
+  SẠCH cả GL phần mềm → `gpu-feature-status: webgl disabled_off` → mọi FX shader
+  (`godrays-gl`/`ntsc-gl`/`hue-gl`/`milkdrop`) fail-loud đúng Luật 10, chỉ vẽ
+  nội dung gốc. Máy không bao giờ có WebGL từ trước — các FX GL mới (2026-09-15)
+  là tính năng đầu tiên đụng vết này.
+- **Fix** (`gpu-policy.js`): giữ `--disable-gpu`, thêm
+  `--use-angle=swiftshader` + `--enable-unsafe-swiftshader` → WebGL2 chạy trên
+  SwiftShader (CPU), KHÔNG đụng driver GPU thật, không quay lại nhánh crash CfT
+  của GPU cứng (2026-09-11j). Vẫn đúng tinh thần "software rendering là cấu hình
+  chủ đích" — chỉ mở thêm GL phần mềm cho FX shader.
+- **Verify thật** (không đoán từ log): probe CDP qua DevTools port 9336 của app
+  đang chạy (tmp-webgl-probe.js — global WebSocket, ĐÃ XOÁ sau §8):
+  `getContext('webgl2')` OK với renderer `ANGLE (Google, Vulkan 1.3.0
+  (SwiftShader Device (Subzero)), SwiftShader driver)`.
+  ⚠️ `gpu-feature-status` VẪN báo `webgl disabled_off` sau fix — nó chỉ phản ánh
+  GPU CỨNG, không phản ánh SwiftShader; ĐỪNG dùng nó để kết luận WebGL chết.
+- **Hạn chế khai báo rõ**: SwiftShader = CPU → preview realtime FX shader chậm
+  hơn GL cứng (máy này không bao giờ có GL cứng nên không mất gì); xuất "⚡ Xuất
+  nhanh" dùng WebCodecs encode từng khung (không realtime) → chất lượng file
+  xuất KHÔNG đổi, chỉ tốn thêm wall-clock; Milkdrop vẫn "chỉ dùng với 2 nút ghi
+  realtime" như text HTML.
+- **Kiểm định**: `npm run check` EXIT 0 sau sửa; restart app qua
+  `khoidong.bat --silent` EXIT 0 (kill instance cũ — app đang chạy flag cũ —
+  bridge OK, log gpu-policy dòng mới hiện đúng). Lifecycle sau restart chưa có
+  crash mới (crash renderer 14:59:46 hôm nay là TRƯỚC fix — renderer cũ chạy
+  canvas software, WARN đơn lẻ theo §6.5).
+- **Chờ user** (§6.6): mở I-MZic → mục 7 chọn lại `God rays GL`/`NTSC GL`/
+  `Xoay sắc màu GL` → phải THẤY hiệu ứng, hết thông báo đỏ. Realtime preview
+  giảm FPS là bình thường trên SwiftShader — đánh giá chất lượng bằng file xuất.
+
+### 2026-09-15s — I-MZic: gói C→F (chất lượng encode/audio + độ bền main + tính năng panel)
+
+- **C1 GPU-encode**: `imzic-export.js` chọn codec 2 vòng — vòng 1
+  `hardwareAcceleration:'prefer-hardware'` (NVENC/QSV/AMF), không được thì vòng 2
+  `'no-preference'` như cũ; status surface "ưu tiên GPU/CPU + codec". prefer-hardware
+  là HINT — status nói "ưu tiên GPU", không khẳng định.
+- **C3 loudnorm**: payload `imzic-mux` thêm `loudnorm` (field cũ đã có sẵn, KHÔNG
+  thêm kênh IPC mới — check:ipc inventory giữ nguyên); main chèn
+  `loudnorm=I=-14:TP=-1.5:LRA=11` trước afade khi bật. UI: select `loudnormSel`.
+- **C4 metadata sạch**: `-map_metadata -1` + tiêu đề từ tên file nhạc.
+- **D1–D5 main**: tách `nova/main/ipc/imzic-helpers.js` (8 hàm thuần, pure Node —
+  exports-contract không track `main/ipc/*` nên không đổi contract);
+  preflight đĩa `IMZIC_DISK_FULL`, copy nguyên tử `.part`+rename, stderr ring 64KB,
+  `taskkill /T /F` khi timeout/huỷ, dọn tmp tồn đọng >24h khi khởi động.
+- **E1 beat-snap**: `imzic-slideshow.js` `getSlideSchedule()` dồn ranh giới trong
+  về nhịp gần nhất (±40% slide, binary search trên `offlineAnalysis.beats`,
+  giữ ≥0.5s giữa ranh giới) khi bật `slideBeatSnap` + đã phân tích; key lịch thêm
+  flag + số beat → preview & "⚡ Xuất nhanh" dùng CÙNG lịch (Luật 8); phân tích xong
+  reset lịch. UI: select `slideBeatSel` (mặc định tắt).
+- **E2 chụp khung**: nút `snapshotBtn` xuất PNG 1080×1920 (×1.5 như file xuất) tại
+  vị trí tua, vẽ bằng đúng chuỗi hàm của "⚡ Xuất nhanh" + `drawWatermark()`;
+  lỗi lộ liễu `IMZIC_SNAPSHOT*`.
+- **E4 watermark trong file xuất**: vòng khung offline export gọi `drawWatermark()`
+  cuối → khớp preview.
+- **D5 tiến độ thật**: progress export thêm encode-fps đo thực + ETA theo tốc độ đó.
+- **E3**: settings persist đã có sẵn (`imzic:settings:v1`) — chỉ đăng ký id mới vào
+  `SETTINGS_RANGE_IDS` (wmSize, wmAlpha) / `SETTINGS_SELECT_IDS` (loudnormSel,
+  slideBeatSel, wmPosSel); ảnh logo KHÔNG persist (File object — khai báo trong
+  comment), chọn lại logo khi mở lại trang.
+- **F1 test**: `nova/scripts/imzic-core-test.js` — nạp nguyên văn helpers (pure
+  Node), 7 nhóm: safeExt, safeBaseName (anti-traversal + ký tự cấm),
+  atomicCopyFile (không rác .part, ném lộ), assertDiskSpace (`IMZIC_DISK_FULL`),
+  payloadAudioBytes, sweepStaleImzicTmp (fixture thật trong tmpdir), killProcessTree
+  (process thật, taskkill /T /F). Đăng ký `npm run test:imzic` + AGENTS.md §3.2
+  (check:docs đã đối chiếu 39 script khớp). Chạy đầu: 7/7 PASS.
+- **Kiểm định**: `node --check` OK 9 file; `npm run check` EXIT 0 (ipc-inventory
+  giữ nguyên); `khoidong.bat --silent` EXIT 0 (app đang chạy → focus, không instance
+  thứ 2); scan:lifecycle không có REAL/WARN mới từ phiên 22:40 hôm nay (REAL 38
+  entry đều lịch sử 09-03→09-08, WARN hôm nay ≤15:35 trước phiên).
+- **Chờ user** (§6.6): test E2E bằng nhạc/ảnh THẬT trong app — "⚡ Xuất nhanh" bật
+  loudnorm + logo + Bám nhịp, nghe/thấy khác biệt; dùng nút 📸 Chụp khung.
+### 2026-09-16a — I-MZic: gói "xuất chuyên nghiệp" D6 (độ phân giải + tiến độ mux + tên file theo bài)
+
+- **Độ phân giải xuất chọn được**: `state.exportRes` (mặc định `'auto'` = 1.5× như cũ) +
+  helper `imzExportUpscaleOf()` / `imzEvenDim()` trong `imzic-core.js` — target tính theo
+  cạnh NGẮN (1080/1440/2160 → dọc 720 → 1080×1920, ngang → 1920×1080), kẹp ≤
+  `MAX_EXPORT_DIM` 4096, ép kích thước CHẴN pixel (H.264/YUV), không bao giờ thu nhỏ
+  dưới khung preview. MỘT NGUỒN dùng chung bởi 3 điểm từng hardcode ×1.5: ghi realtime
+  (`recordAndExport`), "⚡ Xuất nhanh" (`exportOffline`), "📸 Chụp khung" (`snapshotBtn`).
+  UI: select `exportResSel` (persist qua `SETTINGS_SELECT_IDS`).
+- **Tiến độ bước ghép FFmpeg** (kênh event mới `imzic-progress` — inventory 206→207 kênh):
+  main `runFfmpeg` nhận `opts.onProgress`, parse `-progress pipe:1` (`out_time_us`/
+  `out_time_ms` — CẢ HAI đều là MICRO-giây, bug ffmpeg giữ để tương thích); handler
+  `imzic-offline-export` throttle 400ms rồi `event.sender.send('imzic-progress',
+  { cancelId, stage:'mux', pct })`. Preload `imzicOnProgress(cb)` trả về HÀM GỠ listener;
+  renderer subscription bọc try/finally quanh `imzicOfflineExport` — không rò listener
+  giữa các lần xuất. Thanh % chuyển sang giai đoạn mux thay vì đứng yên sau encode.
+- **Tên file mặc định theo TÊN BÀI NHẠC + ngày**: `imzic-offline-export` dialog mặc định
+  `<bài hát>_imzic_<ngày>.mp4` (safeBaseName) thay cho `video_imzic_<ngày>.mp4`; hàng chờ
+  vẫn dùng `saveName` riêng.
+- **Tổng kết hàng chờ**: `imzicQueueRun` thêm cờ `imzicQueueStopped` (đặt ở 4 nhánh
+  break: stop/huỷ/lỗi/exception); chạy trọn vẹn mới báo "Hoàn tất x/y mục … đường dẫn"
+  — không đè thông báo lỗi chi tiết khi dừng giữa chừng.
+- **Kiểm định**: `node --check` 6 file OK; 10 bước `npm run check` từng bước EXIT 0
+  (`check:ipc` regen inventory, `imzic-progress` có ở cả main + renderer);
+  `npm run test:imzic` EXIT 0. Restart app thật (kill PID cũ → `khoidong.bat --silent`
+  EXIT 0, bridge 47280 OK); `scan:lifecycle` chỉ còn WARN lịch sử/kills chủ đích —
+  phiên mới 2026-09-16T13:29Z sạch, không crash/unresponsive.
+- **Cần test thật khi user chạy workflow** (§6.6 — chưa có dữ liệu thật trong phiên này):
+  xuất 1080p/1440p/4K end-to-end (kể cả video lẻ khung khi canvas preview lẻ), thanh %
+  mux khi bật loudnorm/fade, mở file mp4 4K bằng player, hàng chờ nhiều mục chạy trọn.

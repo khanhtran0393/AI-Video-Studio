@@ -52,15 +52,46 @@ function hexToHsl(hex){
 // shared, always-on shimmering gradient built from the user's chosen wave
 // colour — this is what keeps every wave style looking like a glowing
 // ribbon instead of one flat, plain colour
+// #perf (B2): tạo CanvasGradient mỗi frame là đắt (parse hsl + object mới).
+// Cache theo (màu, drift làm tròn 1°, vị trí) — drift chạy 14°/s nên làm tròn
+// 1° chỉ đổi màu ~70ms/lần, mắt không phân biệt. Cache dọn khi quá 1024 mục.
+const imzWaveGradCache = new Map();
 function buildWaveGradient(startX,widthPx){
+  const driftQ = Math.round(waveTime*14) % 360;
+  const key = state.waveColor + '|' + driftQ + '|' + Math.round(startX) + '|' + Math.round(widthPx);
+  const cached = imzWaveGradCache.get(key);
+  if(cached) return cached;
   const [h,s,l] = hexToHsl(state.waveColor);
-  const drift = waveTime*14;
+  const drift = driftQ;
   const grad = ctx.createLinearGradient(startX,0,startX+widthPx,0);
   grad.addColorStop(0,    `hsla(${h-32+drift},${Math.min(100,s+8)}%,${Math.min(80,l+18)}%,0.92)`);
   grad.addColorStop(0.35, `hsla(${h+drift},${s}%,${l}%,1)`);
   grad.addColorStop(0.65, `hsla(${h+26+drift},${s}%,${Math.max(28,l-8)}%,1)`);
   grad.addColorStop(1,    `hsla(${h+50+drift},${Math.min(100,s+8)}%,${Math.min(80,l+18)}%,0.92)`);
+  if(imzWaveGradCache.size >= 1024) imzWaveGradCache.clear();
+  imzWaveGradCache.set(key, grad);
   return grad;
+}
+
+// #perf (B2): sprite glow dựng sẵn — thay vì tạo 24–46 radial gradient MỖI FRAME
+// (drawWaveGlow/drawWaveDots), dựng MỘT canvas sprite 128×128 cho mỗi cặp
+// (màu, alpha mép) rồi mỗi frame chỉ drawImage scale. Đổi màu sóng → key đổi →
+// sprite mới; cache cũ giữ lại (người dùng đổi qua lại không tốn build lần nữa).
+const imzWaveGlowSprites = new Map(); // 'color|edgeAlpha' → canvas
+function imzWaveGlowSprite(color, edgeAlpha){
+  const key = color + '|' + edgeAlpha;
+  let s = imzWaveGlowSprites.get(key);
+  if(s) return s;
+  const c = document.createElement('canvas');
+  c.width = 128; c.height = 128;
+  const g = c.getContext('2d');
+  const grd = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  grd.addColorStop(0, hexToRgba(color, edgeAlpha));
+  grd.addColorStop(1, hexToRgba(color, 0));
+  g.fillStyle = grd;
+  g.fillRect(0, 0, 128, 128);
+  imzWaveGlowSprites.set(key, c);
+  return c;
 }
 
 function roundRectPath(c,x,y,w,h,r){
@@ -136,9 +167,66 @@ function drawWaveBars(bins,w,h,baseY,startX,widthPx,amp){
   }
 }
 
+// 3b) curved equalizer bars — cùng phát thanh nhạc như `bars` nhưng thanh uốn
+// cong thành 1 vòng cung; 0% thẳng đứng (mỗi thanh = cột thường), 100% các
+// thanh khép kín thành VÒNG TRÒN hoàn chỉnh quanh tâm. Hướng uốn chọn
+// 'fwd' = quét trái → phải, 'rev' = ngược lại. Bám công thức:
+//   c = state.waveCurve ∈ [0,1]
+//   R = (widthPx / 2π) * c             (chu vi vòng = widthPx, khớp tại c=1)
+//   θ_i = t_i * 2π                     (vị trí góc của thanh trên vòng)
+//   tilt = (1 - c) * π/2                (c=0: thanh vuông góc bán kính → thẳng
+//                                       đứng; c=1: tilt=0 → thanh xuyên tâm →
+//                                       vòng tròn khép kín)
+//   centerAngleShift = -π/2             (khi c=1, thanh ở góc π/2 nằm trên
+//                                       đỉnh — dễ nhìn hơn là nằm phải)
+function drawWaveCurved(bins,w,h,baseY,startX,widthPx,amp){
+  const barCount = 38;
+  const barW = Math.max(2, state.waveSize*1.6);
+  const c = Math.max(0, Math.min(1, state.waveCurve == null ? 0 : +state.waveCurve));
+  // 1e-6 tránh chia 0 khi c=0 → R=0, vẫn suy ra góc vuông góc đúng
+  const R = Math.max(1e-6, (widthPx / (Math.PI * 2)) * c);
+  // tâm cung: c=0 đặt tại "vô cùng xa" (cột thẳng), c=1 tại chính giữa startX/widthPx
+  const cx = startX + widthPx / 2;
+  const cy = baseY;
+  const tilt = (1 - c) * Math.PI / 2;
+  const dir = (state.waveCurveDir === 'rev') ? -1 : 1;
+  for(let i=0;i<barCount;i++){
+    const t = barCount<=1 ? 0 : i/(barCount-1);
+    // t đảo chiều khi quét ngược — góc trên vòng vẫn quay theo dir
+    const tScan = dir > 0 ? t : (1 - t);
+    const theta = tScan * Math.PI * 2 - Math.PI / 2;
+    const energy = waveEnergyAt(bins,t);
+    const sway = 0.82 + Math.sin(waveTime*0.8 + t*Math.PI*2.4)*0.18;
+    // chiều dài thanh theo nhịc (giống bars) — nhân thêm hệ số để c=1
+    // (vòng tròn) thanh đâm xuyên tâm = đúng nửa đường kính, nên kéo dài
+    // lên R+0.6*amp để khi c=0 thanh cũng đúng biên độ
+    const barH = Math.max(2, amp * (0.18 + energy*0.9) * sway);
+    // gốc thanh trên vòng (bán kính R) — mỗi thanh "mọc" từ đây theo hướng
+    // bán kính + tilt (vuông góc bán kính tại c=0)
+    const baseX = cx + Math.cos(theta) * R;
+    const baseY2 = cy + Math.sin(theta) * R;
+    // hướng thanh: góc = theta + tilt (vuông góc bán kính lệch tilt về 0
+    // theo c — khi c=1 tilt=0 → thanh cùng phương bán kính, cùng chiều
+    // xuyên tâm)
+    const dx = Math.cos(theta + tilt), dy = Math.sin(theta + tilt);
+    // 2 đầu thanh, đối xứng quanh gốc trên vòng (giống "gương" của bars)
+    const x1 = baseX + dx * barH,  y1 = baseY2 + dy * barH;
+    const x2 = baseX - dx * barH,  y2 = baseY2 - dy * barH;
+    ctx.beginPath();
+    roundRectPath(ctx,
+      Math.min(x1,x2) - barW/2,
+      Math.min(y1,y2),
+      barW,
+      Math.max(2, Math.abs(y1 - y2) || 2),
+      barW/2);
+    ctx.fill();
+  }
+}
+
 // 4) circular radial pulse — spectrum ring, slowly rotating
 function drawWaveCircular(bins,w,h,baseY,startX,widthPx,amp){
-  const cx = w/2, cy = baseY;
+  // tâm ngang theo vị trí sóng (không còn cố định giữa khung)
+  const cx = startX + widthPx/2, cy = baseY;
   const baseR = Math.max(20, widthPx*0.28);
   const spikes = 64;
   ctx.beginPath();
@@ -163,13 +251,9 @@ function drawWaveDots(bins,w,h,baseY,startX,widthPx,amp){
     const energy = waveEnergyAt(bins,t);
     const y = baseY + Math.sin(t*Math.PI*3 + waveTime) * amp * (0.3+energy*0.9);
     const r = Math.max(1.5, state.waveSize*0.6) * (0.55+energy*0.9);
-    const g = ctx.createRadialGradient(x,y,0,x,y,r*1.8);
-    g.addColorStop(0, hexToRgba(state.waveColor,0.95));
-    g.addColorStop(1, hexToRgba(state.waveColor,0));
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.arc(x,y,r*1.8,0,Math.PI*2);
-    ctx.fill();
+    // #perf (B2): sprite glow dựng sẵn thay vì radial gradient mỗi quả cầu
+    const R = r*1.8;
+    ctx.drawImage(imzWaveGlowSprite(state.waveColor, 0.95), x-R, y-R, R*2, R*2);
   }
 }
 
@@ -235,13 +319,9 @@ function drawWaveGlow(bins,w,h,baseY,startX,widthPx,amp){
     const energy = waveEnergyAt(bins,t);
     const y = baseY + Math.sin(t*Math.PI*2.4+waveTime*1.1)*amp*(0.3+energy*0.9);
     const r = Math.max(2, state.waveSize*0.9) * (0.6+energy*1.1);
-    const grad = ctx.createRadialGradient(x,y,0,x,y,r*2.2);
-    grad.addColorStop(0, hexToRgba(state.waveColor,0.9));
-    grad.addColorStop(1, hexToRgba(state.waveColor,0));
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.arc(x,y,r*2.2,0,Math.PI*2);
-    ctx.fill();
+    // #perf (B2): sprite glow dựng sẵn thay vì 24 radial gradient mỗi frame
+    const R = r*2.2;
+    ctx.drawImage(imzWaveGlowSprite(state.waveColor, 0.9), x-R, y-R, R*2, R*2);
   }
 }
 
@@ -270,7 +350,8 @@ function drawWaveDashed(bins,w,h,baseY,startX,widthPx,amp){
 
 // 12) spiral, flattened to fit the frame, rotating slowly
 function drawWaveSpiral(bins,w,h,baseY,startX,widthPx,amp){
-  const cx = w/2, cy = baseY, turns = 2.2, segments = 140;
+  // tâm ngang theo vị trí sóng (không còn cố định giữa khung)
+  const cx = startX + widthPx/2, cy = baseY, turns = 2.2, segments = 140;
   const baseR = Math.max(10, widthPx*0.05);
   ctx.beginPath();
   for(let i=0;i<=segments;i++){

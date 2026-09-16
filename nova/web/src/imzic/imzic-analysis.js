@@ -103,6 +103,9 @@ async function analyzeAudioOffline(){
       bins[f] = arr;
       bass[f] = Math.min(1, (bassSum/Math.max(1, bassHiBin))/70);
       treble[f] = Math.min(1, (treSum/Math.max(1, treCount))/45);
+      // #perf (A6): nhường nhịp event loop mỗi 400 khung (~13s nhạc) — bài dài
+      // không khoá UI. Nhường NHỊP không đổi kết quả tính toán (deterministic, Luật 8).
+      if((f % 400) === 399) await new Promise(r => setTimeout(r, 0));
     }
     // tìm nhịp: đỉnh cục bộ của envelope bass vượt trung bình trượt ×1.35, cách nhau ≥0.28s
     const beats = [];
@@ -120,6 +123,8 @@ async function analyzeAudioOffline(){
     }
     tmpCtx.close();
     offlineAnalysis = { file: state.audioFile, frameDur: hopSec, nFrames, bins, bass, treble, beats };
+    // E1: dữ liệu nhịp mới về → lịch slideshow dựng lại (nếu đang bật "Bám nhịp")
+    slideSchedule = { key:'', list:[] };
     drawBeatMarkers();
     return offlineAnalysis;
   }catch(err){

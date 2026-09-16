@@ -1116,6 +1116,10 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
 .wb-root button:not(.wb-tab):disabled{ opacity:.5;cursor:not-allowed; }
 .wb-root .wb-btn-primary{ background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-weight:600; }
 .wb-root .wb-btn-primary:hover:not(:disabled){ background:var(--accent-2);border-color:var(--accent-2); }
+/* Bước 1/2 của Whiteboard Studio: nút đổi XANH LÁ khi đã nhận dữ liệu
+   (kịch bản / giọng đọc) — wbSetBtnOk() toggle class này */
+.wb-root .wb-btn-ok{ background:#166534;border-color:#22c55e;color:#dcfce7;font-weight:600; }
+.wb-root .wb-btn-ok:hover:not(:disabled){ background:#15803d;border-color:#22c55e; }
 /* nút nhỏ trong bảng phần tử / danh sách cảnh (▲ ▼ ✕) */
 .wb-root .wb-act button,.wb-root .wb-item-actions button{ padding:4px 9px;font-size:11px;border-radius:6px; }
 /* thanh trượt thời lượng preview + select trong hàng chọn không giãn full-width */
@@ -1196,6 +1200,17 @@ html.dark .skeleton::after{ background:linear-gradient(90deg, transparent, rgba(
   .wb-root-v2 details.wb-step > .wb-step-body{ padding:2px 14px 14px;display:flex;flex-direction:column;gap:8px; }
   .wb-root-v2 .wb-step-st{ font-size:10.5px;font-weight:600;color:var(--text-muted);background:var(--surface-2,var(--surface-1));border:1px solid var(--border);border-radius:999px;padding:1px 9px;text-transform:none;letter-spacing:0; }
   .wb-root-v2 .wb-step-st.ok{ color:#4ade80;border-color:rgba(74,222,128,.35); }
+  /* checklist điều kiện — từng ô ✓ khi đã đủ, cập nhật sau mỗi hành động */
+  .wb-root-v2 .wb-checklist{ display:flex;flex-direction:column;gap:4px;
+    background:var(--surface-1,var(--surface-2));border:1px solid var(--border);border-radius:10px;padding:8px 12px; }
+  .wb-root-v2 .wb-checklist-title{ font-size:10.5px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px; }
+  .wb-root-v2 .wb-checklist-item{ display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--text-muted); }
+  .wb-root-v2 .wb-checklist-item.ok{ color:var(--text); }
+  .wb-root-v2 .wb-checklist-item.opt{ opacity:.75; }
+  .wb-root-v2 .wb-checklist-item .wb-ck-mark{ flex:0 0 auto;width:16px;height:16px;border-radius:4px;
+    border:1px solid var(--border);display:inline-flex;align-items:center;justify-content:center;
+    font-size:11px;font-weight:700;color:transparent; }
+  .wb-root-v2 .wb-checklist-item.ok .wb-ck-mark{ background:#16a34a;border-color:#16a34a;color:#fff; }
   .wb-root-v2 .wb-step-6{ --step:#e11d48; }
   .wb-root-v2 .wb-step-7{ --step:#7c3aed; }
   .wb-root-v2 .wb-media-row{ margin-top:2px; }

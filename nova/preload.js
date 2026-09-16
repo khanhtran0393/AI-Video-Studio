@@ -309,6 +309,21 @@ contextBridge.exposeInMainWorld('native', {
   // I-MZic (Ảnh & Nhạc): ghép video câm + nhạc gốc bằng FFmpeg (copy stream).
   imzicMux: (payload) => ipcRenderer.invoke('imzic-mux', payload),
   imzicOfflineExport: (payload) => ipcRenderer.invoke('imzic-offline-export', payload),
+  // Chọn thư mục lưu cho hàng chờ xuất của tool I-MZic (imzic-workflow.js).
+  imzicPickDir: () => ipcRenderer.invoke('imzic-pick-dir'),
+  // Huỷ ffmpeg đang chạy giữa chừng theo cancelId (nút ✕ trong tool I-MZic).
+  imzicCancel: (cancelId) => ipcRenderer.invoke('imzic-cancel', cancelId),
+  // D6: tiến độ bước ghép FFmpeg của "⚡ Xuất nhanh" (event push, không phải invoke
+  // — cùng quy ước các kênh on*Progress). Trả về hàm GỠ listener để caller dọn sạch.
+  imzicOnProgress: (cb) => {
+    if (typeof cb !== 'function') return () => {};
+    const h = (_e, s) => { try { cb && cb(s); } catch (e) {} };
+    ipcRenderer.on('imzic-progress', h);
+    return () => ipcRenderer.removeListener('imzic-progress', h);
+  },
+  // Đường dẫn đĩa của File nhạc qua webUtils (Electron ≥32 không còn File.path) —
+  // giúp IPC gửi path thay vì copy cả file nhạc qua structured clone.
+  imzicAudioPath: (file) => { try { return webUtils.getPathForFile(file) || ''; } catch (e) { return ''; } },
   exportDir: () => ipcRenderer.invoke('export-dir'),
   flowCftAdd: () => ipcRenderer.invoke('flow-cft-add'),
   flowCftCancel: () => ipcRenderer.invoke('flow-cft-cancel'),

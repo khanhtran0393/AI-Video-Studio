@@ -17,13 +17,26 @@
  * - KHÔNG đổi hiệu năng thực tế (GPU features đã bị Chromium tắt sẵn).
  * - CẤM --ignore-gpu-blocklist (đã chứng minh vô hiệu; force GPU sẽ đụng nhánh
  *   crash CfT đã ghi nhận — xem MEMORY 2026-09-11j).
+ *
+ * Bổ sung (2026-09-15, MEMORY [2026-09-15r]): FX shader WebGL trong I-MZic
+ * (godrays-gl / ntsc-gl / hue-gl / milkdrop — imzic-glsl.js, imzic-fx.js) cần
+ * WebGL2, mà `--disable-gpu` tắt SẠCH cả GL (gpu-feature-status: webgl
+ * disabled_off) → các FX này fail-loud IMZIC_NO_WEBGL2 dù máy chỉ cần GL phần
+ * mềm. Bật `--enable-unsafe-swiftshader` + `--use-angle=swiftshader`: WebGL2
+ * chạy trên SwiftShader (CPU) — KHÔNG đụng driver GPU thật, không quay lại nhánh
+ * crash CfT của GPU cứng. Vẫn là software rendering; shader nặng sẽ chậm hơn
+ * GL cứng (preview realtime giảm FPS, xuất offline WebCodecs không đổi chất).
  */
 
 function installGpuPolicy(app) {
   try {
     app.commandLine.appendSwitch('disable-gpu');
+    // WebGL2 phần mềm (SwiftShader) cho FX shader I-MZic — không đụng driver
+    // GPU thật (Luật 10: khai báo lộ liễu, không fallback ngầm).
+    app.commandLine.appendSwitch('use-angle', 'swiftshader');
+    app.commandLine.appendSwitch('enable-unsafe-swiftshader');
     // Khai báo lộ liễu — phải nhìn thấy được trong log/terminal khi khởi động.
-    console.log('[gpu-policy] --disable-gpu: software rendering là cấu hình chủ đích (Chromium 149 đã tự tắt GPU trên máy đích — MEMORY 2026-09-11j)');
+    console.log('[gpu-policy] --disable-gpu + SwiftShader WebGL2: software rendering là cấu hình chủ đích (Chromium 149 đã tự tắt GPU trên máy đích — MEMORY 2026-09-11j; SwiftShader WebGL2 cho FX shader — MEMORY 2026-09-15r)');
   } catch (e) {
     // Luật 10: không nuốt lỗi — fail lộ liễu với thông điệp có ý nghĩa.
     console.warn('[gpu-policy] [LOI] không gắn được flag --disable-gpu:', (e && e.message) || e);

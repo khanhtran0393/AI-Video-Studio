@@ -109,10 +109,97 @@ function getSlideBlurBg(idx){
   }
   return small;
 }
+// ---- fitMode 'square': bố cục "Ô vuông giữa + nền mờ" ----
+// Nền: fullscreen cover của ảnh nền RIÊNG (state.bgImg) nếu có chọn, không thì
+// tự dùng chính ảnh đang phát — blur theo state.bgBlur (logic px), lệch mờ
+// trái/phải theo state.bgBlurSide (gradient: âm = trái mờ nhiều hơn, dương =
+// phải mờ nhiều hơn). Chính: ảnh (hoặc ảnh slide hiện tại) cắt VUÔNG đúng tâm
+// (chia điều tâm), cạnh = 1/3 chiều cao khung × state.sqSize%, xoay
+// state.sqTilt° + nghiêng state.sqSkew°. Deterministic (Luật 8) — không random,
+// không phụ thuộc nhạc; export offline đi qua cùng đường vẽ nên giữ nguyên.
+const squareBlurCache = new Map(); // key → canvas nền mờ (LRU 4)
+function getSquareBlurBg(img){
+  if(!img || !img.width || !img.height) return null;
+  const w = canvas.width, h = canvas.height;
+  const b = Math.max(0, state.bgBlur || 0);
+  const side = state.bgBlurSide || 0;
+  const key = [img.src, img.width, img.height, w, h, b, side].join('|');
+  const hit = squareBlurCache.get(key);
+  if(hit) return hit;
+  const K = 10; // dựng nhỏ rồi phóng toàn khung — blur rẻ mà nhìn như blur to (như getSlideBlurBg)
+  const sw = Math.max(16, Math.round(w/K)), sh = Math.max(16, Math.round(h/K));
+  const base = document.createElement('canvas'); base.width = sw; base.height = sh;
+  const bx = base.getContext('2d');
+  const cover = Math.max(sw/img.width, sh/img.height);
+  const dw = img.width*cover, dh = img.height*cover;
+  // quy đổi blur: state.bgBlur tính theo px LOGIC; canvas nhỏ là 1/K canvas vật
+  // lý (w = logicW × hệ số phóng khi ghi) → blur nhỏ = blurLogic × (sw/logicW)
+  const kBlur = sw / logicW;
+  if(b > 0.5) bx.filter = 'blur(' + (b*kBlur).toFixed(2) + 'px)';
+  bx.drawImage(img, (sw-dw)/2, (sh-dh)/2, dw, dh);
+  bx.filter = 'none';
+  if(side !== 0 && b > 0.5){
+    // lớp blur MẠNH HƠN phủ dần về phía được chọn (mờ lệch trái/phải)
+    const extra = (Math.abs(side)/100) * 22; // cộng thêm tối đa 22 logic px
+    const lay = document.createElement('canvas'); lay.width = sw; lay.height = sh;
+    const lx = lay.getContext('2d');
+    lx.filter = 'blur(' + ((b+extra)*kBlur).toFixed(2) + 'px)';
+    lx.drawImage(img, (sw-dw)/2, (sh-dh)/2, dw, dh);
+    lx.filter = 'none';
+    lx.globalCompositeOperation = 'destination-in';
+    const g = lx.createLinearGradient(0, 0, sw, 0);
+    if(side > 0){ g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,1)'); }
+    else        { g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(1, 'rgba(0,0,0,0)'); }
+    lx.fillStyle = g;
+    lx.fillRect(0, 0, sw, sh);
+    bx.drawImage(lay, 0, 0);
+  }
+  // làm tối nhẹ để ô vuông nổi lên (đồng bộ cách làm của getSlideBlurBg)
+  bx.fillStyle = 'rgba(0,0,0,0.28)';
+  bx.fillRect(0, 0, sw, sh);
+  squareBlurCache.set(key, base);
+  while(squareBlurCache.size > 4){
+    const first = squareBlurCache.keys().next().value;
+    if(first === key) break;
+    squareBlurCache.delete(first);
+  }
+  return base;
+}
+// vẽ cả bố cục: nền mờ fullscreen + ô vuông chính giữa. ai gọi truyền (ảnh
+// chính, raster đã quét sẵn của ảnh đó — không có thì vẽ từ ảnh gốc)
+function drawSquareLayout(img, raster){
+  const w = logicW, h = logicH;
+  const bg = getSquareBlurBg(state.bgImg || img);
+  if(bg) ctx.drawImage(bg, 0, 0, w, h);
+  else { ctx.fillStyle = '#050508'; ctx.fillRect(0, 0, w, h); }
+  if(!img || !img.width || !img.height) return;
+  const src = raster || img;
+  if(!src.width || !src.height) return;
+  const side = h/3 * (state.sqSize/100); // mặc định: hình vuông = 1/3 chiều cao
+  // cắt VUÔNG đúng tâm ảnh (chia điều tâm) — raster cover giữ tâm = tâm ảnh
+  const sside = Math.min(src.width, src.height);
+  const sx = (src.width - sside)/2, sy = (src.height - sside)/2;
+  ctx.save();
+  ctx.translate(w/2, h/2);
+  if(state.sqTilt) ctx.rotate(state.sqTilt * Math.PI/180);
+  if(state.sqSkew) ctx.transform(1, 0, Math.tan(state.sqSkew * Math.PI/180), 1, 0, 0);
+  // đổ bóng nhẹ để ô vuông tách khỏi nền mờ
+  ctx.shadowColor = 'rgba(0,0,0,0.5)';
+  ctx.shadowBlur = side * 0.08;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(src, sx, sy, sside, sside, -side/2, -side/2, side, side);
+  ctx.restore();
+}
 // vẽ 1 ảnh slide (raster hoặc gốc) với zoom bass + Ken Burns + kiểu vừa khung
 function drawSlideLayer(slide, idx, zq, scale, kb, fitMode){
   const w = logicW, h = logicH;
   const raster = getSlideRaster(idx, zq) || slide.img;
+  if(fitMode === 'square'){
+    // "Ô vuông giữa + nền mờ": nền mờ từ ảnh nền riêng (hoặc chính ảnh slide),
+    // ô vuông cắt từ ảnh slide hiện tại — có crossfade tự nhiên khi chuyển cảnh
+    drawSquareLayout(slide.img, raster);
+    return;
+  }
   if(fitMode !== 'cover'){
     // nền: blur (từ chính ảnh) hoặc đen (contain)
     if(fitMode === 'blur'){
@@ -149,15 +236,65 @@ function kenBurnsAt(idx, entry, p){
   const py = (fxH01(idx*5.13 + entry*2.9) - 0.5) * 0.06 * (zoomIn ? e : 1-e);
   return {scale: kbScale, px, py};
 }
+// ---- thứ tự ảnh slideshow: 'order' theo thứ tự chọn / 'shuffle' xáo trộn ----
+// Luật 8 (deterministic): KHÔNG Math.random vào render — xáo trộn Fisher–Yates
+// với PRNG LCG seed cố định = hash tên file (đổi bộ ảnh → xáo khác nhau)
+// ^ seed tăng mỗi lần bấm "🔄 Xáo lại". Trong MỘT lần render/xuất thứ tự giữ
+// nguyên (reproducible — preview khớp file xuất).
+function slideNamesSeed(names){
+  let h = 2166136261;
+  for(let i=0;i<names.length;i++){
+    const s = String(names[i] || '');
+    for(let j=0;j<s.length;j++){ h ^= s.charCodeAt(j); h = (h * 16777619) >>> 0; }
+  }
+  return h >>> 0;
+}
+function slideShuffleOrder(n, seed){
+  const arr = [];
+  for(let i=0;i<n;i++) arr.push(i);
+  let s = seed >>> 0;
+  if(!s) s = 0x9E3779B9; // seed 0 làm LCG kẹt ở 0 — trộn hằng số vô hại
+  for(let i=n-1;i>0;i--){
+    s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
+    const j = Math.floor((s / 4294967296) * (i + 1));
+    const t = arr[i]; arr[i] = arr[j]; arr[j] = t;
+  }
+  return arr;
+}
+// ---- E1: dồn ranh giới về nhịp gần nhất (deterministic — binary search) ----
+// offlineAnalysis.beats do imzic-analysis.js tạo TRƯỚC (load order) — chỉ đọc
+// lúc runtime nên không phụ thuộc thứ tự khai báo.
+function snapBoundToBeat(t, lo, len){
+  const beats = offlineAnalysis.beats;
+  let a = 0, b = beats.length - 1;
+  while(a < b){ const m = (a + b) >> 1; if(beats[m] < t) a = m + 1; else b = m; }
+  let best = -1, bestD = Infinity;
+  for(const i of [a, a - 1]){
+    if(i >= 0 && i < beats.length){
+      const d = Math.abs(beats[i] - t);
+      if(d < bestD){ bestD = d; best = beats[i]; }
+    }
+  }
+  if(best < 0 || bestD > len * 0.4) return t;   // không có nhịp đủ gần → giữ nguyên
+  if(best <= lo + 0.5) return t;                // nhịp quá sát ranh giới trước → giữ nguyên
+  return best;
+}
 // ---- lịch phát slideshow: mảng {start,end,idx,entry} phủ hết bài ----
-// 'time': mỗi ảnh slideSecs giây, xoay vòng; 'cue': đổi ảnh theo từng câu SRT
+// 'time': mỗi ảnh slideSecs giây, xoay vòng; 'cue': đổi ảnh theo từng câu SRT.
+// 'shuffle': idx xoay vòng qua HOÁN VỊ đã xáo thay vì 0,1,2… — ảnh không lặp
+// lại cho đến khi hết một vòng đầy đủ.
 let slideSchedule = { key:'', list:[] };
 function getSlideSchedule(){
   const n = state.slides.length;
   if(!n) return {list:[], key:''};
   const dur = isFinite(audioEl.duration) ? audioEl.duration : 0;
-  const key = [n, state.slideMode, state.slideSecs, dur.toFixed(3), state.lyricsCues.length, lyricsVersion].join('|');
+  const namesSeed = slideNamesSeed(state.slides.map(s => s.name));
+  const key = [n, state.slideMode, state.slideSecs, dur.toFixed(3), state.lyricsCues.length, lyricsVersion, state.slideOrder, state.slideShuffleSeed, namesSeed, state.slideBeatSnap, (state.slideBeatSnap && offlineAnalysis) ? offlineAnalysis.beats.length : 0].join('|');
   if(slideSchedule.key === key) return slideSchedule;
+  const orderList = (state.slideOrder === 'shuffle')
+    ? slideShuffleOrder(n, (namesSeed ^ Math.imul(state.slideShuffleSeed + 1, 2654435761)) >>> 0)
+    : null;
+  const idxAt = i => orderList ? orderList[i % n] : (i % n);
   const list = [];
   if(state.slideMode === 'cue' && state.lyricsCues.length){
     // ranh giới: 0 + các mốc bắt đầu câu + hết bài
@@ -166,13 +303,20 @@ function getSlideSchedule(){
     bounds.push(dur);
     for(let i=0;i<bounds.length-1;i++){
       if(bounds[i+1] - bounds[i] < 0.25) continue;
-      list.push({start:bounds[i], end:bounds[i+1], idx:i%n, entry:i});
+      list.push({start:bounds[i], end:bounds[i+1], idx:idxAt(i), entry:i});
     }
   } else {
     const len = Math.max(0.5, state.slideSecs);
     const total = dur > 0 ? Math.max(1, Math.ceil(dur/len)) : 1;
+    // E1 beat-snap: ranh giới trong (i>0) dồn về nhịp gần nhất (±40% len) khi
+    // bật "Bám nhịp" và đã có phân tích nhạc; không có dữ liệu → ranh giới đều
+    // như cũ (khai báo rõ, không fallback ngầm). Preview và "⚡ Xuất nhanh" dùng
+    // CÙNG lịch này (Luật 8 — file xuất khớp preview).
+    const snap = !!state.slideBeatSnap && offlineAnalysis && offlineAnalysis.beats && offlineAnalysis.beats.length > 0;
+    const bounds = [0];
+    for(let i=1;i<total;i++) bounds.push(snap ? snapBoundToBeat(i*len, bounds[i-1], len) : i*len);
     for(let i=0;i<total;i++){
-      list.push({start:i*len, end:(i+1)*len, idx:i%n, entry:i});
+      list.push({start:bounds[i], end:(i+1)*len, idx:idxAt(i), entry:i});
     }
   }
   slideSchedule = {key, list};

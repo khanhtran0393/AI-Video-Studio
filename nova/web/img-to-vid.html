@@ -328,6 +328,15 @@
         </div>
         <input type="file" id="imgInput" accept="image/*">
       </label>
+      <label class="upload-box" style="margin-bottom:6px;">
+        <div class="ic">🌆</div>
+        <div class="meta">
+          <div class="name" id="bgName">Chọn ảnh nền riêng (tuỳ chọn)</div>
+          <div class="hint">Dùng làm nền mờ cho hiệu ứng "Ô vuông giữa" — bỏ trống thì nền tự lấy chính ảnh</div>
+        </div>
+        <input type="file" id="bgInput" accept="image/*">
+      </label>
+      <button class="btn" id="bgClearBtn" style="display:none;width:100%;justify-content:center;margin-bottom:10px;">🗑 Bỏ ảnh nền riêng</button>
       <label class="upload-box">
         <div class="ic">🎵</div>
         <div class="meta">
@@ -351,9 +360,25 @@
           <option value="cue">🎤 Từng dòng lời hát (.srt/.lrc)</option>
         </select>
       </div>
+      <div class="field" id="slideOrderField" style="display:none;">
+        <div class="field-row"><label>Thứ tự ảnh</label></div>
+        <select class="sel" id="slideOrderSel">
+          <option value="order">🔢 Theo thứ tự đã chọn</option>
+          <option value="shuffle">🔀 Ngẫu nhiên (xáo trộn)</option>
+        </select>
+        <button class="btn" id="slideShuffleBtn" style="display:none;width:100%;justify-content:center;margin-top:6px;">🔄 Xáo lại thứ tự</button>
+      </div>
       <div class="field" id="slideSecsField" style="display:none;">
         <div class="field-row"><label>Mỗi ảnh hiển thị</label><span class="val" id="v-ssecs">4s</span></div>
         <input type="range" id="slideSecs" min="1" max="20" step="0.5" value="4">
+      </div>
+      <div class="field" id="slideBeatField" style="display:none;">
+        <div class="field-row"><label>Căn chuyển cảnh theo nhịp</label></div>
+        <select class="sel" id="slideBeatSel">
+          <option value="off">Tắt — đều theo thời lượng</option>
+          <option value="on">🎵 Bám nhịp (dùng phân tích nhạc)</option>
+        </select>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;">Ranh giới mỗi ảnh dồn về nhịp gần nhất (±40% thời lượng) — xem trước và file xuất dùng chung lịch nên luôn khớp.</div>
       </div>
       <div class="field" id="slideLookField" style="display:none;">
         <div class="field-row"><label>Chuyển cảnh giữa ảnh</label></div>
@@ -371,7 +396,35 @@
           <option value="cover">Lấp đầy khung (cắt bớt — như cũ)</option>
           <option value="blur">Nền blur từ chính ảnh (không cắt nội dung)</option>
           <option value="contain">Vừa đủ ảnh, viền đen 2 bên</option>
+          <option value="square">🔲 Ô vuông giữa + nền mờ</option>
         </select>
+        <div style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5;">"Ô vuông giữa + nền mờ" áp dụng cho cả 1 ảnh lẫn slideshow; 2 kiểu còn lại chỉ áp dụng cho slideshow.</div>
+      </div>
+      <div id="squareFields" style="display:none;">
+        <div class="field">
+          <div class="field-row"><label>Độ mờ nền</label><span class="val" id="v-bgBlur">12px</span></div>
+          <input type="range" id="bgBlur" min="0" max="40" step="1" value="12">
+        </div>
+        <div class="field">
+          <div class="field-row"><label>Mờ lệch trái ↔ phải</label><span class="val" id="v-bgBlurSide">đều 2 bên</span></div>
+          <input type="range" id="bgBlurSide" min="-100" max="100" step="5" value="0">
+          <div style="font-size:11px;color:var(--muted);margin-top:6px;">Âm = mờ TRÁI nhiều hơn, dương = mờ PHẢI nhiều hơn, 0 = đều cả hai bên.</div>
+        </div>
+        <div class="field">
+          <div class="field-row"><label>Cỡ ô vuông (100% = 1/3 chiều cao video)</label><span class="val" id="v-sqSize">100%</span></div>
+          <input type="range" id="sqSize" min="40" max="200" step="5" value="100">
+        </div>
+        <div class="row2">
+          <div class="field">
+            <div class="field-row"><label>Xoay ô vuông</label><span class="val" id="v-sqTilt">0°</span></div>
+            <input type="range" id="sqTilt" min="-45" max="45" step="1" value="0">
+          </div>
+          <div class="field">
+            <div class="field-row"><label>Nghiêng ô vuông</label><span class="val" id="v-sqSkew">0°</span></div>
+            <input type="range" id="sqSkew" min="-25" max="25" step="1" value="0">
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5;">Ô vuông luôn căn giữa khung (chia điều tâm), cắt vuông từ tâm ảnh; có chọn ảnh nền riêng thì nền mờ dùng ảnh đó, không thì nền tự lấy chính ảnh.</div>
       </div>
       <button class="btn" id="slidesClearBtn" style="display:none;width:100%;justify-content:center;margin-bottom:10px;">🗑 Xoá slideshow (về 1 ảnh nền)</button>
       <div style="font-size:11px;color:var(--muted);margin-top:8px;line-height:1.5;">
@@ -429,6 +482,12 @@
           <option value="leaves">🍂 Lá rơi</option>
           <option value="stars">✦ Sao bay</option>
           <option value="rain">🌧 Mưa bay</option>
+          <option value="bubbles">🫧 Bong bóng bay</option>
+          <option value="petals">🌸 Cánh hoa rơi</option>
+          <option value="fireflies">✨ Đom đóm</option>
+          <option value="hearts">💗 Tim bay</option>
+          <option value="bokeh">🌕 Bokeh sáng mờ</option>
+          <option value="sparks">🔥 Tia lửa</option>
         </select>
       </div>
 
@@ -494,17 +553,13 @@
         </span>
       </summary>
       <div class="section-body">
-      <div class="field">
-        <div class="field-row"><label>Sóng nhạc</label></div>
-        <select class="sel" id="waveOnSel">
-          <option value="off">Tắt</option>
-          <option value="on">〜 Bật sóng nhạc</option>
-        </select>
-      </div>
-
+      <!-- Bật/tắt sóng hợp nhất vào "Kiểu sóng": chọn "Tắt" = ẩn sóng + ẩn khối
+           tham số bên dưới (waveParams). Hợp đồng state giữ nguyên: state.waveOn
+           (bool) điều khiển vẽ, state.waveStyle chỉ có nghĩa khi waveOn bật. -->
       <div class="field" id="waveStyleField">
         <div class="field-row"><label>Kiểu sóng</label></div>
         <select class="sel" id="waveStyleSel">
+          <option value="off">✕ Tắt — không hiển thị sóng</option>
           <option value="line">〜 Dòng chảy</option>
           <option value="ribbon">◠ Dải ruy băng</option>
           <option value="bars">▮▮▮ Cột nhạc gương</option>
@@ -519,13 +574,35 @@
           <option value="spiral">🌀 Xoắn ốc</option>
           <option value="circledots">●●● Cột hạt tròn</option>
           <option value="neon">💡 Neon đôi</option>
+          <option value="curved">）Cột uốn cong</option>
         </select>
       </div>
 
+      <div class="row2" id="waveCurveField" style="display:none">
+        <div class="field">
+          <div class="field-row"><label>Mức uốn (0% thẳng ⟶ 100% vòng tròn)</label><span class="val" id="v-wcurve">0%</span></div>
+          <input type="range" id="waveCurve" min="0" max="100" step="1" value="0">
+        </div>
+        <div class="field">
+          <div class="field-row"><label>Hướng uốn</label></div>
+          <select class="sel" id="waveCurveDirSel">
+            <option value="fwd" selected>↻ Xuôi (trái → phải)</option>
+            <option value="rev">↺ Ngược (phải → trái)</option>
+          </select>
+        </div>
+      </div>
+      <div id="waveCurveHint" style="display:none;font-size:11px;color:var(--muted);margin:-4px 0 10px 0;line-height:1.5;">Cột nhạc uốn cong thành 1 vòng cung: 0% thì thẳng đứng (như cột thường), 100% khép kín thành vòng tròn. Kéo thanh để uốn dần.</div>
+
+      <div id="waveParams" style="display:none;">
       <div class="field">
         <div class="field-row"><label>Vị trí (trên ↔ dưới)</label><span class="val" id="v-wpos">100%</span></div>
         <input type="range" id="wavePos" min="0" max="100" step="1" value="100">
         <div style="font-size:11px;color:var(--muted);margin-top:6px;">Mặc định 100% = ẩn nửa dưới ở rìa màn hình, chỉ nhô lên nửa trên.</div>
+      </div>
+
+      <div class="field">
+        <div class="field-row"><label>Vị trí ngang (trái ↔ phải)</label><span class="val" id="v-wposx">50%</span></div>
+        <input type="range" id="wavePosX" min="0" max="100" step="1" value="50">
       </div>
 
       <div class="row2">
@@ -550,6 +627,7 @@
           <input type="color" id="waveColor" value="#9b8bff">
         </div>
       </div>
+      </div><!-- /waveParams -->
       </div>
     </details>
 
@@ -607,7 +685,56 @@
             style="width:100%;background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:9px;padding:8px 10px;font-size:13px;font-family:inherit;">
         </div>
       </div>
+      <div class="field" style="margin-top:8px;">
+        <div class="field-row"><label>Chuẩn hoá âm lượng (EBU R128 −14 LUFS)</label></div>
+        <select class="sel" id="loudnormSel">
+          <option value="off">Tắt — giữ nguyên âm lượng gốc</option>
+          <option value="on">🔊 Bật — đều âm lượng chuẩn YouTube</option>
+        </select>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;">Áp cho bước ghép nhạc của "⚡ Xuất nhanh" (loudnorm một-pass trước khi đổ dần).</div>
+      </div>
       <div style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5;">Áp cho cả xem trước lẫn file xuất. "Xuất nhanh" ghép nhạc gốc bằng FFmpeg (có fade) — nếu cắt/đổ dần thì âm thanh được mã hoá lại AAC 192k, còn không thì copy nguyên bản gốc.</div>
+      </div>
+    </details>
+
+    <hr class="sep">
+
+    <details class="section" id="secWm">
+      <summary class="section-title">
+        <span>Logo / Watermark</span>
+        <span class="hgroup">
+          <span class="hint2" id="secWmHint">Chưa chọn logo</span>
+          <span class="cv">⌄</span>
+        </span>
+      </summary>
+      <div class="section-body">
+      <div class="field">
+        <div class="field-row"><label>Ảnh logo (PNG trong suốt là đẹp nhất)</label><span class="val" id="wmName">(chưa chọn)</span></div>
+        <input type="file" id="wmInput" accept="image/*">
+      </div>
+      <div class="field">
+        <div class="field-row"><label>Vị trí</label></div>
+        <select class="sel" id="wmPosSel">
+          <option value="tl">↖ Trên trái</option>
+          <option value="tc">↑ Trên giữa</option>
+          <option value="tr">↗ Trên phải</option>
+          <option value="ml">← Giữa trái</option>
+          <option value="mc">• Giữa màn hình</option>
+          <option value="mr">→ Giữa phải</option>
+          <option value="bl">↙ Dưới trái</option>
+          <option value="bc">↓ Dưới giữa</option>
+          <option value="br" selected>↘ Dưới phải</option>
+        </select>
+      </div>
+      <div class="field">
+        <div class="field-row"><label>Cỡ (% chiều ngang khung)</label><span class="val" id="v-wmsize">18%</span></div>
+        <input type="range" id="wmSize" min="5" max="40" step="1" value="18">
+      </div>
+      <div class="field">
+        <div class="field-row"><label>Độ mờ</label><span class="val" id="v-wmalpha">60%</span></div>
+        <input type="range" id="wmAlpha" min="10" max="100" step="5" value="60">
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:6px;">Logo vẽ SAU cùng (trên mọi FX) để luôn nét — áp cho cả xem trước, 2 nút ghi realtime và "⚡ Xuất nhanh".</div>
       </div>
     </details>
 
@@ -638,12 +765,13 @@
           <option value="smoke">🌫 Khói trôi (Noise)</option>
           <option value="aurora">🎇 Aurora (Noise)</option>
           <option value="huecycle">🎨 Xoay sắc màu (Hue)</option>
+          <option value="hue-gl">🎨 Xoay sắc màu GL (shader, nhanh)</option>
           <option value="lightleak">💡 Light leak</option>
           <option value="godrays-gl">🌅 God rays GL (shader thật)</option>
           <option value="ntsc-gl">📼 NTSC GL (shader thật)</option>
           <option value="milkdrop">🌈 Milkdrop (Butterchurn)</option>
         </select>
-        <div style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5;">Glitch/VHS/Nhiễu/God-rays/Khói/Aurora chạy theo nhịp giả ngẫu nhiên cố định (render lại giống hệt), Nhịp co giật + Aurora + Xoay sắc màu đấm theo bass thật của nhạc, Chromakey xoá vùng phông xanh (viền hút bớt xanh lây, vùng khoá hiện nền đen), God rays GL + NTSC GL dùng shader WebGL thật (cần WebGL2 — báo IMZIC_NO_WEBGL2 nếu máy tắt GPU), Milkdrop vẽ theo nhạc phát thật (cần WebGL2, chỉ dùng với 2 nút ghi realtime). FX phủ LÊN TRÊN ảnh + hạt + sóng + lời, nằm trong cả video xuất.</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5;">Glitch/VHS/Nhiễu/God-rays/Khói/Aurora chạy theo nhịp giả ngẫu nhiên cố định (render lại giống hệt), Nhịp co giật + Aurora + Xoay sắc màu đấm theo bass thật của nhạc, Chromakey xoá vùng phông xanh (viền hút bớt xanh lây, vùng khoá hiện nền đen), God rays GL + NTSC GL + Xoay sắc màu GL dùng shader WebGL thật (cần WebGL2 — báo IMZIC_NO_WEBGL2 nếu máy tắt GPU; GPU reset thì tự chạy lại khi context khôi phục), Milkdrop vẽ theo nhạc phát thật (cần WebGL2, chỉ dùng với 2 nút ghi realtime). FX phủ LÊN TRÊN ảnh + hạt + sóng + lời, nằm trong cả video xuất.</div>
       </div>
 
       <div class="field">
@@ -818,6 +946,33 @@
       </div>
       </div>
     </details>
+
+    <hr class="sep">
+
+    <details class="section" id="secQueue">
+      <summary class="section-title">
+        <span>10. Hàng chờ xuất video</span>
+        <span class="hgroup">
+          <span class="hint2" id="secQueueHint">Trống</span>
+          <span class="cv">⌄</span>
+        </span>
+      </summary>
+      <div class="section-body">
+      <button class="btn gold" id="autoFxBtn" style="width:100%;justify-content:center;margin-bottom:12px;">🎲 Tự động chọn hiệu ứng</button>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.5;">Bấm để tool tự ghép ngẫu nhiên một bộ hiệu ứng hài hoà (hạt bay + sóng nhạc + FX toàn khung) cho cấu hình sắp thêm vào hàng chờ — không chọn Milkdrop vì FX này không dùng được với "⚡ Xuất nhanh". Bấm lại để chọn bộ khác.</div>
+      <button class="btn" id="queueAddBtn" style="width:100%;justify-content:center;">➕ Thêm cấu hình hiện tại</button>
+      <div id="queueList" style="display:flex;flex-direction:column;gap:6px;margin:10px 0;"></div>
+      <div class="row2">
+        <button class="btn" id="queueDirBtn" style="justify-content:center;">📁 Thư mục lưu…</button>
+        <button class="btn" id="queueClearBtn" style="justify-content:center;">🗑 Xoá hết</button>
+      </div>
+      <button class="btn gold" id="queueRunBtn" style="width:100%;justify-content:center;margin-top:8px;">▶ Xuất tất cả (⚡ nhanh)</button>
+      <button class="btn" id="queueStopBtn" style="width:100%;justify-content:center;margin-top:8px;display:none;">⏹ Dừng sau mục này</button>
+      <div style="font-size:11px;color:var(--muted);margin-top:8px;line-height:1.5;">
+        Mỗi mục lưu riêng ảnh (hoặc slideshow — chỉ 1 trong 2) + nhạc + toàn bộ cài đặt hiện tại: khi chạy, tool nạp lại ĐỦ NGUYÊN cài đặt của từng mục (hiệu ứng, zoom, lyric, cắt/fade nhạc, FPS, chất lượng/bitrate…) rồi xuất — file ra y như khi bạn bấm xuất thủ công với cấu hình đó. Cơ chế render là "⚡ Xuất nhanh" (render từng khung theo đồng hồ logic → ghép FFmpeg, ra <b>.mp4 H.264</b>): không rớt khung khi máy yếu, không cần giữ tab hiển thị, nên có thể xuất hàng loạt nhiều mục liên tiếp — FPS và chất lượng VẪN theo đúng cài đặt đã lưu của từng mục. Vào thư mục đã chọn, tên file đặt theo tên nhạc của từng mục, không hỏi lại chỗ lưu, không ghi đè file có sẵn. Gặp lỗi thì hàng chờ dừng ngay tại mục đó để bạn sửa rồi chạy lại. Hàng chờ chỉ tồn tại trong phiên này (reload / mở lại tool là mất).
+      </div>
+      </div>
+    </details>
   </div>
 
   <!-- ============ MAIN ============ -->
@@ -853,14 +1008,24 @@
         <option value="high" selected>Cao (≈14 Mbps)</option>
         <option value="ultra">Siêu nét (≈20 Mbps)</option>
       </select>
+      <span style="color:var(--muted);margin-left:10px;">Độ phân giải:</span>
+      <select class="sel" id="exportResSel" style="width:auto;">
+        <option value="auto" selected>Tự động (×1.5)</option>
+        <option value="1080">1080p</option>
+        <option value="1440">1440p</option>
+        <option value="2160">4K (2160p)</option>
+      </select>
     </div>
 
     <div class="transport">
       <button class="btn primary" id="playBtn" disabled>▶ Phát thử</button>
       <button class="btn" id="restartBtn" disabled>⟲ Từ đầu</button>
+      <button class="btn" id="resetBtn">🧹 Reset</button>
       <button class="btn gold" id="exportAudioBtn" disabled>⬇ Xuất video (kèm nhạc)</button>
       <button class="btn" id="exportSilentBtn" disabled>⬇ Xuất video hình (giữ nhạc gốc riêng)</button>
       <button class="btn" id="exportOfflineBtn" disabled>⚡ Xuất nhanh (không cần giữ tab)</button>
+      <button class="btn" id="snapshotBtn" disabled>📸 Chụp khung (PNG)</button>
+      <button class="btn" id="clearDataBtn">🗑 Xoá dữ liệu</button>
       <button class="btn" id="cancelExportBtn" style="display:none;">✕ Huỷ ghi</button>
       <button class="btn gold" id="muxBtn" style="display:none;">⚡ Ghép nhạc tự động (.mkv)</button>
     </div>
@@ -874,7 +1039,7 @@
     <div class="export-note">
       <b>Lưu ý quan trọng khi xuất video:</b> giữ tab này <b>đang mở và hiển thị trên màn hình</b> suốt quá trình ghi (không chuyển tab, không thu nhỏ cửa sổ). Trình duyệt tự làm chậm canvas khi tab bị ẩn, đó là nguyên nhân hiệu ứng có thể "biến mất" hoặc đứng khung ở một đoạn giữa video.
       <br><br>
-      <b>Về độ nét:</b> file xuất được render ở độ phân giải gấp ~1.5 lần khung xem trước (khổ dọc 720 → 1080×1920), nên file luôn nét hơn phần đang xem trên màn hình.
+      <b>Về độ nét:</b> chọn độ phân giải xuất ở thanh "Độ phân giải" — "Tự động" render gấp ~1.5 lần khung xem trước (khổ dọc 720 → 1080×1920), hoặc chọn thẳng 1080p / 1440p / 4K (tính theo cạnh NGẮN, giữ đúng tỉ lệ khung; không bao giờ nhỏ hơn khung xem trước). Chữ lời bài hát vẽ vector nên nét hoàn toàn ở mọi mức.
       <br><br>
       <b>Về "⚡ Xuất nhanh":</b> nút này render TỪNG KHUNG theo đồng hồ logic rồi ghép bằng FFmpeg trong app — ra file <code>.mp4</code> nét, không rớt khung, <b>không cần giữ tab hiển thị</b>, và thường nhanh hơn thời lượng nhạc. Cần app Nova (có FFmpeg) và trình duyệt hỗ trợ WebCodecs. Không dùng được slideshow "theo nhịp bass" chưa tính trước — mọi chuyển cảnh đều chạy đúng như xem trước.
       <br><br>
@@ -910,5 +1075,9 @@
 <script src="src/imzic/imzic-controls.js"></script>
 <script src="src/imzic/imzic-presets.js"></script>
 <script src="src/imzic/imzic-export.js"></script>
+<!-- imzic-workflow.js — Reset toàn bộ + Tự động chọn hiệu ứng + Hàng chờ xuất.
+     Nạp CUỐI CÙNG (dùng $/state/isExporting/imzNative… của mọi file trước).
+     Không import/export (renderer không build step — AGENTS.md §4/§8). -->
+<script src="src/imzic/imzic-workflow.js"></script>
 </body>
 </html>

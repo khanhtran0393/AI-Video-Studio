@@ -21,9 +21,10 @@ function drawBackground(scale, t){
       ctx.fillStyle = '#050508'; ctx.fillRect(0,0,w,h);
       return;
     }
-    let seg = sched[sched.length-1];
-    for(const s of sched){ if(t >= s.start && t < s.end){ seg = s; break; } }
-    const segIdx = sched.indexOf(seg);
+    let seg = sched[sched.length-1], segIdx = sched.length-1;
+    for(let i=0;i<sched.length;i++){
+      if(t >= sched[i].start && t < sched[i].end){ seg = sched[i]; segIdx = i; break; }
+    }
     const durSeg = Math.max(0.001, seg.end - seg.start);
     const p = Math.max(0, Math.min(1, (t - seg.start) / durSeg));
     const kb = kenBurnsAt(seg.idx, seg.entry, p);
@@ -67,6 +68,11 @@ function drawBackground(scale, t){
     return;
   }
   if(state.img){
+    // fitMode 'square': bố cục "Ô vuông giữa + nền mờ" (áp dụng cho cả ảnh đơn)
+    if(state.fitMode === 'square'){
+      drawSquareLayout(state.img, getImageRaster());
+      return;
+    }
     // #perf: vẽ từ raster đã quét sẵn (luôn ≥ khổ hiển thị) thay vì resample
     // ảnh gốc độ phân giải đầy đủ mỗi frame — vị trí/kích thước giữ nguyên.
     const raster = getImageRaster();
@@ -89,7 +95,31 @@ let offlineRendering = false; // "⚡ Xuất nhanh" đang tự render từng khu
 // mượt mắt, còn hoàn toàn nằm NGOÀI canvas nên không dính gì tới file xuất.
 const progEls = { wrap:$('progWrap'), bar:$('progBar'), text:$('progText') };
 let lastProgUiMs = 0;
+// ---- chống chết vòng render âm thầm (khung đen vĩnh viễn, không báo lỗi) ----
+// 1 exception trong 1 frame KHÔNG được phép giết vòng rAF. Chiến lược fail-loud
+// (Luật 10): báo code IMZIC_RENDER_LOOP rõ ràng ngay lần đầu, thử chạy tiếp
+// (glitch 1 frame thường tự hồi); lỗi 5 frame LIÊN TIẾP → dừng hẳn, không tự
+// hồi phục ngầm. Nếu đang ghi export → huỷ sạch để không chốt file hỏng.
+let imzRenderErrStreak = 0;
+let imzRenderLoopDead = false;
 function render(now){
+  if(imzRenderLoopDead) return;
+  try{
+    renderFrame(now);
+    imzRenderErrStreak = 0;
+  }catch(err){
+    imzRenderErrStreak++;
+    if(imzRenderErrStreak === 1 || imzRenderErrStreak === 5){
+      setStatus('Vòng render gặp lỗi [' + ((err && err.code) || 'IMZIC_RENDER_LOOP') + ']: ' + (err && err.message ? err.message : String(err)) + (imzRenderErrStreak >= 5 ? ' — lỗi lặp 5 frame liên tiếp, render DỪNG. Tải lại trang tool (chuyển tab qua lại) để khôi phục.' : ''), true);
+    }
+    if(imzRenderErrStreak === 1 && isExporting && typeof activeExportCancel === 'function'){
+      try{ activeExportCancel(); }catch(e){}
+    }
+    if(imzRenderErrStreak >= 5){ imzRenderLoopDead = true; return; }
+  }
+  rafId = requestAnimationFrame(render);
+}
+function renderFrame(now){
   now = now || performance.now();
   let dtMs = now - lastT;
   lastT = now;
@@ -99,10 +129,7 @@ function render(now){
   const dt = dtMs / 16.67; // 1.0 == normal 60fps frame
 
   // offline render ("⚡ Xuất nhanh") tự vẽ theo đồng hồ logic — rAF chỉ đợi
-  if(offlineRendering){
-    rafId = requestAnimationFrame(render);
-    return;
-  }
+  if(offlineRendering) return; // wrapper render() lo lập lại nhịp rAF
 
   const w = logicW, h = logicH;
   // canvas vật lý to hơn khi đang ghi xuất (#9) — phóng hệ toạ độ logic bằng transform
@@ -155,6 +182,7 @@ function render(now){
   drawParticles(dt, smoothedTreble); // #bands: hạt nhịp theo dải treble
   drawLyrics(tNow);
   applyFx(smoothedEnergy); // FX toàn khung phủ trên cùng (như z:90 của Nova)
+  drawWatermark();         // E4: logo vẽ CUỐI cùng — trên mọi FX, luôn nét
 
   glowRing.style.setProperty('--pulse', (0.10 + smoothedEnergy*0.55).toFixed(3));
 
@@ -167,54 +195,126 @@ function render(now){
     progEls.bar.style.width = p.toFixed(1) + '%';
     progEls.text.textContent = fmtTime(audioEl.currentTime) + ' / ' + fmtTime(d) + '  ·  ' + Math.floor(p) + '%';
   }
-
-  rafId = requestAnimationFrame(render);
 }
 requestAnimationFrame(render);
 
 // ---- file loading ----
+// Hàm nạp tách khỏi listener input để HÀNG CHỜ (imzic-workflow.js) nạp lại
+// từng mục bằng đúng một luồng — không nhân bản logic (AGENTS.md §4 Luật 1).
+// Trả Promise: resolve khi file nạp xong, reject với error code lộ liễu (Luật 10).
 let imgObjUrl = null;
-$('imgInput').addEventListener('change', e=>{
-  const f = e.target.files[0];
-  if(!f) return;
-  if(isExporting){ setStatus('Đang ghi video — không đổi ảnh giữa chừng (bản ghi sẽ hỏng). Chờ ghi xong rồi đổi nhé.', true); e.target.value = ''; return; }
+function imzicLoadImageFile(f, inputEl){
   const looksImage = (f.type && f.type.startsWith('image')) || /\.(png|jpe?g|gif|webp|bmp|avif)$/i.test(f.name);
   if(!looksImage){
     setStatus('File này có vẻ không phải ảnh — chọn lại file png/jpg/webp nhé.', true);
-    e.target.value = '';
-    return;
+    if(inputEl) inputEl.value = '';
+    return Promise.reject(Object.assign(new Error('File không phải ảnh: ' + f.name), { code: 'IMZIC_NOT_IMAGE' }));
   }
   state.imgFile = f;
   $('imgName').textContent = f.name;
   const url = URL.createObjectURL(f);
   const im = new Image();
-  im.onload = ()=>{
-    // ảnh đã decode xong nằm trong bộ nhớ — thu hồi object URL cũ tránh rò rỉ
-    if(imgObjUrl && imgObjUrl !== url) URL.revokeObjectURL(imgObjUrl);
-    imgObjUrl = url;
-    state.img = im;
-    checkReady();
-    setStatus('Đã nạp ảnh: ' + f.name, false);
-  };
-  im.onerror = ()=>{
-    // lỗi lộ rõ (Luật 10): file hỏng / định dạng không hỗ trợ phải báo ngay
-    URL.revokeObjectURL(url);
-    setStatus('Không đọc được file ảnh này (file hỏng hoặc định dạng không hỗ trợ) — chọn ảnh khác nhé.', true);
-    e.target.value = '';
-  };
-  im.src = url;
+  return new Promise((resolve, reject)=>{
+    im.onload = ()=>{
+      // ảnh đã decode xong nằm trong bộ nhớ — thu hồi object URL cũ tránh rò rỉ
+      if(imgObjUrl && imgObjUrl !== url) URL.revokeObjectURL(imgObjUrl);
+      imgObjUrl = url;
+      state.img = im;
+      // CHỈ CHỌN 1 TRONG 2: ảnh nền đơn và slideshow loại trừ lẫn nhau
+      // (chiều ngược lại slidesInput đã tự xoá ảnh nền). Nếu không xoá ở đây,
+      // slideshow cũ còn tồn tại → vẽ theo slideshow dù người dùng vừa chọn
+      // ảnh đơn, và hàng chờ kế thừa slideshow của mục trước sang mục ảnh đơn.
+      if(state.slides.length){
+        state.slides = [];
+        slideRasterCache.clear(); slideBlurCache.clear();
+        slideSchedule = { key:'', list:[] };
+        if($('slidesHint')) $('slidesHint').textContent = '';
+        if(typeof updateSlideFields === 'function') updateSlideFields();
+        setStatus('Đã nạp ảnh: ' + f.name + ' (đã bỏ slideshow — chỉ dùng 1 trong 2: ảnh nền đơn HOẶC slideshow).', false);
+      } else {
+        setStatus('Đã nạp ảnh: ' + f.name, false);
+      }
+      // ảnh đơn cũng dùng được fitMode — hiện luôn khối "Ảnh lệch khung…"
+      if(typeof updateSlideFields === 'function') updateSlideFields();
+      checkReady();
+      resolve(im);
+    };
+    im.onerror = ()=>{
+      // lỗi lộ rõ (Luật 10): file hỏng / định dạng không hỗ trợ phải báo ngay
+      URL.revokeObjectURL(url);
+      setStatus('Không đọc được file ảnh này (file hỏng hoặc định dạng không hỗ trợ) — chọn ảnh khác nhé.', true);
+      if(inputEl) inputEl.value = '';
+      reject(Object.assign(new Error('Không đọc được file ảnh: ' + f.name), { code: 'IMZIC_BAD_IMAGE' }));
+    };
+    im.src = url;
+  });
+}
+$('imgInput').addEventListener('change', e=>{
+  const f = e.target.files[0];
+  if(!f) return;
+  if(isExporting){ setStatus('Đang ghi video — không đổi ảnh giữa chừng (bản ghi sẽ hỏng). Chờ ghi xong rồi đổi nhé.', true); e.target.value = ''; return; }
+  imzicLoadImageFile(f, e.target);
+});
+
+// ---- ảnh nền RIÊNG cho fitMode 'square' (tuỳ chọn) ----
+// Có chọn → nền mờ fullscreen của bố cục "Ô vuông giữa" dùng ảnh này; không
+// chọn → nền tự dùng chính ảnh đang phát (ảnh đơn hoặc ảnh slide hiện tại).
+let bgObjUrl = null;
+function imzicLoadBgImageFile(f, inputEl){
+  const looksImage = (f.type && f.type.startsWith('image')) || /\.(png|jpe?g|gif|webp|bmp|avif)$/i.test(f.name);
+  if(!looksImage){
+    setStatus('File này có vẻ không phải ảnh — chọn lại file png/jpg/webp nhé.', true);
+    if(inputEl) inputEl.value = '';
+    return Promise.reject(Object.assign(new Error('File không phải ảnh nền: ' + f.name), { code: 'IMZIC_NOT_IMAGE' }));
+  }
+  state.bgFile = f;
+  $('bgName').textContent = f.name;
+  const url = URL.createObjectURL(f);
+  const im = new Image();
+  return new Promise((resolve, reject)=>{
+    im.onload = ()=>{
+      // ảnh đã decode xong nằm trong bộ nhớ — thu hồi object URL cũ tránh rò rỉ
+      if(bgObjUrl && bgObjUrl !== url) URL.revokeObjectURL(bgObjUrl);
+      bgObjUrl = url;
+      state.bgImg = im;
+      if(typeof squareBlurCache !== 'undefined' && squareBlurCache.clear) squareBlurCache.clear();
+      if($('bgClearBtn')) $('bgClearBtn').style.display = '';
+      setStatus('Đã nạp ảnh nền riêng: ' + f.name + ' — bố cục "Ô vuông giữa + nền mờ" sẽ dùng ảnh này làm nền.', false);
+      resolve(im);
+    };
+    im.onerror = ()=>{
+      // lỗi lộ rõ (Luật 10): file hỏng / định dạng không hỗ trợ phải báo ngay
+      URL.revokeObjectURL(url);
+      setStatus('Không đọc được file ảnh nền này (file hỏng hoặc định dạng không hỗ trợ) — chọn ảnh khác nhé.', true);
+      if(inputEl) inputEl.value = '';
+      reject(Object.assign(new Error('Không đọc được file ảnh nền: ' + f.name), { code: 'IMZIC_BAD_IMAGE' }));
+    };
+    im.src = url;
+  });
+}
+$('bgInput').addEventListener('change', e=>{
+  const f = e.target.files[0];
+  if(!f) return;
+  if(isExporting){ setStatus('Đang ghi video — không đổi ảnh giữa chừng (bản ghi sẽ hỏng). Chờ ghi xong rồi đổi nhé.', true); e.target.value = ''; return; }
+  imzicLoadBgImageFile(f, e.target);
+});
+$('bgClearBtn').addEventListener('click', ()=>{
+  if(isExporting){ setStatus('Đang ghi video — không xoá ảnh nền giữa chừng.', true); return; }
+  state.bgImg = null; state.bgFile = null;
+  $('bgName').textContent = 'Chọn ảnh nền riêng (tuỳ chọn)';
+  if($('bgInput')) $('bgInput').value = '';
+  $('bgClearBtn').style.display = 'none';
+  if(typeof squareBlurCache !== 'undefined' && squareBlurCache.clear) squareBlurCache.clear();
+  setStatus('Đã bỏ ảnh nền riêng — nền mờ sẽ tự dùng chính ảnh đang phát.', false);
 });
 
 let audObjUrl = null;
-$('audInput').addEventListener('change', e=>{
-  const f = e.target.files[0];
-  if(!f) return;
-  if(isExporting){ setStatus('Đang ghi video — không đổi nhạc giữa chừng (bản ghi sẽ hỏng). Chờ ghi xong rồi đổi nhé.', true); e.target.value = ''; return; }
+function imzicLoadAudioFile(f, inputEl){
   const looksAudio = (f.type && f.type.startsWith('audio')) || /\.(mp3|wav|m4a|aac|ogg|flac|wma|opus|mp4|3gp)$/i.test(f.name);
   if(!looksAudio){
     setStatus('File này có vẻ không phải nhạc — chọn lại giúp mình file mp3/wav/m4a/aac nhé.', true);
-    e.target.value = '';
-    return;
+    if(inputEl) inputEl.value = '';
+    return Promise.reject(Object.assign(new Error('File không phải nhạc: ' + f.name), { code: 'IMZIC_NOT_AUDIO' }));
   }
   state.audioFile = f;
   state.audioReady = false;
@@ -224,21 +324,53 @@ $('audInput').addEventListener('change', e=>{
   audObjUrl = URL.createObjectURL(f);
   audioEl.src = audObjUrl;
   audioEl.load();
-  audioEl.onloadedmetadata = ()=>{
-    const dur = isFinite(audioEl.duration) ? audioEl.duration : 100; // webm có thể trả Infinity lúc đầu
-    $('seekBar').max = dur;
-    $('seekBar').disabled = false;
-    $('tDur').textContent = fmtTime(audioEl.duration);
-    state.audioReady = true;
-    checkReady();
-    // phân tích offline (marker nhịp + envelope cho "⚡ Xuất nhanh") chạy nền
-    ensureOfflineAnalysis();
-  };
-  audioEl.onerror = ()=>{
-    state.audioReady = false;
-    setStatus('Không đọc được file nhạc này (file hỏng hoặc codec không hỗ trợ) — chọn file khác nhé.', true);
-  };
+  return new Promise((resolve, reject)=>{
+    audioEl.onloadedmetadata = ()=>{
+      const dur = isFinite(audioEl.duration) ? audioEl.duration : 100; // webm có thể trả Infinity lúc đầu
+      $('seekBar').max = dur;
+      $('seekBar').disabled = false;
+      $('tDur').textContent = fmtTime(audioEl.duration);
+      state.audioReady = true;
+      checkReady();
+      // phân tích offline (marker nhịp + envelope cho "⚡ Xuất nhanh") chạy nền
+      ensureOfflineAnalysis();
+      resolve();
+    };
+    audioEl.onerror = ()=>{
+      state.audioReady = false;
+      setStatus('Không đọc được file nhạc này (file hỏng hoặc codec không hỗ trợ) — chọn file khác nhé.', true);
+      if(inputEl) inputEl.value = '';
+      reject(Object.assign(new Error('Không đọc được file nhạc: ' + f.name), { code: 'IMZIC_BAD_AUDIO' }));
+    };
+  });
+}
+$('audInput').addEventListener('change', e=>{
+  const f = e.target.files[0];
+  if(!f) return;
+  if(isExporting){ setStatus('Đang ghi video — không đổi nhạc giữa chừng (bản ghi sẽ hỏng). Chờ ghi xong rồi đổi nhé.', true); e.target.value = ''; return; }
+  imzicLoadAudioFile(f, e.target);
 });
+
+
+// ---- E4: logo / watermark overlay ----
+// Vẽ SAU CÙNG trong stack (sau applyFx) nên logo không bị FX bóp méo.
+// Deterministic (Luật 8): chỉ phụ thuộc state (vị trí/cỡ/độ mờ) — preview, 2
+// nút ghi realtime và "⚡ Xuất nhanh" đều gọi cùng hàm này → file ra khớp preview.
+function drawWatermark(){
+  const img = state.wmImg;
+  if(!img || !img.width || !img.height) return;
+  const w = logicW, h = logicH;
+  const dw = Math.max(8, w * Math.min(0.5, Math.max(0.02, (+state.wmSize || 18) / 100)));
+  const dh = dw * img.height / img.width;
+  const margin = Math.round(w * 0.03);
+  const pos = String(state.wmPos || 'br');
+  const vert = pos[0], horiz = pos[1];
+  const x = horiz === 'l' ? margin : horiz === 'r' ? (w - margin - dw) : (w - dw) / 2;
+  const y = vert === 't' ? margin : vert === 'b' ? (h - margin - dh) : (h - dh) / 2;
+  ctx.globalAlpha = Math.max(0.05, Math.min(1, (state.wmAlpha == null ? 0.6 : +state.wmAlpha)));
+  ctx.drawImage(img, x, y, dw, dh);
+  ctx.globalAlpha = 1;
+}
 
 function checkReady(){
   const hasVisual = state.img || state.slides.length;
@@ -249,6 +381,7 @@ function checkReady(){
     $('exportAudioBtn').disabled = false;
     $('exportSilentBtn').disabled = false;
     $('exportOfflineBtn').disabled = false;
+    $('snapshotBtn').disabled = false;
     $('exportOpts').style.display = 'flex';
   }
 }

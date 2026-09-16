@@ -44,7 +44,8 @@
     "check:shared-shadow": "node nova/scripts/shared-shadow-check.js",
     "test:viral-cut": "node nova/viral-cut/test.js",
     "test:ffx-smoke": "node nova/scripts/ffx-smoke.js",
-    "test:t7-ai": "node nova/scripts/t7-ai-core-test.js"
+    "test:t7-ai": "node nova/scripts/t7-ai-core-test.js",
+    "test:imzic": "node nova/scripts/imzic-core-test.js"
   },
   "dependencies": {
     "@remotion/bundler": "4.0.518",

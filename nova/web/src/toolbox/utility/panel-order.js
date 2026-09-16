@@ -25,7 +25,7 @@
       'toolffxcompress','toolffxframes','toolffxmute','toolffxconvert',
       'toolffxmusic','toolffxgif','toolffxaudiofx','toolffxads',
       'toolffxhistory'  /* Công cụ FFmpeg (sidebar dropdown) */,
-      'toolsettings','tooladmin','toollog',
+      'toolsettings','toolskill'  /* Kho skill viết kịch bản (Skill panel, 2026-09-16) */,'tooladmin','toollog',
       'toolanim'  /* mồ côi: mở từ Tool 7, không có nav-item */
     ];
     // Lấy parent chứa các panel .tool (cùng parent với nav-item thường là .content hoặc body)

@@ -1,0 +1,53 @@
+    <!-- TOOL SKILL: KHO SKILL VIẾT KỊCH BẢN (sidebar nhóm "Cài đặt") -->
+    <div class="tool" id="tool-toolskill">
+      <div class="tool-head">
+        <div class="tool-title">✍️ Skill · Viết kịch bản</div>
+        <div class="tool-subtitle">Kho skill viết kịch bản theo từng chủ đề &amp; phong cách — skill đã lưu sẽ xuất hiện trong tab Tạo Kịch Bản (ô "Kỹ năng viết") và AI được ghép thêm hướng dẫn chi tiết của skill vào prompt.</div>
+      </div>
+      <div class="settings-grid">
+        <section class="settings-col">
+          <div class="settings-h" id="sklFormTitle">➕ Thêm skill mới</div>
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:16px 18px">
+            <input type="hidden" id="sklEditId" value="">
+            <label class="label">TÊN SKILL <span style="color:var(--red)">*</span></label>
+            <input type="text" id="sklName" placeholder="VD: Kể ngược từ cái kết (Reverse Chronology)" autocomplete="off" style="margin-bottom:4px">
+            <div style="font-size:11px;color:var(--text-dim);margin-bottom:12px">Tên này hiện trong ô "Kỹ năng viết (skill)" của tab Tạo Kịch Bản.</div>
+
+            <div class="grid-2" style="gap:12px">
+              <div>
+                <label class="label">CHỦ ĐỀ PHÙ HỢP</label>
+                <input type="text" id="sklTopic" list="sklTopicList" placeholder="Tất cả chủ đề (hoặc gõ tên chủ đề)" autocomplete="off">
+                <datalist id="sklTopicList"></datalist>
+              </div>
+              <div>
+                <label class="label">PHONG CÁCH PHÙ HỢP</label>
+                <input type="text" id="sklStyle" list="sklStyleList" placeholder="Tất cả phong cách (hoặc gõ tên bút pháp)" autocomplete="off">
+                <datalist id="sklStyleList"></datalist>
+              </div>
+            </div>
+            <div style="font-size:11px;color:var(--text-dim);margin:4px 0 12px">Gợi ý lấy từ danh sách Chủ Đề và Bút Pháp kể chuyện của tab Tạo Kịch Bản — để trống = áp dụng cho mọi chủ đề / phong cách.</div>
+
+            <label class="label">HƯỚNG DẪN VIẾT CHO AI <span style="color:var(--red)">*</span></label>
+            <textarea id="sklInstructions" rows="7" placeholder="Chỉ dẫn cụ thể AI áp skill này thế nào: cấu trúc từng hồi, nhịp kể, cách mở/đóng, điều cấm… (viết tiếng Việt hoặc tiếng Anh đều được — AI hiểu cả hai)"></textarea>
+            <div style="font-size:11px;color:var(--text-dim);margin:4px 0 14px">Đoạn này được ghép thẳng vào prompt khi viết kịch bản — hãy viết rõ, ngắn gọn, đi thẳng vào kỹ thuật.</div>
+
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn primary" onclick="sklSave()">💾 Lưu skill</button>
+              <button class="btn ghost" id="sklCancelBtn" onclick="sklResetForm()" style="display:none">✕ Huỷ sửa</button>
+            </div>
+            <div class="status-bar" id="statusSkl" style="margin-top:12px">Sẵn sàng. Điền form rồi bấm Lưu skill.</div>
+          </div>
+        </section>
+
+        <section class="settings-col">
+          <div class="settings-h">📚 Skill đã lưu <span id="sklCount" style="font-weight:400;color:var(--text-dim);font-size:11px"></span></div>
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:16px 18px">
+            <div class="grid-2" style="gap:10px;margin-bottom:10px">
+              <input type="text" id="sklFilterTopic" placeholder="Lọc theo chủ đề…" autocomplete="off" oninput="sklRender()">
+              <input type="text" id="sklFilterStyle" placeholder="Lọc theo phong cách…" autocomplete="off" oninput="sklRender()">
+            </div>
+            <div id="sklList" style="display:flex;flex-direction:column;gap:10px;max-height:520px;overflow:auto"><div style="color:var(--text-muted);font-size:12px">Chưa có skill nào — thêm skill đầu tiên ở cột trái.</div></div>
+          </div>
+        </section>
+      </div>
+    </div>

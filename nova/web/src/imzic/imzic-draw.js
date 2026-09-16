@@ -17,7 +17,8 @@ function drawWave(dt){
   const w = logicW, h = logicH;
   const baseY = h * (state.wavePos/100);
   const widthPx = w * (state.waveWidth/100);
-  const startX = (w - widthPx)/2;
+  // vị trí ngang (trái ↔ phải): 50% = giữa khung như cũ
+  const startX = w * (state.wavePosX/100) - widthPx/2;
   const amp = state.waveHeight;
 
   ctx.save();
@@ -44,6 +45,7 @@ function drawWave(dt){
   else if(state.waveStyle==='spiral') drawWaveSpiral(bins,w,h,baseY,startX,widthPx,amp);
   else if(state.waveStyle==='circledots') drawWaveCircleDots(bins,w,h,baseY,startX,widthPx,amp);
   else if(state.waveStyle==='neon') drawWaveNeon(bins,w,h,baseY,startX,widthPx,amp);
+  else if(state.waveStyle==='curved') drawWaveCurved(bins,w,h,baseY,startX,widthPx,amp);
   else drawWaveLine(bins,w,h,baseY,startX,widthPx,amp);
 
   ctx.restore();
@@ -92,6 +94,23 @@ function drawParticles(dt, treblePulse){
       else { const mag = Math.hypot(p.vx,p.vy) || 0.001; dx = p.vx/mag; dy = p.vy/mag; }
       const dirAngle = Math.atan2(dy,dx);
       drawRaindrop(p.x,p.y,sz*0.5,dirAngle);
+    } else if(state.effect==='bubbles'){
+      drawBubble(p.x,p.y,sz*0.9,p.rot);
+    } else if(state.effect==='petals'){
+      drawPetal(p.x,p.y,sz*0.7,p.rot);
+    } else if(state.effect==='fireflies'){
+      drawFirefly(p.x,p.y,sz*0.5,twinkle);
+    } else if(state.effect==='hearts'){
+      drawHeart(p.x,p.y,sz*0.7,p.rot);
+    } else if(state.effect==='bokeh'){
+      // đĩa bokeh to & mờ hơn hẳn hạt thường — alpha tổng hạ để không lóa khung
+      ctx.globalAlpha *= 0.45;
+      drawBokeh(p.x,p.y,sz*2.4);
+    } else if(state.effect==='sparks'){
+      let dx,dy;
+      if(p.mode==='center'){ dx = Math.cos(p.angle); dy = Math.sin(p.angle); }
+      else { const mag = Math.hypot(p.vx,p.vy) || 0.001; dx = p.vx/mag; dy = p.vy/mag; }
+      drawSpark(p.x,p.y,sz*0.5,Math.atan2(dy,dx), p.x + p.y);
     }
   }
   ctx.restore();
