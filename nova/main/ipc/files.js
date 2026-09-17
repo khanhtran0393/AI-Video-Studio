@@ -51,7 +51,14 @@ function registerFilesIpc() {
       if (!clean) return { error: 'THIẾU_DỮ_LIỆU' };
       const safe = (s) => String(s).replace(/[/\\:*?"<>|]+/g, '_').replace(/\.\.+/g, '_');
       let target = dir;
-      if (subdir) target = path.join(dir, safe(subdir));
+      if (subdir) {
+        // subdir cho phép LỒNG thư mục ('whiteboard-anh/<profile>') — mỗi phân
+        // đoạn được dọn ký tự cấm Windows + chặn traversal ('.'/'..' → '_').
+        const segs = String(subdir).split(/[\\/]+/)
+          .map((sg) => sg.replace(/[/\\:*?"<>|]+/g, '_').replace(/^\.+$/, '_'))
+          .filter(Boolean);
+        if (segs.length) target = path.join(dir, ...segs);
+      }
       fs.mkdirSync(target, { recursive: true });
       const file = path.join(target, safe(name));
       fs.writeFileSync(file, Buffer.from(clean, 'base64'));   // ghi đè nếu đã tồn tại

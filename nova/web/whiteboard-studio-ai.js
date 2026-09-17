@@ -28,10 +28,21 @@
       sinh ảnh line-art cho TỪNG câu (aspect ép 16:9 khớp canvas
       1280×720; model/quality theo tab Tạo Ảnh; multi-account dùng
       POOL, 1 account dùng project riêng), (c) lưu ảnh vào
-      <thư mục lưu>/whiteboard-anh/cau-NNN.png (saveFile IPC) rồi
-      gán vào cảnh đúng khung thời gian SRT, (d) wbAiRegionsCore tự
+      <thư mục lưu>/whiteboard-anh/<profile = tên bản TTS>/cau-NNN.png
+      (saveFile IPC, kèm metadata cau-NNN.json: prompt + text + khung
+      thời gian SRT + objects + cấu hình Flow) rồi gán vào cảnh đúng
+      khung thời gian SRT, (d) wbAiRegionsCore tự khoanh vùng
       khoanh vùng người/vật thể/sự kiện trên ảnh đó + giờ vẽ theo
       nhịp kẻ. Câu đã có ảnh được bỏ qua — chạy lại để tạo tiếp.
+
+   3) Nút "🖼 Gen ảnh" (hiện sau khi Phân tích prompt thành công) —
+      wbAiGenImages riêng lẻ: gen/retry các câu còn thiếu, cùng cấu
+      hình và cùng thư mục profile với luồng trên. Nút "📥 Gọi lại
+      ảnh" — wbRecallImages: chọn thư mục profile → đọc metadata
+      cau-NNN.json → gán lại prompt + khung thời gian + ảnh vào cảnh
+      hiện có, hoặc dựng lại toàn bộ cảnh khi panel vừa reload (timing
+      theo metadata, cues rỗng — khai báo) → Bước 4 sắp xếp timeline
+      bình thường.
 
    Pattern vision port từ src/hd/hd-ai-export.js (không copy chéo
    state — mỗi panel context riêng). Module nạp SAU
@@ -157,6 +168,8 @@
     try {
       const r = C.wbAnalyzePromptData();
       if (!r) return; // lỗi lộ liễu (WB_NO_SCRIPT / WB_NO_SRT) đã log trong panel
+      /* phân tích thành công → mở khóa nút "🖼 Gen ảnh" (gen riêng, retry thiếu) */
+      if (typeof C.showGenImagesBtn === 'function') C.showGenImagesBtn();
       await wbAiPrompts();
       await wbAiGenImages();
     } finally {
@@ -502,7 +515,8 @@
     return st;
   }
 
-  async function wbAiGenSave(dataUrl, idx) {
+  async function wbAiGenSave(dataUrl, idx, opts) {
+    const o = opts || {};
     const m = /^data:([^;]+);base64,(.+)$/.exec(String(dataUrl || ''));
     if (!m) throw new Error('phản hồi Flow không có ảnh đọc được (thiếu dataUrl)');
     let dir = '';
@@ -518,8 +532,29 @@
     }
     const ext = ((m[1] || 'image/png').split('/')[1] || 'png').replace('jpeg', 'jpg');
     const name = 'cau-' + String(idx + 1).padStart(3, '0') + '.' + ext;
-    const sv = await window.native.saveFile({ dir, subdir: 'whiteboard-anh', name, base64: m[2] });
+    const sv = await window.native.saveFile({ dir, subdir: o.subdir || 'whiteboard-anh', name, base64: m[2] });
     if (!sv || !sv.path) throw new Error('lưu ảnh lỗi: ' + ((sv && sv.error) || 'không rõ'));
+    /* metadata gắn ngầm vào ảnh (cau-NNN.json cạnh cau-NNN.png): prompt + text +
+       khung thời gian SRT + objects + cấu hình Flow — để "📥 Gọi lại ảnh" dựng
+       lại timeline mà không cần chạy lại phân tích. Ghi lỗi → KHÔNG nuốt: log ⚠
+       khai báo rõ (Luật 10) nhưng vẫn giữ ảnh đã lưu. */
+    if (o.meta) {
+      try {
+        o.meta.image = sv.path;   // đường dẫn ảnh thật (dir có thể từ pickFolder)
+        const json = JSON.stringify(o.meta, null, 2);
+        const u = new TextEncoder().encode(json);
+        let bin = '';
+        u.forEach((c) => { bin += String.fromCharCode(c); });
+        const jw = await window.native.saveFile({
+          dir, subdir: o.subdir || 'whiteboard-anh',
+          name: 'cau-' + String(idx + 1).padStart(3, '0') + '.json',
+          base64: btoa(bin),
+        });
+        if (!jw || !jw.path) throw new Error((jw && jw.error) || 'không rõ');
+      } catch (e2) {
+        log('⚠ metadata câu ' + (idx + 1) + ' chưa ghi được (ảnh vẫn đã lưu): ' + String((e2 && e2.message) || e2));
+      }
+    }
     return sv.path;
   }
 
@@ -542,7 +577,7 @@
     return { e0, err, rotated };
   }
 
-  window.wbStudioAi = { wbAiPrompts, wbAiGenImages, wbAiRegionsCore, wbAiScheduleReveal, wbAnalyzePrompt, wbArrangeRegions, wbAiVisionJson, wbAcUserSource, wbAiVisionSelfCheck, wbAiVisionSelfCheckPrompt, wbVisionSelfCheckEnabled, wbVisionMemory, wbVisionRemember, wbVisionStyleContext, wbVisionPlan };
+  window.wbStudioAi = { wbAiPrompts, wbAiGenImages, wbAiRegionsCore, wbAiScheduleReveal, wbAnalyzePrompt, wbArrangeRegions, wbAiVisionJson, wbAcUserSource, wbAiVisionSelfCheck, wbAiVisionSelfCheckPrompt, wbVisionSelfCheckEnabled, wbVisionMemory, wbVisionRemember, wbVisionStyleContext, wbVisionPlan, wbRecallImages };
 
   /* ════════ 2b · SẮP XẾP DỮ LIỆU (Bước 4 của luồng 6 bước) ════════
      Nút "🗺 Sắp xếp dữ liệu": AI vision khoanh vùng TẤT CẢ cảnh có ảnh.
@@ -617,8 +652,27 @@
       if (multi) await flowBridge.call('POOL_RESET');
       else projectId = await tfEnsureProject();
       const ctx = { multi, cfg, imgMap: {}, projectId, tier: st.paygateTier };
+      /* thư mục riêng theo profile: <lưu>/whiteboard-anh/<tên bản TTS> (Bước 2).
+         Chưa nhận TTS → chay-<timestamp>. Giữ nguyên trong phiên để gen tiếp/
+         retry vào đúng thư mục đó; đổi TTS → tự sang thư mục mới. */
+      if (state.wbImgGroupFor !== (state.ttsName || '')) {
+        const base = String(state.ttsName || '').trim();
+        state.wbImgGroup = base ? base.replace(/[/\\:*?"<>|]+/g, '-').replace(/\s+/g, ' ').trim().slice(0, 40) : '';
+        state.wbImgGroupFor = state.ttsName || '';
+        if (!state.wbImgGroup) state.wbImgGroup = null;
+      }
+      if (!state.wbImgGroup) state.wbImgGroup = 'chay-' + new Date().toISOString().replace(/\D/g, '').slice(0, 14);
+      const wbSubdir = 'whiteboard-anh/' + state.wbImgGroup;
+      const wbMetaOf = (s, idx) => ({
+        v: 1, scene: idx + 1, profile: state.wbImgGroup,
+        text: s.text || '', imagePrompt: s.imagePrompt || '',
+        startMs: s.startMs || 0, endMs: s.endMs || 0,
+        objects: Array.isArray(s.objects) ? s.objects : [],
+        cfg: { model: cfg.model || '', aspect: cfg.aspect || '16:9', quality: cfg.quality || '' },
+        image: '', createdAt: new Date().toISOString(),
+      });
       const conc = multi ? Math.max(1, st.accountCount) : Math.max(1, cfg.conc || 2);
-        log('🖼 Flow bắt đầu tạo ' + gen.length + ' ảnh' + (multi ? ' (⚡ ' + st.accountCount + ' tài khoản, ' + conc + ' luồng)' : (' · ' + conc + ' luồng')) + '…');
+        log('🖼 Flow bắt đầu tạo ' + gen.length + ' ảnh' + (multi ? ' (⚡ ' + st.accountCount + ' tài khoản, ' + conc + ' luồng)' : (' · ' + conc + ' luồng')) + ' → ' + wbSubdir + '…');
 
         /* (c)+(d) pool đơn giản: mỗi câu — gen → lưu → gán → AI khoanh vùng */
       let i = 0;
@@ -632,7 +686,7 @@
             const { e0, err, rotated } = await wbAiGenOne(String(s.imagePrompt), ctx);
               if (Array.isArray(rotated)) for (const ex of rotated) log('⚠ ' + ex + ' hết lượt → chuyển tài khoản');
             if (!e0) throw new Error(err || 'Flow không trả ảnh');
-            const path = await wbAiGenSave(e0.dataUrl, idx);
+            const path = await wbAiGenSave(e0.dataUrl, idx, { subdir: wbSubdir, meta: wbMetaOf(s, idx) });
             await C.setImageForScene(idx, path);
               if (!s.canvas) throw new Error('ảnh lưu xong nhưng không đọc được kích thước');
             await wbAiRegionsCore(s);
@@ -656,6 +710,92 @@
     }
   }
 
+  /* ════════ 3b · GỌI LẠI ẢNH ĐÃ GEN (metadata cau-NNN.json) ════════
+     Nút "📥 Gọi lại ảnh": chọn thư mục whiteboard-anh/<profile> → đọc JSON
+     metadata ghi kèm lúc gen (prompt + text + startMs/endMs + objects + ảnh) →
+     gán lại vào cảnh hiện có, hoặc DỰNG LẠI toàn bộ cảnh khi panel vừa reload
+     (không cần chạy lại TTS/phân tích). Cảnh dựng lại có cues rỗng (khai báo)
+     — timing dùng startMs/endMs từ metadata nên Bước 4 sắp xếp timeline bình
+     thường. Metadata thiếu/hỏng → lỗi lộ liễu từng câu (Luật 10). */
+  function wbRecallReadJson(r) {
+    if (!r || r.error || !r.dataUrl) throw new Error((r && r.error) ? String(r.error) : 'read-file-b64 không trả dữ liệu');
+    const k = r.dataUrl.indexOf('base64,');
+    if (k < 0) throw new Error('read-file-b64 thiếu base64');
+    const bin = atob(r.dataUrl.slice(k + 7));
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return JSON.parse(new TextDecoder().decode(bytes));
+  }
+  function wbRecallJoin(dir, name) {
+    return dir.replace(/[\\/]+$/, '') + '\\' + name;
+  }
+  function wbRecallApplyMeta(s, meta) {
+    if (typeof meta.imagePrompt === 'string' && meta.imagePrompt.trim()) s.imagePrompt = meta.imagePrompt.trim();
+    if (Number(meta.startMs) > 0 && Number(meta.endMs) > Number(meta.startMs)) {
+      s.startMs = Math.round(meta.startMs);
+      s.endMs = Math.round(meta.endMs);
+      s.durationMs = Math.max(500, s.endMs - s.startMs);
+      s.durationSec = s.durationMs / 1000;
+    }
+    if (Array.isArray(meta.objects) && meta.objects.length) s.objects = wbAiNormalizeShares(meta.objects);
+  }
+  async function wbRecallImages() {
+    if (!window.native || typeof window.native.pickFolder !== 'function' || typeof window.native.readFileB64 !== 'function') {
+      log('⚠ thiếu IPC chọn thư mục/đọc file — chạy panel trong app Nova'); return;
+    }
+    const r = await window.native.pickFolder();
+    if (!r || !r.path) return;
+    const dir = r.path;
+    const readMeta = async (i) => {
+      const f = wbRecallJoin(dir, 'cau-' + String(i + 1).padStart(3, '0') + '.json');
+      try { return wbRecallReadJson(await window.native.readFileB64(f)); }
+      catch (e) { log('❌ câu ' + (i + 1) + ': không đọc được metadata ' + f + ' — ' + String((e && e.message) || e)); return null; }
+    };
+    try {
+      /* (a) đang có cảnh trong phiên → bơm metadata theo đúng số câu */
+      if (state.scenes.length) {
+        let ok = 0;
+        for (let i = 0; i < state.scenes.length; i++) {
+          const meta = await readMeta(i);
+          if (!meta) continue;
+          wbRecallApplyMeta(state.scenes[i], meta);
+          if (meta.image) await C.setImageForScene(i, meta.image);
+          ok++;
+          log('✓ gọi lại câu ' + (i + 1) + ' — prompt + khung ' + ((state.scenes[i].startMs || 0) / 1000).toFixed(1) + 's → ' + ((state.scenes[i].endMs || 0) / 1000).toFixed(1) + 's' + (meta.image ? ' + ảnh' : ' (chưa có ảnh)'));
+        }
+        log('━━━ Gọi lại xong: ' + ok + '/' + state.scenes.length + ' câu ━━━');
+        return;
+      }
+      /* (b) chưa có cảnh (reload/panel mới) → dựng lại tuần tự tới khi thiếu metadata */
+      const built = [];
+      for (let i = 0; ; i++) {
+        const meta = await readMeta(i);
+        if (!meta) break;
+        const startMs = Math.max(0, Math.round(Number(meta.startMs) || 0));
+        const endMs = Math.max(startMs + 500, Math.round(Number(meta.endMs) || 0));
+        built.push({
+          sceneId: 'scene-' + String(i + 1).padStart(2, '0'),
+          startMs, endMs,
+          durationMs: Math.max(500, endMs - startMs),
+          durationSec: Math.max(500, endMs - startMs) / 1000,
+          text: String(meta.text || ''),
+          cues: [],   // metadata không chứa cue SRT — timing dùng startMs/endMs (khai báo)
+          image: null, canvas: null, elements: null, elementsDirty: false, previewPath: null,
+        });
+        wbRecallApplyMeta(built[i], meta);
+        if (meta.image) await C.setImageForScene(i, meta.image);
+        log('✓ dựng lại câu ' + (i + 1) + ' — ' + ((endMs - startMs) / 1000).toFixed(1) + 's' + (meta.image ? ' + ảnh' : ' (chưa có ảnh)'));
+      }
+      if (!built.length) { log('❌ WB_RECALL_EMPTY — không đọc được metadata nào trong thư mục đã chọn (cần thư mục whiteboard-anh/<profile> do "🖼 Gen ảnh" tạo).'); return; }
+      state.scenes = built;
+      state.selected = 0;
+      log('━━━ Gọi lại xong: dựng lại ' + built.length + ' cảnh từ metadata (cues rỗng — timing theo metadata; Bước 4 sắp xếp timeline bình thường) ━━━');
+      if (typeof C.showGenImagesBtn === 'function') C.showGenImagesBtn();
+    } finally {
+      C.renderSceneList(); C.renderSceneDetail();
+    }
+  }
+
   /* ── boot: panel lazy-mount → chờ nút xuất hiện (MutationObserver) ── */
   function boot() {
     /* Luồng 6 bước rút gọn: Bước 3 chỉ còn "Phân tích prompt" (chuỗi đầy đủ
@@ -663,9 +803,13 @@
        "Sắp xếp dữ liệu". Các nút AI rời (prompt/gen/khoanh vùng đơn) đã gỡ. */
     const b4 = document.getElementById('wb-analyzePromptBtn');
     const b5 = document.getElementById('wb-arrangeBtn');
+    const bGen = document.getElementById('wb-genImagesBtn');
+    const bRecall = document.getElementById('wb-recallImagesBtn');
+    if (bGen && !bGen.dataset.wbAiBound) { bGen.dataset.wbAiBound = '1'; bGen.addEventListener('click', wbAiGenImages); }
+    if (bRecall && !bRecall.dataset.wbAiBound) { bRecall.dataset.wbAiBound = '1'; bRecall.addEventListener('click', wbRecallImages); }
     if (b4 && !b4.dataset.wbAiBound) { b4.dataset.wbAiBound = '1'; b4.addEventListener('click', wbAnalyzePrompt); }
     if (b5 && !b5.dataset.wbAiBound) { b5.dataset.wbAiBound = '1'; b5.addEventListener('click', wbArrangeRegions); }
-    return !!(b4 && b5);
+    return !!(b4 && b5 && bGen && bRecall);
   }
   if (!boot()) {
     const mo = new MutationObserver(() => { if (boot()) mo.disconnect(); });

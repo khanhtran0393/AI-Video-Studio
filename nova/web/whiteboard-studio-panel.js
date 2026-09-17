@@ -33,6 +33,8 @@
     scenes: [],
     selected: -1,
     audioTrack: null,
+    handPath: null,        // PNG bàn tay tuỳ chỉnh (tipMode=hand) — null = tay mặc định engine
+    tipMode: 'hand',       // hand | pen | none — mẫu bút vẽ/bàn tay (thẻ Bước 6, đồng bộ kiểu "Bước 3" của Vẽ Tay Ảnh)
     musicTrack: null,      // nhạc nền (lặp tới hết video, mix nhỏ hơn voice)
     exporting: false,
     scriptRaw: null,       // kịch bản đã nhận từ tab Tạo Kịch Bản (Bước 1) — chưa phân tích
@@ -47,10 +49,11 @@
       'st1', 'st2', 'st3', 'st4', 'st5', 'st6',
       'pickSrtBtn', 'tsPullBtn', 'srtExtractRow',
       'pickVoiceSrtBtn', 'voicePullBtn', 'whisperPrepareBtn', 'modelSel',
-      'analyzePromptBtn', 'arrangeBtn', 'acVisionChk', 'autoRunBtn',
+      'analyzePromptBtn', 'genImagesBtn', 'recallImagesBtn', 'arrangeBtn', 'acVisionChk', 'autoRunBtn',
       'pickAudioBtn', 'audioLabel', 'audioWarn',
       'pickMusicBtn', 'musicLabel', 'musicVolSel',
       'inkPathSel', 'colorFillSel', 'capSel',
+      'tipCards', 'brushRadius', 'handPickBtn', 'handLabel',
       'gridEdge', 'saveProjectBtn', 'loadProjectBtn',
       'exportBtn', 'stopBtn', 'cancelXBtn', 'progressBar', 'progressPct', 'progressMsg', 'logBox',
       'pyPrepareBtn',
@@ -522,6 +525,9 @@
         colorFill: els.colorFillSel.value,
         capLongEdge: parseInt(els.capSel.value, 10) || 1080,
         gridEdge: parseInt(els.gridEdge && els.gridEdge.value, 10) || null,   // trống/0 → null = mặc định engine (--grid-edge)
+        tipMode: state.tipMode || 'hand',
+        brushRadius: parseInt(els.brushRadius && els.brushRadius.value, 10) || null,   // trống/0 → null = mặc định engine (--brush-radius)
+        handPath: ((state.tipMode || 'hand') === 'hand' && state.handPath) ? state.handPath : null,
         musicVolume: els.musicVolSel ? (parseFloat(els.musicVolSel.value) || 0.16) : 0.16,
       },
     };
@@ -561,6 +567,9 @@
         capLongEdge: els.capSel ? (parseInt(els.capSel.value, 10) || null) : null,
         musicVolume: els.musicVolSel ? (parseFloat(els.musicVolSel.value) || null) : null,
         gridEdge: els.gridEdge ? (parseInt(els.gridEdge.value, 10) || null) : null,
+        tipMode: state.tipMode || null,
+        brushRadius: els.brushRadius ? (parseInt(els.brushRadius.value, 10) || null) : null,
+        handPath: state.handPath || null,
       },
     };
   }
@@ -594,6 +603,10 @@
       if (d.opts.capLongEdge && els.capSel) els.capSel.value = String(d.opts.capLongEdge);
       if (d.opts.musicVolume && els.musicVolSel) els.musicVolSel.value = String(d.opts.musicVolume);
       if (d.opts.gridEdge && els.gridEdge) els.gridEdge.value = String(d.opts.gridEdge);
+      if (d.opts.brushRadius && els.brushRadius) els.brushRadius.value = String(d.opts.brushRadius);
+      if (d.opts.tipMode && WB_TIP_STYLES.some((t) => t.id === d.opts.tipMode)) state.tipMode = d.opts.tipMode;
+      if (Object.prototype.hasOwnProperty.call(d.opts, 'handPath')) state.handPath = d.opts.handPath || null;
+      syncHandUi();
     }
     // đồng bộ nhãn media theo state đã nạp
     if (els.srtLabel) {
@@ -616,6 +629,83 @@
   }
 
   function r2(out) { return out && out.canceled; }
+
+  /* ════════ MẪU BÚT VẼ & BÀN TAY (Bước 6) — cùng ngôn ngữ thẻ "Bước 3" của Vẽ Tay Ảnh
+     (hd-main.js: TIP_STYLES + hdMakeThumb + hdCardStyle, hoá sang wb-*)
+     tipMode: hand = sprite bàn tay (mặc định hoặc PNG tuỳ chỉnh qua whiteboard:pickHand)
+              pen  = ngòi bút procedural của engine | none = không hiện tay/bút.
+     handPath khai báo mà file thiếu → main fail lộ liễu WB_HAND_MISSING (Luật 10). */
+  const WB_TIP_STYLES = [
+    { id: 'hand', label: 'Bàn tay cầm bút', desc: 'tay thật lướt theo nét vẽ' },
+    { id: 'pen',  label: 'Ngòi bút',        desc: 'chỉ đầu bút chạy trên ảnh' },
+    { id: 'none', label: 'Không hiệu ứng',  desc: 'mực tự chạy, không bút/tay' },
+  ];
+
+  /* thumbnail mẫu vẽ tay bằng canvas 64×40 (mô phỏng cảm giác từng kiểu) */
+  function wbMakeThumb(kind) {
+    const c = document.createElement('canvas');
+    c.width = 64; c.height = 40;
+    c.style.cssText = 'width:64px;height:40px;background:#fff;border:1px solid rgba(0,0,0,.15);border-radius:6px;flex:0 0 auto';
+    const x = c.getContext('2d');
+    x.lineWidth = 2; x.strokeStyle = '#c0392b'; x.fillStyle = '#333';
+    x.font = '20px system-ui,sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+    x.fillText(kind === 'hand' ? '✍' : kind === 'pen' ? '🖊' : '⌀', 32, 19);
+    x.beginPath(); x.moveTo(8, 33); x.quadraticCurveTo(32, 26, 56, 33); x.stroke();
+    return c;
+  }
+
+  function wbTipCardStyle(on) {
+    return 'display:inline-flex;align-items:center;gap:9px;padding:8px 12px;border-radius:10px;cursor:pointer;' +
+      'border:1.5px solid ' + (on ? 'var(--accent,#e67e22)' : 'var(--border,#c9c9c9)') + ';' +
+      'background:' + (on ? 'color-mix(in srgb,var(--accent,#e67e22) 14%,transparent)' : 'var(--surface,#fafafa)') + ';';
+  }
+
+  function buildTipCards() {
+    if (!els.tipCards) return;
+    els.tipCards.textContent = '';
+    WB_TIP_STYLES.forEach((st) => {
+      const card = document.createElement('div');
+      card.dataset.v = st.id;
+      card.appendChild(wbMakeThumb(st.id));
+      const txt = document.createElement('div');
+      txt.innerHTML =
+        '<div style="font-weight:600;font-size:12px">' + st.label + '</div>' +
+        '<div style="font-size:11px;opacity:.75">' + st.desc + '</div>';
+      card.appendChild(txt);
+      card.addEventListener('click', () => {
+        state.tipMode = st.id;
+        syncHandUi();
+        log('🖌 mẫu bút: ' + st.label);
+      });
+      els.tipCards.appendChild(card);
+    });
+  }
+
+  function syncHandUi() {
+    const mode = state.tipMode || 'hand';
+    if (els.tipCards) {
+      Array.prototype.forEach.call(els.tipCards.children, (card) => {
+        card.style.cssText = wbTipCardStyle(card.dataset.v === mode);
+      });
+    }
+    if (els.handPickBtn) els.handPickBtn.disabled = mode !== 'hand';
+    if (els.handLabel) {
+      if (mode === 'pen') { els.handLabel.textContent = 'ngòi bút (engine tự vẽ)'; els.handLabel.title = ''; }
+      else if (mode === 'none') { els.handLabel.textContent = 'không hiện tay/bút'; els.handLabel.title = ''; }
+      else {
+        els.handLabel.textContent = state.handPath ? state.handPath.split(/[\\/]/).pop() : 'mặc định (drawing-hand.png)';
+        els.handLabel.title = state.handPath || 'assets/drawing-hand.png của engine';
+      }
+    }
+  }
+
+  async function pickHand() {
+    const r = await window.native.whiteboard.pickHand();
+    if (r2(r) || !r.path) return;
+    state.handPath = r.path;
+    syncHandUi();
+    log('✓ bàn tay tuỳ chỉnh: ' + r.path);
+  }
 
   function setProgress(pct, msg) {
     if (els.progressBar) els.progressBar.style.width = Math.max(0, Math.min(100, pct)) + '%';
@@ -692,6 +782,12 @@
     if (els.pickMusicBtn) els.pickMusicBtn.addEventListener('click', pickMusic);
     if (els.saveProjectBtn) els.saveProjectBtn.addEventListener('click', saveProject);
     if (els.loadProjectBtn) els.loadProjectBtn.addEventListener('click', loadProject);
+    if (els.handPickBtn) els.handPickBtn.addEventListener('click', pickHand);
+    if (els.brushRadius) els.brushRadius.addEventListener('change', () => {
+      const v = parseInt(els.brushRadius.value, 10);
+      if (!isFinite(v)) { els.brushRadius.value = ''; return; }
+      if (v < 2 || v > 40) els.brushRadius.value = String(Math.min(40, Math.max(2, v)));   // kẹp 2..40 như Vẽ Tay Ảnh
+    });
     if (els.whisperPrepareBtn) els.whisperPrepareBtn.addEventListener('click', async () => {
       els.whisperPrepareBtn.disabled = true;
       try {
@@ -737,6 +833,8 @@
   function init() {
     bind();
     wireEvents();
+    buildTipCards();
+    syncHandUi();
     renderSceneList();
     renderSceneDetail();
     listenProgress();
@@ -805,6 +903,8 @@
         <div class="wb-step-body">
         <div class="wb-media-row">
           <button id="wb-analyzePromptBtn" class="wb-btn-primary" title="TRỌN LUỒNG Bước 3: tách kịch bản (Bước 1) thành CÂU CÓ NGHĨA → đối chiếu .SRT (Bước 2) để MỖI CÂU có thời lượng đọc chính xác → tạo cảnh theo câu → AI sinh prompt ảnh line-art cho từng câu → Flow sinh ảnh + gán đúng khung thời gian. Cần cấu hình AI ở tab Cài đặt + đăng nhập Flow ở tab Tạo Ảnh Hàng Loạt.">🧠 Phân tích prompt</button>
+          <button id="wb-genImagesBtn" class="wb-hide" title="Gen ảnh RIÊNG cho các câu còn thiếu (hiện sau khi Phân tích prompt thành công): dùng đúng cấu hình model/quality/aspect của tab 🖼️ Tạo Ảnh / Video Hàng Loạt, lưu vào <thư mục lưu>/whiteboard-anh/<profile TTS>/ kèm metadata cau-NNN.json (prompt + text + khung thời gian SRT + objects) để gọi lại sau. Câu đã có ảnh được bỏ qua.">🖼 Gen ảnh</button>
+          <button id="wb-recallImagesBtn" title="Gọi lại ảnh đã gen: chọn thư mục whiteboard-anh/<profile> → đọc metadata cau-NNN.json (prompt + text + khung thời gian SRT + objects) → gán lại vào cảnh hiện có (hoặc dựng lại toàn bộ cảnh khi panel vừa reload) → Bước 4 sắp xếp timeline bình thường.">📥 Gọi lại ảnh</button>
         </div>
         <div class="wb-items" id="wb-sceneList"></div>
         </div>
@@ -858,6 +958,13 @@
           <select id="wb-colorFillSel" title="Color fill"><option value="contour-wipe">contour-wipe</option><option value="brush">brush</option></select>
           <select id="wb-capSel" title="Cap cạnh dài"><option value="720">720</option><option value="1080" selected>1080</option><option value="1440">1440</option></select>
           <input id="wb-gridEdge" type="number" min="1" step="1" style="width:90px" title="Cỡ ô lưới --grid-edge (px). Để trống = mặc định engine" placeholder="grid edge px">
+        </div>
+        <div class="wb-media-label" style="margin:10px 0 4px">Hiệu ứng bút chạy theo nét vẽ trong video (cùng bảng chọn Bước 3 của Vẽ Tay Ảnh)</div>
+        <div id="wb-tipCards" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+        <div class="wb-media-row" style="margin-top:10px">
+          <label class="wb-media-label">🖌 Cỡ nét <input id="wb-brushRadius" type="number" min="2" max="40" step="1" placeholder="mặc định" style="width:80px" title="Độ dày nét bút --brush-radius (px, 2–40). Để trống = mặc định engine"></label>
+          <button id="wb-handPickBtn" title="Chọn PNG bàn tay tuỳ chỉnh (nền trong suốt) thay bàn tay mặc định">✋ tay tuỳ chỉnh</button>
+          <span class="wb-media-label" id="wb-handLabel">mặc định</span>
         </div>
         <div class="wb-media-row">
           <button id="wb-saveProjectBtn" title="Lưu toàn bộ dự án (cảnh, vùng vẽ, voice, nhạc, tuỳ chọn render) vào dữ liệu app">💾 Lưu dự án</button>
@@ -915,6 +1022,9 @@
     state, els, A, log, sec, fmtTime, wbFileUrl,
     renderSceneList, renderSceneDetail, checkAudioMatch,
     setImageForScene, wbAnalyzePromptData, wbSetBtnOk, wbRevealSrtExtract,
+    /* nút "🖼 Gen ảnh" (Bước 3) chỉ hiện sau khi Phân tích prompt thành công —
+       panel giữ quyền UI; module AI gọi qua C.showGenImagesBtn() */
+    showGenImagesBtn: () => { if (els.genImagesBtn) els.genImagesBtn.classList.remove('wb-hide'); },
   };
 
   // script nằm cuối <body> → DOM đã parse xong; tự khởi động khi root tồn tại

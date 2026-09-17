@@ -1,3 +1,24 @@
+## 2026-09-17zr — Whiteboard Bước 3: nút "🖼 Gen ảnh" riêng + thư mục theo profile + metadata gắn ảnh + "📥 Gọi lại ảnh"
+
+- **Bối cảnh**: user hỏi "prompt nào cho ảnh nào" → giải thích mapping by-construction (prompt nằm trên cảnh, ảnh gán trong cùng chuỗi await, engine ghép theo media_id). User đề xuất: nút Gen ảnh riêng ở Bước 3 + lưu thư mục riêng theo profile + gán ngầm prompt/timeline vào ảnh để gọi lại sắp xếp timeline. Triển khai luôn (được duyệt ngầm theo đề xuất).
+- **nova/main/ipc/files.js** (`save-file`): subdir giờ cho phép LỒNG `whiteboard-anh/<profile>` — tách phân đoạn theo `/\`, dọn ký tự cấm Windows từng đoạn, chặn traversal (`.`/`..` → `_`). Tên file giữ logic `safe()` cũ.
+- **whiteboard-studio-panel.js**: thêm nút `wb-genImagesBtn` (ẩn `wb-hide`, hiện sau khi Phân tích prompt thành công qua `C.showGenImagesBtn()`) + nút `wb-recallImagesBtn` (luôn hiện) ở Bước 3; bind ids; export ctx thêm `showGenImagesBtn`.
+- **whiteboard-studio-ai.js**:
+  - `wbAiGenSave(dataUrl, idx, {subdir, meta})`: ghi ảnh → ghi sidecar `cau-NNN.json` (meta.image = đường dẫn ảnh thật; UTF-8 qua TextEncoder+btoa). Lỗi ghi metadata → log ⚠ khai báo rõ, KHÔNG mất ảnh (Luật 10).
+  - `wbAiGenImages`: thư mục profile `whiteboard-anh/<tên bản TTS>` (state.wbImgGroup, đổi TTS → đổi thư mục; chưa có TTS → `chay-<timestamp>`); log in kèm thư mục.
+  - `wbRecallImages` (nút "📥 Gọi lại ảnh"): pickFolder → đọc `cau-NNN.json` (readFileB64 + TextDecoder) → có cảnh: bơm prompt + startMs/endMs + objects (wbAiNormalizeShares) + ảnh (setImageForScene); không có cảnh (reload): dựng lại tuần tự tới thiếu metadata — cues rỗng KHAI BÁO (timing theo metadata → Bước 4 vẫn sắp xếp timeline chuẩn). Thiếu/hỏng metadata → lỗi lộ liễu từng câu, `WB_RECALL_EMPTY` khi thư mục sai.
+  - boot() bind thêm 2 nút; `window.wbStudioAi` thêm `wbRecallImages` (hoisting — không đổi export/IPC nào của main → check:exports/inventory không đổi).
+- **Kiểm định**: `npm run check` EXIT 0 (10/10 — toplevel 1810 tên sạch, docs-sync 41 script, selftest 10/10).
+- **Còn treo**: xác minh thực app (cần đăng nhập Flow): Phân tích prompt → Gen ảnh riêng → metadata JSON trong `whiteboard-anh/<profile>` → Gọi lại ảnh sau reload; và auto 1→5 vision thật (mục 2026-09-17zp). tmp scripts giữ lại cho các lần chạy đó rồi mới dọn (Luật §6.7).
+
+
+## 2026-09-17zq — SỬA LUẬT (AGENTS.md §6): thêm mục 7 "Dọn rác sau khi test (BẮT BUỘC)"
+
+- **Bối cảnh**: các script `tmp-*.js` do agent tạo trong task trước đã được user dọn hết. User yêu cầu đưa thành luật cứng: quá trình test hoàn tất thì BẮT BUỘC dọn rác sau khi test xong.
+- **SỬA LUẬT (AGENTS.md §6)**: chèn mục **7. Dọn rác sau khi test (BẮT BUỘC)** — khi test xong, agent phải dọn sạch artifact tạm mình sinh ra: `tmp-*` trong `nova/scripts/tmp/` + script/fixture tạm ở gốc repo (kể cả file bị `.gitignore` che), file fixture/output tạm trong `%TEMP%`, process electron/node thừa do harness spawn, worktree nếu có. **Phạm vi KHÔNG dọn**: dữ liệu THẬT của app (`%APPDATA%\AI Video Studio Independent`, `output/job.json`, tài nguyên thật trong `output/`) và script kiểm định chính thức trong `nova/scripts/`. Giữ lại file tạm chỉ khi khai báo rõ trong mục "Còn treo" của `MEMORY.md` kèm lý do + điều kiện dọn. Định nghĩa "task hoàn tất" giờ bao gồm dọn rác: test PASS mà còn rác = task CHƯA xong.
+- Đánh số lại mục 7 (Ghi nhận) → 8 và mục 8 (CẤM git worktree) → 9 của §6; cập nhật tham chiếu chéo "xem mục 9" trong mục 7.
+
+
 ## 2026-09-17zp — Whiteboard vision: nâng cấp "Antigravity thật" (tự kiểm 1 vòng + nhớ phong cách + kế hoạch) + SỬA LUẬT miễn trừ Antigravity
 
 - **Bối cảnh**: sau khi thác 3 bậc vision (Antigravity → callLLMJson → Google Vision) PASS E2E, gap analysis vs Antigravity thật chỉ ra thiếu: vòng tự kiểm/retry, ghi nhớ trạng thái giữa các bước, kế hoạch hiển thị. User duyệt nâng cấp rẻ nhất + yêu cầu **sửa luật để loại trừ Antigravity**.
@@ -1055,6 +1076,13 @@ Người dùng chọn "cải tiến tất cả" — hiện thực đủ 9 đề 
 - **Dọn dead dormant #2 (t7 preview Remotion iframe)**: bằng chứng chết chắc — `_t7RmState.on` **không bao giờ được đặt true** ở bất kỳ đâu (grep toàn repo, chỉ có khai báo `on:false` trong shared/t7.js), element `#t7RemotionFrame` không còn trong bất kỳ markup nào. Preview hiện là ảnh (`t7PreviewImg` trong panels-tool7-anim.html). Nova EXPORT vẫn LIVE qua `t7NovaExport` → `window.native.renderNovaScenes` (main process) — KHÔNG cần iframe, không bị đụng tới. **Xoá 6 hàm + state**: `_t7RemotionFrame`, `_t7NovaSig`, `_t7NovaLoad`, `_t7RemotionFit` (t7-draw.js, -54 dòng), `t7RemotionSeek`, `t7RemotionRefresh` (t7-engine.js, -18 dòng), nhánh Remotion trong `_t7UpdatePreviewFx` (t7-draw.js), call site `t7RemotionRefresh` trong `_t7PersistClips` (t7-core.js), khai báo `const _t7RmState` (shared/t7.js). Call site còn lại đều type-guard `typeof` nên xoá an toàn.
 - **Kiểm định**: `npm run check` EXIT 0 (10/10 bước, check:toplevel 1810 tên 0 xung đột sau rename; selftest 10/10). Restart app (quit sạch `window-all-closed→…→quit`, không crash) → xác minh CDP: 6 hàm iframe + `_t7RmState` đều `undefined` trên renderer sống; `_tsButPhapNote` giờ là bản RICH (contains `_TS_BUT_PHAP`); `t7NovaExport`/`t7ExportEngineChange`/`_t7UpdatePreviewFx` vẫn function; 0 console error; HTTP server phục vụ tool-ts.js mới (`_tsButPhapNoteEn` có, tên cũ 0). Phiên mới 0 dòng crash trong lifecycle.log.
 - **Bài học editor**: khi old_text có dòng nằm GIỮA một dòng dài (t7-core.js 1-liner) không được thêm leading whitespace tuỳ ý — phải khớp đúng biên dòng.
+- **Quét 2 lớp bug cùng họ (tmp one-off, đã xoá; bị phiên song song mất 1 lần, thêm lại)**: (1) chuỗi `getElementById('X').prop` TRỰC TIẾP không guard trên id không tồn tại (lớp crash `mvVidStopBtn`) — 312 chuỗi toàn renderer, **0** trúng id thiếu → nhóm no-op infra giữ lại xác nhận an toàn; (2) TRÙNG TÊN `function` top-level giữa file renderer (lớp bug `_tsButPhapNote`) — chỉ 1 cặp `parseSRT` (toolbox/utility.js ↔ imzic/imzic-lyrics.js) — **vô hại**: imzic-lyrics.js chỉ nạp từ trang iframe riêng `img-to-vid.html` (chỉ họ imzic-*, không nạp toolbox/utility.js → 2 document, 2 namespace).
+- **Siết checker vĩnh viễn** (`nova/scripts/toplevel-check.js`): fn-fn đè chéo file từ "in thông tin (hợp lệ)" → **FAIL lộ liễu** kèm hướng dẫn đổi tên theo tiền tố feature; đè trong cùng 1 file vẫn OK. Fixture 2 chiều: dup fn → exit 1 đúng, nguồn sạch → exit 0 đúng; nguồn thật pass (0 dup). AGENTS.md §3.1 dòng check:toplevel đã cập nhật.
+- **Audit mapping select ↔ blueprint (ts-prompt)**: script tĩnh đối chiếu — `tsTone` 4/4 option khớp chính xác key `_TS_BUT_PHAP`; `tsLang` 27/27 khớp `_TS_VAN_HOA`; `tsSkill` 7/7 khớp `_TS_SKILL` + option `""` ("AI tự chọn") → `_tsPSkillSpec('')` trả `''` CHỦ ĐÍCH; không có key mồ côi; fallback duy nhất `_tsPVanHoaSpec` generic cho lang lạ là KHAI BÁO rõ. **Xác minh runtime trên renderer sống (CDP, env CDP_WS)**: cả 4 tone sinh note rich >200 ký tự, 27/27 lang spec rich, skill rich, `_tsNovelArchitect`/`_tsNovelChapterPrompt` là function → pipeline Novel nhận ĐẦY ĐỦ blueprint sau fix. Tmp đã xoá; `npm run check` EXIT 0 (chạy 2 lần trong lượt). Lưu ý assert: entry 'Review - lời thoại' dùng 'CHO PHÉP/KHÔNG' thay 'CẤM' (thiết kế — assert 'CẤM' cứng sẽ false âm).
+- **Audit inline event handler (lớp bug crash-on-click, tmp one-off đã xoá)**: script đối chiếu mọi `on*="..."` trong document chính (index.html + toàn bộ partial, 115 script nạp, 2155KB, ~4152 tên khai báo top-level, 935 id) + 4 trang standalone (documentary, fractal-antarctica-render, img-to-vid, video-agent) với tập tên global thật (function/const/var/window.X gán) ∪ id element (named access) ∪ builtin — kết quả **0 handler gọi hàm không tồn tại** trên cả 5 document. Class crash-on-click (họ `mvVidStopBtn` nhưng kích hoạt lúc click) KHÔNG còn trường hợp nào. Kỹ thuật: regex lookbehind `(?<![.\w$])` để loại `.method(`, lọc keyword; `window.X =` phải bắt KHÔNG neo đầu dòng (2 case flow-keys.js bị sót khi neo `^`).
+- **Xoá nợ stale: Bug C1** (`profiles.js:843` `#pCharStyleB` không guard — ghi "còn treo" từ 17z): KIỂM TRA LẠI ĐÃ FIX TỪ 2026-09-17x — code hiện tại guard đúng `if (pCharStyleB && …)` kèm comment "Fix check:shadow C1 2026-09-17x"; id `pCharStyleB` không có trong markup nên guard là bắt buộc. Nợ này ĐÓNG.
+
+
 
 
 ## 2026-09-17zo — Copilot (b): real browser session (persist:copilot) + ảnh TRƯỚC/SAU thay pseudo-diff
@@ -8684,3 +8712,76 @@ ova/web/src/toolbox/skill-catalog/{index.js,part-01.js,part-02.js,part-03.js} (4
 - **Gotcha reply invoke lạc**: `whiteboard:export` resolve `undefined` dù render OK (40s) — automation KHÔNG tin reply; verify bằng `#wb-logBox` (log "sao chép video / done") + file trên đĩa + ffprobe. (ipc.js đã có kênh event dự phòng `whiteboard:exportProgress` nhưng panel-side.)
 - **Phân nhánh đã loại**: Flow i2v cứng `abra_edit_360p` KHÔNG nhận duration (BX_I2V_FIXED_SHAPE, gen-bx.js:475) — muốn AI sinh video 5s phải sinh dài rồi cắt bằng FFmpeg (khai báo rõ).
 - **Kiểm định**: `npm run check` EXIT=0 (10/10). `scan:lifecycle`: chỉ WARN cũ 05:00/05:04Z (trước phiên, đã auto-recovery) — không crash mới. Script tmp (gitignored): `tmp-wb-redraw-5s.js` (payload + chạy), `tmp-wb-logbox.js` (đọc log panel).
+
+## 2026-09-17zo — Ẩn placeholder I-MZic preview
+
+- **Yêu cầu**: user than placeholder `Chọn ảnh + nhạc ở bên trái / để bắt đầu xem trước` (id `emptyState`, class `empty-state` trong `nova/web/img-to-vid.html` dòng 984–987) gây khó chịu.
+- **Cách xử lý**: thêm `display:none !important` vào rule `.empty-state` ở cùng file (dòng ~229). Chỉ thay đổi CSS thuần — DOM + 4 chỗ JS toggle (`imzic-core.js:87`, `imzic-render.js:272/389/417`, `imzic-workflow.js:84`) giữ NGUYÊN để không phá hợp đồng (`check:exports`/`check:shared` không đổi). Bật lại chỉ xoá 1 dòng CSS.
+- **Kiểm định**: `npm run check` 10/10 PASS, không lỗi mới.
+- **Lý do KHÔNG chạy `khoidong.bat`**: thay đổi CSS thuần, không đổi IPC/JS, không có nhánh code mới cần verify theo AGENTS §6.5.
+
+
+## 2026-09-17zp — I-MZic: tính năng "10. Text lên màn hình" — nhiều dòng chữ tự do, chỉnh font/cỡ/hiệu ứng, nhịp theo nhạc
+
+- **Yêu cầu**: user muốn text hiện lên màn hình video I-MZic (khác "9. Lời bài hát .srt"): thêm nhiều dòng, chỉnh cỡ chữ/hiệu ứng/font, nhịp theo nhạc.
+- **Module mới** `nova/web/src/imzic/imzic-text.js` (331 dòng, top-level prefix `imzText*`/`IMZIC_TEXT_*` + `drawTextLines`): mỗi dòng chữ = `{ text, font, size, color, x, y, fx, beat }`; fx ∈ `none/fade/pop/type/glow/bounce` (Tĩnh/Hiện dần/Pop/Đánh máy/Phát sáng theo nhạc/Trôi nhẹ); tick "🥁 Nhịp theo nhạc" → pulse `exp(-5·(t−beatGầnNhất))` theo `offlineAnalysis.beats` — **thuần hàm của t, deterministic (Luật 8)** nên file xuất ra khớp preview. "Phát sáng theo nhạc" dùng `offlineEnvAt(t).energy`. Bật beat/glow → tự gọi `ensureOfflineAnalysis()` 1 lần/file (khai báo qua status, không fallback ngầm — Luật 10). Trần 30 dòng, text ≤200 ký tự, sanitize whitelist trường (dữ liệu localStorage/preset là dữ liệu lạ).
+- **Vẽ ở 3 đường dùng chung** (toạ độ logic — khớp preview/file xuất): `imzic-render.js` renderFrame (sau `drawLyrics`, trước `applyFx`), `imzic-export.js` vòng offline ⚡ + 📸 Chụp khung. Xuống dòng tái dùng `wrapLyricText` của lyrics; viền tối mỏng để nổi trên nền sáng.
+- **UI**: section mới "11. Text lên màn hình (tuỳ chọn)" trong `img-to-vid.html` (id `secText`, hint `secTextHint`, list `textList`, nút `textAddBtn`/`textClearBtn`); "12. Hàng chờ xuất video". Mỗi dòng: ô text + ▲▼✕, font (5 font giống lyricFont), cỡ 14–120, màu, hiệu ứng, tick nhịp, 2 slider Ngang/Cao độ %. Script nạp SAU `imzic-analysis.js`, TRƯỚC `imzic-controls.js` (loadSettings cần `imzicTextApplySaved`).
+- **Persistence**: localStorage `imzic:textLines:v1` (debounce 400ms); `collectSettingsInputs` thêm `inputs.textLines` (JSON) → tự đi cùng **preset** (imzic-presets), **hàng chờ xuất** và **dự án .json**; `applySettingsInputs` khôi phục qua `imzicTextApplySaved`. state thêm `textLines:[]` (imzic-core.js). Hint section qua `SECTION_HINTS.secText`.
+- **Kiểm định**: node --check OK 6 file; `npm run check` **10/10 PASS exit 0** (syntax 505 files, IPC 240 kênh, exports 35, toplevel không xung đột, handler-shadow 0 id trùng, selftest 10/10). Chưa test app thật — chờ user `khoidong.bat` + reload trang I-MZic.
+- **Sửa số thứ tự mục (user báo sai)**: các section trong `img-to-vid.html` được đánh số lại LIÊN TỤC theo thứ tự hiển thị — "7. Logo / Watermark" (trước đây KHÔNG có số, gây lệch), "8. FX toàn khung", "9. Khung hình", "10. Lời bài hát (.srt)", "11. Text lên màn hình", "12. Hàng chờ xuất video". Sửa đồng bộ tham chiếu "mục N" trong text người dùng (imzic-fx.js:404 "mục 8") + comment JS (controls/render/text, comment CSS `mục 9` khung hình, mô tả section text "khác lời hát .srt ở mục 10"). Sau sửa: `npm run check` run 6 **EXIT 0**, node --check OK 4 file, chuỗi section 1→12 liên tục.
+- **Sửa UI native lệch nền (user báo)**: (1) `wmInput` (mục 7) từng là input file trần trong `.field` → hiện control native "Choose File / No file chosen"; thay bằng pattern `.upload-box` chuẩn (icon 🏷️ + `.name#wmName` + `.hint`), giữ nguyên id `wmInput`/`wmName` → JS controls/workflow không đổi; các input khác (mục 1/10) đã ẩn sẵn qua `.upload-box input` clip-rect nên không lộ. (2) Bỏ 3 popup native: `window.prompt` lưu preset + 2 `window.confirm` (🧹 Reset, 🗑 Xoá dữ liệu) → module mới `nova/web/src/imzic/imzic-modal.js` (prefix `imzModal*`, nạp ngay sau imzic-core.js, trước presets/workflow): `imzModalConfirm({title,message,okText,danger})`→Promise<boolean>, `imzModalPrompt({title,message,value,okText})`→Promise<string|null>; DOM tự sinh bằng biến CSS của trang (--panel/--border/--accent), nút tái dùng `.btn`/`.btn.primary` + `.danger` đỏ #dc2626 cho hành động phá huỷ; Enter=OK, Esc/click nền=Huỷ, trả focus về phần tử trước đó; 1 modal/tại một thời điểm (mở mới → modal cũ resolve như Huỷ). CSS modal thêm vào khối `<style>` của img-to-vid.html. Node --check OK 3 file; `npm run check` run 7 **EXIT 0**.
+- **BUG server.js thật — htmlCache stale cho file HTML KHÁC index.html (user báo "mục 7 chưa đánh số" dù đĩa đã đúng)**: `htmlCache` của `nova/main/server.js` khóa theo mtime MỚI NHẤT của index.html + partials/ và `path` — KHÔNG gồm mtime/size của chính file được request. Sửa `img-to-vid.html` (không đụng index/partials) → `htmlMtime()` không đổi → cache hit trả bản STALE mãi mãi dù file đĩa mới; ETag có mtime file nên trình duyệt nhận 200 + thân cũ (không phát hiện qua 304). Fix: thêm `fileMt: stat.mtimeMs, fileSize: stat.size` vào khóa cache (stat đã có sẵn tại điểm đó). Sau fix: node --check OK, `npm run check` run 8 **EXIT 0**; restart app (taskkill + `khoidong.bat --silent`, LAUNCH_EXIT=0); xác minh `http://127.0.0.1:47280/img-to-vid.html` phục vụ đúng "7. Logo / Watermark / 10. Lời bài hát / 11. Text / 12. Hàng chờ"; scan:lifecycle chỉ WARN từ taskkill chủ đích (nhóm nhiễu §6.5), không REAL. Bài học: cache theo mtime "tổng" chỉ đúng cho index.html — mọi file HTML vào nhánh expandIncludes đều cần khóa riêng theo stat của chính nó.
+- Lưu ý: entry 2026-09-15o..r (nút 🗑 clear + sóng cong) KHÔNG còn trong MEMORY.md — các phiên song song đã compact/tái cấu trúc file; không tái tạo, trạng thái feature đã nằm trong code.
+
+## 2026-09-17zr — Whiteboard Studio: tùy chọn hiệu ứng tay/bút (tipMode + handPath + brushRadius)
+
+**Yêu cầu:** user không tùy chọn được mẫu bút vẽ và bàn tay trong Whiteboard Studio.
+
+**Khám phá:** backend `nova/whiteboard-studio/py-backend.js` ĐÃ hỗ trợ sẵn `tipMode` (hand|pen|none) + `brushRadius` trong DEFAULTS nhưng UI không lộ ra — panel chỉ có inkPath/colorFill/cap/gridEdge. Tay mặc định hardcode HAND_PNG (srt-whiteboard-animation/assets/drawing-hand.png); engine render_stream_whiteboard.py nhận positional hand PNG / hand="" → ngòi bút procedural / --bare-tip → không hiện.
+
+**Thay đổi:**
+- `py-backend.js`: option mới `handPath` (PNG bàn tay tuỳ chỉnh, chỉ khi tipMode=hand); file khai báo thiếu → fail lộ liễu `WB_HAND_MISSING` (Luật 10, KHÔNG rơi ngầm về tay mặc định).
+- `whiteboard-studio/ipc.js`: kênh mới `whiteboard:pickHand` (dialog chọn PNG nền trong suốt).
+- `preload.js`: bridge `whiteboard.pickHand`.
+- `web/whiteboard-studio-panel.js` Bước 6: select hiệu ứng (✋ bàn tay / 🖊 ngòi bút / 🚫 không hiện) + ô độ dày nét (--brush-radius) + nút tay tuỳ chỉnh + nhãn; payload export gửi tipMode/brushRadius/handPath; lưu/nạp dự án theo opts; syncHandUi khoá nút tay khi mode ≠ hand.
+
+**Kiểm chứng:** npm run check EXIT=0 (10/10); ipc-inventory.json tự sinh thêm whiteboard:pickHand. Render thật qua CDP 9336 + IPC whiteboard:export trên dữ liệu job 5s (tmp-wb-tip-test.js): tipMode=pen → output/wb-tip-pen.mp4 (5.0s, 719KB); tipMode=hand+handPath → output/wb-tip-customhand.mp4 (5.0s, 1.08MB); handPath không tồn tại → lỗi đúng WB_HAND_MISSING — cả 3 PASS. scan:lifecycle: 0 findings sau 06:15Z (41 REAL/WARN đều là lịch sử ≤05:04Z).
+
+**Treo:** tay tuỳ chỉnh là 1 slot/dự án (không theo từng cảnh); engine chỉ có 1 sprite tay built-in — đa dạng mẫu tay phụ thuộc user cung cấp PNG nền trong suốt.
+
+## 2026-09-17zp+1 — I-MZic: sửa 2 bug bố cục ảnh (ảnh đơn bỏ qua fitMode + thêm dịch chuyển ô vuông)
+
+**Yêu cầu user:** (1) mục "1. Tệp gốc" — ảnh đơn "vẫn còn bị cắt dù chọn hiển thị nào cũng vậy"; (2) mục "Ảnh lệch khung hiển thị thế nào" + bố cục "🔲 Ô vuông giữa + nền mờ" — "chưa có nút lê xuống hay qua lại cho ảnh ở giữa".
+
+**Khám phá 2 bug thật:**
+1. `imzic-render.js:70-83` (`drawBackground`, nhánh ảnh đơn): chỉ `square` đặc biệt, **3 nhánh kia đều rơi về `cover` cứng** → user chọn `contain`/`blur` vẫn bị cắt. Comment "ảnh đơn cũng dùng được fitMode" ở dòng 240 chỉ nói về hiển thị dropdown, KHÔNG phản ánh code (chỉ slideshow mới đủ 4 nhánh trong `drawSlideLayer`).
+2. `imzic-slideshow.js:170-192` (`drawSquareLayout`): `ctx.translate(w/2, h/2)` cứng — không có offset → user không dịch được ảnh ô vuông.
+
+**Sửa (4 bước, hợp đồng giữ nguyên — không tạo IPC/preload mới):**
+- `imzic-core.js`: thêm `sqX:0, sqY:0, sqStep:5` vào state defaults.
+- `imzic-slideshow.js`:
+  - `drawSquareLayout` đọc `state.sqX/sqY` (% chiều rộng/cao logic) → `ctx.translate(w/2 + ox, h/2 + oy)`.
+  - Hàm mới `getImageBlurBg(img)` + cache `imageBlurCache` (LRU 3) cho ảnh đơn — tách hẳn `getSlideBlurBg` (slideshow theo idx).
+- `imzic-render.js` `drawBackground` (ảnh đơn): tách đủ 4 nhánh `square/cover/contain/blur` đúng nghĩa. `contain` không cắt, `blur` = nền mờ + ảnh chính vừa đủ (giống slideshow). Cũng clear `imageBlurCache` khi load ảnh mới + bỏ ảnh.
+- `imzic-controls.js`: 4 nút ↑↓←→ + "↺ Về giữa" + range "Bước dịch" trong `squareFields` (chỉ hiện khi `fitMode='square'`). Bước dịch mặc định 5%/bấm, lệch tối đa ±100%. Lưu/khôi phục qua `SETTINGS_SQXY` (mảng mới cho sqX/sqY — không qua input range).
+- `imzic-workflow.js` nút "🧹 Reset": thêm `imageBlurCache.clear()` cùng 3 cache slideshow.
+- `img-to-vid.html` `squareFields`: thêm grid 3×3 (5 nút + 4 ô trống) + range bước.
+
+**Cache lifecycle:** `imageBlurCache` clear khi (1) load ảnh mới, (2) bỏ ảnh, (3) Reset toàn bộ. Key gồm `src|width|height|w|h|blur` → ảnh mới tự miss cache cũ, không rò rỉ.
+
+**Kiểm định:** `npm run check` 10/10 PASS exit 0 — syntax 506, IPC 241 (do `imzic-modal.js`/`imzic-text.js` untracked từ task trước — KHÔNG do task này), exports 35, shared 20, toplevel 1810 không xung đột, handler-shadow 0 lỗi id trùng, size budget 0 errors (1 warn `serve-now.html` 4448 dòng trong tmp/ từ task trước, không phải của task này), docs-sync OK, selftest 10/10. `git diff` 4 file tôi sửa: 132+/9-/12 hunk, **0 hit** cho `ipcRenderer/ipcMain/window.native./BrowserWindow/registerIpc/":channel"` → xác nhận không phá hợp đồng IPC.
+
+**Lý do KHÔNG chạy `khoidong.bat`:** thay đổi thuần renderer (JS + HTML), không chạm main/preload/IPC; AGENTS §6.5 yêu cầu test app khi thay đổi "ảnh hưởng main/lifecycle" — visual bug chỉ xác nhận được khi user mở app và chọn ảnh thật.
+
+
+## 2026-09-17zs — Bổ sung 2026-09-17zr: UI mẫu bút/bàn tay Whiteboard Studio đổi sang thẻ kiểu "Bước 3" Vẽ Tay Ảnh
+
+**Yêu cầu user:** không dùng hàng select thô — lấy cùng bộ cài đặt "Bước 3 · Mẫu bút vẽ & bàn tay (chọn trước khi xuất)" của ✏️ Vẽ Tay Ảnh (`nova/web/src/hd/hd-main.js`: TIP_STYLES + hdMakeThumb + hdCardStyle) áp cho Whiteboard Studio.
+
+**Thay đổi (chỉ renderer — `nova/web/whiteboard-studio-panel.js` + index.html bump `?v=wbui5`):**
+- Gỡ select `wb-tipModeSel`; thay bằng 3 thẻ `#wb-tipCards` (hand/pen/none) có thumbnail canvas 64×40 + nhãn + mô tả, verbatim hoá sang wb-* (WB_TIP_STYLES/wbMakeThumb/wbTipCardStyle/buildTipCards — trong IIFE nên không đụng check:toplevel).
+- `state.tipMode` thay đọc select; export payload + project save/load đọc/ghi state (validate giá trị khi nạp).
+- Ô cỡ nét kẹp 2..40 khi change (như hd-core), min=2 max=40, placeholder "mặc định"; giữ năng lực riêng whiteboard:pickHand + nhãn tay tuỳ chỉnh.
+
+**Kiểm chứng:** node --check OK; `npm run check` EXIT=0 10/10 (exit 1 lần chạy trước là nhiễu PowerShell bọc stderr npm — xác nhận lại bằng cmd /c). UI thật qua CDP 9336 + Page.reload ignoreCache (`tmp-wb-tip-ui-check.js`): 8/8 PASS — 3 thẻ đúng nhãn/mô tả, thẻ hand mặc định, click pen khoá nút tay / click hand mở, wb-tipModeSel đã gỡ, kẹp cỡ nét 99→40, 0→2, rỗng giữ rỗng. Lưu ý: Page.reload reset trạng thái panel trong RAM (dự án chưa Lưu dự án sẽ mất) — đã báo user.
