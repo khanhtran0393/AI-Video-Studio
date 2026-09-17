@@ -1,3 +1,25 @@
+## 2026-09-17zl — Cập nhật yt-dlp bundled 2026.07.04 → 2026.08.19 (treo của entry 2026-09-17)
+
+- **Lý do**: mục "Còn treo" của entry Nghiên cứu Ngách (2026-09-17) — yt-dlp cũ ~1.5 tháng,
+  YouTube đổi extractor là các luồng clip/ngách/đối thủ hỏng hết. Bản mới nhất: **2026.08.19**
+  (release 2026-08-19, có youtube fixes: web_embedded client fallbacks, bỏ android_vr khỏi
+  default clients, player client maintenance).
+- **Quy trình theo đúng README.md của `nova/ytdlp-bin/`**: tải `yt-dlp.exe` + `yt-dlp_macos` +
+  `SHA2-256SUMS` từ release → đối chiếu SHA-256 cả 2 binary với file SUMS của chính release
+  (exe `6667495…e7a`, macos `0f192b7…202` — KHỚP) → backup bản cũ ra
+  `%TEMP%\ytdlp-update-2026.08.19\` (KHÔNG để `.bak` trong ytdlp-bin — folder được đóng gói
+  nguyên thư mục qua `files` + `asarUnpack`) → thay 3 file (kèm chmod 755 cho macos, dù
+  `ytdlp-path.js` tự chmod lại trên darwin) → `--version` sau thay = 2026.08.19.
+- **Smoke THẬT qua binary mới**: `--dump-single-json dQw4w9WgXcQ` → title/channel/subs 4.54M/
+  views 1.816B/likes 19.4M/48 formats — bản mới đọc được YouTube hiện tại, số liệu khớp với
+  live test enrich của entry 2026-09-17.
+- **Sửa docs**: `nova/ytdlp-bin/README.md` dòng "Bản đang có" → 2026.08.19 + ghi lịch sử/backup.
+- **Kiểm định**: `npm run check` EXIT 0. Không đụng code — `ytdlp-path.js` giữ nguyên hợp đồng.
+- **Còn lại (quyết của user)**: thay/bỏ API key YouTube bị Google chặn trong Cài đặt
+  (để trống → keyless ngay); cache `nova-cache/yt-enrich.json` TTL 24h tự hết hạn, hoặc bấm
+  chạy lại với `fresh`.
+
+
 ## 2026-09-17zk — Viral Cut: real-app smoke sau restart (UI verify qua DevTools CDP)
 
 - **Restart app**: đóng instance cũ bằng `taskkill /IM electron.exe` (không `/F` — WM_CLOSE
@@ -7517,7 +7539,7 @@ B7 mở rộng pattern B5/B6 sang 6 panel còn lại (nhóm "Công cụ AI" + "C
 
 **Kiểm chứng**: live test `enrich(['dQw4w9WgXcQ'])` với chính key bị chặn → `mode='yt-dlp'`, `apiError` đúng 403, map có số liệu THẬT (views 1.8B, subs 4.54M, engRate 1.2%). `npm run check` EXIT 0 (10 bước, warn id-tham-chiều 85 pre-existing).
 
-**Còn treo**: yt-dlp `2026.07.04` cũ ~2.5 tháng — nên cập nhật khi YouTube đổi extractor; user nên thay/bỏ API key bị chặn trong Cài đặt (để trống → keyless ngay); kết quả cũ trong cache 6h của module có thể còn sai số liệu — bấm chạy lại với `fresh` hoặc chờ TTL.
+**Còn treo**: ~~yt-dlp `2026.07.04` cũ~~ → **đã cập nhật lên 2026.08.19** (2026-09-17, xem entry 2026-09-17zl ở đầu file); user nên thay/bỏ API key bị chặn trong Cài đặt (để trống → keyless ngay); kết quả cũ trong cache 6h của module có thể còn sai số liệu — bấm chạy lại với `fresh` hoặc chờ TTL.
 
 
 
@@ -8205,6 +8227,24 @@ Người dùng chọn "cải tiến tất cả" — hiện thực đủ 9 đề 
   lộ liễu (đúng thiết kế Copilot), muốn dùng vision qua Copilot cần OpenAI/
   Gemini/DeepSeek/gateway /v1/chat/completions; key đọc 'api_key' (mirror) khớp
   convention agent-copilot-ui.js. node --check OK; npm run check 10/10 PASS.
+- FIX 2 (cùng ngày — vision theo yêu cầu "provider = API người dùng cài đặt,
+  không hỗ trợ vision thì báo + chuyển Google"): wbAiVisionJson đổi thành THÁC
+  3 BẬC, mọi chuyển hướng đều log cho người dùng: (1) Antigravity CHỈ khi
+  provider user vào được kênh Copilot VÀ thấy được ảnh — hằng mới
+  WB_AC_CHANNEL_PROVIDERS = ['openai','gemini','openai-compatible'] (deepseek bị
+  loại vì không đọc ảnh dù vào được kênh); (2) provider đọc được ảnh nhưng
+  không vào kênh Copilot (anthropic native, openrouter, gateway…) → gọi TRỰC
+  TIẾP callLLMJson theo Cài đặt (log "dùng trực tiếp API đã cấu hình"); (3)
+  provider KHÔNG hỗ trợ vision (deepseek/cli/groq… — tra VISION_PROVIDERS của
+  shared-state.js) → log ⚠ thông báo + chuyển GOOGLE VISION: Gemini qua API Key
+  Flow (addedApiFlowKeys — novaStore seed 'api_key_flow' / localStorage
+  'flowApiKey'), gọi callLLMJson với _override {provider:'gemini', key, model:
+  MODELS.gemini[0].id}; thiếu key Flow → lỗi lộ liễu WB_VISION_NO_GOOGLE_KEY.
+- wbAcApiConfig → wbAcUserSource: nguồn AI CÙNG thứ tự ưu tiên _apiKeyPool
+  ("API đã thêm" qua addedApiResolveAiSource → Flow key → api_key_<provider>/
+  api_key mirror) — hết lệch giữa kênh Copilot và callLLMJson khi user dùng
+  "API đã thêm"; key rỗng KHÔNG throw ở đây nữa (đường trực tiếp tự xử lý).
+  node --check OK; npm run check 10/10 PASS sau fix.
 
 
 ## 2026-09-17zi — Skill panel: Chuẩn hoá v1 → v2 (ghi lại kho)
@@ -8238,4 +8278,39 @@ Người dùng chọn "cải tiến tất cả" — hiện thực đủ 9 đề 
 - Test: test:dub 24/24 PASS (thêm splitScriptText/cuesFromDurationsMs/presets); test:ffx-smoke thêm 4 bước burn-in (CPU/GPU/2 expectFail) + 1 progStep.
 - AGENTS.md cập nhật 3 hàng: nova/dubbing/, test:dub, test:ffx-smoke.
 - Còn treo: E2E trong app cần user chạy thật (TTS cần backend OmniVoice, dịch cần API key đã cấu hình); crash renderer exitCode=-1 (GPU/software render) là pattern môi trường cũ — điều tra riêng.
+
+## 2026-09-17zj — Quét file/logic mồ côi toàn repo (chỉ ĐỌC, chưa xoá gì)
+
+- Script quét: `nova/scripts/tmp/tmp-orphan-scan.js` (tmp, gitignored) + report
+  `nova/scripts/tmp/orphan-scan-report.json`. 839 file nguồn quét (exclude
+  node_modules/.venv-*/dist/build/output/chrome-extension output runtime).
+- **Kết quả B (export chết): 0** — mọi tên trong `exports-contract.json` đều được
+  dùng ngoài module định nghĩa. **Kết quả C (kênh IPC không người gọi renderer): 0**.
+- **File mồ côi THẬT duy nhất ở tầng engine: `nova/video-agent/tts/srt-assemble.js`**
+  (module hàm thuần buildSrt/srtFFmpegArgs "P4 roadmap") — KHÔNG ai require; chỉ
+  xuất hiện trong ipc-inventory.json (danh sách quét). Chức năng SRT đã được thay
+  bởi viral-cut `buildSrtSkeleton` + dubbing `cuesToSrt`/`cuesFromDurationsMs`.
+  → Cần quyết định: xoá, hoặc nối vào orchestrator (chưa làm gì).
+- Script dùng một lần/lâu dài KHÔNG có entry npm, chỉ chạy tay (cân nhắc dời
+  `nova/scripts/tmp/` hoặc xoá khi chắc chắn): root `scripts/` (convert-icon.mjs,
+  inspect-icon(s).mjs, make-extension-icons.mjs, sync-extension.mjs, dump-hits.js,
+  extract-snippet.js), root `test-niche-api.cjs` / `test-niche-live.cjs` (test live
+  niche.js), `tmp_prune_omni.py` / `tmp_venv_inventory.py` (rác local, gitignored —
+  đặt sai chỗ, đáng lẽ ở nova/scripts/tmp/), `nova/web/_check_hd_ids.js`,
+  `nova/web/_smoke_annotation.js`, `nova/whiteboard-studio/py-backend-*-test.js` (2),
+  `nova/documentary/test-{errors,full,segmentation,word-sync-e2e,word-sync-live}.js` (5),
+  `nova/video-agent/test-ui-advanced.js`, `nova/scripts/{smoke-cdp,smoke-mcp,
+  smoke-runtime,test-different-user,ui-functions-e2e,voice-venv-repair-test,
+  giong-dd-packaged-check,produce-real-outputs}.js`, `nova/voice-backend/backend/
+  test_vieneu_direct.py` + `venv_probe_final2.py`, poc-narrator/* (POC có README —
+  cố ý giữ). `nova/_hc-debug.log` + `LICENSES.chromium.html` (root) là artifact
+  local không track.
+- KHÔNG phải mồ côi (false positive đã loại): bundle chunks `NNN.bundle.js`
+  (nạp runtime theo số), test chạy qua npm script/glob (video-agent test-*,
+  auto-fix **/test/*.test.js, core/test-maintenance.js, scripts check-*),
+  pipeline-lock.js (dùng bởi packaged-smoke + ui-functions-e2e),
+  release-paths-check.js (npm script `check:release` của nova/package.json),
+  HF model snapshots .py (vendored runtime).
+- Giới hạn phương pháp: quét theo tên file/tên export — không bắt được hàm nội bộ
+  chết trong module (ranh giới registry theo §4.1 là module, không phải hàm).
 

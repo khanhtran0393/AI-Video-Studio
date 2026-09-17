@@ -202,3 +202,72 @@
   20% { opacity: 1; }
   100% { opacity: 0.2; }
 }
+
+/* ── Thẻ Task/Walkthrough (Antigravity-style) — 1 thẻ / 1 lượt chạy, nằm trong luồng chat ── */
+.ac-task {
+  align-self: stretch;
+  max-width: 100%;
+  background: var(--bg-darker, #0f172a);
+  border: 1px solid var(--border, #334155);
+  border-radius: 8px;
+  padding: 0;
+  overflow: hidden;
+  font-style: normal;
+}
+.ac-task-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  background: rgba(59,130,246,0.08);
+  user-select: none;
+}
+.ac-task-header:hover { background: rgba(59,130,246,0.16); }
+.ac-task-title { flex: 1; }
+.ac-task-progress {
+  color: var(--text-dim, #94a3b8);
+  font-weight: 400;
+  font-size: 12px;
+}
+.ac-task-chevron {
+  color: var(--text-dim, #94a3b8);
+  font-size: 11px;
+  transition: transform 0.2s;
+}
+.ac-task.collapsed .ac-task-chevron { transform: rotate(-90deg); }
+.ac-task.collapsed .ac-task-timeline { display: none; }
+.ac-task-timeline {
+  padding: 6px 12px 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-top: 1px solid var(--border, #334155);
+}
+.ac-task-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-dim, #94a3b8);
+  word-break: break-word;
+}
+.ac-task-row .ac-task-ico {
+  flex-shrink: 0;
+  width: 16px;
+  text-align: center;
+}
+.ac-task-row.running { color: var(--text, #f8fafc); }
+.ac-task-row.ok .ac-task-ico { color: #22c55e; }
+.ac-task-row.err { color: var(--text, #f8fafc); }
+.ac-task-row.err .ac-task-ico { color: #ef4444; }
+.ac-task-row.approval.ok { color: #22c55e; }
+.ac-task-row.approval.err { color: #ef4444; }
+.ac-task-row.approval.auto { color: #f59e0b; }
+.ac-task.done { border-color: rgba(34,197,94,0.35); }
+.ac-task.failed { border-color: rgba(239,68,68,0.4); }
+@keyframes acSpin { to { transform: rotate(360deg); } }
+.ac-task-spin { display: inline-block; animation: acSpin 1s linear infinite; }
