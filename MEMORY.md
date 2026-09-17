@@ -1,3 +1,11 @@
+## 2026-09-17zn — Rà sâu tiếp: SỬA bug thật `_tsButPhapNote` đè lặng lẽ + XOÁ chuỗi preview Remotion iframe chết (t7)
+
+- **Bug thật #2 (ts bút pháp)**: `tool-ts.js` khai báo trùng tên top-level `_tsButPhapNote` với `utility/ts-prompt.js` (nạp 138 < 188) → ĐÈ LẶNG LẼ tại load. `utility/ts.js` — engine sống của pipeline Novel (`_tsNovelArchitect`/`_tsNovelChapterPrompt`, gọi từ tool-ts.js `tsGenerateNovel`) — dựng prompt với `_tsButPhapNote(o.tone)` nhưng luôn nhận bản rút gọn 1 dòng tiếng Anh thay vì bảng `_TS_BUT_PHAP` giàu chi tiết pov/pace/voice/dialogue/address/close (đủ đúng 4 tone của select `tsTone`). **Sửa**: đổi tên bản EN của tool-ts → `_tsButPhapNoteEn` (def + call site, kèm comment cảnh báo không được dùng lại tên cũ) → prompt Novel lấy lại blueprint bút pháp đầy đủ; prompt thường của tool-ts giữ nguyên văn tiếng Anh rút gọn như chủ đích. `_TS_BUT_PHAP`/`_TS_VAN_HOA` chỉ dùng nội bộ ts-prompt.js — không dây ra ngoài.
+- **Dọn dead dormant #2 (t7 preview Remotion iframe)**: bằng chứng chết chắc — `_t7RmState.on` **không bao giờ được đặt true** ở bất kỳ đâu (grep toàn repo, chỉ có khai báo `on:false` trong shared/t7.js), element `#t7RemotionFrame` không còn trong bất kỳ markup nào. Preview hiện là ảnh (`t7PreviewImg` trong panels-tool7-anim.html). Nova EXPORT vẫn LIVE qua `t7NovaExport` → `window.native.renderNovaScenes` (main process) — KHÔNG cần iframe, không bị đụng tới. **Xoá 6 hàm + state**: `_t7RemotionFrame`, `_t7NovaSig`, `_t7NovaLoad`, `_t7RemotionFit` (t7-draw.js, -54 dòng), `t7RemotionSeek`, `t7RemotionRefresh` (t7-engine.js, -18 dòng), nhánh Remotion trong `_t7UpdatePreviewFx` (t7-draw.js), call site `t7RemotionRefresh` trong `_t7PersistClips` (t7-core.js), khai báo `const _t7RmState` (shared/t7.js). Call site còn lại đều type-guard `typeof` nên xoá an toàn.
+- **Kiểm định**: `npm run check` EXIT 0 (10/10 bước, check:toplevel 1810 tên 0 xung đột sau rename; selftest 10/10). Restart app (quit sạch `window-all-closed→…→quit`, không crash) → xác minh CDP: 6 hàm iframe + `_t7RmState` đều `undefined` trên renderer sống; `_tsButPhapNote` giờ là bản RICH (contains `_TS_BUT_PHAP`); `t7NovaExport`/`t7ExportEngineChange`/`_t7UpdatePreviewFx` vẫn function; 0 console error; HTTP server phục vụ tool-ts.js mới (`_tsButPhapNoteEn` có, tên cũ 0). Phiên mới 0 dòng crash trong lifecycle.log.
+- **Bài học editor**: khi old_text có dòng nằm GIỮA một dòng dài (t7-core.js 1-liner) không được thêm leading whitespace tuỳ ý — phải khớp đúng biên dòng.
+
+
 ## 2026-09-17zo — Copilot (b): real browser session (persist:copilot) + ảnh TRƯỚC/SAU thay pseudo-diff
 
 - **Phạm vi**: tiếp theo entry 2026-09-17 (Task card + ⚡ auto-approve). Backlog C9(b)
@@ -6103,6 +6111,49 @@ Trợ lý dựng báo đang chạy ngay + sửa preview 9:16/1:1 bị co nhỏ +
   quét; ⚡ Xuất nhanh file thật để xác nhận offline export dùng chung
   `drawWaveCurved` (đã tự động vì `drawWave` đăng ký nhánh mới, giống
   `bars` cổ điển — không phải sửa `imzic-export.js`).
+
+### 2026-09-15r — I-MZic: nút 🗑 bỏ ảnh nền + bỏ file nhạc ở section "1. Tệp gốc"
+
+- **Yêu cầu user**: section 1 chỉ có nút xoá cho ảnh nền riêng (`bgClearBtn`,
+  có từ trước) và slideshow (`slidesClearBtn`) — ảnh nền CHÍNH và file NHẠC
+  chọn rồi không có cách bỏ ngoài việc chọn đè file khác.
+- **HTML** (`img-to-vid.html`): thêm 2 nút cùng style `bgClearBtn` —
+  `imgClearBtn` ("🗑 Bỏ ảnh nền", sau ô `imgInput`; đổi margin ô chọn
+  10px→6px cho thẳng hàng) và `audClearBtn` ("🗑 Bỏ file nhạc", sau ô
+  `audInput`); ẩn mặc định, hiện khi file nạp thành công.
+- **`imzic-render.js`** (pattern verbatim theo `bgClearBtn`):
+  - `imzicLoadImageFile` onload → hiện `imgClearBtn`; `imzicLoadAudioFile`
+    onloadedmetadata (KHÔNG phải lúc mới chọn — file lỗi thì nút không hiện)
+    → hiện `audClearBtn`.
+  - Handler `imgClearBtn`: guard `isExporting` (đang ghi cấm bỏ file — sẽ
+    hỏng bản ghi), revoke `imgObjUrl` (chống rò rỉ bộ nhớ), reset
+    `state.img/imgFile` + nhãn "Chọn ảnh nền" + `input.value`, ẩn nút,
+    `updateSlideFields` + `refreshSectionHints` (hint section về "Ảnh ✗"),
+    `checkReady()`, hiện lại `emptyState` khi không còn ảnh/slide/nhạc.
+  - Handler `audClearBtn`: guard `isExporting`, pause + `removeAttribute('src')`
+    + `load()` (dừng phát hẳn), revoke `audObjUrl`, reset `state.audioFile/
+    audioReady` + `offlineAnalysis(Promise)` (phân tích nhịp cũ phải vứt —
+    không fallback ngầm, Luật 10), reset nhãn + input + seekBar (disabled,
+    0:00), ẩn nút, refresh hints + `checkReady()` + `emptyState`.
+- **Sửa kèm 1 lỗi tiềm ẩn của `checkReady()`**: bản cũ CHỈ bật nút khi đủ
+  ảnh+nhạc, không bao giờ TẮT lại → sau khi bỏ nhạc, nút ▶/⚡/📸 vẫn bật
+  dù bấm sẽ chạy sai. Thêm nhánh else khoá đủ 6 nút + ẩn `exportOpts`
+  (phản chiếu đúng khối if). `imgClear`/`audClear` gọi `checkReady()` để
+  khoá ngay lập tức.
+- **Không phá hợp đồng**: không IPC/env/export/state-main mới; 2 id mới chỉ
+  nằm trong trang standalone `img-to-vid.html` (không đụng index.html →
+  `check:toplevel` 1810 tên, 0 xung đột).
+- **Kiểm định**: `npm run check` EXIT 0 toàn chuỗi lần 4 (syntax 504 file,
+  ipc 240 kênh/23 events, exports 35 module khớp baseline, shared 20 keys,
+  shared-shadow 0 fn chết, shadow 0 lỗi + 34 warn id-tham-chiếu không chặn,
+  size 0 error/1 warn tmp không liên quan, toplevel 1810 tên 0 xung đột,
+  docs 41 script khớp, selftest 10/10 PASS). Lưu ý: số file/kênh tăng so
+  với entry 2026-09-15q (494/208) do phiên song song đang sửa repo, không
+  phải do task này. Terminal PSReadLine lockup trở lại khi chờ check — đọc
+  kết quả qua file Tee thay vì output terminal.
+- **Chưa làm** (§6.5/§6.6): test thật qua `khoidong.bat` — chọn ảnh + nhạc,
+  bấm từng nút 🗑, xác nhận hint section + khoá nút phát/xuất + hàng chờ
+  không kế thừa file đã bỏ.
 
 
 
