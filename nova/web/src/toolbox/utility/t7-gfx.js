@@ -347,7 +347,7 @@ async function _t7LoadTrans(){
   try {
     const r = await window.native.sceneTransitions();
     if (r && r.ok && Array.isArray(r.items) && r.items.length){ _t7Trans = r.items; return _t7Trans; }
-  } catch (e) {}
+  } catch (e) { console.warn('[T7] IPC sceneTransitions lỗi — dùng kho chuyển cảnh dự phòng:', (e && e.message) || e); }
   _t7Trans = _T7_TRANS_FALLBACK; return _t7Trans;
 }
 

@@ -26,6 +26,7 @@ const BAK_SUFFIX = '.bak';                // hậu tố backup tự động trư
 const APPROVAL_TIMEOUT_MS = 180000;       // cổng duyệt: quá 3 phút không bấm → coi như TỪ CHỐI
 const DIFF_MAX_LINES = 60;                // cắt diff gửi ra renderer (card duyệt không phình vô hạn)
 const BROWSER_SHOT_SUBDIR = 'agent-copilot'; // thư mục con trong output/ lưu ảnh chụp browser
+const BROWSER_SHOT_MAX_WIDTH = 720;       // ảnh before/after kèm cổng duyệt — co về max width này
 const WB_TASK_TIMEOUT_MS = 30 * 60000;    // tool whiteboard_pipeline: quá 30 phút renderer không trả kết quả → lỗi lộ liễu (gen ảnh Flow nhiều câu có thể lâu)
 const SYSTEM_PROMPT_MAX_CHARS = 8000;     // trần systemPrompt override từ apiConfig (nhiệm vụ chuyên biệt, vd vision Whiteboard)
 
@@ -35,7 +36,7 @@ const DEFAULT_SYSTEM_PROMPT = `Bạn là Antigravity, một trợ lý lập trì
 Bạn có quyền truy cập file, chạy lệnh, đọc hiểu dự án và duyệt web qua các tool: read_file, write_file, edit_file, list_dir, grep_files, run_command, get_app_state, browser_open, browser_read, browser_screenshot, browser_close, whiteboard_pipeline.
 Khi yêu cầu cần nhiều bước, hãy TỰ gọi tool rồi mới trả lời — đừng hỏi lại người dùng nếu tự làm được.
 Quy trình khuyến nghị: list_dir/grep_files để định vị → read_file để đọc → edit_file (thay đoạn, an toàn hơn) hoặc write_file để sửa → run_command để chạy lệnh kiểm chứng.
-Browser đọc-only + hành động có duyệt: browser_open(url) → browser_read() để đọc nội dung → browser_screenshot() để chụp bằng chứng (lưu output/agent-copilot/) → browser_close() khi xong. Khi cần TƯƠNG TÁC với trang: browser_click({selector}) / browser_type({selector, text}) theo CSS selector — 2 tool này CÓ side-effect nên PHẢI qua CỔNG DUYỆT như sửa file: sếp xem mô tả hành động rồi bấm Duyệt; nhận AC_APPROVAL_DENIED thì đừng thử lại y hệt, hãy hỏi sếp.
+Browser đọc-only + hành động có duyệt: browser_open(url) → browser_read() để đọc nội dung → browser_screenshot() để chụp bằng chứng (lưu output/agent-copilot/) → browser_close() khi xong. Khi cần TƯƠNG TÁC với trang: browser_click({selector}) / browser_type({selector, text}) theo CSS selector — 2 tool này CÓ side-effect nên PHẢI qua CỔNG DUYỆT như sửa file: sếp xem ẢNH TRƯỚC của trang (kèm trong request duyệt) rồi bấm Duyệt; sau khi duyệt xong em sẽ có ẢNH SAU (afterShot) làm bằng chứng kết quả — browser giữ session persistent nên cookie/login còn nguyên giữa các lượt. Nếu nhận AC_APPROVAL_DENIED thì đừng thử lại y hệt, hãy hỏi sếp.
 Lưu ý: mọi lần sửa/ghi đè file có sẵn đều phải qua CỔNG DUYỆT — sếp xem diff rồi bấm Duyệt. Nếu nhận AC_APPROVAL_DENIED nghĩa là sếp đã từ chối: đừng thử lại y hệt, hãy hỏi sếp muốn thay đổi khác gì.
 Luôn trả lời ngắn gọn, súc tích bằng tiếng Việt.`;
 
@@ -607,15 +608,41 @@ async function executeTool(name, args, ctx) {
   if (name === 'browser_click' || name === 'browser_type') {
     const bc = ensureBrowserController();
     const selector = String(args.selector || '');
+    // ẢNH TRƯỚC khi thực thi — sếp nhìn trang đang hiển thị gì rồi mới bấm Duyệt
+    // (Antigravity-style: bằng chứng trực quan thay mô tả chữ). Lỗi chụp KHÔNG nuốt —
+    // khai báo lộ liễu vào thẻ duyệt qua shotError (Luật 10).
+    let beforeShot;
+    try {
+      beforeShot = await bc.capturePageTo({ maxWidth: BROWSER_SHOT_MAX_WIDTH, tag: 'before' });
+    } catch (e) {
+      beforeShot = { file: null, dataUrl: null, error: e.acCode ? e.message : `AC_BROWSER_SHOT_FAILED: ${e.message}` };
+    }
     // Mô tả trang + hành động cho thẻ duyệt — sếp phải biết đang click/gõ Ở ĐÂU trước khi Duyệt
     const page = await bc.describe();
     const actionText = name === 'browser_click'
       ? `→ click phần tử "${selector}"`
       : `→ gõ vào "${selector}" nội dung: "${String(args.text || '').slice(0, 200)}${String(args.text || '').length > 200 ? '…' : ''}"`;
     const actionDesc = `${actionText}\n  trên trang: "${page.title}"\n  (${page.url})\n  [HÀNH ĐỘNG CÓ TÁC ĐỘNG LÊN TRANG WEB — duyệt trước khi thực thi]`;
-    await requestApproval(name, page.url, '', actionDesc);
-    if (name === 'browser_click') return bc.click(selector);
-    return bc.type(selector, String(args.text || ''));
+    await requestApproval(name, page.url, '', actionDesc, beforeShot);
+    const resultText = name === 'browser_click' ? await bc.click(selector) : await bc.type(selector, String(args.text || ''));
+    // ẢNH SAU khi thực thi — bằng chứng kết quả gắn vào thẻ Task + trả về model.
+    // Lỗi chụp khai báo vào JSON trả model (afterShotError), không nuốt ngầm (Luật 10).
+    try {
+      const afterShot = await bc.capturePageTo({ maxWidth: BROWSER_SHOT_MAX_WIDTH, tag: 'after' });
+      ctx.lastAfterShot = { file: afterShot.file, dataUrl: afterShot.dataUrl };
+      try {
+        const payload = JSON.parse(resultText);
+        payload.afterShot = afterShot.file;
+        return JSON.stringify(payload);
+      } catch (e2) { return resultText; } // kết quả tool không phải JSON — trả nguyên văn
+    } catch (e) {
+      const afterErr = e.acCode ? e.message : `AC_BROWSER_SHOT_FAILED: ${e.message}`;
+      try {
+        const payload = JSON.parse(resultText);
+        payload.afterShotError = afterErr;
+        return JSON.stringify(payload);
+      } catch (e2) { return resultText; }
+    }
   }
   if (name === 'whiteboard_pipeline') {
     if (!ctx || typeof ctx.requestWbTask !== 'function') {
@@ -727,8 +754,10 @@ function registerAgentCopilotIpc() {
     let finalReply = '';
 
     // Cổng duyệt: chỉ bật khi UI gửi requireApproval === true. Timeout/từ chối → resolve(false).
+    // shot (tùy chọn, cho browser_click/type): { file, dataUrl, error } — ảnh TRƯỚC khi
+    // thực thi để sếp nhìn trang thật rồi mới bấm Duyệt (Antigravity-style, thay pseudo-diff).
     const requireApproval = !!(apiConfig && apiConfig.requireApproval === true);
-    const requestApproval = (toolName, filePath, oldText, newText) => new Promise((resolve) => {
+    const requestApproval = (toolName, filePath, oldText, newText, shot) => new Promise((resolve) => {
       const id = `appr_${Date.now().toString(36)}_${++approvalSeq}`;
       const timer = setTimeout(() => {
         pendingApprovals.delete(id);
@@ -738,7 +767,16 @@ function registerAgentCopilotIpc() {
         clearTimeout(timer);
         resolve(!!approved);
       });
-      emit({ type: 'approval_request', id, tool: toolName, path: filePath, diff: capDiff(buildLineDiff(oldText, newText)) });
+      emit({
+        type: 'approval_request',
+        id,
+        tool: toolName,
+        path: filePath,
+        diff: capDiff(buildLineDiff(oldText, newText)),
+        shotFile: shot && shot.file ? shot.file : null,
+        shotError: shot && shot.error ? String(shot.error) : null,
+        shotDataUrl: shot && typeof shot.dataUrl === 'string' && shot.dataUrl.length <= 3000000 ? shot.dataUrl : null,
+      });
     });
     // Ủy nhiệm pipeline Whiteboard: emit event wb_task + chờ renderer trả qua
     // agentCopilot:wbResult. Timeout = lỗi lộ liễu WB_TASK_TIMEOUT (Luật 10).
@@ -790,8 +828,9 @@ function registerAgentCopilotIpc() {
             emit({ type: 'tool_start', name: toolName, summary: summarizeArgs(toolName, args) });
             if (!toolResult) {
               try {
+                toolCtx.lastAfterShot = null; // tool phía sau có thể gắn ảnh sau-chụp (browser_click/type)
                 toolResult = await executeTool(toolName, args, toolCtx);
-                emit({ type: 'tool_end', name: toolName, ok: true, summary: summarizeArgs(toolName, args) });
+                emit({ type: 'tool_end', name: toolName, ok: true, summary: summarizeArgs(toolName, args), shot: toolCtx.lastAfterShot || null });
               } catch (err) {
                 toolResult = err && err.acCode ? err.message : `AC_TOOL_FAILED: ${err.message}`;
                 emit({ type: 'tool_end', name: toolName, ok: false, summary: toolResult.slice(0, 160) });

@@ -11,13 +11,7 @@
 
 
 
-/* ---- UI ---- */
-
-(function veoInit(){
-  var sel=document.getElementById("veoStyle");
-  if(sel && !sel.options.length){
-    Object.keys(VEO_STYLE_PRESETS).forEach(function(k){ var o=document.createElement("option"); o.value=k; o.textContent=VEO_STYLE_PRESETS[k].label; sel.appendChild(o); });
-  }
-  var bs=document.getElementById("veoBaseStyle");
-  if(sel && bs && !bs.value){ var p=VEO_STYLE_PRESETS[sel.value]; if(p) bs.value=p.baseStyle; }
-})();
+   /* ---- UI ----
+      (IIFE init veoStyle/veoBaseStyle đã xoá 2026-09-17 — 2 select này không còn trong
+      UI sau redesign Tool 6 → toàn bộ khối init là no-op. VEO_STYLE_PRESETS vẫn sống
+      ở veo.js.) */

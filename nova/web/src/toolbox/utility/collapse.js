@@ -26,8 +26,3 @@ function toggleApiSection(){
   if(v==='0') s.classList.remove('collapsed');   // user đã chủ động mở → giữ mở
   else s.classList.add('collapsed');              // mặc định thu gọn
 }catch(e){} })();
-
-/* Thu gọn cụm thao tác thủ công Tool 2 — nhớ trạng thái */
-(function(){ try{ var v=localStorage.getItem('ck_t2tools_collapsed'); var a=document.getElementById('t2Actions');
-  if(a && v==='0') a.classList.remove('tools-collapsed');   // user từng mở → giữ mở; mặc định (null) & '1' → gập
-}catch(e){} })();

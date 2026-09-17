@@ -999,7 +999,7 @@ function giongThemDoi(){
   for (const [id, hop] of [['gtClone', c === 'clone'], ['gtDesign', c === 'design'], ['gtDesignInfo', c === 'design']]){
     const el = document.getElementById(id); if (el) el.style.display = hop ? '' : 'none';
   }
-  const tt = document.getElementById('gtVoiceTT'); if (tt) tt.textContent = '';
+  // (Ô gtVoiceTT đã bỏ trong redesign.)
 }
 
 async function giongThemLuu(){

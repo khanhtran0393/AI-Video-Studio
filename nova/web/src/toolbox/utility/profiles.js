@@ -55,7 +55,7 @@ async function loadCloudState(){
       try {
         if (!localStorage.getItem('vmDefaultOff2')) {
           (state.profiles || []).forEach(p => (p.videos || []).forEach(v => { if (v.workData && v.workData.videoMix === 6) v.workData.videoMix = 0; }));
-          if (state.videoMix === 6) { state.videoMix = 0; const vmEl = document.getElementById('t2VideoMix'); if (vmEl) vmEl.value = '0'; }
+          if (state.videoMix === 6) state.videoMix = 0;   // (select t2VideoMix đã bỏ trong redesign)
           localStorage.setItem('vmDefaultOff2', '1');
           saveCloudState(true);   // ghi 0 xuống IDB/cloud để giữ luôn
         }
@@ -404,14 +404,7 @@ function loadStateFromProfile(p){
   if (bgLayoutEl2) bgLayoutEl2.value = state.t3BgLayout;
   const bgLayoutEl2b = document.getElementById('t2BgLayout');
   if (bgLayoutEl2b) bgLayoutEl2b.value = state.t3BgLayout || 'single';
-  const vmEl = document.getElementById('t2VideoMix');
-  if (vmEl) vmEl.value = String(state.videoMix != null ? state.videoMix : 0);
-  const srEl = document.getElementById('t2ShortRef');
-  if (srEl) srEl.checked = !!state.shortRefPrompt;
-  const smEl = document.getElementById('t2StockMix');
-  if (smEl) smEl.value = String(state.stockMix != null ? state.stockMix : 0);
-  const ymEl = document.getElementById('t2YtMix');
-  if (ymEl) ymEl.value = String(state.ytMix != null ? state.ytMix : 0);
+  // (select t2VideoMix/t2ShortRef/t2StockMix/t2YtMix đã bỏ trong redesign — state tự giữ giá trị của mình.)
   try { _t2ChuyenNguonCu(); } catch (e) {}   // thiết lập cũ → bảng ⚙ (một lần)
   try { t2RenderNguon(); } catch (e) {}
   const dm = document.getElementById('t2DescMode');
@@ -552,8 +545,6 @@ function rerenderAllAfterProfileLoad(){
   const t3Pv = document.getElementById('t3PovStyle'); if (t3Pv) t3Pv.value = p?.povStyle || '';
   // Tool 2 visual style readonly
   const v2 = document.getElementById('visualStyle2'); if (v2) v2.value = p?.visualStyle || '';
-  // Tool 6 Veo settings
-  const v6Vs = document.getElementById('v6VisualStyle'); if (v6Vs) v6Vs.value = p?.visualStyle || '';
   // Unified textareas + lists
   // renderAllT2 đã bao trùm renderPreview/renderTable/renderPromptsV/updateScriptCount…
   // — KHÔNG gọi lại từng hàm ngoài (trước đây vẽ bảng cảnh 2 lần liên tiếp gây lag khi đổi profile).

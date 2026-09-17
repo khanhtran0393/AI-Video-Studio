@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-17T04:53:32.553Z",
+  "generatedAt": "2026-09-17T05:51:15.603Z",
   "sourceFiles": [
     "chrome-extension/app.js",
     "chrome-extension/background.js",
@@ -336,7 +336,6 @@
     "video-agent/test.js",
     "video-agent/timeline/engine.js",
     "video-agent/tts/analyzer.js",
-    "video-agent/tts/srt-assemble.js",
     "video-agent/tts/synthesize.js",
     "video-agent/uploader/local.js",
     "video-agent/uploader/s3.js",
@@ -3280,8 +3279,6 @@
     "voice-studio/.venv-omni/Lib/site-packages/urllib3/contrib/emscripten/emscripten_fetch_worker.js",
     "voice-studio/.venv-omni/Lib/site-packages/werkzeug/debug/shared/debugger.js",
     "watermark-native.js",
-    "web/_check_hd_ids.js",
-    "web/_smoke_annotation.js",
     "web/_smoke_handdraw.js",
     "web/dist/assets/index-CZTRVBqH.js",
     "web/dist/assets/lib-Cd_YHzLD.js",

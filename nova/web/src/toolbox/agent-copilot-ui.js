@@ -12,7 +12,7 @@ function acOnAgentEvent(o) {
   if (o.type === 'approval_request') { acShowApprovalCard(o); return; }
   if (o.type === 'step') { acTaskStep(o.step, o.maxSteps); return; }
   if (o.type === 'tool_start') { acTaskToolStart(o.name, o.summary); return; }
-  if (o.type === 'tool_end') { acTaskToolEnd(o.ok, o.summary || o.name); return; }
+  if (o.type === 'tool_end') { acTaskToolEnd(o.ok, o.summary || o.name, o); return; }
 }
 
 // Card cổng duyệt: hiện diff và chờ sếp bấm Duyệt/Từ chối (Antigravity-style).
@@ -41,6 +41,35 @@ function acShowApprovalCard(o) {
   const pre = document.createElement('pre');
   pre.style.cssText = 'max-height:220px;overflow:auto;background:#1e1e1e;color:#d4d4d4;padding:8px;border-radius:6px;font-size:12px;white-space:pre-wrap;margin:0 0 8px 0;';
   pre.textContent = o.diff || '(không có diff)';
+  card.appendChild(title);
+  // ẢNH TRƯỚC khi thực thi (browser_click/type) — sếp nhìn trang thật rồi mới Duyệt
+  if (o.shotDataUrl) {
+    const cap = document.createElement('div');
+    cap.textContent = '📸 Trang TRƯỚC khi thực thi:';
+    cap.style.cssText = 'font-size:12px;opacity:0.8;margin-bottom:4px;';
+    const img = document.createElement('img');
+    img.src = o.shotDataUrl;
+    img.style.cssText = 'max-width:100%;max-height:260px;border:1px solid #444;border-radius:6px;display:block;margin-bottom:8px;cursor:zoom-in;';
+    img.title = 'Bấm để phóng to/thu nhỏ';
+    img.addEventListener('click', () => {
+      img.style.maxHeight = img.style.maxHeight === '260px' ? '70vh' : '260px';
+    });
+    card.appendChild(cap);
+    card.appendChild(img);
+  } else if (o.shotFile) {
+    // Ảnh quá trần nhúng base64 — vẫn còn file trên đĩa, hiện đường dẫn
+    const cap = document.createElement('div');
+    cap.textContent = `📸 Ảnh trang trước khi thực thi (file): ${o.shotFile}`;
+    cap.style.cssText = 'font-size:12px;opacity:0.8;margin-bottom:8px;word-break:break-all;';
+    card.appendChild(cap);
+  } else if (o.shotError) {
+    // Lỗi chụp khai báo lộ liễu — không nuốt ngầm (Luật 10)
+    const cap = document.createElement('div');
+    cap.textContent = `⚠ Không chụp được ảnh trước khi thực thi: ${o.shotError}`;
+    cap.style.cssText = 'font-size:12px;color:#e5b567;margin-bottom:8px;';
+    card.appendChild(cap);
+  }
+  card.appendChild(pre);
   const row = document.createElement('div');
   const btnOk = document.createElement('button');
   btnOk.textContent = '✓ Duyệt';
@@ -50,8 +79,6 @@ function acShowApprovalCard(o) {
   btnNo.style.cssText = 'padding:4px 14px;cursor:pointer;';
   row.appendChild(btnOk);
   row.appendChild(btnNo);
-  card.appendChild(title);
-  card.appendChild(pre);
   card.appendChild(row);
   body.appendChild(card);
   body.scrollTop = body.scrollHeight;
@@ -148,7 +175,7 @@ function acTaskToolStart(name, summary) {
   if (t.cur) t.cur.icoEl.classList.add('ac-task-spin');
 }
 
-function acTaskToolEnd(ok, summary) {
+function acTaskToolEnd(ok, summary, ev) {
   const t = acTaskEnsure();
   if (!t) return;
   const h = t.cur || acTaskRow(ok ? '✓' : '✗', summary || (ok ? 'xong' : 'lỗi'), ok ? 'ok' : 'err');
@@ -158,6 +185,22 @@ function acTaskToolEnd(ok, summary) {
   h.icoEl.textContent = ok ? '✓' : '✗';
   if (summary) h.txt.textContent = summary;
   h.row.className = 'ac-task-row ' + (ok ? 'ok' : 'err');
+  // ẢNH SAU khi thực thi (browser_click/type) — bằng chứng kết quả gắn dưới dòng tool
+  if (ev && ev.shot && ev.shot.dataUrl) {
+    const img = document.createElement('img');
+    img.src = ev.shot.dataUrl;
+    img.style.cssText = 'max-width:100%;max-height:200px;border:1px solid #444;border-radius:6px;display:block;margin:6px 0 4px 24px;cursor:zoom-in;';
+    img.title = ev.shot.file ? `Bấm phóng to/thu nhỏ — file: ${ev.shot.file}` : 'Bấm phóng to/thu nhỏ';
+    img.addEventListener('click', () => {
+      img.style.maxHeight = img.style.maxHeight === '200px' ? '70vh' : '200px';
+    });
+    h.row.appendChild(img);
+  } else if (ev && ev.shot && ev.shot.file) {
+    const note = document.createElement('div');
+    note.textContent = `📸 Ảnh sau khi thực thi (file): ${ev.shot.file}`;
+    note.style.cssText = 'font-size:11px;opacity:0.75;margin:4px 0 2px 24px;word-break:break-all;';
+    h.row.appendChild(note);
+  }
   acTaskScroll();
 }
 

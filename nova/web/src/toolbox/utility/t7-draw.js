@@ -1,61 +1,9 @@
-/* T7 — Nova timeline/editor — PREVIEW: Remotion iframe, draw gfx/glob, layer html, waveform, thumbs, overlay, sfx, peaks, timeline raf
+/* T7 — Nova timeline/editor — PREVIEW: draw gfx/glob, layer html, waveform, thumbs, overlay, sfx, peaks, timeline raf
    Tách verbatim từ src/toolbox/utility/t7.js (2026-09-11, file gốc 2264 dòng quá ngưỡng) — không sửa thân hàm.
-   Toàn bộ là function declaration: chỉ gọi lúc runtime, thứ tự nạp giữa các file t7-*.js không ảnh hưởng. */
-
-function _t7RemotionFrame(){ return document.getElementById('t7RemotionFrame'); }
-
-function _t7NovaSig(){
-  const specs = state.sceneSpecs || {};
-  return _t7Clips().map(c => c.sceneId + ':' + _t7ClipDur(c).toFixed(2) + ':' + (c.fx || 'none') + ':' + (c.trans || 'none') + ':' + ((specs[c.sceneId] && specs[c.sceneId].rev) || 0)).join('|');
-}
-
-async function _t7NovaLoad(){
-  const fr = _t7RemotionFrame(); const win = fr && fr.contentWindow;
-  if (!win || typeof win.remotion_setBundleMode !== 'function') return false;
-  const scenes = await _t7NovaScenes({ inline:false });
-  if (!scenes.length){ setStatus7('Chưa có cảnh nào để dựng.', 'error'); return false; }
-  const totalSec = scenes.reduce((s, x) => s + (Number(x.durationSec) || 3), 0);
-  const durationInFrames = Math.max(1, Math.round(totalSec * T7_NOVA.fps));
-  const props = JSON.stringify({ scenes });
-  win.remotion_setBundleMode({
-    type: 'composition',
-    compositionName: T7_NOVA.comp,
-    serializedResolvedPropsWithSchema: props,
-    serializedDefaultPropsWithCustomSchema: props,
-    compositionDurationInFrames: durationInFrames,
-    compositionFps: T7_NOVA.fps,
-    compositionWidth: T7_NOVA.width,
-    compositionHeight: T7_NOVA.height,
-    compositionDefaultCodec: 'h264',
-    compositionDefaultOutName: null,
-    compositionDefaultVideoImageFormat: null,
-    compositionDefaultPixelFormat: null,
-    compositionDefaultProResProfile: null,
-  });
-  _t7RmState.sig = _t7NovaSig();
-  _t7RmState.frame = -1;
-  return true;
-}
-
-function _t7RemotionFit(){
-  const fr = _t7RemotionFrame(); const win = fr && fr.contentWindow;
-  const host = document.getElementById('t7PreviewWrap');
-  if (!fr || !win || !host) return;
-  const canvas = win.document.getElementById('remotion-canvas');
-  if (!canvas) return;
-  const r = host.getBoundingClientRect();
-  const s = Math.min(r.width / T7_NOVA.width, r.height / T7_NOVA.height) || 1;
-  canvas.style.transform = 'scale(' + s + ')';
-  canvas.style.transformOrigin = 'top left';
-  const body = win.document.body;
-  if (body){ body.style.margin = '0'; body.style.background = '#000'; body.style.overflow = 'hidden'; }
-  const vc = win.document.getElementById('video-container');
-  if (vc){
-    vc.style.position = 'absolute';
-    vc.style.left = Math.max(0, (r.width - T7_NOVA.width * s) / 2) + 'px';
-    vc.style.top = Math.max(0, (r.height - T7_NOVA.height * s) / 2) + 'px';
-  }
-}
+   Toàn bộ là function declaration: chỉ gọi lúc runtime, thứ tự nạp giữa các file t7-*.js không ảnh hưởng.
+   2026-09-17: XOÁ _t7RemotionFrame/_t7NovaSig/_t7NovaLoad/_t7RemotionFit — đường preview Remotion
+   iframe đã chết (#t7RemotionFrame không còn trong markup, _t7RmState.on không bao giờ được đặt true).
+   Preview là ảnh (t7PreviewImg); Nova EXPORT vẫn live qua t7NovaExport (t7-engine.js → main process). */
 
 function _t7UpdateOverlay(){
   const el = document.getElementById('t7OverlayImg'); if (!el) return;
@@ -164,8 +112,7 @@ function _t7PreviewFx(effect, i, p){
 }
 
 function _t7UpdatePreviewFx(){
-  // Bật xem trước Remotion → engine thật vẽ khung, bỏ qua hẳn nhánh mô phỏng CSS bên dưới.
-  if (typeof _t7RmState === 'object' && _t7RmState.on){ t7RemotionSeek(t7State.playT); return; }
+  // (2026-09-17: bỏ nhánh "nếu bật preview Remotion → seek iframe" — đường iframe đã xoá, preview là ảnh.)
   const el = document.getElementById('t7PreviewImg'); if (!el) return;
   const at = _t7ClipAt(t7State.playT); if (!at){ el.style.transform = 'none'; return; }
   const sc = (at.clip.scale && at.clip.scale !== 1) ? at.clip.scale : 1;   // 🔍 tỉ lệ ảnh người dùng đặt

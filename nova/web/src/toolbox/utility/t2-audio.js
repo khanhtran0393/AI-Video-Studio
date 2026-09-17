@@ -6,10 +6,6 @@ function loadAutoAudio(input){
   if (!f) return;
   _autoAudioFile = f;
   _autoAudioWords = null;     // file mới → xoá cache
-  const info = document.getElementById('autoSrtInfo');
-  if (info) info.textContent = `✓ Đã đính audio: ${f.name} — Auto sẽ transcribe (Whisper) & căn timing.`;
-  const clr = document.getElementById('autoSrtClear');
-  if (clr) clr.style.display = 'inline-flex';
   input.value = '';
   // Refresh nút "Phân tích kịch bản": onchange gọi t2AudioInfo TRƯỚC khi _autoAudioFile được set ở đây → phải cập nhật lại nút.
   if (typeof t2UpdateAnalyzeBtn === 'function') t2UpdateAnalyzeBtn();
@@ -33,8 +29,7 @@ function _t2ResetTimingAudio(){
   try { if (typeof t8State === 'object' && t8State) t8State.audioFile = null; } catch (e) {}
   const nm = document.getElementById('t2AudioName'); if (nm) nm.textContent = 'Đính MP3 căn timing';
   const pill = document.getElementById('t2AudioPill'); if (pill){ pill.style.color = ''; pill.style.borderColor = ''; pill.style.background = ''; }
-  const info = document.getElementById('autoSrtInfo'); if (info) info.textContent = '';
-  const clr = document.getElementById('autoSrtClear'); if (clr) clr.style.display = 'none';
+  // Ô trạng thái autoSrtInfo/autoSrtClear đã bỏ trong redesign — chỉ còn pill tên file.
   if (typeof t2UpdateAnalyzeBtn === 'function') t2UpdateAnalyzeBtn();
   if (typeof t2UpdateCost === 'function') t2UpdateCost();
   if (typeof t2RenderTimingWarn === 'function') t2RenderTimingWarn();
@@ -101,9 +96,8 @@ async function _autoAlignAudioOnce(){
 }
 
 function _autoStepsAll(){
-  return document.getElementById('autoFlowImages')?.checked
-    ? AUTO_STEPS.concat(FLOW_STEPS)
-    : AUTO_STEPS;
+  // Checkbox autoFlowImages (nhánh "Trọn gói ảnh Flow") đã bỏ khỏi UI → luôn chuỗi AUTO_STEPS.
+  return AUTO_STEPS;
 }
 
 function _autoRenderSteps(){

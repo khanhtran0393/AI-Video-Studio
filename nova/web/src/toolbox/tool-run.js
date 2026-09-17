@@ -238,67 +238,6 @@ async function runAutoTool2(){
       }
     }
 
-    // BƯỚC 9 (tuỳ chọn) — Trọn gói ảnh bằng Flow: prompt asset → ảnh asset → ảnh cảnh
-    if (document.getElementById('autoFlowImages')?.checked && !stopped()) {
-      // 9a — Tạo prompt nhân vật/bối cảnh (Tool 3)
-      _autoSetStep(FS_ASSET_PROMPT, 'active');
-      try {
-        setStatus2('🎭 Đang tạo prompt nhân vật/bối cảnh (Tool 3)…', 'working');
-        loadAssetsFromTool2(true);
-        clearCancel();
-        await genAllAssetPrompts();
-        if (typeof tfRenderAssets === 'function') tfRenderAssets();
-        _autoSetStep(FS_ASSET_PROMPT, 'done');
-      } catch (e){ _autoSetStep(FS_ASSET_PROMPT, 'fail'); verifyNote += ' · 🎭 prompt asset lỗi: ' + (e.message || e); }
-
-      // 9b — Tạo ảnh nhân vật + bối cảnh bằng Flow (để làm ảnh tham chiếu)
-      if (!stopped()) {
-        _autoSetStep(FS_ASSET_IMG, 'active');
-        setStatus2('🖼 Đang tạo ảnh nhân vật/bối cảnh bằng Flow…', 'working');
-        tfState.onProgress = (p) => _autoSetStepLabel(FS_ASSET_IMG, `🖼 Ảnh asset ${p.done}/${p.total}`);
-        try {
-          const rc = await tfGenAssets('char');
-          const rb = await tfGenAssets('bg');
-          tfState.onProgress = null;
-          // ⚠️ ĐẢM BẢO đủ ảnh tham chiếu: tạo lại asset còn THIẾU ảnh (lỗi/hết quota) trước khi tạo cảnh.
-          const _missAssets = () => [
-            ...tfAssetList('char').filter(a => a.prompt && String(a.prompt).trim() && !state.characterImages?.[a.name]?.base64),
-            ...tfAssetList('bg').filter(a => a.prompt && String(a.prompt).trim() && !state.backgroundImages?.[a.name]?.base64),
-          ];
-          for (let round = 1; round <= 3 && !stopped(); round++){
-            const miss = _missAssets();
-            if (!miss.length) break;
-            _autoSetStepLabel(FS_ASSET_IMG, `🔁 Tạo lại ${miss.length} ảnh tham chiếu thiếu (lần ${round})`);
-            const mc = tfAssetList('char').some(a => a.prompt && String(a.prompt).trim() && !state.characterImages?.[a.name]?.base64);
-            const mb = tfAssetList('bg').some(a => a.prompt && String(a.prompt).trim() && !state.backgroundImages?.[a.name]?.base64);
-            if (mc) await tfGenAssets('char', true);
-            if (mb && !stopped()) await tfGenAssets('bg', true);
-          }
-          tfState.onProgress = null;
-          const skip = rc?.skipped ? rc : (rb?.skipped ? rb : null);
-          const stillMiss = _missAssets().length;
-          if (skip) { _autoSetStep(FS_ASSET_IMG, 'skip'); verifyNote += ` · 🎭 ảnh asset bỏ qua (${skip.reason}).`; }
-          else if (stillMiss) { _autoSetStep(FS_ASSET_IMG, 'fail'); verifyNote += ` · ⚠️ còn ${stillMiss} ảnh tham chiếu THIẾU (hết quota?) — cảnh liên quan có thể thiếu ref.`; }
-          else { _autoSetStep(FS_ASSET_IMG, 'done'); verifyNote += ` · 🎭 asset đủ ảnh tham chiếu.`; }
-        } catch (e){ _autoSetStep(FS_ASSET_IMG, 'fail'); verifyNote += ' · 🎭 ảnh asset lỗi: ' + (e.message || e); }
-        finally { tfState.onProgress = null; }
-      } else _autoSetStep(FS_ASSET_IMG, 'skip');
-
-      // 9c — Tạo ảnh cảnh (tự đính ảnh asset vừa tạo làm tham chiếu)
-      if (!stopped()) {
-        _autoSetStep(FS_SCENE_IMG, 'active');
-        setStatus2('🖼 Đang tạo ảnh cảnh bằng Flow… (theo dõi ở tab ✨ Tạo Ảnh Hàng Loạt)', 'working');
-        tfState.onProgress = (p) => _autoSetStepLabel(FS_SCENE_IMG, `🖼 Ảnh cảnh ${p.done}/${p.total}`);
-        try {
-          if (typeof tfRenderScenes === 'function') tfRenderScenes();
-          const res = await tfGenScenes(false);
-          if (res?.skipped) { _autoSetStep(FS_SCENE_IMG, 'skip'); verifyNote += ` · 🖼 ảnh cảnh bỏ qua (${res.reason}).`; }
-          else { _autoSetStep(FS_SCENE_IMG, res?.err ? 'fail' : 'done'); verifyNote += ` · 🖼 cảnh: ${res?.done || 0} ảnh${res?.err ? `, ${res.err} lỗi` : ''}.`; }
-        } catch (e){ _autoSetStep(FS_SCENE_IMG, 'fail'); verifyNote += ' · 🖼 ảnh cảnh lỗi: ' + (e.message || e); }
-        finally { tfState.onProgress = null; }
-      } else _autoSetStep(FS_SCENE_IMG, 'skip');
-    }
-
     // --- Tổng kết ---
     const secs = Math.round((Date.now() - t0) / 1000);
     const missing = state.scenes.filter(s => !state.scenePrompts[s.id] || !state.scenePrompts[s.id].trim()).length;

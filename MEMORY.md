@@ -1,3 +1,93 @@
+## 2026-09-17zo — Copilot (b): real browser session (persist:copilot) + ảnh TRƯỚC/SAU thay pseudo-diff
+
+- **Phạm vi**: tiếp theo entry 2026-09-17 (Task card + ⚡ auto-approve). Backlog C9(b)
+  (fs sync → async trong `agent-copilot.js`) kiểm tra lại thấy ĐÃ xong từ trước —
+  0 match `fs.*Sync` còn lại, có test offline riêng (tmp-agent-copilot-fs-async-test).
+- **Real browser session** (`nova/main/ipc/agent-copilot-browser.js`):
+  `webPreferences.partition = 'persist:copilot'` — cookie/localStorage của trang
+  giữ qua các lượt chạy và qua restart app (login 1 lần), cách ly khỏi session
+  cửa sổ chính. Thêm `capturePageTo({maxWidth, tag})`: capturePage → resize CHỈ CO
+  (≤720px, không phóng to, guard `typeof image.resize === 'function'`) → lưu PNG
+  artifact thật vào `output/agent-copilot/ac-shot-<ts>-<tag>.png` → trả
+  `{file,width,height,bytes,dataUrl}`; dataURL bị CHẶN nếu vượt 900KB (file vẫn
+  còn trên đĩa — UI hiện đường dẫn). `browser_screenshot` refactor dùng helper;
+  export controller thêm `capturePageTo` (exports-contract của module chỉ có
+  `createBrowserController` — không đổi).
+- **Ảnh TRƯỚC khi duyệt** (`nova/main/ipc/agent-copilot.js`): nhánh browser_click/type
+  chụp before TRƯỚC khi gọi `requestApproval`; `requestApproval` thêm param thứ 5
+  `shot={file,dataUrl,error}` → event `approval_request` kèm `shotFile/shotDataUrl/
+  shotError` (dataURL chỉ đính khi ≤3MB). Lỗi chụp KHÔNG nuốt: `shotError` khai báo
+  lộ liễu lên thẻ duyệt (Luật 10).
+- **Ảnh SAU khi thực thi**: sau click/type chụp again → `ctx.lastAfterShot` (loop
+  xoá null trước mỗi tool, `tool_end` ok kèm `shot`) + JSON trả model thêm
+  `afterShot` (hoặc `afterShotError` khi chụp lỗi). System prompt cập nhật tương ứng.
+- **UI** (`agent-copilot-ui.js`): thẻ duyệt hiện 📸 ảnh TRƯỚC (click zoom-in/out
+  260px↔70vh) / đường dẫn file / cảnh báo lỗi chụp; `acTaskToolEnd(ok, summary, ev)`
+  nhận nguyên event — ảnh SAU gắn dưới dòng tool trong thẻ Task, title ảnh nêu file.
+- **BUG tự bắt bằng live smoke**: lần chèn đầu tôi chặn nhầm `card.appendChild(title/pre)`
+  cũ còn sót cuối hàm → appendChild di chuyển node xuống cuối card (caption thành
+  firstElementChild). Sửa: bỏ 2 lệnh append trùng, chỉ giữ `card.appendChild(row)`.
+- **Kiểm định**: offline loop test 16/16 PASS (fake BrowserWindow capturePage
+  100x80 tương thích — resize không kích hoạt vì 100<720); `npm run check` EXIT=0
+  (chạy 2 lần, cả sau fix UI); smoke live qua bridge `app.eval` (env
+  `AI_VIDEO_STUDIO_AGENT_EVAL=1`, app restart bằng `khoidong.bat --silent`)
+  **tmp-ac-live-shots.js 4/4 PASS** — P1 thẻ duyệt hiện ảnh TRƯỚC, P2 thẻ Task
+  hiện ảnh SAU dưới đúng dòng tool, P3 quá trần base64 → dòng đường dẫn, P4
+  shotError → cảnh báo lộ liễu; restart sạch → `app.eval` HTTP 409
+  `AVS_AGENT_EVAL_DISABLED` fail-closed đúng; scan lifecycle: 0 entry sau 05:15Z
+  (REAL/WARN trong json đều là lịch sử session trước).
+- **Gotchas**: (1) ảnh gắn vào dòng tool ĐANG CHẠY (row của `tool_start`), không
+  phải row cuối của thẻ Task — test bừa row cuối sẽ fail; (2) resize ảnh chỉ khi
+  `width > maxWidth`, fake 100x80 phải qua đúng nhánh này; (3) `image.resize`
+  Electron có thể phóng to — phải guard trước.
+- **Backlog còn lại**: E2E thật với LLM live (click qua cổng duyệt bấm tay trên
+  trang thật) — chưa chạy vì cần API key/credit; khung đã sẵn.
+
+
+## 2026-09-17zn — Dọn worktree Kilo song song (purring-allosaurus)
+
+- **Bối cảnh**: user thấy "app song song" — hoá ra là git worktree
+  `D:\AI Video Studio\.kilo\worktrees\purring-allosaurus` (nhánh purring-allosaurus,
+  tip d973330d) do tool Kilo sinh. App đang chạy phục vụ UI từ repo chính
+  `nova/web` qua server 127.0.0.1:47280–47283 → agent sửa trong worktree KHÔNG
+  hiện lên UI (nguyên nhân chính của report "sửa nhưng không thấy").
+- **Kiểm định trước xoá**: worktree sạch (0 file chưa commit) + nhánh 0 commit
+  trước main (`main..purring-allosaurus` rỗng) → xoá an toàn, không mất gì.
+- **Đã làm**: `git worktree remove` (thư mục biến mất, Test-Path=False) +
+  `git branch -d purring-allosaurus` (safe-delete OK — xác nhận đã merge).
+  Git worktree list giờ chỉ còn repo chính (main @ 127b0222).
+- **Bài học**: agent/tool sinh worktree thì sửa nằm ngoài app — muốn thấy UI
+  phải merge về main rồi Ctrl+R cửa sổ app (server no-cache + ETag theo mtime,
+  reload là thấy bản mới, không cần restart app).
+- **Nguyên nhân gốc**: `.kilo/agent-manager.json` — tool Kilo TỰ sinh worktree
+  cho mỗi phiên agent (2 cái ngày 2026-09-01: wt-…-1 → alkaline-hook, wt-…-2 →
+  purring-allosaurus). User chỉ chạy desktop app, không hề chủ đích dùng worktree.
+- **Còn lại — quyết của user (2026-09-17)**: docs 3 file của alkaline-hook GIỐNG
+  HỆT main (diff rỗng — công việc đã vào main từ trước); merge-tree báo 4 file
+  xung đột nếu merge (ipc-ai.js, ipc-inventory.json là file sinh tự động,
+  story/plan.js, web/index.html) + nhánh kèm file rác (nova/0, .tmp-test-matrix
+  -summary.json 10k dòng). User chọn: XOÁ `feature/auto-fix-master-specification`
+  (safe-delete OK, was 6a22a42d — đã merge đủ; remote origin vẫn giữ, có thể
+  push xoá sau nếu muốn), GIỮ `alkaline-hook` làm lưu trữ WIP (1828aa2e,
+  e3641714). Stale entry trong agent-manager.json (trỏ tới worktree đã xoá)
+  nên dọn qua UI của Kilo, không sửa tay.
+- **Chặn tái phát**: thêm §6 mục 8 vào AGENTS.md — CẤM agent tạo worktree/bản
+  sao song song; sửa trực tiếp checkout chính; tool tự sinh worktree thì phải
+  merge về main trước khi user test UI.
+
+## 2026-09-17zm — Dọn 58 tham chiếu id chết + sửa bug mvVidStopBtn + mở miệng 3 cụm catch nuốt lỗi (rà soát sâu)
+
+- **Nguồn**: audit 41 hàm sidebar (cùng ngày) — 58 dead id / 487 empty catch. Xử lý theo đúng khuyến nghị: dọn theo-cụm, không xoay vòng file output.
+- **BUG THẬT sửa (tool-mv.js `mvVideoGenerate`)**: dòng cũ `document.getElementById('mvVidStopBtn').style.display = ''` KHÔNG có guard — nút này đã biến mất sau redesign Tool 6 (chỉ còn `mvVidGenBtn` + cơ chế dừng qua `tvToggleGen` đặt `__mvVidStop`). Mỗi lần queue "Chạy trọn gói" tới bước Veo (autopipe.js `videos`) là TypeError → bị catch nuốt thành thông báo tối nghĩa "Veo bỏ qua (Cannot read properties of null…)". Đã bỏ 2 dòng dùng `stop` (đầu + cuối hàm); nút chính vẫn disable/enable đúng.
+- **Dọn dead code (giữ nguyên hành vi, chỉ xoá nhánh không bao giờ chạy)**: BƯỚC 9 "Trọn gói ảnh Flow" của auto-run (tool-run.js, ~60 dòng — checkbox `autoFlowImages` đã không còn trong UI nên bước này chưa từng chạy từ lúc redesign) + `FLOW_STEPS`/`FS_ASSET_PROMPT`/`FS_ASSET_IMG`/`FS_SCENE_IMG` (auto-assets.js) + đơn giản hoá `_autoStepsAll()` → luôn `AUTO_STEPS`; autopipe bỏ no-op check/uncheck `autoFlowImages` quanh `runAutoTool2()` (giữ nguyên gán `state.videoMix/stockMix/ytMix`); profiles bỏ 6 khối DOM-only (t2VideoMix/t2ShortRef/t2StockMix/t2YtMix/v6VisualStyle + rút gọn migration videoMix===6); t2-audio bỏ autoSrtInfo/autoSrtClear; t2-scenes bỏ t2BulkBar/t2BulkCount + fallback `scriptBox||script||t2script` (import .txt giờ gán thẳng `state.script` — hành vi cũ khi textarea null); t2-edit bỏ khối t2FillBtn/t2MissingCount; t2-regen bỏ sceneListBar; collapse bỏ IIFE t2Actions; desktop-defaults bỏ t7Mp4Btn; tf.js bỏ tfCftBtn/fcWmStatus/tfAddBtn + khoá `shardN=1` (UI chia máy tfShardN/tfShardK đã bỏ); veo.js ép `aspectRatio='16:9'`/`audioMode='none'`/`_veoDurMode()→'auto'` (select v6* đã bỏ); veo-init xoá IIFE chết (veoStyle/veoBaseStyle); shell bỏ slot settingsGenCfgSlot; tool-tts bỏ gtEngine/gtKey; voice bỏ gtVoiceTT; tool-ts bỏ tsWordEst; t7-playback bỏ t7SubPrevBtn; mvtv bỏ mvInfo/mvSceneList (→ `_mvRenderSceneList` thành no-op giữ chỗ, còn 1 caller) + wmOff/wmSide.
+- **Cố tình GIỮ (no-op infra, xóa là refactor lớn vô ích)**: `_autoRenderSteps/_autoSetStep/_autoSetStepLabel/_toggleAutoUI` (~50 call site trong core auto-pipeline), `setSyncStatus` (9 call site), `renderTierBadge` (early-return — chip topbar do hệ tier đã gỡ), `tfRenderScenes/tfRenderAssets` (early-return), và **toàn bộ t7-draw/t7-engine** (`t7RemotionFrame`, `remotion-canvas`, `video-container`): 2 id sau tra cứu trong `win.document` của iframe Remotion = **false positive** của scanner; đường preview Nova-GUI hiện không còn iframe nào trong partials (chỉ còn preview ảnh) — cần quyết định riêng, không dọn trong đợt này. Sau dọn: dead id 58 → 21 (toàn bộ 21 là nhóm giữ cố ý).
+- **Mở miệng catch nuốt lỗi (Luật 10)**: t7-ai.js bước 6 (tải kho chuyển cảnh) + t7-gfx.js `_t7LoadTrans` — console.warn rõ ràng trước khi rơi vào fallback dự phòng đã khai báo; nguon-web/tim-web.js `_webTimQuaCongCu` — 3 catch `(_)` quanh máy tìm chính/truy vấn phụ/ô tìm trang → console.warn kèm tên máy/nền tảng (khoá Brave sai, SearXNG chết… trước đây biến mất lặng lẽ, user chỉ thấy "công cụ tìm đang chặn" gây hiểu nhầm).
+- **Kiểm định**: `npm run check` EXIT 0 (chạy 2 lần, cả sau edit cuối); `khoidong.bat --silent` OK (app đang chạy → focus, bridge OK); tail lifecycle.log phiên hiện tại sạch (REAL/WARN trong scan đều là lịch sử các session trước).
+- **Restart + xác minh renderer mới qua CDP** (tmp-cdp-verify.js qua `ws://127.0.0.1:9336`, Node global WebSocket): đóng instance cũ bằng `taskkill /IM electron.exe` không `/F` → trình tự quit sạch (`window-all-closed → before-quit → will-quit → quit`, KHÔNG crash) → `khoidong.bat --silent` lên OK. Trên renderer đang chạy: `runAutoTool2` không còn `FLOW_STEPS`/`autoFlowImages`; `_webTimQuaCongCu` có `console.warn`; `mvVideoGenerate` chỉ còn nhắc `mvVidStopBtn` trong COMMENT ghi chú (code thật đã bỏ); các hàm chính (`mvLoadScenes`, `t7RenderPreview`…) đều `function`; lỗi console duy nhất là cảnh báo CSP mặc định Electron dev (noise). Phiên mới từ 05:38:16Z: **0** dòng crash/unresponsive.
+- **Mở câu hỏi còn treo ĐÃ GIẢI QUYẾT**: `src\toolbox\nguon-web\tim-web.js` không tồn tại trên đĩa và chưa từng được git track (bản tạm của session trước) — bản duy nhất sống là `nova\web\nguon-web\tim-web.js` (nạp tại index.html:238), đã sửa catch. Không cần sửa thêm.
+- **Còn lại (nợ có chủ đích)**: hệ tier (renderTierBadge + gate) ngủ đông nguyên trạng; `_tsButPhapNote` overwrite ts-prompt.js→tool-ts.js (check:toplevel đánh dấu hợp lệ); 480+ catch rỗng còn lại đã phân loại là cleanup hợp lệ (recorder/unsub/IDB best-effort/localStorage).
+
+
 ## 2026-09-17zl — Cập nhật yt-dlp bundled 2026.07.04 → 2026.08.19 (treo của entry 2026-09-17)
 
 - **Lý do**: mục "Còn treo" của entry Nghiên cứu Ngách (2026-09-17) — yt-dlp cũ ~1.5 tháng,
@@ -8359,3 +8449,133 @@ Người dùng chọn "cải tiến tất cả" — hiện thực đủ 9 đề 
 - Giới hạn phương pháp: quét theo tên file/tên export — không bắt được hàm nội bộ
   chết trong module (ranh giới registry theo §4.1 là module, không phải hàm).
 
+## 2026-09-17zk — Dọn dẹp mồ côi (theo zj, đã chốt phạm vi hẹp sau git grep)
+
+- **Xoá `nova/video-agent/tts/srt-assemble.js`** (mồ côi thật — 0 require, không
+  npm script, bị thay bởi viral-cut buildSrtSkeleton + dubbing cuesToSrt).
+  `check:ipc` tái sinh → inventory đã không còn nó.
+- **Xoá rác local**: `nova/_hc-debug.log`, root `LICENSES.chromium.html`
+  (artifact electron-builder, sẽ tự sinh lại khi build).
+- **Dời về `nova/scripts/tmp/` (đổi tên `tmp-`)**: root `scripts/dump-hits.js`,
+  `extract-snippet.js`, `inspect-icon.mjs`, `inspect-icons.mjs`,
+  root `test-niche-api.cjs`, `test-niche-live.cjs` (debug live API),
+  `nova/web/_check_hd_ids.js`, `_smoke_annotation.js` (smoke đặt nhầm ở renderer),
+  root `tmp_prune_omni.py`, `tmp_venv_inventory.py` (mv thuần, đã gitignored).
+- **GIỮ (sau git grep — báo cáo quét thô gây hiểu nhầm)**: `nova/scripts/
+  smoke-cdp/smoke-mcp/smoke-runtime.js` (require bởi packaged-smoke = npm
+  `smoke:packaged`, voice-ui-smoke = `test:voice:ui`, ui-functions-e2e,
+  produce-real-outputs, test-different-user, giong-dd-packaged-check);
+  `documentary/test-full|test-segmentation` (npm `test:documentary:*` của
+  nova/package.json); toàn bộ test thủ công có header "Chạy: node …" của module
+  (documentary test-errors/word-sync-*, whiteboard py-backend-*-test,
+  video-agent test-ui-advanced, voice-venv-repair-test); icon tooling root
+  `scripts/` (convert-icon, make-square-icon, make-extension-icons,
+  sync-extension, cleanup-junk.ps1).
+- Bài học: quét theo tên file phải đối chiếu `git grep` theo stem trước khi xoá —
+  `require('./x')` không đuôi + comment tham chiếu khiến danh sách "mồ côi" thô
+  sai vài file hạ tầng smoke-test.
+- Kiểm định: `npm run check` PASS (exit 0, checker-fixture 10/10). Git status:
+  8 rename staged + xoá srt-assemble + inventory regenerated. `nova/main/server.js`
+  modified là thay đổi có sẵn của user (fix ETag partial) — không đụng tới.
+
+## 2026-09-17zk2 — Dọn rác local ~21,5 GB (user chọn "dọn mạnh")
+
+- Đã xác minh trước khi xoá runtime root: KHÔNG có `AI Video Studio.exe` ở root
+  (chỉ còn `Uninstall...exe` của bản cài gỡ cụt), không process nào chạy từ
+  `D:\AI Video Studio`, không shortcut trỏ vào → bộ Electron runtime root là
+  xác chết của bản cài, xoá an toàn.
+- **Xoá thư mục**: `smoke-results/` (22.207 file ~21 GB), `artifacts/` (964 file
+  474 MB), `logs/` (4 MB), `locales/` (46,6 MB), `nova/smoke-results/`.
+- **Xoá 15 file runtime root**: chrome_100/200_percent.pak, resources.pak,
+  d3dcompiler_47, dxcompiler, dxil, ffmpeg, libEGL, libGLESv2, vk_swiftshader,
+  vulkan-1 (.dll), icudtl.dat, snapshot_blob.bin, v8_context_snapshot.bin,
+  vk_swiftshader_icd.json.
+- **Xoá ~42 file log/tmp rác root** (build-win*, tmp-*, venv-*, check-*,
+  rebrand-report, CUsersKhanhAppDataLocalTempdepth.log…).
+- **`fix.py` → `nova/scripts/tmp/tmp-fix.py`** (git mv — script patch HTML một
+  lần đã dùng, tracked).
+- **GIỮ**: `resources/` (649 MB payload bản cài — user có thể chạy
+  `Uninstall AI Video Studio.exe` để gọn nốt), 2 file `giong-noi-*.mp3` +
+  `voice clone/` (dữ liệu giọng thật — Luật 6), các script tiện ích root
+  (`clear-cache-and-restart.ps1`, `start-stage*.ps1`), doc NOVA_*.md,
+  `.cline_last_action.log` (log tool đang sống).
+- Dependency check thêm: 0 dep thừa trong package.json (7 dep nghi vấn đều dùng).
+- Kiểm định sau dọn: `npm run check` PASS exit 0.
+- LƯU Ý 1: `artifacts/real-api-sample-20260830/` chứa 5 file TRACKED (fixture
+  sample API cũ, 0 tham chiếu trong repo — git grep sạch) → xoá kèm thư mục,
+  cần vào commit dọn dẹp.
+- LƯU Ý 2 (quan trọng): working tree có ~26 file modify KHÔNG phải từ session
+  này (nova/web/src/toolbox/* — redesign v6Aspect/v6Duration/v6AudioMode,
+  whiteboard-studio-ai, nova/main/ipc/agent-copilot-browser.js — persist
+  session 'persist:copilot' + trần dataURL) → là thay đổi song song của
+  user/tool khác đang chạy cùng lúc. KHÔNG stage/commit hay revert các file đó
+  khi commit dọn dẹp — chỉ commit: MEMORY.md, ipc-inventory.json, xoá
+  srt-assemble + artifacts sample, 9 rename tmp-. server.js là fix ETag cũ.
+- SỰ CỐ near-miss (đã xử lý): xoá nhầm `scripts/` root chứa 5 file tooling
+  tracked (cleanup-junk.ps1, convert-icon.mjs, make-extension-icons.mjs,
+  make-square-icon.mjs, sync-extension.mjs — file nhỏ nên thư mục hiện 0 MB,
+  listing đệ quy bị shell noise che mất) → khôi phục nguyên vẹn bằng
+  `git checkout -- scripts/`, git status trở lại đúng 9 rename. Bài học: trước
+  khi Remove-Item thư mục, BẮT BUỘC chạy `git ls-files` đối chiếu —
+  "0 MB" ≠ "rỗng".
+- Đã xoá thêm: `.verification-logs/` (16 log auto-fix cũ 2026-09-01, gitignored).
+- Còn lại ở root chỉ: `.cursor/`, `.kilo/` (pointer tool — giữ), `voice clone/`
+  (dữ liệu giọng — giữ), `resources/` + Uninstaller (user tự chạy để gọn).
+
+
+
+
+## 2026-09-17 — Agent Copilot: thẻ Task/Walkthrough + ⚡ Tự động duyệt (Antigravity UI)
+
+- **Thẻ Task/Walkthrough trong khung chat** (`nova/web/src/toolbox/agent-copilot-ui.js` +
+  `nova/web/partials/agent-copilot.html` + `nova/web/src/styles/agent-copilot.css`):
+  mỗi lượt chạy chèn 1 thẻ `🧭 Nhiệm vụ` ngay trong luồng chat — header (tiến độ
+  "Bước N/M" + chevron co giãn) + timeline từng dòng: tool (◐ quay → ✓/✗ kèm summary),
+  approval (🛡 Chờ duyệt → ✓ ĐÃ DUYỆT / ✗ TỪ CHỐI / ⚡ TỰ ĐỘNG DUYỆT, màu xanh/đỏ/vàng),
+  `done` → thẻ tự co + "✓ Hoàn thành" (border xanh) / lỗi → "✗ Thất bại" (border đỏ),
+  bấm header mở lại được. Status line cũ (ac-tool-status) bỏ; hàm giữ làm no-op cho an toàn.
+- **Nút ⚡ Tự động duyệt** trên header chat (cạnh 🛡): localStorage `ac_auto_approve`
+  mặc định TẮT (an toàn trước, đối xứng cổng duyệt 🛡). BẬT → mọi `approval_request`
+  được `settle(true)` ngay: thẻ duyệt vẫn hiện diff minh bạch + badge "⚡ TỰ ĐỘNG
+  DUYỆT", nút Duyệt/Từ chối khoá; task card ghi dòng ⚡ màu vàng. Signature payload
+  không đổi: `agentCopilotApprove({id, approved: true})`.
+- **Fix bug thật trong `nova/main/server.js` (ETag stale)**: ETag HTML chỉ tính
+  mtime+size của index.html thô, trong khi nội dung phục vụ là bản ĐÃ LẮP partial
+  (`expandIncludes`) → partial đổi mà index.html nguyên vẹn → ETag không đổi →
+  trình duyệt 304 dùng bản stale CŨ (bug này là nguyên nhân UI mới "không lên"
+  dù server phục vụ đúng). Vá: ETag HTML cộng thêm mtime partials (`htmlMtime()`).
+  Entry MEMORY trước ghi "server.js modified là của user — không đụng" → hôm nay
+  ĐÃ chủ đích sửa tiếp tại chỗ ETag (dòng ~154-165), giữ nguyên cơ chế 304.
+- **Live smoke test trên app thật** (`nova/scripts/tmp/tmp-ac-live-walkthrough.js`,
+  bridge `app.eval` env=1): bơm event giả → P1 thẻ Task xuất hiện, 3 dòng timeline
+  đúng icon/text/tiến độ; P2 bấm Từ chối tay → thẻ duyệt + task row "✗ TỪ CHỐI";
+  P3 `done` → thẻ co + "✓ Hoàn thành" + bấm header mở lại; P4 toggle ⚡ bật/tắt
+  localStorage đúng, approval auto chốt ngay + khoá nút + row ⚡. PASS exit 0.
+- Gotcha harness: (1) `acTask` là top-level `let` — gán từ app.eval được (global
+  lexical scope) nhưng thẻ DOM cũ phải xoá tay trước khi test lại nếu không đếm doubled;
+  (2) `process.exit(0)` cứng trong harness node Windows gây crash libuv
+  0xC0000409 dù logic PASS — dùng `process.exitCode` thay thế; (3) run_commands
+  dùng chung 1 PowerShell session → `$env:` ĐÃ SET ở call trước VẪN CÒN khi
+  restart app ở call sau — phải `Remove-Item Env:...` trước khi restart sạch,
+  rồi xác nhận `app.eval` → HTTP 409 `AVS_AGENT_EVAL_DISABLED`.
+- Kiểm định: `npm run check` EXIT=0 (10 bước, checker-fixture 10/10) sau khi sửa
+  server.js; app restart sạch (không env), lifecycle log chỉ có startup GPU — sạch.
+- Còn backlog: C9(b) fs sync refactor `agent-copilot.js`; real browser session +
+  screenshot before/after thay pseudo-diff (proposal b) chưa làm.
+
+
+
+
+## 2026-09-17zk — Kiểm định thác vision Whiteboard: sandbox 23/23 + E2E thật trong app ĐẠT
+- Kiểm định 1 lần (tmp, không commit): `nova/scripts/tmp/tmp-wb-vision-cascade-test.js` — trích nguyên văn đoạn wbAiVisionJson/wbAcUserSource/wbAcToOpenAiMessages từ whiteboard-studio-ai.js vào vm sandbox, mock kênh Copilot + callLLMJson: **23/23 PASS** (bậc 1 Copilot + convert image_url + disableTools; chặn WB_AC_NO_KEY; bậc 2 anthropic direct giữ chuẩn Anthropic; toggle tắt → direct; bậc 3 deepseek → _override Gemini key Flow + chặn WB_VISION_NO_GOOGLE_KEY; thứ tự ưu tiên wbAcUserSource).
+- E2E THẬT qua CDP 9336 (`tmp-wb-cdp-real-test.js`): Page.reload ignoreCache → renderer chạy code mới; nguồn AI thật của user = **openai-compatible / qwen/qwen3.8-max:free** (key 54 ký tự, có baseUrl) → đúng bậc 1 Antigravity; gọi wbAiVisionJson THẬT với probe PNG 128×128 (tròn đỏ + vuông xanh) → `{"OK":true,"out":{"shapes":2,"colors":["red","blue"]}}` — model nhìn đúng ảnh; wb-logBox ghi đúng log "🤖 Antigravity đang nhìn ảnh (vision thuần, không tool)…". User có 18 key Flow (bậc 3 sẵn sàng).
+- **Sửa thêm** (additive): `window.wbStudioAi` export thêm `wbAiVisionJson, wbAcUserSource` (dòng 441 whiteboard-studio-ai.js) — phục vụ test ngoài + không đổi gì cũ.
+- **HOTFIX syntax** (không phải của task này — edit đồng thời): `nova/web/src/toolbox/shared/auto-assets.js` dòng 2 — chuỗi `FS_ASSET_*/FS_SCENE_IMG` trong comment khối chứa `*/` đóng comment sớm → SyntaxError, `npm run check` FAIL cả chuỗi. Sửa = thêm khoảng trắng `FS_ASSET_* / FS_SCENE_IMG`. Sau fix: `npm run check` **10/10 PASS, exit 0** (syntax 504 files, exports 35 module, shared 42/20, size 755 files, toplevel 1816 tên, docs 41 script, selftest 10/10).
+- Lưu ý chung: file renderer khối comment KHÔNG được chứa chuỗi `*/` (kể cả trong tên hằng kiểu `X_*/Y`).
+
+
+## 2026-09-17zm — Panel Skill: nút "🗑 Xóa tất cả" đã xác minh TRONG app thật qua CDP; chẩn đoán "không thấy" = renderer cũ + cache cũ
+- User báo chạy khoidong.bat vẫn không thấy 4 nút trên dòng "📚 Skill đã lưu" (screenshot còn nút cũ "Nạp bộ skill mẫu (100 chủ đề)" + tên skill mojibake). Chuỗi markup cũ này KHÔNG tồn tại trong repo nữa (quét toàn repo) → screenshot = DOM cũ của phiên renderer cũ, không phải HTML hiện tại.
+- Xác minh ground truth bằng CDP (ws://127.0.0.1:9336, script tmp find-skill-panel2.js): (1) server 47280 phục vụ HTML MỚI (fetch so byte: có đủ 4 nút, "SKILL DỮ LIỆU"/"Nạp bộ skill mẫu" vắng bóng); (2) DOM renderer TRƯỚC reload đã có sẵn nút (deleteAllBtn: true, header "📚 Skill đã lưu · 200 skill"); (3) Page.reload ignoreCache → switchTool('toolskill') → panel display:block, nút Xóa tất cả rect 93x29px visible. LƯU Ý: switchTool nhận tên KHÔNG tiền tố "tool-" (gọi 'toolskill' → id 'tool-toolskill').
+- Boot renderer lúc 05:06Z từng FAIL: SyntaxError auto-assets.js:2 (bản cũ trong HTTP cache của renderer partition, TRƯỚC hotfix "*/ trong comment" 2026-09-17zk) + SCENE_TYPE_VI is not defined (hệ quả). Sau Page.reload ignoreCache: SCENE_TYPE_VI = object, boot OK. Bài học: khi nghi renderer stale, hard-reload qua CDP (Page.reload ignoreCache) thay vì chỉ restart app — disk cache của partition có thể giữ bản .js cũ.
+- Kiểm định: npm run check 10/10 PASS (docs-sync 41 script, selftest 10/10). scan:lifecycle: chỉ WARN (cụm -1 từ taskkill ngoài + render crash đã auto-recovery 05:04), không REAL sau boot 05:06.

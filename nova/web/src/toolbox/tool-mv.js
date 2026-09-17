@@ -97,7 +97,7 @@ async function mvVideoGenerate(){
   const modelName = document.getElementById('mvVidModel').value.trim();   // để trống → native tự chọn abra_r2v_<dur>s
   if (!state.sceneVideos) state.sceneVideos = {};
   const btn = document.getElementById('mvVidGenBtn'); btn.disabled = true;
-  const stop = document.getElementById('mvVidStopBtn'); stop.style.display = '';
+  // Nút dừng riêng (mvVidStopBtn) đã bỏ trong redesign — dừng bằng cách bấm lại nút chính (tvToggleGen đặt __mvVidStop).
   window.__mvVidStop = false;
   try { await flow('POOL_RESET'); } catch { /* */ }
   // Số luồng song song = số tài khoản Flow đang dùng được (mỗi account 1 cảnh cùng lúc).
@@ -158,7 +158,7 @@ async function mvVideoGenerate(){
   setStatusBar('statusMvVid', `🎬 Đang render ${total} cảnh · ${conc} luồng song song… mỗi cảnh ~1-3 phút.`, 'working');
   await _mvRunLimited(targets, conc, work);
   await _mvPersistVideos();
-  btn.disabled = false; stop.style.display = 'none';
+  btn.disabled = false;
   setStatusBar('statusMvVid', window.__mvVidStop ? `Đã dừng. ${okc}/${total} video xong.` : `✓ Xong ${okc}/${total} video${lastCredit != null ? ` · còn ~${lastCredit} credit` : ''}.`, okc ? 'ok' : 'error');
 }
 

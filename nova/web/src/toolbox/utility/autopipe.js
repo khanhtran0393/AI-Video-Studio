@@ -205,15 +205,15 @@ async function _runPipeline(job){
     scenes: async () => {
       const si = document.getElementById('scriptInput'); if (si) si.value = state.script;
       // Áp mức xen video 🎞/🎬 mà kênh đã chọn (ghi lúc Thêm) — vì newVideo() vừa đưa DOM về mặc định.
-      if (job.videoMix != null){ state.videoMix = job.videoMix; const e = document.getElementById('t2VideoMix'); if (e) e.value = String(job.videoMix); }
-      if (job.stockMix != null){ state.stockMix = job.stockMix; const e = document.getElementById('t2StockMix'); if (e) e.value = String(job.stockMix); }
-      if (job.ytMix != null){ state.ytMix = job.ytMix; const e = document.getElementById('t2YtMix'); if (e) e.value = String(job.ytMix); }
+      // (select t2VideoMix/t2StockMix/t2YtMix đã bỏ trong redesign — chỉ còn áp vào state.)
+      if (job.videoMix != null) state.videoMix = job.videoMix;
+      if (job.stockMix != null) state.stockMix = job.stockMix;
+      if (job.ytMix != null) state.ytMix = job.ytMix;
       if (job.nguonBat){ state.nguonBat = Object.assign({ veo:false, stock:false, yt:false, kho:false, web:false }, job.nguonBat); try { t2RenderNguon(); } catch (e) {} }
       if (job.webBat && Object.keys(job.webBat).length) state.webBat = Object.assign({}, job.webBat);
       // Đưa file giọng vào Tool 2 để TỰ CĂN TIMING (Whisper) — thời lượng cảnh khớp giọng đọc. Không có giọng → dùng độ dài ước lượng.
       try { _autoAudioFile = (t7State && t7State.audioFile) || null; _autoAudioWords = null; } catch (e) {}
-      const chk = document.getElementById('autoFlowImages'); const prev = chk ? chk.checked : false; if (chk) chk.checked = false;
-      try { await runAutoTool2(); } finally { if (chk) chk.checked = prev; }
+      await runAutoTool2();
       const n = (state.scenes || []).length; if (!n) throw new Error('Chưa chia được cảnh.'); return { sub: n + ' cảnh' + (t7State.audioFile ? ' (căn theo giọng)' : '') };
     },
     assets: async () => { await runAutoTool3(); return { sub: ((state.charactersV || []).length + (state.backgroundsV || []).length) + ' asset' }; },

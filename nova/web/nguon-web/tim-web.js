@@ -219,17 +219,24 @@ async function _webTimQuaCongCu(platId, q, n) {
   };
   if (ra.length < n) {
     // Lấy dư (n*3) rồi mới lọc: máy tìm hay trả link chết/link không phải trang xem.
-    try { (await mayTim(truy, n * 3)).forEach(them); } catch (_) {}
+    // Lỗi máy tìm (khoá sai, server chết…) KHÔNG nuốt lặng lẽ — log rõ để người dùng
+    // hiểu vì sao kết quả ít và lý do "công cụ tìm đang chặn" có thật hay không.
+    try { (await mayTim(truy, n * 3)).forEach(them); }
+    catch (e) { console.warn('[Nguồn web] Máy tìm chính (' + (K.may || '?') + ') lỗi:', (e && e.message) || e); }
     // Dạng site: không ra thì thử dạng "tên-nền-tảng + từ khoá".
     if (!ra.length) {
       const phu = _webTruyVanPhu(q, platId);
-      if (phu) { try { (await mayTim(phu, n * 3)).forEach(them); } catch (_) {} }
+      if (phu) {
+        try { (await mayTim(phu, n * 3)).forEach(them); }
+        catch (e) { console.warn('[Nguồn web] Máy tìm (truy vấn phụ) lỗi:', (e && e.message) || e); }
+      }
     }
   }
 
   // 2) Ô tìm của chính trang.
   if (ra.length < n && p.timTrang) {
-    try { (await _webTimTrang(p, q, n)).forEach(them); } catch (_) {}
+    try { (await _webTimTrang(p, q, n)).forEach(them); }
+    catch (e) { console.warn('[Nguồn web] Ô tìm của ' + (p.ten || platId) + ' lỗi:', (e && e.message) || e); }
   }
 
   // 3–4) Công cụ tìm kiếm chung — chỉ tới đây mới tính phanh nhịp.

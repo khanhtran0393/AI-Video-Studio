@@ -8,9 +8,7 @@ function tsSetWords(n){
 
 function tsEstimate(){
   const w = parseInt(document.getElementById('tsWords')?.value) || 0;
-  const mins = w / 150;   // ~150 từ/phút khi đọc TTS
-  const el = document.getElementById('tsWordEst');
-  if (el) el.textContent = w ? `≈ ${mins < 1 ? Math.round(mins * 60) + ' giây' : mins.toFixed(1).replace('.0','') + ' phút'} đọc` : '';
+  // Ô ước lượng tsWordEst đã bỏ trong redesign — chỉ còn chip chọn số từ.
   document.querySelectorAll('#tool-toolscript .ts-chip').forEach(ch => ch.classList.toggle('on', parseInt(ch.textContent) === w));
 }
 
@@ -80,8 +78,12 @@ function tsXoaNguon(){
 function tsNguonDangBat(){ return !!(tsYtBrief && tsYtBrief.text); }
 
 /* Ghi chú diễn giải cho từng Bút pháp kể chuyện (đưa vào prompt tiếng Anh). */
-function _tsButPhapNote(tone){
-  if (tone === 'Tự sự thuần') return 'pure flowing narration — one storyteller voice, no character dialogue, no direct address to the viewer';
+/* Bản EN rút gọn CHO RIÊNG prompt tool-ts — KHÔNG được tên `_tsButPhapNote`!
+   Tên `_tsButPhapNote` là của utility/ts-prompt.js (bảng _TS_BUT_PHAP giàu chi tiết
+   pov/pace/voice/dialogue/address/close) mà utility/ts.js dùng để dựng prompt Novel;
+   bản này từng ĐÈ LẶNG LẼ vì tool-ts.js nạp sau (index.html:188 > 138) làm prompt
+   Novel mất chi tiết bút pháp → đổi tên thành _tsButPhapNoteEn. */
+function _tsButPhapNoteEn(tone){
   if (tone === 'Review ở góc nhìn thứ 3') return 'third-person review/commentary — the narrator analyzes and reviews the subject from an outside perspective, no character dialogue';
   if (tone === 'Tự sự - lời thoại của nhân vật') return 'narration woven with short character dialogue lines — dialogue appears inline inside the flowing narration, no speaker labels';
   if (tone === 'Review - lời thoại') return 'third-person review mixed with short character/subject dialogue lines woven inline into the commentary, no speaker labels';
@@ -125,7 +127,7 @@ async function tsGenerate(rewrite){
     return tsGenerateNovel({ topic, words, lang, tone, skill, lever, cta,
       rewrite: !!rewrite, n, chWords });
   }
-  const styleNote = _tsButPhapNote(tone);
+  const styleNote = _tsButPhapNoteEn(tone);   // bản EN rút gọn của tool-ts (bản RICH _tsButPhapNote của ts-prompt.js dành cho pipeline Novel trong utility/ts.js)
   // extras = Đòn bẩy tâm lý + Kỹ năng viết + CTA (do người dùng chọn trên UI).
   const buildPrompt = (withExtras) =>
 `You are a professional voiceover scriptwriter for faceless YouTube videos.

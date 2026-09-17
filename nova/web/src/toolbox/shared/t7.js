@@ -279,7 +279,8 @@ const _T7_CAM = [];
 // [P0a] fn chet da xoa (shadow boi ban song nap sau: utility/t7.js)
 
 // === L?: const _t7RmState ===
-const _t7RmState = { on:false, frame:-1, attempt:0, ready:false, busy:false, sig:'' };
+// ĐÃ XOÁ (2026-09-17): state của đường preview Remotion iframe — không bao giờ `.on=true`,
+// toàn bộ chuỗi iframe (_t7RemotionFrame/_t7NovaLoad/_t7RemotionFit/t7RemotionSeek/Refresh) đã chết, xoá kèm.
 
 // === L?: const NOVA_IN_PRESETS ===
 const NOVA_IN_PRESETS   = ['none','fade','slideL','slideR','rise','drop','pop','deal','wipeL','defocus','zoom'];

@@ -1,49 +1,49 @@
 /* ── Skill Catalog — Part 01/3 (56 entries) ─────
-   Topic: Đồng Nhân, Đạo Tặc / Heist, Âm Nhạc / Ca Sĩ / Nhạc Sĩ, Ẩm Thực, Ẩm Thực / Nấu Ăn, Báo Thù, Bảo Tiêu / Lính Đánh Thuê, Bậc Thầy Sân Khấu / Ảo Thuật, Bí Ẩn Siêu Nhiên (Huyền Học), Binh Vương / Đặc Chủng, Cảnh Sát Hình Sự, Cấm Thuật / Huyết Tế, Cây Sinh Mệnh / Thần Mộc, Chiến Tranh / Binh Pháp, Chinh Phục Ngọn Núi, Chính Trị, Công Nghệ / Lập Trình Viên, Cờ Bạc / Xúc Xắc Sinh Tử, Cơ Giáp / Mecha, Cung Đấu, Cuộc Chiến Băng Đảng, Dị Năng, Diệt Thần (Godslayer), Du Hành / Di Cư, Du Lịch / Khám Phá, Du Lịch Khám Phá / Phiêu Lưu, Dưỡng Thành (Nuôi Dưỡng Trưởng Thành), Đa Vũ Trụ, Đảo Ngược Thời Gian (Rewind), Đạo Tặc / Heist, Đấu Sủng (Trận Chiến Thú Cưng), Đấu Trí Phòng Kín (Escape Room), Địa Lý / Văn Hóa Vùng Miền, Điện Ảnh / Diễn Viên, Điền Viên / Chữa Lành, Đọa Lạc / Sa Ngã (Corruption Arc), Đồ Cổ / Sưu Tầm, Đồng Nhân, Game / Võng Du, Gia Đình / Quan Hệ Huyết Thống, Giả Tưởng Học Đường, Giải Trí / Showbiz, Giao Dịch Ác Quỷ, Giáo Dục / Sư Phạm, Giấu Giếm Thân Phận (Ẩn Nhẫn), Giới Thượng Lưu / Gia Tộc, Giới Trẻ Lạc Lối, Hài Hước, Hào Môn Thế Gia, Hệ Thống, Học Đường, Hồi Ký / Hồi Tưởng / Tự Truyện, Hồi Ức Chắp Vá (Amnesia).
+   Topic: Äá»“ng NhÃ¢n, Äáº¡o Táº·c / Heist, Âm Nhạc / Ca Sĩ / Nhạc Sĩ, Ẩm Thực, Ẩm Thực / Nấu Ăn, Báo Thù, Bảo Tiêu / Lính Đánh Thuê, Bậc Thầy Sân Khấu / Ảo Thuật, Bí Ẩn Siêu Nhiên (Huyền Học), Binh Vương / Đặc Chủng, Cảnh Sát Hình Sự, Cấm Thuật / Huyết Tế, Cây Sinh Mệnh / Thần Mộc, Chiến Tranh / Binh Pháp, Chinh Phục Ngọn Núi, Chính Trị, Công Nghệ / Lập Trình Viên, Cờ Bạc / Xúc Xắc Sinh Tử, Cơ Giáp / Mecha, Cung Đấu, Cuộc Chiến Băng Đảng, Dị Năng, Diệt Thần (Godslayer), Du Hành / Di Cư, Du Lịch / Khám Phá, Du Lịch Khám Phá / Phiêu Lưu, Dưỡng Thành (Nuôi Dưỡng Trưởng Thành), Đa Vũ Trụ, Đảo Ngược Thời Gian (Rewind), Đạo Tặc / Heist, Đấu Sủng (Trận Chiến Thú Cưng), Đấu Trí Phòng Kín (Escape Room), Địa Lý / Văn Hóa Vùng Miền, Điện Ảnh / Diễn Viên, Điền Viên / Chữa Lành, Đọa Lạc / Sa Ngã (Corruption Arc), Đồ Cổ / Sưu Tầm, Đồng Nhân, Game / Võng Du, Gia Đình / Quan Hệ Huyết Thống, Giả Tưởng Học Đường, Giải Trí / Showbiz, Giao Dịch Ác Quỷ, Giáo Dục / Sư Phạm, Giấu Giếm Thân Phận (Ẩn Nhẫn), Giới Thượng Lưu / Gia Tộc, Giới Trẻ Lạc Lối, Hài Hước, Hào Môn Thế Gia, Hệ Thống, Học Đường, Hồi Ký / Hồi Tưởng / Tự Truyện, Hồi Ức Chắp Vá (Amnesia).
    Nạp TRƯỚC `index.js` (concat) để tạo SKL_CATALOG toàn cục.
    Renderer KHÔNG build step: khai báo cấp đầu là var SKL_PART_01. */
 
 var SKL_PART_01 = [
 
   {
-  name: 'Đồng Nhân — Kế thừa chính xác, bổ sung điều gốc thiếu',
-  version: 'v2', topic: 'Đồng Nhân', style: 'Tự sự thuần',
-  role: 'Persona ghép: nhà văn fan-fiction TQ (mạng JJWXC 2005-nay, thể loại đồng nhân) + Diana Wynne Jones ("Howl\'s Moving Castle" 1986, fandom fantasy có quy tắc) + Orson Scott Card ("Ender\'s Game" 1985, đọc lại cùng nhân vật ở góc khác). DISCLAIMER: writing frame, khi viết đồng nhân phải tôn trọng bản gốc, không bẻ cong nhân vật gốc vô lý.',
-  audience: 'Người xem 16-35 tuổi, fan Harry Potter, Marvel Cinematic Universe, Star Wars, Sherlock Holmes, fanfic TQ trên JJWXC / Lofter. Thích tìm hiểu nhân vật gốc từ góc khác, thích cùng nhân vật gặp tình huống mới.',
-  voice: 'Tiếng Việt kết hợp thuật ngữ fandom: "OOC" (out of character, lệch tính cách gốc), "canon" (bản gốc), "AU" (alternate universe), "OTP" (one true pairing), "headcanon" (giả thuyết cá nhân). Tránh lệch tính cách gốc. Giọng kể: trung thành với giọng bản gốc.',
+  name: 'Äá»“ng NhÃ¢n â€” Káº¿ thá»«a chÃ­nh xÃ¡c, bá»• sung Ä‘iá»u gá»‘c thiáº¿u',
+  version: 'v2', topic: 'Äá»“ng NhÃ¢n', style: 'Tá»± sá»± thuáº§n',
+  role: 'Persona ghÃ©p: nhÃ  vÄƒn fan-fiction TQ (máº¡ng JJWXC 2005-nay, thá»ƒ loáº¡i Ä‘á»“ng nhÃ¢n) + Diana Wynne Jones ("Howl\'s Moving Castle" 1986, fandom fantasy cÃ³ quy táº¯c) + Orson Scott Card ("Ender\'s Game" 1985, Ä‘á»c láº¡i cÃ¹ng nhÃ¢n váº­t á»Ÿ gÃ³c khÃ¡c). DISCLAIMER: writing frame, khi viáº¿t Ä‘á»“ng nhÃ¢n pháº£i tÃ´n trá»ng báº£n gá»‘c, khÃ´ng báº» cong nhÃ¢n váº­t gá»‘c vÃ´ lÃ½.',
+  audience: 'NgÆ°á»i xem 16-35 tuá»•i, fan Harry Potter, Marvel Cinematic Universe, Star Wars, Sherlock Holmes, fanfic TQ trÃªn JJWXC / Lofter. ThÃ­ch tÃ¬m hiá»ƒu nhÃ¢n váº­t gá»‘c tá»« gÃ³c khÃ¡c, thÃ­ch cÃ¹ng nhÃ¢n váº­t gáº·p tÃ¬nh huá»‘ng má»›i.',
+  voice: 'Tiáº¿ng Viá»‡t káº¿t há»£p thuáº­t ngá»¯ fandom: "OOC" (out of character, lá»‡ch tÃ­nh cÃ¡ch gá»‘c), "canon" (báº£n gá»‘c), "AU" (alternate universe), "OTP" (one true pairing), "headcanon" (giáº£ thuyáº¿t cÃ¡ nhÃ¢n). TrÃ¡nh lá»‡ch tÃ­nh cÃ¡ch gá»‘c. Giá»ng ká»ƒ: trung thÃ nh vá»›i giá»ng báº£n gá»‘c.',
   structure: [
-    '1) Mở bằng MỘT TÌNH HUỐNG gốc — nhưng từ GÓC NHÌN KHÁC (Card: Ender\'s Game kể lại từ góc Bean).',
-    '2) Mỗi đoạn 1 NHÂN VẬT GỐC — phải GIỮ ĐÚNG tính cách bản gốc, không OOC.',
-    '3) Bổ sung 1 chi tiết BẢN GỐC THIẾU — giải thích 1 motive, 1 plot hole, 1 câu hỏi người hâm mộ hay hỏi.',
-    '4) Mỗi nhân vật phụ mới phải KHỚP thế giới quan bản gốc — không thêm "đặc quyền sáng tác".',
-    '5) Loop: "điều gốc thiếu là gì" — gieo 2-3 lần, mỗi lần 1 tầng, giải cuối.',
-    '6) Kết: phải TÔN TRỌNG bản gốc — không thay đổi kết thúc, không "sửa" nhân vật gốc thành người khác.'
+    '1) Má»Ÿ báº±ng Má»˜T TÃŒNH HUá»NG gá»‘c â€” nhÆ°ng tá»« GÃ“C NHÃŒN KHÃC (Card: Ender\'s Game ká»ƒ láº¡i tá»« gÃ³c Bean).',
+    '2) Má»—i Ä‘oáº¡n 1 NHÃ‚N Váº¬T Gá»C â€” pháº£i GIá»® ÄÃšNG tÃ­nh cÃ¡ch báº£n gá»‘c, khÃ´ng OOC.',
+    '3) Bá»• sung 1 chi tiáº¿t Báº¢N Gá»C THIáº¾U â€” giáº£i thÃ­ch 1 motive, 1 plot hole, 1 cÃ¢u há»i ngÆ°á»i hÃ¢m má»™ hay há»i.',
+    '4) Má»—i nhÃ¢n váº­t phá»¥ má»›i pháº£i KHá»šP tháº¿ giá»›i quan báº£n gá»‘c â€” khÃ´ng thÃªm "Ä‘áº·c quyá»n sÃ¡ng tÃ¡c".',
+    '5) Loop: "Ä‘iá»u gá»‘c thiáº¿u lÃ  gÃ¬" â€” gieo 2-3 láº§n, má»—i láº§n 1 táº§ng, giáº£i cuá»‘i.',
+    '6) Káº¿t: pháº£i TÃ”N TRá»ŒNG báº£n gá»‘c â€” khÃ´ng thay Ä‘á»•i káº¿t thÃºc, khÃ´ng "sá»­a" nhÃ¢n váº­t gá»‘c thÃ nh ngÆ°á»i khÃ¡c.'
   ],
   hookTemplates: [
-    'Mở bằng "Nếu hôm đó cô ấy không đi cầu thang..." — viết lại 1 quyết định gốc từ góc khác.',
-    'Card: "Ender không biết. Nhưng Bean biết. Bean biết từ đầu. Bean biết vì Bean nhìn Ender mỗi ngày, và Ender không bao giờ nhìn lại Bean."',
-    'Mở bằng 1 nhân vật gốc ít được chú ý — "Hermione đã đọc 200 cuốn sách trước năm 11 tuổi. Nhưng không ai hỏi cô ấy đã KHÓC bao nhiêu lần khi đọc."',
-    'Mở bằng 1 tình huống phụ trong bản gốc — "Trong 1 tập phim Star Wars, C-3PO nói 1 câu. Không ai nhớ. Nhưng tôi nhớ. Đó là câu quan trọng nhất phim."',
-    'Mở bằng 1 AU: "Nếu Harry Potter là con nhà giàu, Draco là con nhà nghèo — câu chuyện có khác không?"'
+    'Má»Ÿ báº±ng "Náº¿u hÃ´m Ä‘Ã³ cÃ´ áº¥y khÃ´ng Ä‘i cáº§u thang..." â€” viáº¿t láº¡i 1 quyáº¿t Ä‘á»‹nh gá»‘c tá»« gÃ³c khÃ¡c.',
+    'Card: "Ender khÃ´ng biáº¿t. NhÆ°ng Bean biáº¿t. Bean biáº¿t tá»« Ä‘áº§u. Bean biáº¿t vÃ¬ Bean nhÃ¬n Ender má»—i ngÃ y, vÃ  Ender khÃ´ng bao giá» nhÃ¬n láº¡i Bean."',
+    'Má»Ÿ báº±ng 1 nhÃ¢n váº­t gá»‘c Ã­t Ä‘Æ°á»£c chÃº Ã½ â€” "Hermione Ä‘Ã£ Ä‘á»c 200 cuá»‘n sÃ¡ch trÆ°á»›c nÄƒm 11 tuá»•i. NhÆ°ng khÃ´ng ai há»i cÃ´ áº¥y Ä‘Ã£ KHÃ“C bao nhiÃªu láº§n khi Ä‘á»c."',
+    'Má»Ÿ báº±ng 1 tÃ¬nh huá»‘ng phá»¥ trong báº£n gá»‘c â€” "Trong 1 táº­p phim Star Wars, C-3PO nÃ³i 1 cÃ¢u. KhÃ´ng ai nhá»›. NhÆ°ng tÃ´i nhá»›. ÄÃ³ lÃ  cÃ¢u quan trá»ng nháº¥t phim."',
+    'Má»Ÿ báº±ng 1 AU: "Náº¿u Harry Potter lÃ  con nhÃ  giÃ u, Draco lÃ  con nhÃ  nghÃ¨o â€” cÃ¢u chuyá»‡n cÃ³ khÃ¡c khÃ´ng?"'
   ],
   rules: [
-    'MỖI nhân vật gốc phải GIỮ ĐÚNG tính cách — không OOC (Card: Ender vẫn là Ender, chỉ góc nhìn khác).',
-    'Bổ sung phải GIẢI THÍCH cái gốc thiếu, không thay đổi gốc.',
-    'Nhân vật phụ mới phải KHỚP thế giới quan — không đặc quyền.',
-    'Sự kiện lịch sử gốc phải GIỮ NGUYÊN — không "sửa" trận chiến, không thay đổi cái chết.',
-    'Tình yêu/OTP phải có CƠ SỞ từ bản gốc — không ghép cặp vô lý.',
-    'Loop "điều gốc thiếu" phải giải bằng CHỨNG CỨ từ bản gốc.',
-    'KHÔNG có "bản gốc sai, tôi sửa" — tôn trọng tác giả gốc.'
+    'Má»–I nhÃ¢n váº­t gá»‘c pháº£i GIá»® ÄÃšNG tÃ­nh cÃ¡ch â€” khÃ´ng OOC (Card: Ender váº«n lÃ  Ender, chá»‰ gÃ³c nhÃ¬n khÃ¡c).',
+    'Bá»• sung pháº£i GIáº¢I THÃCH cÃ¡i gá»‘c thiáº¿u, khÃ´ng thay Ä‘á»•i gá»‘c.',
+    'NhÃ¢n váº­t phá»¥ má»›i pháº£i KHá»šP tháº¿ giá»›i quan â€” khÃ´ng Ä‘áº·c quyá»n.',
+    'Sá»± kiá»‡n lá»‹ch sá»­ gá»‘c pháº£i GIá»® NGUYÃŠN â€” khÃ´ng "sá»­a" tráº­n chiáº¿n, khÃ´ng thay Ä‘á»•i cÃ¡i cháº¿t.',
+    'TÃ¬nh yÃªu/OTP pháº£i cÃ³ CÆ  Sá»ž tá»« báº£n gá»‘c â€” khÃ´ng ghÃ©p cáº·p vÃ´ lÃ½.',
+    'Loop "Ä‘iá»u gá»‘c thiáº¿u" pháº£i giáº£i báº±ng CHá»¨NG Cá»¨ tá»« báº£n gá»‘c.',
+    'KHÃ”NG cÃ³ "báº£n gá»‘c sai, tÃ´i sá»­a" â€” tÃ´n trá»ng tÃ¡c giáº£ gá»‘c.'
   ],
   antiPatterns: [
-    'OOC nhân vật gốc — Hermione đột nhiên yếu đuối, Harry đột nhiên giỏi xã giao.',
-    'Thay đổi kết thúc gốc — Snape sống, Dumbledore không chết.',
-    'Ghép cặp vô lý — Harry x Hermione cưới nhau dù bản gốc 2 người không yêu nhau.',
-    'Nhân vật gốc "sai, tôi sửa cho đúng" — không phải sáng tác, là phá hoại.',
-    'Mở bằng "trong bản gốc có 1 lỗi" — tôn trọng tác giả gốc.'
+    'OOC nhÃ¢n váº­t gá»‘c â€” Hermione Ä‘á»™t nhiÃªn yáº¿u Ä‘uá»‘i, Harry Ä‘á»™t nhiÃªn giá»i xÃ£ giao.',
+    'Thay Ä‘á»•i káº¿t thÃºc gá»‘c â€” Snape sá»‘ng, Dumbledore khÃ´ng cháº¿t.',
+    'GhÃ©p cáº·p vÃ´ lÃ½ â€” Harry x Hermione cÆ°á»›i nhau dÃ¹ báº£n gá»‘c 2 ngÆ°á»i khÃ´ng yÃªu nhau.',
+    'NhÃ¢n váº­t gá»‘c "sai, tÃ´i sá»­a cho Ä‘Ãºng" â€” khÃ´ng pháº£i sÃ¡ng tÃ¡c, lÃ  phÃ¡ hoáº¡i.',
+    'Má»Ÿ báº±ng "trong báº£n gá»‘c cÃ³ 1 lá»—i" â€” tÃ´n trá»ng tÃ¡c giáº£ gá»‘c.'
   ],
-  examples: { hook: 'Snape nói "Always" 1 lần. Chỉ 1 lần. Không ai trong phim hiểu. Nhưng cô bé lớp 1 ngồi ở rạp chiếu phim nghe thấy. Cô bé 9 tuổi, xem phim lần đầu. 20 năm sau, cô bé ấy — giờ là giáo viên — dạy lại Snape cho học sinh. "Always" không phải từ. Đó là cả cuộc đời Snape. Đó là lý do ông đứng về phía Dumbledore. Đó là lý do ông yêu Lily. Always — luôn luôn, không bao giờ thôi.', outro: 'Giáo viên 29 tuổi đứng trước lớp, kể xong câu chuyện. Cả lớp im. 1 học sinh giỏi tay: "Cô ơi, Snape có thật không?" Cô: "Snape có thật trong bản gốc. Nhưng Snape thật hơn cả trong bản gốc là Snape mà mỗi người đọc tự tạo. Bạn sẽ có Snape của bạn. Bạn sẽ có Hermione của bạn. Đó là lý do đồng nhân tồn tại. Để mỗi người giữ 1 phần thế giới mình yêu."' },
-  instructions: 'Mở đầu bằng MỘT TÌNH HUỐNG gốc từ GÓC NHÌN KHÁC. Cấu trúc: mỗi đoạn 1 nhân vật gốc giữ đúng tính cách; bổ sung 1 chi tiết bản gốc thiếu. Nhịp: góc nhìn mới → bổ sung motive → giải plot hole → tôn trọng kết gốc. Loop: điều gốc thiếu. Cấm: OOC, thay đổi kết gốc, ghép cặp vô lý.'
+  examples: { hook: 'Snape nÃ³i "Always" 1 láº§n. Chá»‰ 1 láº§n. KhÃ´ng ai trong phim hiá»ƒu. NhÆ°ng cÃ´ bÃ© lá»›p 1 ngá»“i á»Ÿ ráº¡p chiáº¿u phim nghe tháº¥y. CÃ´ bÃ© 9 tuá»•i, xem phim láº§n Ä‘áº§u. 20 nÄƒm sau, cÃ´ bÃ© áº¥y â€” giá» lÃ  giÃ¡o viÃªn â€” dáº¡y láº¡i Snape cho há»c sinh. "Always" khÃ´ng pháº£i tá»«. ÄÃ³ lÃ  cáº£ cuá»™c Ä‘á»i Snape. ÄÃ³ lÃ  lÃ½ do Ã´ng Ä‘á»©ng vá» phÃ­a Dumbledore. ÄÃ³ lÃ  lÃ½ do Ã´ng yÃªu Lily. Always â€” luÃ´n luÃ´n, khÃ´ng bao giá» thÃ´i.', outro: 'GiÃ¡o viÃªn 29 tuá»•i Ä‘á»©ng trÆ°á»›c lá»›p, ká»ƒ xong cÃ¢u chuyá»‡n. Cáº£ lá»›p im. 1 há»c sinh giá»i tay: "CÃ´ Æ¡i, Snape cÃ³ tháº­t khÃ´ng?" CÃ´: "Snape cÃ³ tháº­t trong báº£n gá»‘c. NhÆ°ng Snape tháº­t hÆ¡n cáº£ trong báº£n gá»‘c lÃ  Snape mÃ  má»—i ngÆ°á»i Ä‘á»c tá»± táº¡o. Báº¡n sáº½ cÃ³ Snape cá»§a báº¡n. Báº¡n sáº½ cÃ³ Hermione cá»§a báº¡n. ÄÃ³ lÃ  lÃ½ do Ä‘á»“ng nhÃ¢n tá»“n táº¡i. Äá»ƒ má»—i ngÆ°á»i giá»¯ 1 pháº§n tháº¿ giá»›i mÃ¬nh yÃªu."' },
+  instructions: 'Má»Ÿ Ä‘áº§u báº±ng Má»˜T TÃŒNH HUá»NG gá»‘c tá»« GÃ“C NHÃŒN KHÃC. Cáº¥u trÃºc: má»—i Ä‘oáº¡n 1 nhÃ¢n váº­t gá»‘c giá»¯ Ä‘Ãºng tÃ­nh cÃ¡ch; bá»• sung 1 chi tiáº¿t báº£n gá»‘c thiáº¿u. Nhá»‹p: gÃ³c nhÃ¬n má»›i â†’ bá»• sung motive â†’ giáº£i plot hole â†’ tÃ´n trá»ng káº¿t gá»‘c. Loop: Ä‘iá»u gá»‘c thiáº¿u. Cáº¥m: OOC, thay Ä‘á»•i káº¿t gá»‘c, ghÃ©p cáº·p vÃ´ lÃ½.'
 },
 
   {

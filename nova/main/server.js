@@ -152,14 +152,18 @@ function startLocalServer() {
       const filePath = path.join(root, r ? r.rel : p);
       if (!filePath.startsWith(root)) { res.writeHead(403); return res.end(); }
       // ETag: mtimeMs + size — đủ duy nhất cho file local, không cần hash.
+      // HTML: cộng thêm mtime của partials (bản phục vụ là bản ĐÃ LẮP include —
+      // partial đổi mà index.html nguyên vẹn thì ETag cũ khiến trình duyệt 304 stale).
       let stat;
       try { stat = fs.statSync(filePath); } catch { res.writeHead(404); return res.end('not found'); }
-      const etag = '"' + stat.mtimeMs.toString(36) + '-' + stat.size.toString(36) + '"';
+      const isHtmlEntry = root === WEB_DIR && path.extname(filePath).toLowerCase() === '.html';
+      const htmlMt = isHtmlEntry ? htmlMtime() : 0;
+      const etag = '"' + stat.mtimeMs.toString(36) + '-' + stat.size.toString(36) + (isHtmlEntry ? '-' + Math.round(htmlMt).toString(36) : '') + '"';
       if (req.headers['if-none-match'] === etag) { res.writeHead(304); return res.end(); }
 
       // HTML của nova/web: expand includes + cache theo mtime.
-      if (root === WEB_DIR && path.extname(filePath).toLowerCase() === '.html') {
-        const mt = htmlMtime();
+      if (isHtmlEntry) {
+        const mt = htmlMt;
         if (htmlCache && htmlCache.mtime === mt && htmlCache.path === filePath) {
           res.writeHead(200, { 'Content-Type': types['.html'], 'ETag': etag, 'Cache-Control': 'no-cache' });
           return res.end(htmlCache.html);

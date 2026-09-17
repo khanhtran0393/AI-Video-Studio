@@ -1,49 +1,49 @@
 /* ── Skill Catalog — Part 01/3 (71 entries) ─────
-   Topic: Đồng Nhân, Đạo Tặc / Heist, Âm Nhạc / Ca Sĩ / Nhạc Sĩ, Ẩm Thực, Ẩm Thực / Nấu Ăn, Báo Thù, Bảo Tiêu / Lính Đánh Thuê, Bậc Thầy Sân Khấu / Ảo Thuật, Bí Ẩn Siêu Nhiên (Huyền Học), Binh Vương / Đặc Chủng, Cảnh Sát Hình Sự, Cấm Thuật / Huyết Tế, Cây Sinh Mệnh / Thần Mộc, Chiến Tranh / Binh Pháp, Chinh Phục Ngọn Núi, Chính Trị, Công Nghệ / Lập Trình Viên, Cờ Bạc / Xúc Xắc Sinh Tử, Cơ Giáp / Mecha, Cung Đấu, Cuộc Chiến Băng Đảng, Dị Năng, Diệt Thần (Godslayer), Du Hành / Di Cư, Du Lịch / Khám Phá, Du Lịch Khám Phá / Phiêu Lưu, Dưỡng Thành (Nuôi Dưỡng Trưởng Thành), Đa Vũ Trụ, Đảo Ngược Thời Gian (Rewind), Đạo Tặc / Heist, Đấu Sủng (Trận Chiến Thú Cưng), Đấu Trí Phòng Kín (Escape Room), Địa Lý / Văn Hóa Vùng Miền, Điện Ảnh / Diễn Viên, Điền Viên / Chữa Lành, Đọa Lạc / Sa Ngã (Corruption Arc), Đồ Cổ / Sưu Tầm, Đồng Nhân, Game / Võng Du, Gia Đình / Quan Hệ Huyết Thống, Giả Tưởng Học Đường, Giải Trí / Showbiz, Giao Dịch Ác Quỷ, Giáo Dục / Sư Phạm, Giấu Giếm Thân Phận (Ẩn Nhẫn), Giới Thượng Lưu / Gia Tộc, Giới Trẻ Lạc Lối, Hài Hước, Hào Môn Thế Gia, Hệ Thống, Học Đường, Hồi Ký / Hồi Tưởng / Tự Truyện, Hồi Ức Chắp Vá (Amnesia).
+   Topic: Äá»“ng NhÃ¢n, Äáº¡o Táº·c / Heist, Âm Nhạc / Ca Sĩ / Nhạc Sĩ, Ẩm Thực, Ẩm Thực / Nấu Ăn, Báo Thù, Bảo Tiêu / Lính Đánh Thuê, Bậc Thầy Sân Khấu / Ảo Thuật, Bí Ẩn Siêu Nhiên (Huyền Học), Binh Vương / Đặc Chủng, Cảnh Sát Hình Sự, Cấm Thuật / Huyết Tế, Cây Sinh Mệnh / Thần Mộc, Chiến Tranh / Binh Pháp, Chinh Phục Ngọn Núi, Chính Trị, Công Nghệ / Lập Trình Viên, Cờ Bạc / Xúc Xắc Sinh Tử, Cơ Giáp / Mecha, Cung Đấu, Cuộc Chiến Băng Đảng, Dị Năng, Diệt Thần (Godslayer), Du Hành / Di Cư, Du Lịch / Khám Phá, Du Lịch Khám Phá / Phiêu Lưu, Dưỡng Thành (Nuôi Dưỡng Trưởng Thành), Đa Vũ Trụ, Đảo Ngược Thời Gian (Rewind), Đạo Tặc / Heist, Đấu Sủng (Trận Chiến Thú Cưng), Đấu Trí Phòng Kín (Escape Room), Địa Lý / Văn Hóa Vùng Miền, Điện Ảnh / Diễn Viên, Điền Viên / Chữa Lành, Đọa Lạc / Sa Ngã (Corruption Arc), Đồ Cổ / Sưu Tầm, Đồng Nhân, Game / Võng Du, Gia Đình / Quan Hệ Huyết Thống, Giả Tưởng Học Đường, Giải Trí / Showbiz, Giao Dịch Ác Quỷ, Giáo Dục / Sư Phạm, Giấu Giếm Thân Phận (Ẩn Nhẫn), Giới Thượng Lưu / Gia Tộc, Giới Trẻ Lạc Lối, Hài Hước, Hào Môn Thế Gia, Hệ Thống, Học Đường, Hồi Ký / Hồi Tưởng / Tự Truyện, Hồi Ức Chắp Vá (Amnesia).
    Nạp TRƯỚC `index.js` (concat) để tạo SKL_CATALOG toàn cục.
    Renderer KHÔNG build step: khai báo cấp đầu là var SKL_PART_01. */
 
 var SKL_PART_02 = [
 
   {
-  name: 'Đạo Tặc / Heist — Sơ đồ đường hầm trong đầu người xem',
-  version: 'v2', topic: 'Đạo Tặc / Heist', style: 'Tự sự thuần',
-  role: 'Persona ghép: Agatha Christie ("The Theft of the Royal Ruby", trộm kim cương khách sạn 5 sao) + Donald Westlake / Richard Stark ("Parker" series 1960s, trộm chuyên nghiệp, không lãng mạn) + bộ đôi Ocean\'s Eleven (Soderbergh 2001, heist ăn ý nhóm). DISCLAIMER: writing frame, mọi chi tiết trộm/bảo vệ phải có logic, không "vừa đi vừa nói chuyện" thành công.',
-  audience: 'Người xem 20-50 tuổi, fan heist (Ocean\'s, Inside Man, Italian Job), fan trinh thám (Agatha Christie, Sherlock Holmes), fan Money Heist. Thích chi tiết kế hoạch có logic, thích đội có chuyên môn rõ, thích biến cố bất ngờ trong trộm.',
-  voice: 'Tiếng Việt kết hợp thuật ngữ an ninh: "camera" (CCTV), "cảm biến" (sensor), "vân tay" (fingerprint), "mật mã" (cipher), "bảo vệ" (security), "đường tẩu thoát" (escape route). Tránh ngôn ngữ phim hành động. Giọng kể: thận trọng, có nhịp đếm ngược.',
+  name: 'Äáº¡o Táº·c / Heist â€” SÆ¡ Ä‘á»“ Ä‘Æ°á»ng háº§m trong Ä‘áº§u ngÆ°á»i xem',
+  version: 'v2', topic: 'Äáº¡o Táº·c / Heist', style: 'Tá»± sá»± thuáº§n',
+  role: 'Persona ghÃ©p: Agatha Christie ("The Theft of the Royal Ruby", trá»™m kim cÆ°Æ¡ng khÃ¡ch sáº¡n 5 sao) + Donald Westlake / Richard Stark ("Parker" series 1960s, trá»™m chuyÃªn nghiá»‡p, khÃ´ng lÃ£ng máº¡n) + bá»™ Ä‘Ã´i Ocean\'s Eleven (Soderbergh 2001, heist Äƒn Ã½ nhÃ³m). DISCLAIMER: writing frame, má»i chi tiáº¿t trá»™m/báº£o vá»‡ pháº£i cÃ³ logic, khÃ´ng "vá»«a Ä‘i vá»«a nÃ³i chuyá»‡n" thÃ nh cÃ´ng.',
+  audience: 'NgÆ°á»i xem 20-50 tuá»•i, fan heist (Ocean\'s, Inside Man, Italian Job), fan trinh thÃ¡m (Agatha Christie, Sherlock Holmes), fan Money Heist. ThÃ­ch chi tiáº¿t káº¿ hoáº¡ch cÃ³ logic, thÃ­ch Ä‘á»™i cÃ³ chuyÃªn mÃ´n rÃµ, thÃ­ch biáº¿n cá»‘ báº¥t ngá» trong trá»™m.',
+  voice: 'Tiáº¿ng Viá»‡t káº¿t há»£p thuáº­t ngá»¯ an ninh: "camera" (CCTV), "cáº£m biáº¿n" (sensor), "vÃ¢n tay" (fingerprint), "máº­t mÃ£" (cipher), "báº£o vá»‡" (security), "Ä‘Æ°á»ng táº©u thoÃ¡t" (escape route). TrÃ¡nh ngÃ´n ngá»¯ phim hÃ nh Ä‘á»™ng. Giá»ng ká»ƒ: tháº­n trá»ng, cÃ³ nhá»‹p Ä‘áº¿m ngÆ°á»£c.',
   structure: [
-    '1) Mở bằng MỘT MỤC TIÊU — 1 tòa nhà, 1 kho báu, 1 người. Không giải thích vì sao trộm.',
-    '2) Mỗi đoạn 1 THÀNH VIÊN đội — mỗi người 1 chuyên môn (hacker, đạo chích, tay lái, người trong cuộc, chuyên gia bảo vệ giả lập).',
-    '3) Mỗi đoạn 1 VÒNG CHUẨN BỊ — chi tiết: khảo sát, vẽ bản đồ, đóng giả nhân viên, xây dựng profile mục tiêu.',
-    '4) Loop: "mục tiêu có biết mình sắp bị trộm không" — gieo 2-3 lần, mỗi lần 1 tầng (bảo vệ, chủ nhân, công an), giải cuối.',
-    '5) Đêm trộm: MỖI PHÚT = 1 hành động, có nhịp đếm ngược, có biến cố bất ngờ (Stark: Parker luôn có 1 kế hoạch dự phòng).',
-    '6) Kết: trộm có thể THÀNH CÔNG, THẤT BẠI, hoặc THÀNH CÔNG NHƯNG MẤT THỨ — không có "trộm hoàn hảo, không mất gì".'
+    '1) Má»Ÿ báº±ng Má»˜T Má»¤C TIÃŠU â€” 1 tÃ²a nhÃ , 1 kho bÃ¡u, 1 ngÆ°á»i. KhÃ´ng giáº£i thÃ­ch vÃ¬ sao trá»™m.',
+    '2) Má»—i Ä‘oáº¡n 1 THÃ€NH VIÃŠN Ä‘á»™i â€” má»—i ngÆ°á»i 1 chuyÃªn mÃ´n (hacker, Ä‘áº¡o chÃ­ch, tay lÃ¡i, ngÆ°á»i trong cuá»™c, chuyÃªn gia báº£o vá»‡ giáº£ láº­p).',
+    '3) Má»—i Ä‘oáº¡n 1 VÃ’NG CHUáº¨N Bá»Š â€” chi tiáº¿t: kháº£o sÃ¡t, váº½ báº£n Ä‘á»“, Ä‘Ã³ng giáº£ nhÃ¢n viÃªn, xÃ¢y dá»±ng profile má»¥c tiÃªu.',
+    '4) Loop: "má»¥c tiÃªu cÃ³ biáº¿t mÃ¬nh sáº¯p bá»‹ trá»™m khÃ´ng" â€” gieo 2-3 láº§n, má»—i láº§n 1 táº§ng (báº£o vá»‡, chá»§ nhÃ¢n, cÃ´ng an), giáº£i cuá»‘i.',
+    '5) ÄÃªm trá»™m: Má»–I PHÃšT = 1 hÃ nh Ä‘á»™ng, cÃ³ nhá»‹p Ä‘áº¿m ngÆ°á»£c, cÃ³ biáº¿n cá»‘ báº¥t ngá» (Stark: Parker luÃ´n cÃ³ 1 káº¿ hoáº¡ch dá»± phÃ²ng).',
+    '6) Káº¿t: trá»™m cÃ³ thá»ƒ THÃ€NH CÃ”NG, THáº¤T Báº I, hoáº·c THÃ€NH CÃ”NG NHÆ¯NG Máº¤T THá»¨ â€” khÃ´ng cÃ³ "trá»™m hoÃ n háº£o, khÃ´ng máº¥t gÃ¬".'
   ],
   hookTemplates: [
-    'Mở bằng 1 kế hoạch: "Bản đồ tầng 3, phòng 312, két sắt 1m², mã 6 số, camera 4 góc, bảo vệ 6 người, ca 8 tiếng. Chúng tôi cần 30 phút. 4 người. 1 lần."',
-    'Stark: mở bằng lời tay trộm — "Tôi đã trộm 47 lần. 46 lần thành công. 1 lần tôi suýt chết. Đêm nay là lần thứ 48. Tôi sẽ không có lần thứ 49."',
-    'Mở bằng hồi tưởng — "Hôm đó tôi 25 tuổi. Tôi chưa cưới. Tôi chưa có con. Tôi tưởng tôi sẽ trộm đến 30 tuổi rồi nghỉ. Tôi sai. Tôi trộm đến 35. Rồi tôi bị bắt. Rồi tôi ra tù. Rồi tôi trộm lần cuối."',
-    'Mở bằng 1 cuộc họp nhóm — "Mỗi người giới thiệu tên, tuổi, và lần cuối cùng bị bắt." — 5 người, 5 câu chuyện tù.',
-    'Mở bằng 1 chi tiết nhỏ: "Con chó nhà mục tiêu không sủa vào ban đêm. Tôi nuôi nó 1 tuần. Nó quen tôi. Đêm trộm, nó chỉ vẫy đuôi."'
+    'Má»Ÿ báº±ng 1 káº¿ hoáº¡ch: "Báº£n Ä‘á»“ táº§ng 3, phÃ²ng 312, kÃ©t sáº¯t 1mÂ², mÃ£ 6 sá»‘, camera 4 gÃ³c, báº£o vá»‡ 6 ngÆ°á»i, ca 8 tiáº¿ng. ChÃºng tÃ´i cáº§n 30 phÃºt. 4 ngÆ°á»i. 1 láº§n."',
+    'Stark: má»Ÿ báº±ng lá»i tay trá»™m â€” "TÃ´i Ä‘Ã£ trá»™m 47 láº§n. 46 láº§n thÃ nh cÃ´ng. 1 láº§n tÃ´i suÃ½t cháº¿t. ÄÃªm nay lÃ  láº§n thá»© 48. TÃ´i sáº½ khÃ´ng cÃ³ láº§n thá»© 49."',
+    'Má»Ÿ báº±ng há»“i tÆ°á»Ÿng â€” "HÃ´m Ä‘Ã³ tÃ´i 25 tuá»•i. TÃ´i chÆ°a cÆ°á»›i. TÃ´i chÆ°a cÃ³ con. TÃ´i tÆ°á»Ÿng tÃ´i sáº½ trá»™m Ä‘áº¿n 30 tuá»•i rá»“i nghá»‰. TÃ´i sai. TÃ´i trá»™m Ä‘áº¿n 35. Rá»“i tÃ´i bá»‹ báº¯t. Rá»“i tÃ´i ra tÃ¹. Rá»“i tÃ´i trá»™m láº§n cuá»‘i."',
+    'Má»Ÿ báº±ng 1 cuá»™c há»p nhÃ³m â€” "Má»—i ngÆ°á»i giá»›i thiá»‡u tÃªn, tuá»•i, vÃ  láº§n cuá»‘i cÃ¹ng bá»‹ báº¯t." â€” 5 ngÆ°á»i, 5 cÃ¢u chuyá»‡n tÃ¹.',
+    'Má»Ÿ báº±ng 1 chi tiáº¿t nhá»: "Con chÃ³ nhÃ  má»¥c tiÃªu khÃ´ng sá»§a vÃ o ban Ä‘Ãªm. TÃ´i nuÃ´i nÃ³ 1 tuáº§n. NÃ³ quen tÃ´i. ÄÃªm trá»™m, nÃ³ chá»‰ váº«y Ä‘uÃ´i."'
   ],
   rules: [
-    'MỖI chi tiết an ninh phải CHÍNH XÁC — camera, cảm biến, mật mã, thời gian ca trực (Stark).',
-    'Mỗi thành viên đội phải CÓ CHUYÊN MÔN rõ — không "anh này giỏi mọi thứ".',
-    'Kế hoạch phải có PHƯƠNG ÁN DỰ PHÒNG — 1 kế hoạch chính + 2 kế hoạch dự phòng.',
-    'Mỗi trộm phải có BIẾN CỐ — không "mọi thứ đúng kế hoạch".',
-    'Loop "mục tiêu có biết không" phải giải bằng CHỨNG CỨ, không plot twist.',
-    'Sau trộm, đội phải CHIA TIỀN + CHIA KÝ ỨC — không "vui vẻ chia tay".',
-    'KHÔNG có "trộm hoàn hảo" — Westlake: mỗi trộm có cái giá.'
+    'Má»–I chi tiáº¿t an ninh pháº£i CHÃNH XÃC â€” camera, cáº£m biáº¿n, máº­t mÃ£, thá»i gian ca trá»±c (Stark).',
+    'Má»—i thÃ nh viÃªn Ä‘á»™i pháº£i CÃ“ CHUYÃŠN MÃ”N rÃµ â€” khÃ´ng "anh nÃ y giá»i má»i thá»©".',
+    'Káº¿ hoáº¡ch pháº£i cÃ³ PHÆ¯Æ NG ÃN Dá»° PHÃ’NG â€” 1 káº¿ hoáº¡ch chÃ­nh + 2 káº¿ hoáº¡ch dá»± phÃ²ng.',
+    'Má»—i trá»™m pháº£i cÃ³ BIáº¾N Cá» â€” khÃ´ng "má»i thá»© Ä‘Ãºng káº¿ hoáº¡ch".',
+    'Loop "má»¥c tiÃªu cÃ³ biáº¿t khÃ´ng" pháº£i giáº£i báº±ng CHá»¨NG Cá»¨, khÃ´ng plot twist.',
+    'Sau trá»™m, Ä‘á»™i pháº£i CHIA TIá»€N + CHIA KÃ á»¨C â€” khÃ´ng "vui váº» chia tay".',
+    'KHÃ”NG cÃ³ "trá»™m hoÃ n háº£o" â€” Westlake: má»—i trá»™m cÃ³ cÃ¡i giÃ¡.'
   ],
   antiPatterns: [
-    'Trộm xong, bước ra cửa không ai thấy — an ninh thật không đơn giản vậy.',
-    'Mỗi thành viên giỏi mọi thứ — đội trộm có CHUYÊN MÔN, không phải siêu nhân.',
-    'Kế hoạch không có dự phòng — kế hoạch duy nhất = thất bại.',
-    'Trộm thành công hoàn hảo, vui vẻ — Westlake: mỗi trộm có cái giá (mất người, mất tiền, mất tự do).',
-    'Mở bằng giải thích "kế hoạch này hoàn hảo" — để hành động kể.'
+    'Trá»™m xong, bÆ°á»›c ra cá»­a khÃ´ng ai tháº¥y â€” an ninh tháº­t khÃ´ng Ä‘Æ¡n giáº£n váº­y.',
+    'Má»—i thÃ nh viÃªn giá»i má»i thá»© â€” Ä‘á»™i trá»™m cÃ³ CHUYÃŠN MÃ”N, khÃ´ng pháº£i siÃªu nhÃ¢n.',
+    'Káº¿ hoáº¡ch khÃ´ng cÃ³ dá»± phÃ²ng â€” káº¿ hoáº¡ch duy nháº¥t = tháº¥t báº¡i.',
+    'Trá»™m thÃ nh cÃ´ng hoÃ n háº£o, vui váº» â€” Westlake: má»—i trá»™m cÃ³ cÃ¡i giÃ¡ (máº¥t ngÆ°á»i, máº¥t tiá»n, máº¥t tá»± do).',
+    'Má»Ÿ báº±ng giáº£i thÃ­ch "káº¿ hoáº¡ch nÃ y hoÃ n háº£o" â€” Ä‘á»ƒ hÃ nh Ä‘á»™ng ká»ƒ.'
   ],
-  examples: { hook: '5 giờ sáng, ca trực cuối của bảo vệ già. 62 tuổi, 30 năm trong nghề. Anh đi 1 vòng, không thấy gì. Ngồi xuống. 4h sau ca mới đến. Anh ra về. Không biết rằng 3 tiếng trước, 4 người lạ đã vào từ cửa sổ tầng 2, mở két sắt, lấy đi 12 triệu USD, và biến mất. Anh ngồi ở công viên 1 tiếng. Anh nhìn trời. "30 năm. Tôi già. Tôi mệt. Nhưng chưa ai qua mặt tôi." Anh không biết.', outro: '3 tháng sau. Đội trộm 4 người chia tiền, 3 triệu USD/người. Mỗi người 1 nơi. Trưởng đội không chia tiền cho 1 người — người chết trong trộm. Anh đưa 1,5 triệu cho vợ người chết. Vợ nhận. Không khóc. "Anh ấy biết. Anh ấy biết có thể chết." Trưởng đội: "Tôi không muốn anh ấy chết." Vợ: "Tôi biết. Anh ấy cũng biết." Im lặng. Tiền trên bàn. Trưởng đội đi ra. Không quay lại.' },
-  instructions: 'Mở đầu bằng MỘT MỤC TIÊU. Cấu trúc: mỗi đoạn 1 thành viên có chuyên môn; mỗi đoạn 1 vòng chuẩn bị. Nhịp: khảo sát → kế hoạch → trộm → biến cố → thoát → chia tiền. Loop: mục tiêu có biết không. Cấm: trộm hoàn hảo, thành viên siêu nhân, kế hoạch không dự phòng.'
+  examples: { hook: '5 giá» sÃ¡ng, ca trá»±c cuá»‘i cá»§a báº£o vá»‡ giÃ . 62 tuá»•i, 30 nÄƒm trong nghá». Anh Ä‘i 1 vÃ²ng, khÃ´ng tháº¥y gÃ¬. Ngá»“i xuá»‘ng. 4h sau ca má»›i Ä‘áº¿n. Anh ra vá». KhÃ´ng biáº¿t ráº±ng 3 tiáº¿ng trÆ°á»›c, 4 ngÆ°á»i láº¡ Ä‘Ã£ vÃ o tá»« cá»­a sá»• táº§ng 2, má»Ÿ kÃ©t sáº¯t, láº¥y Ä‘i 12 triá»‡u USD, vÃ  biáº¿n máº¥t. Anh ngá»“i á»Ÿ cÃ´ng viÃªn 1 tiáº¿ng. Anh nhÃ¬n trá»i. "30 nÄƒm. TÃ´i giÃ . TÃ´i má»‡t. NhÆ°ng chÆ°a ai qua máº·t tÃ´i." Anh khÃ´ng biáº¿t.', outro: '3 thÃ¡ng sau. Äá»™i trá»™m 4 ngÆ°á»i chia tiá»n, 3 triá»‡u USD/ngÆ°á»i. Má»—i ngÆ°á»i 1 nÆ¡i. TrÆ°á»Ÿng Ä‘á»™i khÃ´ng chia tiá»n cho 1 ngÆ°á»i â€” ngÆ°á»i cháº¿t trong trá»™m. Anh Ä‘Æ°a 1,5 triá»‡u cho vá»£ ngÆ°á»i cháº¿t. Vá»£ nháº­n. KhÃ´ng khÃ³c. "Anh áº¥y biáº¿t. Anh áº¥y biáº¿t cÃ³ thá»ƒ cháº¿t." TrÆ°á»Ÿng Ä‘á»™i: "TÃ´i khÃ´ng muá»‘n anh áº¥y cháº¿t." Vá»£: "TÃ´i biáº¿t. Anh áº¥y cÅ©ng biáº¿t." Im láº·ng. Tiá»n trÃªn bÃ n. TrÆ°á»Ÿng Ä‘á»™i Ä‘i ra. KhÃ´ng quay láº¡i.' },
+  instructions: 'Má»Ÿ Ä‘áº§u báº±ng Má»˜T Má»¤C TIÃŠU. Cáº¥u trÃºc: má»—i Ä‘oáº¡n 1 thÃ nh viÃªn cÃ³ chuyÃªn mÃ´n; má»—i Ä‘oáº¡n 1 vÃ²ng chuáº©n bá»‹. Nhá»‹p: kháº£o sÃ¡t â†’ káº¿ hoáº¡ch â†’ trá»™m â†’ biáº¿n cá»‘ â†’ thoÃ¡t â†’ chia tiá»n. Loop: má»¥c tiÃªu cÃ³ biáº¿t khÃ´ng. Cáº¥m: trá»™m hoÃ n háº£o, thÃ nh viÃªn siÃªu nhÃ¢n, káº¿ hoáº¡ch khÃ´ng dá»± phÃ²ng.'
 },
 
   {

@@ -148,6 +148,16 @@ auto-fix policy/test + readiness fail-closed + `npm audit`; kèm job `windows-sm
 8. **Deterministic** (§16): timeline có hash SHA-1 ổn định; AI chỉ chọn *tên
    preset*, engine diễn giải. Auto-Fix tối đa **5 attempt**, mỗi attempt 1
    version, bản tệ hơn không nhận.
+   **NGOẠI LỆ — Antigravity:** tính năng chạy qua kênh Antigravity
+   (`agentCopilot:chat` — hiện là vision Whiteboard `wbAiVisionJson`/
+   `wbAiRegionsCore` và các luồng auto của nó) được MIỄN TRỪ khỏi chữ "AI chỉ
+   chọn tên preset": được phép vòng agentic CÓ GIỚI HẠN đúng kiểu Antigravity
+   thật — vòng tự kiểm (`wbAiVisionSelfCheck`, ≤2 lượt gọi/ảnh), ghi nhớ
+   phong cách giữa các cảnh (`wbVisionMemory`, trần ≤6 cảnh), kế hoạch hiển
+   thị (`wbVisionPlan`). Giới hạn này là hợp đồng: mở rộng vòng lặp (thêm
+   lượt, thêm loại nhớ) phải sửa đúng dòng này. Luật 10 vẫn tuyệt đối với
+   Antigravity — mọi vòng/lượt đều khai báo trong log, lượt 2 lỗi → giữ lượt 1
+   VÀ ghi rõ, không fallback ngầm; channel vision thuần vẫn `disableTools`.
 9. **Không upload khi Final QA FAIL** (§32.12); không render full khi preview
    chưa xong (§32.11). Không thêm dependency mới cho video-agent (validator tự
    viết, cache file-based, AWS SigV4 tự ký bằng node crypto).
@@ -249,6 +259,13 @@ COMPLETED | FAILED | CANCELLED`.
    artifact thật tương ứng.
 7. **Ghi nhận**: cập nhật `MEMORY.md` (quyết định, phát hiện, vấn đề còn treo)
    trong cùng thay đổi. Không ghi log vào AGENTS.md — file này chỉ chứa quy chuẩn ổn định.
+8. **CẤM tạo git worktree / bản sao repo song song.** App desktop chạy trực tiếp
+   từ checkout chính (`d:\AI Video Studio`) và phục vụ UI qua server nội bộ đọc
+   `nova/web` mỗi request — sửa trong worktree thì app KHÔNG bao giờ thấy, gây
+   ảo giác "sửa nhưng UI không đổi" (sự cố 2026-09-17zn). Mọi agent sửa code
+   PHẢI sửa trực tiếp ở checkout chính; nếu tool (Kilo agent-manager…) tự sinh
+   worktree thì phải merge về `main` trước khi user test UI. worktree chỉ hợp lệ
+   khi user yêu cầu rõ ràng và phải dọn (`git worktree remove`) khi xong.
 
 ## 7. Ranh giới tự động hoá / Auto-Fix
 

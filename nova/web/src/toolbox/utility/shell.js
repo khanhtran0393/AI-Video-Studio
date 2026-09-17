@@ -71,9 +71,7 @@ function _relocateSettings(){
       api.style.display = '';
       apiSlot.appendChild(api);
     }
-    const cfgSlot = document.getElementById('settingsGenCfgSlot');
-    const cfg = document.getElementById('genCfgBlock');
-    if (cfg && cfgSlot && cfg.parentElement !== cfgSlot){ cfgSlot.appendChild(cfg); }   // đưa Model/Luồng… sang Cài đặt
+    // (slot settingsGenCfgSlot đã bỏ trong redesign — genCfgBlock giữ nguyên vị trí khai báo.)
     const flowSlot = document.getElementById('settingsFlowSlot');
     const flow = document.getElementById('flowAuthBlock');
     if (flow && flowSlot && flow.parentElement !== flowSlot){

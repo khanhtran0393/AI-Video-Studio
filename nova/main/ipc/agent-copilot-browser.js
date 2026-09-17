@@ -12,7 +12,10 @@
  *  - Cửa sổ ẨN (show:false), nodeIntegration:false, contextIsolation:true,
  *    sandbox:true — trang web KHÔNG đụng được Node.
  *  - Chỉ ĐỌC (innerText/title/url) + chụp PNG. click/type CÓ side-effect lên trang
- *    web → tầng agent-copilot.js PHẢI đưa 2 tool đó qua CỔNG DUYỆT khi requireApproval.
+ *    web → tầng agent-copilot.js PHẢI đưa 2 tool đó qua CỔNG DUYỆT kèm ẢNH TRƯỚC
+ *    (capturePageTo) — sếp xem trang đang hiển thị gì rồi mới bấm Duyệt.
+ *  - Session PERSISTENT qua partition 'persist:copilot' — cookie giữ qua lượt chạy
+ *    (login 1 lần), cách ly khỏi session cửa sổ chính của app.
  *  - Lỗi đều lộ liễu mã AC_BROWSER_* — không fallback ngầm (Luật 10).
  *
  * Hợp đồng: module.exports = { createBrowserController } (duy nhất, đúng thứ tự).
@@ -24,6 +27,8 @@ const BROWSER_READ_MAX_CHARS = 15000;    // cắt innerText gửi về LLM (dư�
 const BROWSER_JS_TIMEOUT_MS = 15000;     // 1 lần executeJavaScript/capturePage
 const BROWSER_SELECTOR_MAX = 200;        // trần độ dài CSS selector
 const BROWSER_TYPE_MAX = 10000;          // trần độ dài text gõ vào input
+const BROWSER_SHOT_MAX_WIDTH = 720;      // ảnh before/after nhúng vào UI co về max width này
+const BROWSER_SHOT_MAX_DATAURL_BYTES = 900 * 1024; // trần dataURL nhúng vào event — quá → chỉ trả file trên đĩa
 
 const ALLOWED_PROTOCOLS = new Set(['http:', 'https:', 'file:']);
 
@@ -65,6 +70,11 @@ function createBrowserController({ BrowserWindow, outputDir, fs, path }) {
         nodeIntegration: false,
         contextIsolation: true,
         sandbox: true,
+        // Session PERSISTENT (real browser session): cookie/localStorage của trang
+        // giữ qua các lượt chạy và qua lần khởi động app sau — trang cần login chỉ
+        // login 1 lần. Partition riêng 'persist:copilot' — KHÔNG dùng session mặc
+        // định của app (cách ly, không đụng cookie của cửa sổ chính).
+        partition: 'persist:copilot',
       },
     });
     win.on('closed', () => { win = null; });
@@ -134,8 +144,9 @@ function createBrowserController({ BrowserWindow, outputDir, fs, path }) {
     }) + note;
   }
 
-  // ── browser_screenshot: chụp PNG trang đang mở vào outputDir (artifact thật) ──
-  async function screenshot(name) {
+  // ── chụp trang vào file + dataURL cho UI (dùng chung cho browser_screenshot
+  //    và ảnh TRƯỚC/SAU của cổng duyệt click/type — artifact thật trên đĩa) ──
+  async function capturePageTo({ maxWidth, tag } = {}) {
     const w = requireOpenWindow();
     const image = await withTimeout(
       w.webContents.capturePage(),
@@ -143,13 +154,27 @@ function createBrowserController({ BrowserWindow, outputDir, fs, path }) {
       'AC_BROWSER_SHOT_TIMEOUT',
       'Chụp màn hình trang',
     );
-    const buf = image.toPNG();
+    const origSize = typeof image.getSize === 'function' ? image.getSize() : null;
+    let png = image;
+    if (maxWidth && origSize && origSize.width > maxWidth && typeof image.resize === 'function') {
+      png = image.resize({ width: maxWidth });   // chỉ co, không phóng to
+    }
+    const buf = png.toPNG();
     fs.mkdirSync(outputDir, { recursive: true });
-    const safeName = String(name || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 40);
-    const file = path.join(outputDir, `ac-shot-${Date.now().toString(36)}${safeName ? `-${safeName}` : ''}.png`);
+    const safeTag = String(tag || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 40);
+    const file = path.join(outputDir, `ac-shot-${Date.now().toString(36)}${safeTag ? `-${safeTag}` : ''}.png`);
     fs.writeFileSync(file, buf);
-    const size = typeof image.getSize === 'function' ? image.getSize() : null;
-    return `OK: đã chụp ${size ? `${size.width}x${size.height}` : 'png'} → ${file}`;
+    const size = typeof png.getSize === 'function' ? png.getSize() : null;
+    const dataUrl = buf.length <= BROWSER_SHOT_MAX_DATAURL_BYTES
+      ? `data:image/png;base64,${buf.toString('base64')}`
+      : null; // quá trần nhúng — vẫn còn file PNG trên đĩa, UI hiện đường dẫn thay ảnh
+    return { file, width: size ? size.width : null, height: size ? size.height : null, bytes: buf.length, dataUrl };
+  }
+
+  // ── browser_screenshot: chụp PNG trang đang mở vào outputDir (artifact thật) ──
+  async function screenshot(name) {
+    const r = await capturePageTo({ tag: name });
+    return `OK: đã chụp ${r.width && r.height ? `${r.width}x${r.height}` : 'png'} → ${r.file}`;
   }
 
   // ── browser_describe nội bộ: url + title hiện tại (phục vụ thẻ duyệt click/type) ──
@@ -228,7 +253,7 @@ function createBrowserController({ BrowserWindow, outputDir, fs, path }) {
     return 'OK: đã đóng browser.';
   }
 
-  return { open, read, screenshot, describe, click, type, close };
+  return { open, read, screenshot, describe, click, type, close, capturePageTo };
 }
 
 module.exports = { createBrowserController };

@@ -197,18 +197,7 @@ function renderPromptsV(){
     });
     ta.value = lines.join('\n\n');
   }
-  // Nút "Tạo nốt cảnh thiếu" — hiện khi có cảnh chưa có prompt
-  const missing = state.scenes.filter(s => !state.scenePrompts[s.id] || !state.scenePrompts[s.id].trim()).length;
-  const fillBtn = document.getElementById('t2FillBtn');
-  const missEl = document.getElementById('t2MissingCount');
-  if (fillBtn && missEl) {
-    if (missing > 0 && cnt > 0) {
-      fillBtn.style.display = '';
-      missEl.textContent = '(' + missing + ')';
-    } else {
-      fillBtn.style.display = 'none';
-    }
-  }
+  // Nút "Tạo nốt cảnh thiếu" (t2FillBtn/t2MissingCount) đã bỏ trong redesign — bỏ luôn khối hiển thị.
 }
 
 function renderStats2(){

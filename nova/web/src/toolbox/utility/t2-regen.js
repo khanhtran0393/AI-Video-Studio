@@ -187,16 +187,13 @@ function renderTable(){
   const addRow = document.getElementById('addSceneRow');
   if (!tbl) return;
   document.getElementById('badge-list').textContent = state.scenes.length;
-  const listBar = document.getElementById('sceneListBar');
   if (state.scenes.length === 0) {
     tbl.style.display = 'none';
     empty.style.display = 'block';
     if (addRow) addRow.style.display = 'block';
-    if (listBar) listBar.style.display = 'none';
     return;
   }
   tbl.style.display = 'table'; empty.style.display = 'none';
-  if (listBar) listBar.style.display = 'flex';
   if (addRow) addRow.style.display = 'block';
 
   let _acc = 0;

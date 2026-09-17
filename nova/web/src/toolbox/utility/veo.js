@@ -44,8 +44,8 @@ async function genSingleVeoPrompt(id){
   if (idx < 0) return;
   const scene = state.scenes[idx];
   const dur = getSceneDuration(scene);
-  const aspectRatio = document.getElementById('v6AspectRatio')?.value || '16:9';
-  const audioMode = document.getElementById('v6AudioMode')?.value || 'none';
+  const aspectRatio = '16:9';   // select v6AspectRatio đã bỏ trong redesign — mặc định 16:9
+  const audioMode = 'none';     // select v6AudioMode đã bỏ trong redesign — mặc định không audio
   const audioLine = audioMode === 'none' ? 'Do NOT add an audio line.' : 'Add a line "Audio: [ambient music + sfx description fitting the scene]" at the end of the prompt.';
   const gLabsPrompt = state.scenePrompts[id] ? `\nG-Labs prompt (style reference): ${state.scenePrompts[id].slice(0, 200)}` : '';
   setStatus6(`Đang tạo prompt Veo 3 cảnh [${id}]...`, 'working');
@@ -78,9 +78,7 @@ Requirements: Subject+Action+CameraMovement+Lighting+Style. ${audioLine}
 }
 
 function _veoDurMode(){
-  const el = document.getElementById('v6Duration');
-  const v = el && el.value ? String(el.value) : 'auto';
-  return (v === 'auto' || Number.isFinite(parseInt(v))) ? v : 'auto';
+  return 'auto';   // select v6Duration đã bỏ trong redesign — luôn auto (≤8s theo cảnh)
 }
 
 function renderVeoStats(){

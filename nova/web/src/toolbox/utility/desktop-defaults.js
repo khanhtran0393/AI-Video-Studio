@@ -1,11 +1,11 @@
 /* ── Tách từ inline <script> trong index.html. Tinh chỉnh mặc định CHỈ cho
-   app desktop (bật xuất MP4 FFmpeg, ép Whisper local, thu gọn khung transcribe). ── */
+   app desktop (ép Whisper local, thu gọn khung transcribe). ── */
 
-/* APP DESKTOP: tinh chỉnh mặc định cho app (Whisper local, xuất MP4) — không còn login. */
+/* APP DESKTOP: tinh chỉnh mặc định cho app (Whisper local) — không còn login. */
 (function(){
   if (!(window.native && window.native.isDesktop)) return;
   function apply(){
-    var mp4 = document.getElementById('t7Mp4Btn'); if (mp4) mp4.style.display = '';   // bật xuất MP4 FFmpeg
+    // (Nút t7Mp4Btn đã bỏ trong redesign — xuất MP4 FFmpeg luôn bật.)
     // Whisper: ÉP dùng LOCAL (chạy trong máy, không cần key) + thu gọn khung transcribe cho app.
     try {
       localStorage.setItem('t8_provider', 'local');

@@ -228,17 +228,11 @@ function _t2ImportJson(file){
 
 function _t2SelToggle(id, on){
   if (on) _t2Sel.add(id); else _t2Sel.delete(id);
-  const bar = document.getElementById('t2BulkBar');
-  if (bar) bar.style.display = _t2Sel.size ? 'flex' : 'none';
-  const cnt = document.getElementById('t2BulkCount');
-  if (cnt) cnt.textContent = String(_t2Sel.size);
 }
 
 function _t2SelClear(){
   _t2Sel.clear();
   document.querySelectorAll('#sceneBody input.t2-sel-cb').forEach(cb => cb.checked = false);
-  const bar = document.getElementById('t2BulkBar');
-  if (bar) bar.style.display = 'none';
 }
 
 function _t2SelApply(field, value){
@@ -273,9 +267,7 @@ function _t2ImportScriptFile(file){
   reader.onload = () => {
     try {
       const text = String(reader.result || '');
-      const ta = document.getElementById('scriptBox') || document.getElementById('script') || document.getElementById('t2script');
-      if (ta) { ta.value = text; if (typeof syncTool2 === 'function') syncTool2(); }
-      else if (typeof state !== 'undefined') { state.script = text; }
+      state.script = text;   // textarea cũ (scriptBox/script/t2script) đã bỏ trong redesign — import thẳng vào state
       try { if (typeof novaLog === 'function') novaLog('Import file thanh cong: ' + file.name + ' (' + file.size + ' bytes)', 'ok'); } catch(_){}
     } catch (e) { try { if (typeof novaLog === 'function') novaLog('Import err: ' + e.message, 'err'); } catch(_){} }
   };

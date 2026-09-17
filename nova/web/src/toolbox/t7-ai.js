@@ -424,7 +424,10 @@ async function _t7AiProposeRun(lamLai){
   // ── 6. Chuyển cảnh ──────────────────────────────────────────────────
   let nTr = 0;
   if (!state.cancelRequested){
-    try { if (!_t7Trans) await _t7LoadTrans(); } catch (e) {}
+    // Lỗi tải kho chuyển cảnh phải hiện ra (Luật 10) — bên dưới _t7LoadTrans có fallback
+    // khai báo, nhưng nếu cả fallback cũng không dựng được thì không được nuốt lặng lẽ.
+    try { if (!_t7Trans) await _t7LoadTrans(); }
+    catch (e) { console.warn('[Trợ lý dựng] Tải kho chuyển cảnh lỗi — bỏ qua bước chuyển cảnh:', (e && e.message) || e); }
     const trCat = _t7Trans || [];
     if (trCat.length > 1){
       _t7AiSteps(5, { 5: '0/' + Math.max(0, clips.length - 1) + ' mối nối' });

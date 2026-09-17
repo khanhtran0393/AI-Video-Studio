@@ -220,6 +220,8 @@ function imzicLoadImageFile(f, inputEl){
       if(imgObjUrl && imgObjUrl !== url) URL.revokeObjectURL(imgObjUrl);
       imgObjUrl = url;
       state.img = im;
+      // 2026-09-15r: hiện nút "Bỏ ảnh nền" sau khi nạp thành công
+      if($('imgClearBtn')) $('imgClearBtn').style.display = '';
       // CHỈ CHỌN 1 TRONG 2: ảnh nền đơn và slideshow loại trừ lẫn nhau
       // (chiều ngược lại slidesInput đã tự xoá ảnh nền). Nếu không xoá ở đây,
       // slideshow cũ còn tồn tại → vẽ theo slideshow dù người dùng vừa chọn
@@ -254,6 +256,21 @@ $('imgInput').addEventListener('change', e=>{
   if(!f) return;
   if(isExporting){ setStatus('Đang ghi video — không đổi ảnh giữa chừng (bản ghi sẽ hỏng). Chờ ghi xong rồi đổi nhé.', true); e.target.value = ''; return; }
   imzicLoadImageFile(f, e.target);
+});
+// 2026-09-15r: nút bỏ ảnh nền đã chọn (đúng pattern bgClearBtn/slidesClearBtn)
+$('imgClearBtn').addEventListener('click', ()=>{
+  if(isExporting){ setStatus('Đang ghi video — không bỏ ảnh giữa chừng (bản ghi sẽ hỏng).', true); return; }
+  if(!state.img && !state.imgFile) return;
+  if(imgObjUrl){ URL.revokeObjectURL(imgObjUrl); imgObjUrl = null; }
+  state.img = null; state.imgFile = null;
+  $('imgName').textContent = 'Chọn ảnh nền';
+  if($('imgInput')) $('imgInput').value = '';
+  $('imgClearBtn').style.display = 'none';
+  if(typeof updateSlideFields === 'function') updateSlideFields();
+  if(typeof refreshSectionHints === 'function') refreshSectionHints();
+  checkReady();
+  if(!state.slides.length && !state.audioFile && emptyState) emptyState.style.display = '';
+  setStatus('Đã bỏ ảnh nền. Chọn ảnh mới hoặc thêm slideshow để tiếp tục.', false);
 });
 
 // ---- ảnh nền RIÊNG cho fitMode 'square' (tuỳ chọn) ----
@@ -331,6 +348,8 @@ function imzicLoadAudioFile(f, inputEl){
       $('seekBar').disabled = false;
       $('tDur').textContent = fmtTime(audioEl.duration);
       state.audioReady = true;
+      // 2026-09-15r: hiện nút "Bỏ file nhạc" sau khi nạp thành công
+      if($('audClearBtn')) $('audClearBtn').style.display = '';
       checkReady();
       // phân tích offline (marker nhịp + envelope cho "⚡ Xuất nhanh") chạy nền
       ensureOfflineAnalysis();
@@ -349,6 +368,26 @@ $('audInput').addEventListener('change', e=>{
   if(!f) return;
   if(isExporting){ setStatus('Đang ghi video — không đổi nhạc giữa chừng (bản ghi sẽ hỏng). Chờ ghi xong rồi đổi nhé.', true); e.target.value = ''; return; }
   imzicLoadAudioFile(f, e.target);
+});
+// 2026-09-15r: nút bỏ file nhạc đã chọn — dừng phát, thu hồi object URL,
+// reset seek bar + phân tích offline (không fallback ngầm — Luật 10)
+$('audClearBtn').addEventListener('click', ()=>{
+  if(isExporting){ setStatus('Đang ghi video — không bỏ nhạc giữa chừng (bản ghi sẽ hỏng).', true); return; }
+  if(!state.audioFile) return;
+  audioEl.pause(); state.playing = false; $('playBtn').textContent = '▶ Phát thử';
+  if(audObjUrl){ URL.revokeObjectURL(audObjUrl); audObjUrl = null; }
+  audioEl.removeAttribute('src'); audioEl.load();
+  state.audioFile = null; state.audioReady = false;
+  offlineAnalysis = null; offlineAnalysisPromise = null;
+  $('audName').textContent = 'Chọn file nhạc';
+  if($('audInput')) $('audInput').value = '';
+  $('audClearBtn').style.display = 'none';
+  $('seekBar').disabled = true; $('seekBar').value = 0;
+  $('tCur').textContent = '0:00'; $('tDur').textContent = '0:00';
+  if(typeof refreshSectionHints === 'function') refreshSectionHints();
+  checkReady();
+  if(!state.img && !state.slides.length && emptyState) emptyState.style.display = '';
+  setStatus('Đã bỏ file nhạc. Chọn nhạc mới để phát hoặc xuất video.', false);
 });
 
 
@@ -383,6 +422,16 @@ function checkReady(){
     $('exportOfflineBtn').disabled = false;
     $('snapshotBtn').disabled = false;
     $('exportOpts').style.display = 'flex';
+  } else {
+    // 2026-09-15r: chiều ngược — bỏ ảnh/nhạc (nút 🗑) thì khoá lại nút phát/xuất,
+    // tránh "bấm được nhưng chạy sai" khi thiếu dữ liệu (Luật 10)
+    $('playBtn').disabled = true;
+    $('restartBtn').disabled = true;
+    $('exportAudioBtn').disabled = true;
+    $('exportSilentBtn').disabled = true;
+    $('exportOfflineBtn').disabled = true;
+    $('snapshotBtn').disabled = true;
+    $('exportOpts').style.display = 'none';
   }
 }
 

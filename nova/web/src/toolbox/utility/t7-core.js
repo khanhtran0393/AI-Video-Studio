@@ -113,7 +113,6 @@ function _t7ClipAt(time){ let acc = 0; const cl = t7State.clips; for (let i = 0;
 function _t7Doc(){ try { const p = getProfile(); const v = p && getCurrentVideo(p); return v ? v.workData : null; } catch (e){ return null; } }
 
 function _t7PersistClips(){ const wd = _t7Doc(); if (wd){ wd.editClips = t7State.clips.map(c => ({ id: c.id, sceneId: c.sceneId, variant: c.variant || 'A', dur: c.dur, fx: c.fx || 'none', trans: c.trans || 'none', transDur: c.transDur || 0.5, useVideo: !!c.useVideo, vidDur: c.vidDur || 0, scale: c.scale || 1, imported: !!c.imported, mediaId: c.mediaId || null, kind: c.kind || null, name: c.name || null })); wd.overlays = (t7State.overlays || []).map(o => ({ id: o.id, dataUrl: o.dataUrl, name: o.name || '', start: o.start || 0, dur: o.dur || 3 })); wd.media = (t7State.media || []).map(m => ({ id: m.id, kind: m.kind, name: m.name || '', dataUrl: m.dataUrl, dur: m.dur || 0 })); try { if (typeof saveState === 'function') saveState(true); } catch (e) {} }
-  try { if (typeof t7RemotionRefresh === 'function') t7RemotionRefresh(); } catch (e) {}   // đổi fx/thời lượng/thứ tự → nạp lại composition cho bản xem trước Remotion
 }
 
 function _t7FxFromScene(s){

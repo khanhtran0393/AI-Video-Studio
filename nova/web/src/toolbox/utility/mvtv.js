@@ -4,13 +4,7 @@
 function _mvImgSrc(img){ return img.base64.startsWith('data:') ? img.base64 : ('data:' + (img.mediaType || 'image/png') + ';base64,' + img.base64); }
 
 function _mvRenderSceneList(){
-  const info = document.getElementById('mvInfo');
-  if (info) info.textContent = mvScenes.length ? (mvScenes.length + ' ảnh sẵn sàng. Bấm Sinh prompt chuyển động.') : 'Chưa có ảnh — tải ảnh lên (test) hoặc lấy ảnh cảnh đã tạo.';
-  const box = document.getElementById('mvSceneList');
-  if (!box) return;
-  box.innerHTML = mvScenes.length
-    ? mvScenes.map(s => `<div style="display:flex;gap:8px;align-items:center;font-size:12px"><img src="${_mvImgSrc(s.img)}" style="width:44px;height:26px;object-fit:cover;border-radius:4px;border:1px solid var(--border)"><b>[${escapeHtml(s.id)}]</b> <span style="color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${s.uploaded ? '<i>ảnh tải lên</i>' : escapeHtml((s.vo || '').slice(0, 90))}</span>${s.uploaded ? `<button class="btn ghost sm" style="padding:1px 7px" onclick="mvRemoveUpload('${s.id}')">×</button>` : ''}</div>`).join('')
-    : '<div class="empty-state">Tải ảnh lên (test) hoặc "Lấy ảnh cảnh đã tạo" từ Tool 2 / Tạo Ảnh Hàng Loạt.</div>';
+  // Danh sách ảnh test (mvInfo/mvSceneList) đã bỏ trong redesign — giữ no-op cho caller cũ.
 }
 
 function _mvFileToB64(file){ return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => { const s = String(r.result); res(s.slice(s.indexOf(',') + 1)); }; r.onerror = rej; r.readAsDataURL(file); }); }
@@ -163,8 +157,7 @@ function _autoSaveSyncUI(){
   document.querySelectorAll('.asv-mode').forEach(e => { e.value = c.mode || 'perTask'; });
   document.querySelectorAll('.asv-folder').forEach(e => { e.value = c.folder || ''; });
   const wmEl = document.getElementById('wmToggle'); if (wmEl) wmEl.checked = !!c.wmRemove;
-  const wmO = document.getElementById('wmOff'); if (wmO && c.off) wmO.value = c.off;
-  const wmS = document.getElementById('wmSide'); if (wmS && c.side) wmS.value = c.side;
+  // (select wmOff/wmSide đã bỏ trong redesign.)
   document.querySelectorAll('.asv-name').forEach(e => { e.value = c.taskName || ''; e.placeholder = 'Tên thư mục (mặc định: ' + ch + ')'; e.style.display = (c.mode === 'flat') ? 'none' : ''; });
 }
 

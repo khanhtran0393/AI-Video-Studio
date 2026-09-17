@@ -1,8 +1,9 @@
-/* AUTO-ASSETS — auto pipeline + asset rules: AUTO_STEPS, FLOW_STEPS, FS_*, SCENE_TYPE_VI, _t2Regen*, ASSET_*, setStatus3 (đã dọn 1 fn chết — 2026-09-11, xem MEMORY 2026-09-11t)
+/* AUTO-ASSETS — auto pipeline + asset rules: AUTO_STEPS, SCENE_TYPE_VI, _t2Regen*, ASSET_*, setStatus3
+   (2026-09-17: dọn FLOW_STEPS + FS_ASSET_* / FS_SCENE_IMG — nhánh "Trọn gói ảnh Flow" của auto-run đã chết
+   kể khi checkbox autoFlowImages bị bỏ khỏi UI, xem MEMORY 2026-09-17)
    Tách verbatim từ src/toolbox/shared-consts.js (2026-09-11) — đã dọn 1 fn chết bị peer shadow (2026-09-11, MEMORY 2026-09-11t); tombstone marker [P0a] giữ nguyên.
    Thứ tự nạp index.html: khối shared/ nằm đúng vị trí cũ của shared-consts.js — sau shared-state.js, trước utility.js. */
 let _autoRunning = false;
-
 // === L?: let _autoStopFlag ===
 let _autoStopFlag = false;
 
@@ -25,23 +26,6 @@ const AUTO_STEPS = [
   { label: 'Ảnh B (cảnh dài)' }
 ];
 
-// === L?: const FLOW_STEPS ===
-const FLOW_STEPS = [
-  { label: '🎭 Prompt asset' },
-  { label: '🖼 Ảnh asset' },
-  { label: '🖼 Ảnh cảnh' }
-];
-
-// === L?: const FS_ASSET_PROMPT ===
-const FS_ASSET_PROMPT = AUTO_STEPS.length;
-
-// === L?: const FS_ASSET_IMG ===
-const FS_ASSET_IMG    = AUTO_STEPS.length + 1;
-
-// === L?: const FS_SCENE_IMG ===
-const FS_SCENE_IMG    = AUTO_STEPS.length + 2;
-
-// === L?: const SCENE_TYPE_VI ===
 const SCENE_TYPE_VI = { hook: 'Mở màn', establishing: 'Cảnh rộng', scene: 'Kể chuyện', 'close-up': 'Cận cảnh', 'b-roll': 'Minh hoạ', compare: 'So sánh', flashback: 'Hồi tưởng', dream: 'Tưởng tượng', map: 'Bản đồ', reveal: 'Lật mở', transition: 'Chuyển chương' };
 
 // === L?: const _CROWD_RE ===

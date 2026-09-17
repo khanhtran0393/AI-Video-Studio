@@ -713,7 +713,7 @@ async function tfCftAdd(){
     });
   }
   _tfCftBusy = true;
-  const btn = document.getElementById('tfCftBtn'); if (btn){ btn.disabled = true; btn.textContent = '🌐 Đang mở Chrome… (Huỷ)'; btn.onclick = tfCftCancel; }
+  // Nút tfCftBtn đã bỏ trong redesign — trạng thái hiện qua ô statusF.
   setStatusF('🌐 Đang mở Chrome — hãy đăng nhập tài khoản Google trong cửa sổ vừa mở.', 'working');
   let added = false;
   try {
@@ -723,7 +723,6 @@ async function tfCftAdd(){
     else setStatusF('Chưa lưu được — thử lại.', 'error');
   } catch (e){ setStatusF('Lỗi: ' + (e.message || e), 'error'); }
   _tfCftBusy = false;
-  if (btn){ btn.disabled = false; btn.textContent = '🌐 Thêm bằng Chrome (lưu vào app)'; btn.onclick = tfCftAdd; }
   // Tài khoản "Thêm bằng Chrome" lưu vào kho BUILT-IN → chuyển panel sang đó để thấy ngay.
   if (added) tfSetMode('builtin'); else tfRefreshConn();
 }
@@ -745,8 +744,7 @@ function _fcConsentPoll(){
 }
 
 function wmRefreshStatus(){
-  const el = document.getElementById('fcWmStatus');
-  if (el){ el.textContent = 'sẵn sàng — bấm để tắt'; el.style.color = 'var(--text-muted)'; }
+  // Ô fcWmStatus đã bỏ trong redesign — giữ no-op cho caller cũ (tfSetMode).
 }
 
 function _fcDate(ms){
@@ -920,8 +918,7 @@ function tfSyncModeUI(){
     const card = document.getElementById('tfModeCard_' + k);
     if (card){ card.style.borderColor = (k === m) ? 'var(--accent)' : 'var(--border)'; card.style.background = (k === m) ? 'rgba(124,58,237,.05)' : 'transparent'; }
   });
-  const addBtn = document.getElementById('tfAddBtn');
-  if (addBtn) addBtn.textContent = (m === 'extension') ? '🌐 Mở Flow trong Chrome' : '＋ Thêm tài khoản Flow';
+  // Nút tfAddBtn đã bỏ trong redesign.
 }
 
 function tfRenderExtStatus(){
@@ -1295,8 +1292,8 @@ async function tfGenScenes(onlyMissing, opts){
   if (typeof gateTool==='function' && gateTool('toolflow')) return;
   if (tfState.running) return { skipped: true, reason: 'đang chạy' };
   const cfg = tfCfg();
-  const shardN = Math.max(1, parseInt(document.getElementById('tfShardN')?.value) || 1);
-  const shardK = Math.min(shardN, Math.max(1, parseInt(document.getElementById('tfShardK')?.value) || 1));
+  // UI chia máy (tfShardN/tfShardK) đã bỏ trong redesign — luôn chạy 1 máy trọn bộ cảnh.
+  const shardN = 1, shardK = 1;
   const onlyIds = (opts && opts.onlyIds && opts.onlyIds.length) ? new Set(opts.onlyIds.map(String)) : null;   // giới hạn đúng các cảnh đã tick (Tạo lại đã chọn)
   const scenes = tfScenesWithPrompt().filter((s, i) => (shardN <= 1 || (i % shardN) === (shardK - 1)) && (!onlyIds || onlyIds.has(String(s.id))));
   // Đơn vị tạo: mỗi cảnh = ảnh A (+ ảnh B nếu cảnh có prompt B).

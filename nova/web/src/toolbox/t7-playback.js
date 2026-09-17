@@ -132,7 +132,7 @@ function t7TogglePlay(){ t7State.playing ? t7Pause() : t7Play(); }
 function t7ToggleSubPreview(){
   const cb = document.getElementById('t7ExpSubs'); if (cb) cb.checked = !cb.checked;
   const on = cb ? cb.checked : true;
-  const b = document.getElementById('t7SubPrevBtn'); if (b){ b.style.color = on ? 'var(--accent)' : ''; b.style.borderColor = on ? 'var(--accent)' : ''; }
+  // Nút t7SubPrevBtn đã bỏ trong redesign — trạng thái highlight không còn chỗ hiển thị.
   if (typeof t7RenderPreview === 'function') t7RenderPreview();
   setStatus7(on ? '🅣 Hiện phụ đề (lấy từ lời thoại cảnh) — cũng sẽ ghi vào video khi Xuất.' : 'Đã ẩn phụ đề trên preview.', 'info');
 }

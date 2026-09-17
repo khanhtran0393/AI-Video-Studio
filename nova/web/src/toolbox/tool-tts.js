@@ -111,10 +111,8 @@ function giongMoKey(eng){
   const b = document.getElementById('giongThemBox');
   if (b && b.style.display === 'none'){ _giongThemMo = false; giongThemBat(); }
   const c = document.getElementById('giongThemCach'); if (c) c.value = 'nhap';
-  const e = document.getElementById('gtEngine'); if (e && eng) e.value = eng;
   giongThemDoi();
-  const o = document.getElementById('gtKey');
-  if (o){ o.scrollIntoView({ block: 'center' }); o.focus(); }
+  // (select gtEngine + ô gtKey đã bỏ trong redesign.)
 }
 
 async function _giongNhanBan(eng, id, model, ten, nhan){

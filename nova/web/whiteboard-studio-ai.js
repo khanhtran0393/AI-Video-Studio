@@ -8,6 +8,13 @@
    "🤖 Antigravity khoanh vùng" (Bước 4) đổi đường dây sang Antigravity
    (agentCopilot:chat, vision thuần disableTools); hợp đồng JSON +
    validate giữ nguyên tuyệt đối, lỗi lộ liễu không fallback ngầm.
+   2026-09-17 (nâng cấp "Antigravity thật"): wbAiVisionSelfCheck — vòng
+   tự kiểm 1 lượt (nhìn lại ảnh lần 2, verdict ok/fix); wbVisionMemory —
+   ghi nhớ nhãn ≤6 cảnh trước để tên vật thể nhất quán giữa các câu;
+   wbVisionPlan — kế hoạch có tick tiến độ cho luồng nhiều cảnh. Vòng
+   agentic CÓ GIỚI HẠN này thuộc NGOẠI LỆ Antigravity của Luật 8
+   (AGENTS.md §4) — mọi vòng đều khai báo trong log, vẫn cấm fallback
+   ngầm (Luật 10).
 
    1) wbAiPrompts — sinh prompt ảnh: AI đọc TỪNG CÂU kịch bản
       (cảnh đã chia theo timing SRT ở Bước 2) → mỗi cảnh nhận
@@ -322,6 +329,98 @@
       _override: { provider: 'gemini', key: flowKeys[0], model: gModel },
     });
   }
+  /* ══ NĂNG LƯỢNG "ANTIGRAVITY THẬT" (bổ sung 2026-09-17 — miễn trừ luật §4.8) ══
+     Antigravity thật không chỉ nhìn 1 lần: nó TỰ KIỂM kết quả của chính mình,
+     NHỚ ngữ cảnh qua các bước, và HIỂN THỊ kế hoạch. Ở đây mô phỏng đúng 3
+     năng lượng đó nhưng CÓ GIỚI HẠN (≤2 lượt gọi/ảnh, nhớ ≤6 cảnh) và MỌI vòng
+     đều khai báo trong log (Luật 10 — không fallback ngầm):
+     1) wbAiVisionSelfCheck — sau lượt khoanh vùng 1, gửi lượt 2 ("ảnh này + JSON
+        lượt 1 — đúng không?") → verdict "ok" giữ nguyên, "fix" nhận bản sửa
+        (cùng validate). Lượt 2 lỗi → khai báo rõ + giữ lượt 1, KHÔNG im lặng.
+     2) wbVisionMemory — ghi nhớ nhãn vùng của ≤6 cảnh trước, nhét vào prompt
+        cảnh sau để tên vật thể nhất quán giữa các câu ("chiếc bàn" vẫn là
+        "chiếc bàn", không thành "table").
+     3) wbVisionPlan — kế hoạch có đánh dấu tiến độ cho luồng chạy nhiều cảnh
+        (Sắp xếp dữ liệu): log kế hoạch đầu vòng, tick từng bước. */
+  const WB_VISION_SELF_CHECK_TOGGLE = 'wb_vision_selfcheck';   // '0' = tắt
+  function wbVisionSelfCheckEnabled() {
+    try { return localStorage.getItem(WB_VISION_SELF_CHECK_TOGGLE) !== '0'; } catch (_) { return true; }
+  }
+  const wbVisionMemory = { scenes: [], max: 6 };   // [{idx, labels:[…]}] — state nội bộ module, không đụng state.js (main process)
+  function wbVisionRemember(idx, labels) {
+    wbVisionMemory.scenes = wbVisionMemory.scenes.filter((x) => x.idx !== idx);
+    wbVisionMemory.scenes.push({ idx, labels });
+    while (wbVisionMemory.scenes.length > wbVisionMemory.max) wbVisionMemory.scenes.shift();
+  }
+  function wbVisionStyleContext() {
+    if (!wbVisionMemory.scenes.length) return '';
+    return 'For cross-scene visual consistency, previously outlined scenes used these Vietnamese labels: ' +
+      wbVisionMemory.scenes.map((x) => 'scene ' + (x.idx + 1) + ': ' + x.labels.join(', ')).join(' | ') +
+      '. Reuse the SAME Vietnamese label wording when the same object appears again. ';
+  }
+  /* Lượt 2 — tự kiểm: image + JSON lượt 1 → {"verdict":"ok"} hoặc
+     {"verdict":"fix","regions":[…]} (cùng hợp đồng regions lượt 1). */
+  function wbAiVisionSelfCheckPrompt(firstJson) {
+    return 'You already outlined this image. The first attempt produced this JSON:\n' +
+      JSON.stringify(firstJson) + '\n' +
+      'Look at the image again and VERIFY every polygon: correct labels (Vietnamese, matching visible objects), ' +
+      'polygons actually enclosing their object, no missing major object, no points outside the image, ' +
+      'normalized 0-1000 coordinates. If everything is correct return ONLY {"verdict":"ok"}. ' +
+      'Otherwise return ONLY {"verdict":"fix","regions":[{"label":"…","points":[[x,y],…]},…]} ' +
+      '(full corrected list, background to foreground, same format as the first attempt). JSON only — no explanations, no markdown.';
+  }
+  async function wbAiVisionSelfCheck(img, firstJson) {
+    if (!wbVisionSelfCheckEnabled()) { log('ℹ vòng tự kiểm đang tắt (' + WB_VISION_SELF_CHECK_TOGGLE + "=0) — dùng kết quả lượt 1"); return firstJson; }
+    log('🤖 Antigravity tự kiểm: nhìn lại ảnh lần 2 để xác minh khoanh vùng lượt 1…');
+    const messages = [{
+      role: 'user',
+      content: [
+        { type: 'image', source: { media_type: img.mediaType, data: img.data } },
+        { type: 'text', text: wbAiVisionSelfCheckPrompt(firstJson) },
+      ],
+    }];
+    let second = null;
+    try {
+      second = await wbAiVisionJson(wbAiVisionSelfCheckPrompt(firstJson), messages, (o) => {
+        if (!o || (o.verdict !== 'ok' && o.verdict !== 'fix')) throw new Error('self-check thiếu verdict ok/fix');
+        if (o.verdict === 'fix') {
+          if (!Array.isArray(o.regions) || !o.regions.length) throw new Error('self-check verdict fix nhưng thiếu regions');
+          o.regions.forEach((r, i) => {
+            if (!r || !Array.isArray(r.points) || r.points.length < 3) throw new Error('self-check regions[' + i + '] thiếu points');
+          });
+        }
+        return o;
+      });
+    } catch (e) {
+      /* Degrade CÓ KHAI BÁO (Luật 10): lượt 2 không trả lời được → giữ lượt 1,
+         ghi rõ vào log — không nuốt lỗi ngầm, không sửa kết quả im lặng. */
+      log('⚠ vòng tự kiểm lỗi (' + String((e && e.message) || e) + ') — GIỮ kết quả lượt 1 (khai báo: self-check unavailable)');
+      return firstJson;
+    }
+    if (second.verdict === 'fix' && Array.isArray(second.regions) && second.regions.length) {
+      log('🔁 Antigravity tự kiểm phát hiện sai → nhận bản sửa lượt 2 (' + second.regions.length + ' vùng)');
+      return { regions: second.regions };
+    }
+    log('✓ Antigravity tự kiểm: khoanh vùng lượt 1 đạt — giữ nguyên');
+    return firstJson;
+  }
+  /* Kế hoạch hiển thị (plan artifact) — log kế hoạch đầu vòng + tick tiến độ. */
+  const wbVisionPlan = {
+    steps: [],
+    reset(title, steps) {
+      this.steps = steps.map((label) => ({ label, done: false }));
+      log('📋 ' + title + ' — kế hoạch ' + this.steps.length + ' bước:');
+      this.steps.forEach((s, i) => log('   ' + (i + 1) + '. ' + s.label));
+    },
+    mark(i) {
+      if (!this.steps[i]) return;
+      this.steps[i].done = true;
+      const done = this.steps.filter((s) => s.done).length;
+      log('📋 kế hoạch ' + done + '/' + this.steps.length + ' ✓ — ' + this.steps[i].label);
+    },
+  };
+
+  /* lõi vision cho 1 cảnh — dùng chung cho nút 🎯 AI khoanh vùng và
   /* lõi vision cho 1 cảnh — dùng chung cho nút 🎯 AI khoanh vùng và
      luồng auto 🤖 AI sinh ảnh theo câu. s.image + s.canvas phải có. */
   async function wbAiRegionsCore(s) {
@@ -335,6 +434,7 @@
     const prompt = 'You are looking at ONE image that will be redrawn as a hand-drawn animation. ' +
       'Detect the 2-6 most important visual objects/subjects of the image (not the whole image, no tiny details, no text lines). ' +
       focus +
+      wbVisionStyleContext() +
       'For each object output a closed polygon outlining it. ' +
       'Coordinates are NORMALIZED 0-1000 relative to image width (x, right) and height (y, down). ' +
       'Each polygon: 4-14 points [x, y] as integers, ordered clockwise. ' +
@@ -347,13 +447,15 @@
         { type: 'text', text: prompt },
       ],
     }];
-    const out = await wbAiVisionJson(prompt, messages, (o) => {
+    let out = await wbAiVisionJson(prompt, messages, (o) => {
       if (!o || !Array.isArray(o.regions) || !o.regions.length) throw new Error('AI thiếu mảng regions');
       o.regions.forEach((r, i) => {
         if (!r || !Array.isArray(r.points) || r.points.length < 3) throw new Error('regions[' + i + '] thiếu points');
       });
       return o;
     });
+    /* vòng tự kiểm 1 vòng (Antigravity thật tự verify) — fix thì thay, lỗi thì khai báo giữ lượt 1 */
+    out = await wbAiVisionSelfCheck(img, out);
     const built = [];
     out.regions.forEach((r, i) => {
       const e2 = wbAiRegionToElement(r, built.length, s);
@@ -365,6 +467,8 @@
     s.previewPath = null;
     s.elementsDirty = false;
     wbAiScheduleReveal(built, s);
+    /* ghi nhớ nhãn cảnh này cho các cảnh sau (nhất quán tên vật thể giữa các câu) */
+    wbVisionRemember(state.scenes.indexOf(s), built.map((e2) => e2.label));
     log('🎯 AI khoanh ' + built.length + ' vùng: ' + built.map((e2) => e2.label).join(' · ') +
       (Array.isArray(s.objects) && s.objects.length === built.length ? ' — giờ vẽ theo share nhịp kể' : ' — giờ vẽ chia đều (objects không khớp số vùng)'));
     return built;
@@ -438,7 +542,7 @@
     return { e0, err, rotated };
   }
 
-  window.wbStudioAi = { wbAiPrompts, wbAiGenImages, wbAiRegionsCore, wbAiScheduleReveal, wbAnalyzePrompt, wbArrangeRegions };
+  window.wbStudioAi = { wbAiPrompts, wbAiGenImages, wbAiRegionsCore, wbAiScheduleReveal, wbAnalyzePrompt, wbArrangeRegions, wbAiVisionJson, wbAcUserSource, wbAiVisionSelfCheck, wbAiVisionSelfCheckPrompt, wbVisionSelfCheckEnabled, wbVisionMemory, wbVisionRemember, wbVisionStyleContext, wbVisionPlan };
 
   /* ════════ 2b · SẮP XẾP DỮ LIỆU (Bước 4 của luồng 6 bước) ════════
      Nút "🗺 Sắp xếp dữ liệu": AI vision khoanh vùng TẤT CẢ cảnh có ảnh.
@@ -460,12 +564,16 @@
     if (btn) { btn.disabled = true; }
     let ok = 0; const errs = [];
     try {
+      /* kế hoạch hiển thị (Antigravity thật luôn có task list) — mỗi cảnh 1 bước: nhìn → khoanh → tự kiểm → nhớ */
+      wbVisionPlan.reset('🗺 Sắp xếp dữ liệu (AI vision ' + state.scenes.length + ' cảnh)', state.scenes.map((s, i) =>
+        'Câu ' + (i + 1) + ' — nhìn ảnh → khoanh vùng → tự kiểm lượt 2 → ghi nhớ nhãn'));
       for (let i = 0; i < state.scenes.length; i++) {
         const s = state.scenes[i];
         if (btn) btn.textContent = '🗺 AI đang sắp xếp cảnh ' + (i + 1) + '/' + state.scenes.length + '…';
         try {
           await wbAiRegionsCore(s);
           ok++;
+          wbVisionPlan.mark(i);
         } catch (err) {
           errs.push('câu ' + (i + 1) + ': ' + String((err && err.message) || err));
         }

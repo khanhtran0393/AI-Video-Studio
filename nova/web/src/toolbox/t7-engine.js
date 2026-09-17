@@ -1,25 +1,9 @@
-/* T7 ENGINE — Remotion seek/refresh, chọn engine xuất (t7ExportEngineChange/t7NovaExport), fx/chuyển cảnh clip, auto transitions, dịch phụ đề
+/* T7 ENGINE — chọn engine xuất (t7ExportEngineChange/t7NovaExport), fx/chuyển cảnh clip, auto transitions, dịch phụ đề
    Tách verbatim từ src/toolbox/tool-t7.js (2026-09-11) — không sửa thân hàm.
    Toàn bộ là function declaration: chỉ gọi lúc runtime, thứ tự nạp không ảnh hưởng. */
-function t7RemotionSeek(t){
-  if (!_t7RmState.on || !_t7RmState.ready || _t7RmState.busy) return;
-  const fr = _t7RemotionFrame(); const win = fr && fr.contentWindow;
-  if (!win || typeof win.remotion_setFrame !== 'function') return;
-  const f = Math.max(0, Math.round((t || 0) * T7_NOVA.fps));
-  if (f === _t7RmState.frame) return;
-  _t7RmState.frame = f;
-  try { win.remotion_setFrame(f, T7_NOVA.comp, ++_t7RmState.attempt); } catch (e) {}
-}
-
-async function t7RemotionRefresh(){
-  if (!_t7RmState.on || !_t7RmState.ready || _t7RmState.busy) return;
-  if (_t7NovaSig() === _t7RmState.sig) return;
-  _t7RmState.busy = true;
-  await _t7NovaLoad();
-  _t7RmState.busy = false;
-  setTimeout(() => { _t7RemotionFit(); t7RemotionSeek(t7State.playT); }, 300);
-}
-
+/* 2026-09-17: t7RemotionSeek/t7RemotionRefresh ĐÃ XOÁ — đường preview Remotion iframe
+   đã chết (#t7RemotionFrame không còn trong markup, _t7RmState.on không bao giờ true).
+   Preview là ảnh (t7PreviewImg); Nova EXPORT vẫn live qua t7NovaExport (main process). */
 function t7ExportEngineChange(){
   const eng = document.getElementById('t7ExpEngine')?.value || 'ffmpeg';
   const nova = eng === 'nova';
