@@ -21,7 +21,17 @@ function switchTool(name){
       return;
     }
   }
+  const _prevTool = state.tool;  // 2026-09-17ab (B11): capture trước khi ghi đè để dispose panel cũ
   state.tool = name;
+  // B11: dispose panel cũ (nếu khác) để giảm GPU memory leak khi mount 6 panel liên tiếp (B7/B8 cụm crash).
+  // Hiện tại chỉ là no-op stub; full body (clear RAF + release canvas context) sẽ làm ở task riêng.
+  if (_prevTool && _prevTool !== name) {
+    try {
+      if (_prevTool === 'toolwhiteboard' && window.WhiteboardPanel && typeof window.WhiteboardPanel.dispose === 'function') window.WhiteboardPanel.dispose();
+      if (_prevTool === 'toolhanddraw' && window.HanddrawPanel && typeof window.HanddrawPanel.dispose === 'function') window.HanddrawPanel.dispose();
+      if (_prevTool === 'toolsrttranslate' && window.SrtTranslatePanel && typeof window.SrtTranslatePanel.dispose === 'function') window.SrtTranslatePanel.dispose();
+    } catch (e) { /* không block switchTool nếu dispose lỗi */ }
+  }
   document.querySelectorAll('.nav-item').forEach(t =>
     t.classList.toggle('active', t.dataset.tool === name)
   );
@@ -83,6 +93,13 @@ function switchTool(name){
     if (_stC && window.SrtTranslatePanel && typeof window.SrtTranslatePanel.init === 'function') {
       try { window.SrtTranslatePanel.init(_stC); }
       catch (e) { console.error('[srt-translate] init lỗi:', e); }
+    }
+  }
+  if (name === 'tooldub') {
+    const _dbC = document.getElementById('dubRoot');
+    if (_dbC && window.DubPanel && typeof window.DubPanel.init === 'function') {
+      try { window.DubPanel.init(_dbC); }
+      catch (e) { console.error('[dub] init lỗi:', e); }
     }
   }
   if (name === 'toolimzic') {

@@ -26,6 +26,7 @@ const { registerLiveStreamIpc } = require('./live-stream');
 const { registerWhiteboardIpc } = require('../../whiteboard-studio/ipc');
 const { registerSrtTranslateIpc } = require('../../srt-translate/ipc');
 const { registerViralCutIpc } = require('../../viral-cut/ipc');
+const { registerDubbingIpc } = require('../../dubbing/ipc');
 const { registerAgentCopilotIpc } = require('./agent-copilot');
 
 function registerAllIpc() {
@@ -61,6 +62,12 @@ function registerAllIpc() {
   try {
     registerViralCutIpc(ipcMain, { getState: () => state });
   } catch (e) { console.warn('[viral-cut]', e && e.message); }
+
+  // ── Lồng tiếng theo phụ đề (dub): video + SRT → TTS OmniVoice từng cue →
+  //    khớp timeline SRT (speed-up giữ cao độ + trim) → MP4 + SRT khớp ──
+  try {
+    registerDubbingIpc(ipcMain, { getState: () => state });
+  } catch (e) { console.warn('[dubbing]', e && e.message); }
 
   // ── CLI bridge native: app tự chạy gói Claude/ChatGPT của user (localhost:8795/8796) ──
   try { cliBridge.startAll(); } catch (e) { console.warn('[cli-bridge]', e && e.message); }

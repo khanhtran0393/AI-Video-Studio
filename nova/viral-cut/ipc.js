@@ -20,6 +20,7 @@ const { FFMPEG, FFPROBE, probeDur } = require('../native-tools/ffmpeg');
 const { claude } = require('../editor-pro/niche');
 const YT = require('./youtube');
 const SB = require('./source-brief');
+const SRTT = require('../srt-translate/engine');
 
 const MODELS = { gemini: 'gemini-2.5-flash-lite', claude: 'claude-sonnet-4-20250514' };
 
@@ -128,6 +129,221 @@ function registerViralCutIpc(ipcMain, { getState } = {}) {
           comments: (r.brief.comments || []).length,
           withComments: !!(p && p.withComments !== false),
           text: SB.briefToPromptText(r.brief),
+        };
+      } finally {
+        run = null;
+      }
+    } catch (err) {
+      run = null;
+      return { ok: false, error: errOf(err), code: codeOf(err) };
+    }
+  });
+
+  /* ── RE-SYNC PHỤ ĐỀ (2026-09-17): SRT lệch tiếng → dò khoảng TIẾNG NÓI THẬT từ
+     audio/video (energy cửa sổ 0.5s, ngưỡng tương đối) → kéo từng cue về biên
+     tiếng nói gần nhất trong tolerance (snap BẢO THỦ — cue không có neo giữ
+     nguyên, không bịa) → ghi `<tên>.resync.srt` cạnh file SRT gốc. Media + SRT
+     đến từ dialog (path thật). Không dò được tiếng nói → FAIL lộ liễu
+     VC_RESYNC_NO_SPEECH (Luật 10). ── */
+  handle('viralCut:pickResyncMedia', async () => {
+    const r = await dialog.showOpenDialog(ownerWin(), {
+      title: 'Chọn video/audio nguồn để dò tiếng nói',
+      properties: ['openFile'],
+      filters: [{ name: 'Media', extensions: ['mp4', 'mkv', 'mov', 'webm', 'avi', 'flv', 'ts', 'm4v', 'mp3', 'm4a', 'wav', 'aac', 'ogg', 'flac'] }],
+    });
+    if (r.canceled || !r.filePaths[0]) return { canceled: true };
+    return { ok: true, path: r.filePaths[0], name: path.basename(r.filePaths[0]) };
+  });
+
+  /* Dò tiếng nói dùng chung (2026-09-17) cho re-sync / skeleton / tighten:
+     tách WAV mono 16 kHz (cache theo hash path) → PCM → dò khoảng tiếng nói
+     (cửa sổ 0.5s, ngưỡng RMS tương đối). */
+  async function detectSpeech(mediaPath, prog, canceled) {
+    fs.mkdirSync(tmpDir(), { recursive: true });
+    const hash = crypto.createHash('sha1').update(mediaPath + '|resync').digest('hex').slice(0, 12);
+    const wavPath = path.join(tmpDir(), 'vc-resync-' + hash + '.wav');
+    if (!fs.existsSync(wavPath)) {
+      prog('audio', 5, 'Tách âm thanh từ media…');
+      await mediaTools.extractAudio({
+        inputPath: mediaPath, outputPath: wavPath,
+        format: 'wav', channels: 'mono', sampleRate: 16000,
+        onProgress: (f) => {
+          if (canceled()) throw new Error('VC_CANCELLED: đã hủy bởi người dùng.');
+          prog('audio', 5 + Math.round((f || 0) * 0.55), 'Tách âm thanh ' + Math.round((f || 0) * 100) + '%…');
+        },
+      });
+    }
+    if (canceled()) throw new Error('VC_CANCELLED: đã hủy bởi người dùng.');
+    prog('speech', 65, 'Dò khoảng tiếng nói…');
+    const wavBuf = fs.readFileSync(wavPath);
+    const wavInfo = E.pcmFromWav(wavBuf);
+    return E.speechSegmentsFromWav(wavBuf, wavInfo, { windowSec: 0.5 });
+  }
+
+  handle('viralCut:resyncSrt', async (e, p = {}) => {
+    try {
+      guardRun('resync');
+      const mediaPath = String(p.mediaPath || '').trim();
+      const srtPath = String(p.srtPath || '').trim();
+      if (!mediaPath) return { ok: false, error: 'Chưa chọn video/audio nguồn.', code: 'VC_NO_INPUT' };
+      if (!srtPath) return { ok: false, error: 'Chưa chọn file SRT cần re-sync.', code: 'VC_SRT_MISSING' };
+      if (!fs.existsSync(mediaPath)) return { ok: false, error: 'File media không tồn tại: ' + mediaPath, code: 'VC_INPUT_MISSING' };
+      if (!fs.existsSync(srtPath)) return { ok: false, error: 'File SRT không tồn tại: ' + srtPath, code: 'VC_SRT_MISSING' };
+      const cues = E.parseSrtCues(fs.readFileSync(srtPath, 'utf8'));
+      if (!cues.length) return { ok: false, error: 'File SRT không đọc được dòng thoại nào.', code: 'VC_SRT_EMPTY' };
+      const tolMs = Math.max(100, Math.min(10000, Math.round(Number(p.toleranceMs) || 1500)));
+      const offMs = Math.round(Number(p.offsetMs) || 0); // lệch tuyên bố của người dùng (±ms)
+
+      run = { kind: 'resync', cancelRequested: false, child: null };
+      const prog = (step, pct, message) => sendProgress(e, { kind: 'resync', step, pct, message });
+      const canceled = () => run && run.cancelRequested;
+      try {
+        const speech = await detectSpeech(mediaPath, prog, canceled);
+        if (!speech.segments.length) {
+          return { ok: false, error: 'Không dò được khoảng tiếng nói nào trong audio (file câm hoặc chỉ có nhạc nền nhỏ?).', code: 'VC_RESYNC_NO_SPEECH' };
+        }
+
+        /* 3) Kéo cue về biên tiếng nói + ghi file mới cạnh SRT gốc */
+        prog('resync', 85, 'Khớp ' + cues.length + ' cue với ' + speech.segments.length + ' khoảng tiếng nói…');
+        const r2 = E.resyncCuesToSpeech(cues, speech.segments, { toleranceMs: tolMs, offsetMs: offMs });
+        const outPath = srtPath.replace(/\.[^./\\]+$/, '') + '.resync.srt';
+        fs.writeFileSync(outPath, '\uFEFF' + SRTT.serializeSrt(r2.cues), 'utf8');
+        prog('done', 100, 'Đã ghi ' + outPath);
+        return {
+          ok: true, outPath, count: r2.cues.length,
+          matched: r2.matched, untouched: r2.untouched,
+          adjustments: r2.adjustments.length, speechSegments: speech.segments.length,
+          toleranceMs: tolMs, offsetMs: offMs,
+        };
+      } finally {
+        run = null;
+      }
+    } catch (err) {
+      run = null;
+      return { ok: false, error: errOf(err), code: codeOf(err) };
+    }
+  });
+
+  /* ── SKELETON SRT (2026-09-17): dò tiếng nói → sinh SRT khung (cue = khoảng
+      nói thật, text rỗng / mẫu %n%) — người dùng tự điền lời. KHÔNG bịa nội
+      dung (Luật 10). Ghi `<tên>.skeleton.srt` cạnh SRT nguồn nếu có, không thì
+      cạnh media. ── */
+  handle('viralCut:skeletonSrt', async (e, p = {}) => {
+    try {
+      guardRun('skeleton');
+      const mediaPath = String(p.mediaPath || '').trim();
+      if (!mediaPath) return { ok: false, error: 'Chưa chọn video/audio nguồn.', code: 'VC_NO_INPUT' };
+      if (!fs.existsSync(mediaPath)) return { ok: false, error: 'File media không tồn tại: ' + mediaPath, code: 'VC_INPUT_MISSING' };
+      const textTemplate = String(p.text || '').trim(); // mẫu text, %n% = số thứ tự; rỗng → cue text rỗng
+
+      run = { kind: 'skeleton', cancelRequested: false, child: null };
+      const prog = (step, pct, message) => sendProgress(e, { kind: 'skeleton', step, pct, message });
+      const canceled = () => run && run.cancelRequested;
+      try {
+        const speech = await detectSpeech(mediaPath, prog, canceled);
+        if (!speech.segments.length) {
+          return { ok: false, error: 'Không dò được khoảng tiếng nói nào trong audio (file câm hoặc chỉ có nhạc nền nhỏ?).', code: 'VC_RESYNC_NO_SPEECH' };
+        }
+        const totalMs = Math.round((await probeDur(mediaPath)) * 1000);
+        prog('build', 85, 'Sinh khung ' + speech.segments.length + ' cue từ khoảng tiếng nói…');
+        const cuesOut = E.buildSrtSkeleton(speech.segments, { text: textTemplate, totalMs });
+        const anchor = (fs.existsSync(String(p.srtPath || '')) ? String(p.srtPath) : mediaPath);
+        const outPath = anchor.replace(/\.[^./\\]+$/, '') + '.skeleton.srt';
+        fs.writeFileSync(outPath, '\uFEFF' + SRTT.serializeSrt(cuesOut), 'utf8');
+        prog('done', 100, 'Đã ghi ' + outPath);
+        return { ok: true, outPath, count: cuesOut.length, speechSegments: speech.segments.length };
+      } finally {
+        run = null;
+      }
+    } catch (err) {
+      run = null;
+      return { ok: false, error: errOf(err), code: codeOf(err) };
+    }
+  });
+
+  /* ── CẮT KHOẢNG LẶNG (2026-09-17): dò tiếng nói → gộp đoạn giữ (gap ≤ keepGapMs)
+      → cắt bằng select/aselect + setpts/asetpts (video/audio cùng timeline mới)
+      → SRT cạnh đó được KÉO theo timeline mới (remap khai báo từng cue). ── */
+  handle('viralCut:pickTightenOut', async () => {
+    const r = await dialog.showSaveDialog(ownerWin(), {
+      title: 'Lưu video đã cắt khoảng lặng',
+      defaultPath: 'tight.mp4',
+      filters: [{ name: 'MP4', extensions: ['mp4'] }],
+    });
+    if (r.canceled || !r.filePath) return { canceled: true };
+    return { path: r.filePath };
+  });
+
+  handle('viralCut:tightenSilence', async (e, p = {}) => {
+    try {
+      guardRun('tighten');
+      const mediaPath = String(p.mediaPath || '').trim();
+      const outPath = String(p.outPath || '').trim();
+      const srtPath = String(p.srtPath || '').trim();
+      if (!mediaPath) return { ok: false, error: 'Chưa chọn video nguồn.', code: 'VC_NO_INPUT' };
+      if (!outPath) return { ok: false, error: 'Chưa chọn nơi lưu video xuất.', code: 'VC_NO_OUT' };
+      if (!fs.existsSync(mediaPath)) return { ok: false, error: 'File media không tồn tại: ' + mediaPath, code: 'VC_INPUT_MISSING' };
+      if (path.resolve(outPath) === path.resolve(mediaPath)) return { ok: false, error: 'Nơi lưu TRÙNG file nguồn — chọn file khác.', code: 'VC_SAME_PATH' };
+      const numOr = (v, d) => { const n = Number(v); return Number.isFinite(n) ? n : d; };
+      const keepGapMs = Math.max(0, Math.min(5000, Math.round(numOr(p.keepGapMs, 700))));
+      const padMs = Math.max(0, Math.min(1000, Math.round(numOr(p.padMs, 150))));
+
+      run = { kind: 'tighten', cancelRequested: false, child: null };
+      const prog = (step, pct, message) => sendProgress(e, { kind: 'tighten', step, pct, message });
+      const canceled = () => run && run.cancelRequested;
+      const runFf = (args) => new Promise((resolve, reject) => {
+        const cp = spawn(FFMPEG, ['-nostdin', '-hide_banner', '-y'].concat(args), { windowsHide: true });
+        if (run) run.child = cp;
+        let err = '';
+        cp.stderr.on('data', (d) => { err += d; if (err.length > 8192) err = err.slice(-4096); });
+        cp.on('error', reject);
+        cp.on('close', (code) => {
+          if (run && run.child === cp) run.child = null;
+          if (code === 0) return resolve();
+          if (run && run.cancelRequested) return reject(new Error('VC_CANCELLED: đã hủy bởi người dùng.'));
+          reject(new Error('VC_FFMPEG: FFmpeg lỗi (' + code + '): ' + err.slice(-400)));
+        });
+      });
+      try {
+        const speech = await detectSpeech(mediaPath, prog, canceled);
+        if (!speech.segments.length) {
+          return { ok: false, error: 'Không dò được khoảng tiếng nói nào trong audio — không biết giữ đoạn nào.', code: 'VC_TIGHT_NO_SPEECH' };
+        }
+        const totalMs = Math.round((await probeDur(mediaPath)) * 1000);
+        const t = E.tightenRanges(speech.segments, { keepGapMs, padMs, totalMs });
+        if (!t.ranges.length) return { ok: false, error: 'Không tính được đoạn giữ nào — khoảng lặng chiếm toàn bộ?', code: 'VC_TIGHT_NO_RANGE' };
+        if (t.ranges.length > 400) {
+          return { ok: false, error: 'Phân mảnh quá mức (' + t.ranges.length + ' đoạn giữ > 400) — tăng "Ghép gap ≤ (ms)" rồi thử lại.', code: 'VC_TIGHT_TOO_MANY' };
+        }
+        if (totalMs - t.keptMs < 250) {
+          return { ok: false, error: 'Khoảng lặng dài chỉ ' + (totalMs - t.keptMs) + 'ms — không đủ cắt (ngưỡng 250ms). Giảm "Ghép gap" hoặc bỏ qua.', code: 'VC_TIGHT_NOTHING' };
+        }
+        const expr = E.cutRangesSelectExpr(t.ranges);
+        prog('cut', 70, 'Cắt ' + t.ranges.length + ' đoạn giữ (bỏ ~' + Math.round((totalMs - t.keptMs) / 1000) + 's lặng)…');
+        await runFf([
+          '-i', mediaPath,
+          '-vf', "select='" + expr + "',setpts=N/FRAME_RATE/TB",
+          '-af', "aselect='" + expr + "',asetpts=N/SR/TB",
+          '-c:v', 'libx264', '-crf', '20', '-preset', 'medium',
+          '-c:a', 'aac', '-b:a', '192k',
+          '-movflags', '+faststart', outPath,
+        ]);
+        let srtOut = null, remapped = 0;
+        if (srtPath && fs.existsSync(srtPath)) {
+          const cues = E.parseSrtCues(fs.readFileSync(srtPath, 'utf8'));
+          if (cues.length) {
+            const r2 = E.remapCuesThroughRanges(cues, t.ranges);
+            srtOut = outPath.replace(/\.[^./\\]+$/, '') + '.tight.srt';
+            fs.writeFileSync(srtOut, '\uFEFF' + SRTT.serializeSrt(r2.cues), 'utf8');
+            remapped = r2.adjustments.length;
+          }
+        }
+        prog('done', 100, 'Đã xuất ' + outPath);
+        return {
+          ok: true, outPath, srtOut,
+          ranges: t.ranges.length, keptMs: t.keptMs, removedMs: totalMs - t.keptMs,
+          totalMs, remappedCues: remapped, speechSegments: speech.segments.length,
+          keepGapMs, padMs,
         };
       } finally {
         run = null;
@@ -546,8 +762,11 @@ function registerViralCutIpc(ipcMain, { getState } = {}) {
 
   /* ── XUẤT: cắt từng highlight bằng ffmpeg accurate + tuỳ chọn dựng khung
         (giữ nguyên / 9:16 dọc / 16:9 ngang)
-        + tuỳ chọn GHÉP tất cả clip thành 1 video (concat demuxer -c copy:
-        các clip do chính ta encode cùng tham số → ghép không mất chất lượng) ── */
+        + tuỳ chọn GHÉP tất cả clip thành 1 video (concat demuxer -c copy)
+        + COLD-OPEN: nếu highlight có hook hợp lệ → cắt thêm 1 clip hook
+        và chèn lên đầu clip chính (clip riêng) + đầu bản ghép
+        + EDGE-PAD: tự lùi start 200ms / tiến end 300ms (mặc định bật; tắt qua edgePad:false)
+        để giữ hơi thở khi concat. */
   handle('viralCut:export', async (e, p = {}) => {
     try {
       guardRun('export');
@@ -560,6 +779,10 @@ function registerViralCutIpc(ipcMain, { getState } = {}) {
       try { aspect = E.normalizeAspect(p.aspect, p.crop916); }
       catch (aerr) { return { ok: false, error: errOf(aerr), code: 'VC_ASPECT_UNSUPPORTED' }; }
       const mergeAll = p.mergeAll !== false; // mặc định CÓ ghép
+      const coldOpen = p.coldOpen !== false; // mặc định BẬT chèn hook
+      const edgePad = p.edgePad !== false;   // mặc định BẬT pad biên
+      const adaptivePad = p.adaptivePad === true; // mặc định TẮT — opt-in (extract audio thêm 1 lần)
+      const forceAccurate = p.forceAccurate === true; // mặc định TẮT — opt-in ép re-encode chính xác khung (không snap keyframe)
       const highlights = Array.isArray(p.highlights) ? p.highlights : [];
       if (!videoPathIn && !sourceUrl) return { ok: false, error: 'Chưa chọn video nguồn (hoặc URL YouTube).', code: 'VC_NO_INPUT' };
       if (videoPathIn && !fs.existsSync(videoPathIn)) return { ok: false, error: 'File video không tồn tại: ' + videoPathIn, code: 'VC_INPUT_MISSING' };
@@ -569,6 +792,82 @@ function registerViralCutIpc(ipcMain, { getState } = {}) {
       run = { kind: 'export', cancelRequested: false, child: null };
       const send = (payload) => sendProgress(e, { kind: 'export', ...payload });
       const canceled = () => run && run.cancelRequested;
+
+      /* Tách helper để dùng lại cho hook + main + concat. Cùng tham số encode
+         (-c:v/-c:a) → kết quả có thể ghép bằng -c copy không re-encode. */
+      const cutFfmpeg = (startSec, durationSec, outPath, vf) => new Promise((resolve) => {
+        const args = ['-y', '-ss', String(startSec), '-i', videoPath, '-t', String(durationSec)];
+        if (vf) args.push('-vf', vf);
+        args.push('-c:v', 'libx264', '-crf', '20', '-preset', 'fast', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', outPath);
+        const cp = spawn(FFMPEG, args, { windowsHide: true });
+        if (run) run.child = cp;
+        let errTail = '';
+        cp.stderr.on('data', (d) => { errTail = (errTail + String(d)).slice(-500); });
+        cp.on('error', (er) => resolve({ ok: false, error: errOf(er) }));
+        cp.on('close', (code) => resolve(code === 0 ? { ok: true } : { ok: false, error: 'FFmpeg lỗi (' + code + '): ' + errTail }));
+      });
+
+      /* ── Đề xuất 5 (2026-09-17): cắt stream-copy khi KHÔNG có filter ──
+         Khi aspect='keep' (mặc định) → vf=null → không cần re-encode.
+         -c copy nhanh ~5–10×, zero quality loss. Trade-off: ffmpeg phải snap
+         về keyframe gần nhất TRƯỚC startSec (input seek, nhanh vì dùng index).
+         Hook ~3–6s + cold-open nên mất tối đa ~1 GOP (0.5–2s tuỳ source) ở đầu
+         → chấp nhận được (entry C4 đã đảm bảo hook ≥ 500ms sau pad). Nếu sau
+         copy mà thấy thực sự xấu (keyframe quá xa), vẫn fallback re-encode
+         qua `cutFfmpeg` cũ. Output vẫn có faststart để preview mượt.
+         Trả về ok=false nếu duration quá ngắn (<0.1s) → ffmpeg -t gần 0 hay
+         tạo file rỗng. */
+      const cutFfmpegFast = (startSec, durationSec, outPath) => new Promise((resolve) => {
+        if (!Number.isFinite(startSec) || !Number.isFinite(durationSec) || durationSec < 0.1) {
+          return resolve({ ok: false, error: 'cutFfmpegFast: startSec/durationSec không hợp lệ (' + startSec + ', ' + durationSec + ').' });
+        }
+        const args = E.buildCopyArgs(videoPath, startSec, durationSec, outPath);
+        const t0 = Date.now();
+        const cp = spawn(FFMPEG, args, { windowsHide: true });
+        if (run) run.child = cp;
+        let errTail = '';
+        cp.stderr.on('data', (d) => { errTail = (errTail + String(d)).slice(-500); });
+        cp.on('error', (er) => resolve({ ok: false, error: errOf(er) }));
+        cp.on('close', (code) => {
+          const dt = Date.now() - t0;
+          if (code === 0) {
+            try { console.log('[viral-cut] cutFfmpegFast OK in ' + dt + 'ms (start=' + startSec + 's, dur=' + durationSec + 's)'); } catch (_) {}
+            resolve({ ok: true, ms: dt });
+          } else {
+            try { console.log('[viral-cut] cutFfmpegFast FAIL in ' + dt + 'ms code=' + code); } catch (_) {}
+            resolve({ ok: false, error: 'FFmpeg copy-mode lỗi (' + code + '): ' + errTail });
+          }
+        });
+      });
+
+      const concatFiles = (filesArr, outPath) => new Promise((resolve) => {
+        if (!filesArr.length) return resolve({ ok: false, error: 'Không có file để ghép.' });
+        if (filesArr.length === 1) {
+          const args = ['-y', '-i', filesArr[0], '-c', 'copy', '-movflags', '+faststart', outPath];
+          const cp = spawn(FFMPEG, args, { windowsHide: true });
+          if (run) run.child = cp;
+          let errTail = '';
+          cp.stderr.on('data', (d) => { errTail = (errTail + String(d)).slice(-500); });
+          cp.on('error', (er) => resolve({ ok: false, error: errOf(er) }));
+          cp.on('close', (code) => resolve(code === 0 ? { ok: true } : { ok: false, error: 'FFmpeg lỗi (' + code + '): ' + errTail }));
+          return;
+        }
+        const cc = E.buildConcatPlan(filesArr, { outDir, videoName: path.basename(videoPath) });
+        const listHash = crypto.createHash('sha1').update(filesArr.join('|')).digest('hex').slice(0, 12);
+        const listPath = path.join(tmpDir(), 'vc-concat-' + listHash + '.txt');
+        fs.mkdirSync(tmpDir(), { recursive: true });
+        fs.writeFileSync(listPath, cc.listContent, 'utf8');
+        const args = ['-y', '-f', 'concat', '-safe', '0', '-i', listPath, '-c', 'copy', '-movflags', '+faststart', outPath];
+        const cp = spawn(FFMPEG, args, { windowsHide: true });
+        if (run) run.child = cp;
+        let errTail = '';
+        cp.stderr.on('data', (d) => { errTail = (errTail + String(d)).slice(-500); });
+        cp.on('error', (er) => resolve({ ok: false, error: errOf(er) }));
+        cp.on('close', (code) => {
+          try { fs.unlinkSync(listPath); } catch (_) {}
+          resolve(code === 0 ? { ok: true } : { ok: false, error: 'FFmpeg lỗi (' + code + '): ' + errTail });
+        });
+      });
 
       try {
         let videoPath = videoPathIn;
@@ -584,52 +883,176 @@ function registerViralCutIpc(ipcMain, { getState } = {}) {
           if (canceled()) return { ok: false, error: 'Đã hủy bởi người dùng.', code: 'VC_CANCELLED' };
         }
         fs.mkdirSync(outDir, { recursive: true });
-        const plan = E.buildExportPlan(highlights, { outDir, aspect });
+        /* Edge-pad: chạy SAU khi user đã chấp nhận highlight, dùng duration thật
+           (probeDur) để clamp [0, durationMs]. Nếu probe fail → bỏ clamp cuối.
+           P4 (2026-09-17): nếu `adaptivePad=true` → extract audio 16kHz mono PCM
+           1 lần (~100-500ms cho clip 60s), dò silence bằng `detectSilence`, dùng
+           `computeAdaptivePadMs` cho từng highlight → cắt sát mép im lặng (nếu
+           có trong vùng pad) để giữ hơi thở đầu-cuối câu đúng nghĩa hơn 200/300ms
+           cố định. Extract fail → fallback pad cố định (giữ hành vi cũ).
+           P4-cache (2026-09-17): gaps được cache trong tmp theo sha1(videoPath|
+           durationSec) — lần xuất sau cùng video bỏ qua extract+dò (đắt nhất).
+           Cache đọc sai shape → miss, extract lại như thường (không dùng dữ liệu lạ). */
+        const probeSec = Number(probeDur(videoPath) || 0);
+        let adaptivePadFn = null;
+        if (edgePad && adaptivePad && probeSec > 0) {
+          const silKey = E.silenceCacheKey(videoPath, probeSec);
+          const silCachePath = silKey ? path.join(tmpDir(), 'vc-sil-' + silKey + '.json') : null;
+          let gaps = null;
+          if (silCachePath && fs.existsSync(silCachePath)) {
+            try {
+              gaps = E.parseSilenceCache(fs.readFileSync(silCachePath, 'utf8'), { videoPath, durationSec: probeSec });
+            } catch (_) { gaps = null; /* đọc lỗi → miss */ }
+            if (gaps) send({ step: 'pad', index: 0, total: 1, pct: 0, message: 'Pad thích ứng: ' + gaps.length + ' khoảng lặng (cache) — bỏ qua phân tích âm thanh.' });
+            else try { fs.unlinkSync(silCachePath); } catch (_) {}
+          }
+          if (!gaps) {
+            try {
+              const wavPath = path.join(tmpDir(), 'vc-adapt-' + crypto.randomBytes(4).toString('hex') + '.wav');
+              const acp = spawn(FFMPEG, ['-y', '-i', videoPath, '-vn', '-ac', '1', '-ar', '16000', '-f', 'wav', wavPath], { windowsHide: true });
+              const ac = await new Promise((res) => {
+                let err = '';
+                acp.stderr.on('data', (d) => { err += String(d); });
+                acp.on('error', () => res({ ok: false, err: 'ffmpeg fail' }));
+                acp.on('close', (code) => code === 0 ? res({ ok: true }) : res({ ok: false, err: err.slice(-300) }));
+              });
+              if (ac.ok && fs.existsSync(wavPath)) {
+                const buf = fs.readFileSync(wavPath);
+                try { fs.unlinkSync(wavPath); } catch (_) {}
+                const pcmInfo = E.pcmFromWav(buf);
+                if (pcmInfo && pcmInfo.info && Array.isArray(pcmInfo.samples) && pcmInfo.samples.length > 0) {
+                  const wins = E.energyWindowsFromPcm(pcmInfo.samples, pcmInfo.info, { windowMs: 100 });
+                  const sil = E.detectSilence(wins, { rel: 0.1, minSec: 0.4 });
+                  if (sil && Array.isArray(sil.gaps) && sil.gaps.length > 0) {
+                    gaps = sil.gaps;
+                    /* Ghi cache gaps — ghi lỗi chỉ là miss lần sau, không nguy hiểm */
+                    if (silCachePath) {
+                      try {
+                        fs.writeFileSync(silCachePath, JSON.stringify({ videoPath, durationSec: probeSec, gaps, savedAt: new Date().toISOString() }));
+                      } catch (_) {}
+                    }
+                    send({ step: 'pad', index: 0, total: 1, pct: 0, message: 'Pad thích ứng: ' + gaps.length + ' khoảng lặng đã dò.' });
+                  }
+                }
+              }
+            } catch (e) {
+              /* fallthrough → dùng pad cố định */
+              send({ step: 'pad', index: 0, total: 1, pct: 0, message: 'Pad thích ứng lỗi, dùng pad cố định 200/300ms.' });
+            }
+          }
+          if (gaps) adaptivePadFn = (h) => E.computeAdaptivePadMs(h, gaps, { durationMs: probeSec * 1000 });
+        }
+        const padOpts = { durationMs: probeSec * 1000 };
+        if (adaptivePadFn) padOpts.adaptivePadFn = adaptivePadFn;
+        const prepared = edgePad
+          ? E.padHighlightEdges(highlights, padOpts)
+          : highlights;
+        const plan = E.buildExportPlan(prepared, { outDir, aspect });
         const results = [];
+        const mergedSegments = []; // thứ tự file cho bản ghép: [hook1, main1, hook2, main2, ...]
         for (const item of plan) {
+          /* forceAccurate (opt-in): cắt re-encode chính xác khung thay vì stream-copy
+             snap keyframe. Key cache hook phải phân biệt 2 chế độ — đánh dấu bằng
+             vf tổng hợp 'accurate' (không thể trùng chuỗi filter thật). */
+          const itemVf = item.vf || (forceAccurate ? 'accurate' : null);
           if (canceled()) return { ok: false, error: 'Đã hủy bởi người dùng.', code: 'VC_CANCELLED', results };
-          send({ step: 'clip', index: item.index, total: plan.length, pct: Math.round(((item.index - 1) / plan.length) * 100), message: 'Cắt clip ' + item.index + '/' + plan.length + ': ' + item.title });
-          const args = ['-y', '-ss', String(item.startSec), '-i', videoPath, '-t', String(item.endSec - item.startSec)];
-          if (item.vf) args.push('-vf', item.vf);
-          args.push('-c:v', 'libx264', '-crf', '20', '-preset', 'fast', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', item.outPath);
-          const okRun = await new Promise((resolve) => {
-            const cp = spawn(FFMPEG, args, { windowsHide: true });
-            if (run) run.child = cp;
-            let errTail = '';
-            cp.stderr.on('data', (d) => { errTail = (errTail + String(d)).slice(-500); });
-            cp.on('error', (er) => resolve({ ok: false, error: errOf(er) }));
-            cp.on('close', (code) => resolve(code === 0 ? { ok: true } : { ok: false, error: 'FFmpeg lỗi (' + code + '): ' + errTail }));
-          });
+          /* 1) Cắt hook (nếu có và bật coldOpen) — cùng vf để -c copy khớp */
+          let hookOut = null;
+          if (coldOpen && item.hookOutPath) {
+            send({ step: 'clip', index: item.index, total: plan.length, pct: Math.round(((item.index - 1) / plan.length) * 100), message: 'Cắt hook ' + item.index + '/' + plan.length + ': ' + item.title });
+            /* Cache hook theo key sha1(videoPath, hookStartMs, hookEndMs, aspect, vf) +
+               mtime nguồn. Nếu meta hợp lệ + file hookOutPath còn dùng được → skip ffmpeg. */
+            let cacheHit = false;
+            try {
+              const ck = E.hookCacheKey(videoPath, item.hookStartSec * 1000, item.hookEndSec * 1000, item.aspect, itemVf);
+              if (ck) {
+                const metaPath = item.hookOutPath + '.cache.json';
+                if (fs.existsSync(metaPath) && fs.existsSync(item.hookOutPath)) {
+                  const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+                  const srcStat = fs.statSync(videoPath);
+                  if (meta && meta.key === ck && meta.sourceMtimeMs === srcStat.mtimeMs && meta.size > 0) {
+                    cacheHit = true;
+                    hookOut = item.hookOutPath;
+                    send({ step: 'cache', index: item.index, total: plan.length, message: 'Hook ' + item.index + ' cache hit — bỏ qua ffmpeg.' });
+                  }
+                }
+              }
+            } catch (_) { /* meta hỏng → fallback cắt lại, không nuốt lỗi */ }
+            if (!cacheHit) {
+              /* forceAccurate bật → re-encode cả khi aspect='keep' (chính xác khung);
+                 ngược lại stream-copy nhanh khi không có filter (xem cutFfmpegFast). */
+              const hDur = item.hookEndSec - item.hookStartSec;
+              const hRun = (item.vf || forceAccurate)
+                ? await cutFfmpeg(item.hookStartSec, hDur, item.hookOutPath, item.vf)
+                : await cutFfmpegFast(item.hookStartSec, hDur, item.hookOutPath);
+              if (run) run.child = null;
+              if (canceled()) return { ok: false, error: 'Đã hủy bởi người dùng.', code: 'VC_CANCELLED', results };
+              if (!hRun.ok) {
+                /* Hook lỗi → bỏ hook của item này (giữ main), ghi warning rõ ràng */
+                results.push({ index: item.index, outPath: item.outPath, ok: true, hookError: hRun.error });
+                hookOut = null;
+              } else {
+                hookOut = item.hookOutPath;
+                /* Ghi meta cache cạnh file hook để lần sau skip ffmpeg */
+                try {
+                  const ck = E.hookCacheKey(videoPath, item.hookStartSec * 1000, item.hookEndSec * 1000, item.aspect, itemVf);
+                  if (ck) {
+                    const srcStat = fs.statSync(videoPath);
+                    const outStat = fs.statSync(item.hookOutPath);
+                    fs.writeFileSync(item.hookOutPath + '.cache.json', JSON.stringify({
+                      key: ck, sourceMtimeMs: srcStat.mtimeMs, size: outStat.size, ts: Date.now(),
+                    }), 'utf8');
+                  }
+                } catch (_) { /* meta ghi lỗi → lần sau vẫn cache miss, không nguy hiểm */ }
+              }
+            }
+          }
+          /* 2) Cắt clip chính */
+          send({ step: 'clip', index: item.index, total: plan.length, pct: Math.round(((item.index - 1) / plan.length) * 100 + (hookOut ? 20 : 0)), message: 'Cắt clip ' + item.index + '/' + plan.length + ': ' + item.title });
+          /* forceAccurate bật → re-encode chính xác khung; ngược lại stream-copy
+             khi không có filter (xem cutFfmpegFast ở trên). */
+          const mDur = item.endSec - item.startSec;
+          const mRun = (item.vf || forceAccurate)
+            ? await cutFfmpeg(item.startSec, mDur, item.outPath, item.vf)
+            : await cutFfmpegFast(item.startSec, mDur, item.outPath);
           if (run) run.child = null;
           if (canceled()) return { ok: false, error: 'Đã hủy bởi người dùng.', code: 'VC_CANCELLED', results };
-          results.push({ index: item.index, outPath: item.outPath, ok: okRun.ok, error: okRun.error || '' });
-          if (!okRun.ok) {
+          if (!mRun.ok) {
             // Luật 10: clip nào lỗi → báo đúng lỗi, KHÔNG ngầm bỏ qua im lặng
-            return { ok: false, error: 'Cắt clip ' + item.index + ' thất bại: ' + okRun.error, code: 'VC_CUT_FAILED', results };
+            return { ok: false, error: 'Cắt clip ' + item.index + ' thất bại: ' + mRun.error, code: 'VC_CUT_FAILED', results };
           }
+          /* 3) Nếu có hook → ghép hook + main thành clip có cold-open (đặt cạnh clip gốc) */
+          let finalOut = item.outPath;
+          if (hookOut) {
+            const coldPath = item.outPath.replace(/\.mp4$/i, '-coldopen.mp4');
+            const cRun = await concatFiles([hookOut, item.outPath], coldPath);
+            if (run) run.child = null;
+            if (canceled()) return { ok: false, error: 'Đã hủy bởi người dùng.', code: 'VC_CANCELLED', results };
+            if (!cRun.ok) {
+              /* Ghép cold-open lỗi → vẫn giữ main + hook riêng, ghi warning */
+              results.push({ index: item.index, outPath: item.outPath, hookOut, ok: true, coldOpenError: cRun.error });
+            } else {
+              finalOut = coldPath;
+              results.push({ index: item.index, outPath: coldPath, mainOut: item.outPath, hookOut, ok: true, coldOpen: true });
+            }
+          } else {
+            results.push({ index: item.index, outPath: item.outPath, ok: true });
+          }
+          /* Thứ tự file cho bản ghép: hook trước main → cold-open ở đầu mỗi đoạn (hiệu ứng déjà-vu) */
+          if (hookOut && !results[results.length - 1].coldOpenError) mergedSegments.push(hookOut, finalOut);
+          else mergedSegments.push(finalOut);
         }
-        /* Ghép tất cả clip thành 1 video (concat demuxer, -c copy) */
+        /* Ghép tất cả clip thành 1 video (concat demuxer, -c copy).
+           Nếu cold-open bật → mergedSegments chứa [hook1,main1,hook2,main2,...] → mỗi
+           đoạn đều có hook ở đầu (đạt hiệu ứng déjà-vu liên đoạn). */
         let mergedPath = null;
         let mergeNote = '';
         if (mergeAll) {
           if (plan.length > 1) {
-            send({ step: 'merge', index: plan.length, total: plan.length, pct: 96, message: 'Ghép ' + plan.length + ' clip thành 1 video…' });
-            const cc = E.buildConcatPlan(plan.map((it) => it.outPath), { outDir, videoName: path.basename(videoPath) });
-            const listHash = crypto.createHash('sha1').update(videoPath + '|' + plan.length).digest('hex').slice(0, 12);
-            const listPath = path.join(tmpDir(), 'vc-concat-' + listHash + '.txt');
-            fs.mkdirSync(tmpDir(), { recursive: true });
-            fs.writeFileSync(listPath, cc.listContent, 'utf8');
-            const mergeArgs = ['-y', '-f', 'concat', '-safe', '0', '-i', listPath, '-c', 'copy', '-movflags', '+faststart', cc.outPath];
-            const mergeRun = await new Promise((resolve) => {
-              const cp = spawn(FFMPEG, mergeArgs, { windowsHide: true });
-              if (run) run.child = cp;
-              let errTail = '';
-              cp.stderr.on('data', (d) => { errTail = (errTail + String(d)).slice(-500); });
-              cp.on('error', (er) => resolve({ ok: false, error: errOf(er) }));
-              cp.on('close', (code) => resolve(code === 0 ? { ok: true } : { ok: false, error: 'FFmpeg lỗi (' + code + '): ' + errTail }));
-            });
+            send({ step: 'merge', index: plan.length, total: plan.length, pct: 96, message: 'Ghép ' + plan.length + ' clip' + (coldOpen ? ' (kèm cold-open)' : '') + ' thành 1 video…' });
+            const cc = E.buildConcatPlan(mergedSegments, { outDir, videoName: path.basename(videoPath) });
+            const mergeRun = await concatFiles(mergedSegments, cc.outPath);
             if (run) run.child = null;
-            try { fs.unlinkSync(listPath); } catch (_) {}
             if (canceled()) return { ok: false, error: 'Đã hủy bởi người dùng.', code: 'VC_CANCELLED', results };
             if (!mergeRun.ok) {
               // Luật 10: ghép lỗi → báo đúng lỗi (các clip riêng vẫn còn nguyên trong results)
@@ -641,8 +1064,9 @@ function registerViralCutIpc(ipcMain, { getState } = {}) {
           }
         }
 
-        send({ step: 'done', index: plan.length, total: plan.length, pct: 100, message: 'Đã xuất ' + results.length + ' clip' + (mergedPath ? ' + 1 bản ghép' : '') + ' vào ' + outDir });
-        return { ok: true, outDir, count: results.length, results, mergedPath, mergeNote, aspect };
+        const coldOk = results.filter((r) => r.coldOpen).length;
+        send({ step: 'done', index: plan.length, total: plan.length, pct: 100, message: 'Đã xuất ' + results.length + ' clip' + (mergedPath ? ' + 1 bản ghép' : '') + (coldOpen && coldOk ? ' (cold-open: ' + coldOk + '/' + results.length + ')' : '') + ' vào ' + outDir });
+        return { ok: true, outDir, count: results.length, results, mergedPath, mergeNote, aspect, coldOpen, edgePad };
       } finally {
         run = null;
       }

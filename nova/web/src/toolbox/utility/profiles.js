@@ -839,8 +839,11 @@ function quickFill(){
   document.getElementById('pNgach').value = 'Dark educational, mysteries, lịch sử bí ẩn';
   document.getElementById('pVisualStyle').value = 'Crayon Capital — Dark';
   document.getElementById('pCharStyle').value = PRESET.characterStyle;
-  if (document.getElementById('pCharStyleB') && PRESET.characterStyleB) {
-    document.getElementById('pCharStyleB').value = PRESET.characterStyleB;
+  // Cache element lookup — nếu getElementById trả null giữa 2 lần gọi (race / element bị remove)
+  // thì lần 2 .value sẽ crash. Lưu vào biến để guard chỉ 1 chỗ. Fix check:shadow C1 2026-09-17x.
+  const pCharStyleB = document.getElementById('pCharStyleB');
+  if (pCharStyleB && PRESET.characterStyleB) {
+    pCharStyleB.value = PRESET.characterStyleB;
   }
   document.getElementById('pBgStyle').value = PRESET.backgroundStyle;
   document.getElementById('pSceneStyle').value = PRESET.sceneStyle;

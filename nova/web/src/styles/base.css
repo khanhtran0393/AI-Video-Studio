@@ -1,4 +1,10 @@
 
+/* ============ LOCAL FONT (self-hosted Be Vietnam Pro) ============
+   Tải woff2 về local để không phụ thuộc Google CDN — tránh mojibake
+   khi mạng chậm/proxy chặn. CSS này định nghĩa @font-face trỏ tới woff2
+   trong cùng thư mục. Import BẰNG @import đặt TRƯỚC mọi rule khác. */
+@import url('./fonts/be-vietnam-pro.css');
+
 /* ============ DESIGN TOKENS — LIGHT MODE ============ */
 :root{
   --bg: #f7f7f5;
@@ -112,7 +118,7 @@ html.dark textarea::placeholder { color: var(--text-dim); }
 html,body{
   background:var(--bg);
   color:var(--text);
-  font-family:'Be Vietnam Pro',-apple-system,BlinkMacSystemFont,sans-serif;
+  font-family:'Be Vietnam Pro','Segoe UI',-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif;
   font-size:13.5px;
   line-height:1.55;
   -webkit-font-smoothing:antialiased;
@@ -771,7 +777,7 @@ html.dark .auto-arrow{color:#d6cfc2}   /* giữ nguyên tông be nhạt của da
 #scriptInput{
   border:none;border-radius:0;
   min-height:380px;
-  font-family:'Be Vietnam Pro',sans-serif;
+  font-family:'Be Vietnam Pro','Segoe UI',-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif;
   font-size:14px;line-height:1.75;
   background:var(--surface);
 }

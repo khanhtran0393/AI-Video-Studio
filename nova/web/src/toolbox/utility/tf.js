@@ -580,6 +580,7 @@ async function tfRefreshConn(){
 function tfStartBuiltinPoll(){
   if (_tfBuiltinPoll) return;   // đã chạy
   _tfBuiltinPoll = setInterval(async () => {
+    if (document.hidden) return;   // 2026-09-17perf: skip poll khi cửa sổ ẩn
     if (flowBridge.mode !== 'builtin'){ clearInterval(_tfBuiltinPoll); _tfBuiltinPoll = null; return; }
     const el = document.getElementById('tfConn');
     if (!el || el.contains(document.activeElement)) return;   // đang gõ trong bảng → khỏi vẽ lại
@@ -736,6 +737,7 @@ function _fcStatus(html, col){ const el = document.getElementById('fcStatus'); i
    lên ô trạng thái thay vì để ô đứng im ở "⏳…". Trả về hàm stop() gọi sau khi thao tác xong. */
 function _fcConsentPoll(){
   const t = setInterval(async () => {
+    if (document.hidden) return;   // 2026-09-17perf: skip poll extension status khi cửa sổ ẩn
     const s = await window.native.flowChrome('GET_ACCOUNTS').catch(() => null);
     if (s?.ssoConsent) _fcStatus('⚠️ <b>' + escapeHtml(s.ssoConsent.message) + '</b>' + (s.ssoConsent.email ? ' (' + escapeHtml(s.ssoConsent.email) + ')' : ''), 'var(--amber)');
   }, 2500);
@@ -931,6 +933,7 @@ function tfRenderExtStatus(){
     return;
   }
   const tick = async () => {
+    if (document.hidden) return;   // 2026-09-17perf: không poll extension khi cửa sổ ẩn
     const s = await window.native.flowBridgeStatus().catch(() => null);
     const connected = !!s?.extensionConnected;
     if (connected) {

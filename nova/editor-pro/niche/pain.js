@@ -1,31 +1,14 @@
-const { searchVideos, claude, safeJson, cached, kfmt, pool } = require('./loi');
-const { fetchComments } = require('./binh-luan');
+const { searchVideos, claude, safeJson, cached } = require('./loi');
+const { gomBinhLuan } = require('./binh-luan');
 
 async function painMining(seed, onProgress = () => {}, opts = {}) {
   return cached('pain', seed, opts.fresh, onProgress, async () => {
     onProgress(5, `Tìm video cho "${seed}"…`);
-    const { vids, enriched } = await searchVideos(seed, 10, onProgress);
+    const { vids, enriched, enrichErr } = await searchVideos(seed, 10, onProgress);
     if (!vids.length) throw new Error('Không tìm được video cho từ khoá này.');
     onProgress(20, `Tìm thấy ${vids.length} video, lấy bình luận từ 5 video nhiều view nhất…`);
-    const top = vids.sort((a,b) => b.views - a.views).slice(0, 5);
-    let allComments = [];
-    let failed = [];
-    const results = await pool(top, 2, async (v) => {
-      try {
-        const comments = await fetchComments(v.id);
-        return { ok: true, id: v.id, comments, video: v };
-      } catch (e) {
-        return { ok: false, id: v.id, error: e.message };
-      }
-    });
-    for (const r of results) {
-      if (r.ok) {
-        allComments = allComments.concat(r.comments.map(t => ({ video: r.video, text: t })));
-      } else {
-        failed.push(r.id);
-      }
-    }
-    if (!allComments.length) throw new Error('Không lấy được bình luận nào.');
+    const sapXem = vids.slice().sort((a, b) => b.views - a.views);
+    const { allComments, soVideoDaThu, failed, failedDetail } = await gomBinhLuan(sapXem, { soDau: 5, onProgress });
     onProgress(60, `Thu được ${allComments.length} bình luận, phân tích AI…`);
     const commentTexts = allComments.map(c => c.text).filter(t => t.length > 10).slice(0, 200);
     const prompt = `Bạn là chuyên gia phân tích khán giả YouTube. Phân tích các bình luận sau từ ngách "${seed}". Rút ra:
@@ -37,7 +20,7 @@ Bình luận: ${commentTexts.join('\n')}`;
     const raw = await claude('Bạn là trợ lý hữu ích. Chỉ trả JSON hợp lệ.', prompt);
     const result = safeJson(raw, { needs: [], gaps: [], ideas: [] });
     onProgress(100, 'Xong');
-    return { ok: true, seed, commentCount: allComments.length, videosScanned: top.length, failed, result, enriched };
+    return { ok: true, seed, commentCount: allComments.length, videosScanned: soVideoDaThu, failed, failedDetail, result, enriched, enrichErr };
   });
 }
 module.exports = { painMining };

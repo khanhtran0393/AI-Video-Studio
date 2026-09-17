@@ -14,10 +14,7 @@
 <link rel="icon" type="image/png" href="brand-logo.png">
 <link rel="apple-touch-icon" href="brand-logo.png">
 
-<!-- Be Vietnam Pro -->
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<!-- Be Vietnam Pro (self-hosted qua @import trong base.css để không phụ thuộc CDN) -->
 
 <!-- Kho cài đặt BỀN cho API key — phải chạy TRƯỚC mọi script khác.
      Trang được phục vụ ở http://localhost:<port>, mà localStorage gắn chặt vào origin:
@@ -69,7 +66,7 @@
 </script>
 
 <!-- Libraries -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="vendor/jszip.min.js"></script>
 <link rel="stylesheet" href="src/styles/base.css?v=wbui2">
 <link rel="stylesheet" href="src/styles/agent-copilot.css">
 </head>
@@ -189,9 +186,8 @@
 <script src="src/toolbox/tool-t8.js"></script>
 <script src="src/toolbox/tool-t9.js"></script>
 <script src="src/toolbox/tool-ts.js"></script>
-<!-- Skill Catalog: bộ skill mẫu pre-authored phủ 100 chủ đề Tạo Kịch Bản —
-     nạp TRƯỚC tool-skills.js (SKL_CATALOG được sklImportCatalog đọc toàn cục) -->
-<script src="src/toolbox/skill-catalog.js"></script>
+<!-- Skill Catalog (2026-09-17x): LAZY-LOAD — 670KB chỉ nạp khi user bấm "Import Catalog".
+     tool-skills.js → sklEnsureCatalog() nạp động 4 file theo đúng thứ tự cũ. -->
 <!-- Skill Panel: kho skill viết kịch bản theo chủ đề & phong cách — sidebar nhóm "Cài đặt" (nạp SAU tool-ts vì chèn option vào #tsSkill) -->
 <script src="src/toolbox/tool-skills.js"></script>
 <script src="src/toolbox/tool-tts.js"></script>
@@ -228,6 +224,8 @@
   <script src="src/hd/hd-main.js"></script>
   <!-- Dịch SRT: panel UI (IPC srt-translate:* qua window.native.srtTranslate) -->
   <script src="srt-translate-panel.js?v=srtt1"></script>
+<!-- Lồng tiếng theo phụ đề: panel UI (IPC dub:* qua window.native.dub) -->
+<script src="dub-panel.js?v=dub1"></script>
 <script src="viral-cut-panel.js?v=vc1"></script>
 <script src="spy-panel.js?v=spy1"></script>
 

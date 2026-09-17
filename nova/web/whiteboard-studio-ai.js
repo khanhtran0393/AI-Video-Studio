@@ -4,6 +4,10 @@
    src/toolbox/utility/llm.js, đi qua window.native.llmFetch) và
    engine Flow sẵn có của tab Tạo Ảnh Hàng Loạt (flowBridge +
    tfDispatchGen — src/toolbox/utility/tf.js):
+   2026-09-17: vision (wbAiRegionsCore) đi qua wbAiVisionJson — toggle
+   "🤖 Antigravity khoanh vùng" (Bước 4) đổi đường dây sang Antigravity
+   (agentCopilot:chat, vision thuần disableTools); hợp đồng JSON +
+   validate giữ nguyên tuyệt đối, lỗi lộ liễu không fallback ngầm.
 
    1) wbAiPrompts — sinh prompt ảnh: AI đọc TỪNG CÂU kịch bản
       (cảnh đã chia theo timing SRT ở Bước 2) → mỗi cảnh nhận
@@ -206,6 +210,118 @@
       t += d;
     });
   }
+  /* ── Đường dây vision: user API → Antigravity → Google Vision (một nguồn hợp đồng) ──
+     Toggle "🤖 Antigravity khoanh vùng" (Bước 4, localStorage wb_antigravity):
+     khi bật và provider của Sếp VÀO ĐƯỢC kênh Copilot (chuẩn OpenAI: openai/
+     gemini/openai-compatible) → wbAiRegionsCore đi qua Antigravity
+     (agentCopilot:chat) ở chế độ VISION THUẦN: disableTools → main không khai
+     báo tools cho model, KHÔNG vòng lặp agentic; systemPrompt chuyên biệt
+     override. Config AI luôn là API NGƯỜI DÙNG CÀI ĐẶT — cùng thứ tự ưu tiên
+     với callLLM: "📋 API đã thêm" → API Key Flow (key Gemini) → provider đang
+     chọn (api_provider/api_key_<provider>/api_key mirror/api_model/api_base_url).
+     Provider KHÔNG đi được kênh Copilot nhưng đọc được ảnh (anthropic native,
+     gateway…) → dùng trực tiếp callLLMJson (báo log rõ ràng, không phải fallback
+     ngầm). Provider KHÔNG hỗ trợ vision (deepseek/cli/groq…) → THÔNG BÁO cho
+     người dùng rồi CHUYỂN SANG GOOGLE VISION (Gemini qua API Key Flow); thiếu
+     key Flow → lỗi lộ liễu WB_VISION_NO_GOOGLE_KEY (Luật 10). */
+  const WB_AC_VISION_SYSTEM = 'Bạn là mắt nhìn của Whiteboard Studio: chỉ nhìn MỘT ảnh và trả về DUY NHẤT một JSON hợp lệ đúng yêu cầu. KHÔNG gọi tool nào, KHÔNG giải thích, KHÔNG markdown — chỉ JSON.';
+  /* Provider đi được kênh Antigravity (main resolveEndpoint CHỈ nhận chuẩn OpenAI)
+     VÀ đọc được ảnh. deepseek vào được kênh nhưng KHÔNG thấy ảnh → loại. */
+  const WB_AC_CHANNEL_PROVIDERS = ['openai', 'gemini', 'openai-compatible'];
+  function wbAcEnabled() {
+    try { return localStorage.getItem('wb_antigravity') !== '0'; } catch (_) { return true; }
+  }
+  /* Nguồn AI NGƯỜI DÙNG CÀI ĐẶT — CÙNG thứ tự ưu tiên với _apiKeyPool (llm.js):
+     "📋 API đã thêm" → API Key Flow (key Gemini, addedApiFlowKeys) → provider
+     đang chọn (api_key_<provider>, fallback kho cũ 'api_key'). Trả
+     {provider, model, key, baseUrl} — key CÓ THỂ rỗng (đường trực tiếp tự xử lý). */
+  function wbAcUserSource() {
+    const src = (typeof addedApiResolveAiSource === 'function') ? addedApiResolveAiSource() : null;
+    if (src && src.provider && Array.isArray(src.keys) && src.keys.length) {
+      return { provider: src.provider, model: src.model || '', key: src.keys[0], baseUrl: src.baseUrl || '' };
+    }
+    const provider = localStorage.getItem('api_provider') || 'anthropic';
+    const keyRaw = (typeof _provKeyName === 'function')
+      ? (localStorage.getItem(_provKeyName(provider)) || localStorage.getItem('api_key') || '')
+      : (localStorage.getItem('api_key') || '');
+    return {
+      provider,
+      model: localStorage.getItem('api_model') || '',
+      key: keyRaw.split(/[\n,]+/)[0].trim(),
+      baseUrl: localStorage.getItem('api_base_url') || '',
+    };
+  }
+  /* Tách JSON từ văn bản model (bỏ fence ```json), rồi chạy validate —
+     cùng hợp đồng đầu ra như callLLMJson. */
+  function wbAiParseJson(text, validate) {
+    const m = /```(?:json)?\s*([\s\S]*?)```/.exec(String(text || ''));
+    const raw = (m ? m[1] : String(text || '')).trim();
+    let obj;
+    try { obj = JSON.parse(raw); } catch (e) { throw new Error('WB_AC_JSON_BAD — trả lời không parse được JSON: ' + String(e.message || e)); }
+    return validate(obj);
+  }
+  /* Convert messages kiểu Anthropic (block {type:'image',source:{media_type,data}}) →
+     schema OpenAI ({type:'image_url',image_url:{url:dataURL}}). Kênh agentCopilot:chat
+     chuyển tiếp messages NGUYÊN VẸN lên endpoint chuẩn OpenAI (anthropic native bị
+     chặn AC_PROVIDER_UNSUPPORTED từ trước) nên BẮT BUỘC convert trước khi gửi.
+     Đường callLLMJson không cần — llm.js tự convert theo provider. */
+  function wbAcToOpenAiMessages(messages) {
+    return (messages || []).map((m) => {
+      if (!Array.isArray(m.content)) return m;
+      return {
+        role: m.role,
+        content: m.content.map((c) => {
+          if (c && c.type === 'image' && c.source && c.source.data) {
+            return { type: 'image_url', image_url: { url: 'data:' + (c.source.media_type || 'image/png') + ';base64,' + c.source.data } };
+          }
+          return c;
+        }),
+      };
+    });
+  }
+  /* Đường dây vision 1 lần gọi — thác 3 bậc, MỌI chuyển hướng đều BÁO CHO NGƯỜI DÙNG:
+     1) Antigravity (nếu bật + provider user vào được kênh Copilot và thấy được ảnh);
+     2) gọi TRỰC TIẾP theo Cài đặt khi provider đọc được ảnh nhưng không vào kênh
+        Copilot (anthropic native, openrouter, gateway…);
+     3) provider KHÔNG hỗ trợ vision → thông báo + chuyển GOOGLE VISION (Gemini
+        qua API Key Flow); thiếu key Flow → lỗi lộ liễu.
+     Cùng hợp đồng: (prompt, messages, validate) → object JSON ĐÃ QUA validate.
+     messages vào đây ở kiểu Anthropic (chuẩn builder của wbAiRegionsCore); nhánh
+     Copilot convert sang OpenAI qua wbAcToOpenAiMessages, đường callLLMJson để
+     llm.js tự convert theo provider. */
+  async function wbAiVisionJson(prompt, messages, validate) {
+    const src = wbAcUserSource();
+    const acOn = wbAcEnabled() && window.native && typeof window.native.agentCopilotChat === 'function';
+    // 1) Antigravity — vision thuần qua kênh Copilot
+    if (acOn && WB_AC_CHANNEL_PROVIDERS.includes(src.provider)) {
+      if (!src.key) throw new Error('WB_AC_NO_KEY — Antigravity chưa có API key (Cài đặt → API). Tắt "🤖 Antigravity khoanh vùng" ở Bước 4 nếu muốn dùng luồng LLM cũ.');
+      log('🤖 Antigravity đang nhìn ảnh (vision thuần, không tool)…');
+      const r = await window.native.agentCopilotChat(wbAcToOpenAiMessages(messages), {
+        ...src,
+        disableTools: true,
+        systemPrompt: WB_AC_VISION_SYSTEM,
+      });
+      if (!r || !r.ok) throw new Error('WB_AC_FAILED — ' + ((r && r.error) || 'Antigravity không trả lời'));
+      return wbAiParseJson(r.text, validate);
+    }
+    // 2) Provider user đọc được ảnh → gọi trực tiếp đúng Cài đặt (hỗ trợ anthropic native)
+    if (typeof VISION_PROVIDERS !== 'undefined' && VISION_PROVIDERS.includes(src.provider)) {
+      if (acOn) log('ℹ Provider "' + src.provider + '" không đi được kênh Antigravity — dùng trực tiếp API đã cấu hình trong Cài đặt…');
+      return callLLMJson(prompt, { messages, maxTokens: 1200, tries: 2, validate });
+    }
+    // 3) Provider KHÔNG hỗ trợ vision → THÔNG BÁO + chuyển Google Vision (Gemini, key Flow)
+    log('⚠ Provider "' + src.provider + '" không đọc được ảnh — chuyển sang Google Vision (Gemini qua API Key Flow)…');
+    const flowKeys = (typeof addedApiFlowKeys === 'function') ? addedApiFlowKeys() : [];
+    if (!flowKeys.length) {
+      throw new Error('WB_VISION_NO_GOOGLE_KEY — provider "' + src.provider + '" không hỗ trợ vision và chưa có API Key Flow (key Gemini). Thêm key ở Cài đặt → Tài khoản Google Flow, hoặc đổi provider hỗ trợ ảnh (Anthropic/OpenAI/Gemini).');
+    }
+    const gModel = (typeof MODELS !== 'undefined' && MODELS.gemini && MODELS.gemini[0]) ? MODELS.gemini[0].id : 'gemini-2.5-flash';
+    log('🔍 Google Vision (Gemini ' + gModel + ', key Flow) đang đọc ảnh…');
+    return callLLMJson(prompt, {
+      messages, maxTokens: 1200, tries: 2, validate,
+      _override: { provider: 'gemini', key: flowKeys[0], model: gModel },
+    });
+  }
   /* lõi vision cho 1 cảnh — dùng chung cho nút 🎯 AI khoanh vùng và
      luồng auto 🤖 AI sinh ảnh theo câu. s.image + s.canvas phải có. */
   async function wbAiRegionsCore(s) {
@@ -231,15 +347,12 @@
         { type: 'text', text: prompt },
       ],
     }];
-    const out = await callLLMJson(prompt, {
-      messages, maxTokens: 1200, tries: 2,
-      validate: (o) => {
-        if (!o || !Array.isArray(o.regions) || !o.regions.length) throw new Error('AI thiếu mảng regions');
-        o.regions.forEach((r, i) => {
-          if (!r || !Array.isArray(r.points) || r.points.length < 3) throw new Error('regions[' + i + '] thiếu points');
-        });
-        return o;
-      },
+    const out = await wbAiVisionJson(prompt, messages, (o) => {
+      if (!o || !Array.isArray(o.regions) || !o.regions.length) throw new Error('AI thiếu mảng regions');
+      o.regions.forEach((r, i) => {
+        if (!r || !Array.isArray(r.points) || r.points.length < 3) throw new Error('regions[' + i + '] thiếu points');
+      });
+      return o;
     });
     const built = [];
     out.regions.forEach((r, i) => {

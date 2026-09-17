@@ -43,7 +43,7 @@
   flex-direction: column;
   z-index: 9999;
   overflow: hidden;
-  font-family: 'Be Vietnam Pro', sans-serif;
+  font-family: 'Be Vietnam Pro', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
   color: var(--text, #f8fafc);
 }
 #agentCopilotWindow.active {

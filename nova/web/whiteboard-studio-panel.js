@@ -47,7 +47,7 @@
       'st1', 'st2', 'st3', 'st4', 'st5', 'st6',
       'pickSrtBtn', 'tsPullBtn', 'srtExtractRow',
       'pickVoiceSrtBtn', 'voicePullBtn', 'whisperPrepareBtn', 'modelSel',
-      'analyzePromptBtn', 'arrangeBtn',
+      'analyzePromptBtn', 'arrangeBtn', 'acVisionChk', 'autoRunBtn',
       'pickAudioBtn', 'audioLabel', 'audioWarn',
       'pickMusicBtn', 'musicLabel', 'musicVolSel',
       'inkPathSel', 'colorFillSel', 'capSel',
@@ -104,6 +104,47 @@
     if (els.srtExtractRow) els.srtExtractRow.classList.remove('wb-hide');
   }
 
+  /* ── 🤖 Chạy tự động 1→5 — tự lo TTS bằng cách TÁI DÙNG nguyên vẹn tab 🎙
+     Giọng nói (không bịa dữ liệu, không luồng TTS riêng — Luật 10). Ưu tiên:
+     (1) bản sản phẩm cuối mới nhất trong "Đã tạo" (useVoiceFromVoiceTab —
+     nạp voice-over + .SRT do backend sinh); (2) chưa có gì → tự bấm hộ
+     "Tạo giọng" (voiceGenerate đọc #voiceText + giọng đang chọn): kịch bản
+     ngắn ra 1 bản trọn vẹn; kịch bản dài tách đoạn → tự ghép nhóm đoạn
+     ("Đoạn i/N" — _giongNhomDoan lấy nhóm entry mới nhất nên đúng nhóm vừa
+     tạo) thành 1 file có SRT khớp toàn văn bản. */
+  async function wbAutoEnsureVoice() {
+    if (typeof useVoiceFromVoiceTab !== 'function') throw new Error('WB_NO_VOICE_TAB — tab 🎙 Giọng nói chưa nạp (useVoiceFromVoiceTab không tồn tại).');
+    await useVoiceFromVoiceTab();   // đã có bản TTS kèm SRT thì nhận luôn
+    if (state.audioTrack) return;
+    if (typeof voiceGenerate !== 'function') throw new Error('WB_NO_VOICE_ENGINE — mất voiceGenerate (tab Giọng nói chưa nạp).');
+    let coGiong = false;
+    try { coGiong = !!_giongChon; } catch (_) { coGiong = false; }
+    if (!coGiong) throw new Error('WB_NO_VOICE_SELECTED — chưa chọn giọng ở tab 🎙 Giọng nói. Chọn giọng rồi bấm lại "🤖 Chạy tự động 1→5".');
+    const vt = document.getElementById('voiceText');
+    if (!vt) throw new Error('WB_NO_VOICE_TEXT — không thấy ô nội dung của tab Giọng nói.');
+    const khiCu = (typeof _giongSu !== 'undefined' && Array.isArray(_giongSu)) ? new Set(_giongSu.map((h) => h.khi)) : null;
+    const cu = vt.value;
+    vt.value = state.scriptRaw || '';
+    try {
+      log('🎙 Chưa có TTS — tự gen ở tab Giọng nói (' + state.scriptRaw.split(/\s+/).length + ' từ)…');
+      await voiceGenerate();
+      // Kịch bản dài → voiceGenerate tách đoạn (đoạn cache không dùng được làm
+      // voice-over) → phải ghép các đoạn VỪA TẠO thành 1 bản trọn vẹn.
+      const moi = (khiCu && typeof _giongSu !== 'undefined') ? _giongSu.filter((h) => !khiCu.has(h.khi)) : [];
+      const doan = moi.filter((h) => /^Đoạn \d+\/\d+/.test(h.ten || ''));
+      if (doan.length >= 2) {
+        const mN = /^Đoạn \d+\/(\d+)/.exec(doan[0].ten);
+        const N = mN ? parseInt(mN[1], 10) : doan.length;
+        if (doan.length < N) throw new Error('WB_TTS_INCOMPLETE — TTS tách ' + N + ' đoạn nhưng mới xong ' + doan.length + ' (lỗi backend? xem tab 🎙 Giọng nói). Sửa xong bấm lại "🤖 Chạy tự động 1→5".');
+        if (typeof giongSuGhep !== 'function') throw new Error('WB_NO_VOICE_MERGE — mất hàm ghép đoạn (giongSuGhep).');
+        log('🔗 Kịch bản dài đã tách ' + N + ' đoạn — tự ghép thành 1 file trọn vẹn…');
+        await giongSuGhep();
+      }
+    } finally { vt.value = cu; }
+    await useVoiceFromVoiceTab();
+    if (!state.audioTrack) throw new Error('WB_NO_TTS_PRODUCT — gen xong nhưng không nhận được bản TTS kèm SRT (bản có thể là đoạn cache, hoặc engine đám mây không sinh SRT). Kiểm tra tab 🎙 Giọng nói rồi bấm lại.');
+  }
+
   /* ── URL ảnh an toàn cho origin http://localhost ──
      App chạy UI trên http://localhost (local server của Nova) nên trình duyệt
      CHẶN <img src="file:///..."> — sơ đồ vùng preview hiện lỗi/không lên.
@@ -113,6 +154,66 @@
     if (!p) return '';
     if (/^(https?:|data:|blob:|file:)/i.test(p)) return p;
     return '/local-media?p=' + encodeURIComponent(String(p).replace(/\\/g, '/'));
+  }
+
+  /* ── 🤖 Chạy tự động 1→5 (Antigravity orchestration, dual-path) ──
+     Chuỗi: Bước 1 nhận kịch bản → Bước 2 TTS+SRT (tự gen khi thiếu, xem
+     wbAutoEnsureVoice) → Bước 3 wbAnalyzePrompt (tách câu + khớp SRT + AI
+     prompt + Flow sinh ảnh) → Bước 4 wbArrangeRegions (AI vision — đi qua
+     Antigravity khi toggle Bước 4 bật) → Bước 5 mở preview. Mỗi bước verify
+     trạng thái THẬT của state (không tin log), bước nào thiếu dữ liệu dừng
+     LỘ LIỄU ở đó (Luật 10) — bấm lại chạy tiếp từ chỗ dừng vì từng nút đều
+     idempotent theo state (câu/ảnh/vùng đã xong không lặp). Trả về chuỗi
+     tóm tắt (tool whiteboard_pipeline của Antigravity dùng). */
+  let wbAutoRunning = false;
+  async function wbAutoRun() {
+    if (wbAutoRunning) { log('⚠ Chạy tự động đang chạy — chờ xong đã.'); return; }
+    if (!window.wbStudioAi || typeof window.wbStudioAi.wbAnalyzePrompt !== 'function' || typeof window.wbStudioAi.wbArrangeRegions !== 'function') {
+      log('❌ WB_NO_AI_MODULE — whiteboard-studio-ai.js chưa nạp (thiếu window.wbStudioAi).');
+      throw new Error('WB_NO_AI_MODULE — whiteboard-studio-ai.js chưa nạp.');
+    }
+    wbAutoRunning = true;
+    if (els.autoRunBtn) els.autoRunBtn.disabled = true;
+    try {
+      // Bước 1 — kịch bản
+      if (!state.scriptRaw) {
+        pullScriptFromTs();
+        if (!state.scriptRaw) throw new Error('WB_NO_SCRIPT — chưa có kịch bản (tab Tạo Kịch Bản trống và state.script của app cũng trống).');
+      }
+      log('① Kịch bản: ' + state.scriptRaw.split(/\s+/).length + ' từ (' + (state.scriptSource || 'đã nhận') + ')');
+      // Bước 2 — TTS + SRT
+      if (!state.audioTrack) await wbAutoEnsureVoice();
+      log('② TTS + SRT: ' + (state.ttsName || '?') + ' · ' + state.cues.length + ' cue');
+      // Bước 3 — tách câu + prompt + sinh ảnh
+      log('③ Phân tích prompt: tách câu → khớp SRT → AI prompt → Flow sinh ảnh…');
+      await window.wbStudioAi.wbAnalyzePrompt();
+      const n = state.scenes.length;
+      if (!n) throw new Error('WB_ANALYZE_EMPTY — Bước 3 không tạo được cảnh nào (kịch bản/SRT có vấn đề? xem log phía trên).');
+      const thieuAnh = state.scenes.filter((s) => !s.image);
+      if (thieuAnh.length) {
+        throw new Error('WB_GEN_INCOMPLETE — còn ' + thieuAnh.length + '/' + n + ' câu chưa có ảnh (câu ' + thieuAnh.map((s) => state.scenes.indexOf(s) + 1).join(', ') + '). Bấm lại "🤖 Chạy tự động 1→5" để sinh nốt phần thiếu.');
+      }
+      log('✓ ③ xong: ' + n + ' câu · đủ ảnh line-art.');
+      // Bước 4 — AI vision khoanh vùng + giờ vẽ
+      log('④ Sắp xếp dữ liệu: AI vision khoanh vùng + giờ vẽ…');
+      await window.wbStudioAi.wbArrangeRegions();
+      const nEl = state.scenes.filter((s) => s.elements && s.elements.length).length;
+      if (nEl < n) {
+        throw new Error('WB_ARRANGE_INCOMPLETE — còn ' + (n - nEl) + '/' + n + ' cảnh chưa có vùng vẽ. Bấm lại để chạy nốt (cảnh đã xong không lặp).');
+      }
+      // Bước 5 — mở preview
+      const d5 = els.st5 && els.st5.closest ? els.st5.closest('details') : null;
+      if (d5) d5.open = true;
+      const t = n + ' câu · ' + n + ' ảnh line-art · ' + nEl + ' vùng vẽ · ' + state.cues.length + ' cue SRT';
+      log('✅ Xong trọn chuỗi 1→5: ' + t + ' — Bước 5 sẵn sàng xem trước.');
+      return t;
+    } catch (e) {
+      log('❌ Chạy tự động dừng: ' + (e.message || e));
+      throw e;
+    } finally {
+      wbAutoRunning = false;
+      if (els.autoRunBtn) els.autoRunBtn.disabled = false;
+    }
   }
 
   /* ── tiến trình render (IPC main → renderer) ── */
@@ -606,6 +707,31 @@
         log(r && r.ok ? '✓ engine Python sẵn sàng' : '❌ prepare lỗi: ' + (r && r.error));
       } finally { els.pyPrepareBtn.disabled = false; }
     });
+    // 🤖 Antigravity vision toggle (Bước 4) — persist localStorage wb_antigravity
+    if (els.acVisionChk) {
+      try { els.acVisionChk.checked = localStorage.getItem('wb_antigravity') !== '0'; } catch (_) { els.acVisionChk.checked = true; }
+      els.acVisionChk.addEventListener('change', () => {
+        try { localStorage.setItem('wb_antigravity', els.acVisionChk.checked ? '1' : '0'); } catch (_) {}
+        log(els.acVisionChk.checked ? '🤖 AI vision sẽ đi qua Antigravity (vision thuần, không tool).' : '🤖 Đã tắt Antigravity vision — dùng luồng LLM cũ (callLLMJson).');
+      });
+    }
+    if (els.autoRunBtn) els.autoRunBtn.addEventListener('click', () => { wbAutoRun().catch(() => {}); });
+    // ── Antigravity ủy nhiệm whiteboard_pipeline: main gửi event wb_task qua
+    // kênh agentCopilot:event → chạy wbAutoRun → trả kết quả qua agentCopilot:wbResult
+    // (preload agentCopilotWbResult). Chỉ nhận lệnh run_auto — lệnh lạ trả lỗi lộ liễu.
+    if (window.native && typeof window.native.onAgentCopilotEvent === 'function' && typeof window.native.agentCopilotWbResult === 'function') {
+      window.native.onAgentCopilotEvent(async (o) => {
+        if (!o || o.type !== 'wb_task') return;
+        const traLoi = (payload) => { try { window.native.agentCopilotWbResult(payload); } catch (_) {} };
+        if (o.command && o.command !== 'run_auto') { traLoi({ id: o.id, ok: false, error: 'WB_TASK_UNKNOWN_COMMAND: ' + o.command }); return; }
+        try {
+          const summary = await wbAutoRun();
+          traLoi({ id: o.id, ok: true, summary: summary || 'xong trọn chuỗi 1→5' });
+        } catch (e) {
+          traLoi({ id: o.id, ok: false, error: String((e && e.message) || e) });
+        }
+      });
+    }
   }
 
   function init() {
@@ -616,7 +742,7 @@
     listenProgress();
     syncButtons();
     setProgress(0, '—');
-    log('Whiteboard Studio (luồng 6 bước): 1 Nhận kịch bản → 2 Nhận TTS (SRT tự trích xuất) → 3 Phân tích prompt (tách câu + khớp timing .SRT + AI prompt/ảnh) → 4 Sắp xếp dữ liệu (AI khoanh vùng, giờ vẽ khớp câu) → 5 Xem trước (timeline 2 dòng: video + âm thanh) → 6 Xuất Video. Nút Bước 1/2 đổi XANH khi đã nhận.');
+    log('Whiteboard Studio (luồng 6 bước): 1 Nhận kịch bản → 2 Nhận TTS (SRT tự trích xuất) → 3 Phân tích prompt (tách câu + khớp timing .SRT + AI prompt/ảnh) → 4 Sắp xếp dữ liệu (AI khoanh vùng, giờ vẽ khớp câu) → 5 Xem trước (timeline 2 dòng: video + âm thanh) → 6 Xuất Video. Nút Bước 1/2 đổi XANH khi đã nhận. Hoặc bấm "🤖 Chạy tự động 1→5" để Antigravity điều phối trọn chuỗi (chưa có TTS sẽ tự gen ở tab Giọng nói).');
   }
 
   async function stopExport() {
@@ -639,6 +765,10 @@
       Hợp đồng ID giữ nguyên tuyệt đối (bind() đọc #wb-*) ════════ */
   const SHELL_HTML = `
     <div class="wb-root wb-root-v2">
+      <div class="wb-media-row" style="padding:8px 10px;margin-bottom:10px;border:1px solid var(--border);border-radius:10px">
+        <button id="wb-autoRunBtn" class="wb-btn-primary" title="🤖 Chạy tự động trọn chuỗi 1→5: nhận kịch bản → (chưa có TTS thì tự gen ở tab 🎙 Giọng nói, kịch bản dài tự ghép đoạn) → khớp timing .SRT → AI sinh prompt + Flow sinh ảnh line-art theo từng câu → AI vision khoanh vùng + giờ vẽ → Bước 5 sẵn sàng. Cần chọn giọng ở tab Giọng nói + cấu hình AI ở Cài đặt + đăng nhập Flow ở Tạo Ảnh Hàng Loạt.">🤖 Chạy tự động 1→5</button>
+        <span class="wb-media-label">Antigravity orchestration: kịch bản → TTS → SRT → ảnh line-art theo câu → khoanh vùng + giờ vẽ → sẵn sàng xem trước</span>
+      </div>
       <details class="wb-group wb-step wb-step-1" id="wb-step1" open>
         <summary class="wb-group-title"><span class="wb-step-num">1</span><span class="wb-step-name">Kịch bản</span><span class="wb-step-st" id="wb-st1">—</span><span class="wb-step-hint">nhận kịch bản từ tab 📝 Tạo Kịch Bản</span></summary>
         <div class="wb-step-body">
@@ -685,6 +815,7 @@
         <div class="wb-step-body">
         <div class="wb-media-row">
           <button id="wb-arrangeBtn" class="wb-btn-primary" title="AI vision soi TẤT CẢ ảnh cảnh (cảnh thiếu ảnh → lỗi lộ liễu, không bỏ qua ngầm) → khoanh vùng VẬT THỂ (polygon) → phân bổ giờ vẽ theo nhịp kể, KHỚP ĐÚNG khung thời lượng câu (start/end từ SRT ở Bước 3).">🗺 Sắp xếp dữ liệu</button>
+          <label class="wb-media-label" style="display:flex;align-items:center;gap:5px;cursor:pointer" title="Bật: AI vision khoanh vùng đi qua Antigravity (agentCopilot:chat — vision thuần, không tool). Tắt: dùng luồng LLM cũ (callLLMJson). API key chung ở Cài đặt → API."><input type="checkbox" id="wb-acVisionChk" checked style="margin:0"> 🤖 Antigravity</label>
         </div>
         </div>
       </details>

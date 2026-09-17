@@ -17,6 +17,7 @@
     "check": "npm run check:syntax && npm run check:ipc && npm run check:exports && npm run check:shared && npm run check:shared-shadow && npm run check:shadow && npm run check:size && npm run check:toplevel && npm run check:docs && npm run check:selftest",
     "check:exports": "node nova/scripts/exports-contract-check.js",
     "check:docs": "node nova/scripts/docs-sync-check.js",
+    "build:skill-catalog": "node nova/scripts/build-skill-catalog.js",
     "check:selftest": "node nova/scripts/checker-fixture-test.js",
     "scan:lifecycle": "node nova/scripts/lifecycle-log-scan.js",
     "check:all": "npm run check && npm run test:foundation && npm run test:media-protocol && npm run test:t7-ai && npm run test:video-agent && npm run test:voice && npm run test:auto-fix",
@@ -43,6 +44,7 @@
     "test:maintenance": "node nova/core/test-maintenance.js",
     "check:shared-shadow": "node nova/scripts/shared-shadow-check.js",
     "test:viral-cut": "node nova/viral-cut/test.js",
+    "test:dub": "node nova/dubbing/test.js",
     "test:ffx-smoke": "node nova/scripts/ffx-smoke.js",
     "test:t7-ai": "node nova/scripts/t7-ai-core-test.js",
     "test:imzic": "node nova/scripts/imzic-core-test.js"

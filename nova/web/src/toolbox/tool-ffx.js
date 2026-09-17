@@ -1470,6 +1470,92 @@ function ffxEnqueueNorm() {
     ['ffxNormTarget', 'ffxNormKeepVideo'], 'ffxRunNorm');
 }
 
+/* ── 11d) Đổi tốc độ âm thanh (giữ cao độ mặc định — atempo) ── */
+async function ffxRunSpeed() {
+  const id = 'ffxSpeedStatus';
+  try {
+    ffxWireProgress();
+    if (!ffxState.audiofx) { ffxSetStatus(id, 'Chưa chọn file nguồn', true); return; }
+    const speed = Number((document.getElementById('ffxSpeedVal') || {}).value);
+    if (!Number.isFinite(speed) || speed < 0.25 || speed > 4) { ffxSetStatus(id, 'Tốc độ phải là số trong khoảng 0.25–4', true); return; }
+    const keep = !!(document.getElementById('ffxSpeedKeepPitch') || {}).checked;
+    ffxActiveStatus = id; ffxShowProgress(id);
+    ffxSetStatus(id, '⏳ Đang đổi tốc độ ' + speed + '×… (0%)', false);
+    const out = await ffxPickOutput(ffxStripExt(ffxBaseName(ffxState.audiofx)) + '-toc' + String(speed).replace('.', '_') + 'x.' + ffxAudioOutExt(ffxState.audiofx), id);
+    if (!out) { ffxActiveStatus = ''; ffxHideProgress(id); ffxSetStatus(id, '', false); return; }
+    const r = await ffxNative().changeSpeed({ inputPath: ffxState.audiofx, outputPath: out, speed: speed, keepPitch: keep });
+    ffxDone(id, r);
+    if (r && r.ok) {
+      const el = document.getElementById(id);
+      if (el) el.appendChild(document.createTextNode(' · ' + speed + '× ' + (r.keepPitch ? 'giữ cao độ (atempo)' : 'asetrate') + (r.videoCopy ? ' · hình copy' : '')));
+    }
+  } catch (e) { ffxFail(id, e); }
+}
+
+/* ── 11e) Đổi cao độ giữ thời lượng (2026-09-17): asetrate + bù atempo ── */
+async function ffxRunPitch() {
+  const id = 'ffxPitchStatus';
+  try {
+    ffxWireProgress();
+    if (!ffxState.audiofx) { ffxSetStatus(id, 'Chưa chọn file nguồn', true); return; }
+    const st = Number((document.getElementById('ffxPitchVal') || {}).value);
+    if (!Number.isFinite(st) || st === 0 || st < -12 || st > 12) { ffxSetStatus(id, 'Nửa cung phải là số khác 0 trong khoảng −12..12', true); return; }
+    ffxActiveStatus = id; ffxShowProgress(id);
+    ffxSetStatus(id, '⏳ Đang đổi cao độ ' + st + ' nửa cung… (0%)', false);
+    const out = await ffxPickOutput(ffxStripExt(ffxBaseName(ffxState.audiofx)) + '-pitch' + (st > 0 ? '+' + st : st) + '.' + ffxAudioOutExt(ffxState.audiofx), id);
+    if (!out) { ffxActiveStatus = ''; ffxHideProgress(id); ffxSetStatus(id, '', false); return; }
+    const r = await ffxNative().pitch({ inputPath: ffxState.audiofx, outputPath: out, semitones: st });
+    ffxDone(id, r);
+    if (r && r.ok) {
+      const el = document.getElementById(id);
+      if (el) el.appendChild(document.createTextNode(' · ' + st + ' nửa cung · thời lượng giữ nguyên' + (r.videoCopy ? ' · hình copy' : '')));
+    }
+  } catch (e) { ffxFail(id, e); }
+}
+
+/* ── 11e) Đóng phụ đề cứng (burn-in — filter subtitles/libass, re-encode hình).
+   Nguồn video dùng chung ô "Nguồn (video hoặc âm thanh)" của panel này. ── */
+var ffxSubPath = '';
+
+async function ffxPickSrt() {
+  const n = ffxNative();
+  if (!n || !n.pickSrt) return;
+  const r = await n.pickSrt();
+  if (r && r.path) {
+    ffxSubPath = r.path;
+    ffxSetInputLabel('sub', r.path, 'ffxSubInput');
+  }
+}
+
+async function ffxRunSub() {
+  const id = 'ffxSubStatus';
+  try {
+    ffxWireProgress();
+    if (!ffxState.audiofx) { ffxSetStatus(id, 'Chưa chọn video nguồn', true); return; }
+    if (!ffxSubPath) { ffxSetStatus(id, 'Chưa chọn file SRT', true); return; }
+    const size = Number((document.getElementById('ffxSubSize') || {}).value);
+    const margin = Number((document.getElementById('ffxSubMargin') || {}).value);
+    const gpu = !!((document.getElementById('ffxSubGpu') || {}).checked);
+    ffxActiveStatus = id; ffxShowProgress(id);
+    ffxSetStatus(id, '⏳ Đang đóng phụ đề cứng… (0%)', false);
+    const out = await ffxPickOutput(ffxStripExt(ffxBaseName(ffxState.audiofx)) + '-phude.mp4', id);
+    if (!out) { ffxActiveStatus = ''; ffxHideProgress(id); ffxSetStatus(id, '', false); return; }
+    const r = await ffxNative().burnSubtitles({
+      inputPath: ffxState.audiofx,
+      srtPath: ffxSubPath,
+      outputPath: out,
+      fontSize: Number.isFinite(size) && size > 0 ? size : undefined,
+      marginV: Number.isFinite(margin) && margin >= 0 ? margin : undefined,
+      useGpu: gpu,
+    });
+    ffxDone(id, r);
+    if (r && r.ok) {
+      const el = document.getElementById(id);
+      if (el) el.appendChild(document.createTextNode(' · cỡ chữ ' + r.fontSize + ' · ' + r.encoder));
+    }
+  } catch (e) { ffxFail(id, e); }
+}
+
 /* ── Kéo-thả file từ Explorer vào panel tool (Electron 43 gỡ File.path → phải qua
    webUtils.getPathForFile do preload expose là ffx.pathForFile) ── */
 var FFX_DROP_EXT = ['mp4', 'mov', 'webm', 'm4v', 'mkv', 'avi', 'ts', 'gif', 'mp3', 'm4a', 'wav', 'aac', 'ogg', 'flac'];

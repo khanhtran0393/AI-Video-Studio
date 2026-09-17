@@ -70,6 +70,7 @@ function acacheBoot(){
   });
   // 3) Sweep 3s: bắt mọi thay đổi (kể cả out.value = … từ code) rồi lưu
   setInterval(() => {
+    if (document.hidden) return;   // 2026-09-17perf: cửa sổ ẩn → bỏ nhịp sweep, tiết kiệm CPU nền
     ACACHE_TEXT_BINDS.forEach(b => {
       const id = b[0], key = b[1];
       const el = document.getElementById(id);

@@ -209,6 +209,65 @@ t('buildExportPlan: tên file thứ tự + crop916 + thiếu outDir → lỗi l�
   assert.strictEqual(plan[0].startSec, 1);
   assert.throws(() => E.buildExportPlan(hl, { outDir: '' }), /VC_NO_OUTDIR/);
 });
+t('buildExportPlan: hook hợp lệ (nằm trong [start,end] + ≥0.5s) → hookOutPath, không thì null', () => {
+  const hlWithHook = [{ startMs: 1000, endMs: 20000, title: 'A', hookStartMs: 3000, hookEndMs: 5000 }];
+  const plan = E.buildExportPlan(hlWithHook, { outDir: 'D:/o' });
+  assert.ok(plan[0].hookOutPath, 'hookOutPath phải có khi hook hợp lệ: ' + plan[0].hookOutPath);
+  assert.ok(plan[0].hookOutPath.endsWith('-hook.mp4'), 'tên hook đúng hậu tố: ' + plan[0].hookOutPath);
+  assert.strictEqual(plan[0].hookStartSec, 3);
+  assert.strictEqual(plan[0].hookEndSec, 5);
+  /* hook quá ngắn (<500ms) → coi như không hợp lệ */
+  const hlShort = [{ startMs: 0, endMs: 20000, title: 'B', hookStartMs: 1000, hookEndMs: 1100 }];
+  const p2 = E.buildExportPlan(hlShort, { outDir: 'D:/o' });
+  assert.strictEqual(p2[0].hookOutPath, null, 'hook <0.5s → null');
+  /* hook lệch khỏi [start,end] → null */
+  const hlOob = [{ startMs: 0, endMs: 20000, title: 'C', hookStartMs: 25000, hookEndMs: 27000 }];
+  const p3 = E.buildExportPlan(hlOob, { outDir: 'D:/o' });
+  assert.strictEqual(p3[0].hookOutPath, null, 'hook ngoài [start,end] → null');
+  /* không hook → null */
+  const hlNone = [{ startMs: 0, endMs: 10000, title: 'D' }];
+  const p4 = E.buildExportPlan(hlNone, { outDir: 'D:/o' });
+  assert.strictEqual(p4[0].hookOutPath, null);
+});
+t('padHighlightEdges: lùi 200ms start / tiến 300ms end, không mutate input, clamp durationMs', () => {
+  const hl = [{ startMs: 10000, endMs: 30000, title: 'A' }];
+  const out = E.padHighlightEdges(hl, { durationMs: 60000 });
+  assert.notStrictEqual(out[0], hl[0], 'trả mảng mới');
+  assert.strictEqual(out[0].startMs, 9800, 'lùi 200ms');
+  assert.strictEqual(out[0].endMs, 30300, 'tiến 300ms');
+  assert.strictEqual(hl[0].startMs, 10000, 'không mutate input');
+  /* clamp durationMs */
+  const out2 = E.padHighlightEdges(hl, { durationMs: 30000 });
+  assert.strictEqual(out2[0].endMs, 30000, 'không vượt durationMs');
+  /* clamp 0 (start âm) */
+  const out3 = E.padHighlightEdges([{ startMs: 100, endMs: 10000, title: 'X' }], { durationMs: 50000 });
+  assert.strictEqual(out3[0].startMs, 0, 'không âm');
+});
+t('padHighlightEdges: clip quá ngắn (<3×pad tổng) → giữ nguyên KHÔNG pad', () => {
+  const hl = [{ startMs: 0, endMs: 800, title: 'mini' }]; // 800 < 3*(200+300)=1500
+  const out = E.padHighlightEdges(hl, { durationMs: 30000 });
+  assert.strictEqual(out[0].startMs, 0);
+  assert.strictEqual(out[0].endMs, 800);
+  assert.strictEqual(out[0].edgePadded, undefined, 'không gắn cờ edgePadded');
+});
+t('padHighlightEdges: chống chồng lấn highlight kế cận — endMs(i) ≤ startMs(i+1)−1', () => {
+  /* A=[0,10000], B=[10500,20000]. Sau pad thô: A=[0,10300], B=[10300,20300] (B bị kéo
+     lùi start để giữ hook còn 300ms; clamp 2-pass: A.endMs chỉ tiến tới tối đa là
+     10299 để A vẫn ≥ 1ms và B vẫn có ≥ 1ms). */
+  const hl = [
+    { startMs: 0, endMs: 10000, title: 'A' },
+    { startMs: 10500, endMs: 20000, title: 'B' }, // cách 500ms < pad tổng 500ms
+  ];
+  const out = E.padHighlightEdges(hl, { durationMs: 60000 });
+  const A = out[0], B = out[1];
+  assert.ok(A.endMs < B.startMs, 'A.endMs < B.startMs: ' + A.endMs + ' vs ' + B.startMs);
+  assert.ok(B.startMs - A.endMs <= 1, 'chỉ hở đúng 1ms (an toàn): ' + (B.startMs - A.endMs));
+  /* cả 2 highlight đều còn dài (không rỗng) */
+  assert.ok(A.endMs - A.startMs >= 1, 'A còn nội dung: ' + (A.endMs - A.startMs));
+  assert.ok(B.endMs - B.startMs >= 1, 'B còn nội dung: ' + (B.endMs - B.startMs));
+  assert.strictEqual(A.edgePadded, true);
+  assert.strictEqual(B.edgePadded, true);
+});
 t('genTitleLocal: deterministic, bỏ dấu câu cuối', () => {
   const title = E.genTitleLocal('Bạn có biết bí mật này không? Đây là phần tiếp theo rất dài để cắt bớt cho vừa giới hạn');
   assert.ok(title.length <= 60, 'title quá dài: ' + title);
@@ -794,6 +853,35 @@ t('Panel: payload export dùng `aspect` (không còn `crop916`), default maxClip
   assert.ok(/<option value="169">/.test(src), 'phải có lựa chọn 16:9');
   assert.ok(/<option value="916">/.test(src), 'phải có lựa chọn 9:16');
 });
+t('Panel: adaptivePad opt-in — markup + payload + sync disabled theo vcEdgePad', () => {
+  const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'web', 'viral-cut-panel.js'), 'utf8');
+  assert.ok(src.includes('id="vcAdaptivePad"'), 'markup thiếu checkbox vcAdaptivePad');
+  assert.ok(/adaptivePad:\s*!!\(vcEl\('vcAdaptivePad'\)\s*\|\|\s*\{\}\)\.checked/.test(src), 'payload export phải gửi adaptivePad từ checkbox');
+  assert.ok(/vcSyncAdaptive/.test(src) && /onChg\('vcEdgePad',\s*vcSyncAdaptive\)/.test(src), 'phải có sync disabled adaptive theo edgePad (IPC guard edgePad && adaptivePad)');
+  /* mặc định TẮT (opt-in) — checkbox KHÔNG có `checked` */
+  const m = src.match(/<input type="checkbox" id="vcAdaptivePad"[^>]*>/);
+  assert.ok(m && !m[0].includes('checked'), 'vcAdaptivePad phải mặc định TẮT (opt-in)');
+});
+t('Panel: click-on-sub-bar seek — hook bar bind data-hookbar + delegation tua theo vị trí click', () => {
+  const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'web', 'viral-cut-panel.js'), 'utf8');
+  assert.ok(/data-hookbar="' \+ i \+ '"/.test(src), 'markup sub-bar hook phải bind data-hookbar=<index>');
+  assert.ok(!/cursor:help/.test(src), 'sub-bar hook phải đổi cursor:help → cursor:pointer (click được)');
+  assert.ok(/t\.closest\('\[data-hookbar\]'\)/.test(src), 'delegation click trong vcHlList phải bắt data-hookbar');
+  assert.ok(/hookStartMs \+ frac \* \(h\.hookEndMs - h\.hookStartMs\)/.test(src), 'phải nội suy ms theo vị trí click trong khoảng hook');
+  assert.ok(/vcSetPick\(i\)/.test(src.split("t.closest('[data-hookbar]')")[1].split('data-prev')[0]), 'click sub-bar phải chọn luôn card (vcSetPick)');
+});
+t('Panel + IPC: forceAccurate opt-in — mặc định TẮT, ép re-encode + key cache hook phân biệt 2 chế độ', () => {
+  const psrc = require('fs').readFileSync(require('path').join(__dirname, '..', 'web', 'viral-cut-panel.js'), 'utf8');
+  assert.ok(psrc.includes('id="vcForceAccurate"'), 'markup thiếu checkbox vcForceAccurate');
+  const m = psrc.match(/<input type="checkbox" id="vcForceAccurate"[^>]*>/);
+  assert.ok(m && !m[0].includes('checked'), 'vcForceAccurate phải mặc định TẮT (stream-copy vẫn là mặc định)');
+  assert.ok(/forceAccurate:\s*!!\(vcEl\('vcForceAccurate'\)\s*\|\|\s*\{\}\)\.checked/.test(psrc), 'payload export phải gửi forceAccurate từ checkbox');
+  const isrc = require('fs').readFileSync(require('path').join(__dirname, 'ipc.js'), 'utf8');
+  assert.ok(/const forceAccurate = p\.forceAccurate === true;/.test(isrc), 'IPC phải opt-in forceAccurate (=== true, mặc định TẮT)');
+  assert.strictEqual((isrc.match(/\(item\.vf \|\| forceAccurate\)/g) || []).length, 2, 'cả 2 điểm cắt (hook + clip chính) phải tôn trọng forceAccurate');
+  assert.ok(isrc.includes("item.vf || (forceAccurate ? 'accurate' : null)"), 'key cache hook phải đánh dấu chế độ accurate để không hit nhầm bản copy');
+  assert.strictEqual((isrc.match(/item\.aspect, itemVf\)/g) || []).length, 2, 'cả 2 chỗ tính hookCacheKey (đọc + ghi meta) phải dùng itemVf');
+});
 t('Panel: grid 2 khung mỗi hàng + báo lỗi preview lộ liễu + đủ điều khiển khung 3', () => {
   const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'web', 'viral-cut-panel.js'), 'utf8');
   assert.ok(/\.vc-hls \{[^}]*repeat\(2, minmax\(0, 1fr\)\)/.test(src), 'danh sách highlight là grid 2 cột');
@@ -1104,6 +1192,401 @@ t('HỢP ĐỒNG TĨNH P1: nguồn YouTube — IPC + preload + UI Tạo Kịch B
   assert.ok(tsJs.includes('tsYtBrief.text'), 'prompt phải dùng đúng text từ brief');
   assert.ok(tsJs.includes('chưa hỗ trợ chế độ Novel'), 'Novel + nguồn phải chặn lộ liễu');
 });
+/* ── Re-sync phụ đề theo tiếng nói thật (2026-09-17 — hợp đồng `viralCut:resyncSrt`) ── */
+t('resyncCuesToSpeech: kéo cue về biên tiếng nói gần nhất trong tolerance', () => {
+  const cues = [{ startMs: 1100, endMs: 2100, text: 'x' }];
+  const segs = [{ startMs: 1500, endMs: 2500 }];
+  const r = E.resyncCuesToSpeech(cues, segs, { toleranceMs: 1500 });
+  assert.strictEqual(r.matched, 1);
+  assert.strictEqual(r.cues[0].startMs, 1500);
+  assert.strictEqual(r.cues[0].endMs, 2500); // giữ nguyên độ dài cue
+});
+t('resyncCuesToSpeech: ngoài tolerance → giữ nguyên, đếm untouched', () => {
+  const cues = [{ startMs: 1000, endMs: 2000, text: 'x' }];
+  const r = E.resyncCuesToSpeech(cues, [{ startMs: 6000, endMs: 7000 }], { toleranceMs: 1500 });
+  assert.strictEqual(r.untouched, 1);
+  assert.strictEqual(r.matched, 0);
+  assert.strictEqual(r.cues[0].startMs, 1000);
+});
+t('resyncCuesToSpeech: cue sau không đè cue trước (clamp + khai báo)', () => {
+  const cues = [
+    { startMs: 1000, endMs: 2000, text: 'a' },
+    { startMs: 1100, endMs: 2200, text: 'b' },
+  ];
+  const r = E.resyncCuesToSpeech(cues, [
+    { startMs: 1200, endMs: 2200 },
+    { startMs: 1300, endMs: 2300 },
+  ], { toleranceMs: 1500 });
+  assert.ok(r.cues[1].startMs > r.cues[0].startMs);
+  assert.ok(r.adjustments.some((a) => /clamp/.test(a.via)));
+});
+t('resyncCuesToSpeech: segments rỗng → tất cả untouched, không bịa (Luật 10)', () => {
+  const r = E.resyncCuesToSpeech([{ startMs: 0, endMs: 100, text: 'a' }], [], {});
+  assert.strictEqual(r.untouched, 1);
+  assert.strictEqual(r.matched, 0);
+});
+/* ── 15. HOOK CACHE KEY (2026-09-17) — sha1 ngắn, deterministic, có hay không vf.
+   Key phụ thuộc (videoPath, hookStartMs, hookEndMs, aspect, vf) — đổi bất kỳ
+   tham số nào phải đổi key. Mục đích: skip ffmpeg khi export lại cùng hook. */
+t('hookCacheKey: cùng input → cùng key (deterministic, Luật 8)', () => {
+  const k1 = E.hookCacheKey('C:/v/source.mp4', 1234, 5678, 'keep', null);
+  const k2 = E.hookCacheKey('C:/v/source.mp4', 1234, 5678, 'keep', null);
+  assert.strictEqual(typeof k1, 'string');
+  assert.strictEqual(k1.length, 16, 'sha1 cắt 16 hex');
+  assert.strictEqual(k1, k2);
+});
+t('hookCacheKey: đổi bất kỳ tham số → key đổi (cache miss đúng)', () => {
+  const base = E.hookCacheKey('C:/v/source.mp4', 1234, 5678, 'keep', null);
+  assert.notStrictEqual(E.hookCacheKey('C:/v/other.mp4', 1234, 5678, 'keep', null), base, 'đổi videoPath → key đổi');
+  assert.notStrictEqual(E.hookCacheKey('C:/v/source.mp4', 1235, 5678, 'keep', null), base, 'đổi hookStartMs 1ms → key đổi');
+  assert.notStrictEqual(E.hookCacheKey('C:/v/source.mp4', 1234, 5679, 'keep', null), base, 'đổi hookEndMs 1ms → key đổi');
+  assert.notStrictEqual(E.hookCacheKey('C:/v/source.mp4', 1234, 5678, '916', null), base, 'đổi aspect → key đổi');
+  assert.notStrictEqual(E.hookCacheKey('C:/v/source.mp4', 1234, 5678, 'keep', 'crop=iw*9/16'), base, 'đổi vf → key đổi');
+  /* aspect null/undefined → fallback 'keep' → cùng key với 'keep' tường minh */
+  assert.strictEqual(E.hookCacheKey('C:/v/source.mp4', 1234, 5678, null, null), base, 'aspect null ≡ "keep"');
+  assert.strictEqual(E.hookCacheKey('C:/v/source.mp4', 1234, 5678, undefined, null), base, 'aspect undefined ≡ "keep"');
+});
+t('hookCacheKey: input không hợp lệ → null (không bịa key)', () => {
+  assert.strictEqual(E.hookCacheKey('', 0, 100, 'keep', null), null, 'videoPath rỗng → null');
+  assert.strictEqual(E.hookCacheKey(null, 0, 100, 'keep', null), null);
+  assert.strictEqual(E.hookCacheKey('C:/v/x.mp4', NaN, 100, 'keep', null), null, 'startMs NaN → null');
+  assert.strictEqual(E.hookCacheKey('C:/v/x.mp4', 0, Infinity, 'keep', null), null, 'endMs Infinity → null');
+});
+/* ── 16. HOOK CLAMP SAU PAD (2026-09-17) — khi pad biên khiến hook trượt ra ngoài
+   [startMs, endMs] mới, neo hook về biên trong. Nếu còn lại < 500ms → vô hiệu. */
+t('padHighlightEdges: hook nằm gọn trong pad → giữ nguyên, hookClamped không set', () => {
+  const h = [{ startMs: 10000, endMs: 20000, hookStartMs: 10200, hookEndMs: 10700, title: 'a' }];
+  const r = E.padHighlightEdges(h, { durationMs: 30000 });
+  assert.strictEqual(r[0].startMs, 9800, 'pad start 200');
+  assert.strictEqual(r[0].endMs, 20300, 'pad end 300');
+  assert.strictEqual(r[0].hookStartMs, 10200, 'hook trong [9800,20300] → giữ nguyên');
+  assert.strictEqual(r[0].hookEndMs, 10700);
+  assert.ok(!r[0].hookClamped, 'không set hookClamped khi hook không bị clamp');
+});
+t('padHighlightEdges: hook bị trượt ra biên trước (startMs pad nhỏ hơn hook) → neo về newStartMs', () => {
+  /* hookStartMs nằm trước cả newStartMs (sau pad) nhưng hook dài đủ để sau
+     khi neo về newStartMs vẫn còn ≥ 500ms. hookEndMs vẫn nằm trong vùng pad. */
+  const h = [{ startMs: 10000, endMs: 20000, hookStartMs: 9700, hookEndMs: 10500, title: 'b' }];
+  const r = E.padHighlightEdges(h, { durationMs: 30000 });
+  assert.strictEqual(r[0].startMs, 9800);
+  assert.strictEqual(r[0].hookStartMs, 9800, 'hookStartMs < newStartMs → neo về newStartMs');
+  assert.strictEqual(r[0].hookEndMs, 10500, 'hookEndMs vẫn trong [9800, 20300]');
+  assert.strictEqual(r[0].hookClamped, true);
+});
+t('padHighlightEdges: hook bị trượt ra biên sau (endMs pad nhỏ hơn hook) → kéo về newEndMs', () => {
+  const h = [{ startMs: 10000, endMs: 20000, hookStartMs: 19800, hookEndMs: 20500, title: 'c' }];
+  const r = E.padHighlightEdges(h, { durationMs: 30000 });
+  assert.strictEqual(r[0].endMs, 20300);
+  assert.strictEqual(r[0].hookStartMs, 19800, 'hookStartMs vẫn trong [9800, 20300]');
+  assert.strictEqual(r[0].hookEndMs, 20300, 'hookEndMs > newEndMs → kéo về newEndMs');
+  assert.strictEqual(r[0].hookClamped, true);
+});
+t('padHighlightEdges: hook bị clamp thu nhỏ < 500ms → vô hiệu hoá (buildExportPlan trả null)', () => {
+  /* hook nằm hoàn toàn trước newStartMs → sau khi neo về newStartMs, hook còn 0ms */
+  const h = [{ startMs: 10000, endMs: 20000, hookStartMs: 9700, hookEndMs: 9750, title: 'd' }];
+  const r = E.padHighlightEdges(h, { durationMs: 30000 });
+  assert.strictEqual(r[0].hookStartMs, null, 'hook quá ngắn → vô hiệu');
+  assert.strictEqual(r[0].hookEndMs, null);
+  assert.strictEqual(r[0].hookClamped, 'invalidated');
+  /* buildExportPlan phải trả hookOutPath: null cho highlight này */
+  const plan = E.buildExportPlan(r, { outDir: 'C:/o' });
+  assert.strictEqual(plan[0].hookOutPath, null);
+});
+t('padHighlightEdges: clip quá ngắn KHÔNG pad → hook giữ nguyên tuyệt đối', () => {
+  const h = [{ startMs: 10000, endMs: 10100, hookStartMs: 9950, hookEndMs: 10050, title: 'e' }];
+  /* len 100 < (200+300)*3 = 1500 → không pad */
+  const r = E.padHighlightEdges(h, { durationMs: 30000 });
+  assert.strictEqual(r[0].startMs, 10000, 'giữ nguyên startMs');
+  assert.strictEqual(r[0].endMs, 10100);
+  assert.strictEqual(r[0].hookStartMs, 9950, 'hook giữ nguyên khi không pad');
+  assert.strictEqual(r[0].hookEndMs, 10050);
+  assert.ok(!r[0].edgePadded, 'không set edgePadded');
+  assert.ok(!r[0].hookClamped, 'không set hookClamped');
+});
+
+/* ── hookBarLayout (đề xuất 3: hook preview sub-bar trong panel) ──
+   Công thức % dùng render hook sub-bar trong viral-cut-panel.js; engine có
+   bản thuần tương đương để test (renderer no build step không require được). */
+t('hookBarLayout: hook nằm đầu clip → left=0, width=2% (min)', () => {
+  const hb = E.hookBarLayout({ startMs: 0, endMs: 30000, hookStartMs: 0, hookEndMs: 3000 });
+  assert.strictEqual(hb.valid, true);
+  assert.strictEqual(hb.left, 0);
+  assert.strictEqual(hb.width, 10, '3s/30s = 10%');
+});
+t('hookBarLayout: hook giữa clip → tính đúng %', () => {
+  const hb = E.hookBarLayout({ startMs: 10000, endMs: 20000, hookStartMs: 10200, hookEndMs: 10700 });
+  /* (10200-10000)/10000 = 2% left; (10700-10000)/10000 = 7% right → width 5% */
+  assert.ok(Math.abs(hb.left - 2) < 1e-9, 'left 2%, thực tế ' + hb.left);
+  assert.ok(Math.abs(hb.width - 5) < 1e-9, 'width 5%, thực tế ' + hb.width);
+});
+t('hookBarLayout: hook trượt biên (clamp) → vẫn vẽ được phần còn lại', () => {
+  /* Khi padHighlightEdges kéo hook về newStartMs, hookStartMs có thể = startMs → left=0 */
+  const hb = E.hookBarLayout({ startMs: 9800, endMs: 20300, hookStartMs: 9800, hookEndMs: 10500 });
+  assert.strictEqual(hb.left, 0);
+  /* (10500-9800)/(20300-9800) = 700/10500 = 6.67% */
+  assert.ok(Math.abs(hb.width - 6.67) < 0.01, 'width ~6.67%, thực tế ' + hb.width);
+});
+t('hookBarLayout: hook quá nhỏ < 0.5% → width=2% (min hiển thị)', () => {
+  /* 100ms hook trong clip 60s = 0.167% → width min 2% */
+  const hb = E.hookBarLayout({ startMs: 0, endMs: 60000, hookStartMs: 5000, hookEndMs: 5100 });
+  assert.strictEqual(hb.left.toFixed(2), '8.33');
+  assert.strictEqual(hb.width, 2, 'width min 2%');
+});
+t('hookBarLayout: hook ngoài [startMs,endMs] (trượt hẳn) → vẫn clamp % an toàn', () => {
+  /* Trường hợp xấu: hookStartMs < startMs → left âm → clamp 0; hookEndMs > endMs → rt > 100 → clamp 100 */
+  const hb = E.hookBarLayout({ startMs: 10000, endMs: 20000, hookStartMs: 9500, hookEndMs: 21000 });
+  assert.strictEqual(hb.left, 0, 'clamp left về 0');
+  assert.strictEqual(hb.width, 100, 'clamp rt về 100 → width 100');
+});
+t('hookBarLayout: highlight không có hook → valid=false', () => {
+  const hb = E.hookBarLayout({ startMs: 0, endMs: 10000, hookStartMs: null, hookEndMs: null });
+  assert.strictEqual(hb.valid, false);
+});
+t('hookBarLayout: highlight degenerate (endMs<=startMs) → valid=false', () => {
+  const hb = E.hookBarLayout({ startMs: 5000, endMs: 5000, hookStartMs: 5000, hookEndMs: 6000 });
+  assert.strictEqual(hb.valid, false);
+});
+t('buildCopyArgs: shape đầy đủ + đúng thứ tự flags', () => {
+  const args = E.buildCopyArgs('D:/v/in.mp4', 12.5, 30, 'D:/v/out.mp4');
+  assert.deepStrictEqual(args, [
+    '-y', '-ss', '12.5', '-i', 'D:/v/in.mp4', '-t', '30',
+    '-c', 'copy', '-movflags', '+faststart', 'D:/v/out.mp4',
+  ]);
+});
+t('buildCopyArgs: luôn -ss TRƯỚC -i (input seek, snap keyframe)', () => {
+  /* Quan trọng: thứ tự -ss trước -i = input seek (nhanh, dùng index).
+     Nếu -ss sau -i = output seek (chậm, decode toàn bộ từ đầu) → sai ý đồ stream-copy. */
+  const args = E.buildCopyArgs('/v.mp4', 5, 10, '/o.mp4');
+  const ssIdx = args.indexOf('-ss');
+  const iIdx = args.indexOf('-i');
+  assert.ok(ssIdx >= 0 && iIdx >= 0, 'có -ss và -i');
+  assert.ok(ssIdx < iIdx, '-ss phải trước -i (input seek)');
+});
+t('buildCopyArgs: stringify số (12.5, 0, 30) thành string để CLI parse', () => {
+  const args = E.buildCopyArgs('/v.mp4', 12.5, 0, '/o.mp4');
+  /* durationSec=0 vẫn tạo args — caller cutFfmpegFast sẽ reject sớm ở durationSec < 0.1,
+     nhưng builder vẫn phải trả về hợp lệ (không null) để không phải xử lý 2 chỗ. */
+  assert.strictEqual(args[args.indexOf('-t') + 1], '0');
+  assert.strictEqual(args[args.indexOf('-ss') + 1], '12.5');
+});
+t('buildCopyArgs: output path luôn cuối (ffmpeg positional output)', () => {
+  const args = E.buildCopyArgs('/v.mp4', 1, 2, 'D:/viralcut/clip-01-hook.mp4');
+  assert.strictEqual(args[args.length - 1], 'D:/viralcut/clip-01-hook.mp4');
+});
+/* ══ P4 (2026-09-17): adaptive pad qua silence windows ══════════════════════
+   - computeAdaptivePadMs: helper thuần tính biên pad "thông minh".
+   - padHighlightEdges: nhận thêm opts.adaptivePadFn (opt-in, mặc định không có → giữ hành vi cũ). */
+t('computeAdaptivePadMs: không có silence → fallback pad cố định 200/300ms', () => {
+  const h = { startMs: 10000, endMs: 15000 };
+  const r = E.computeAdaptivePadMs(h, [], { durationMs: 30000 });
+  assert.strictEqual(r.startMs, 9800, 'lùi 200ms');
+  assert.strictEqual(r.endMs, 15300, 'tiến 300ms');
+  assert.strictEqual(r.adaptiveStart, false);
+  assert.strictEqual(r.adaptiveEnd, false);
+  assert.strictEqual(r.reason, 'fixed');
+});
+t('computeAdaptivePadMs: có silence TRƯỚC startMs trong vùng pad → cắt sát cuối silence + 10ms', () => {
+  const h = { startMs: 10000, endMs: 15000 };
+  const gaps = [{ startMs: 9500, endMs: 9800 }];
+  const r = E.computeAdaptivePadMs(h, gaps, { durationMs: 30000 });
+  assert.strictEqual(r.startMs, 9810, 'cắt sát cuối silence + 10ms buffer');
+  assert.strictEqual(r.endMs, 15300, 'biên end không có silence → giữ pad cố định');
+  assert.strictEqual(r.adaptiveStart, true, 'adaptiveStart=true vì có đổi');
+  assert.strictEqual(r.adaptiveEnd, false);
+  assert.strictEqual(r.reason, 'silence-before');
+});
+t('computeAdaptivePadMs: có silence SAU endMs trong vùng pad → cắt sát đầu silence − 10ms', () => {
+  const h = { startMs: 10000, endMs: 15000 };
+  const gaps = [{ startMs: 15500, endMs: 16000 }];
+  const r = E.computeAdaptivePadMs(h, gaps, { durationMs: 30000 });
+  assert.strictEqual(r.startMs, 9800, 'biên start không có silence');
+  assert.strictEqual(r.endMs, 15490, 'cắt sát đầu silence − 10ms');
+  assert.strictEqual(r.reason, 'silence-after');
+});
+t('computeAdaptivePadMs: có silence CẢ HAI bên → cắt cả hai mép (reason=silence-both)', () => {
+  const h = { startMs: 10000, endMs: 15000 };
+  const gaps = [
+    { startMs: 9200, endMs: 9700 },
+    { startMs: 15400, endMs: 16200 },
+  ];
+  const r = E.computeAdaptivePadMs(h, gaps, { durationMs: 30000 });
+  assert.strictEqual(r.startMs, 9710);
+  assert.strictEqual(r.endMs, 15390);
+  assert.strictEqual(r.reason, 'silence-both');
+});
+t('computeAdaptivePadMs: silence ngoài vùng pad (xa quá) → KHÔNG ảnh hưởng', () => {
+  const h = { startMs: 10000, endMs: 15000 };
+  const gaps = [{ startMs: 0, endMs: 500 }];
+  const r = E.computeAdaptivePadMs(h, gaps, { durationMs: 30000 });
+  assert.strictEqual(r.startMs, 9800);
+  assert.strictEqual(r.endMs, 15300);
+  assert.strictEqual(r.reason, 'fixed');
+});
+t('computeAdaptivePadMs: nhiều silence ở biên → chọn GẦN startMs nhất', () => {
+  const h = { startMs: 10000, endMs: 15000 };
+  const gaps = [
+    { startMs: 8800, endMs: 9200 },
+    { startMs: 9700, endMs: 9850 },
+  ];
+  const r = E.computeAdaptivePadMs(h, gaps, { durationMs: 30000 });
+  assert.strictEqual(r.startMs, 9860, 'chọn silence gần startMs nhất');
+});
+t('computeAdaptivePadMs: pad=0 → không có vùng dò → fixed', () => {
+  const h = { startMs: 10000, endMs: 15000 };
+  const gaps = [{ startMs: 9500, endMs: 9800 }];
+  const r = E.computeAdaptivePadMs(h, gaps, { padStartMs: 0, padEndMs: 0, durationMs: 30000 });
+  assert.strictEqual(r.startMs, 10000);
+  assert.strictEqual(r.endMs, 15000);
+  assert.strictEqual(r.reason, 'fixed');
+});
+t('padHighlightEdges: adaptivePadFn opt-in — clip đủ dài thì dùng hàm custom', () => {
+  const h = [{ startMs: 10000, endMs: 15000, title: 'a' }];
+  const fn = (hl) => E.computeAdaptivePadMs(hl, [{ startMs: 9500, endMs: 9800 }], { durationMs: 30000 });
+  const out = E.padHighlightEdges(h, { durationMs: 30000, adaptivePadFn: fn });
+  assert.strictEqual(out[0].startMs, 9810);
+  assert.strictEqual(out[0].endMs, 15300);
+  assert.strictEqual(out[0].edgePadded, true);
+  assert.ok(out[0].edgePadAdaptive, 'cờ edgePadAdaptive=true (adaptive đã dùng)');
+  assert.strictEqual(out[0].edgePadReason, 'silence-before');
+});
+t('padHighlightEdges: KHÔNG truyền adaptivePadFn → giữ hành vi cũ 100% (compat ngược)', () => {
+  const h = [{ startMs: 10000, endMs: 15000, title: 'a' }];
+  const out = E.padHighlightEdges(h, { durationMs: 30000 });
+  assert.strictEqual(out[0].startMs, 9800);
+  assert.strictEqual(out[0].endMs, 15300);
+  assert.ok(!out[0].edgePadAdaptive, 'không có cờ edgePadAdaptive');
+});
+t('padHighlightEdges: adaptivePadFn + clip quá ngắn (<3×pad) → KHÔNG gọi fn', () => {
+  const h = [{ startMs: 10000, endMs: 10100, title: 'short' }];
+  let called = false;
+  const fn = (hl) => { called = true; return E.computeAdaptivePadMs(hl, [], {}); };
+  const out = E.padHighlightEdges(h, { durationMs: 30000, adaptivePadFn: fn });
+  assert.strictEqual(out[0].startMs, 10000);
+  assert.strictEqual(out[0].endMs, 10100);
+  assert.strictEqual(called, false);
+  assert.ok(!out[0].edgePadded);
+});
+/* ══ SILENCE CACHE (P4-cache, 2026-09-17) ═══════════════════════════════════ */
+t('silenceCacheKey: hash 12 hex, deterministic, đổi video/duration → key khác; thiếu input → null', () => {
+  const k1 = E.silenceCacheKey('D:/a.mp4', 61.5);
+  const k2 = E.silenceCacheKey('D:/a.mp4', 61.5);
+  const k3 = E.silenceCacheKey('D:/a.mp4', 62);
+  const k4 = E.silenceCacheKey('D:/b.mp4', 61.5);
+  assert.ok(/^[0-9a-f]{12}$/.test(k1), 'key phải là 12 hex');
+  assert.strictEqual(k1, k2);
+  assert.notStrictEqual(k1, k3, 'đổi duration phải đổi key');
+  assert.notStrictEqual(k1, k4, 'đổi video phải đổi key');
+  assert.strictEqual(E.silenceCacheKey('', 61.5), null);
+  assert.strictEqual(E.silenceCacheKey('D:/a.mp4', 0), null);
+  assert.strictEqual(E.silenceCacheKey('D:/a.mp4', -1), null);
+  assert.strictEqual(E.silenceCacheKey(null, 61.5), null);
+});
+t('parseSilenceCache: JSON hợp lệ khớp ctx → gaps; sai bất kỳ → null (không ném)', () => {
+  const ctx = { videoPath: 'D:/a.mp4', durationSec: 61.5 };
+  const good = JSON.stringify({ videoPath: 'D:/a.mp4', durationSec: 61.5, gaps: [{ startMs: 9500, endMs: 9800 }] });
+  assert.deepStrictEqual(E.parseSilenceCache(good, ctx), [{ startMs: 9500, endMs: 9800 }]);
+  /* JSON hỏng / rỗng */
+  assert.strictEqual(E.parseSilenceCache('không phải json', ctx), null);
+  assert.strictEqual(E.parseSilenceCache('', ctx), null);
+  assert.strictEqual(E.parseSilenceCache('null', ctx), null);
+  /* ctx lệch — cache của video/duration KHÁC phải bị từ chối */
+  assert.strictEqual(E.parseSilenceCache(good, { videoPath: 'D:/b.mp4', durationSec: 61.5 }), null);
+  assert.strictEqual(E.parseSilenceCache(good, { videoPath: 'D:/a.mp4', durationSec: 62 }), null);
+  assert.strictEqual(E.parseSilenceCache(good, {}), null);
+  /* gaps sai shape */
+  assert.strictEqual(E.parseSilenceCache(JSON.stringify({ videoPath: 'D:/a.mp4', durationSec: 61.5, gaps: [] }), ctx), null);
+  assert.strictEqual(E.parseSilenceCache(JSON.stringify({ videoPath: 'D:/a.mp4', durationSec: 61.5, gaps: 'x' }), ctx), null);
+  assert.strictEqual(E.parseSilenceCache(JSON.stringify({ videoPath: 'D:/a.mp4', durationSec: 61.5, gaps: [{ startMs: 9800, endMs: 9800 }] }), ctx), null, 'endMs<=startMs → null');
+  assert.strictEqual(E.parseSilenceCache(JSON.stringify({ videoPath: 'D:/a.mp4', durationSec: 61.5, gaps: [{ startMs: '9500', endMs: 9800 }] }), ctx), null, 'startMs string → null (chặn coercion, Luật 10)');
+  assert.strictEqual(E.parseSilenceCache(JSON.stringify({ videoPath: 'D:/a.mp4', durationSec: 61.5, gaps: [{ startMs: 9500 }] }), ctx), null);
+  assert.strictEqual(E.parseSilenceCache(JSON.stringify({ videoPath: 'D:/a.mp4', durationSec: 61.5, gaps: [null] }), ctx), null);
+});
+/* ══ RE-SYNC offset / SKELETON / TIGHTEN (2026-09-17) ═══════════════════════ */
+t('resyncCuesToSpeech: offsetMs — tìm neo theo cue + offset, cue không neo giữ toạ độ GỐC', () => {
+  const cues = [
+    { startMs: 1000, endMs: 2000, text: 'a' }, // +500 → 1500, neo 1600 (sai lệch 100)
+    { startMs: 5000, endMs: 6000, text: 'b' }, // +500 → 5500, xa mọi neo → giữ 5000
+  ];
+  const r = E.resyncCuesToSpeech(cues, [{ startMs: 1600 }, { startMs: 9000 }], { toleranceMs: 800, offsetMs: 500 });
+  assert.strictEqual(r.cues[0].startMs, 1600);
+  assert.strictEqual(r.cues[1].startMs, 5000, 'không tìm được neo → giữ toạ độ gốc');
+  assert.strictEqual(r.untouched, 1);
+  assert.strictEqual(r.matched, 1);
+  assert.ok(/offset 500ms/.test(r.adjustments[0].via));
+});
+t('resyncCuesToSpeech: không offset → hành vi cũ giữ nguyên', () => {
+  const r = E.resyncCuesToSpeech([{ startMs: 1000, endMs: 2000, text: 'a' }], [{ startMs: 1100 }], { toleranceMs: 500 });
+  assert.strictEqual(r.cues[0].startMs, 1100);
+  assert.ok(!/offset/.test(r.adjustments[0].via));
+});
+
+t('buildSrtSkeleton: cue = từng khoảng nói, minDur, mẫu %n%', () => {
+  const out = E.buildSrtSkeleton([{ startMs: 500, endMs: 900 }, { startMs: 3000, endMs: 5000 }], { text: 'Câu %n%' });
+  assert.strictEqual(out.length, 2);
+  assert.strictEqual(out[0].startMs, 500);
+  assert.strictEqual(out[0].endMs, 1100, 'khoảng 400ms < minDur 600 → kéo dài tối thiểu');
+  assert.strictEqual(out[0].text, 'Câu 1');
+  assert.strictEqual(out[1].text, 'Câu 2');
+});
+t('buildSrtSkeleton: text rỗng mặc định + sắp xếp + clamp totalMs', () => {
+  const out = E.buildSrtSkeleton([{ startMs: 2000, endMs: 4000 }, { startMs: 500, endMs: 9000 }], { totalMs: 6000 });
+  assert.deepStrictEqual(out.map((c) => c.startMs), [500, 2000]);
+  assert.strictEqual(out[0].text, '');
+  assert.strictEqual(out[0].endMs, 6000, 'end clamp theo totalMs');
+});
+t('buildSrtSkeleton: lọc khoảng vô nghĩa (end ≤ start)', () => {
+  const out = E.buildSrtSkeleton([{ startMs: 1000, endMs: 1000 }, { startMs: 2000, endMs: 3000 }]);
+  assert.strictEqual(out.length, 1);
+});
+
+t('tightenRanges: gộp gap nhỏ, pad biên, newStartMs liền mạch', () => {
+  const t1 = E.tightenRanges([
+    { startMs: 1000, endMs: 2000 }, { startMs: 2400, endMs: 3500 }, // gap 400 ≤ 700 → gộp
+    { startMs: 10000, endMs: 11000 },                               // gap xa → range riêng
+  ], { keepGapMs: 700, padMs: 100, totalMs: 20000 });
+  assert.strictEqual(t1.ranges.length, 2);
+  assert.strictEqual(t1.ranges[0].startMs, 900);
+  assert.strictEqual(t1.ranges[0].endMs, 3600);
+  assert.strictEqual(t1.ranges[0].newStartMs, 0);
+  assert.strictEqual(t1.ranges[1].newStartMs, 2700, 'timeline mới liền mạch sau range 1');
+  assert.strictEqual(t1.removedMs, 20000 - 3900);
+});
+t('tightenRanges: đoạn giữ < 100ms bị bỏ', () => {
+  const t2 = E.tightenRanges([{ startMs: 1000, endMs: 1040 }], { padMs: 0, totalMs: 5000 });
+  assert.strictEqual(t2.ranges.length, 0);
+});
+
+t('remapCuesThroughRanges: cue trong range dịch theo newStartMs, cue trong lặng neo về range kế', () => {
+  const ranges = [
+    { startMs: 0, endMs: 2000, durMs: 2000, newStartMs: 0 },
+    { startMs: 6000, endMs: 8000, durMs: 2000, newStartMs: 2000 },
+  ];
+  const r = E.remapCuesThroughRanges([
+    { startMs: 1000, endMs: 1500, text: 'trong range 1' },
+    { startMs: 4000, endMs: 4500, text: 'trong khoảng lặng' },
+    { startMs: 7000, endMs: 7500, text: 'trong range 2' },
+  ], ranges);
+  assert.strictEqual(r.cues[0].startMs, 1000);
+  assert.strictEqual(r.cues[1].startMs, 2000, 'neo về đầu range kế');
+  assert.ok(/khoảng lặng/.test(r.adjustments.find((a) => a.i === 1).via));
+  assert.strictEqual(r.cues[2].startMs, 2000 + (7000 - 6000));
+});
+t('remapCuesThroughRanges: cue sau range cuối → neo về cuối range cuối + clamp chống đè', () => {
+  const ranges = [{ startMs: 0, endMs: 1000, durMs: 1000, newStartMs: 0 }];
+  const r = E.remapCuesThroughRanges([
+    { startMs: 500, endMs: 2000, text: 'dài tràn qua cuối range' },
+    { startMs: 2000, endMs: 2500, text: 'sau range' },
+  ], ranges);
+  assert.strictEqual(r.cues[0].startMs, 500, 'cue nằm trong range → giữ offset trong range');
+  assert.strictEqual(r.cues[1].startMs, 2000, 'clamp về cuối range cuối');
+  assert.strictEqual(r.cues[1].endMs, 2500);
+});
+
+t('cutRangesSelectExpr: between(t,s,e) nối bằng +, giây 3 số lẻ', () => {
+  const s = E.cutRangesSelectExpr([{ startMs: 0, endMs: 1500 }, { startMs: 2000, endMs: 3050 }]);
+  assert.strictEqual(s, 'between(t,0.000,1.500)+between(t,2.000,3.050)');
+});
+
 // __TAIL__
 // Test async (promise) chốt kết quả trong microtask — setTimeout(0) in summary SAU CÙNG.
 setTimeout(() => {

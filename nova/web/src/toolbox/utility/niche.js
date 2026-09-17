@@ -31,7 +31,7 @@ function _nfSet(id, html){ const el = document.getElementById(id); if (el) el.in
 
 function _nfBadge(level){ const v = String(level||'').toLowerCase(); if (/cao|high/.test(v)) return '<span class="nf-badge nf-hi">'+_nfEsc(level)+'</span>'; if (/thấp|low/.test(v)) return '<span class="nf-badge nf-lo">'+_nfEsc(level)+'</span>'; return '<span class="nf-badge nf-mid">'+_nfEsc(level||'')+'</span>'; }
 
-function _nfMeta(r){ return (r && r.enriched ? ' · 📊 có like/comment' + (r.enrichedVia === 'api' ? '/sub (API)' : ' (yt-dlp, không cần key)') : ' · chỉ view') + (r && r.fromCache ? ' · ⚡cache' : ''); }
+function _nfMeta(r){ return (r && r.enrichErr ? ' · ⚠️ ' + _nfEsc(r.enrichErr) : '') + (r && r.enriched ? ' · 📊 có like/comment' + (r.enrichedVia === 'api' ? '/sub (API)' : ' (yt-dlp, không cần key)') : ' · chỉ view') + (r && r.fromCache ? ' · ⚡cache' : ''); }
 
 function nicheInit(){
   if (!window.native || !window.native.niche){ _nfSet('nfHotState', '⚠️ Chỉ chạy trong app Nova (desktop).'); }

@@ -19,7 +19,15 @@
  *   software — force crash GPU process (circuit breaker) hoặc force vô hiệu →
  *            rút lui về --disable-gpu + SwiftShader như cấu hình 2026-09-15r.
  *   gpu      — force/auto ổn định 30s → chốt GPU thật vĩnh viễn cho máy này.
- *  Chế độ 'gpu' vẫn canh crash: ≥2 lần GPU process chết trong 60s → software.
+ *  Chế độ 'gpu' vẫn canh crash: ≥2 lần crash thuộc cụm GPU chết trong 180s →
+ *  software. Từ 2026-09-17d: đếm CẢ Network Service (type=Utility) — signature
+ *  crash thật trên Pascal (2026-09-11j) là GPU/Network/renderer chết cùng cụm
+ *  mà tag KHÔNG chứa chữ "gpu" → bộ lọc /gpu/i cũ làm breaker không bao giờ
+ *  kích hoạt (quan sát 03:55–04:01 2026-09-17: crash lặp vô hạn, escalations=0).
+ *  Cửa sổ 60s → 180s vì các cụm crash cách nhau ~76s (60s cũ hụt ngưỡng).
+ *  Từ 2026-09-17c: crash timestamps PERSIST vào gpu-policy-mode.json để circuit
+ *  breaker hoạt động XUYÊN QUA restart (trước đây mảng chỉ trong RAM → restart
+ *  reset counter → không bao giờ đạt ngưỡng → vòng lặp GPU crash vô hạn).
  * Quyết định lưu tại userData/gpu-policy-mode.json (ghi nguyên tử .tmp+rename).
  * Override chẩn đoán: env AI_VIDEO_STUDIO_GPU_POLICY=auto|gpu|force|software
  * (chỉ phiên hiện tại, không ghi đè quyết định đã lưu).
@@ -35,11 +43,12 @@ const VALID_MODES = ['auto', 'gpu', 'force', 'software'];
 const PROBE_DELAY_MS = 6000;     // sau whenReady: đợi GPU process ổn định rồi hỏi status
 const PROBE_TIMEOUT_MS = 10000;  // status/getGPUInfo không trả lời → bỏ probe, không đoán
 const STABILITY_MS = 30000;      // 'force' sống yên bấy lâu thì chốt 'gpu'
-const CRASH_WINDOW_MS = 60000;   // cửa sổ đếm crash GPU process ở chế độ 'gpu'/'auto'
+const CRASH_WINDOW_MS = 180000;  // cửa sổ đếm crash cụm GPU (2026-09-17d: 180s — cụm crash thật cách nhau ~76s, 60s cũ hụt ngưỡng)
 const CRASH_LIMIT = 2;
+const CLUSTER_DEDUPE_MS = 2000;  // GPU + Network Service + renderer chết CÙNG MỘT cụm (cùng giây) chỉ đếm 1 lần
 
 function defaultState() {
-  return { version: 1, mode: 'auto', escalations: 0, decidedAt: null, history: [] };
+  return { version: 1, mode: 'auto', escalations: 0, decidedAt: null, history: [], gpuCrashTimes: [] };
 }
 
 function stateFileOf(app) {
@@ -80,6 +89,7 @@ function loadState(app) {
           escalations: Number(parsed.escalations) || 0,
           decidedAt: parsed.decidedAt || null,
           history: Array.isArray(parsed.history) ? parsed.history.slice(-20) : [],
+          gpuCrashTimes: Array.isArray(parsed.gpuCrashTimes) ? parsed.gpuCrashTimes.filter((t) => typeof t === 'number' && t > 0) : [],
         };
       } else {
         // Khai báo lộ liễu — không nuốt: file sai dạng thì nói ra rồi dùng 'auto'.
@@ -232,13 +242,22 @@ function installGpuPolicy(app) {
   say(app, 'gpu-policy-mode', 'khoi dong mode=' + st.mode + ' escalations=' + st.escalations);
 
   // Circuit breaker: GPU process chết là bằng chứng MẠNH hơn mọi lý thuyết blocklist.
-  const gpuCrashTimes = [];
+  // Từ 2026-09-17c: seed từ state PERSIST (xuyên qua restart), không chỉ RAM.
+  const gpuCrashTimes = (st.gpuCrashTimes || []).slice();
   app.on('child-process-gone', (_e, d) => {
     const tag = String((d && d.type) || '') + ' ' + String((d && d.name) || '');
-    if (!/gpu/i.test(tag)) return;
+    // 2026-09-17d: signature crash GPU Pascal = GPU/Network/renderer chết cùng
+    // cụm; Network Service có tag "Utility Network Service" — không chứa "gpu".
+    // Chỉ đếm process thuộc cụm crash (GPU process hoặc Network Service).
+    if (!/gpu|network service/i.test(tag)) return;
     const now = Date.now();
+    // Dedupe cụm: nhiều process của cùng một cụm crash chết trong ~2s chỉ đếm 1.
+    if (gpuCrashTimes.length && now - gpuCrashTimes[gpuCrashTimes.length - 1] < CLUSTER_DEDUPE_MS) return;
     gpuCrashTimes.push(now);
     while (gpuCrashTimes.length && now - gpuCrashTimes[0] > CRASH_WINDOW_MS) gpuCrashTimes.shift();
+    // Persist crash times để circuit breaker sống sót qua restart.
+    st.gpuCrashTimes = gpuCrashTimes.slice();
+    saveState(app, st, file);
     const detail = (d && d.reason ? d.reason : '?') + ' exit=' + (d && d.exitCode);
     if (st.mode === 'force') {
       say(app, 'gpu-policy-crash-guard', 'GPU process crash o che do force (' + detail + ') → rút lui về software');

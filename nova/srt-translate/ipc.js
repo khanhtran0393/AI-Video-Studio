@@ -70,6 +70,32 @@ function registerSrtTranslateIpc(ipcMain, { getState } = {}) {
     }
   });
 
+  /* ── dịch + ghép SRT SONG NGỮ (2026-09-17ze): mỗi cue 2 dòng gốc + dịch ── */
+  handle('srt-translate:bilingual', async (_e, p = {}) => {
+    const srcPath = String(p.srcPath || '').trim();
+    const outPath = String(p.outPath || '').trim();
+    if (!srcPath) return { ok: false, error: 'Thiếu file SRT nguồn (srcPath).', code: 'SRTT_NO_SRC' };
+    if (!outPath) return { ok: false, error: 'Thiếu đường dẫn xuất (outPath).', code: 'SRTT_NO_OUT' };
+    try {
+      const raw = fs.readFileSync(srcPath, 'utf8');
+      const cues = E.parseSrtCues(raw);
+      if (!cues.length) return { ok: false, error: 'File SRT không có dòng thoại nào.', code: 'SRTT_EMPTY' };
+      const translated = await E.translateCues(cues, {
+        sourceLang: p.sourceLang,
+        targetLang: p.targetLang,
+        batchSize: p.batchSize,
+        model: p.model,
+        maxConcurrent: p.maxConcurrent,
+      });
+      const merged = E.mergeBilingualCues(translated, cues, { originalFirst: p.originalFirst !== false });
+      const srt = E.serializeSrt(merged);
+      fs.writeFileSync(outPath, '\uFEFF' + srt, 'utf8');
+      return { ok: true, outPath, count: merged.length };
+    } catch (err) {
+      return { ok: false, error: errOf(err), code: codeOf(err), detail: (err && err.detail) || '' };
+    }
+  });
+
   /* ── gợi ý đường dẫn xuất (dialog thật) ── */
   handle('srt-translate:pickOutput', async (_e, p = {}) => {
     const defaultPath = String(p && p.defaultName ? p.defaultName : 'translated.srt');

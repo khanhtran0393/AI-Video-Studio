@@ -12,6 +12,7 @@
      mới hạ cấp có KHAI BÁO (warning VC_TIER_FALLBACK).
    ============================================================ */
 const { parseSrtCues } = require('../web/whiteboard-annotation.js');
+const crypto = require('crypto');
 
 /* ── Từ khoá hook (VI + EN) — điểm từ-khoá mở màn giữ chân người xem ── */
 const HOOK_KEYWORDS = [
@@ -595,7 +596,232 @@ function aspectFilterOf(aspect) {
   return key === ASPECT_KEEP ? null : ASPECT_FILTERS[key];
 }
 
-/* ── 9b. Kế hoạch cắt ffmpeg: mỗi highlight 1 output; dựng khung theo tỉ lệ chọn ── */
+/* ── 9c. Pad biên highlight: lùi `start` 200ms / tiến `end` 300ms để giữ hơi thở
+   đầu-cuối câu (chống jump-cut ngoại biên khi concat); clamp [0, durationMs]
+   và không vượt biên highlight kế cận nếu truyền `boundsMs`. Trả về mảng MỚI
+   (không mutate input). KHÔNG nếu highlight quá ngắn (<2×pad tổng) → giữ nguyên.
+
+   2-PASS để xử lý chồng lấn đúng nghĩa: pass 1 pad thô theo pad; pass 2 clamp lại
+   sao cho endMs(i) ≤ startMs(i+1)−1 (và tương tự ngược lại).
+
+   **P4 (2026-09-17) — adaptive pad qua silence windows**: nếu caller truyền
+   `opts.adaptivePadFn(h)` → dùng hàm này thay cho pad cố định. Mặc định vẫn
+   200/300ms; helper `computeAdaptivePadMs` xuất sẵn cho caller muốn dùng. */
+const EDGE_PAD_START_MS = 200;
+const EDGE_PAD_END_MS = 300;
+
+/* 9c-adapter. Tính biên pad "thông minh" cho 1 highlight dựa trên khoảng im lặng
+   (silence gaps) gần biên. Ý tưởng:
+   - Nếu có silence TRƯỚC startMs trong [startMs-maxPad, startMs) → cắt sát CUỐI
+     silence (giảm lãng phí, tránh cắt vào giữa câu).
+   - Nếu không có silence → lùi bình thường về `startMs - padStart` (giữ hơi thở
+     đầu câu như cũ).
+   - Tương tự với biên END: tìm silence SAU endMs trong (endMs, endMs+maxPad] → cắt
+     sát ĐẦU silence. Nếu không có → tiến bình thường.
+   - KHÔNG BAO GIỜ lùi quá `padStart` / tiến quá `padEnd` (giữ hành vi cũ ở case
+     xấu nhất). Luôn `≥ 0` và `≤ durationMs`.
+   Trả về `{ startMs, endMs, adaptiveStart, adaptiveEnd, reason }`:
+   - `startMs/endMs`: biên mới sau adaptive (caller dùng).
+   - `adaptiveStart/adaptiveEnd`: `true` nếu silence đã đổi biên (so với pad cố định).
+   - `reason` cho debug: 'silence-before' | 'silence-after' | 'fixed' (fallback). */
+function computeAdaptivePadMs(highlight, silenceGaps, opts = {}) {
+  const h = highlight || {};
+  const startMs = Math.round(Number(h.startMs) || 0);
+  const endMs = Math.round(Number(h.endMs) || 0);
+  const _ps = Number(opts.padStartMs);
+  const _pe = Number(opts.padEndMs);
+  const padStart = Math.max(0, Number.isFinite(_ps) ? _ps : EDGE_PAD_START_MS);
+  const padEnd = Math.max(0, Number.isFinite(_pe) ? _pe : EDGE_PAD_END_MS);
+  const durMs = Number(opts.durationMs) > 0 ? Math.round(Number(opts.durationMs)) : Infinity;
+  /* Baseline (giống pad cũ) */
+  const fixedStart = Math.max(0, startMs - padStart);
+  const fixedEnd = Math.min(durMs, endMs + padEnd);
+  const gaps = Array.isArray(silenceGaps) ? silenceGaps : [];
+  if (gaps.length === 0) {
+    return { startMs: fixedStart, endMs: fixedEnd, adaptiveStart: false, adaptiveEnd: false, reason: 'fixed' };
+  }
+  /* Tìm silence gần biên start: bất kỳ gap kết thúc TRƯỚC startMs VÀ
+     trong phạm vi `maxSearchStart = 2×padStart` tính từ startMs đi ngược.
+     Chọn gap gần startMs nhất (gE lớn nhất ≤ startMs).
+     Lý do giới hạn phạm vi: nếu silence quá xa (>2×pad) thì buffer cố định
+     đã "trượt qua" silence đó rồi, không nên cắt sâu hơn nữa (sẽ ăn vào
+     giữa câu thoại dài). */
+  const maxSearchStart = padStart * 2;
+  const maxSearchEnd = padEnd * 2;
+  let bestStartGap = null;
+  for (const g of gaps) {
+    if (!g) continue;
+    const gS = Math.round(Number(g.startMs) || 0);
+    const gE = Math.round(Number(g.endMs) || 0);
+    if (gE < startMs && gS < startMs && gE >= 0 && (startMs - gE) <= maxSearchStart) {
+      if (!bestStartGap || gE > bestStartGap.endMs) bestStartGap = { startMs: gS, endMs: gE };
+    }
+  }
+  /* Tìm silence gần biên end: bất kỳ gap bắt đầu SAU endMs VÀ trong phạm vi
+     2×padEnd. Chọn gap gần endMs nhất (gS nhỏ nhất ≥ endMs). */
+  let bestEndGap = null;
+  for (const g of gaps) {
+    if (!g) continue;
+    const gS = Math.round(Number(g.startMs) || 0);
+    const gE = Math.round(Number(g.endMs) || 0);
+    if (gS > endMs && gE > endMs && (gS - endMs) <= maxSearchEnd) {
+      if (!bestEndGap || gS < bestEndGap.startMs) bestEndGap = { startMs: gS, endMs: gE };
+    }
+  }
+  let newStart = fixedStart;
+  let newEnd = fixedEnd;
+  let reason = 'fixed';
+  if (bestStartGap) {
+    /* Cắt sát cuối silence + 10ms buffer (tránh cắt đúng vào mép im lặng).
+       Buffer 10ms đảm bảo mép audio còn chút dư → concat mượt. */
+    const silEnd = bestStartGap.endMs + 10;
+    newStart = Math.max(0, Math.min(startMs, silEnd));
+    if (newStart !== fixedStart) reason = 'silence-before';
+  }
+  if (bestEndGap) {
+    const silStart = bestEndGap.startMs - 10;
+    newEnd = Math.min(durMs, Math.max(endMs, silStart));
+    if (newEnd !== fixedEnd) reason = (reason === 'silence-before') ? 'silence-both' : 'silence-after';
+  }
+  return {
+    startMs: newStart,
+    endMs: newEnd,
+    adaptiveStart: newStart !== fixedStart,
+    adaptiveEnd: newEnd !== fixedEnd,
+    reason,
+  };
+}
+
+/* ══ 13b. HOOK CACHE KEY (2026-09-17) ═════════════════════════════════════════
+   Băm sha1 ngắn từ (videoPath + hookStartMs + hookEndMs + aspect + vf) — dùng để
+   ghi/đọc file cache bên cạnh hookOutPath (đặt tên <hookOutPath>.cache.json).
+   - vf có thể là null (aspect 'keep' không crop) → vẫn ghi nhận rõ.
+   - Hàm pure, deterministic: cùng input → cùng key (Luật 8).
+   - Mục đích: tránh cắt lại hook khi user sửa 1 highlight rồi xuất lại —
+     key phụ thuộc videoPath, KHÔNG phụ thuộc outDir → đổi thư mục xuất
+     vẫn cache hit nếu video + hook range không đổi. */
+function hookCacheKey(videoPath, hookStartMs, hookEndMs, aspect, vf) {
+  if (!videoPath || !Number.isFinite(hookStartMs) || !Number.isFinite(hookEndMs)) return null;
+  const raw = String(videoPath) + '|' + Math.round(hookStartMs) + '|' + Math.round(hookEndMs) +
+    '|' + String(aspect || 'keep') + '|' + (vf ? String(vf) : '');
+  return crypto.createHash('sha1').update(raw).digest('hex').slice(0, 16);
+}
+
+/* ══ 13c. SILENCE CACHE (P4 — 2026-09-17) ═════════════════════════════════════
+   Đọc/ghi cache gaps im lặng theo video để lần xuất sau bỏ qua extract + PCM +
+   detectSilence (đắt nhất trong adaptive pad). Key sha1(videoPath|durationSec):
+   đổi nội dung video hầu như luôn đổi duration → miss tự nhiên.
+   - `parseSilenceCache(jsonText, ctx)` pure: validate CHẶT shape (Luật 10) —
+     videoPath/durationSec phải khớp đúng, gaps là mảng {startMs,endMs} số hợp lệ
+     startMs<endMs. Sai bất kỳ → null (cache miss, extract lại như thường).
+     KHÔNG bao giờ ném — sai cache = miss, không phải lỗi nghiệp vụ.
+   - Ghi cache fail ở caller chỉ là miss lần sau (khai báo trong comment). */
+function silenceCacheKey(videoPath, durationSec) {
+  if (!videoPath || !(Number(durationSec) > 0)) return null;
+  const raw = String(videoPath) + '|' + Number(durationSec);
+  return crypto.createHash('sha1').update(raw).digest('hex').slice(0, 12);
+}
+function parseSilenceCache(jsonText, ctx) {
+  let obj = null;
+  try { obj = JSON.parse(String(jsonText)); } catch (_) { return null; }
+  if (!obj || typeof obj !== 'object') return null;
+  if (obj.videoPath !== String(ctx && ctx.videoPath || '')) return null;
+  if (Math.abs(Number(obj.durationSec) - Number(ctx && ctx.durationSec)) > 1e-6) return null;
+  if (!Array.isArray(obj.gaps) || obj.gaps.length === 0) return null;
+  const gaps = [];
+  for (const g of obj.gaps) {
+    if (!g || typeof g !== 'object') return null;
+    if (typeof g.startMs !== 'number' || typeof g.endMs !== 'number') return null;
+    if (!Number.isFinite(g.startMs) || !Number.isFinite(g.endMs) || g.endMs <= g.startMs) return null;
+    gaps.push({ startMs: g.startMs, endMs: g.endMs });
+  }
+  return gaps;
+}
+function padHighlightEdges(highlights, opts = {}) {
+  const list = Array.isArray(highlights) ? highlights : [];
+  const _ps = Number(opts.padStartMs);
+  const _pe = Number(opts.padEndMs);
+  const padStart = Math.max(0, Number.isFinite(_ps) ? _ps : EDGE_PAD_START_MS);
+  const padEnd = Math.max(0, Number.isFinite(_pe) ? _pe : EDGE_PAD_END_MS);
+  const durMs = Number(opts.durationMs) > 0 ? Math.round(Number(opts.durationMs)) : Infinity;
+  const adaptivePadFn = typeof opts.adaptivePadFn === 'function' ? opts.adaptivePadFn : null;
+  const sorted = list.slice().sort((a, b) => Number(a.startMs) - Number(b.startMs));
+  const pad = sorted.map((h) => {
+    const len = Number(h.endMs) - Number(h.startMs);
+    if (!Number.isFinite(len) || len < (padStart + padEnd) * 3) return { startMs: h.startMs, endMs: h.endMs, padded: false };
+    if (adaptivePadFn) {
+      /* P4 (2026-09-17): caller truyền hàm (highlight) → {startMs,endMs,...}.
+         Trách nhiệm an toàn: caller phải đảm bảo startMs<endMs và clamp [0,durMs].
+         Ở đây chỉ thêm clamp dự phòng nếu caller quên. */
+      const r = adaptivePadFn(h) || {};
+      const ns = Math.max(0, Math.min(durMs, Math.round(Number(r.startMs) || Number(h.startMs))));
+      const ne = Math.max(ns + 1, Math.min(durMs, Math.round(Number(r.endMs) || Number(h.endMs))));
+      return { startMs: ns, endMs: ne, padded: true, adaptive: !!r.adaptiveStart || !!r.adaptiveEnd, reason: r.reason || null };
+    }
+    return {
+      startMs: Math.max(0, Number(h.startMs) - padStart),
+      endMs: Math.min(durMs, Number(h.endMs) + padEnd),
+      padded: true,
+    };
+  });
+  /* Pass 2: clamp cuối theo kế cận — đảm bảo endMs(i) ≤ startMs(i+1)−1 */
+  for (let i = 0; i < pad.length; i++) {
+    if (i > 0) {
+      const prev = pad[i - 1];
+      /* cần endMs(i-1) ≤ startMs(i)−1 → prev.endMs chỉ được tiến tới pad[i].startMs − 1 */
+      const cap = pad[i].startMs - 1;
+      if (prev.endMs > cap) {
+        /* prev chiếm quá nhiều → lùi prev.endMs về cap, đảm bảo prev vẫn còn ≥ 1ms */
+        pad[i - 1].endMs = Math.max(pad[i - 1].startMs + 1, cap);
+      }
+    }
+    if (i + 1 < pad.length) {
+      const next = pad[i + 1];
+      /* cần endMs(i) ≤ startMs(i+1)−1 */
+      const cap = next.startMs - 1;
+      if (pad[i].endMs > cap) pad[i].endMs = cap;
+    }
+  }
+  /* gắn cờ edgePadded nếu clip thực sự được pad (so với input).
+     Đồng thời CLAMP hook vào biên mới (nếu có): sau khi pad, hook gốc có thể
+     bị trượt khỏi đầu/cuối highlight → neo về [newStartMs, newEndMs]. Nếu
+     hook mới < 500ms → xem như không hợp lệ (hookStartMs=null), giữ nguyên
+     luật buildExportPlan (hook < 0.5s = coi như không có cold-open). */
+  const out = sorted.map((h, i) => {
+    const p = pad[i];
+    if (!p.padded) return Object.assign({}, h);
+    const next = Object.assign({}, h, { startMs: p.startMs, endMs: p.endMs, edgePadded: true });
+    /* P4 (2026-09-17): nhớ cờ adaptive + reason từ pad result để debug + audit */
+    if (p.adaptive) next.edgePadAdaptive = true;
+    if (p.reason) next.edgePadReason = p.reason;
+    if (Number.isFinite(h.hookStartMs) && Number.isFinite(h.hookEndMs)) {
+      const origStart = Math.round(h.hookStartMs);
+      const origEnd = Math.round(h.hookEndMs);
+      const clampedStart = Math.max(p.startMs, origStart);
+      const clampedEnd = Math.min(p.endMs, origEnd);
+      /* Cờ hookClamped chỉ set khi giá trị thực sự thay đổi (≠ original) — tránh
+         khai báo "đã clamp" cho hook vốn nằm gọn trong pad (gây nhiễu cache key). */
+      const changed = clampedStart !== origStart || clampedEnd !== origEnd;
+      if (clampedEnd - clampedStart >= 500) {
+        next.hookStartMs = clampedStart;
+        next.hookEndMs = clampedEnd;
+        if (changed) next.hookClamped = true;
+      } else {
+        /* hook mất nhiều quá → vô hiệu hoá, buildExportPlan sẽ trả hookOutPath: null */
+        next.hookStartMs = null;
+        next.hookEndMs = null;
+        next.hookClamped = 'invalidated';
+      }
+    }
+    return next;
+  });
+  /* giữ thứ tự theo input gốc (call-site sort theo thời gian nếu cần) */
+  return list.map((h) => out[sorted.indexOf(h)]);
+}
+
+/* ── 9b. Kế hoạch cắt ffmpeg: mỗi highlight 1 output; dựng khung theo tỉ lệ chọn ──
+   Nếu highlight có hook hợp lệ (nằm trong [startMs, endMs]) → trả thêm `hook*`
+   để IPC cắt thêm 1 clip hook để chèn lên đầu clip chính (hiệu ứng cold-open). */
 function buildExportPlan(highlights, opts = {}) {
   const path = require('path');
   const outDir = String(opts.outDir || '');
@@ -606,13 +832,20 @@ function buildExportPlan(highlights, opts = {}) {
   return list.map((h, idx) => {
     const n = String(idx + 1).padStart(2, '0');
     const name = 'viralcut-' + n + '-' + slugify(h.title || 'clip') + '.mp4';
+    const hs = Number(h.hookStartMs);
+    const he = Number(h.hookEndMs);
+    const sMs = Number(h.startMs);
+    const eMs = Number(h.endMs);
+    const hookValid = Number.isFinite(hs) && Number.isFinite(he) && Number.isFinite(sMs) && Number.isFinite(eMs)
+      && hs >= sMs && he <= eMs && (he - hs) >= 500;       // hook < 0.5s → coi như không hợp lệ
     return {
       index: idx + 1,
       outPath: path.join(outDir, name),
       startSec: Math.max(0, h.startMs / 1000),
       endSec: h.endMs / 1000,
-      hookStartSec: h.hookStartMs != null ? h.hookStartMs / 1000 : null,
-      hookEndSec: h.hookEndMs != null ? h.hookEndMs / 1000 : null,
+      hookStartSec: hookValid ? hs / 1000 : null,
+      hookEndSec: hookValid ? he / 1000 : null,
+      hookOutPath: hookValid ? path.join(outDir, 'viralcut-' + n + '-' + slugify(h.title || 'clip') + '-hook.mp4') : null,
       title: h.title || '',
       crop916: aspect === '916',
       aspect: aspect,
@@ -1408,6 +1641,211 @@ function pickHighlightsByFusion(feats, opts = {}) {
   }));
 }
 
+/* ══ 14. RE-SYNC PHỤ ĐỀ THEO TIẾNG NÓI THẬT (2026-09-17) ══════════════════════
+   SRT lệch so với audio (dịch máy/cue cứng) → dò khoảng TIẾNG NÓI từ WAV
+   (energy cửa sổ nhỏ, ngưỡng RMS tương đối — cùng nguyên lý detectSilence nhưng
+   cửa sổ 0.5s + gộp biên có đệm) rồi KÉO MỖI CUE về gần nhất biên tiếng nói
+   trong tolerance (snap BẢO THỦ: không tìm thấy biên → giữ nguyên cue, KHÔNG bịa
+   vị trí mới — Luật 10). Trả adjustments + untouched để IPC/UI khai báo rõ. ── */
+function speechSegmentsFromWav(buf, info, opts = {}) {
+  const windowSec = Math.max(0.1, Number(opts.windowSec) || 0.5);
+  const wins = energyWindowsFromPcm(buf, info, { windowSec });
+  if (wins.length < 2) return { threshold: 0, segments: [], windowSec };
+  const maxRms = wins.reduce((m, w) => Math.max(m, Number(w && w.rms) || 0), 0);
+  if (!(maxRms > 0)) return { threshold: 0, segments: [], windowSec };
+  const rel = Number(opts.rel) > 0 ? Math.min(0.9, Number(opts.rel)) : 0.10;
+  const threshold = maxRms * rel;
+  const minSpeechMs = Math.max(0, Number(opts.minSpeechMs) || 250);
+  const padMs = Math.max(0, Number(opts.padMs) || 120);
+  const minWin = Math.max(1, Math.round(minSpeechMs / (windowSec * 1000)));
+  const segments = [];
+  let run = -1;
+  for (let i = 0; i <= wins.length; i++) {
+    const loud = i < wins.length && (Number(wins[i].rms) || 0) > threshold;
+    if (loud && run < 0) run = i;
+    if (!loud && run >= 0) {
+      if (i - run >= minWin) {
+        const s = Math.max(0, Math.round(Number(wins[run].t) * 1000 - padMs));
+        const e = Math.round((Number(wins[i - 1].t) + windowSec) * 1000 + padMs);
+        segments.push({ startMs: s, endMs: e });
+      }
+      run = -1;
+    }
+  }
+  return { threshold: Math.round(threshold * 100) / 100, segments, windowSec };
+}
+
+/* Kéo cue về biên bắt đầu TIẾNG NÓI gần nhất trong toleranceMs. Cue không tìm
+   được neo → giữ nguyên toạ độ (đếm vào untouched, không bịa). Cue sau không
+   được đè lên cue trước: clamp lùi về sau biên trước − 1ms (báo trong adjustments).
+   opts.offsetMs (2026-09-17): lệch tuyên bố của người dùng — tìm neo theo vị trí
+   cue + offset; cue không tìm được neo vẫn giữ toạ độ GỐC (không bịa). */
+function resyncCuesToSpeech(cues, segments, opts = {}) {
+  const tolMs = Math.max(0, Number(opts.toleranceMs) || 1500);
+  const offsetMs = Math.round(Number(opts.offsetMs) || 0);
+  const segs = (Array.isArray(segments) ? segments : [])
+    .filter((s) => s && Number.isFinite(s.startMs))
+    .map((s) => Math.round(s.startMs))
+    .sort((a, b) => a - b);
+  const list = Array.isArray(cues) ? cues : [];
+  const adjustments = [];
+  let untouched = 0;
+  let prevStart = -Infinity;
+  const out = list.map((c, i) => {
+    const startMs = Math.round(Number(c && c.startMs) || 0);
+    const durMs = Math.max(1, Math.round(Number(c && c.endMs) || 0) - startMs);
+    const shifted = startMs + offsetMs; // toạ độ sau lệch tuyên bố — chỉ dùng khi tìm neo
+    let best = null;
+    for (const ms of segs) {
+      const d = Math.abs(ms - shifted);
+      if (d <= tolMs && (!best || d < best.d)) best = { ms, d };
+    }
+    if (!best) { untouched++; prevStart = Math.max(prevStart, shifted); return Object.assign({}, c); }
+    let newStart = best.ms;
+    let clamped = false;
+    if (newStart <= prevStart) { newStart = prevStart + 1; clamped = true; }
+    prevStart = newStart;
+    if (newStart !== startMs || clamped) {
+      adjustments.push({
+        i, fromStartMs: startMs, toStartMs: newStart,
+        via: (offsetMs ? 'khớp tiếng nói (offset ' + offsetMs + 'ms)' : 'khớp tiếng nói')
+          + (clamped ? ' + clamp chống đè' : ''),
+      });
+    }
+    return Object.assign({}, c, { startMs: newStart, endMs: newStart + durMs });
+  });
+  return { cues: out, adjustments, untouched, matched: list.length - untouched };
+}
+
+/* ── Args builder cho cut stream-copy (đề xuất 5) ──
+   Hàm PURE: cùng input → cùng args. Tách ra khỏi ipc.js để test được
+   (ipc.js require electron nên không test trực tiếp được).
+   - `-ss` TRƯỚC `-i` = input seek: snap về keyframe gần nhất TRƯỚC startSec (nhanh, dùng index).
+   - `-c copy` = không re-encode, ~5–10× nhanh hơn re-encode, zero quality loss.
+   - `-movflags +faststart` = web-friendly (preview mượt ngay khi mở).
+   - Trade-off: keyframe xa (GOP 2–10s tuỳ source) → mất tối đa ~1 GOP đầu.
+     Với cold-open 3–6s + entry C4 (pad đảm bảo ≥500ms) → chấp nhận được. */
+function buildCopyArgs(videoPath, startSec, durationSec, outPath) {
+  return [
+    '-y',
+    '-ss', String(startSec),
+    '-i', String(videoPath),
+    '-t', String(durationSec),
+    '-c', 'copy',
+    '-movflags', '+faststart',
+    String(outPath),
+  ];
+}
+
+/* ── Tính toạ độ % để render hook sub-bar trong panel (đề xuất 3) ──
+   Trả về { left, width, valid }. left/width ∈ [0..100]. valid=false khi
+   highlight không có hook hoặc hook nằm ngoài [startMs, endMs].
+   - Nếu hook trượt biên (do padHighlightEdges clamp), vẫn clamp % về [0..100]
+     để thanh bar hiển thị phần hook còn lại, không phải ẩn hoàn toàn.
+   - width min = 2% để thanh luôn nhìn thấy kể cả khi hook chỉ còn 100ms
+     trong clip 60s. */
+function hookBarLayout(h) {
+  if (!h || h.hookStartMs == null || h.hookEndMs == null) return { valid: false };
+  const total = h.endMs - h.startMs;
+  if (total <= 0) return { valid: false };
+  let lf = ((h.hookStartMs - h.startMs) / total) * 100;
+  let rt = ((h.hookEndMs - h.startMs) / total) * 100;
+  lf = Math.max(0, Math.min(100, lf));
+  rt = Math.max(0, Math.min(100, rt));
+  const w = Math.max(2, rt - lf);
+  return { valid: true, left: lf, width: w };
+}
+
+/* Sinh SRT KHUNG từ các khoảng tiếng nói đã dò: cue = từng khoảng nói (text rỗng
+   hoặc theo mẫu, %n% = số thứ tự). KHÔNG bịa nội dung — chỉ khung thời gian do
+   tiếng thật của video quyết định; người dùng tự điền chữ (Luật 10). */
+function buildSrtSkeleton(segments, opts = {}) {
+  const minDurMs = Math.max(200, Number(opts.minDurMs) || 600);
+  const text = opts.text != null ? String(opts.text) : '';
+  const totalMs = Number(opts.totalMs) > 0 ? Number(opts.totalMs) : null;
+  const segs = (Array.isArray(segments) ? segments : [])
+    .filter((s) => s && Number.isFinite(s.startMs) && Number.isFinite(s.endMs) && s.endMs > s.startMs)
+    .map((s) => ({ startMs: Math.max(0, Math.round(s.startMs)), endMs: Math.round(s.endMs) }))
+    .sort((a, b) => a.startMs - b.startMs);
+  return segs.map((s, i) => ({
+    startMs: s.startMs,
+    endMs: Math.max(s.startMs + minDurMs, totalMs != null ? Math.min(totalMs, s.endMs) : s.endMs),
+    text: text ? text.replace(/%n%/g, String(i + 1)) : '',
+  }));
+}
+
+/* Gộp khoảng tiếng nói thành các ĐOẠN GIỮ (keep ranges): gap ≤ keepGapMs → gộp;
+   pad biên; clamp totalMs. Mỗi range có newStartMs = vị trí trên timeline MỚI
+   (các khoảng lặng dài bị bỏ đã rút gọn). */
+function tightenRanges(segments, opts = {}) {
+  const numOr = (v, d) => { const n = Number(v); return Number.isFinite(n) ? n : d; };
+  const keepGapMs = Math.max(0, numOr(opts.keepGapMs, 700)); // 0 hợp lệ — chỉ NaN/undefined mới dùng mặc định
+  const padMs = Math.max(0, numOr(opts.padMs, 150));
+  const totalMs = Number(opts.totalMs) > 0 ? Number(opts.totalMs) : null;
+  const segs = (Array.isArray(segments) ? segments : [])
+    .filter((s) => s && Number.isFinite(s.startMs) && Number.isFinite(s.endMs) && s.endMs > s.startMs)
+    .map((s) => ({ startMs: Math.max(0, Math.round(s.startMs) - padMs), endMs: Math.round(s.endMs) + padMs }))
+    .sort((a, b) => a.startMs - b.startMs);
+  const merged = [];
+  for (const s of segs) {
+    const last = merged[merged.length - 1];
+    if (last && s.startMs - last.endMs <= keepGapMs) last.endMs = Math.max(last.endMs, s.endMs);
+    else merged.push({ startMs: s.startMs, endMs: s.endMs });
+  }
+  const ranges = [];
+  let newStart = 0;
+  for (const r of merged) {
+    const startMs = Math.max(0, r.startMs);
+    const endMs = totalMs != null ? Math.min(totalMs, r.endMs) : r.endMs;
+    if (endMs - startMs < 100) continue; // đoạn giữ quá ngắn (<100ms) → bỏ (khai báo bằng thiếu range)
+    const durMs = endMs - startMs;
+    ranges.push({ startMs, endMs, durMs, newStartMs: newStart });
+    newStart += durMs;
+  }
+  const keptMs = ranges.reduce((a, r) => a + r.durMs, 0);
+  return { ranges, keptMs, removedMs: totalMs != null ? Math.max(0, totalMs - keptMs) : null };
+}
+
+/* Kéo cue qua timeline ĐÃ CẮT: cue nằm trong range giữ → dịch theo newStartMs;
+   cue rơi vào khoảng lặng bị cắt → neo về đầu range kế (khai báo 'vào khoảng cắt');
+   hết range → neo cuối range cuối. Clamp chống đè như resync. */
+function remapCuesThroughRanges(cues, ranges) {
+  const rs = (Array.isArray(ranges) ? ranges : []).filter((r) => r && Number.isFinite(r.newStartMs));
+  const list = Array.isArray(cues) ? cues : [];
+  const adjustments = [];
+  let prevEnd = -Infinity;
+  const out = list.map((c, i) => {
+    const startMs = Math.round(Number(c && c.startMs) || 0);
+    const durMs = Math.max(1, Math.round(Number(c && c.endMs) || 0) - startMs);
+    let hit = null, next = null;
+    for (const r of rs) {
+      if (!hit && startMs >= r.startMs && startMs < r.endMs) hit = r;
+      if (r.startMs > startMs && !next) next = r;
+    }
+    let newStart, via = null;
+    if (hit) newStart = hit.newStartMs + (startMs - hit.startMs);
+    else if (next) { newStart = next.newStartMs; via = 'cue nằm trong khoảng lặng bị cắt → neo về đầu đoạn giữ kế tiếp'; }
+    else if (rs.length) { const lastR = rs[rs.length - 1]; newStart = lastR.newStartMs + lastR.durMs - durMs; via = 'cue sau đoạn giữ cuối → neo về cuối đoạn giữ cuối'; }
+    else newStart = startMs;
+    let clamped = false;
+    if (newStart < prevEnd) { newStart = prevEnd; clamped = true; }
+    prevEnd = newStart + durMs;
+    if (newStart !== startMs || via || clamped) {
+      adjustments.push({ i, fromStartMs: startMs, toStartMs: newStart, via: via || (clamped ? 'clamp chống đè sau khi cắt' : null) });
+    }
+    return Object.assign({}, c, { startMs: newStart, endMs: newStart + durMs });
+  });
+  return { cues: out, adjustments };
+}
+
+/* Biểu thức select/aselect từ các range giữ (giây, 3 số lẻ) — IPC ghép vào
+   -vf/-af: select='<expr>',setpts=... / aselect='<expr>',asetpts=... */
+function cutRangesSelectExpr(ranges) {
+  const parts = (Array.isArray(ranges) ? ranges : []).map((r) =>
+    'between(t,' + ((Number(r.startMs) || 0) / 1000).toFixed(3) + ',' + ((Number(r.endMs) || 0) / 1000).toFixed(3) + ')');
+  return parts.join('+');
+}
+
 module.exports = {
   HOOK_KEYWORDS,
   STOPWORDS,
@@ -1448,6 +1886,15 @@ module.exports = {
   normalizeAspect,
   aspectFilterOf,
   buildExportPlan,
+  padHighlightEdges,
+  computeAdaptivePadMs,
+  EDGE_PAD_START_MS,
+  EDGE_PAD_END_MS,
+  hookCacheKey,
+  silenceCacheKey,
+  parseSilenceCache,
+  hookBarLayout,
+  buildCopyArgs,
   buildConcatPlan,
   pickHighlightsByHeatmap,
   pickHighlightsByComments,
@@ -1464,4 +1911,11 @@ module.exports = {
   pitchWindowsFromFrames,
   fuseLocalScores,
   pickHighlightsByFusion,
+  /* Re-sync phụ đề theo tiếng nói thật (2026-09-17) */
+  speechSegmentsFromWav,
+  resyncCuesToSpeech,
+  buildSrtSkeleton,
+  tightenRanges,
+  remapCuesThroughRanges,
+  cutRangesSelectExpr,
 };

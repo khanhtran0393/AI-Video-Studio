@@ -24,7 +24,7 @@ const { resolveStartUrl } = require('./main/server');
 const { createWindow } = require('./main/window');
 const { setupAutoUpdate } = require('./main/updater');
 const { shutdownOwnedResources } = require('./main/lifecycle');
-const { installLifecycleLogging } = require('./main/lifecycle-log');
+const { installLifecycleLogging, logLifecycle } = require('./main/lifecycle-log');
 const { registerAllIpc } = require('./main/ipc');
 const { userDataPath } = require('./core/paths');
 const { runStartupJanitor, runQuitJanitor } = require('./main/janitor');
@@ -130,12 +130,26 @@ app.whenReady().then(async () => {
       if (state.errorReporter) {
         try { state.errorReporter.recordEvent('app_start', { platform: process.platform }); } catch (_) {}
         state.errorReporter.startLifecycle({ networkTarget: app, onlineEvent: 'online' });
+      } else {
+        // Degrade CÓ KHAI BÁO (Luật 10): bật reporting nhưng module chưa đóng gói
+        // (bản dev/gói cũ) → observe-only không hoạt động; ghi lộ liễu vào
+        // lifecycle.log để scan:lifecycle nhìn thấy, không im lặng.
+        logLifecycle(app, 'error-reporter-unavailable', 'reason=module-not-packaged');
       }
-    } catch (e) { console.warn('[error-reporter] setup:', e && e.message); }
+    } catch (e) {
+      // KHÔNG nuốt lặng lẽ (Luật 10): setup thất bại → tín hiệu lộ liễu trong
+      // lifecycle.log, tránh mù nguyên nhân khi điều tra crash giữa phiên.
+      logLifecycle(app, 'error-reporter-setup-failed', 'code=ERR_REPORTER_SETUP message=' + String((e && e.message) || e).slice(0, 200));
+      console.warn('[error-reporter] setup:', e && e.message);
+    }
   }
   try {
     state.unregisterErrorBridge = registerElectronErrorBridge({ app, ipcMain, getReporter: () => state.errorReporter });
-  } catch (e) { console.warn('[error-reporter] bridge:', e && e.message); }
+  } catch (e) {
+    // Cùng Luật 10: bridge renderer→reporter thất bại cũng phải lộ liễu.
+    logLifecycle(app, 'error-bridge-setup-failed', 'code=ERR_REPORTER_BRIDGE message=' + String((e && e.message) || e).slice(0, 200));
+    console.warn('[error-reporter] bridge:', e && e.message);
+  }
 
   // Không tạo BrowserWindow splash riêng. Cửa sổ frameless tạm thời có thể bị
   // Windows giữ lại thành một mảng đen nếu tiến trình cũ bị kill/crash. Giao diện

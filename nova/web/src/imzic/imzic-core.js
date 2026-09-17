@@ -77,6 +77,7 @@ function imzExportUpscaleOf(baseW, baseH){
 }
 // H.264/YUV cần kích thước CHẴN pixel — ép chẵn sau khi phóng (làm tròn lên).
 function imzEvenDim(n){ const r = Math.round(n); return (r % 2) ? r + 1 : r; }
+// 2026-09-17z (B9b, ROLLBACK): thử thêm willReadFrequently: true để fix warning + giảm GPU memory nhưng GÂY crash app ngay khi start (lifecycle 02:32 cụm exitCode=-1 cuối session). Rollback về getContext('2d') thuần. Crash root cause KHÔNG phải ở option này.
 const ctx = canvas.getContext('2d');
 const glowRing = $('glowRing');
 const emptyState = $('emptyState');

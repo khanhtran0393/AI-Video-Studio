@@ -15,6 +15,7 @@ async function cliLogin(){
   const started = Date.now();
   clearInterval(_cliPoll);
   _cliPoll = setInterval(async () => {
+    if (document.hidden) return;   // 2026-09-17perf: skip poll đăng nhập khi cửa sổ ẩn
     // Ưu tiên: nếu giờ bridge gọi được CLI (user vừa đăng nhập xong trên trình duyệt) → thành công.
     if (await _cliTestWorks(ep)){ clearInterval(_cliPoll); box.innerHTML = '<span style="color:var(--green)">✅ Đăng nhập thành công! Dùng được rồi.</span>'; return; }
     let s; try { s = await (await fetch(ep + '/login/status')).json(); } catch { s = null; }

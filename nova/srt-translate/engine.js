@@ -140,4 +140,28 @@ async function translateCues(cues, opts = {}) {
   return list.map((c, idx) => ({ startMs: c.startMs, endMs: c.endMs, text: out[idx] }));
 }
 
-module.exports = { LANGS, MODELS, msToSrt, serializeSrt, translateCues, parseSrtCues };
+/* Ghép SRT song ngữ (2026-09-17ze): mỗi cue 2 dòng — gốc + dịch (originalFirst)
+   hoặc dịch + gốc. Thời gian lấy theo bản dịch (dịch không đổi timestamp).
+   Số dòng lệch hoặc dòng trống → lỗi lộ liễu SRTT_*. */
+function mergeBilingualCues(translationCues, originalCues, opts = {}) {
+  const a = Array.isArray(translationCues) ? translationCues : [];
+  const b = Array.isArray(originalCues) ? originalCues : [];
+  if (a.length !== b.length) {
+    const e = new Error('Số dòng không khớp khi ghép song ngữ (dịch ' + a.length + ' vs gốc ' + b.length + ').');
+    e.code = 'SRTT_LEN_MISMATCH';
+    throw e;
+  }
+  const originalFirst = opts.originalFirst !== false;
+  return a.map((c, i) => {
+    const trans = String((c && c.text) || '').trim();
+    const orig = String((b[i] && b[i].text) || '').trim();
+    if (!trans || !orig) {
+      const e = new Error('Cue ' + (i + 1) + ' thiếu dòng ' + (trans ? 'gốc' : 'dịch') + ' — không ghép được song ngữ.');
+      e.code = 'SRTT_BILINGUAL_EMPTY';
+      throw e;
+    }
+    return { startMs: c.startMs, endMs: c.endMs, text: originalFirst ? (orig + '\n' + trans) : (trans + '\n' + orig) };
+  });
+}
+
+module.exports = { LANGS, MODELS, msToSrt, serializeSrt, translateCues, parseSrtCues, mergeBilingualCues };

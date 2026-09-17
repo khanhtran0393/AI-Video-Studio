@@ -213,6 +213,7 @@ async function probeStreams(file) {
     index: typeof s.index === 'number' ? s.index : 0,
     codec: s.codec_name || '?',
     channels: s.channels || 0,
+    sampleRate: Number(s.sample_rate) || 0,
   }));
   const subs = streams.filter((s) => s.codec_type === 'subtitle').length;
   let fps = 0;
@@ -1434,10 +1435,148 @@ async function insertAds(opts) {
   };
 }
 
+/* ══ 18) ĐỔI TỐC ĐỘ ÂM THANH (2026-09-17 — tham chiếu hành vi dgtmaxrender) ════
+   speed 0.25–4. Mặc định GIỮ CAO ĐỘ: filter atempo (WSOLA — co giãn thời lượng
+   mà cao độ không đổi). Factor ngoài 0.5–2 → chuỗi atempo (ffmpeg giới hạn từng
+   node 0.5..2.0, nhân đúng factor tổng). keepPitch=false → asetrate+aresample
+   (đổi cao độ kiểu băng từ — chủ đích, KHÔNG phải fallback; UI khai báo rõ).
+   Input video có track video + đích là container video → copy stream hình
+   (không re-encode vô ích). Lỗi lộ liễu mã FFX_SPEED_* (Luật 10). ── */
+const SPEED_MIN = 0.25;
+const SPEED_MAX = 4;
+
+function atempoChain(factor) {
+  const parts = [];
+  let remain = Number(factor);
+  while (remain < 0.5 - 1e-9) { parts.push('atempo=0.5'); remain /= 0.5; }
+  while (remain > 2 + 1e-9) { parts.push('atempo=2.0'); remain /= 2; }
+  parts.push('atempo=' + remain.toFixed(6));
+  return parts.join(',');
+}
+
+async function changeAudioSpeed(opts) {
+  const o = opts || {};
+  assertInput(o.inputPath, 'FFX_INPUT');
+  assertOutput(o.outputPath, o.inputPath);
+  const speed = num(o.speed, 'FFX_SPEED');
+  if (speed < SPEED_MIN || speed > SPEED_MAX) {
+    const e = new Error('FFX_SPEED: tốc độ phải trong khoảng ' + SPEED_MIN + '–' + SPEED_MAX + '× (nhận ' + speed + ')');
+    e.code = 'FFX_SPEED'; throw e;
+  }
+  const keepPitch = o.keepPitch !== false;
+  const ext = path.extname(o.outputPath).slice(1).toLowerCase();
+  const info = await probeStreams(o.inputPath);
+  if (!info.audioTracks.length) {
+    const e = new Error('FFX_INPUT: file không chứa âm thanh — không đổi tốc độ được — ' + o.inputPath);
+    e.code = 'FFX_INPUT'; throw e;
+  }
+  const sr = info.audioTracks[0].sampleRate;
+  if (!keepPitch && !(sr > 0)) {
+    const e = new Error('FFX_SPEED: ffprobe không đo được sample-rate nguồn — không dựng được asetrate');
+    e.code = 'FFX_SPEED'; throw e;
+  }
+  const dur = info.durationSec;
+  const videoContainer = ['mp4', 'mov', 'm4v', 'mkv', 'avi', 'webm', 'ts'].indexOf(ext) >= 0;
+  const videoCopy = !!(info.video && videoContainer);
+  const af = keepPitch ? atempoChain(speed) : ('asetrate=' + Math.round(sr * speed) + ',aresample=' + sr);
+  let args = ['-y', '-i', o.inputPath, '-map', '0:a:0'];
+  if (videoCopy) args = args.concat(['-map', '0:v:0?', '-c:v', 'copy']);
+  else if (info.video) {
+    // Nguồn video nhưng đích là file thuần âm thanh → không bê stream hình theo.
+  }
+  args = args.concat(['-af', af], normCodecArgs(ext));
+  args = args.concat(['-movflags', '+faststart', o.outputPath]);
+  // ffmpeg báo time= theo NGÕ RA → tổng để tính % là thời lượng đích (nguồn/speed).
+  await spawnRun(FFMPEG, args, { totalSec: dur > 0 ? dur / speed : 0, outPath: o.outputPath, onProgress: o.onProgress });
+  return { ok: true, path: o.outputPath, speed, keepPitch, videoCopy, sampleRate: sr || 0 };
+}
+
+/* ── Đổi CAO ĐỘ giữ thời lượng (2026-09-17) ──
+   asetrate đổi cao độ kèm tốc độ → bù atempo=1/factor để thời lượng nguyên
+   (nghe cao/trầm hơn nhưng dài như cũ — khác changeAudioSpeed keepPitch:false
+   nơi cố ý đổi cả tốc). semitones: −12..12 bán cung (≠0). Mã lỗi FFX_PITCH_*
+   lộ liễu (Luật 10). */
+async function changeAudioPitch(opts) {
+  const o = opts || {};
+  assertInput(o.inputPath, 'FFX_INPUT');
+  assertOutput(o.outputPath, o.inputPath);
+  const st = num(o.semitones, 'FFX_PITCH');
+  if (!Number.isFinite(st) || st === 0 || st < -12 || st > 12) {
+    const e = new Error('FFX_PITCH: semitones phải khác 0 và trong khoảng −12..12 (nhận ' + st + ')');
+    e.code = 'FFX_PITCH'; throw e;
+  }
+  const factor = Math.pow(2, st / 12);
+  const ext = path.extname(o.outputPath).slice(1).toLowerCase();
+  const info = await probeStreams(o.inputPath);
+  if (!info.audioTracks.length) {
+    const e = new Error('FFX_INPUT: file không chứa âm thanh — không đổi cao độ được — ' + o.inputPath);
+    e.code = 'FFX_INPUT'; throw e;
+  }
+  const sr = info.audioTracks[0].sampleRate;
+  if (!(sr > 0)) {
+    const e = new Error('FFX_PITCH: ffprobe không đo được sample-rate nguồn — không dựng được asetrate');
+    e.code = 'FFX_PITCH'; throw e;
+  }
+  const dur = info.durationSec;
+  const videoContainer = ['mp4', 'mov', 'm4v', 'mkv', 'avi', 'webm', 'ts'].indexOf(ext) >= 0;
+  const videoCopy = !!(info.video && videoContainer);
+  const af = 'asetrate=' + Math.round(sr * factor) + ',aresample=' + sr + ',' + atempoChain(1 / factor);
+  let args = ['-y', '-i', o.inputPath, '-map', '0:a:0'];
+  if (videoCopy) args = args.concat(['-map', '0:v:0?', '-c:v', 'copy']);
+  args = args.concat(['-af', af], normCodecArgs(ext));
+  args = args.concat(['-movflags', '+faststart', o.outputPath]);
+  // Thời lượng KHÔNG đổi → tổng % tính tiến độ = thời lượng nguồn.
+  await spawnRun(FFMPEG, args, { totalSec: dur > 0 ? dur : 0, outPath: o.outputPath, onProgress: o.onProgress });
+  return { ok: true, path: o.outputPath, semitones: st, factor, videoCopy, sampleRate: sr || 0 };
+}
+
+/* ── (2026-09-17ze) Đóng phụ đề cứng (burn-in) — filter `subtitles` (libass,
+      có sẵn trong ffmpeg-static, đã xác minh qua -filters). Video re-encode
+      (CPU hoặc GPU tuỳ useGpu), audio copy. Đường dẫn SRT escape đúng quy tắc
+      filter (':' → '\:' — Windows C:\… bị filter ăn nhầm làm options). Font:
+      fontsdir trỏ thư mục font hệ thống + force_style FontName=Arial — libass
+      KHÔNG có fonts.conf trong ffmpeg-static → không trỏ fontsdir thì không
+      tìm thấy font nào (toàn chữ ô vuông), khai báo rõ ở đây. ── */
+const SUB_FONTS_DIR = process.platform === 'win32' ? 'C:\\Windows\\Fonts' : '/usr/share/fonts';
+
+function srtFilterArg(p) {
+  return String(p).replace(/\\/g, '/').replace(/:/g, '\\:');
+}
+
+async function burnSubtitles(opts) {
+  const o = opts || {};
+  assertInput(o.inputPath, 'FFX_INPUT');
+  assertInput(o.srtPath, 'FFX_NO_SRT');
+  assertOutput(o.outputPath, o.inputPath);
+  if (String(path.resolve(o.srtPath)).toLowerCase() === String(path.resolve(o.outputPath)).toLowerCase()) {
+    const e = new Error('FFX_SAME_PATH: SRT nguồn trùng file output — chọn nơi lưu khác'); e.code = 'FFX_SAME_PATH'; throw e;
+  }
+  const total = await probeDur(o.inputPath);
+  if (!(total > 0)) { const e = new Error('FFX_DURATION: không đo được thời lượng video nguồn'); e.code = 'FFX_DURATION'; throw e; }
+  const fsSize = Math.max(10, Math.min(72, Number(o.fontSize) || 18));
+  const mV = Math.max(0, Math.min(400, Math.round(Number(o.marginV) || 30)));
+  const fontName = String(o.fontName || 'Arial').replace(/[,'\\]/g, '').trim() || 'Arial';
+  const forceStyle = 'FontName=' + fontName + ',FontSize=' + fsSize
+    + ',PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000'
+    + ',BorderStyle=1,Outline=1,Shadow=0,Bold=1,Alignment=2,MarginV=' + mV;
+  const vf = "subtitles=filename='" + srtFilterArg(o.srtPath)
+    + "':fontsdir='" + srtFilterArg(SUB_FONTS_DIR)
+    + "':force_style='" + forceStyle + "'";
+  const enc = o.useGpu ? gpuEncoder('h264') : null;
+  const vArgs = enc
+    ? ['-c:v', enc].concat(qualityArgs(enc, { crf: 23 }))
+    : ['-c:v', 'libx264', '-crf', '23', '-preset', 'fast'];
+  const args = ['-y', '-i', o.inputPath, '-map', '0:v:0', '-map', '0:a:0?',
+    '-vf', vf].concat(vArgs, ['-c:a', 'copy', o.outputPath]);
+  await spawnRun(FFMPEG, args, { totalSec: total, outputPath: o.outputPath, onProgress: o.onProgress });
+  return { ok: true, path: o.outputPath, encoder: enc ? gpuLabel(enc) : 'CPU', fontSize: fsSize, marginV: mV };
+}
+
 module.exports = {
   cancelRunning, probeMedia, probeStreams, detectScenes,
   extractAudio, cutVideo, cutMulti, concatVideos, concatAuto, concatTransition,
   loopVideo, loopPingPong, loopCrossfade, loopAudio, compressVideo,
   extractFrames, removeAudio, convertMedia, addMusic, toGif, makeThumb,
   faststartRemux, normalizeAudio, removeVocals, addFades, insertAds,
+  changeAudioSpeed, changeAudioPitch, atempoChain, burnSubtitles,
 };

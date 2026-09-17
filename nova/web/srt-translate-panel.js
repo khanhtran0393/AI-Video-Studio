@@ -80,6 +80,9 @@
             <input class="st-num" id="stConc" type="number" min="1" max="10" value="${state.maxConcurrent}">
           </label>
         </div>
+        <label class="st-lbl" style="display:flex;gap:6px;align-items:center;cursor:pointer;margin-top:10px">
+          <input type="checkbox" id="stBilingual" checked> Xuất SONG NGỮ — mỗi dòng 2 lớp: gốc + dịch
+        </label>
         <div class="st-note">Dịch song song nhiều lô qua AI đã cấu hình ở Cài đặt. Gemini là mặc định vì nhanh và rẻ.</div>
       </section>
       <section class="st-card">
@@ -216,15 +219,26 @@
       state.busy = true;
       refreshControls();
       status('Đang dịch ' + state.cues.length + ' dòng… (có thể mất vài phút)');
-      const r = await n.translate({
-        srcPath: state.srtPath,
-        outPath: state.outPath,
-        sourceLang: state.sourceLang,
-        targetLang: state.targetLang,
-        batchSize: state.batchSize,
-        model: state.model,
-        maxConcurrent: state.maxConcurrent,
-      });
+      const bilingual = !!((root.querySelector('#stBilingual') || {}).checked);
+      const r = bilingual
+        ? await n.bilingual({
+          srcPath: state.srtPath,
+          outPath: state.outPath,
+          sourceLang: state.sourceLang,
+          targetLang: state.targetLang,
+          batchSize: state.batchSize,
+          model: state.model,
+          maxConcurrent: state.maxConcurrent,
+        })
+        : await n.translate({
+          srcPath: state.srtPath,
+          outPath: state.outPath,
+          sourceLang: state.sourceLang,
+          targetLang: state.targetLang,
+          batchSize: state.batchSize,
+          model: state.model,
+          maxConcurrent: state.maxConcurrent,
+        });
       state.busy = false;
       refreshControls();
       if (r && r.ok) {

@@ -110,7 +110,15 @@ async function channelScorecard(channelUrl, onProgress = () => {}, opts = {}) {
     const args = [normChannel(channelUrl), '--no-warnings', '--playlist-items', '1-' + count,
       '--print', '%(id)s\t%(view_count)s\t%(duration)s\t%(upload_date)s\t%(channel)s\t%(channel_follower_count)s\t%(title)s'];
     if (ck) args.push('--cookies', ck);
-    const out = await run(args);
+    let out;
+    try { out = await run(args); }
+    catch (e) {
+      // 1 video age-gate/members-only trong kênh không được phép giết cả bảng chỉ số —
+      // yt-dlp vẫn in các video OK vào stdout trước khi exit≠0. Không còn hàng → ném lộ (Luật 10).
+      out = (e && e.stdout) || '';
+      if (!out.trim()) throw e;
+      onProgress(12, 'Một số video của kênh bị khoá — dùng phần quét được…');
+    }
     const vids = out.trim().split('\n').filter(Boolean).map(l => {
       const [id, v, d, up, ch, sub, ...t] = l.split('\t');
       return { id: (id || '').trim(), views: parseInt(v) || 0, dur: parseInt(d) || 0, days: daysSince(up), channel: (ch || '').trim(), subs: parseInt(sub) || 0, title: (t.join('\t') || '').trim(), url: id ? 'https://youtu.be/' + id : '' };
@@ -140,6 +148,7 @@ async function channelScorecard(channelUrl, onProgress = () => {}, opts = {}) {
 
     let analysis = ''; let analysisError = '';
     let enrichedVia = '';
+    let enrichErr = '';
     let commentsBlock = ''; let commentsNote = '';   // scope producer — return luôn tham chiếu kể cả khi analyze:false
     if (opts.analyze !== false && outliers.length) {
       // Enrich like/comment cho outlier (≤8 video): có key Nova → YouTube API nhanh;
@@ -147,12 +156,13 @@ async function channelScorecard(channelUrl, onProgress = () => {}, opts = {}) {
       if (_yt) {
         try {
           onProgress(52, 'Bổ sung like/comment…');
-          const { key, mode, map: em } = await _yt.enrich(outliers.map(x => x.id), (p, m) => onProgress(52 + Math.round(p * 0.15), m));
+          const { key, mode, map: em, apiError } = await _yt.enrich(outliers.map(x => x.id), (p, m) => onProgress(52 + Math.round(p * 0.15), m));
+          enrichErr = apiError || '';   // API key lỗi (vd bị Google chặn 403) — đã lùi yt-dlp keyless, khai báo ra UI (Luật 10)
           if (Object.keys(em).length) {
             enrichedVia = mode || (key ? 'api' : 'yt-dlp');
             vids.forEach(x => { const e = em[x.id]; if (e) { x.likes = e.likes; x.comments = e.comments; x.engRate = e.engRate; } });
           }
-        } catch (_) {}
+        } catch (err) { enrichErr = String((err && err.message) || err).slice(0, 160); }   // Luật 10: không nuốt
       }
       onProgress(70, 'AI đọc mô-típ…');
       // Đào bình luận của outlier #1 (tùy chọn, tắt bằng opts.mineComments === false):
@@ -180,7 +190,7 @@ async function channelScorecard(channelUrl, onProgress = () => {}, opts = {}) {
     onProgress(100, 'Xong');
     return {
       ok: true, channel: name, subs, subsFmt: kfmt(subs), videoCount: vids.length, median: Math.round(med),
-      metrics: m, health: healthScore(m), monetized: monetizedGuess(subs, m), analysis, analysisError, enrichedVia, commentsNote,
+      metrics: m, health: healthScore(m), monetized: monetizedGuess(subs, m), analysis, analysisError, enrichedVia, enrichErr, commentsNote,
       outliers: outliers.map(x => ({ title: x.title, views: x.views, viewsFmt: kfmt(x.views), ratio: x.ratio, dur: x.dur, days: x.days, url: x.url, id: x.id, likes: x.likes, comments: x.comments, engRate: x.engRate })),
       shortsCount: shorts.length, shortsMedian: Math.round(shortsMed), shortsNote,
       shortsOutliers: shortsOutliers.map(x => ({ title: x.title, views: x.views, viewsFmt: kfmt(x.views), ratio: x.ratio, dur: x.dur, url: x.url })),

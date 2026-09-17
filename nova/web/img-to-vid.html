@@ -4,8 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Ảnh + Nhạc • Hiệu ứng theo nhịp</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=Be+Vietnam+Pro:wght@400;600;700&family=Montserrat:wght@400;600;700&family=Playfair+Display:wght@600;700&family=Bebas+Neue&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="src/styles/fonts/multifonts-local.css">
 <style>
   :root{
     /* Token theme — mirror giá trị từ src/styles/base.css (light).
@@ -56,10 +55,10 @@
       radial-gradient(900px 600px at 100% 10%, color-mix(in srgb, var(--amber) 5%, transparent), transparent 55%),
       var(--bg);
     color:var(--text);
-    font-family:'Be Vietnam Pro',system-ui,sans-serif;
+    font-family:'Be Vietnam Pro','Segoe UI',system-ui,-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif;
     min-height:100vh;
   }
-  h1,h2,h3,.brand{font-family:'Be Vietnam Pro',system-ui,sans-serif;}
+  h1,h2,h3,.brand{font-family:'Be Vietnam Pro','Segoe UI',system-ui,-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif;}
   .app{
     display:grid;
     grid-template-columns: 360px minmax(0,1fr);
@@ -1052,11 +1051,9 @@
 
 </div>
 
-<!-- Vendor nguồn mở cho I-MZic FX (nạp TRƯỚC panel — panel đọc window.butterchurn /
-     window.butterchurnPresets khi người dùng chọn FX Milkdrop). Cả 2 là UMD build
-     minified — không sửa tay. -->
-<script src="vendor/butterchurn.min.js"></script>
-<script src="vendor/butterchurn-presets.min.js"></script>
+<!-- Vendor Butterchurn (Milkdrop) — LAZY LOAD 2026-09-17perf: nạp động khi user chọn
+     FX Milkdrop (bcEnsureVendor trong imzic-controls.js). Tiết kiệm ~826KB parse lúc
+     boot trang. Lỗi tải → báo lộ liễu IMZIC_BUTTERCHURN_LOAD (Luật 10). -->
 <!-- Panel tách từ img-to-vid-panel.js (IIFE 2612 dòng) thành 12 module top-level
      ngày 2026-09-11. THỨ TỰ NẠP = NGỮ NGHĨA: các file sau đọc biến/hàm file trước
      (đã kiểm chứng bằng AST — mọi lệnh chạy ngay chỉ đọc tên khai báo trước nó).

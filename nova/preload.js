@@ -54,9 +54,11 @@ contextBridge.exposeInMainWorld('native', {
     attention: (p) => ipcRenderer.invoke('nova:niche:attention', p),
     hot: (p) => ipcRenderer.invoke('nova:niche:hot', p),
     scorecard: (p) => ipcRenderer.invoke('nova:niche:scorecard', p),
+    scorecard_ai: (p) => ipcRenderer.invoke('nova:niche:scorecard_ai', p),   // panel auto-call sau scorecard (niche.js fnAi)
     similar: (p) => ipcRenderer.invoke('nova:niche:similar', p),
     bw: (p) => ipcRenderer.invoke('nova:niche:bw', p),
     spike: (p) => ipcRenderer.invoke('nova:niche:spike', p),
+    spike_ai: (p) => ipcRenderer.invoke('nova:niche:spike_ai', p),           // panel auto-call sau spike (niche.js fnAi)
     comments: (p) => ipcRenderer.invoke('nova:niche:comments', p),
     compare: (p) => ipcRenderer.invoke('nova:niche:compare', p),
     pain: (p) => ipcRenderer.invoke('nova:niche:pain', p),
@@ -190,6 +192,8 @@ contextBridge.exposeInMainWorld('native', {
     pickSrt: () => ipcRenderer.invoke('srt-translate:pickSrt'),
     pickOutput: (defaultName) => ipcRenderer.invoke('srt-translate:pickOutput', { defaultName }),
     translate: (payload) => ipcRenderer.invoke('srt-translate:translate', payload),
+    // SRT song ngữ (2026-09-17ze): dịch AI + ghép 2 dòng gốc + dịch
+    bilingual: (payload) => ipcRenderer.invoke('srt-translate:bilingual', payload),
   },
   // Viral Cut — port ViralCut 2.5: video (+SRT tuỳ chọn) → highlight 3 tầng
   // (LLM → heuristic → energy) → best-hook → cắt ffmpeg. Dialog thật, progress + cancel.
@@ -205,12 +209,46 @@ contextBridge.exposeInMainWorld('native', {
     // Hồ sơ nguồn YouTube (P1): URL → source-brief JSON+TXT (metadata,
     // chapters, heatmap, transcript, bình luận) — NGUỒN viết kịch bản.
     buildBrief: (payload) => ipcRenderer.invoke('viralCut:buildBrief', payload || {}),
+    // Re-sync phụ đề theo tiếng nói thật (2026-09-17) + skeleton SRT + cắt khoảng lặng
+    pickResyncMedia: () => ipcRenderer.invoke('viralCut:pickResyncMedia'),
+    resyncSrt: (payload) => ipcRenderer.invoke('viralCut:resyncSrt', payload || {}),
+    skeletonSrt: (payload) => ipcRenderer.invoke('viralCut:skeletonSrt', payload || {}),
+    pickTightenOut: () => ipcRenderer.invoke('viralCut:pickTightenOut'),
+    tightenSilence: (payload) => ipcRenderer.invoke('viralCut:tightenSilence', payload || {}),
     exportClips: (payload) => ipcRenderer.invoke('viralCut:export', payload || {}),
     cancel: () => ipcRenderer.invoke('viralCut:cancel'),
     onProgress: (cb) => {
       const listener = (_e, s) => { if (cb) cb(s); };
       ipcRenderer.on('viralCut:progress', listener);
       return () => ipcRenderer.removeListener('viralCut:progress', listener);
+    },
+  },
+  // Lồng tiếng theo phụ đề (dub): video + SRT → TTS OmniVoice từng cue →
+  // khớp timeline SRT (speed-up giữ cao độ + trim) → MP4 + SRT khớp.
+  dub: {
+    pickVideo: () => ipcRenderer.invoke('dub:pickVideo'),
+    pickSrt: () => ipcRenderer.invoke('dub:pickSrt'),
+    pickOutput: (defaultName) => ipcRenderer.invoke('dub:pickOutput', { defaultName }),
+    voices: () => ipcRenderer.invoke('dub:voices'),
+    render: (payload) => ipcRenderer.invoke('dub:render', payload || {}),
+    // Kiểm tra giọng (health check): dò backend + TTS 1 câu ngắn
+    checkVoice: () => ipcRenderer.invoke('dub:checkVoice'),
+    // Lồng tiếng loạt: nhiều video + SRT cùng tên → hàng đợi tuần tự
+    pickVideos: () => ipcRenderer.invoke('dub:pickVideos'),
+    pickBatchOutDir: () => ipcRenderer.invoke('dub:pickBatchOutDir'),
+    batch: (payload) => ipcRenderer.invoke('dub:batch', payload || {}),
+    // Preset cấu hình Lồng Tiếng (2026-09-17ze): lưu/nạp/xoá bộ cấu hình form
+    presetList: () => ipcRenderer.invoke('dub:presetList'),
+    presetSave: (payload) => ipcRenderer.invoke('dub:presetSave', payload || {}),
+    presetDelete: (payload) => ipcRenderer.invoke('dub:presetDelete', payload || {}),
+    // Tạo SRT chuẩn giờ từ kịch bản text (2026-09-17ze): text → TTS từng câu → SRT
+    pickTextSrtOut: (payload) => ipcRenderer.invoke('dub:pickTextSrtOut', payload || {}),
+    textToSrt: (payload) => ipcRenderer.invoke('dub:textToSrt', payload || {}),
+    cancel: () => ipcRenderer.invoke('dub:cancel'),
+    onProgress: (cb) => {
+      const listener = (_e, s) => { if (cb) cb(s); };
+      ipcRenderer.on('dub:progress', listener);
+      return () => ipcRenderer.removeListener('dub:progress', listener);
     },
   },
   // Công cụ FFmpeg (sidebar): tách MP3/M4A/WAV, cắt, ghép, loop, nén, trích frame,
@@ -248,6 +286,13 @@ contextBridge.exposeInMainWorld('native', {
     addFades: (payload) => ipcRenderer.invoke('ffx:add-fades', payload),
     // Chèn Quảng Cáo (gói 2026-09-12f)
     insertAds: (payload) => ipcRenderer.invoke('ffx:insert-ads', payload),
+    // Đổi tốc độ âm thanh (giữ cao độ mặc định — atempo)
+    changeSpeed: (payload) => ipcRenderer.invoke('ffx:change-speed', payload),
+    // Đổi cao độ giữ thời lượng (asetrate + bù atempo)
+    pitch: (payload) => ipcRenderer.invoke('ffx:pitch', payload),
+    // Đóng phụ đề cứng (2026-09-17ze): filter subtitles/libass, re-encode hình
+    pickSrt: () => ipcRenderer.invoke('ffx:pick-srt'),
+    burnSubtitles: (payload) => ipcRenderer.invoke('ffx:burn-subtitles', payload),
     // Electron 43 gỡ File.path → drag-drop file vào GUI phải đi qua webUtils.getPathForFile
     // (hàm đồng bộ, chạy trong preload — KHÔNG phải kênh IPC mới).
     pathForFile: (file) => webUtils.getPathForFile(file),
@@ -360,6 +405,14 @@ contextBridge.exposeInMainWorld('native', {
   updateDownload: () => ipcRenderer.invoke('update-download'),
   updateInstall: () => ipcRenderer.invoke('update-install'),
   agentCopilotChat: (history, apiConfig) => ipcRenderer.invoke('agentCopilot:chat', history, apiConfig),
+  // Stream tiến trình tool của Agent Copilot ra renderer theo thời gian thực
+  // (payload: {type:'step'|'tool_start'|'tool_end'|'done'|'approval_request', name?, summary?, step?, maxSteps?, ok?, id?, path?, diff?})
+  onAgentCopilotEvent: (cb) => ipcRenderer.on('agentCopilot:event', (_e, o) => cb(o)),
+  // Trả lời cổng duyệt: {id, approved:true|false} — giải phóng loop đang chờ diff được duyệt
+  agentCopilotApprove: (payload) => ipcRenderer.invoke('agentCopilot:approval', payload),
+  // Trả kết quả ủy nhiệm whiteboard_pipeline: {id, ok, summary?, error?} — panel Whiteboard
+  // Studio nhận event wb_task (qua onAgentCopilotEvent) rồi trả về qua kênh này
+  agentCopilotWbResult: (payload) => ipcRenderer.invoke('agentCopilot:wbResult', payload),
   // Secret Vault — kho credential MÃ HOÁ (safeStorage) trong <userData>/secure.
   // Key phải nằm trong TOP_LEVEL_SECRET_KEYS (nova/main/secret-vault.js); key lạ
   // sẽ bị main từ chối lộ liễu (rejected invoke).

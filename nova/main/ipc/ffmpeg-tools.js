@@ -135,6 +135,22 @@ function registerFfmpegToolsIpc() {
   handleOp('ffx:add-fades', (p, onProgress) => mediaTools.addFades(Object.assign({}, p, { onProgress })));
   // ── Chèn Quảng Cáo (2026-09-12f): cắt nguồn tại các điểm chèn + ghép clip quảng cáo vào ──
   handleOp('ffx:insert-ads', (p, onProgress) => mediaTools.insertAds(Object.assign({}, p, { onProgress })));
+  // ── Đổi tốc độ âm thanh (2026-09-17): giữ cao độ mặc định (atempo), tuỳ chọn asetrate ──
+  handleOp('ffx:change-speed', (p, onProgress) => mediaTools.changeAudioSpeed(Object.assign({}, p, { onProgress })));
+  // ── Đổi cao độ giữ thời lượng (2026-09-17): asetrate + bù atempo=1/factor ──
+  handleOp('ffx:pitch', (p, onProgress) => mediaTools.changeAudioPitch(Object.assign({}, p, { onProgress })));
+  // ── Chọn file SRT để đóng phụ đề cứng (2026-09-17ze) ──
+  ipcMain.handle('ffx:pick-srt', async () => {
+    try {
+      const r = await dialog.showOpenDialog(state.mainWindow, {
+        title: 'Chọn file SRT phụ đề', properties: ['openFile'], filters: [{ name: 'SRT', extensions: ['srt'] }],
+      });
+      if (r.canceled || !r.filePaths || !r.filePaths[0]) return { canceled: true };
+      return { path: r.filePaths[0] };
+    } catch (e) { return { error: e.message || String(e) }; }
+  });
+  // ── Đóng phụ đề cứng (burn-in — filter subtitles/libass, re-encode hình) ──
+  handleOp('ffx:burn-subtitles', (p, onProgress) => mediaTools.burnSubtitles(Object.assign({}, p, { onProgress })));
   // Thumbnail 1 frame (grid thẻ Ghép Video) — nhanh, không cần progress.
   ipcMain.handle('ffx:thumb', async (_e, payload = {}) => {
     try { return await mediaTools.makeThumb(payload || {}); }

@@ -11,9 +11,17 @@ let _yt = null; try { _yt = require('../nova-yt'); } catch (_) {}
 function run(args, timeoutMs = 150000) {
   return new Promise((res, rej) => {
     const ps = spawn(YTDLP, args, { windowsHide: true }); let o = '', e = '';
-    const t = setTimeout(() => { try { ps.kill('SIGKILL'); } catch (_) {} rej(new Error('yt-dlp timeout')); }, timeoutMs);
+    // Gắn stdout (phần dữ liệu đã in được) vào mọi lỗi — yt-dlp quét cả playlist,
+    // 1 video lỗi không ngăn nó in hàng của các video OK; caller cứu phần đó được.
+    const t = setTimeout(() => { try { ps.kill('SIGKILL'); } catch (_) {} const err = new Error('yt-dlp timeout'); err.stdout = o; rej(err); }, timeoutMs);
     ps.stdout.on('data', d => o += d); ps.stderr.on('data', d => e += d);
-    ps.on('error', rej); ps.on('close', c => { clearTimeout(t); c === 0 ? res(o) : rej(new Error(e.split('\n').slice(-2).join(' '))); });
+    ps.on('error', rej); ps.on('close', c => {
+      clearTimeout(t);
+      if (c === 0) return res(o);
+      const err = new Error(e.split('\n').slice(-2).join(' '));
+      err.stdout = o;
+      rej(err);
+    });
   });
 }
 // ── AI: ưu tiên ĐÚNG API người dùng đã cấu hình trong Cài đặt → API (kho nova-settings),
@@ -269,10 +277,19 @@ async function searchVideos(query, n = 20, onProgress = () => {}, opts = {}) {
   // Lấy luôn channel_url + channel_follower_count: tên kênh có dấu cách KHÔNG ghép được thành @handle,
   // và có sub từ yt-dlp thì tính được VPS ngay cả khi máy chưa có key YouTube API.
   const args = opts.sort === 'date' && query && query.trim()
-    ? [target, '--playlist-end', String(n), '--no-warnings', '--print', '%(view_count)s\\t%(upload_date)s\\t%(duration)s\\t%(channel)s\\t%(channel_url)s\\t%(channel_follower_count)s\\t%(id)s\\t%(title)s']
-    : [target, '--no-warnings', '--print', '%(view_count)s\\t%(upload_date)s\\t%(duration)s\\t%(channel)s\\t%(channel_url)s\\t%(channel_follower_count)s\\t%(id)s\\t%(title)s'];
+    ? [target, '--playlist-end', String(n), '--no-warnings', '--print', '%(view_count)s\t%(upload_date)s\t%(duration)s\t%(channel)s\t%(channel_url)s\t%(channel_follower_count)s\t%(id)s\t%(title)s']
+    : [target, '--no-warnings', '--print', '%(view_count)s\t%(upload_date)s\t%(duration)s\t%(channel)s\t%(channel_url)s\t%(channel_follower_count)s\t%(id)s\t%(title)s'];
   if (ck) args.push('--cookies', ck);
-  const out = await run(args);
+  let out;
+  try { out = await run(args); }
+  catch (e) {
+    // yt-dlp exit≠0 nhưng stdout vẫn chứa hàng dữ liệu của các video quét được (1 video
+    // age-gate/xoá trong playlist không được phép giết cả lượt quét). Không còn hàng nào
+    // thì ném lại lộ liễu — không bịa dữ liệu (Luật 10).
+    out = (e && e.stdout) || '';
+    if (!out.trim()) throw e;
+    onProgress(20, 'Một số video bị YouTube khoá tuổi/xoá — dùng phần quét được…');
+  }
   let vids = out.trim().split('\n').filter(Boolean).map(l => {
     const [v, up, d, ch, chUrl, sub, id, ...t] = l.split('\t');
     const views = parseInt(v) || 0, days = daysSince(up);
@@ -281,18 +298,22 @@ async function searchVideos(query, n = 20, onProgress = () => {}, opts = {}) {
   }).filter(x => x.title);
   // Enrich like/comment/sub: CÓ key → YouTube Data API (nhanh, 1 unit/50 video);
   // KHÔNG key → yt-dlp chế độ KHÔNG CẦN KEY (chậm hơn nhưng zero cấu hình). Báo rõ enrichedVia để UI hiển thị.
-  let enriched = false, enrichedVia = '';
+  let enriched = false, enrichedVia = '', enrichErr = '';
   if (_yt) {
     try {
-      const { key, mode, map } = await _yt.enrich(vids.map(x => x.id), (p, m) => onProgress(42 + Math.round(p * 0.18), m));
-      if (key) onProgress(42, 'Bổ sung like/comment/sub (YouTube API)…');
+      const { key, mode, map, apiError } = await _yt.enrich(vids.map(x => x.id), (p, m) => onProgress(42 + Math.round(p * 0.18), m));
+      enrichErr = apiError || '';   // API key lỗi (vd bị Google chặn 403) — đã lùi yt-dlp keyless, khai báo ra UI (Luật 10)
+      if (key && !apiError) onProgress(42, 'Bổ sung like/comment/sub (YouTube API)…');
       if (Object.keys(map).length) {
         enriched = true; enrichedVia = mode || (key ? 'api' : 'yt-dlp');
         vids.forEach(x => { const e = map[x.id]; if (e) { x.views = e.views || x.views; x.likes = e.likes; x.comments = e.comments; x.dur = e.dur || x.dur; x.days = e.days != null ? e.days : x.days; x.channel = e.channel || x.channel; x.subs = e.subs || x.subs; x.vel = e.vel || x.vel; x.engRate = e.engRate; x.viewPerSub = e.viewPerSub || x.viewPerSub; x.demand = e.demand; } });
       }
-    } catch (_) {}
+    } catch (e) {
+      // Luật 10: không nuốt — enrich lỗi thì ghi nhận rõ; dữ liệu yt-dlp gốc (view/ngày/kênh) vẫn dùng được
+      enrichErr = String((e && e.message) || e).slice(0, 160);
+    }
   }
-  return { vids, enriched, enrichedVia };
+  return { vids, enriched, enrichedVia, enrichErr };
 }
 
 // ══════════════════════════════════════════════════════════════════

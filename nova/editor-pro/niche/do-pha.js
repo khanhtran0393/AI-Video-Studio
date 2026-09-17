@@ -31,7 +31,7 @@ async function viewSpikes(seed, onProgress = () => {}, opts = {}) {
     { q: String(seed), n: 25, sort: 'date', label: 'mới nhất' },
     { q: String(seed), n: 15, label: 'phổ biến' },
   ];
-  const failedQueries = []; const byId = new Map(); let enriched = false; let done = 0;
+  const failedQueries = []; const byId = new Map(); let enriched = false; let enrichErr = ''; let done = 0;
   const results = await pool(jobs, 2, (j) => searchVideos(j.q, j.n, () => {}, { sort: j.sort })
     .then(r => ({ ok: true, r }))
     .catch(err => ({ ok: false, q: j.q, error: String((err && err.message) || err).slice(0, 140) }))
@@ -43,6 +43,7 @@ async function viewSpikes(seed, onProgress = () => {}, opts = {}) {
   for (const res of results) {
     if (!res.ok) { failedQueries.push({ q: res.q, error: res.error }); continue; }
     enriched = enriched || res.r.enriched;
+    enrichErr = enrichErr || res.r.enrichErr || '';
     res.r.vids.forEach(v => { if (v.id && !byId.has(v.id)) byId.set(v.id, v); });
   }
   if (!byId.size) {
@@ -116,14 +117,17 @@ async function viewSpikes(seed, onProgress = () => {}, opts = {}) {
   }
   onProgress(100, 'Xong');
   return {
-    ok: true, seed, enriched, scanned: byId.size, firstRun: !prev,
+    ok: true, seed, enriched, enrichErr, scanned: byId.size, firstRun: !prev,
     prevScan: prev ? { ageHours: windowHours } : null, windowHours, overlap, baselineKept,
     videos: movers, newVideos, rockets, medVel, channels, failedQueries, analysis, analysisError,
   };
 }
 
 async function viewSpikesAi(opts) {
-  const { seed, windowHours, movers, rockets, newVideos, medVel } = opts;
+  // viewSpikes trả "videos" (movers) — chấp nhận cả 2 tên + mặc định [] để không
+  // TypeError khi 1 trong các mảng rỗng/không có (Luật 10: lỗi lộ liễu ở handler).
+  const { seed, windowHours, rockets = [], newVideos = [], medVel } = opts || {};
+  const movers = (opts && (opts.movers || opts.videos)) || [];
   try {
     const { claude, kfmt } = require('./loi');
     const lines = [

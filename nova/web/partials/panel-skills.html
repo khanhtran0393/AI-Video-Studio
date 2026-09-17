@@ -40,11 +40,18 @@
         </section>
 
         <section class="settings-col">
-          <div class="settings-h">📚 Skill đã lưu <span id="sklCount" style="font-weight:400;color:var(--text-dim);font-size:11px"></span></div>
+          <div class="settings-h" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span>📚 Skill đã lưu <span id="sklCount" style="font-weight:400;color:var(--text-dim);font-size:11px"></span></span>
+            <span style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-left:auto">
+              <button class="btn ghost sm" onclick="sklImportCatalog()" title="Nạp trọn bộ 100 skill mẫu phủ kín 100 chủ đề của tab Tạo Kịch Bản. Skill trùng tên đã có trong kho bị bỏ qua — KHÔNG ghi đè lên skill bạn đã tự sửa.">📥 Nạp mẫu</button>
+              <button class="btn ghost sm" onclick="sklDownloadAll()" title="Tải toàn bộ skill đã lưu ra 1 file .json để sao lưu hoặc chia sẻ.">⬇ Tải tất cả</button>
+              <button class="btn ghost sm" onclick="sklNormalizeAll()" title="Nâng cấp skill v1 (chỉ có Hướng dẫn) lên chuẩn v2: tách nhãn Mở đầu bằng / Cấu trúc / Nhịp / Loop / Cấm thành hookTemplates / structure / voice / antiPatterns và ghi lại. Không bịa nội dung — role/audience/examples để trống.">🧰 Chuẩn hoá v1 → v2</button>
+              <button class="btn ghost sm" style="color:var(--red);border-color:var(--red)" onclick="sklDeleteAll()" title="XOÁ TOÀN BỘ skill đã lưu trong kho (có xác nhận, không thể hoàn tác).">🗑 Xóa tất cả</button>
+            </span>
+          </div>
           <div style="background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:16px 18px">
             <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
-              <button class="btn ghost sm" onclick="sklImportCatalog()" title="Nạp trọn bộ 100 skill mẫu phủ kín 100 chủ đề của tab Tạo Kịch Bản. Skill trùng tên đã có trong kho bị bỏ qua — KHÔNG ghi đè lên skill bạn đã tự sửa.">📥 Nạp bộ skill mẫu (100 chủ đề)</button>
-              <span style="font-size:11px;color:var(--text-dim)">Chỉ thêm mới — không ghi đè skill đã sửa.</span>
+              <span style="font-size:11px;color:var(--text-dim)">📥 Nạp mẫu: chỉ thêm mới — không ghi đè skill đã sửa.</span>
             </div>
             <div class="grid-2" style="gap:10px;margin-bottom:10px">
               <input type="text" id="sklFilterTopic" placeholder="Lọc theo chủ đề…" autocomplete="off" oninput="sklRender()">

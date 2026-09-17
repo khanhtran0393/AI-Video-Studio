@@ -9,7 +9,7 @@ async function hotTopics(seed, onProgress = () => {}, opts = {}) {
     const queries = await sweepQueries(seed, onProgress);
     // Quét SONG SONG 2 luồng (pool) thay vì tuần tự — 4 góc yt-dlp độc lập nên nhanh ~2x.
     // Lỗi từng góc KHÔNG bị nuốt (Luật 10): gom vào failedQueries, báo rõ ra UI.
-    const seen = new Set(); const all = []; const failedQueries = []; let enriched = false; let done = 0;
+    const seen = new Set(); const all = []; const failedQueries = []; let enriched = false; let enrichErr = ''; let done = 0;
     const results = await pool(queries, 2, (q) => searchVideos(q, 20, () => {})
       .then(r => ({ ok: true, q, r }))
       .catch(err => ({ ok: false, q, error: String((err && err.message) || err).slice(0, 140) }))
@@ -23,6 +23,7 @@ async function hotTopics(seed, onProgress = () => {}, opts = {}) {
     for (const res of results) {
       if (!res.ok) { failedQueries.push({ q: res.q, error: res.error }); continue; }
       enriched = enriched || res.r.enriched;
+      enrichErr = enrichErr || res.r.enrichErr || '';
       res.r.vids.forEach(v => { if (v.id && !seen.has(v.id)) { seen.add(v.id); v.q = res.q; all.push(v); } });
     }
     if (!all.length) {
@@ -56,7 +57,7 @@ async function hotTopics(seed, onProgress = () => {}, opts = {}) {
     onProgress(100, 'Xong');
     const pick = (x) => ({ title: x.title, channel: x.channel, views: x.views, viewsFmt: kfmt(x.views), ratio: x.ratio, vps: x.vps, subs: x.subs, days: x.days, url: x.url, id: x.id });
     return {
-      ok: true, seed, enriched, queries, median: Math.round(med), scanned: all.length,
+      ok: true, seed, enriched, enrichErr, queries, median: Math.round(med), scanned: all.length,
       failedQueries,                                          // góc quét lỗi — UI báo "x/y góc lỗi"
       items: safeJson(raw, []),
       rising: rising.map(pick), proven: proven.map(pick),
@@ -90,7 +91,7 @@ async function bwScore(payload = {}, onProgress = () => {}) {
 //    và mọi ý tưởng đều bị chấm theo thang đen–trắng.
 async function attentionMarkets(seed, onProgress = () => {}, opts = {}) {
   return cached('attention', seed, opts.fresh, onProgress, async () => {
-    const { vids, enriched } = await searchVideos(seed, 24, onProgress);
+    const { vids, enriched, enrichErr } = await searchVideos(seed, 24, onProgress);
     if (!vids.length) throw new Error('Không tìm được video cho từ khoá này.');
     onProgress(58, 'Lọc video vượt trội…');
     // Chỉ xét OUTLIER: video vượt trung vị ngách — đó mới là chỗ có tệp khán giả đang đói.
@@ -122,7 +123,7 @@ async function attentionMarkets(seed, onProgress = () => {}, opts = {}) {
     }).filter(m => m.segment).sort((a, b) => b.fire - a.fire);
 
     onProgress(100, 'Xong');
-    return { ok: true, seed, enriched, median: Math.round(med), scanned: vids.length, outliers: pool.length, items };
+    return { ok: true, seed, enriched, enrichErr, median: Math.round(med), scanned: vids.length, outliers: pool.length, items };
   });
 }
 module.exports = { hotTopics, bwScore, attentionMarkets };

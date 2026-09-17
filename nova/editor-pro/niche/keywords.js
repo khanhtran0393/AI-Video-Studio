@@ -7,6 +7,7 @@ async function keywordClusters(seed, onProgress = () => {}, opts = {}) {
     onProgress(10, `Quét ${queries.length} góc…`);
     const allVids = [];
     const failedQueries = [];
+    let enrichErr = '';
     let done = 0;
     const results = await pool(queries, 2, (q) => searchVideos(q, 15, () => {})
       .then(r => ({ ok: true, q, r }))
@@ -18,6 +19,7 @@ async function keywordClusters(seed, onProgress = () => {}, opts = {}) {
       }));
     for (const res of results) {
       if (!res.ok) { failedQueries.push({ q: res.q, error: res.error }); continue; }
+      enrichErr = enrichErr || res.r.enrichErr || '';
       res.r.vids.forEach(v => { if (!allVids.find(x => x.id === v.id)) allVids.push(v); });
     }
     if (!allVids.length) throw new Error('Không tìm được video.');
@@ -32,7 +34,7 @@ Tiêu đề: ${titles.join('\n')}`;
     const raw = await claude('Bạn là trợ lý hữu ích. Chỉ trả JSON hợp lệ.', prompt);
     const clusters = safeJson(raw, []);
     onProgress(100, 'Xong');
-    return { ok: true, seed, clusters, totalVideos: allVids.length, failedQueries };
+    return { ok: true, seed, clusters, totalVideos: allVids.length, failedQueries, enrichErr };
   });
 }
 module.exports = { keywordClusters };

@@ -32,6 +32,20 @@
     previewStartMs: null, // mốc bắt đầu phát của lượt xem trước hiện tại (phục vụ loop)
     videoErr: '',         // lý do <video> không phát được (codec/DOM) — báo lộ liễu, không im lặng
     loadTimer: null,      // watchdog: src gán rồi mà không có metadata trong 8s → báo lỗi
+    resyncMediaPath: '',  // Re-sync: media nguồn dò tiếng nói (path thật từ dialog)
+    resyncMediaName: '',
+    resyncSrtPath: '',    // Re-sync: file SRT cần kéo về tiếng nói
+    resyncSrtName: '',
+    resyncing: false,     // đang chạy re-sync
+    skelMediaPath: '',    // SRT khung: media nguồn dò tiếng nói
+    skelMediaName: '',
+    skelRunning: false,   // đang sinh SRT khung
+    tightMediaPath: '',   // Cắt khoảng lặng: video nguồn
+    tightMediaName: '',
+    tightSrtPath: '',     // Cắt khoảng lặng: SRT kéo theo timeline mới (tuỳ chọn)
+    tightSrtName: '',
+    tightOutPath: '',     // Cắt khoảng lặng: nơi lưu (dialog save thật)
+    tightening: false,    // đang cắt khoảng lặng
   };
 
   let SHELL = `
@@ -85,13 +99,21 @@
   };
   const vcSetLog = (msg) => { const el = vcEl('vcLog'); if (el) el.textContent = msg; };
   const vcSetBusy = () => {
-    const busy = vcState.analyzing || vcState.exporting || vcState.downloading || vcState.fetchingCaptions;
+    const busy = vcState.analyzing || vcState.exporting || vcState.downloading || vcState.fetchingCaptions || vcState.resyncing || vcState.skelRunning || vcState.tightening;
     if (vcEl('vcAnalyze')) vcEl('vcAnalyze').disabled = busy;
     if (vcEl('vcAnalyzeYt')) vcEl('vcAnalyzeYt').disabled = busy;
     if (vcEl('vcExport')) vcEl('vcExport').disabled = busy || !vcState.highlights.length || !vcState.outDir;
     if (vcEl('vcCancel')) vcEl('vcCancel').disabled = !busy;
     if (vcEl('vcGetSrc')) vcEl('vcGetSrc').disabled = busy || !vcState.sourceUrl;
     if (vcEl('vcFetchSrt')) vcEl('vcFetchSrt').disabled = busy || !((vcEl('vcUrl') || {}).value || '').trim() && !vcState.sourceUrl;
+    if (vcEl('vcResyncRun')) vcEl('vcResyncRun').disabled = busy || !vcState.resyncMediaPath || !vcState.resyncSrtPath;
+    if (vcEl('vcSkelRun')) vcEl('vcSkelRun').disabled = busy || !vcState.skelMediaPath;
+    if (vcEl('vcTightRun')) vcEl('vcTightRun').disabled = busy || !vcState.tightMediaPath || !vcState.tightOutPath;
+  };
+  const vcResyncInfo = () => {
+    const el = vcEl('vcResyncInfo');
+    if (el) el.textContent = 'Nguồn: ' + (vcState.resyncMediaName || 'chưa chọn') + ' · SRT: ' + (vcState.resyncSrtName || 'chưa chọn');
+    vcSetBusy();
   };
   const vcSetProg = (pct, msg) => {
     const wrap = vcEl('vcProgWrap');
@@ -345,6 +367,43 @@
     vcSetLog('Đang xem trước đoạn ' + (i + 1) + ': ' + vcFmt(h.startMs) + ' → ' + vcFmt(h.endMs) + (h.title ? ' — ' + h.title : ''));
   };
 
+  /* Phát đoạn hook (~3–6s đầu clip) — tua tới hookStartMs, tự dừng ở hookEndMs.
+     Tách riêng vcPreviewHighlight để user duyệt nhanh câu hook mà engine sẽ cắt cold-open. */
+  const vcPreviewHook = (i) => {
+    const h = vcState.highlights[i];
+    if (!h) return;
+    if (h.hookStartMs == null || h.hookEndMs == null) {
+      vcSetLog('Đoạn ' + (i + 1) + ' không có hook — bấm ▶ Clip để nghe cả đoạn.');
+      return;
+    }
+    const v = vcEl('vcVideo');
+    vcState.previewStartMs = h.hookStartMs;
+    vcState.previewUntilMs = h.hookEndMs;
+    vcState.previewIdx = i;
+    vcState.pickedIdx = i;
+    vcClearActiveSeg();
+    const seg = vcEl('vcTlMarks') ? vcEl('vcTlMarks').querySelectorAll('.vc-tl-seg')[i] : null;
+    if (seg) seg.classList.add('vc-active');
+    vcRenderPick(true);
+    if (!v || !vcState.videoPath) {
+      vcSetLog('Hook ' + (i + 1) + ': ' + vcFmt(h.hookStartMs) + ' → ' + vcFmt(h.hookEndMs) + ' — bấm "Tải video nguồn" để nghe thử.');
+      return;
+    }
+    if (v.dataset.path !== vcState.videoPath) {
+      v.src = vcMediaUrl(vcState.videoPath);
+      v.dataset.path = vcState.videoPath;
+      vcWatchLoad();
+    }
+    const seek = () => {
+      v.currentTime = h.hookStartMs / 1000;
+      const pr = v.play();
+      if (pr && pr.catch) pr.catch((e) => vcSetVideoErr('Không phát được: ' + ((e && e.message) || e)));
+    };
+    if (v.readyState >= 1) seek();
+    else v.addEventListener('loadedmetadata', seek, { once: true });
+    vcSetLog('Đang nghe hook ' + (i + 1) + ': ' + vcFmt(h.hookStartMs) + ' → ' + vcFmt(h.hookEndMs) + (h.hookText ? ' — "' + h.hookText + '"' : ''));
+  };
+
   /* Chỉnh thời gian 1 highlight: clamp 0..thời lượng, giữ khoảng cách tối thiểu 1s */
   const vcAdjustHl = (i, field, valSec) => {
     const h = vcState.highlights[i];
@@ -472,6 +531,10 @@
         <label class="vc-field">Xuất
           <select id="vcMerge"><option value="1" selected>Từng clip + ghép 1 video</option><option value="0">Chỉ từng clip riêng</option></select>
         </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;white-space:nowrap;cursor:pointer"><input type="checkbox" id="vcColdOpen" checked> 🪝 Cold-open (lặp hook 3s đầu mỗi clip)</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;white-space:nowrap;cursor:pointer"><input type="checkbox" id="vcEdgePad" checked> 🌬 Đệm biên (-200ms / +300ms)</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;white-space:nowrap;cursor:pointer;opacity:.85" title="Dò khoảng lặng thật từ audio, cắt sát mép im lặng thay vì 200/300ms cố định. Cần bật Đệm biên. Tốn thêm ~0.5s để phân tích âm thanh."><input type="checkbox" id="vcAdaptivePad"> 🎯 Cắt sát lặng (adaptive pad)</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;white-space:nowrap;cursor:pointer;opacity:.85" title="Mặc định cắt stream-copy rất nhanh nhưng đầu clip snap về keyframe gần nhất (mất tối đa ~1 GOP đầu, 0.5–2s tuỳ nguồn). Bật để re-encode chính xác từng khung hình — chậm hơn 5–10×."><input type="checkbox" id="vcForceAccurate"> 🎞️ Cắt chính xác khung (chậm hơn)</label>
       </div>
       <div class="vc-row" style="margin-top:10px">
         <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;white-space:nowrap;cursor:pointer"><input type="checkbox" id="vcTierA"> 🧠 Tier A — đa tín hiệu local (không AI, không mạng)</label>
@@ -561,15 +624,36 @@
       div.className = 'vc-hl' + (vcState.pickedIdx === i ? ' vc-hl-active' : '');
       const dur = ((h.endMs - h.startMs) / 1000).toFixed(1);
       const hookIn = h.hookStartMs != null && h.hookStartMs >= h.startMs && h.hookEndMs <= h.endMs;
+      /* Hook sub-bar: vẽ thanh vàng từ hookStartMs → hookEndMs theo % so với [startMs, endMs].
+         Clamp về [0..100] để highlight vừa bị đè sau pad vẫn hiển thị đúng phần hook còn lại.
+         Logic % giữ ở panel (renderer no build step, không có module system); engine có
+         hookBarLayout thuần tương đương đã được test ở test.js — cùng công thức, đảm bảo đồng bộ. */
+      let hookBarHtml = '';
+      if (hookIn) {
+        const total = Math.max(1, h.endMs - h.startMs);
+        const lf = Math.max(0, Math.min(100, ((h.hookStartMs - h.startMs) / total) * 100));
+        const rt = Math.max(0, Math.min(100, ((h.hookEndMs - h.startMs) / total) * 100));
+        const w = Math.max(2, rt - lf);
+        const hookDur = ((h.hookEndMs - h.hookStartMs) / 1000).toFixed(1);
+        hookBarHtml = '<div data-hookbar="' + i + '" title="🪝 Hook ' + vcFmt(h.hookStartMs) + '–' + vcFmt(h.hookEndMs) + ' (' + hookDur + 's) — bấm vào vị trí bất kỳ để tua video tới đó, bấm ▶ Hook để nghe cả đoạn" ' +
+          'style="position:relative;height:10px;background:color-mix(in srgb,var(--amber) 14%,transparent);' +
+          'border:1px solid color-mix(in srgb,var(--amber) 38%,var(--border));border-radius:5px;' +
+          'margin:6px 0 2px;overflow:hidden;cursor:pointer">' +
+          '<div style="position:absolute;top:0;bottom:0;background:linear-gradient(90deg,var(--amber),var(--accent));' +
+          'left:' + lf.toFixed(2) + '%;width:' + w.toFixed(2) + '%;opacity:.85"></div>' +
+          '</div>';
+      }
       div.innerHTML = '<div class="vc-title" title="' + vcEsc(h.title || 'Clip') + '">' + (i + 1) + '. ' + vcEsc(h.title || 'Clip') + '</div>' +
         '<div class="vc-meta">' + vcFmt(h.startMs) + ' → ' + vcFmt(h.endMs) + ' · ' + dur + 's · điểm ' + h.score +
         (hookIn ? ' · hook ' + vcFmt(h.hookStartMs) + '–' + vcFmt(h.hookEndMs) : '') + '</div>' +
         (h.reason ? '<div class="vc-meta">' + vcEsc(h.reason) + '</div>' : '') +
         (hookIn && h.hookText ? '<div class="vc-meta vc-quote" title="' + vcEsc(h.hookText) + '">🔊 "' + vcEsc(h.hookText) + '"</div>' : '') +
+        hookBarHtml +
         '<div class="vc-row" style="margin-top:6px;gap:6px">' +
           '<label class="vc-field" style="gap:2px">Bắt đầu<input class="vc-num" type="number" min="0" step="0.5" data-i="' + i + '" data-f="start" value="' + (h.startMs / 1000).toFixed(1) + '" style="width:82px"></label>' +
           '<label class="vc-field" style="gap:2px">Kết thúc<input class="vc-num" type="number" min="0" step="0.5" data-i="' + i + '" data-f="end" value="' + (h.endMs / 1000).toFixed(1) + '" style="width:82px"></label>' +
-          '<button class="vc-btn" data-prev="' + i + '" title="Phát riêng đoạn này">▶</button>' +
+          '<button class="vc-btn" data-prev="' + i + '" title="Phát riêng đoạn này (từ ' + vcFmt(h.startMs) + ')">▶ Clip</button>' +
+          (hookIn ? '<button class="vc-btn vc-btn-hook" data-hook="' + i + '" title="Phát đoạn hook ' + vcFmt(h.hookStartMs) + '–' + vcFmt(h.hookEndMs) + ' để duyệt">▶ Hook</button>' : '') +
           '<button class="vc-btn" data-edit="' + i + '" title="Chọn để chỉnh chi tiết ở khung 3">✎ Chỉnh</button>' +
         '</div>';
       list.appendChild(div);
@@ -817,6 +901,17 @@
         /* `aspect` là hợp đồng mới của IPC export ('keep'|'916'|'169') */
         aspect: ((vcEl('vcAspect') || {}).value || 'keep'),
         mergeAll: ((vcEl('vcMerge') || {}).value || '1') !== '0',
+        /* Cold-open: cắt thêm 1 clip hook (lấy từ `hookStartMs/hookEndMs` do analyze
+           trả về) và ghép lên đầu mỗi clip chính. edgePad: lùi 200ms / tiến 300ms
+           để giữ hơi thở khi concat. Cả 2 mặc định BẬT.
+           P4: adaptivePad (mặc định TẮT — tốn 1 lần extract audio) → cắt sát mép
+           im lặng thật; chỉ hiệu lực khi edgePad bật (IPC guard `edgePad && adaptivePad`). */
+        coldOpen: !!(vcEl('vcColdOpen') || {}).checked,
+        edgePad: !!(vcEl('vcEdgePad') || {}).checked,
+        adaptivePad: !!(vcEl('vcAdaptivePad') || {}).checked,
+        /* forceAccurate (mặc định TẮT): ép re-encode chính xác khung thay vì
+           stream-copy snap keyframe. Chậm 5–10× → chỉ bật khi cần cắt đúng ms. */
+        forceAccurate: !!(vcEl('vcForceAccurate') || {}).checked,
         highlights: vcState.highlights,
       });
       if (!r || !r.ok) {
@@ -825,7 +920,8 @@
         return;
       }
       const aspNote = { '916': ' (khung 9:16)', '169': ' (khung 16:9)' }[r.aspect] || '';
-      vcSetProg(100, 'Đã xuất ' + r.count + ' clip' + aspNote
+      const coldNote = (r.results && r.results.filter((x) => x.coldOpen).length) ? ' 🪝cold-open ' + r.results.filter((x) => x.coldOpen).length + '/' + r.count : '';
+      vcSetProg(100, 'Đã xuất ' + r.count + ' clip' + aspNote + coldNote
         + (r.mergedPath ? ' + bản ghép: ' + r.mergedPath : (r.mergeNote ? ' (' + r.mergeNote + ')' : ''))
         + ' → ' + r.outDir);
       if (window.native.openPath && r.outDir) window.native.openPath(r.outDir);
@@ -864,6 +960,19 @@
     on('vcPickOut', vcPickOut);
     on('vcExport', vcExport);
     on('vcCancel', vcCancel);
+
+    /* P4 (2026-09-17): adaptivePad chỉ hiệu lực khi edgePad bật (IPC guard
+       `edgePad && adaptivePad`) → đồng bộ disabled ngay từ đầu + theo thay đổi,
+       tránh user bật adaptive khi edgePad tắt rồi thắc mắc "sao không tác dụng". */
+    const vcSyncAdaptive = () => {
+      const ep = vcEl('vcEdgePad'), ap = vcEl('vcAdaptivePad');
+      if (ep && ap) {
+        ap.disabled = !ep.checked;
+        if (!ep.checked) ap.checked = false;
+      }
+    };
+    vcSyncAdaptive();
+    onChg('vcEdgePad', vcSyncAdaptive);
 
     /* Tổng quan: video + timeline + delegation danh sách highlight */
     const v = vcEl('vcVideo');
@@ -936,6 +1045,132 @@
     onIn('vcSelStartR', (ev) => vcAdjustSel('start', Number(ev.target.value), true));
     onIn('vcSelEndR', (ev) => vcAdjustSel('end', Number(ev.target.value), true));
 
+    /* ── Re-sync phụ đề theo tiếng nói thật ── */
+    on('vcResyncMedia', async () => {
+      const n = window.native && window.native.viralCut;
+      if (!n) return vcSetLog('Bridge chưa sẵn sàng.');
+      const r = await n.pickResyncMedia();
+      if (r && r.ok) {
+        vcState.resyncMediaPath = r.path; vcState.resyncMediaName = r.name;
+        vcSetLog('Nguồn dò tiếng: ' + r.name);
+      }
+      vcResyncInfo();
+    });
+    on('vcResyncSrt', async () => {
+      const n = window.native && window.native.viralCut;
+      if (!n) return vcSetLog('Bridge chưa sẵn sàng.');
+      const r = await n.pickSrt();
+      if (r && r.ok) {
+        vcState.resyncSrtPath = r.path; vcState.resyncSrtName = r.name;
+        vcSetLog('SRT cần re-sync: ' + r.name);
+      }
+      vcResyncInfo();
+    });
+    on('vcResyncRun', async () => {
+      const n = window.native && window.native.viralCut;
+      if (!n) return vcSetLog('Bridge chưa sẵn sàng.');
+      if (vcState.resyncing) return;
+      if (!vcState.resyncMediaPath || !vcState.resyncSrtPath) {
+        vcSetLog('Chọn đủ video/audio nguồn và file SRT cần re-sync.'); return;
+      }
+      vcState.resyncing = true; vcSetBusy(); vcSetProg(2, 'Bắt đầu re-sync…');
+      try {
+        const tol = Number((vcEl('vcResyncTol') || {}).value) || 1500;
+        const off = Number((vcEl('vcResyncOff') || {}).value) || 0;
+        const r = await n.resyncSrt({ mediaPath: vcState.resyncMediaPath, srtPath: vcState.resyncSrtPath, toleranceMs: tol, offsetMs: off });
+        if (r && r.ok) {
+          vcSetProg(100, 'Đã ghi ' + r.outPath + ' — khớp ' + r.matched + '/' + r.count + ' cue (' + r.untouched + ' giữ nguyên' + (r.offsetMs ? ', offset ' + r.offsetMs + 'ms' : '') + '), ' + r.speechSegments + ' khoảng tiếng nói.');
+        } else {
+          vcSetProg(null, 'Lỗi [' + ((r && r.code) || 'VC_ERROR') + ']: ' + ((r && r.error) || 'Thất bại'));
+        }
+      } finally {
+        vcState.resyncing = false; vcSetBusy();
+      }
+    });
+
+    /* ── SRT khung từ khoảng tiếng nói thật (2026-09-17) ── */
+    on('vcSkelMedia', async () => {
+      const n = window.native && window.native.viralCut;
+      if (!n) return vcSetLog('Bridge chưa sẵn sàng.');
+      const r = await n.pickResyncMedia();
+      if (r && r.ok) {
+        vcState.skelMediaPath = r.path; vcState.skelMediaName = r.name;
+        vcSetLog('Nguồn SRT khung: ' + r.name);
+      }
+      vcSetBusy();
+    });
+    on('vcSkelRun', async () => {
+      const n = window.native && window.native.viralCut;
+      if (!n || !n.skeletonSrt) return vcSetLog('Bridge chưa sẵn sàng.');
+      if (vcState.skelRunning) return;
+      if (!vcState.skelMediaPath) { vcSetLog('Chọn video/audio nguồn để sinh SRT khung.'); return; }
+      vcState.skelRunning = true; vcSetBusy(); vcSetProg(2, 'Bắt đầu dò tiếng nói…');
+      try {
+        const tpl = ((vcEl('vcSkelText') || {}).value || '').trim();
+        const r = await n.skeletonSrt({ mediaPath: vcState.skelMediaPath, text: tpl });
+        if (r && r.ok) {
+          vcSetProg(100, 'Đã ghi ' + r.outPath + ' — ' + r.count + ' cue khung từ ' + r.speechSegments + ' khoảng tiếng nói. Mở file điền lời cho từng cue.');
+        } else {
+          vcSetProg(null, 'Lỗi [' + ((r && r.code) || 'VC_ERROR') + ']: ' + ((r && r.error) || 'Thất bại'));
+        }
+      } finally {
+        vcState.skelRunning = false; vcSetBusy();
+      }
+    });
+
+    /* ── Cắt khoảng lặng (2026-09-17) ── */
+    on('vcTightMedia', async () => {
+      const n = window.native && window.native.viralCut;
+      if (!n) return vcSetLog('Bridge chưa sẵn sàng.');
+      const r = await n.pickResyncMedia();
+      if (r && r.ok) {
+        vcState.tightMediaPath = r.path; vcState.tightMediaName = r.name;
+        vcSetLog('Nguồn cắt lặng: ' + r.name);
+      }
+      vcSetBusy();
+    });
+    on('vcTightSrt', async () => {
+      const n = window.native && window.native.viralCut;
+      if (!n) return vcSetLog('Bridge chưa sẵn sàng.');
+      const r = await n.pickSrt();
+      if (r && r.ok) {
+        vcState.tightSrtPath = r.path; vcState.tightSrtName = r.name;
+        vcSetLog('SRT kéo theo timeline mới: ' + r.name);
+      }
+      vcSetBusy();
+    });
+    on('vcTightOut', async () => {
+      const n = window.native && window.native.viralCut;
+      if (!n || !n.pickTightenOut) return vcSetLog('Bridge chưa sẵn sàng.');
+      const r = await n.pickTightenOut();
+      if (r && r.path) { vcState.tightOutPath = r.path; }
+      vcSetBusy();
+    });
+    on('vcTightRun', async () => {
+      const n = window.native && window.native.viralCut;
+      if (!n || !n.tightenSilence) return vcSetLog('Bridge chưa sẵn sàng.');
+      if (vcState.tightening) return;
+      if (!vcState.tightMediaPath || !vcState.tightOutPath) {
+        vcSetLog('Chọn video nguồn và nơi lưu trước khi cắt khoảng lặng.'); return;
+      }
+      vcState.tightening = true; vcSetBusy(); vcSetProg(2, 'Bắt đầu dò tiếng nói…');
+      try {
+        const gap = Number((vcEl('vcTightGap') || {}).value) || 700;
+        const pad = Number((vcEl('vcTightPad') || {}).value) || 150;
+        const r = await n.tightenSilence({
+          mediaPath: vcState.tightMediaPath, outPath: vcState.tightOutPath, srtPath: vcState.tightSrtPath,
+          keepGapMs: gap, padMs: pad,
+        });
+        if (r && r.ok) {
+          vcSetProg(100, 'Đã xuất ' + r.outPath + ' — giữ ' + r.ranges + ' đoạn, bỏ ' + (Math.round(r.removedMs / 100) / 10) + 's lặng (từ ' + (Math.round(r.totalMs / 100) / 10) + 's)' + (r.srtOut ? ' · SRT kéo theo: ' + r.srtOut + ' (' + r.remappedCues + ' cue dịch)' : ''));
+        } else {
+          vcSetProg(null, 'Lỗi [' + ((r && r.code) || 'VC_ERROR') + ']: ' + ((r && r.error) || 'Thất bại'));
+        }
+      } finally {
+        vcState.tightening = false; vcSetBusy();
+      }
+    });
+
     const list = vcEl('vcHlList');
     if (list) {
       list.addEventListener('change', (ev) => {
@@ -947,8 +1182,37 @@
       list.addEventListener('click', (ev) => {
         const t = ev.target;
         if (!t || !t.closest) return;
+        /* Sub-bar hook: bấm vào vị trí bất kỳ trên thanh vàng → tua video tới đúng
+           ms nội suy trong khoảng [hookStartMs, hookEndMs] (không tự play — giống
+           click trên vcTimeline; muốn nghe cả hook bấm ▶ Hook). */
+        const hb = t.closest('[data-hookbar]');
+        if (hb) {
+          const i = Number(hb.dataset.hookbar);
+          const h = vcState.highlights[i];
+          if (h && h.hookStartMs != null && h.hookEndMs != null) {
+            vcSetPick(i);
+            const v = vcEl('vcVideo');
+            if (v && vcState.videoPath) {
+              if (v.dataset.path !== vcState.videoPath) {
+                v.src = vcMediaUrl(vcState.videoPath);
+                v.dataset.path = vcState.videoPath;
+                vcWatchLoad();
+              }
+              const rect = hb.getBoundingClientRect();
+              const frac = Math.max(0, Math.min(1, (ev.clientX - rect.left) / rect.width));
+              const atMs = Math.round(h.hookStartMs + frac * (h.hookEndMs - h.hookStartMs));
+              const doSeek = () => { v.currentTime = atMs / 1000; };
+              if (v.readyState >= 1) doSeek();
+              else v.addEventListener('loadedmetadata', doSeek, { once: true });
+              vcSetLog('Tua tới ' + vcFmt(atMs) + ' (giữa hook ' + (i + 1) + ' — bấm ▶ Hook để nghe cả đoạn).');
+            }
+          }
+          return;
+        }
         const play = t.closest('[data-prev]');
         if (play) { vcPreviewHighlight(Number(play.dataset.prev)); return; }
+        const hook = t.closest('[data-hook]');
+        if (hook) { vcPreviewHook(Number(hook.dataset.hook)); return; }
         const edit = t.closest('[data-edit]');
         if (edit) {
           vcSetPick(Number(edit.dataset.edit));
@@ -965,6 +1229,51 @@
     }
   };
 
+  /* ── Re-sync phụ đề theo tiếng nói thật (2026-09-17) — card cuối panel ── */
+  SHELL += `
+    <div class="vc-card">
+      <h4>🔁 Re-sync phụ đề theo tiếng nói thật</h4>
+      <div class="vc-row">
+        <button class="vc-btn" id="vcResyncMedia">🎬 Chọn video/audio nguồn…</button>
+        <button class="vc-btn" id="vcResyncSrt">📝 Chọn SRT cần re-sync…</button>
+        <label class="vc-field">Dung sai khớp (ms)
+          <input class="vc-num" id="vcResyncTol" type="number" min="100" max="10000" value="1500">
+        </label>
+        <label class="vc-field">Lệch toàn bộ ±(ms)
+          <input class="vc-num" id="vcResyncOff" type="number" min="-10000" max="10000" value="0">
+        </label>
+        <button class="vc-btn vc-primary" id="vcResyncRun">🔁 Re-sync SRT</button>
+      </div>
+      <div class="vc-file" id="vcResyncInfo" style="margin-top:8px">Dò khoảng tiếng nói thật từ audio rồi kéo từng cue về biên tiếng nói gần nhất — xuất &lt;tên&gt;.resync.srt cạnh file gốc. Cue không tìm được neo giữ nguyên vị trí. Offset dương = tìm neo theo vị trí cue + offset (SRT lệch đều về sau).</div>
+    </div>
+    <div class="vc-card">
+      <h4>🦴 Sinh SRT khung từ tiếng nói thật</h4>
+      <div class="vc-row">
+        <button class="vc-btn" id="vcSkelMedia">🎬 Chọn video/audio nguồn…</button>
+        <label class="vc-field">Mẫu text (%n% = số thứ tự — để trống = cue rỗng)
+          <input class="vc-field" id="vcSkelText" type="text" placeholder="VD: Câu %n%" style="min-width:220px">
+        </label>
+        <button class="vc-btn vc-primary" id="vcSkelRun">🦴 Sinh SRT khung</button>
+      </div>
+      <div class="vc-file" style="margin-top:8px">Mỗi khoảng tiếng nói dò được → 1 cue đúng mốc — bạn tự điền lời (không bịa nội dung). Xuất &lt;tên&gt;.skeleton.srt cạnh file nguồn.</div>
+    </div>
+    <div class="vc-card">
+      <h4>✂️ Cắt khoảng lặng dài</h4>
+      <div class="vc-row">
+        <button class="vc-btn" id="vcTightMedia">🎬 Chọn video nguồn…</button>
+        <button class="vc-btn" id="vcTightSrt">📝 SRT kéo theo (tuỳ chọn)</button>
+        <button class="vc-btn" id="vcTightOut">💾 Nơi lưu…</button>
+        <label class="vc-field">Ghép gap ≤ (ms)
+          <input class="vc-num" id="vcTightGap" type="number" min="0" max="5000" value="700">
+        </label>
+        <label class="vc-field">Đệm biên (ms)
+          <input class="vc-num" id="vcTightPad" type="number" min="0" max="1000" value="150">
+        </label>
+        <button class="vc-btn vc-primary" id="vcTightRun">✂️ Cắt lặng</button>
+      </div>
+      <div class="vc-file" style="margin-top:8px">Dò tiếng nói → giữ các đoạn nói (gap nhỏ ghép lại, có đệm biên), bỏ khoảng lặng dài — video re-encode accurate. SRT (nếu chọn) được kéo theo timeline mới, xuất cạnh file xuất.</div>
+    </div>`;
+
   let vcMounted = false;
   function vcInit() {
     const root = document.getElementById('viralCutRoot');
@@ -979,6 +1288,9 @@
         else if (s.kind === 'export' && vcState.exporting) vcSetProg(s.pct, s.message);
         else if (s.kind === 'download' && vcState.downloading) vcSetProg(s.pct, s.message);
         else if (s.kind === 'transcript' && vcState.fetchingCaptions) vcSetProg(s.pct, s.message);
+        else if (s.kind === 'resync' && vcState.resyncing) vcSetProg(s.pct, s.message);
+        else if (s.kind === 'skeleton' && vcState.skelRunning) vcSetProg(s.pct, s.message);
+        else if (s.kind === 'tighten' && vcState.tightening) vcSetProg(s.pct, s.message);
       });
       vcMounted = true;
       vcSetLog('Sẵn sàng — chọn video nguồn để bắt đầu.');

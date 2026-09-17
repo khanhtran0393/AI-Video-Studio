@@ -46,6 +46,7 @@ async function enrich(ids, onProgress = () => {}) {
   // Không có key → enrich bằng yt-dlp (yt-dlp-bin đã đóng gói theo app, zero cấu hình).
   if (!key) { const m = await enrichKeyless(ids, onProgress); return { key: false, mode: 'yt-dlp', map: m }; }
   const map = {};
+  try {
   for (let i = 0; i < ids.length; i += 50) {
     const chunk = ids.slice(i, i + 50).filter(Boolean);
     if (!chunk.length) continue;
@@ -74,6 +75,14 @@ async function enrich(ids, onProgress = () => {}) {
   }
   for (const v of Object.values(map)) { v.subs = subs[v.channelId] || 0; v.viewPerSub = v.subs ? +(v.views / v.subs).toFixed(2) : 0; }
   return { key: true, mode: 'api', map };
+  } catch (e) {
+    // CÓ key nhưng API gọi lỗi (vd key bị Google chặn 403 "blocked", hết quota) — KHÔNG nuốt ngầm
+    // (Luật 10): lùi về enrichKeyless (yt-dlp) ĐÃ KHAI BÁO trong hợp đồng mode='yt-dlp' của file này,
+    // kèm apiError lộ liễu để caller/UI hiển thị đúng sự thật thay vì âm thầm mất like/comment/sub.
+    const apiError = String((e && e.message) || e).slice(0, 200);
+    const m = await enrichKeyless(ids, onProgress);
+    return { key: true, mode: 'yt-dlp', map: m, apiError };
+  }
 }
 
 // ── Enrich KHÔNG CẦN KEY (yt-dlp): like/comment/view/dur/ngày đăng cho từng video. ──

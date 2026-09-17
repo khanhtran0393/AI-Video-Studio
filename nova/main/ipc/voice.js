@@ -4,6 +4,7 @@
  */
 const path = require('path');
 const fs = require('fs');
+const fsp = fs.promises;
 const { app, shell, dialog, ipcMain } = require('electron');
 const state = require('../state');
 const { novaRoot, unpackedNovaRoot, canWriteDir } = require('../fs-utils');
@@ -86,42 +87,44 @@ ipcMain.handle('voice-engines', () => require('../../voice-native/engines').list
   // Trần dung lượng cache mẫu nghe thử: vượt trần thì dọn file CŨ NHẤT trước (LRU)
   // để cache không phình vô hạn khi người dùng nghe thử nhiều giọng.
   const VOICE_SAMPLE_CAP_BYTES = 50 * 1024 * 1024;
-  function voiceSampleGomDu(){
+  async function voiceSampleGomDu(){
     try {
       const dir = voiceSampleDir();
-      if (!fs.existsSync(dir)) return;
-      const files = fs.readdirSync(dir).filter((f) => f.endsWith('.txt')).map((f) => {
+      let names;
+      try { names = await fsp.readdir(dir); } catch { return; }
+      const stats = await Promise.all(names.filter((f) => f.endsWith('.txt')).map(async (f) => {
         try {
-          const st = fs.statSync(path.join(dir, f));
+          const st = await fsp.stat(path.join(dir, f));
           return { file: path.join(dir, f), bytes: st.size, mtime: st.mtimeMs };
         } catch { return null; }
-      }).filter(Boolean);
+      }));
+      const files = stats.filter(Boolean);
       let total = files.reduce((s, x) => s + x.bytes, 0);
       files.sort((a, b) => a.mtime - b.mtime);   // cũ nhất trước
       for (const x of files){
         if (total <= VOICE_SAMPLE_CAP_BYTES) break;
-        try { fs.rmSync(x.file, { force: true }); total -= x.bytes; } catch (_) {}
+        try { await fsp.rm(x.file, { force: true }); total -= x.bytes; } catch (_) {}
       }
     } catch (_) {}
   }
-  ipcMain.handle('voice-sample-save', (_e, payload = {}) => {
+  ipcMain.handle('voice-sample-save', async (_e, payload = {}) => {
     try {
       const { key, dataUrl, sp, p } = payload || {};
       if (!key || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:') || dataUrl.length > 16 * 1024 * 1024) return { error: 'DỮ_LIỆU_KHÔNG_HỢP_LỆ' };
       const file = voiceSampleFile(key);
-      fs.mkdirSync(path.dirname(file), { recursive: true });
+      await fsp.mkdir(path.dirname(file), { recursive: true });
       // Format v2: gói tham số tốc độ/cao độ lúc gen cùng dataURL — renderer đọc ra
       // so khớp, lệch tham số thì gen lại và ghi đè (đĩa luôn 1 file / giọng + engine).
-      fs.writeFileSync(file, JSON.stringify({ v: 2, sp: typeof sp === 'number' ? sp : null, p: typeof p === 'number' ? p : null, dataUrl }), 'utf8');
-      voiceSampleGomDu();
+      await fsp.writeFile(file, JSON.stringify({ v: 2, sp: typeof sp === 'number' ? sp : null, p: typeof p === 'number' ? p : null, dataUrl }), 'utf8');
+      await voiceSampleGomDu();
       return { ok: true };
     } catch (e) { return { error: String((e && e.message) || e) }; }
   });
-  ipcMain.handle('voice-sample-load', (_e, key) => {
+  ipcMain.handle('voice-sample-load', async (_e, key) => {
     try {
       const file = voiceSampleFile(key);
-      if (!fs.existsSync(file)) return { missing: true };
-      const raw = fs.readFileSync(file, 'utf8');
+      let raw;
+      try { raw = await fsp.readFile(file, 'utf8'); } catch { return { missing: true }; }
       if (typeof raw !== 'string' || !raw.length) return { missing: true };
       // Format v2 (JSON có tham số): trả nguyên object để renderer so khớp tham số.
       try {
@@ -138,26 +141,27 @@ ipcMain.handle('voice-engines', () => require('../../voice-native/engines').list
   });
   // Danh sách mẫu đã cache trên đĩa: renderer dùng để vẽ badge "đã có mẫu — phát
   // ngay" trên nút ▶ mà không phải probe từng giọng (mỗi lần load là 1 dataURL nặng).
-  ipcMain.handle('voice-sample-list', () => {
+  ipcMain.handle('voice-sample-list', async () => {
     try {
       const dir = voiceSampleDir();
-      if (!fs.existsSync(dir)) return { ok: true, items: [] };
-      const items = fs.readdirSync(dir).filter((f) => f.endsWith('.txt')).map((f) => {
+      let names;
+      try { names = await fsp.readdir(dir); } catch { return { ok: true, items: [] }; }
+      const items = (await Promise.all(names.filter((f) => f.endsWith('.txt')).map(async (f) => {
         try {
-          const st = fs.statSync(path.join(dir, f));
+          const st = await fsp.stat(path.join(dir, f));
           return { key: f.slice(0, -4), bytes: st.size, mtime: st.mtimeMs };
         } catch { return null; }
-      }).filter(Boolean);
+      }))).filter(Boolean);
       return { ok: true, items };
     } catch (e) { return { error: String((e && e.message) || e) }; }
   });
-  ipcMain.handle('voice-sample-clear', (_e, key) => {
+  ipcMain.handle('voice-sample-clear', async (_e, key) => {
     try {
       if (key == null || key === ''){
-        fs.rmSync(path.join(app.getPath('userData'), 'voice-sample-cache'), { recursive: true, force: true });
+        await fsp.rm(path.join(app.getPath('userData'), 'voice-sample-cache'), { recursive: true, force: true });
         return { ok: true };
       }
-      try { fs.rmSync(voiceSampleFile(key), { force: true }); } catch (_) {}
+      try { await fsp.rm(voiceSampleFile(key), { force: true }); } catch (_) {}
       return { ok: true };
     } catch (e) { return { error: String((e && e.message) || e) }; }
   });
@@ -173,83 +177,84 @@ ipcMain.handle('voice-engines', () => require('../../voice-native/engines').list
   function voiceCacheDir(){ return path.join(app.getPath('userData'), 'voice-cache'); }
   function voiceZoneDir(cache){ return cache ? voiceCacheDir() : voiceHistoryDir(); }
 
-  function voiceZoneSave(payload){
+  async function voiceZoneSave(payload){
     const { khi, ext, buf, meta, cache } = payload || {};
     const id = String(khi || '').replace(/[^0-9]/g, '').slice(0, 16);
     if (!id || !(buf instanceof Uint8Array) || !buf.length) return { error: 'DỮ_LIỆU_KHÔNG_HỢP_LỆ' };
     const dir = voiceZoneDir(!!cache);
-    fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(path.join(dir, id + (ext === '.mp3' ? '.mp3' : '.wav')), Buffer.from(buf));
-    fs.writeFileSync(path.join(dir, id + '.json'), JSON.stringify(meta && typeof meta === 'object' ? meta : {}), 'utf8');
+    await fsp.mkdir(dir, { recursive: true });
+    await fsp.writeFile(path.join(dir, id + (ext === '.mp3' ? '.mp3' : '.wav')), Buffer.from(buf));
+    await fsp.writeFile(path.join(dir, id + '.json'), JSON.stringify(meta && typeof meta === 'object' ? meta : {}), 'utf8');
     return { ok: true };
   }
   // Liệt kê 1 vùng + prune (≤40 bản mới nhất, ≤64MB — phần cũ xoá cho nhẹ đĩa).
-  function voiceZoneList(cache){
+  async function voiceZoneList(cache){
     const dir = voiceZoneDir(!!cache);
-    if (!fs.existsSync(dir)) return { ok: true, items: [] };
+    let names;
+    try { names = await fsp.readdir(dir); } catch { return { ok: true, items: [] }; }
     const entries = [];
-    for (const f of fs.readdirSync(dir)){
+    for (const f of names){
       if (!f.endsWith('.json')) continue;
       const audio = f.slice(0, -5);
       try {
-        const meta = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
-        const size = fs.statSync(path.join(dir, audio)).size;
+        const meta = JSON.parse(await fsp.readFile(path.join(dir, f), 'utf8'));
+        const size = (await fsp.stat(path.join(dir, audio))).size;
         entries.push({ meta, audio, size });
       } catch (_) {   // json mồ côi (mất file audio) — dọn luôn
-        try { fs.rmSync(path.join(dir, f), { force: true }); } catch (_) {}
+        try { await fsp.rm(path.join(dir, f), { force: true }); } catch (_) {}
       }
     }
     entries.sort((a, b) => (b.meta && b.meta.khi || 0) - (a.meta && a.meta.khi || 0));
     const giu = []; let tong = 0;
     for (const e of entries){
       if (giu.length < 40 && tong + e.size <= 64 * 1024 * 1024){ giu.push(e); tong += e.size; }
-      else { try { fs.rmSync(path.join(dir, e.audio), { force: true }); } catch (_) {} try { fs.rmSync(path.join(dir, e.audio + '.json'), { force: true }); } catch (_) {} }
+      else { try { await fsp.rm(path.join(dir, e.audio), { force: true }); } catch (_) {} try { await fsp.rm(path.join(dir, e.audio + '.json'), { force: true }); } catch (_) {} }
     }
     const items = [];
     for (const e of giu){
-      try { items.push({ meta: e.meta, buf: new Uint8Array(fs.readFileSync(path.join(dir, e.audio))) }); } catch (_) {}
+      try { items.push({ meta: e.meta, buf: new Uint8Array(await fsp.readFile(path.join(dir, e.audio))) }); } catch (_) {}
     }
     return { ok: true, items };
   }
   // Xoá 1 bản khỏi vùng chỉ định — xoá cả audio lẫn meta json.
-  function voiceZoneDelete(khi, cache){
+  async function voiceZoneDelete(khi, cache){
     const id = String(khi || '').replace(/[^0-9]/g, '').slice(0, 16);
     if (!id) return { error: 'DỮ_LIỆU_KHÔNG_HỢP_LỆ' };
     const dir = voiceZoneDir(!!cache);
     for (const f of [id + '.mp3', id + '.wav', id + '.json']){
-      try { fs.rmSync(path.join(dir, f), { force: true }); } catch (_) {}
+      try { await fsp.rm(path.join(dir, f), { force: true }); } catch (_) {}
     }
     return { ok: true };
   }
 
-  ipcMain.handle('voice-history-save', (_e, payload = {}) => {
-    try { return voiceZoneSave(payload); }
+  ipcMain.handle('voice-history-save', async (_e, payload = {}) => {
+    try { return await voiceZoneSave(payload); }
     catch (e) { return { error: String((e && e.message) || e) }; }
   });
-  ipcMain.handle('voice-history-list', (_e, cache) => {
-    try { return voiceZoneList(!!cache); }
+  ipcMain.handle('voice-history-list', async (_e, cache) => {
+    try { return await voiceZoneList(!!cache); }
     catch (e) { return { error: String((e && e.message) || e), items: [] }; }
   });
-  ipcMain.handle('voice-history-delete', (_e, khi, cache) => {
-    try { return voiceZoneDelete(khi, !!cache); }
+  ipcMain.handle('voice-history-delete', async (_e, khi, cache) => {
+    try { return await voiceZoneDelete(khi, !!cache); }
     catch (e) { return { error: String((e && e.message) || e) }; }
   });
   // Đường dẫn file audio của 1 bản "Đã tạo" (khi + cache) — cho tính năng khác
   // (vd Whiteboard Studio "🎙 Dùng giọng đã tạo") dùng lại giọng ĐÃ SINH mà không
   // mở dialog chọn file. Không đọc/ghi nội dung — chỉ trả path nếu file còn tồn
   // tại; bị xoá/prune → lỗi lộ liễu (không fallback ngầm — Luật 10).
-  function voiceZonePath(khi, cache){
+  async function voiceZonePath(khi, cache){
     const id = String(khi || '').replace(/[^0-9]/g, '').slice(0, 16);
     if (!id) return { error: 'DỮ_LIỆU_KHÔNG_HỢP_LỆ' };
     const dir = voiceZoneDir(!!cache);
     for (const f of [id + '.mp3', id + '.wav']){
       const p = path.join(dir, f);
-      if (fs.existsSync(p)) return { ok: true, path: p };
+      try { await fsp.access(p); return { ok: true, path: p }; } catch (_) {}
     }
     return { error: 'WB_VOICE_GONE: bản giọng không còn trên đĩa (đã bị xoá/prune) — tạo lại giọng.' };
   }
-  ipcMain.handle('voice-history-path', (_e, khi, cache) => {
-    try { return voiceZonePath(khi, !!cache); }
+  ipcMain.handle('voice-history-path', async (_e, khi, cache) => {
+    try { return await voiceZonePath(khi, !!cache); }
     catch (e) { return { error: String((e && e.message) || e) }; }
   });
 

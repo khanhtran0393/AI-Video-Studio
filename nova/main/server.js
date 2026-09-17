@@ -102,6 +102,25 @@ function startLocalServer() {
       }
       return null;
     };
+    // ── ETag cho static files (B1) + expandIncludes cache (B2) ────────────────
+    // ETag = mtime-ms + size. If-None-Match trùng → 304, không đọc lại đĩa.
+    // HTML cache: kết quả expandIncludes lưu theo mtime MỚI NHẤT của index.html
+    // + toàn bộ partials/ (partial đổi → invalidate; chỉ check index.html sẽ stale).
+    let htmlCache = null;          // { html, mtime, path }
+    const htmlMtime = () => {
+      let mt = 0;
+      try { mt = fs.statSync(path.join(WEB_DIR, 'index.html')).mtimeMs; } catch { /* file thiếu → 0 */ }
+      let partials = [];
+      try { partials = fs.readdirSync(path.join(WEB_DIR, 'partials')); } catch { /* không có partials */ }
+      for (const name of partials) {
+        try {
+          const st = fs.statSync(path.join(WEB_DIR, 'partials', name));
+          if (st.mtimeMs > mt) mt = st.mtimeMs;
+        } catch { /* bỏ qua file không stat được */ }
+      }
+      return mt;
+    };
+
     const server = http.createServer((req, res) => {
       let p = decodeURIComponent((req.url || '/').split('?')[0]);
       if (p === '/' || p === '') p = '/index.html';
@@ -132,22 +151,41 @@ function startLocalServer() {
       }
       const filePath = path.join(root, r ? r.rel : p);
       if (!filePath.startsWith(root)) { res.writeHead(403); return res.end(); }
-      fs.readFile(filePath, (err, data) => {
-        if (err) { res.writeHead(404); return res.end('not found'); }
-        // HTML của nova/web: lắp ráp include tĩnh trước khi trả (xem expandIncludes).
-        // Chỉ áp dụng cho WEB_DIR — index.html của bundle Remotion giữ nguyên.
-        if (root === WEB_DIR && path.extname(filePath).toLowerCase() === '.html') {
-          try { data = Buffer.from(expandIncludes(data.toString('utf8'), 0), 'utf8'); }
-          catch (e) {
+      // ETag: mtimeMs + size — đủ duy nhất cho file local, không cần hash.
+      let stat;
+      try { stat = fs.statSync(filePath); } catch { res.writeHead(404); return res.end('not found'); }
+      const etag = '"' + stat.mtimeMs.toString(36) + '-' + stat.size.toString(36) + '"';
+      if (req.headers['if-none-match'] === etag) { res.writeHead(304); return res.end(); }
+
+      // HTML của nova/web: expand includes + cache theo mtime.
+      if (root === WEB_DIR && path.extname(filePath).toLowerCase() === '.html') {
+        const mt = htmlMtime();
+        if (htmlCache && htmlCache.mtime === mt && htmlCache.path === filePath) {
+          res.writeHead(200, { 'Content-Type': types['.html'], 'ETag': etag, 'Cache-Control': 'no-cache' });
+          return res.end(htmlCache.html);
+        }
+        fs.readFile(filePath, (err, raw) => {
+          if (err) { res.writeHead(404); return res.end('not found'); }
+          try {
+            const expanded = Buffer.from(expandIncludes(raw.toString('utf8'), 0), 'utf8');
+            htmlCache = { html: expanded, mtime: mt, path: filePath };
+            res.writeHead(200, { 'Content-Type': types['.html'], 'ETag': etag, 'Cache-Control': 'no-cache' });
+            res.end(expanded);
+          } catch (e) {
             console.error('[server] ' + e.message + ' (khi phục vụ ' + p + ')');
             res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
-            return res.end(e.message);
+            res.end(e.message);
           }
-        }
-        // no-cache: Chromium luôn kiểm tra lại — tránh renderer chạy JS cũ sau khi
-        // dev sửa file (lỗi "panel chết vì cache" đã xảy ra với handdraw panel).
+        });
+        return;
+      }
+
+      // Static files: đọc đĩa + ETag. Dev mode vẫn no-cache để tránh stale.
+      fs.readFile(filePath, (err, data) => {
+        if (err) { res.writeHead(404); return res.end('not found'); }
         res.writeHead(200, {
           'Content-Type': types[path.extname(filePath).toLowerCase()] || 'application/octet-stream',
+          'ETag': etag,
           'Cache-Control': 'no-cache',
         });
         res.end(data);

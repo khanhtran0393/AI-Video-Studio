@@ -93,10 +93,37 @@ $('waveCurve').addEventListener('input', e=>{
 setupSel('waveCurveDirSel','waveCurveDir');
 
 // ---- FX toàn khung ----
+// Lazy-load vendor Butterchurn (~826KB) — chỉ nạp khi user chọn FX Milkdrop lần đầu.
+// Lỗi tải → reject lộ liễu code IMZIC_BUTTERCHURN_LOAD (Luật 10, không fallback ngầm).
+var _bcVendorLoaded = false;
+var _bcVendorLoading = null;
+function bcEnsureVendor(){
+  if (_bcVendorLoaded) return Promise.resolve();
+  if (_bcVendorLoading) return _bcVendorLoading;
+  _bcVendorLoading = new Promise(function(resolve, reject){
+    var s1 = document.createElement('script');
+    s1.src = 'vendor/butterchurn.min.js';
+    s1.onload = function(){
+      var s2 = document.createElement('script');
+      s2.src = 'vendor/butterchurn-presets.min.js';
+      s2.onload = function(){ _bcVendorLoaded = true; resolve(); };
+      s2.onerror = function(){ _bcVendorLoading = null; reject(Object.assign(new Error('Không nạp được vendor/butterchurn-presets.min.js'), { code:'IMZIC_BUTTERCHURN_LOAD' })); };
+      document.head.appendChild(s2);
+    };
+    s1.onerror = function(){ _bcVendorLoading = null; reject(Object.assign(new Error('Không nạp được vendor/butterchurn.min.js'), { code:'IMZIC_BUTTERCHURN_LOAD' })); };
+    document.head.appendChild(s1);
+  });
+  return _bcVendorLoading;
+}
+
 $('fxSel').addEventListener('change', e=>{
   const v = e.target.value;
   if(v === 'milkdrop'){
-    try{ bcEnsure(); }
+    try{ bcEnsureVendor().then(function(){ refreshBcPresetList(); bcEnsure(); }).catch(function(err){
+      e.target.value = 'none';
+      state.fx = 'none';
+      setStatus('[' + ((err && err.code) || 'IMZIC_BUTTERCHURN') + '] ' + (err && err.message ? err.message : String(err)), true);
+    }); }
     catch(err){
       // Không fallback ngầm (Luật 10): trả FX về Tắt + báo lỗi lộ liễu với code
       e.target.value = 'none';
@@ -104,6 +131,9 @@ $('fxSel').addEventListener('change', e=>{
       setStatus('[' + ((err && err.code) || 'IMZIC_BUTTERCHURN') + '] ' + (err && err.message ? err.message : String(err)), true);
       return;
     }
+    state.fx = v;
+    $('bcPresetField').style.display = '';
+    return;
   }
   state.fx = v;
   $('bcPresetField').style.display = (v === 'milkdrop') ? '' : 'none';

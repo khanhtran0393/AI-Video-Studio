@@ -630,7 +630,7 @@
     <div class="tool" id="tool-toolffxaudiofx">
       <div class="tool-head">
         <div class="tool-title">🎚 Âm Thanh Nâng Cao</div>
-        <div class="tool-subtitle">3 tác vụ: chuẩn hoá âm lượng EBU R128 (loudnorm 2-pass — âm lượng đều giữa các video), bỏ lời/tách giọng thô (nguồn stereo), và fade mở/khép video + âm thanh.</div>
+        <div class="tool-subtitle">6 tác vụ: chuẩn hoá âm lượng EBU R128 (loudnorm 2-pass — âm lượng đều giữa các video), bỏ lời/tách giọng thô (nguồn stereo), fade mở/khép video + âm thanh, đổi tốc độ âm thanh giữ cao độ, đổi cao độ giữ thời lượng, và đóng phụ đề cứng (burn-in).</div>
       </div>
       <div style="display:flex;flex-direction:column;gap:12px;max-width:640px">
         <div>
@@ -691,6 +691,54 @@
             <button class="btn primary sm" onclick="ffxRunFades()">🌅 Thêm fade</button>
             <span id="ffxFadeStatus" style="font-size:11.5px"></span>
           </div>
+        </div>
+        <div style="border:1px solid var(--border,#2a2d3a);border-radius:8px;padding:10px">
+          <div style="font-size:12.5px;font-weight:600;margin-bottom:8px">4 · Đổi tốc độ âm thanh (0.25–4×)</div>
+          <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end">
+            <div>
+              <label class="label">Tốc độ</label>
+              <input type="text" id="ffxSpeedVal" placeholder="1.5" style="max-width:90px">
+            </div>
+            <div>
+              <label class="label" style="display:flex;gap:6px;align-items:center;cursor:pointer">
+                <input type="checkbox" id="ffxSpeedKeepPitch" checked> Giữ cao độ (atempo)
+              </label>
+            </div>
+            <button class="btn primary sm" onclick="ffxRunSpeed()">⏩ Đổi tốc độ</button>
+            <span id="ffxSpeedStatus" style="font-size:11.5px"></span>
+          </div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:6px">Bỏ tick "giữ cao độ" = đổi kiểu băng từ (asetrate — tiếng cao/vọng lên khi nhanh). Video nguồn giữ nguyên hình (copy stream).</div>
+        </div>
+        <div style="border:1px solid var(--border,#2a2d3a);border-radius:8px;padding:10px">
+          <div style="font-size:12.5px;font-weight:600;margin-bottom:8px">5 · Đổi cao độ giữ thời lượng (−12..12 nửa cung)</div>
+          <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end">
+            <div>
+              <label class="label">Nửa cung (+ cao / − trầm)</label>
+              <input type="text" id="ffxPitchVal" placeholder="-3" style="max-width:90px">
+            </div>
+            <button class="btn primary sm" onclick="ffxRunPitch()">🎵 Đổi cao độ</button>
+            <span id="ffxPitchStatus" style="font-size:11.5px"></span>
+          </div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:6px">Thời lượng GIỮ NGUYÊN (asetrate đổi cao độ kèm tốc → bù atempo ngược). Dùng chỉnh giọng đọc trầm/sáng hơn mà không lệch phụ đề.</div>
+        </div>
+        <div style="border:1px solid var(--border,#2a2d3a);border-radius:8px;padding:10px">
+          <div style="font-size:12.5px;font-weight:600;margin-bottom:8px">6 · Đóng phụ đề cứng (burn-in SRT lên hình)</div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <button class="btn ghost sm" onclick="ffxPickSrt()">📝 Chọn SRT</button>
+            <span id="ffxSubInput" style="font-size:11.5px;color:var(--text-muted);word-break:break-all">Chưa chọn SRT</span>
+          </div>
+          <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;margin-top:8px">
+            <div><label class="label">Cỡ chữ (10–72)</label><input type="text" id="ffxSubSize" placeholder="18" style="max-width:90px"></div>
+            <div><label class="label">Cách mép dưới (px)</label><input type="text" id="ffxSubMargin" placeholder="30" style="max-width:90px"></div>
+            <div>
+              <label class="label" style="display:flex;gap:6px;align-items:center;cursor:pointer">
+                <input type="checkbox" id="ffxSubGpu"> GPU encode
+              </label>
+            </div>
+            <button class="btn primary sm" onclick="ffxRunSub()">🎬 Đóng phụ đề</button>
+            <span id="ffxSubStatus" style="font-size:11.5px"></span>
+          </div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:6px">Phụ đề bị ĐÓNG CỨNG vào hình (không tắt được) — video re-encode, tiếng gốc copy. Font Arial, trắng viền đen, căn giữa dưới.</div>
         </div>
       </div>
     </div>

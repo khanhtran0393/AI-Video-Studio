@@ -8,6 +8,25 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const mt = require('./../native-tools/media-tools');
+const { FFPROBE } = require('./../native-tools/ffmpeg');
+
+/* Đo thời lượng TRACK AUDIO (không phải container) — cần khi video copy giữ
+   nguyên hình: container duration = max(hình, tiếng), không phản ánh atempo. */
+function audioDurSec(file) {
+  return new Promise((resolve, reject) => {
+    const cp = require('child_process').spawn(FFPROBE,
+      ['-v', 'error', '-select_streams', 'a:0', '-show_entries', 'stream=duration', '-of', 'csv=p=0', file],
+      { windowsHide: true });
+    let out = '';
+    cp.stdout.on('data', (d) => { out += d; });
+    cp.on('error', reject);
+    cp.on('close', () => {
+      const n = parseFloat(String(out).trim().split(',').pop());
+      if (Number.isFinite(n) && n > 0) return resolve(n);
+      reject(new Error('ffprobe không đo được duration track audio: ' + file));
+    });
+  });
+}
 
 const V_A = 'D:/AI Video Studio/output/gen-e2e/native-video-veo31-fast.mp4';   // video VEO3 thật (app tạo)
 const V_B = 'D:/AI Video Studio/output/gen-e2e/chrome-video-veo31-fast.mp4';   // video Flow Chrome thật (app tạo)
@@ -103,6 +122,64 @@ async function step(name, fn) {
   }
   await step('addFades video+audio 0.5s (re-encode)', () => mt.addFades({ inputPath: path.join(OUT, 'cat.mp4'), outputPath: path.join(OUT, 'fade.mp4'), videoInSec: 0.5, videoOutSec: 0.5, audioInSec: 0.5, audioOutSec: 0.5 }));
 
+  // ── Đổi tốc độ (2026-09-17): keep-pitch atempo + video copy; kiểm artifact thật ──
+  await step('changeAudioSpeed 2× giữ cao độ (video copy) — track audio = nguồn/2', async () => {
+    const src = await mt.probeStreams(V_A);
+    const r = await mt.changeAudioSpeed({ inputPath: V_A, outputPath: path.join(OUT, 'toc-2x.mp4'), speed: 2, keepPitch: true });
+    if (r.keepPitch !== true || r.speed !== 2) throw new Error('hợp đồng trả về sai speed/keepPitch: ' + JSON.stringify({ s: r.speed, k: r.keepPitch }));
+    if (r.videoCopy !== true) throw new Error('video vẫn bị re-encode dù chỉ đổi tốc độ audio');
+    // Video copy giữ nguyên hình → container duration = max(hình, tiếng); phải đo TRACK AUDIO.
+    const got = await audioDurSec(r.path);
+    const want = src.durationSec / 2;
+    if (Math.abs(got - want) > Math.max(0.35, want * 0.06)) throw new Error('thời lượng track audio ' + got.toFixed(2) + 's lệch xa dự kiến ' + want.toFixed(2) + 's');
+    return r;
+  });
+  await step('changeAudioSpeed 0.5× asetrate (đổi cao độ có chủ đích)', async () => {
+    const src = await mt.probeStreams(V_A);
+    const r = await mt.changeAudioSpeed({ inputPath: V_A, outputPath: path.join(OUT, 'toc-0_5x.mp3'), speed: 0.5, keepPitch: false });
+    if (r.keepPitch !== false) throw new Error('keepPitch=false không được ghi nhận');
+    const got = (await mt.probeStreams(r.path)).durationSec;
+    const want = src.durationSec / 0.5;
+    if (Math.abs(got - want) > Math.max(0.35, want * 0.06)) throw new Error('thời lượng ' + got.toFixed(2) + 's lệch xa dự kiến ' + want.toFixed(2) + 's');
+    return r;
+  });
+  await step('atempoChain: tích các node = đúng factor (mỗi node 0.5–2)', () => {
+    for (const f of [0.25, 0.5, 1.5, 2, 4]) {
+      const chain = mt.atempoChain(f);
+      if (!/^atempo=/.test(chain)) throw new Error('chain phải bắt đầu atempo=: ' + chain);
+      const product = chain.split(',').map((s) => parseFloat(s.replace('atempo=', '')))
+        .reduce((a, b) => a * b, 1);
+      if (Math.abs(product - f) > 1e-6) throw new Error('factor ' + f + ' — tích node ' + product + ' ≠ factor: ' + chain);
+      for (const node of chain.split(',')) {
+        const v = parseFloat(node.replace('atempo=', ''));
+        if (!(v >= 0.5 && v <= 2)) throw new Error('node ngoài 0.5–2: ' + chain);
+      }
+    }
+    return { chain4: mt.atempoChain(4), path: path.join(OUT, 'toc-2x.mp4') }; // artifact thật từ step trước
+  });
+
+  // ── Đổi cao độ giữ thời lượng (2026-09-17): asetrate + bù atempo; kiểm artifact thật ──
+  await step('changeAudioPitch +3 nửa cung — thời lượng KHÔNG đổi', async () => {
+    const src = await mt.probeStreams(V_A);
+    const r = await mt.changeAudioPitch({ inputPath: V_A, outputPath: path.join(OUT, 'cao-do+3.mp4'), semitones: 3 });
+    if (r.semitones !== 3) throw new Error('hợp đồng trả về sai semitones: ' + r.semitones);
+    if (Math.abs(r.factor - Math.pow(2, 3 / 12)) > 1e-9) throw new Error('factor phải = 2^(3/12): ' + r.factor);
+    if (r.videoCopy !== true) throw new Error('video vẫn bị re-encode dù chỉ đổi cao độ audio');
+    const got = (await mt.probeStreams(r.path)).durationSec;
+    const want = src.durationSec;
+    if (Math.abs(got - want) > Math.max(0.35, want * 0.06)) throw new Error('thời lượng phải giữ nguyên: ' + got.toFixed(2) + 's lệch xa ' + want.toFixed(2) + 's');
+    return r;
+  });
+  await step('changeAudioPitch −2 nửa cung (thuần âm thanh mp3)', async () => {
+    const src = await mt.probeStreams(loopSrc);
+    const r = await mt.changeAudioPitch({ inputPath: loopSrc, outputPath: path.join(OUT, 'cao-do-2.mp3'), semitones: -2 });
+    if (r.semitones !== -2) throw new Error('hợp đồng trả về sai semitones: ' + r.semitones);
+    const got = (await mt.probeStreams(r.path)).durationSec;
+    const want = src.durationSec;
+    if (Math.abs(got - want) > Math.max(0.35, want * 0.06)) throw new Error('thời lượng phải giữ nguyên: ' + got.toFixed(2) + 's lệch xa ' + want.toFixed(2) + 's');
+    return r;
+  });
+
   await step('addFades chỉ fade tiếng (video copy — không re-encode)', async () => {
     const src = await mt.probeStreams(path.join(OUT, 'cat.mp4'));
     const r = await mt.addFades({ inputPath: path.join(OUT, 'cat.mp4'), outputPath: path.join(OUT, 'fade-tieng.mp4'), audioInSec: 0.5, audioOutSec: 0.5 });
@@ -157,6 +234,9 @@ async function step(name, fn) {
   await expectFail('normalizeAudio đích .ogg', () => mt.normalizeAudio({ inputPath: loopSrc, outputPath: path.join(OUT, 'x12.ogg'), targetLU: -16 }));
   await expectFail('removeVocals mode sai', () => mt.removeVocals({ inputPath: loopSrc, outputPath: path.join(OUT, 'x13.mp3'), mode: 'magic' }));
   await expectFail('addFades tất cả = 0', () => mt.addFades({ inputPath: V_A, outputPath: path.join(OUT, 'x14.mp4') }));
+  await expectFail('changeAudioSpeed tốc độ sai (10×)', () => mt.changeAudioSpeed({ inputPath: V_A, outputPath: path.join(OUT, 'x19.mp4'), speed: 10 }));
+  await expectFail('changeAudioPitch semitones 0', () => mt.changeAudioPitch({ inputPath: V_A, outputPath: path.join(OUT, 'x20.mp4'), semitones: 0 }));
+  await expectFail('changeAudioPitch semitones vượt trần (13)', () => mt.changeAudioPitch({ inputPath: V_A, outputPath: path.join(OUT, 'x21.mp4'), semitones: 13 }));
   await expectFail('addFades out ≥ thời lượng', () => mt.addFades({ inputPath: path.join(OUT, 'cat.mp4'), outputPath: path.join(OUT, 'x15.mp4'), videoOutSec: 99 }));
   await expectFail('normalizeAudio keepVideo đích .m4a', () => mt.normalizeAudio({ inputPath: V_A, outputPath: path.join(OUT, 'x17.m4a'), targetLU: -16, keepVideo: true }));
   await expectFail('removeVocals normalizeLU sai (3 LUFS)', () => mt.removeVocals({ inputPath: loopSrc, outputPath: path.join(OUT, 'x18.mp3'), mode: 'instrumental', normalizeLU: 3 }));
@@ -216,6 +296,16 @@ async function step(name, fn) {
   await expectFail('insertAds đích format không hỗ trợ (.gif)', () => mt.insertAds({ inputPath: V_A, breaks: [{ atSec: 1, adPaths: [adA] }], outputPath: path.join(OUT, 'ads-x6.gif') }));
   await expectFail('insertAds điểm trùng nhau', () => mt.insertAds({ inputPath: V_A, breaks: [{ atSec: 3, adPaths: [adA] }, { atSec: 3, adPaths: [adA] }], outputPath: path.join(OUT, 'ads-x7.mp4') }));
 
+  // ── Đóng phụ đề cứng (2026-09-17ze): filter subtitles/libass trong ffmpeg-static ──
+  // SRT đầu vào là CẤU HÌNH text của op (2 cue ngắn nằm trong phạm vi video THẬT V_A) —
+  // không phải media bịa: nội dung chữ không ảnh hưởng tính đúng đắn của burn-in.
+  const subSrt = path.join(OUT, 'phu-de-smoke.srt');
+  fs.writeFileSync(subSrt, '1\n00:00:00,500 --> 00:00:02,000\nKiểm tra burn-in dòng đầu\n\n2\n00:00:02,500 --> 00:00:03,500\nDòng hai\n', 'utf8');
+  await step('burnSubtitles (libass, CPU)', () => mt.burnSubtitles({ inputPath: V_A, srtPath: subSrt, outputPath: path.join(OUT, 'phu-de.mp4'), fontSize: 20, marginV: 24 }));
+  await step('burnSubtitles (GPU nếu máy có)', () => mt.burnSubtitles({ inputPath: V_A, srtPath: subSrt, outputPath: path.join(OUT, 'phu-de-gpu.mp4'), useGpu: true }));
+  await expectFail('burnSubtitles thiếu SRT → FFX_NO_SRT', () => mt.burnSubtitles({ inputPath: V_A, srtPath: path.join(OUT, 'khong-ton-tai.srt'), outputPath: path.join(OUT, 'phu-de-x.mp4') }));
+  await expectFail('burnSubtitles output trùng SRT → FFX_SAME_PATH', () => mt.burnSubtitles({ inputPath: V_A, srtPath: subSrt, outputPath: subSrt }));
+
   // ── TIẾN ĐỘ (onProgress) — hồi quy 2026-09-12g: concatAuto nhánh re-encode crash
   //    ReferenceError (viết `{ onProgress }` trong khi biến tên `onProg`), và 29/33 điểm
   //    spawnRun nhận o.onProgress rồi BỎ RƠI → % UI đứng 0. Smoke cũ không truyền
@@ -242,6 +332,7 @@ async function step(name, fn) {
   }
   await progStep('concatAuto nhánh re-encode (V_A + 240p)', (prog) => mt.concatAuto({ inputPaths: [V_A, small240], outputPath: path.join(OUT, 'prog-ca.mp4'), onProgress: prog }));
   await progStep('cutVideo accurate', (prog) => mt.cutVideo({ inputPath: V_A, outputPath: path.join(OUT, 'prog-cut-acc.mp4'), startSec: 0, endSec: 3, mode: 'accurate', onProgress: prog }), 0);
+  await progStep('burnSubtitles (re-encode + filter)', (prog) => mt.burnSubtitles({ inputPath: V_A, srtPath: subSrt, outputPath: path.join(OUT, 'prog-phude.mp4'), onProgress: prog }), 0);
   await progStep('cutMulti 2 đoạn (cắt + ghép)', (prog) => mt.cutMulti({ inputPath: V_A, outputPath: path.join(OUT, 'prog-cm.mp4'), segments: [{ startSec: 0, endSec: 3 }, { startSec: 4, endSec: 7 }], mode: 'accurate', onProgress: prog }));
   await progStep('compress size 2-pass', (prog) => mt.compressVideo({ inputPath: V_A, outputPath: path.join(OUT, 'prog-2p.mp4'), mode: 'size', targetMB: 5, onProgress: prog }));
   await progStep('loopPingPong (dao nguoc + ghep)', (prog) => mt.loopPingPong({ inputPath: small240, outputPath: path.join(OUT, 'prog-pp.mp4'), times: 2, onProgress: prog }));
