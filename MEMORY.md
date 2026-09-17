@@ -84,6 +84,38 @@ Quét 15/15 bộ test offline ĐỀU PASS (foundation, video-agent, voice, viral
 - Khác: `compareChannels` trả MẢNG `{channel,ok,card}` (harness lần đầu đọc sai — không phải bug app); watchlist add/list/remove round-trip OK (khôi phục nguyên trạng); `comments` live OK lần 2 liên tiếp sau C7.
 - Hợp đồng kênh IPC không đổi (2 kênh _ai đã đăng ký sẵn từ trước — chỉ thiếu dây preload), `npm run check` PASS sau vá. Harness tmp đã xoá.
 
+## 2026-09-17zg — Chốt 2 commit hôm nay (ea5419d + b33127d) + bổ sung E2E_PASS cho entry ze
+
+Hai commit liên tiếp chốt working tree 17 nhóm task tích lũy từ sau f12c1a74:
+
+### Commit 1: `ea5419d` — chore: commit 102 file pre-existing (B1-B12 + C-series + 4 module mới + font self-host)
+
+- **102 file** (55M + 47 untracked + 1 D): 12806+ / 566-
+- **17 nhóm** (xem message đầy đủ trong git log): ffx tools (speed/pitch/burn-in) + server B1+B2 ETag + agent-copilot Antigravity (cổng duyệt write_file/edit_file/browser_click) + viral-cut mở rộng (re-sync SRT theo tiếng nói thật + skeletonSrt + tightenSilence + 5 IPC mới) + srt-translate bilingual + dubbing module mới (fitCuePlan + atempo + cache audio + preset) + font self-host 35 file (Be Vietnam Pro + Noto Sans + Material Icons + Roboto Flex) + skill-catalog refactor 1→4 file + imzic lazy butterchurn + whiteboard Antigravity + tool-t11 YT key test thật + niche enrichment + yt-dlp error normalization + gpu-policy cứng vòng lặp crash vô hạn + main error-reporter hardening + voice C9 async + tool-ffx/tool-cli/utility/{nav,tf,niche,profiles} + AGENTS.md/MEMORY.md/ipc-inventory.json
+- **`npm run check` PASS 10/10** trước commit (syntax 507, ipc 240/23/3432, exports 35, shared 42/20, shared-shadow 13/0, shadow 25×144/0, size 742/0, toplevel 117/1807, docs 41, selftest 10/0)
+- **Quyết định 1 commit lớn**: 17 nhóm đan xen qua `preload.js` (53+ dòng mới: 6 nhóm API niche/srt-translate/viral-cut/dub/ffx/agent-copilot) + `ipc-inventory.json` (240 kênh) + MEMORY.md — tách nhỏ = rủi ro patch thủ công + 2-3 giờ thêm
+
+### Commit 2: `b33127d` — feat(agent-copilot): Task/Walkthrough card + tự động duyệt ⚡
+
+- Cải tiến tiếp Antigravity-style sau commit 1: 5 file, 299+ / 6-
+- **Thẻ Task/Walkthrough** (1 thẻ / 1 lượt chạy, nằm trong luồng chat, xỏng tự co lại): timeline từng tool (⟳ → ✓/✗), dòng duyệt (🛡 → ✓/✗/⚡), tiến độ "Bước N/M"
+- **Nút ⚡ Tự động duyệt BẬT** (localStorage `ac_auto_approve`): chốt ngay khi cổng duyệt mở, diff vẫn hiện minh bạch trong card
+- **`acApprovalLabelOf`**: mô tả tool = SỬA / GHI ĐÈ / CLICK / ĐÁNH VĂN BẢN theo tên tool thật
+- **`agent-copilot.css`** 69 dòng: `.ac-task` + `.ac-task-header` + `.ac-task-tools` + `.ac-task-approval`
+- **`agent-copilot.html`** 1 dòng (mount element); **`ipc-inventory.json`** 2 dòng (cập nhật)
+- **`npm run check` PASS 10/10** sau commit (size 746/125826, toplevel 1820, ipc 240 — các số tăng tương ứng)
+
+### Working tree hiện tại
+
+- Còn 1 file modified: **MEMORY.md** (chính entry này + 13 dòng bổ sung E2E_PASS cho entry ze)
+
+### Tổng kết session
+
+- Phase rà soát pre-existing hoàn tất: phân tích sâu 17 nhóm task qua 30+ file review ở `C:\Users\Khanh\AppData\Local\Temp\review\` (sẽ cleanup sau commit)
+- 0 quy chuẩn nào bị phá (Luật 1–10 đều giữ) — `exports-contract.json` baseline khớp, `state.js` không đổi key, `ipc-inventory.json` cập nhật đúng 240 kênh
+- Lesson PowerShell: `2>$null` chỉ chạy được khi tách lệnh; heredoc `@'…'@` với `N/M` trong text sẽ bị PowerShell interpret nhầm pathspec → dùng `git commit -F <file>` thay vì inline
+
+## 2026-09-17zf — B13: stress test 50 switch liên tiếp — dispose xác nhận HIỆU QUẢ (heap delta ÂM, 0 reload)
 ## 2026-09-17zf — B13: stress test 50 switch liên tiếp — dispose xác nhận HIỆU QUẢ (heap delta ÂM, 0 reload)
 
 - **Bối cảnh**: Sau B12 dispose body thật cho 3 panel (whiteboard/handdraw/srt-translate), cần verify dispose thực sự hoạt động dưới tải. Câu hỏi: switch 50 lần liên tiếp qua 5 panel có gây crash hoặc memory leak không?
@@ -8278,6 +8310,19 @@ Người dùng chọn "cải tiến tất cả" — hiện thực đủ 9 đề 
 - Test: test:dub 24/24 PASS (thêm splitScriptText/cuesFromDurationsMs/presets); test:ffx-smoke thêm 4 bước burn-in (CPU/GPU/2 expectFail) + 1 progStep.
 - AGENTS.md cập nhật 3 hàng: nova/dubbing/, test:dub, test:ffx-smoke.
 - Còn treo: E2E trong app cần user chạy thật (TTS cần backend OmniVoice, dịch cần API key đã cấu hình); crash renderer exitCode=-1 (GPU/software render) là pattern môi trường cũ — điều tra riêng.
+- **E2E ĐÃ CHẠY THẬT trong app đang mở (cùng ngày, qua CDP → IPC thật)** — dữ liệu
+  vào là sản phẩm thật của app: SRT lồng tiếng `nova/voice-backend/data/output/3f2f110c29ef/output.srt`
+  ("Đế chế dép lê" — voice backend sinh khi user dùng thật) + video `output/gen-e2e/native-video-veo31-quality.mp4`:
+  - Preset: save→list(1)→found→delete→gone **PASS trọn vòng đời** trên `<userData>/dub-presets` thật
+    (lần chạy đầu timeout 20s ngay gọi IPC đầu tiên, chạy lại OK — nghi cold-start IPC, chưa tái hiện).
+  - Burn-in: GPU (NVIDIA NVENC) + CPU đều **PASS**, duration 8.0s khớp nguồn; trích khung
+    `output/kiem-dinh-2026-09-17ze/frame-{gpu,goc}.png` xác nhận bằng mắt phụ đề trắng viền đen đóng cứng.
+  - textToSrt: **PASS** — 2 cue chuẩn giờ (0→3.36s→6.192s) từ 2 câu thật, artifact
+    `output/kiem-dinh-2026-09-17ze/tu-kich-ban.srt` + 2 mp3 mới trong dub-cache (TTS thật).
+  - SRT song ngữ: **fail-loud ĐÚNG** — `SRTT_ERROR: cli-bridge HTTP 500 "Credit balance is
+    too low"` (tài khoản AI dịch hết credit — lỗi môi trường, KHÔNG phải bug; cần nạp credit để test tiếp).
+  - Harness: `nova/scripts/tmp/tmp-kiem-dinh-cdp.js` (tmp, gitignored) — kết nối
+    ws://127.0.0.1:9336/json/list → Runtime.evaluate → window.native.* (mẫu chạy E2E không cần user).
 
 ## 2026-09-17zj — Quét file/logic mồ côi toàn repo (chỉ ĐỌC, chưa xoá gì)
 
