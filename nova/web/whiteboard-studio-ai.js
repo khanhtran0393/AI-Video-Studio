@@ -730,14 +730,16 @@
     return dir.replace(/[\\/]+$/, '') + '\\' + name;
   }
   function wbRecallApplyMeta(s, meta) {
+    /* KHÔNG đụng startMs/endMs: timing là tài sản của .SRT (Bước 2) — recall
+       chỉ bơm ảnh + prompt + objects. Ghi đè timing từ metadata = nhảy cóc
+       (đè timing mới theo .SRT đang nạp bằng timing cũ ghi trong JSON). */
     if (typeof meta.imagePrompt === 'string' && meta.imagePrompt.trim()) s.imagePrompt = meta.imagePrompt.trim();
-    if (Number(meta.startMs) > 0 && Number(meta.endMs) > Number(meta.startMs)) {
-      s.startMs = Math.round(meta.startMs);
-      s.endMs = Math.round(meta.endMs);
-      s.durationMs = Math.max(500, s.endMs - s.startMs);
-      s.durationSec = s.durationMs / 1000;
-    }
     if (Array.isArray(meta.objects) && meta.objects.length) s.objects = wbAiNormalizeShares(meta.objects);
+  }
+  function wbRecallTimingDiff(s, meta) {
+    const a = Math.abs((Number(meta.startMs) || 0) - (s.startMs || 0));
+    const b = Math.abs((Number(meta.endMs) || 0) - (s.endMs || 0));
+    return Math.max(a, b);
   }
   async function wbRecallImages() {
     if (!window.native || typeof window.native.pickFolder !== 'function' || typeof window.native.readFileB64 !== 'function') {
@@ -752,18 +754,26 @@
       catch (e) { log('❌ câu ' + (i + 1) + ': không đọc được metadata ' + f + ' — ' + String((e && e.message) || e)); return null; }
     };
     try {
-      /* (a) đang có cảnh trong phiên → bơm metadata theo đúng số câu */
+      /* (a) đang có cảnh trong phiên → bơm THUẦN ảnh + prompt; timing vẫn theo
+         .SRT đang nạp (Bước 2) — metadata chỉ là sổ ghi của Bước 3 */
       if (state.scenes.length) {
-        let ok = 0;
+        let ok = 0, timingDiff = 0;
         for (let i = 0; i < state.scenes.length; i++) {
           const meta = await readMeta(i);
           if (!meta) continue;
-          wbRecallApplyMeta(state.scenes[i], meta);
-          if (meta.image) await C.setImageForScene(i, meta.image);
+          if (!state.scenes[i].hasImage && typeof meta.image === 'string' && meta.image) {
+            const diff = wbRecallTimingDiff(state.scenes[i], meta);
+            if (diff > 50) {
+              timingDiff++;
+              log('⚠ câu ' + (i + 1) + ': metadata ghi khung ' + ((Number(meta.startMs) || 0) / 1000).toFixed(1) + '–' + ((Number(meta.endMs) || 0) / 1000).toFixed(1) + 's nhưng .SRT đang nạp là ' + ((state.scenes[i].startMs || 0) / 1000).toFixed(1) + '–' + ((state.scenes[i].endMs || 0) / 1000).toFixed(1) + 's → GIỮ timing .SRT, chỉ bơm ảnh + prompt');
+            }
+            wbRecallApplyMeta(state.scenes[i], meta);
+            await C.setImageForScene(i, meta.image);
+          }
           ok++;
-          log('✓ gọi lại câu ' + (i + 1) + ' — prompt + khung ' + ((state.scenes[i].startMs || 0) / 1000).toFixed(1) + 's → ' + ((state.scenes[i].endMs || 0) / 1000).toFixed(1) + 's' + (meta.image ? ' + ảnh' : ' (chưa có ảnh)'));
+          log('✓ gọi lại câu ' + (i + 1) + ' — prompt + khung ' + ((state.scenes[i].startMs || 0) / 1000).toFixed(1) + 's → ' + ((state.scenes[i].endMs || 0) / 1000).toFixed(1) + 's (theo .SRT)' + (state.scenes[i].hasImage ? ' + ảnh' : ' (chưa có ảnh)'));
         }
-        log('━━━ Gọi lại xong: ' + ok + '/' + state.scenes.length + ' câu ━━━');
+        log('━━━ Gọi lại xong: ' + ok + '/' + state.scenes.length + ' câu — timing giữ nguyên theo .SRT' + (timingDiff ? ' (' + timingDiff + ' câu lệch metadata, đã khai báo)' : '') + ' ━━━');
         return;
       }
       /* (b) chưa có cảnh (reload/panel mới) → dựng lại tuần tự tới khi thiếu metadata */
@@ -781,6 +791,7 @@
           text: String(meta.text || ''),
           cues: [],   // metadata không chứa cue SRT — timing dùng startMs/endMs (khai báo)
           image: null, canvas: null, elements: null, elementsDirty: false, previewPath: null,
+          metaCreatedAt: String(meta.createdAt || ''),
         });
         wbRecallApplyMeta(built[i], meta);
         if (meta.image) await C.setImageForScene(i, meta.image);
@@ -789,7 +800,7 @@
       if (!built.length) { log('❌ WB_RECALL_EMPTY — không đọc được metadata nào trong thư mục đã chọn (cần thư mục whiteboard-anh/<profile> do "🖼 Gen ảnh" tạo).'); return; }
       state.scenes = built;
       state.selected = 0;
-      log('━━━ Gọi lại xong: dựng lại ' + built.length + ' cảnh từ metadata (cues rỗng — timing theo metadata; Bước 4 sắp xếp timeline bình thường) ━━━');
+      log('━━━ Gọi lại xong: dựng lại ' + built.length + ' cảnh từ metadata do luồng Bước 1→3 tạo lúc ' + (built[0] && built[0].metaCreatedAt ? built[0].metaCreatedAt : 'trước đó') + ' — timing = khung .SRT ghi lúc gen (khai báo: cues rỗng); Bước 4 sắp xếp timeline bình thường ━━━');
       if (typeof C.showGenImagesBtn === 'function') C.showGenImagesBtn();
     } finally {
       C.renderSceneList(); C.renderSceneDetail();

@@ -1,5 +1,8 @@
 ## 2026-09-17zr — Whiteboard Bước 3: nút "🖼 Gen ảnh" riêng + thư mục theo profile + metadata gắn ảnh + "📥 Gọi lại ảnh"
 
+- **Quy trình cứng user chốt (KHÔNG nhảy cóc khi thiếu dữ liệu trước)**: kịch bản → TTS → .SRT → tách câu có nghĩa → timestamp theo .SRT → mỗi câu = prompt tạo ảnh → ảnh khớp timestamp câu đó → vision khoanh vùng + vẽ đúng khung timestamp câu → các video vẽ ghép trùng khớp TTS ở Bước 5 → user tùy chỉnh → xuất Bước 6.
+- **Sửa nhảy cóc trong recall (2026-09-17zr bổ sung)**: `wbRecallApplyMeta` ĐÃ BỎ ghi đè `startMs/endMs` từ metadata lên cảnh có sẵn — timing là tài sản của .SRT (Bước 2); recall trong phiên chỉ bơm ảnh + prompt + objects. Nếu metadata ghi khung khác .SRT đang nạp (>50ms) → log ⚠ khai báo từng câu "GIỮ timing .SRT". Nhánh dựng lại (không có cảnh) dùng timing trong metadata ĐÚNG NGHĨA: đó là khung .SRT ghi lúc gen (khai báo cues rỗng, log ghi rõ nguồn + createdAt). Gates xác minh: `wbAnalyzePrompt` fail-loud `WB_NO_SCRIPT`/`WB_NO_SRT`; `wbAiGenImages` chặn khi chưa có cảnh text; `wbArrangeRegions` yêu cầu đủ ảnh; reveal neo startMs/endMs.
+
 - **Bối cảnh**: user hỏi "prompt nào cho ảnh nào" → giải thích mapping by-construction (prompt nằm trên cảnh, ảnh gán trong cùng chuỗi await, engine ghép theo media_id). User đề xuất: nút Gen ảnh riêng ở Bước 3 + lưu thư mục riêng theo profile + gán ngầm prompt/timeline vào ảnh để gọi lại sắp xếp timeline. Triển khai luôn (được duyệt ngầm theo đề xuất).
 - **nova/main/ipc/files.js** (`save-file`): subdir giờ cho phép LỒNG `whiteboard-anh/<profile>` — tách phân đoạn theo `/\`, dọn ký tự cấm Windows từng đoạn, chặn traversal (`.`/`..` → `_`). Tên file giữ logic `safe()` cũ.
 - **whiteboard-studio-panel.js**: thêm nút `wb-genImagesBtn` (ẩn `wb-hide`, hiện sau khi Phân tích prompt thành công qua `C.showGenImagesBtn()`) + nút `wb-recallImagesBtn` (luôn hiện) ở Bước 3; bind ids; export ctx thêm `showGenImagesBtn`.
@@ -8785,3 +8788,18 @@ ova/web/src/toolbox/skill-catalog/{index.js,part-01.js,part-02.js,part-03.js} (4
 - Ô cỡ nét kẹp 2..40 khi change (như hd-core), min=2 max=40, placeholder "mặc định"; giữ năng lực riêng whiteboard:pickHand + nhãn tay tuỳ chỉnh.
 
 **Kiểm chứng:** node --check OK; `npm run check` EXIT=0 10/10 (exit 1 lần chạy trước là nhiễu PowerShell bọc stderr npm — xác nhận lại bằng cmd /c). UI thật qua CDP 9336 + Page.reload ignoreCache (`tmp-wb-tip-ui-check.js`): 8/8 PASS — 3 thẻ đúng nhãn/mô tả, thẻ hand mặc định, click pen khoá nút tay / click hand mở, wb-tipModeSel đã gỡ, kẹp cỡ nét 99→40, 0→2, rỗng giữ rỗng. Lưu ý: Page.reload reset trạng thái panel trong RAM (dự án chưa Lưu dự án sẽ mất) — đã báo user.
+
+## 2026-09-17zt — Whiteboard Studio: bổ sung bàn tay mẫu PNGtree (hand preset built-in)
+
+**Yêu cầu user:** bổ sung bàn tay `—Pngtree—hand holding a pen writing_7166226.png` trên Desktop làm bàn tay chọn được.
+
+**Thay đổi:**
+- Copy PNG vào engine assets: `nova/whiteboard-studio/srt-whiteboard-animation/assets/drawing-hand-pngtree.png` (2000×2000 nền trong suốt, ~260KB) — bàn tay mẫu cố định của app, không phụ thuộc file Desktop.
+- `py-backend.js`: `BUILTIN_HANDS` (một nguồn) + export `builtinHandPath(id)` (id lạ → null); module không nằm trong exports-contract nên không cần `--update`.
+- `ipc.js`: `whiteboard:pickHand` nhận preset id → trả path built-in (không dialog); id lạ → `WB_HAND_UNKNOWN_PRESET`, asset thiếu → `WB_HAND_MISSING` (Luật 10). Bàn tay mẫu là asset kèm engine cùng loại HAND_PNG — không vi phạm quy tắc "media user phải qua dialog".
+- `preload.js`: `pickHand(preset)` truyền qua (backward compatible).
+- `web/whiteboard-studio-panel.js` (bump `?v=wbui6`): hàng tay khi tipMode=hand có 3 nút highlight kiểu thẻ — ✋ Mặc định / ✋ PNGtree / 📁 PNG khác…; `state.handPreset`; nhãn "✋ bàn tay mẫu (PNGtree)"; nhận diện PNGtree qua tên file `drawing-hand-pngtree.png`.
+
+**Kiểm chứng:** node --check 4 file OK; `npm run check` EXIT 0. Restart app qua `khoidong.bat --silent` (EXIT 0, bridge 47280) vì pickHand/preload/py-backend là main process. UI qua CDP (`tmp-wb-tip-ui-check.js`): **10/10 PASS** (gồm chọn PNGtree qua IPC thật + quay lại Mặc định). Render thật qua IPC `whiteboard:export` (`tmp-wb-pngtree-render.js`, dữ liệu job 5s model sheet đã duyệt): `output/wb-tip-pngtree.mp4` — ffprobe xác nhận h264 600×1080 5.0s ~981KB, progress 100 done. scan:lifecycle: 0 findings sau 06:56Z.
+
+**Treo:** script tmp dùng lại được (tmp-wb-tip-test.js / tmp-wb-tip-ui-check.js / tmp-wb-pngtree-render.js trong `nova/scripts/tmp/`, đã gitignore) — giữ để verify các lần sau; dọn khi user xác nhận không cần.
