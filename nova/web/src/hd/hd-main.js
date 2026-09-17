@@ -305,6 +305,16 @@
     loadImages: (paths) => addScenes((paths || []).filter((p) => typeof p === 'string')),
     /* API: render thẳng tới đường dẫn MP4 cho sẵn (bỏ qua hộp thoại lưu) */
     exportTo: (outPath) => exportVideo(outPath),
+    // 2026-09-17ab (B11) + 2026-09-17ac (B12): dispose hook gọi khi chuyển tool.
+    // B12: wire body thật — gọi C.pvDispose (chặn RAF + clear 2 canvas + drop Image ref).
+    // Mục đích giảm GPU memory leak canvas.
+    dispose: () => {
+      try { const C = window.hdPanelCtx; if (C && typeof C.pvDispose === 'function') C.pvDispose(); } catch (_) {}
+      try {
+        const r = document.getElementById('handdrawRoot');
+        if (r) r.querySelectorAll('canvas').forEach((c) => { try { const x = c.getContext('2d'); if (x) x.clearRect(0, 0, c.width, c.height); } catch (_) {} });
+      } catch (_) {}
+    },
   };
 
   // script nằm cuối <body> → DOM đã parse xong; tự khởi động khi root tồn tại

@@ -35,7 +35,6 @@
     audioTrack: null,
     musicTrack: null,      // nhạc nền (lặp tới hết video, mix nhỏ hơn voice)
     exporting: false,
-    engineOk: false,       // engine Python sẵn sàng (refreshEngine cập nhật — checklist đọc)
     scriptRaw: null,       // kịch bản đã nhận từ tab Tạo Kịch Bản (Bước 1) — chưa phân tích
     scriptSource: '',      // nguồn kịch bản (tsOutput / state.script)
     ttsName: '',           // tên bản TTS đã nhận (Bước 2)
@@ -44,9 +43,9 @@
   /* ── nạp phần tử UI (index.html) ── */
   function bind() {
     const ids = [
-      'engine', 'srtLabel', 'sceneList',
+      'srtLabel', 'sceneList',
       'st1', 'st2', 'st3', 'st4', 'st5', 'st6',
-      'pickSrtBtn', 'tsPullBtn', 'checklist', 'srtExtractRow',
+      'pickSrtBtn', 'tsPullBtn', 'srtExtractRow',
       'pickVoiceSrtBtn', 'voicePullBtn', 'whisperPrepareBtn', 'modelSel',
       'analyzePromptBtn', 'arrangeBtn',
       'pickAudioBtn', 'audioLabel', 'audioWarn',
@@ -91,35 +90,7 @@
     set('st3', n ? nPr + '/' + n + ' prompt' : '—', n > 0 && nPr >= n);
     set('st4', n ? nImg + '/' + n + ' ảnh · ' + nEl + '/' + n + ' vùng' : '—', n > 0 && nImg >= n && nEl >= n);
     set('st5', (n && nImg >= n && nEl >= n) ? 'sẵn sàng' : '—', n > 0 && nImg >= n && nEl >= n);
-    set('st6', state.engineOk ? 'engine OK' : '—', !!state.engineOk);
-    renderChecklist();
-  }
-
-  /* ── checklist điều kiện: từng ô ✓ khi đã đủ (tính từ state + engine),
-        render cùng nhịp với updateStepStatus (gọi sau mỗi hành động) ── */
-  function renderChecklist() {
-    if (!els.checklist) return;
-    const nImg = state.scenes.filter((s) => s.image).length;
-    const nEl = state.scenes.filter((s) => s.elements && s.elements.length).length;
-    const nPr = state.scenes.filter((s) => s.imagePrompt).length;
-    const n = state.scenes.length;
-    const items = [
-      { ok: !!state.scriptRaw, label: 'Kịch bản từ Tạo Kịch Bản' },
-      { ok: !!state.audioTrack, label: 'TTS từ Giọng nói' + (state.audioTrack ? (state.audioTrack.durationSec ? ' (' + state.audioTrack.durationSec.toFixed(1) + 's)' : '') : '') },
-      { ok: !!(state.srtPath || state.cues.length), label: '.SRT đã trích xuất' + (state.cues.length ? ' (' + state.cues.length + ' cue)' : '') },
-      { ok: n > 0 && nPr >= n, label: 'Phân tích prompt từng câu' + (n ? ' (' + nPr + '/' + n + ')' : '') },
-      { ok: n > 0 && nImg >= n, label: 'Ảnh từng câu' + (n ? ' (' + nImg + '/' + n + ')' : '') },
-      { ok: n > 0 && nEl >= n, label: 'Vùng vẽ khớp thời lượng' + (n ? ' (' + nEl + '/' + n + ')' : '') },
-      { ok: !!state.musicTrack, label: 'Nhạc nền', optional: true },
-      { ok: !!state.engineOk, label: 'Engine Python (repo · venv · deps · ffmpeg)' },
-    ];
-    els.checklist.innerHTML =
-      '<div class="wb-checklist-title">Checklist điều kiện</div>' +
-      items.map((it) =>
-        '<div class="wb-checklist-item' + (it.ok ? ' ok' : '') + (it.optional ? ' opt' : '') + '">' +
-        '<span class="wb-ck-mark">' + (it.ok ? '✓' : '') + '</span><span class="wb-ck-label">' +
-        it.label + (it.optional ? ' (tuỳ chọn)' : '') + '</span></div>'
-      ).join('');
+    set('st6', '—', false);
   }
 
   /* ── nút trạng thái Bước 1/2: xanh khi đã nhận (Luật: trạng thái lộ liễu) ── */
@@ -626,7 +597,6 @@
         log('🧠 cài faster-whisper vào venv (lần đầu, vài phút)…');
         const r = await window.native.whiteboard.whisperPrepare();
         log(r && r.ok ? '✓ faster-whisper sẵn sàng — có thể dùng Voice → SRT' : '❌ cài Whisper lỗi: ' + (r && r.error));
-        refreshEngine();
       } finally { els.whisperPrepareBtn.disabled = false; }
     });
     if (els.pyPrepareBtn) els.pyPrepareBtn.addEventListener('click', async () => {
@@ -634,38 +604,8 @@
       try {
         const r = await window.native.whiteboard.pyPrepare();
         log(r && r.ok ? '✓ engine Python sẵn sàng' : '❌ prepare lỗi: ' + (r && r.error));
-        refreshEngine();
       } finally { els.pyPrepareBtn.disabled = false; }
     });
-  }
-
-  async function refreshEngine() {
-    const r = await window.native.whiteboard.pyStatus().catch(() => null);
-    if (!r) { els.engine.innerHTML = '<span class="wb-chip bad">engine ?</span>'; state.engineOk = false; updateStepStatus(); return; }
-    // engine status dạng chips màu trên hero (repo/venv/deps/ffmpeg/whisper)
-    const chip = (n, ok) => '<span class="wb-chip ' + (ok ? 'ok' : 'bad') + '">' + n + ' ' + (ok ? '✓' : '✗') + '</span>';
-    const chips = [
-      chip('repo', r.repoPresent),
-      chip('venv', r.venvReady),
-      chip('deps', r.deps),
-      chip('ffmpeg', r.ffmpeg),
-    ];
-    if (r.whisper === true || r.whisper === false) chips.push(chip('whisper', r.whisper === true));
-    els.engine.innerHTML = chips.join('');
-    state.engineOk = !!r.ok;   // checklist điều kiện đọc từ đây
-    updateStepStatus();
-    const parts = [];
-    parts.push(r.repoPresent ? 'repo ✓' : 'repo ✗');
-    parts.push(r.venvReady ? 'venv ✓' : 'venv ✗');
-    parts.push(r.deps ? 'deps ✓' : 'deps ✗');
-    parts.push(r.ffmpeg ? 'ffmpeg ✓' : 'ffmpeg ✗');
-    if (r.whisper === true) parts.push('whisper ✓');
-    else if (r.whisper === false) parts.push('whisper ✗');
-    if (!r.ok) {
-      log('⚠ engine chưa sẵn sàng (' + parts.join(' ') + ') — dùng nút "⚙ Chuẩn bị Python" ở tool ✏️ Vẽ Tay Ảnh để dựng venv lần đầu');
-    } else if (r.whisper === false) {
-      log('ℹ voice → SRT chưa dùng được (thiếu faster-whisper) — bấm "Cài Whisper" (🧠) ở Bước 2 để bật (chỉ 1 lần)');
-    }
   }
 
   function init() {
@@ -677,7 +617,6 @@
     syncButtons();
     setProgress(0, '—');
     log('Whiteboard Studio (luồng 6 bước): 1 Nhận kịch bản → 2 Nhận TTS (SRT tự trích xuất) → 3 Phân tích prompt (tách câu + khớp timing .SRT + AI prompt/ảnh) → 4 Sắp xếp dữ liệu (AI khoanh vùng, giờ vẽ khớp câu) → 5 Xem trước (timeline 2 dòng: video + âm thanh) → 6 Xuất Video. Nút Bước 1/2 đổi XANH khi đã nhận.');
-    refreshEngine();
   }
 
   async function stopExport() {
@@ -700,14 +639,6 @@
       Hợp đồng ID giữ nguyên tuyệt đối (bind() đọc #wb-*) ════════ */
   const SHELL_HTML = `
     <div class="wb-root wb-root-v2">
-      <div class="wb-hero wb-hide">
-        <div class="wb-hero-text">
-          <div class="wb-chips" id="wb-engine"><span class="wb-chip">engine …</span></div>
-        </div>
-      </div>
-
-      <div class="wb-checklist" id="wb-checklist"></div>
-
       <details class="wb-group wb-step wb-step-1" id="wb-step1" open>
         <summary class="wb-group-title"><span class="wb-step-num">1</span><span class="wb-step-name">Kịch bản</span><span class="wb-step-st" id="wb-st1">—</span><span class="wb-step-hint">nhận kịch bản từ tab 📝 Tạo Kịch Bản</span></summary>
         <div class="wb-step-body">
@@ -833,6 +764,17 @@
 
   window.WhiteboardPanel = {
     init: (root) => boot(root || document.getElementById('whiteboardRoot')),
+    // 2026-09-17ab (B11) + 2026-09-17ac (B12): dispose hook gọi khi chuyển tool (nav.js).
+    // B12: wire body thật — gọi wbStudioPreview.dispose (cancel RAF, pause audio, clear img cache)
+    // + clear canvas thủ công (els không export khỏi IIFE nên truy cập qua DOM).
+    // Mục đích: giảm GPU memory leak canvas khi mount 6 panel liên tiếp (B7/B8 cụm crash GPU+Network).
+    dispose: () => {
+      try { if (window.wbStudioPreview && typeof window.wbStudioPreview.dispose === 'function') window.wbStudioPreview.dispose(); } catch (_) {}
+      try {
+        const c1 = document.getElementById('wb-pvCanvas');
+        if (c1) { const ctx = c1.getContext('2d'); if (ctx) ctx.clearRect(0, 0, c1.width, c1.height); }
+      } catch (_) {}
+    },
   };
 
   /* Context dùng chung cho các module mở rộng nạp SAU panel (whiteboard-studio-ai.js,

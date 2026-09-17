@@ -255,6 +255,12 @@
 
   window.SrtTranslatePanel = {
     init: (el) => boot(el || document.getElementById('srtTranslateRoot')),
+    // 2026-09-17ab (B11) + 2026-09-17ac (B12): dispose hook gọi khi chuyển tool.
+    // B12: KHÔNG xoá root.innerHTML — panel KHÔNG tự re-init khi switchTool quay lại
+    // (nav.js chỉ gọi dispose, không gọi init). Xoá root → panel trống vĩnh viễn.
+    // Best-effort hiện tại: no-op. SRT-translate IIFE không giữ RAF/Interval/fetch
+    // nên dispose thật không cần làm gì — DOM cleanup do app tự dọn khi đóng.
+    dispose: () => { /* no-op — see comment above */ },
   };
 
   const _stRoot = document.getElementById('srtTranslateRoot');

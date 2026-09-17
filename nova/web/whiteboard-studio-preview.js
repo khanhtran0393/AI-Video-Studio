@@ -347,7 +347,22 @@
     dom.tl.appendChild(outer);
   }
 
-  window.wbStudioPreview = { refresh: () => { wbPvRenderTimeline(); wbPvFrame(); } };
+  /* ════════ 2026-09-17ac (B12) · dispose body ════════
+     Huỷ vòng RAF, pause audio, clear image cache, drop dom ref.
+     Gọi từ WhiteboardPanel.dispose (B11) khi chuyển tool. Best-effort: lỗi 1 bước
+     KHÔNG chặn bước sau (try/catch quanh từng thao tác). */
+  function wbPvDispose() {
+    try { playing = false; cancelAnimationFrame(rafId); rafId = 0; } catch (_) {}
+    try { if (audio) { audio.pause(); audio.src = ''; audio = null; } } catch (_) {}
+    try { if (wbPvImg && wbPvImg.cache) wbPvImg.cache.clear(); } catch (_) {}
+    try { if (dom && dom.playBtn) dom.playBtn.textContent = '▶ Phát'; } catch (_) {}
+    try { dom = null; } catch (_) {}
+  }
+
+  window.wbStudioPreview = {
+    refresh: () => { wbPvRenderTimeline(); wbPvFrame(); },
+    dispose: wbPvDispose,  // 2026-09-17ac (B12): body thật thay cho no-op stub
+  };
 
   /* ── boot: panel lazy-mount → chờ UI xuất hiện (MutationObserver) ── */
   function boot() {

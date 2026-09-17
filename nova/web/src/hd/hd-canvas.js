@@ -606,4 +606,21 @@
   C._pvQueued = _pvQueued;
   C.pvRender = pvRender;
   C.pvPaint = pvPaint;
+
+  /* ════════ 2026-09-17ac (B12) · dispose body cho HD panel ════════
+     Best-effort: chặn RAF pending (nếu có) + clear 2 canvas + drop Image ref.
+     Gọi từ HanddrawPanel.dispose. _pvQueued = false để chặn callback inline rAF
+     nếu nó chưa chạy. */
+  C.pvDispose = function () {
+    try { _pvQueued = false; } catch (_) {}
+    try {
+      const c = document.getElementById('hd-editCanvas') || els.editCanvas;
+      if (c) { const x = c.getContext('2d'); if (x) x.clearRect(0, 0, c.width, c.height); }
+    } catch (_) {}
+    try {
+      const c = document.getElementById('hd-previewCanvas') || els.previewCanvas;
+      if (c) { const x = c.getContext('2d'); if (x) x.clearRect(0, 0, c.width, c.height); }
+    } catch (_) {}
+    try { pv.img = null; pv.imgOk = false; } catch (_) {}
+  };
 })();
