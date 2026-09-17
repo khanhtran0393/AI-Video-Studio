@@ -32,17 +32,14 @@
       (saveFile IPC, kèm metadata cau-NNN.json: prompt + text + khung
       thời gian SRT + objects + cấu hình Flow) rồi gán vào cảnh đúng
       khung thời gian SRT, (d) wbAiRegionsCore tự khoanh vùng
-      khoanh vùng người/vật thể/sự kiện trên ảnh đó + giờ vẽ theo
+      người/vật thể/sự kiện trên ảnh đó + giờ vẽ theo
       nhịp kẻ. Câu đã có ảnh được bỏ qua — chạy lại để tạo tiếp.
 
-   3) Nút "🖼 Gen ảnh" (hiện sau khi Phân tích prompt thành công) —
-      wbAiGenImages riêng lẻ: gen/retry các câu còn thiếu, cùng cấu
-      hình và cùng thư mục profile với luồng trên. Nút "📥 Gọi lại
-      ảnh" — wbRecallImages: chọn thư mục profile → đọc metadata
-      cau-NNN.json → gán lại prompt + khung thời gian + ảnh vào cảnh
-      hiện có, hoặc dựng lại toàn bộ cảnh khi panel vừa reload (timing
-      theo metadata, cues rỗng — khai báo) → Bước 4 sắp xếp timeline
-      bình thường.
+   3) Metadata tự lưu trong luồng auto: mỗi ảnh gen xong được ghi kèm
+   sidecar cau-NNN.json vào <thư mục lưu>/whiteboard-anh/<profile =
+   tên bản TTS>/ (prompt + text + khung thời gian SRT + objects + cấu
+   hình Flow + đường dẫn ảnh) — dữ liệu kiểm chứng mapping
+   prompt↔ảnh↔timeline, KHÔNG có UI/nút riêng nào.
 
    Pattern vision port từ src/hd/hd-ai-export.js (không copy chéo
    state — mỗi panel context riêng). Module nạp SAU
@@ -168,8 +165,6 @@
     try {
       const r = C.wbAnalyzePromptData();
       if (!r) return; // lỗi lộ liễu (WB_NO_SCRIPT / WB_NO_SRT) đã log trong panel
-      /* phân tích thành công → mở khóa nút "🖼 Gen ảnh" (gen riêng, retry thiếu) */
-      if (typeof C.showGenImagesBtn === 'function') C.showGenImagesBtn();
       await wbAiPrompts();
       await wbAiGenImages();
     } finally {
@@ -577,7 +572,7 @@
     return { e0, err, rotated };
   }
 
-  window.wbStudioAi = { wbAiPrompts, wbAiGenImages, wbAiRegionsCore, wbAiScheduleReveal, wbAnalyzePrompt, wbArrangeRegions, wbAiVisionJson, wbAcUserSource, wbAiVisionSelfCheck, wbAiVisionSelfCheckPrompt, wbVisionSelfCheckEnabled, wbVisionMemory, wbVisionRemember, wbVisionStyleContext, wbVisionPlan, wbRecallImages };
+  window.wbStudioAi = { wbAiPrompts, wbAiGenImages, wbAiRegionsCore, wbAiScheduleReveal, wbAnalyzePrompt, wbArrangeRegions, wbAiVisionJson, wbAcUserSource, wbAiVisionSelfCheck, wbAiVisionSelfCheckPrompt, wbVisionSelfCheckEnabled, wbVisionMemory, wbVisionRemember, wbVisionStyleContext, wbVisionPlan };
 
   /* ════════ 2b · SẮP XẾP DỮ LIỆU (Bước 4 của luồng 6 bước) ════════
      Nút "🗺 Sắp xếp dữ liệu": AI vision khoanh vùng TẤT CẢ cảnh có ảnh.
@@ -710,103 +705,6 @@
     }
   }
 
-  /* ════════ 3b · GỌI LẠI ẢNH ĐÃ GEN (metadata cau-NNN.json) ════════
-     Nút "📥 Gọi lại ảnh": chọn thư mục whiteboard-anh/<profile> → đọc JSON
-     metadata ghi kèm lúc gen (prompt + text + startMs/endMs + objects + ảnh) →
-     gán lại vào cảnh hiện có, hoặc DỰNG LẠI toàn bộ cảnh khi panel vừa reload
-     (không cần chạy lại TTS/phân tích). Cảnh dựng lại có cues rỗng (khai báo)
-     — timing dùng startMs/endMs từ metadata nên Bước 4 sắp xếp timeline bình
-     thường. Metadata thiếu/hỏng → lỗi lộ liễu từng câu (Luật 10). */
-  function wbRecallReadJson(r) {
-    if (!r || r.error || !r.dataUrl) throw new Error((r && r.error) ? String(r.error) : 'read-file-b64 không trả dữ liệu');
-    const k = r.dataUrl.indexOf('base64,');
-    if (k < 0) throw new Error('read-file-b64 thiếu base64');
-    const bin = atob(r.dataUrl.slice(k + 7));
-    const bytes = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-    return JSON.parse(new TextDecoder().decode(bytes));
-  }
-  function wbRecallJoin(dir, name) {
-    return dir.replace(/[\\/]+$/, '') + '\\' + name;
-  }
-  function wbRecallApplyMeta(s, meta) {
-    /* KHÔNG đụng startMs/endMs: timing là tài sản của .SRT (Bước 2) — recall
-       chỉ bơm ảnh + prompt + objects. Ghi đè timing từ metadata = nhảy cóc
-       (đè timing mới theo .SRT đang nạp bằng timing cũ ghi trong JSON). */
-    if (typeof meta.imagePrompt === 'string' && meta.imagePrompt.trim()) s.imagePrompt = meta.imagePrompt.trim();
-    if (Array.isArray(meta.objects) && meta.objects.length) s.objects = wbAiNormalizeShares(meta.objects);
-  }
-  function wbRecallTimingDiff(s, meta) {
-    const a = Math.abs((Number(meta.startMs) || 0) - (s.startMs || 0));
-    const b = Math.abs((Number(meta.endMs) || 0) - (s.endMs || 0));
-    return Math.max(a, b);
-  }
-  async function wbRecallImages() {
-    if (!window.native || typeof window.native.pickFolder !== 'function' || typeof window.native.readFileB64 !== 'function') {
-      log('⚠ thiếu IPC chọn thư mục/đọc file — chạy panel trong app Nova'); return;
-    }
-    const r = await window.native.pickFolder();
-    if (!r || !r.path) return;
-    const dir = r.path;
-    const readMeta = async (i) => {
-      const f = wbRecallJoin(dir, 'cau-' + String(i + 1).padStart(3, '0') + '.json');
-      try { return wbRecallReadJson(await window.native.readFileB64(f)); }
-      catch (e) { log('❌ câu ' + (i + 1) + ': không đọc được metadata ' + f + ' — ' + String((e && e.message) || e)); return null; }
-    };
-    try {
-      /* (a) đang có cảnh trong phiên → bơm THUẦN ảnh + prompt; timing vẫn theo
-         .SRT đang nạp (Bước 2) — metadata chỉ là sổ ghi của Bước 3 */
-      if (state.scenes.length) {
-        let ok = 0, timingDiff = 0;
-        for (let i = 0; i < state.scenes.length; i++) {
-          const meta = await readMeta(i);
-          if (!meta) continue;
-          if (!state.scenes[i].hasImage && typeof meta.image === 'string' && meta.image) {
-            const diff = wbRecallTimingDiff(state.scenes[i], meta);
-            if (diff > 50) {
-              timingDiff++;
-              log('⚠ câu ' + (i + 1) + ': metadata ghi khung ' + ((Number(meta.startMs) || 0) / 1000).toFixed(1) + '–' + ((Number(meta.endMs) || 0) / 1000).toFixed(1) + 's nhưng .SRT đang nạp là ' + ((state.scenes[i].startMs || 0) / 1000).toFixed(1) + '–' + ((state.scenes[i].endMs || 0) / 1000).toFixed(1) + 's → GIỮ timing .SRT, chỉ bơm ảnh + prompt');
-            }
-            wbRecallApplyMeta(state.scenes[i], meta);
-            await C.setImageForScene(i, meta.image);
-          }
-          ok++;
-          log('✓ gọi lại câu ' + (i + 1) + ' — prompt + khung ' + ((state.scenes[i].startMs || 0) / 1000).toFixed(1) + 's → ' + ((state.scenes[i].endMs || 0) / 1000).toFixed(1) + 's (theo .SRT)' + (state.scenes[i].hasImage ? ' + ảnh' : ' (chưa có ảnh)'));
-        }
-        log('━━━ Gọi lại xong: ' + ok + '/' + state.scenes.length + ' câu — timing giữ nguyên theo .SRT' + (timingDiff ? ' (' + timingDiff + ' câu lệch metadata, đã khai báo)' : '') + ' ━━━');
-        return;
-      }
-      /* (b) chưa có cảnh (reload/panel mới) → dựng lại tuần tự tới khi thiếu metadata */
-      const built = [];
-      for (let i = 0; ; i++) {
-        const meta = await readMeta(i);
-        if (!meta) break;
-        const startMs = Math.max(0, Math.round(Number(meta.startMs) || 0));
-        const endMs = Math.max(startMs + 500, Math.round(Number(meta.endMs) || 0));
-        built.push({
-          sceneId: 'scene-' + String(i + 1).padStart(2, '0'),
-          startMs, endMs,
-          durationMs: Math.max(500, endMs - startMs),
-          durationSec: Math.max(500, endMs - startMs) / 1000,
-          text: String(meta.text || ''),
-          cues: [],   // metadata không chứa cue SRT — timing dùng startMs/endMs (khai báo)
-          image: null, canvas: null, elements: null, elementsDirty: false, previewPath: null,
-          metaCreatedAt: String(meta.createdAt || ''),
-        });
-        wbRecallApplyMeta(built[i], meta);
-        if (meta.image) await C.setImageForScene(i, meta.image);
-        log('✓ dựng lại câu ' + (i + 1) + ' — ' + ((endMs - startMs) / 1000).toFixed(1) + 's' + (meta.image ? ' + ảnh' : ' (chưa có ảnh)'));
-      }
-      if (!built.length) { log('❌ WB_RECALL_EMPTY — không đọc được metadata nào trong thư mục đã chọn (cần thư mục whiteboard-anh/<profile> do "🖼 Gen ảnh" tạo).'); return; }
-      state.scenes = built;
-      state.selected = 0;
-      log('━━━ Gọi lại xong: dựng lại ' + built.length + ' cảnh từ metadata do luồng Bước 1→3 tạo lúc ' + (built[0] && built[0].metaCreatedAt ? built[0].metaCreatedAt : 'trước đó') + ' — timing = khung .SRT ghi lúc gen (khai báo: cues rỗng); Bước 4 sắp xếp timeline bình thường ━━━');
-      if (typeof C.showGenImagesBtn === 'function') C.showGenImagesBtn();
-    } finally {
-      C.renderSceneList(); C.renderSceneDetail();
-    }
-  }
-
   /* ── boot: panel lazy-mount → chờ nút xuất hiện (MutationObserver) ── */
   function boot() {
     /* Luồng 6 bước rút gọn: Bước 3 chỉ còn "Phân tích prompt" (chuỗi đầy đủ
@@ -814,13 +712,9 @@
        "Sắp xếp dữ liệu". Các nút AI rời (prompt/gen/khoanh vùng đơn) đã gỡ. */
     const b4 = document.getElementById('wb-analyzePromptBtn');
     const b5 = document.getElementById('wb-arrangeBtn');
-    const bGen = document.getElementById('wb-genImagesBtn');
-    const bRecall = document.getElementById('wb-recallImagesBtn');
-    if (bGen && !bGen.dataset.wbAiBound) { bGen.dataset.wbAiBound = '1'; bGen.addEventListener('click', wbAiGenImages); }
-    if (bRecall && !bRecall.dataset.wbAiBound) { bRecall.dataset.wbAiBound = '1'; bRecall.addEventListener('click', wbRecallImages); }
     if (b4 && !b4.dataset.wbAiBound) { b4.dataset.wbAiBound = '1'; b4.addEventListener('click', wbAnalyzePrompt); }
     if (b5 && !b5.dataset.wbAiBound) { b5.dataset.wbAiBound = '1'; b5.addEventListener('click', wbArrangeRegions); }
-    return !!(b4 && b5 && bGen && bRecall);
+    return !!(b4 && b5);
   }
   if (!boot()) {
     const mo = new MutationObserver(() => { if (boot()) mo.disconnect(); });

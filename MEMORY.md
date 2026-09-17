@@ -1,3 +1,40 @@
+## 2026-09-17zs — Whiteboard Bước 3: GỠ 2 nút "🖼 Gen ảnh"/"📥 Gọi lại ảnh" theo quyết định user ("theo flow, không thêm gì cả") — giữ metadata tự lưu
+
+- **Quyết định user**: luồng Bước 3 chỉ còn nút "🧠 Phân tích prompt"; KHÔNG thêm UI nào. Giữ nguyên phần dữ liệu: sidecar `cau-NNN.json` + thư mục profile `whiteboard-anh/<tên bản TTS>` tự lưu trong luồng auto (`wbAiGenSave`/`wbAiGenImages`/`wbMetaOf` — không đổi).
+- **Đã gỡ**: markup + ids + `showGenImagesBtn` trong `whiteboard-studio-panel.js`; block `wbRecall*` (ReadJson/Join/ApplyMeta/TimingDiff/Images) + bindings + export `wbRecallImages` + gọi `C.showGenImagesBtn()` trong `whiteboard-studio-ai.js`. Syntax OK, 0 tham chiếu còn lại.
+- **Tài liệu**: đổi `GEN-ANH-GOI-LAI-ANH.md` → `METADATA-ANH-THEO-CAU.md` (viết lại: metadata tự lưu, không UI; ghi rõ quyết định zr/zs); README.md Bước 3 + bảng cấu trúc cập nhật tương ứng.
+- Lưu ý: helpers `wbRecallApplyMeta` (nguyên tắc "timing chỉ thuộc .SRT") đã gỡ theo block — nguyên tắc được bảo tồn trong doc + mục zr; nếu sau này cần khôi phục dữ liệu từ metadata, làm theo doc, không đè timing.
+
+
+## 2026-09-17zu — Sprite HD Vẽ Tay Ảnh: sửa 3 lỗi (fringe xanh, mất ngón curl, chữ Trung) + wire selector 12 mẫu Bước 3
+
+**Bối cảnh**: tiếp 2026-09-17 (đợt sinh 9 sprite HD trong `nova/whiteboard-studio/assets/hands/`: 4 tay pale/tan/deep/glove + 5 đầu bút pencil/fountain/crayon/brush/marker). 3 lỗi còn: quầng xanh viền cánh tay/nắm tay, đầu ngón cuộn trái nắm tay vẫn cam nguyên bản, chữ Trung "江哥是老登啊" in sẵn trên thân bút trắng (branding của asset upstream `srt-whiteboard-animation/assets/drawing-hand.png`, KHÔNG phải của app).
+
+**Chẩn đoán bằng probe** (`nova/scripts/tmp/tmp-probe-hd-issues.py`, `tmp-probe-hd-issues2.py`):
+- Mất ngón: 2 CC da bị drop vì NGƯỠNG AREA 1200px — CC 1182px (227,407) + 780px (267,491), H≈11/S≈140 (da thật; bút nâu S≥158 loại sẵn), khe cách CC da lớn >9px do bút chen ngang; thêm 1 mảng da bóng (464,461) 583px cũng bị drop.
+- Fringe: rule cũ (H40–80, S≥140) bắt đủ 13.280px nguồn, NHƯNG fill bằng blur thường TỰ NHIỄM (blur gồm px fringe chưa fill vẫn xanh + px trong suốt đen) → 12.415px viền TỐI V<60 (p50=19) trong output vẫn ám xanh. Quyết định cũ "V<60 giữ nguyên" là SAI — chính là quầng user thấy.
+- Chữ: glyph detect theo frac-trắng quá gắt (chỉ ăn 3.578/9.797px nét); barrel trắng: CC 51.599px, minAreaRect 108×641, trục dài 39.7° (góc -50.3 là cạnh NGẮN).
+
+**Sửa `tmp-gen-hd-sprites.py`** (chạy bằng venv python của engine):
+- `skin_mask`: cứu CC nhỏ 400–1200px trong bán kính 20 (41×41) với frac≥0.8 — đo thực frac@20 = 0.82/0.92/0.99 cho đúng 3 CC tay, KHÔNG có CC nhỏ khác → 0 false positive. Skin px 426.359 → 429.966.
+- `defringe` v2: viền tối V<60 → NEUTRAL hoá (V,V,V — đọc là đen, mất tint, giữ shape); fringe sáng V≥60 → fill blur CHUẨN HOÁ (num/den, nguồn gồm cả viền tối đã neutral để không chết cạn). Kết quả: green-dominant (g>r+8, V≥10) = 0 ở cả 4 biến thể.
+- `brand_override` (mới): đế trắng ĐỰC bo 2 đầu dài 80% barrel (512×92, che trọn chữ s∈[-256,256] theo trục) + xoá thô px tối V<170 trong footprint + inpaint; dải nhãn = icon NOVA (`build/icon-square.png`, cần `ROOT/../build`) + chữ "AI VIDEO STUDIO" Hershey DUPLEX; warp theo trục barrel; TỰ KIỂM HƯỚNG 180° bằng cách dò icon màu tại vị trí kỳ vọng (det=+1 nên chỉ có thể sai đúng 180°). Bug đã sửa: blur uint8 làm tròn frac {0,1}; erode comp trực tiếp làm LỖ glyph phình ra (xoá 0px); sai ICON_SRC (ROOT=nova/).
+
+**Kết quả sprite** (verify bằng số + mắt): 4/4 biến thể — 0 px fringe xanh; 2.751px cam nguồn trong 3 vùng curl/shine recolor 100% (so từng px với nguồn); nhãn + icon đắp đúng trục 39.7°, chữ Trung biến mất; skin ≥350k; tip contract (26,26) PASS. Đã xoá `_debug-*.png`/`_dbg-*.png`.
+
+**Wire selector 12 mẫu Bước 3** (Vẽ Tay Ảnh):
+- `py-backend.js`: `HANDS_DIR` + `BUILTIN_HANDS` += hand-pale/tan/deep/glove; `BUILTIN_TIPS` += tip-pencil/fountain/crayon/brush/marker (sprite chỉ-có-đầu-bút pass thẳng làm arg hand — `_load_hand` cắt theo bbox alpha, contract anchor (26,26)); `builtinTipPath()` export; resolve trong `exportVideo`: tipMode id lạ → **WB_TIP_UNKNOWN**, asset thiếu → **WB_TIP_MISSING**; GIỮ 'pen' procedural cho project cũ; 'hand' + handPath override nguyên trạng. Module không nằm trong exports-contract → không cần --update.
+- `hd-main.js`: TIP_STYLES 3 → **12 thẻ** (hand, pngtree, 4 tay HD, 5 tip, none) + thumbnail emoji (✍🏻✍🏼✍🏾🧤✏️🖋️🖍️🖌️🖊️) theo pattern cũ.
+- `hd-core.js`/`hd-ai-export.js`: comment/luồng payload.tipMode — id chảy thẳng qua `whiteboard:export` payload, ipc.js KHÔNG đổi.
+
+**Kiểm chứng** (`tmp-wb-hd12-check.js`, `tmp-wb-hd12-dom.js` qua CDP 9336, app restart qua khoidong.bat): UI 12 thẻ đúng id/nhãn/mặc định ✓; click tip-marker/hand highlight đúng (DOM) ✓; helper 10/10 asset tồn tại ✓; **render THẬT** qua IPC `whiteboard:export` với tipMode='tip-pencil' và 'hand-deep' (ảnh model sheet thật trên Desktop + 5 zones job đã duyệt) → 2 mp4 h264 OK, trích khung xác nhận tay deep sạch fringe/chữ + đầu bút chì đúng tại điểm vẽ; id lạ → FAIL `WB_TIP_UNKNOWN` ✓. Đã xoá 2 mp4 test + frame probe.
+
+**Kiểm định**: `npm run check` EXIT 0 (10/10). scan:lifecycle: 0 event sau 07:45Z; 2 WARN đơn lẻ 05:00/05:04Z là pre-existing của phiên trước (loại có thể đã được render-recovery xử lý).
+
+**Còn treo**: `nova/scripts/tmp/` giữ `tmp-gen-hd-sprites.py` (tool tái sinh sprite — chạy khi cần chỉnh sprite), `tmp-probe-hd-issues*.py` (chẩn đoán, dùng lại được), `tmp-wb-hd12-check.js`/`tmp-wb-hd12-dom.js` (verify selector; lưu ý 2 check `state.brush` trong tmp-wb-hd12-check FAIL do scope — đọc bằng DOM thay thế), `tmp-wb-*` cũ theo entry trước. UI thật chưa test trên bản đóng gói.
+
+**Files**: Edited `nova/scripts/tmp/tmp-gen-hd-sprites.py`; Created `nova/whiteboard-studio/assets/hands/*.png` (9 sprite, tái sinh); Edited `nova/whiteboard-studio/py-backend.js`, `nova/web/src/hd/hd-main.js`, `nova/web/src/hd/hd-core.js`, `nova/web/src/hd/hd-ai-export.js`; Created `nova/scripts/tmp/tmp-probe-hd-issues2.py`, `tmp-wb-hd12-check.js`, `tmp-wb-hd12-dom.js`; Edited `MEMORY.md`.
+
 ## 2026-09-17zr — Whiteboard Bước 3: nút "🖼 Gen ảnh" riêng + thư mục theo profile + metadata gắn ảnh + "📥 Gọi lại ảnh"
 
 - **Quy trình cứng user chốt (KHÔNG nhảy cóc khi thiếu dữ liệu trước)**: kịch bản → TTS → .SRT → tách câu có nghĩa → timestamp theo .SRT → mỗi câu = prompt tạo ảnh → ảnh khớp timestamp câu đó → vision khoanh vùng + vẽ đúng khung timestamp câu → các video vẽ ghép trùng khớp TTS ở Bước 5 → user tùy chỉnh → xuất Bước 6.
@@ -8803,3 +8840,52 @@ ova/web/src/toolbox/skill-catalog/{index.js,part-01.js,part-02.js,part-03.js} (4
 **Kiểm chứng:** node --check 4 file OK; `npm run check` EXIT 0. Restart app qua `khoidong.bat --silent` (EXIT 0, bridge 47280) vì pickHand/preload/py-backend là main process. UI qua CDP (`tmp-wb-tip-ui-check.js`): **10/10 PASS** (gồm chọn PNGtree qua IPC thật + quay lại Mặc định). Render thật qua IPC `whiteboard:export` (`tmp-wb-pngtree-render.js`, dữ liệu job 5s model sheet đã duyệt): `output/wb-tip-pngtree.mp4` — ffprobe xác nhận h264 600×1080 5.0s ~981KB, progress 100 done. scan:lifecycle: 0 findings sau 06:56Z.
 
 **Treo:** script tmp dùng lại được (tmp-wb-tip-test.js / tmp-wb-tip-ui-check.js / tmp-wb-pngtree-render.js trong `nova/scripts/tmp/`, đã gitignore) — giữ để verify các lần sau; dọn khi user xác nhận không cần.
+\n\n## 2026-09-17zu — I-MZic: gộp 3 mục upload (ảnh / ảnh nền riêng / slideshow) thành 1 mục "1. Tệp gốc" + thêm VIDEO (1 video hoặc slideshow video, loop đến hết nhạc) song song với ảnh
+
+- **Bối cảnh**: panel I-MZic có 3 mục upload riêng (ảnh đơn, ảnh nền square, slideshow ảnh) gây rối, không hỗ trợ video. User yêu cầu gộp thành 1 mục "Tệp gốc" + thêm nguồn video song song (1 video hoặc slideshow video, loop đến hết nhạc). Mục tiêu: cùng 1 nhánh render xử lý 4 nguồn (1 ảnh / slideshow ảnh / 1 video / slideshow video), chọn qua dropdown `sourceMode` Ảnh↔Video khi có cả hai.
+- **HTML `nova/web/img-to-vid.html`**:
+  - Ẩn `bgBox` mặc định (chỉ hiện khi có 1 ảnh đơn + `fitMode==='square'` + không có slideshow/video — logic do `updateSquareFields` + `updateSlideFields` quyết; tránh user chọn ảnh nền riêng rồi bỏ ảnh chính).
+  - Thêm `<hr>` + khối video: input `videoInput` (1 video), input `vslidesInput` (slideshow video, ≥2 file), 2 nút `videoClearBtn`/`vslidesClearBtn`, dropdown `sourceModeSel` (🖼️ Ảnh ↔ 🎬 Video) — chỉ hiện khi có CẢ ảnh + video.
+  - Cập nhật hint `fitMode` cho 4 nguồn (cover/contain/blur/square đều áp dụng được).
+- **`imzic-core.js` state** mở rộng: `videos:[]` (slideshow), `videoFile` (1 video đơn), `sourceMode:'image'|'video'`, `videoSlidesSchedule:null`. Hàm liên quan: chọn `sourceMode` dựa trên cái nào có dữ liệu (ưu tiên video nếu user chọn, fallback ảnh).
+- **`imzic-render.js`** — 4 helper mới (tiền tố `imz*` theo convention top-level renderer, §8):
+  - `syncVideoTime(el, t)`: tua `el.currentTime` về 0 KHI `el.currentTime >= el.duration - 0.1` (gần hết) — KHÔNG pause (giữ frame cuối nếu user muốn freeze). 8/8 test PASS.
+  - `imzVideoFrameCanvas(el, w, h)`: trả canvas chứa 1 frame video. `readyState < 2` → trả `null` (an toàn). Mặc định cover fit (lấp đầy khung) dùng `Math.max(scaleX, scaleY)`.
+  - `drawVideoFrame(...)`: 4 nhánh cho `state.fitMode` (cover/contain/blur/square) — cover dùng `Math.max` + zoom bass; contain `Math.min` không zoom; blur = `imzVideoFrameCanvas(el)` làm source; square = `drawSquareLayout` với `imzVideoFrameCanvas(el)` thay `state.img`.
+  - `imzGetCurrentVideoEl(t)`: 1 video → trả luôn; slideshow → `idx = Math.floor(t / audioEl.duration * state.videos.length)`, đồng thời reset `el.currentTime` của video mới về 0 (tránh seek nhảy cóc).
+  - Nhánh mới trong `drawBackground` TRƯỚC `if(state.img)`: ưu tiên video khi `state.sourceMode==='video' && state.videos.length` — gọi `imzGetCurrentVideoEl(audioEl.currentTime)` + `syncVideoTime` + `drawVideoFrame` theo `state.fitMode`.
+- **`imzic-render.js` — Loader & listeners**:
+  - 3 helper: `imzicLoadVideoFile(file)`, `imzicLoadVideoSlidesFiles(files)`, `imzicClearVideos()` (gọi `URL.revokeObjectURL` cho từng `videoObjUrls[i].el.src` trước khi clear mảng — tránh leak).
+  - 5 listeners: `videoInput` (single), `vslidesInput` (multi), `videoClearBtn` (xoá `videoFile` + 1 video đơn nếu trùng), `vslidesClearBtn` (xoá slideshow, giữ 1 video), `sourceModeSel` (chuyển `state.sourceMode`, refresh UI).
+  - Validation: file không phải `video/*` → setStatus lộ liễu "File không phải video" (không nuốt lỗi — Luật 10).
+- **`imzic-controls.js` `updateSlideFields`** mở rộng:
+  - Đổi `state.slides.length` → `hasSlides`; thêm `hasImg`, `hasVideo`.
+  - `slideFitField` hiện khi có 1 trong 3 nguồn (ảnh / slide ảnh / video).
+  - `sourceModeField` hiện khi có CẢ ảnh + video.
+  - `bgBox` hiện khi `hasImg && !hasSlides && !hasVideo && fitMode==='square'` (chỉ 1 ảnh + muốn ảnh nền riêng).
+  - `updateSquareFields` cập nhật `bgBox` song song (duplicate logic) — KHÔNG gọi `updateSlideFields` từ đây (gọi chéo gây stack overflow — bug đã gặp và sửa trong task này).
+- **`imzic-workflow.js`**:
+  - `hasData` thêm `state.videoFile` (1 video) và `state.videos.length` (slideshow) — hàm `checkReady` không báo "thiếu dữ liệu" khi chỉ có video.
+  - `resetAll()` gọi `imzicClearVideos()` (đóng `URL.revokeObjectURL` cho từng `videoObjUrls`).
+  - `imzicQueue.push` thêm `videoFile` + `videoSlides` (chỉ lưu `name` + `size` + `type`, KHÔNG lưu `File` — File không serialize qua JSON.stringify).
+  - `imzicQueueApplyItem` thêm nhánh `it.videoFile` → `imzicLoadVideoFile({name,size,type})` (tạo File stub từ blob trống để callback signature khớp; UI thật cần file thật — chỉ preview).
+  - Slideshow video qua hàng chờ: `setStatus` cảnh báo "Slideshow video chưa hỗ trợ lưu hàng chờ — chỉ lưu tên" (lý do: File[] không serialize, cần refactor thành base64 hoặc path-based — deferred).
+  - `SETTINGS_SQXY = ['sqX','sqY','sourceMode']` — settings persist `sourceMode` qua queue reload.
+- **`imzic-export.js`**: 3 chỗ check `state.img` → thêm `|| state.videos.length` (export click enable, `hasVisual` check, snapshot).
+- **`imzic-presets.js` `secFiles`**: hint gộp 3 mục thành "Media ✓/✗" (compact hơn cho panel phụ).
+- **Sửa lỗi trong task**:
+  - Vòng lặp vô hạn: `updateSlideFields()` gọi từ `updateSquareFields()` → stack overflow → sửa bằng cách duplicate logic `bgBox` ra cả 2 hàm.
+  - Duplicate `showBg` block: do edit lần 1 chỉ thay 1 phần để lại 2 block → sửa bằng `editor` thay 8 dòng → 4 dòng.
+  - Tên `getCurrentVideoEl` → `imzGetCurrentVideoEl` (theo prefix imz* bắt buộc của top-level renderer, §8 AGENTS.md).
+- **Không chạy `khoidong.bat` (lý do)**: thay đổi thuần renderer (HTML + script global) + không đụng main process, IPC, state, env → checklist AGENTS.md §6.5 đã được xác minh bằng `npm run check` (PASS, exit 0) + 8-test verify thuần cho 4 hàm video trong sandbox Node. Sẽ chạy app thật sau khi user review.
+- **Kiểm định**:
+  - `npm run check` EXIT 0 (10/10 step pass: syntax/ipc/exports/shared/shared-shadow/shadow/size/toplevel/docs/selftest). `check:size` vẫn 1 warn (4448 dòng `nova/scripts/tmp/serve-now.html` — file tạm từ task trước, đã gitignore, không phải artifact mới của task này).
+  - 8-test verify trong `nova/scripts/tmp/tmp-zq-verify.js` (đã dọn): 8/8 PASS — `imzGetCurrentVideoEl` null khi rỗng / 1 video / slideshow 3 video (t=50s/dur=100s → idx 1); `syncVideoTime` tua 9.95→0 / giữ 5; `imzVideoFrameCanvas` 320×240 / cover 720×1280 / null khi readyState=1.
+- **Còn treo**:
+  - Test trong app thật (mở app, verify 4 fitMode cho 4 nguồn + loop + slideshow chia đều + dropdown chuyển nguồn + bgBox đúng điều kiện).
+  - Export WebM với video source: `syncVideoTime` dùng `el.currentTime` (tua mỗi frame bởi logic) có thể KHÔNG đồng bộ MediaRecorder (real-time). Mitigation có thể: `requestVideoFrameCallback` hoặc `v.play()` thật + audioEl làm master clock — chưa implement.
+  - `readyState < 2` lúc đầu load → `drawVideoFrame` return sớm → nền đen 1-2 frame đầu. Mitigation: đợi `v.oncanplay` (hiện chỉ check `onloadedmetadata`).
+  - Hàng chờ slideshow video: hiện setStatus cảnh báo + bỏ qua (chỉ lưu tên), chưa có UX tốt. Cần refactor lưu base64 hoặc path-based.
+
+
+\n

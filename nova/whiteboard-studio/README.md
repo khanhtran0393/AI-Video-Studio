@@ -9,7 +9,7 @@
 | File | Vai trò |
 |---|---|
 | `../web/whiteboard-studio-panel.js` | UI panel (luồng repo): chọn 1/nhiều ảnh hoặc cả thư mục → mỗi ảnh 1 cảnh (đổi thứ tự ▲▼, sửa thời lượng, đổi/xoá ảnh) → tuỳ chọn SRT gán phụ đề + thời lượng → voice-over → Export. Preview ảnh + progress + log. Nút "🧩 Chia theo câu (SRT)": gom cue theo ranh giới câu → mỗi câu 1 cảnh, thời gian hiển thị giữ nguyên timing SRT. Nút "📥 Nhận kịch bản" / "🎙 Dùng giọng đã tạo": nạp kịch bản từ Tạo Kịch Bản / voice+SRT từ tab Giọng nói. |
-| `../web/whiteboard-studio-ai.js` | AI (renderer, dùng callLLMJson của app): "🤖 AI prompt ảnh" — đọc từng câu → prompt ảnh line-art whiteboard + objects (vật thể AI nhận dạng trong câu, share = tỉ trọng nhịp kể); "🤖 AI sinh ảnh theo câu (auto)" — trọn luồng tự động: prompt cho câu còn thiếu → Flow sinh ảnh line-art **từng câu** (aspect 16:9, model/quality theo tab Tạo Ảnh Hàng Loạt, multi-account dùng POOL) → lưu `<thư mục lưu>/whiteboard-anh/cau-NNN.png` + gán vào cảnh đúng khung thời gian SRT → AI vision khoanh vùng + giờ vẽ theo nhịp kể; "🖼 Gen ảnh" + "📥 Gọi lại ảnh" — gen riêng lẻ/retry theo thư mục profile + metadata `cau-NNN.json` + khôi phục ảnh/prompt (chi tiết: [GEN-ANH-GOI-LAI-ANH.md](GEN-ANH-GOI-LAI-ANH.md)); "🎯 AI khoanh vùng vật thể" — AI vision soi ảnh cảnh → polygon 0–1000 → phần tử vẽ, giờ reveal phân bổ theo share. |
+| `../web/whiteboard-studio-ai.js` | AI (renderer, dùng callLLMJson của app): "🤖 AI prompt ảnh" — đọc từng câu → prompt ảnh line-art whiteboard + objects (vật thể AI nhận dạng trong câu, share = tỉ trọng nhịp kể); "🤖 AI sinh ảnh theo câu (auto)" — trọn luồng tự động: prompt cho câu còn thiếu → Flow sinh ảnh line-art **từng câu** (aspect 16:9, model/quality theo tab Tạo Ảnh Hàng Loạt, multi-account dùng POOL) → lưu `<thư mục lưu>/whiteboard-anh/<profile TTS>/cau-NNN.png` kèm metadata `cau-NNN.json` (prompt + text + khung SRT + objects + cfg — tự lưu, không UI) + gán vào cảnh đúng khung thời gian SRT → AI vision khoanh vùng + giờ vẽ theo nhịp kể (chi tiết: [METADATA-ANH-THEO-CAU.md](METADATA-ANH-THEO-CAU.md)); "🎯 AI khoanh vùng vật thể" — AI vision soi ảnh cảnh → polygon 0–1000 → phần tử vẽ, giờ reveal phân bổ theo share. |
 | `../web/whiteboard-studio-preview.js` | "▶ Xem trước ghép" CapCut-like: canvas phát liên tục các cảnh + voice-over (master clock = audio), seek, timeline khối cảnh (click = nhảy, kéo mép phải khối = chỉnh durationMs — ghi thẳng state để export dùng), mô phỏng reveal vùng vẽ, phụ đề. |
 | `../web/src/hd/` (6 module `hd-*.js`) | UI panel "Vẽ Tay Ảnh" (sidebar `toolhanddraw`): ảnh tĩnh → video stream-ink, không SRT/voice. |
 | `ipc.js` | IPC main process: dialog chọn SRT/voice/ảnh thật, đo thời lượng bằng ffprobe, parse cảnh (`parse_srt.py`), export stream (`exportStream`); giữ các kênh cũ cho tương thích. |
@@ -44,16 +44,12 @@ trạng thái động — vd "✓ 42 cue", "3/5 ảnh"; chỉ Bước 1 mở m�
    cho câu còn thiếu → engine Flow của tab "Tạo Ảnh Hàng Loạt" sinh ảnh line-art
    **cho TỪNG câu** (ép 16:9 khớp canvas 1280×720; nhiều tài khoản → POOL round-robin,
    1 tài khoản → project riêng; retry lỗi mềm ≤2 lần / bị chặn traffic ≤3 lần) →
-   lưu + gán vào cảnh đúng khung thời gian SRT → AI vision tự khoanh vùng
-   người/vật thể/sự kiện + giờ vẽ theo nhịp kể. Câu đã có ảnh được giữ nguyên —
-   bấm lại để tạo tiếp câu còn thiếu. Cần đăng nhập Flow trước.
-   **"🖼 Gen ảnh"** (nút riêng, hiện sau khi phân tích prompt thành công):
-   gen/retry riêng các câu thiếu ảnh vào thư mục profile
-   `<thư mục lưu>/whiteboard-anh/<tên bản TTS>/`, kèm sidecar `cau-NNN.json`
-   (prompt + text + khung .SRT + objects + cfg). **"📥 Gọi lại ảnh"**: đọc
-   metadata thư mục profile → bơm ảnh + prompt vào cảnh hiện có (timing giữ
-   nguyên theo .SRT) hoặc dựng lại toàn bộ cảnh sau reload — timing = khung
-   .SRT ghi lúc gen. Chi tiết: [GEN-ANH-GOI-LAI-ANH.md](GEN-ANH-GOI-LAI-ANH.md).
+   lưu + gán vào cảnh đúng khung thời gian SRT (thư mục profile
+   `<thư mục lưu>/whiteboard-anh/<tên bản TTS>/`, tự lưu kèm sidecar
+   `cau-NNN.json`: prompt + text + khung .SRT + objects + cfg — không UI) →
+   AI vision tự khoanh vùng người/vật thể/sự kiện + giờ vẽ theo nhịp kể.
+   Câu đã có ảnh được giữ nguyên — bấm lại để tạo tiếp câu còn thiếu.
+   Cần đăng nhập Flow trước. Chi tiết: [METADATA-ANH-THEO-CAU.md](METADATA-ANH-THEO-CAU.md).
 4. **Vùng vẽ** (Bước 4): sinh phần tử vẽ (region + sequence + reveal) bằng
    `whiteboard-annotation.js`, sửa trực tiếp, preview sơ đồ vùng
    (`render_annotation_preview.py`). Hoặc "🎯 AI khoanh vùng vật thể" — AI vision
