@@ -41,6 +41,10 @@ Gates đã cưỡng chế bằng code:
 ```
 
 - Tên profile = tên bản TTS đã dọn ký tự cấm Windows; chưa nhận TTS → fallback
+  khai báo `chay-<YYYYMMDDHHMMSS>`.
+- Gen tiếp/retry trong cùng phiên → đúng thư mục profile đó (cache
+  `state.wbImgGroup`/`wbImgGroupFor`; đổi bản TTS → tự sang thư mục mới).
+
 ## 3. Nội dung metadata (sidecar `cau-NNN.json`)
 
 Cạnh mỗi ảnh `cau-NNN.png` — ảnh tự mô tả, reload app không mất mapping
