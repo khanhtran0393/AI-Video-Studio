@@ -662,6 +662,8 @@ async function _giongSuNapDia(){
 
 async function voiceGenerate(){
   if (typeof gateTool === 'function' && gateTool('toolvoice')) return;
+  // Chặn mềm profile: chưa có Profile thì không sinh sản phẩm giọng (đầu ra phải lưu theo profile)
+  if (typeof _pfRequireActive === 'function') { try { _pfRequireActive('tạo giọng nói'); } catch (e) { giongBao(e.message, 'red'); return; } }
   const text = ((document.getElementById('voiceText') || {}).value || '').trim();
   if (!text){ giongBao('Nhập nội dung trước.', 'red'); return; }
   const btn = document.getElementById('voiceGenBtn');

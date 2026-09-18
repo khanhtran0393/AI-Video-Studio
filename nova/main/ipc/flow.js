@@ -104,7 +104,13 @@ function registerFlowIpc() {
         if (fs.existsSync(path.join(alt, 'manifest.json'))) src = alt;
         else return { error: 'Không tìm thấy extension đóng gói trong app.' };
       }
-      fs.cpSync(src, dest, { recursive: true });
+      /* Lọc `_metadata` (dữ liệu Chrome tự sinh cho extension đã cài — tên bắt đầu
+         bằng `_` bị Chrome dành riêng): có nó trong cây nguồn thì "Load unpacked"
+         luôn bị từ chối. Lọc tại chỗ xuất để nguồn lỡ nhiễm rác cũng không lây. */
+      fs.cpSync(src, dest, {
+        recursive: true,
+        filter: (s) => !path.basename(s).startsWith('_'),
+      });
       try { shell.openPath(dest); } catch {}
       return { ok: true, path: dest };
     } catch (e) { return { error: String(e) }; }

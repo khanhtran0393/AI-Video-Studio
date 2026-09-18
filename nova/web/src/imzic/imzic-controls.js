@@ -77,20 +77,34 @@ $('pcolor').addEventListener('change', ()=>{ state.colorTouched = true; });
 // Bật/tắt sóng hợp nhất vào "Kiểu sóng" (2026-09-16): 'off' = tắt — không vẽ
 // sóng + ẩn khối tham số waveParams. Hợp đồng vẽ giữ nguyên: drawWave vẫn đọc
 // state.waveOn; state.waveStyle chỉ có nghĩa khi bật (AGENTS §4 Luật 1).
+// 2026-09-18j: nhớ kiểu đang chọn trước khi chuyển sang 'bend' (nắm kiểu nền tự động)
+let imzPrevWaveStyle = state.waveStyle || 'line';
 setupSel('waveStyleSel','waveStyle', ()=>{
   state.waveOn = (state.waveStyle !== 'off');
+  // 2026-09-18j: hiệu ứng "Uốn cong" (bend) — tự nắm kiểu đang chọn TRƯỚC đó
+  // làm kiểu sóng nền (nếu hợp lệ: không phải off/bend)
+  if(state.waveStyle === 'bend' && imzPrevWaveStyle !== 'off' && imzPrevWaveStyle !== 'bend'){
+    state.waveBendBase = imzPrevWaveStyle;
+    const bsel = $('waveBendBaseSel');
+    if(bsel) bsel.value = state.waveBendBase;
+  }
+  imzPrevWaveStyle = state.waveStyle;
   const wp = $('waveParams'); if(wp) wp.style.display = state.waveOn ? '' : 'none';
-  // chỉ kiểu 'curved' mới hiện slider mức uốn + hướng uốn
+  // kiểu 'curved' và 'bend' đều dùng slider mức uốn + hướng uốn
   const f = $('waveCurveField'); const h = $('waveCurveHint');
-  const on = state.waveStyle === 'curved';
+  const on = (state.waveStyle === 'curved' || state.waveStyle === 'bend');
   if(f) f.style.display = on ? '' : 'none';
   if(h) h.style.display = on ? '' : 'none';
+  // chỉ 'bend' mới hiện chọn kiểu sóng nền
+  const bf = $('waveBendBaseField');
+  if(bf) bf.style.display = (state.waveStyle === 'bend') ? '' : 'none';
 });
+setupSel('waveCurveDirSel','waveCurveDir');
+setupSel('waveBendBaseSel','waveBendBase');
 $('waveCurve').addEventListener('input', e=>{
   state.waveCurve = Math.max(0, Math.min(1, (+e.target.value || 0) / 100));
   const lbl = $('v-wcurve'); if(lbl) lbl.textContent = e.target.value + '%';
 });
-setupSel('waveCurveDirSel','waveCurveDir');
 
 // ---- FX toàn khung ----
 // Lazy-load vendor Butterchurn (~826KB) — chỉ nạp khi user chọn FX Milkdrop lần đầu.
@@ -563,10 +577,27 @@ $('lyricPosY').addEventListener('input', e=>{ state.lyricPosY = +e.target.value;
   const v = Math.round((state.waveCurve == null ? 0 : +state.waveCurve) * 100);
   sl.value = String(v);
   const lbl = $('v-wcurve'); if(lbl) lbl.textContent = v + '%';
+  // 2026-09-18j: đổ option "Kiểu sóng được uốn" từ waveStyleSel (trừ ✕ Tắt và
+  // chính "Uốn cong") — một nguồn nhãn, không lệch khi thêm kiểu mới
+  const bsel = $('waveBendBaseSel');
+  const src = $('waveStyleSel');
+  if(bsel && src){
+    bsel.innerHTML = '';
+    Array.prototype.forEach.call(src.options, op=>{
+      if(op.value === 'off' || op.value === 'bend') return;
+      const o = document.createElement('option');
+      o.value = op.value; o.textContent = op.textContent;
+      bsel.appendChild(o);
+    });
+    bsel.value = state.waveBendBase;
+    if(bsel.selectedIndex < 0) bsel.value = 'line';
+  }
   const f = $('waveCurveField'); const h = $('waveCurveHint');
-  const on = state.waveStyle === 'curved';
+  const on = (state.waveStyle === 'curved' || state.waveStyle === 'bend');
   if(f) f.style.display = on ? '' : 'none';
   if(h) h.style.display = on ? '' : 'none';
+  const bf = $('waveBendBaseField');
+  if(bf) bf.style.display = (state.waveStyle === 'bend') ? '' : 'none';
 })();
 
 rebuildParticles();
@@ -579,7 +610,7 @@ const SETTINGS_RANGE_IDS = ['zoomMin','zoomMax','sensitivity','smoothness','dens
 // 2026-09-17zp: sqX/sqY lưu riêng vì do nút bấm dịch chuyển (không qua range)
 const SETTINGS_SQXY = ['sqX','sqY','sourceMode'];
 const SETTINGS_COLOR_IDS = ['pcolor','waveColor','lyricColor','lyricAccent'];
-const SETTINGS_SELECT_IDS = ['lyricFont','effectSel','dirSel','waveStyleSel','ratioSel','lyricShadowSel','fxSel','slideModeSel','slideOrderSel','transSel','fitSel','lyricKaraokeSel','lyricStyleSel','lyricAnimSel','exportFpsSel','qualitySel','exportResSel','bcPresetSel','loudnormSel','slideBeatSel','wmPosSel','waveCurveDirSel'];
+const SETTINGS_SELECT_IDS = ['lyricFont','effectSel','dirSel','waveStyleSel','ratioSel','lyricShadowSel','fxSel','slideModeSel','slideOrderSel','transSel','fitSel','lyricKaraokeSel','lyricStyleSel','lyricAnimSel','exportFpsSel','qualitySel','exportResSel','bcPresetSel','loudnormSel','slideBeatSel','wmPosSel','waveCurveDirSel','waveBendBaseSel'];
 const SETTINGS_NUMBER_IDS = ['customW','customH','trimStart','trimEnd','fadeIn','fadeOut'];
 // chip-group đã gom thành dropdown — bản lưu cũ có {chips:{}} được đổi tên ở loadSettings.
 // waveChips bản cũ là bật/tắt ('on'/'off') → hợp nhất vào waveStyleSel ('off' = tắt).

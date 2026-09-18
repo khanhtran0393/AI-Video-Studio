@@ -22,11 +22,15 @@ const { registerImzicIpc } = require('./imzic');
 const { registerScheduleIpc } = require('./schedule');
 const { registerSpyIpc } = require('./spy');
 const { registerFfmpegToolsIpc } = require('./ffmpeg-tools');
+const { registerHardwareIpc } = require('./hardware');
 const { registerLiveStreamIpc } = require('./live-stream');
 const { registerWhiteboardIpc } = require('../../whiteboard-studio/ipc');
 const { registerSrtTranslateIpc } = require('../../srt-translate/ipc');
 const { registerViralCutIpc } = require('../../viral-cut/ipc');
 const { registerDubbingIpc } = require('../../dubbing/ipc');
+const { registerHardsubIpc } = require('../../hardsub/ipc');
+const { registerDiarizeIpc } = require('../../diarization/ipc');
+const { registerBinmanIpc } = require('../../bin-manifest/ipc');
 const { registerAgentCopilotIpc } = require('./agent-copilot');
 
 function registerAllIpc() {
@@ -42,6 +46,7 @@ function registerAllIpc() {
   registerScheduleIpc();
   registerSpyIpc();
   registerFfmpegToolsIpc();   // Công cụ FFmpeg (sidebar): tách MP3, cắt, ghép, loop video
+  registerHardwareIpc();      // "Máy của bạn & Tối ưu": dò phần cứng + Runtime AI (CUDA) giọng đọc
   registerLiveStreamIpc();    // Phát Trực Tiếp (Livestream Studio): đa nền tảng RTMP + video/webcam/cửa sổ
   registerAgentCopilotIpc();  // Agent Copilot
 
@@ -68,6 +73,25 @@ function registerAllIpc() {
   try {
     registerDubbingIpc(ipcMain, { getState: () => state });
   } catch (e) { console.warn('[dubbing]', e && e.message); }
+
+  // ── Hardsub OCR (Bước 2 lộ trình ezmaxsub): video phụ đề chèn sẵn →
+  //    ffmpeg trích khung đáy → RapidOCR → gộp cue → SRT ──
+  try {
+    registerHardsubIpc(ipcMain, { getState: () => state });
+  } catch (e) { console.warn('[hardsub]', e && e.message); }
+
+  // ── Diarization (Bước 3 lộ trình ezmaxsub): tách người nói theo cao độ
+  //    F0 + gán giọng OmniVoice theo giới tính → SRT prefix "Tên:" ──
+  try {
+    registerDiarizeIpc(ipcMain, { getState: () => state });
+  } catch (e) { console.warn('[diarization]', e && e.message); }
+
+  // ── Bin manifest (Bước 4 lộ trình ezmaxsub): toàn vẹn sha256 binary
+  //    runtime (nova/ytdlp-bin, ffmpeg/ffprobe-static) — verify chỉ đọc +
+  //    ghi baseline nguyên tử khi user yêu cầu ──
+  try {
+    registerBinmanIpc(ipcMain, { getState: () => state });
+  } catch (e) { console.warn('[bin-manifest]', e && e.message); }
 
   // ── CLI bridge native: app tự chạy gói Claude/ChatGPT của user (localhost:8795/8796) ──
   try { cliBridge.startAll(); } catch (e) { console.warn('[cli-bridge]', e && e.message); }

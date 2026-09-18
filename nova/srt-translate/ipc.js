@@ -61,6 +61,7 @@ function registerSrtTranslateIpc(ipcMain, { getState } = {}) {
         batchSize: p.batchSize,
         model: p.model,
         maxConcurrent: p.maxConcurrent,
+        genre: p.genre,
       });
       const srt = E.serializeSrt(translated);
       fs.writeFileSync(outPath, '\uFEFF' + srt, 'utf8');
@@ -86,6 +87,7 @@ function registerSrtTranslateIpc(ipcMain, { getState } = {}) {
         batchSize: p.batchSize,
         model: p.model,
         maxConcurrent: p.maxConcurrent,
+        genre: p.genre,
       });
       const merged = E.mergeBilingualCues(translated, cues, { originalFirst: p.originalFirst !== false });
       const srt = E.serializeSrt(merged);

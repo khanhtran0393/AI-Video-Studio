@@ -196,6 +196,38 @@ contextBridge.exposeInMainWorld('native', {
     // SRT song ngữ (2026-09-17ze): dịch AI + ghép 2 dòng gốc + dịch
     bilingual: (payload) => ipcRenderer.invoke('srt-translate:bilingual', payload),
   },
+  // Hardsub OCR (Bước 2 lộ trình ezmaxsub): video phụ đề chèn sẵn → SRT.
+  // ffmpeg trích khung đáy khung → RapidOCR (venv OmniVoice) → gộp cue.
+  // Dialog media thật; KHÔNG nhận đường dẫn repo ngoài từ GUI.
+  hardsub: {
+    pickVideo: () => ipcRenderer.invoke('hardsub:pickVideo'),
+    run: (payload) => ipcRenderer.invoke('hardsub:run', payload || {}),
+    cancel: () => ipcRenderer.invoke('hardsub:cancel'),
+    saveSrt: (payload) => ipcRenderer.invoke('hardsub:saveSrt', payload || {}),
+    onProgress: (cb) => {
+      const listener = (_e, s) => { if (cb) cb(s); };
+      ipcRenderer.on('hardsub:progress', listener);
+      return () => ipcRenderer.removeListener('hardsub:progress', listener);
+    },
+  },
+  // Diarization (Bước 3 lộ trình ezmaxsub): tách người nói + gán giọng theo giới tính.
+  diarize: {
+    pickVideo: () => ipcRenderer.invoke('diarize:pickVideo'),
+    analyze: (payload) => ipcRenderer.invoke('diarize:analyze', payload || {}),
+    cancel: () => ipcRenderer.invoke('diarize:cancel'),
+    saveSrt: (payload) => ipcRenderer.invoke('diarize:saveSrt', payload || {}),
+    onProgress: (listener) => {
+      ipcRenderer.on('diarize:progress', listener);
+      return () => ipcRenderer.removeListener('diarize:progress', listener);
+    },
+  },
+  // Bin manifest (Bước 4 lộ trình ezmaxsub): toàn vẹn sha256 binary runtime
+  // (nova/ytdlp-bin + ffmpeg/ffprobe-static). status = verify chỉ đọc;
+  // refresh = ghi baseline mới — chỉ khi user bấm rõ ràng.
+  binman: {
+    status: () => ipcRenderer.invoke('binman:status'),
+    refresh: () => ipcRenderer.invoke('binman:refresh'),
+  },
   // Viral Cut — port ViralCut 2.5: video (+SRT tuỳ chọn) → highlight 3 tầng
   // (LLM → heuristic → energy) → best-hook → cắt ffmpeg. Dialog thật, progress + cancel.
   viralCut: {
@@ -401,6 +433,13 @@ contextBridge.exposeInMainWorld('native', {
   voiceHistoryPath: (khi, cache) => ipcRenderer.invoke('voice-history-path', khi, !!cache),
   flowExtExport: () => ipcRenderer.invoke('flow-ext-export'),
   onVoiceLog: (cb) => ipcRenderer.on('voice-log', (_e, s) => cb(s)),
+  // "Máy của bạn & Tối ưu" (Cài đặt): profile phần cứng thật + Runtime AI (CUDA)
+  // cho giọng đọc — cài có verify thật + rollback khai báo rõ.
+  hardwareProfile: () => ipcRenderer.invoke('hardware:profile'),
+  hardwareCudaStatus: () => ipcRenderer.invoke('hardware:cuda-status'),
+  hardwareCudaInstall: () => ipcRenderer.invoke('hardware:cuda-install'),
+  hardwareCudaRollback: () => ipcRenderer.invoke('hardware:cuda-rollback'),
+  onHardwareCudaProgress: (cb) => ipcRenderer.on('hardware:cuda-progress', (_e, p) => cb(p)),
   // Cập nhật app (thông báo hiện ở góc trên phải).
   onUpdate: (cb) => ipcRenderer.on('update-status', (_e, s) => cb(s)),
   updateDownload: () => ipcRenderer.invoke('update-download'),

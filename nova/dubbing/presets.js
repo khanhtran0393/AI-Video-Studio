@@ -19,7 +19,7 @@ const MAX_PRESETS = 100;
 
 /* Trường cấu hình được lưu — khớp payload dub:render trên panel. */
 const PRESET_KEYS = [
-  'voicePid', 'voiceName', 'language', 'translateTo',
+  'voicePid', 'voiceName', 'language', 'translateTo', 'genre',
   'maxSpeed', 'mixMode', 'origVolume',
   'speakerMode', 'speakerVoices',
   'musicPath', 'musicVolume', 'duck',

@@ -25,7 +25,9 @@ async function autoSaveMedia(name, base64, kind, skipWm){
   const c = _autoSaveCfg();
   // Ưu tiên cấu hình auto-save riêng; nếu chưa bật nhưng dashboard "Lưu về máy" đã chọn thư mục → VẪN lưu vào đó.
   // → ảnh tạo lại thủ công (sửa cảnh lỗi) cũng tự lưu về đúng thư mục <thư mục>/<video>/anh/ như luồng tự động.
-  const folder = (c.enabled && c.folder) ? c.folder : (_autoOutDir || '');
+  const folder0 = (c.enabled && c.folder) ? c.folder : (_autoOutDir || '');
+  // Tầng profile (2026-09-18): đầu ra lưu <thư mục gốc>/<Tên kênh>/ — profile nào sinh ra nằm trong thư mục profile đó.
+  const folder = (typeof _pfOutDir === 'function') ? _pfOutDir(folder0) : folder0;
   if (!folder || !window.native?.saveFile || !base64) return null;
   const mode = (c.enabled ? c.mode : (_autoSaveMode || 'perTask')) || 'perTask';
   const subdir = mode === 'perTask' ? (_autoSaveTask() + '/' + kind) : kind;

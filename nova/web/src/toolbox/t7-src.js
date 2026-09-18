@@ -238,9 +238,9 @@ function t7AiEditReset(i, ev){
   _t7AiSave();
 }
 
-function t7CloseInsp(){ const i = document.querySelector('#tool-tool7 .t7-inspector'); if (i) i.classList.remove('open'); }
+function t7CloseInsp(){ const i = document.querySelector('#tool-tool7 .t7-inspector'); if (i) i.classList.remove('open'); if (typeof t7RightTab === 'function') t7RightTab('subs'); }
 
-function t7OpenInsp(){ const i = document.querySelector('#tool-tool7 .t7-inspector'); if (i) i.classList.add('open'); }
+function t7OpenInsp(){ const i = document.querySelector('#tool-tool7 .t7-inspector'); if (i) i.classList.add('open'); if (typeof t7RightTab === 'function') t7RightTab('insp'); }
 
 function t7SceneToggle(id){
   _t7Open = (_t7Open === id) ? null : id;

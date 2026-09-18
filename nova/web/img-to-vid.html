@@ -118,6 +118,15 @@
   details.section[open] > summary.section-title .cv{transform:rotate(180deg);}
   details.section > .section-body{padding-top:12px;}
 
+  /* tiêu đề nhóm con trong 1 section (vd mục 1 Tệp gốc: Ảnh / Video / Audio) */
+  .fgroup{
+    font-size:10.5px; text-transform:uppercase; letter-spacing:1px;
+    color:var(--muted); font-weight:600;
+    margin:4px 0 8px; padding-bottom:5px;
+    border-bottom:1px solid var(--border);
+  }
+  .fgroup:not(:first-child){margin-top:14px;}
+
   .upload-box{
     border:1.5px dashed var(--border);
     border-radius:var(--radius);
@@ -205,7 +214,7 @@
     position:relative;
     flex:0 0 auto;          /* không cho flexbox bóp dẹt khung preview (overflow:hidden → min auto = 0) */
     width:min(92%, 620px);
-    aspect-ratio: 9/16;     /* mục 9 — JS ghi đè inline khi đổi khổ (setOrientation) */
+    aspect-ratio: 9/16;     /* mục 2 — Khung hình; JS ghi đè inline khi đổi khổ (setOrientation) */
     border-radius:20px;
     background:#000;
     overflow:hidden;
@@ -352,6 +361,7 @@
         </span>
       </summary>
       <div class="section-body">
+      <div class="fgroup">🖼 Ảnh</div>
       <label class="upload-box" style="margin-bottom:6px;">
         <div class="ic">🖼️</div>
         <div class="meta">
@@ -370,15 +380,6 @@
         <input type="file" id="bgInput" accept="image/*">
       </label>
       <button class="btn" id="bgClearBtn" style="display:none;width:100%;justify-content:center;margin-bottom:10px;">🗑 Bỏ ảnh nền riêng</button>
-      <label class="upload-box">
-        <div class="ic">🎵</div>
-        <div class="meta">
-          <div class="name" id="audName">Chọn file nhạc</div>
-          <div class="hint">MP3 / WAV / M4A — giữ nguyên chất lượng gốc</div>
-        </div>
-        <input type="file" id="audInput">
-      </label>
-      <button class="btn" id="audClearBtn" style="display:none;width:100%;justify-content:center;margin-bottom:10px;">🗑 Bỏ file nhạc</button>
       <label class="upload-box" style="margin-bottom:10px;">
         <div class="ic">🎞</div>
         <div class="meta">
@@ -387,14 +388,14 @@
         </div>
         <input type="file" id="slidesInput" accept="image/*" multiple>
       </label>
-      <hr style="border:none;border-top:1px dashed var(--border);margin:6px 0;">
+      <div class="fgroup">🎬 Video</div>
       <div class="field" id="sourceModeField" style="display:none;">
         <div class="field-row"><label>Nguồn hiển thị chính</label></div>
         <select class="sel" id="sourceModeSel">
           <option value="image">🖼️ Ảnh (1 ảnh hoặc slideshow ảnh)</option>
           <option value="video">🎬 Video (1 video hoặc slideshow video)</option>
         </select>
-        <div style="font-size:11px;color:var(--muted);margin-top:4px;">Chọn ảnh ở khối trên thì ưu tiên ảnh; chọn video ở khối dưới thì ưu tiên video. Dùng mục này để chuyển qua lại nếu đã chọn cả 2.</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;">Chọn ảnh ở nhóm 🖼 Ảnh thì ưu tiên ảnh; chọn video ở nhóm 🎬 Video thì ưu tiên video. Dùng mục này để chuyển qua lại nếu đã chọn cả 2.</div>
       </div>
       <label class="upload-box" style="margin-bottom:6px;">
         <div class="ic">🎬</div>
@@ -414,6 +415,17 @@
         <input type="file" id="vslidesInput" accept="video/*" multiple>
       </label>
       <button class="btn" id="vslidesClearBtn" style="display:none;width:100%;justify-content:center;margin-bottom:10px;">🗑 Bỏ slideshow video (về 1 video)</button>
+      <div class="fgroup">🎵 Audio</div>
+      <label class="upload-box">
+        <div class="ic">🎵</div>
+        <div class="meta">
+          <div class="name" id="audName">Chọn file nhạc</div>
+          <div class="hint">MP3 / WAV / M4A — giữ nguyên chất lượng gốc</div>
+        </div>
+        <input type="file" id="audInput">
+      </label>
+      <button class="btn" id="audClearBtn" style="display:none;width:100%;justify-content:center;margin-bottom:10px;">🗑 Bỏ file nhạc</button>
+      <hr style="border:none;border-top:1px dashed var(--border);margin:6px 0;">
       <div class="field" id="slideModeField" style="display:none;">
         <div class="field-row"><label>Chuyển cảnh theo</label></div>
         <select class="sel" id="slideModeSel">
@@ -512,9 +524,42 @@
 
     <hr class="sep">
 
+    <details class="section" id="secFrame">
+      <summary class="section-title">
+        <span>2. Khung hình</span>
+        <span class="hgroup">
+          <span class="hint2" id="secFrameHint">▯ Dọc • 9:16</span>
+          <span class="cv">⌄</span>
+        </span>
+      </summary>
+      <div class="section-body">
+      <select class="sel" id="ratioSel" style="width:100%; margin-bottom:4px;">
+        <option value="portrait">▯ Dọc • 9:16</option>
+        <option value="landscape">▭ Ngang • 16:9</option>
+      </select>
+      <div class="field" id="customSizeField" style="display:none; margin-top:12px;">
+        <div class="field-row"><label>Kích thước tuỳ chỉnh (khổ ngang)</label></div>
+        <div class="row2">
+          <div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:4px;">Rộng (px)</div>
+            <input type="number" id="customW" min="480" max="3840" step="10" value="1280"
+              style="width:100%;background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:9px;padding:8px 10px;font-size:13px;font-family:inherit;">
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:4px;">Cao (px)</div>
+            <input type="number" id="customH" min="270" max="2160" step="10" value="720"
+              style="width:100%;background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:9px;padding:8px 10px;font-size:13px;font-family:inherit;">
+          </div>
+        </div>
+      </div>
+      </div>
+    </details>
+
+    <hr class="sep">
+
     <details class="section" id="secZoom">
       <summary class="section-title">
-        <span>2. Zoom theo nhịp</span>
+        <span>3. Zoom theo nhịp</span>
         <span class="hgroup">
           <span class="hint2" id="secZoomHint">1.00–1.18x</span>
           <span class="cv">⌄</span>
@@ -544,7 +589,7 @@
 
     <details class="section" id="secEffect">
       <summary class="section-title">
-        <span>3. Hiệu ứng bay</span>
+        <span>4. Hiệu ứng bay</span>
         <span class="hgroup">
           <span class="hint2" id="secEffectHint">Không</span>
           <span class="cv">⌄</span>
@@ -623,7 +668,7 @@
          cho biết sóng đang Tắt hay đang chạy kiểu nào (JS cập nhật theo select). -->
     <details class="section" id="waveSection">
       <summary class="section-title">
-        <span>4. Sóng nhạc</span>
+        <span>5. Sóng nhạc</span>
         <span class="hgroup">
           <span class="hint2" id="waveSectionHint">Tắt</span>
           <span class="cv">⌄</span>
@@ -652,7 +697,17 @@
           <option value="circledots">●●● Cột hạt tròn</option>
           <option value="neon">💡 Neon đôi</option>
           <option value="curved">）Cột uốn cong</option>
+          <option value="bend">↷ Uốn cong (uốn kiểu đã chọn)</option>
         </select>
+      </div>
+
+      <!-- 2026-09-18j: hiệu ứng "Uốn cong" — chọn kiểu sóng NỀN để uốn; danh sách
+           option được copy động từ waveStyleSel (trừ ✕ Tắt và chính nó) trong
+           imzic-controls.js, tránh lệch nhãn khi thêm kiểu mới. -->
+      <div class="field" id="waveBendBaseField" style="display:none">
+        <div class="field-row"><label>Kiểu sóng được uốn</label></div>
+        <select class="sel" id="waveBendBaseSel"></select>
+        <div style="font-size:11px;color:var(--muted);margin-top:6px;">Kiểu sóng gốc sẽ bị uốn cong — mặc định là kiểu bạn đang chọn trước khi chuyển sang "Uốn cong".</div>
       </div>
 
       <div class="row2" id="waveCurveField" style="display:none">
@@ -668,7 +723,7 @@
           </select>
         </div>
       </div>
-      <div id="waveCurveHint" style="display:none;font-size:11px;color:var(--muted);margin:-4px 0 10px 0;line-height:1.5;">Cột nhạc uốn cong thành 1 vòng cung: 0% thì thẳng đứng (như cột thường), 100% khép kín thành vòng tròn. Kéo thanh để uốn dần.</div>
+      <div id="waveCurveHint" style="display:none;font-size:11px;color:var(--muted);margin:-4px 0 10px 0;line-height:1.5;">Uốn cong dáng sóng thành 1 vòng cung: 0% là đường thẳng, 100% khép kín thành hình tròn. Dùng cho cả hiệu ứng "↷ Uốn cong" (uốn kiểu sóng đã chọn) lẫn kiểu "）Cột uốn cong". Kéo thanh để uốn dần.</div>
 
       <div id="waveParams" style="display:none;">
       <div class="field">
@@ -712,7 +767,7 @@
 
     <details class="section" id="secLead">
       <summary class="section-title">
-        <span>5. Đồng bộ sớm</span>
+        <span>6. Đồng bộ sớm</span>
         <span class="hgroup">
           <span class="hint2" id="secLeadHint">300 ms</span>
           <span class="cv">⌄</span>
@@ -731,7 +786,7 @@
 
     <details class="section" id="secTrim">
       <summary class="section-title">
-        <span>6. Cắt &amp; đổ dần nhạc</span>
+        <span>7. Cắt &amp; đổ dần nhạc</span>
         <span class="hgroup">
           <span class="hint2" id="secTrimHint">Nguyên bài</span>
           <span class="cv">⌄</span>
@@ -778,7 +833,7 @@
 
     <details class="section" id="secWm">
       <summary class="section-title">
-        <span>7. Logo / Watermark</span>
+        <span>8. Logo / Watermark</span>
         <span class="hgroup">
           <span class="hint2" id="secWmHint">Chưa chọn logo</span>
           <span class="cv">⌄</span>
@@ -825,7 +880,7 @@
 
     <details class="section" id="secFx">
       <summary class="section-title">
-        <span>8. Hiệu ứng FX toàn khung</span>
+        <span>9. Hiệu ứng FX toàn khung</span>
         <span class="hgroup">
           <span class="hint2" id="secFxHint">Tắt</span>
           <span class="cv">⌄</span>
@@ -866,39 +921,6 @@
         <div class="field-row"><label>Preset Milkdrop</label></div>
         <select class="sel" id="bcPresetSel"><option value="">— đang nạp preset… —</option></select>
         <div style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5;">Preset Milkdrop (Butterchurn, MIT) — hiển thị chỉ khi chọn FX "🌈 Milkdrop". Nhạc phải đang phát thật mới có hình.</div>
-      </div>
-      </div>
-    </details>
-
-    <hr class="sep">
-
-    <details class="section" id="secFrame">
-      <summary class="section-title">
-        <span>9. Khung hình</span>
-        <span class="hgroup">
-          <span class="hint2" id="secFrameHint">▯ Dọc • 9:16</span>
-          <span class="cv">⌄</span>
-        </span>
-      </summary>
-      <div class="section-body">
-      <select class="sel" id="ratioSel" style="width:100%; margin-bottom:4px;">
-        <option value="portrait">▯ Dọc • 9:16</option>
-        <option value="landscape">▭ Ngang • 16:9</option>
-      </select>
-      <div class="field" id="customSizeField" style="display:none; margin-top:12px;">
-        <div class="field-row"><label>Kích thước tuỳ chỉnh (khổ ngang)</label></div>
-        <div class="row2">
-          <div>
-            <div style="font-size:11px;color:var(--muted);margin-bottom:4px;">Rộng (px)</div>
-            <input type="number" id="customW" min="480" max="3840" step="10" value="1280"
-              style="width:100%;background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:9px;padding:8px 10px;font-size:13px;font-family:inherit;">
-          </div>
-          <div>
-            <div style="font-size:11px;color:var(--muted);margin-bottom:4px;">Cao (px)</div>
-            <input type="number" id="customH" min="270" max="2160" step="10" value="720"
-              style="width:100%;background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:9px;padding:8px 10px;font-size:13px;font-family:inherit;">
-          </div>
-        </div>
       </div>
       </div>
     </details>

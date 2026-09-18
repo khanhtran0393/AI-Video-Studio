@@ -258,6 +258,25 @@
         ]
       }
     ],
+    "nova/main/hardware-profile.js": [
+      {
+        "kind": "object",
+        "entries": [
+          {
+            "name": "probeHardware"
+          },
+          {
+            "name": "invalidateCache"
+          },
+          {
+            "name": "laneFile"
+          },
+          {
+            "name": "CUDA_VRAM_MIN_MB"
+          }
+        ]
+      }
+    ],
     "nova/main/identity.js": [
       {
         "kind": "object",
@@ -556,6 +575,31 @@
         "entries": [
           {
             "name": "setupAutoUpdate"
+          }
+        ]
+      }
+    ],
+    "nova/main/voice-cuda.js": [
+      {
+        "kind": "object",
+        "entries": [
+          {
+            "name": "install"
+          },
+          {
+            "name": "rollback"
+          },
+          {
+            "name": "status"
+          },
+          {
+            "name": "readTorchVersion"
+          },
+          {
+            "name": "wheelCandidates"
+          },
+          {
+            "name": "DISK_FREE_MIN"
           }
         ]
       }

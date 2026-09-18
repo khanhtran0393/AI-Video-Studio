@@ -322,6 +322,8 @@ function _bulkFriendlyErr(e){
 
 async function bulkGenerate(retryOnly){
   if (bulkState.running) return;
+  // Chặn mềm profile: chưa có Profile thì không đốt credit Flow (đầu ra phải lưu theo profile)
+  if (typeof _pfRequireActive === 'function') { try { _pfRequireActive('tạo ảnh/video hàng loạt'); } catch (e) { setStatusF(e.message, 'error'); return; } }
   if (!retryOnly) bulkState.items = _bulkParse().map(x => ({ ...x, status: 'wait', pct: 0, err: '', dataUrl: null }));
   if (!bulkState.items.length) { setStatusF('Chưa có prompt. Nhập danh sách prompt trước.', 'error'); return; }
   const targets = retryOnly ? bulkState.items.filter(x => x.status === 'err') : bulkState.items;
@@ -759,7 +761,7 @@ async function fcRenderList(){
   const s = await window.native.flowChrome('GET_ACCOUNTS').catch(() => null);
   const accs = s?.accounts || [];
   const canhBao = s?.ssoConsent ? `<div style="margin:0 0 9px;padding:8px 10px;border:1px solid var(--amber);border-radius:8px;background:rgba(255,170,0,.08);color:var(--amber);font-size:12.5px">⚠️ <b>${escapeHtml(s.ssoConsent.message)}</b>${s.ssoConsent.email ? ' (' + escapeHtml(s.ssoConsent.email) + ')' : ''}</div>` : '';
-  const activeN = accs.filter(a => a.enabled !== false && a.hasToken && !a.needLogin).length;
+  const activeN = accs.filter(a => a.enabled !== false && !a.needLogin && (a.hasToken || a.migrated)).length;
   let h = canhBao + `<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:9px">
       <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" ${accs.length && accs.every(a=>a.enabled!==false)?'checked':''} onchange="fcSetAllEnabled(this.checked)"> Bật tất cả</label>
       <span style="font-size:12px;color:var(--text-muted)">Tài khoản hoạt động: <b style="color:var(--green)">${activeN}</b>/${accs.length}</span>
@@ -779,7 +781,7 @@ async function fcRenderList(){
     </tr></thead><tbody>`;
   accs.forEach((a, i) => {
     const st = a.needLogin ? '<span style="color:var(--amber);font-weight:600">CẦN ĐN LẠI</span>'
-      : (a.hasToken ? '<span style="color:var(--green);font-weight:600">HOẠT ĐỘNG</span>' : '<span style="color:var(--red);font-weight:600">HẾT HẠN</span>');
+      : ((a.hasToken || a.migrated) ? `<span style="color:var(--green);font-weight:600" title="${a.migrated && !a.hasToken ? 'Giao thức mới flow.google.com — verify/gen qua batchexecute, không cần token ya29. Hạn Token hiện "—" là đúng.' : ''}">HOẠT ĐỘNG</span>` : '<span style="color:var(--red);font-weight:600">HẾT HẠN</span>');
     const relogin = a.needLogin ? `<button class="btn sm" style="background:var(--amber);color:#111" title="Đăng nhập lại" onclick="fcRelogin(${a.id})">🔑 Đăng nhập lại</button> ` : '';
     h += `<tr style="border-top:1px solid var(--border)">
       <td style="padding:6px 5px;color:var(--text-dim)">${i+1}</td>
@@ -1112,6 +1114,8 @@ async function tfRegenScene(id, variant){
   // Báo trạng thái ra CẢ tab Flow lẫn Tool 2 (nút tạo lại nằm ở bảng cảnh Tool 2 → nếu chỉ setStatusF thì bấm không thấy gì).
   const _rs = (m, t) => { try { setStatusF(m, t); } catch (e) {} if (typeof setStatus2 === 'function') { try { setStatus2(m, t); } catch (e) {} } };
   if (tfState.running) { _rs('Đang chạy mẻ khác — đợi xong rồi tạo lại.', 'error'); return; }
+  // Chặn mềm profile: chưa có Profile thì không đốt credit Flow (đầu ra phải lưu theo profile)
+  if (typeof _pfRequireActive === 'function') { try { _pfRequireActive('tạo lại ảnh cảnh'); } catch (e) { _rs(e.message, 'error'); return; } }
   const isB = variant === 'b';
   const lbl = 'cảnh ' + id + (isB ? ' B' : '');
   const prompt = (isB ? state.scenePrompts2 : state.scenePrompts)?.[id];
@@ -1162,6 +1166,8 @@ function tfEnlargeAsset(kind, name){
 
 async function tfRegenAsset(kind, name){
   if (tfState.running) { setStatusF('Đang chạy mẻ khác — đợi xong rồi tạo lại.', 'error'); return; }
+  // Chặn mềm profile: chưa có Profile thì không đốt credit Flow (đầu ra phải lưu theo profile)
+  if (typeof _pfRequireActive === 'function') { try { _pfRequireActive('tạo lại ảnh asset'); } catch (e) { setStatusF(e.message, 'error'); return; } }
   const prompt = (kind === 'char' ? state.assetCharPrompts : state.assetBgPrompts)?.[name];
   if (!prompt || !String(prompt).trim()) { setStatusF(name + ' chưa có prompt.', 'error'); return; }
   if (!(await flowBridge.waitReady(1500))) { setStatusF('Chưa thấy extension AI Video Studio.', 'error'); return; }
@@ -1290,6 +1296,8 @@ function _t2WithPalette(prompt){
 
 async function tfGenScenes(onlyMissing, opts){
   if (typeof gateTool==='function' && gateTool('toolflow')) return;
+  // Chặn mềm profile: chưa có Profile thì không đốt credit Flow (đầu ra phải lưu theo profile)
+  if (typeof _pfRequireActive === 'function') { try { _pfRequireActive('tạo ảnh cảnh'); } catch (e) { setStatusF(e.message, 'error'); return { skipped: true, reason: e.message }; } }
   if (tfState.running) return { skipped: true, reason: 'đang chạy' };
   const cfg = tfCfg();
   // UI chia máy (tfShardN/tfShardK) đã bỏ trong redesign — luôn chạy 1 máy trọn bộ cảnh.
@@ -1447,6 +1455,8 @@ function tfRenderAssets(){
 
 async function tfGenAssets(kind, onlyMissing){
   if (typeof gateTool==='function' && gateTool('toolflow')) return;
+  // Chặn mềm profile: chưa có Profile thì không đốt credit Flow (đầu ra phải lưu theo profile)
+  if (typeof _pfRequireActive === 'function') { try { _pfRequireActive('tạo ảnh nhân vật/bối cảnh'); } catch (e) { setStatusF(e.message, 'error'); return { skipped: true, reason: e.message }; } }
   if (tfState.running) return { skipped: true, reason: 'đang chạy' };
   const cfg = tfCfg();
   const store0 = kind === 'char' ? (state.characterImages || {}) : (state.backgroundImages || {});

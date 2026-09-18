@@ -206,6 +206,37 @@ function initAppDirect(){
 
 function getProfile(){ return state.currentProfileIdx >= 0 ? state.profiles[state.currentProfileIdx] : null; }
 
+// === PROFILE GATE (chặn mềm) + thư mục đầu ra theo profile (2026-09-18) ===
+// Chưa có Profile → mọi hành động SINH/LƯU sản phẩm phải fail lộ liễu (PF_NO_PROFILE):
+// sản phẩm đầu ra phải nằm trong thư mục của profile (<gốc đã chọn>/<Tên kênh>/).
+// Xem giao diện thì thoải mái — chỉ chặn hành động sinh sản phẩm (Luật 10: không fallback ngầm).
+function _pfRequireActive(hanhDong){
+  const p = getProfile();
+  if (p) return p;
+  const msg = 'Chưa có Profile — hãy tạo/chọn Profile trước khi ' + (hanhDong || 'chạy tính năng này') + ' (sản phẩm đầu ra phải lưu vào thư mục của Profile).';
+  try { if (typeof setStatus1 === 'function') setStatus1('⚠ ' + msg, 'error'); } catch (e) {}
+  throw new Error('PF_NO_PROFILE: ' + msg);
+}
+
+// Tên thư mục đầu ra của profile hiện tại (slug an toàn Windows) — '' khi chưa có profile.
+function _pfOutSlug(){
+  const p = getProfile();
+  if (!p) return '';
+  const raw = String(p.tenKenh || p.name || '').trim();
+  let s = raw;
+  if (typeof _slug === 'function') s = _slug(raw);
+  else s = raw.slice(0, 60).replace(/[^\w\sÀ-ỹ-]/g, '').trim().replace(/\s+/g, '-');
+  return s || ('profile-' + (state.currentProfileIdx + 1));
+}
+
+// Ghép tầng thư mục profile vào thư mục gốc: <gốc>/<Tên kênh> — giữ nguyên khi thiếu gốc hoặc chưa có profile.
+function _pfOutDir(baseDir){
+  const base = String(baseDir || '').replace(/[\\/]+$/, '');
+  const slug = _pfOutSlug();
+  if (!base || !slug) return base;
+  return base + '/' + slug;
+}
+
 function makeEmptyProfile(){
   return {
     profileId: 'p_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),

@@ -205,13 +205,16 @@ function upOnProgress(s){
 
 async function upRun(){
   if (upState.running) return;
+  // Chặn mềm profile: chưa có Profile thì không sinh sản phẩm (đầu ra phải lưu theo profile)
+  if (typeof _pfRequireActive === 'function') { try { _pfRequireActive('nâng cấp ảnh'); } catch (e) { upSetStatus(e.message, 'var(--red)'); return; } }
   if (!upState.items.length){ upSetStatus('Chưa có ảnh để nâng cấp.', 'var(--red)'); return; }
   const todo = upState.items.filter(it => it.status !== 'xong');   // bỏ qua ảnh đã nâng xong (khỏi làm lại)
   if (!todo.length){ upSetStatus('Tất cả ảnh đã nâng xong rồi.', 'var(--text-muted)'); return; }
   upSaveCfg();
   const payload = {
     items: todo.map(it => ({ id: it.id, path: it.path })),
-    outputDir: document.getElementById('upOutDir').value || '',
+    // Tầng profile (2026-09-18): đầu ra lưu <thư mục đã chọn>/<Tên kênh>/ — profile nào sinh ra nằm trong thư mục profile đó
+    outputDir: (typeof _pfOutDir === 'function') ? _pfOutDir(document.getElementById('upOutDir').value || '') : (document.getElementById('upOutDir').value || ''),
     suffix: document.getElementById('upSuffix').value || '_upscaled',
     model: document.getElementById('upModel').value || 'remacri-4x',
     target: upTargetVal(),

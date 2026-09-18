@@ -1,4 +1,4 @@
-# AGENTS.md — Bách khoa toàn thư dự án AI Video Studio
+﻿# AGENTS.md — Bách khoa toàn thư dự án AI Video Studio
 
 Tài liệu này là **nguồn chân lý duy nhất** cho mọi AI coding agent (Claude Code, Cline,
 Kilo, Cursor…) và developer khi can thiệp vào repo này. Mọi thay đổi mã nguồn phải
@@ -83,6 +83,9 @@ Chuỗi tuần tự, bước nào FAIL thì dừng cả chuỗi:
 | `npm run test:maintenance` | nova/core maintenance |
 | `npm run test:viral-cut` | test viral-cut (`nova/viral-cut/test.js`) — gồm re-sync `resyncCuesToSpeech` (có `offsetMs` khai báo), SRT khung `buildSrtSkeleton`, cắt lặng `tightenRanges`/`remapCuesThroughRanges`/`cutRangesSelectExpr` |
 | `npm run test:dub` | test thuần engine Lồng Tiếng SRT (`nova/dubbing/test.js`): `fitCuePlan` (khớp khe SRT, tăng tốc giữ cao độ có trần, trim đuôi lố khai báo, cue cuối theo totalMs, SRT lỗi cue-đè-cue), `buildOutCues`, `summarizePlan`, `splitSpeakerCues`/`assignSpeakerVoices` (tách prefix "Tên:" + gán giọng round-robin deterministic), `splitScriptText` (tách câu giữ dấu, gộp câu lẻ, tách câu dài tại dấu phẩy), `cuesFromDurationsMs` (cue tuần tự + gap, thiếu thời lượng → DUB_PROBE lộ liễu), presets (`nova/dubbing/presets.js` — whitelist trường + ép kiểu, upsert/xoá/missing lộ liễu, fixture tmpdir). TTS/mux thật chạy trong app qua dialog (dữ liệu thật — Luật 6), không fixture audio |
+| `npm run test:hardsub` | Test hàm thuần Hardsub OCR (`nova/hardsub/test.js`) — Bước 2 lộ trình ezmaxsub (video phụ đề chèn sẵn → SRT): `cropFilter` (dựng `-vf` fps + crop đáy khung, chặn tham số sai lộ liễu `HS_FPS_INVALID`/`HS_REGION_INVALID`), `frameTimeMs` (idx 1-based + startSec), `framesFromWorkerJson` (JSON worker sai → `HS_OCR_BADJSON`, bỏ khung trống + lọc điểm tin cậy), `cuesFromFrameTexts` (gộp khung giống nhau liền kề, chống cue-đè-cue, trần `endVideoMs`), engine fail-nhanh TRƯỚC mọi IO (`HS_NO_VIDEO`/`HS_NO_FRAMES_DIR`/`HS_FPS_INVALID` trước khi đụng ffmpeg/python). Pipeline thật (ffmpeg trích khung → worker RapidOCR/PP-OCRv6 trong venv `.venv-omni` → gộp cue, kênh `hardsub:*` + preload + panel Dịch SRT) chạy trong app qua dialog — Luật 6 |
+| `npm run test:diarize` | Test hàm thuần Diarization (`nova/diarization/test.js`) — Bước 3 lộ trình ezmaxsub: tách người nói theo cao độ + gán giọng theo giới tính. `parseSrt`/`cuesToSrtText` (SRT lỗi lộ liễu `DIAZ_SRT_BAD`/`DIAZ_SRT_ORDER`), `parseWav` (PCM16 mono, sai header → `DIAZ_WAV_BAD`), `pitchTrack`/`nccfF0` (NCCF 8kHz, khoảng lặng không bịa F0), `cuePitchStats` (median F0 per-cue, lấy mẫu đều), `diarizeCues` (phân cụm ngưỡng `f0GapHz`, cue không F0 kế thừa speaker trước qua `inherited`, F0 vùng mù 165–185Hz → "không rõ" — không bịa nam/nữ), `genderOfVoice` (attributes.gender → tags → nhãn "(Nam)/(Nữ)" trong tên; không dấu hiệu → null), `assignVoicesByGender` (pool nam/nữ round-robin deterministic, thiếu giọng → `DIAZ_NO_VOICE_*` lộ liễu), `rewriteSrtWithSpeakers` (prefix "Tên:" đúng hợp đồng `SPEAKER_RE` dubbing, không đè prefix có sẵn, lệch bản đồ → `DIAZ_MAP_BAD`), orchestrator fail-nhanh (`DIAZ_NO_VIDEO`/`DIAZ_NO_WAVPATH`). Tín hiệu tổng hợp 110Hz/210Hz sinh trong RAM — pipeline thật qua kênh `diarize:*` chạy trong app qua dialog — Luật 6 |
+| `npm run test:binman` | Test hàm thuần Bin Manifest (`nova/bin-manifest/test.js`) — Bước 4 lộ trình ezmaxsub: toàn vẹn sha256 binary runtime (`nova/bin-manifest/engine.js`, thuần Node). `sha256File` (stream 1 MiB, vector "abc" chuẩn), `buildDirManifest`/`buildFileManifest` (đệ quy, deterministic, dir thiếu → `BIN_ROOT_MISSING`, dir rỗng → `BIN_NO_FILES`), `diffManifests` (changed/missing/extra khai báo — verify không tự sửa), `parseSums`/`verifySumsInDir` (định dạng SHA2-256SUMS upstream yt-dlp, marker `*`, CRLF, dòng xấu → `BIN_SUMS_BAD`, platform không ship → skipped, không có file sums → present:false), `resolveTargets` (ytdlp-bin + ffmpeg-static/ffprobe-static, target thiếu → available:false khai báo), `verifyTargets` (no-baseline → ok → tamper → changed → missing), baseline (`buildBaseline`/`writeBaselineAtomic` nguyên tử `.part` + rename, `loadBaseline` JSON hỏng → `BIN_BASELINE_BAD`). Kèm **verify THẬT** yt-dlp.exe/yt-dlp_macos đã ship trong repo khớp SHA2-256SUMS upstream đi kèm — fixture %TEMP% dọn sạch cuối run. Verify thật trong app qua kênh `binman:status` (chỉ đọc) + `binman:refresh` (ghi baseline CHỈ khi user bấm) — Luật 10 |
 | `npm run test:ffx-smoke` | smoke Công cụ FFmpeg (`nova/scripts/ffx-smoke.js`) — chạy ffmpeg/ffprobe THẬT trên video app đã tạo trong `output/gen-e2e/` (tách audio, cắt, ghép copy/auto/xfade, loop, nén, trích frame, GIF, addMusic, faststart (+ already skip), loudnorm 2-pass (+ keepVideo), bỏ lời/tách giọng (+ loudnorm ghép), fade (+ video copy khi chỉ fade tiếng), **đổi tốc độ âm thanh** (giữ cao độ atempo / asetrate chủ đích, video copy, kiểm thời lượng **TRACK AUDIO** thật qua ffprobe — container giữ nguyên vì hình copy, atempoChain kiểm TÍCH các node = factor), **đổi cao độ giữ thời lượng** (`changeAudioPitch` — asetrate + bù atempo=1/factor, semitones −12..12 ≠0, thời lượng artifact không đổi), chèn quảng cáo (điểm chèn tay / dò cảnh / chia đều ≤ 20 điểm, đệm màu trước-sau, 3 chế độ tiếng, nhạc nền dưới quảng cáo, timeline trả về), huỷ, validate lỗi lộ liễu, **đóng phụ đề cứng** (`burnSubtitles` — filter `subtitles`/libass có trong ffmpeg-static, fontsdir trỏ font hệ thống, re-encode hình + audio copy, CPU/GPU, SRT đầu vào là cấu hình text của op), **tiến độ**: mỗi op đã nối `onProgress` phải phát kiện với % ĐƠN ĐIỆU không lùi và nằm 0..99 (`progStep`) — op nhiều giai đoạn chia ngân sách dải %, op không thể đo thật thì khai báo không wire, kèm bước chạy KHÔNG truyền `onProgress` vẫn OK); thiếu dữ liệu nguồn → FAIL, không bịa dữ liệu |
 | `npm run test:t7-ai` | Kiểm định các HÀM THUẦN của Trợ lý dựng (`nova/scripts/t7-ai-core-test.js`) — nạp `shared/t7.js` + `utility/t7-ai-core.js` vào sandbox `vm` (stub DOM/window tối thiểu, không mạng, không Electron) rồi test đúng hàng rào BẰNG CODE: `_t7AiSig`/`_t7AiEntrySig` (vân tay lời thoại → phát hiện đề xuất hết hiệu lực), `_t7AiPrunePick` (danh sách trắng trường theo params danh mục trước khi vào sceneSpecs), `_t7AiQuota`/`_t7AiPolicy` (trần ambient/chữ + `maxUse` ĐỌC TỪ METADATA `catalog()` của templates.js), `_t7AiGate`/`_t7AiTrGate` (chặn mẫu bịa/hết quota/lặp liền cảnh), `_t7AiFixLayers` (kẹp toạ độ+màu+preset, bỏ lớp đè/trống) |
 | `npm run test:imzic` | Kiểm định HÀM THUẦN của IPC I-MZic (`nova/scripts/imzic-core-test.js`) — nạp nguyên văn `nova/main/ipc/imzic-helpers.js` (pure Node, không Electron) rồi test đúng hàng rào BẰNG CODE: `safeExt`/`safeBaseName` (đuôi an toàn + dọn path traversal/ký tự cấm Windows), `atomicCopyFile` (nguyên tử `.part` + rename — thành công/lỗi không để rác `.part`, nguồn thiếu ném lộ), `diskFreeBytes`/`assertDiskSpace` (lỗi lộ liễu `IMZIC_DISK_FULL`, thư mục lạ → Infinity không chặn), `payloadAudioBytes` (bytes/ArrayBuffer/Buffer/audioPath/thiếu), `sweepStaleImzicTmp` (fixture THẬT trong os.tmpdir: dir cũ >24h xoá, dir mới giữ, dir khác tiền tố không đụng), `killProcessTree` (process thật, taskkill /T /F) |
@@ -274,6 +277,22 @@ COMPLETED | FAILED | CANCELLED`.
    phải khai báo rõ trong `MEMORY.md` mục "Còn treo" kèm lý do + điều kiện dọn.
    Bước dọn rác là một phần của định nghĩa "task hoàn tất": test PASS mà còn rác
    = task CHƯA xong.
+   **Bước bắt buộc — KIỂM ĐẾM PHẢN CHỨNG (chống sót rác)**: dọn xong chưa đủ,
+   agent PHẢI rà lại bằng lệnh thật (cấm khai báo suông) trước khi tổng kết task
+   và trình bày kết quả từng điểm trong phần tổng kết:
+   (a) `git status --porcelain` ở gốc repo — phải rỗng hoặc chỉ còn thay đổi có
+       chủ đích của task;
+   (b) quét mẫu `tmp-*` / `.tmp-*` trong gốc repo + cây `nova/` — chỉ được tồn
+       tại trong `nova/scripts/tmp/`, và MỖI file còn lại phải khớp một dòng
+       khai báo GIỮ trong `MEMORY.md`; file không được khai báo = rác → xoá ngay;
+   (c) quét `%TEMP%` các thư mục/file fixture do phiên tạo — kể cả thư mục
+       RỖNG vẫn là rác (từng bị sót 2026-09-18: `nova-auto2`, `nova-editor-pro`,
+       `nova-khoploi`, `nova-smart` trong `%TEMP%`);
+   (d) process electron/node thừa do harness spawn (app user đang mở qua
+       `khoidong.bat` là app thật, KHÔNG phải rác — tuyệt đối không đụng);
+   (e) worktree nếu có (`git worktree list`).
+   Bất kỳ điểm nào lệch mà không có khai báo "Còn treo" trong `MEMORY.md` →
+   CHƯA được kết thúc task; dọn xong rồi mới tổng kết.
 8. **Ghi nhận**: cập nhật `MEMORY.md` (quyết định, phát hiện, vấn đề còn treo)
    trong cùng thay đổi. Không ghi log vào AGENTS.md — file này chỉ chứa quy chuẩn ổn định.
 9. **CẤM tạo git worktree / bản sao repo song song.** App desktop chạy trực tiếp
@@ -319,6 +338,12 @@ COMPLETED | FAILED | CANCELLED`.
   — không commit, không để chúng thay thế script kiểm định chính thức. Muốn
   "chính thức hoá" một script tmp: đổi tên bỏ tiền tố, đưa về `nova/scripts/`,
   mô tả trong §3 (`check:docs` sẽ bắt nếu thiếu).
+- **Popup/dialog trong renderer phải cùng theme app** — CẤM `alert()`/`confirm()`
+  hệ thống (dialog trắng Windows lệch chủ đạo nền tối). Dùng modal tự dựng bằng
+  biến theme (`var(--surface)`, `var(--accent)`, nút `.btn primary/ghost sm`,
+  backdrop blur, Esc/bấm nền = Huỷ, trả `Promise<boolean>`). Mẫu hiện hành:
+  `hwzDialog` trong `nova/web/src/toolbox/utility/hwz.js` — popup mới copy đúng
+  pattern này, không sinh tên global mới.
 
 ## 9. MỘT NGUỒN RULE CHO MỌI CÔNG CỤ AI
 

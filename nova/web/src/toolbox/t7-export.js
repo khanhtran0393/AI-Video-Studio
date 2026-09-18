@@ -125,6 +125,8 @@ function t7RenderSubStyleChips(){
 function t7PickSubStyle(k){ state.t7SubStyle = k; t7RenderSubStyleChips(); try { if (typeof t7RenderPreview === 'function') t7RenderPreview(); } catch (_) {} }
 
 async function t7DoExport(){
+  // Chặn mềm profile: chưa có Profile thì không xuất sản phẩm (đầu ra phải lưu theo profile)
+  try { if (typeof _pfRequireActive === 'function') _pfRequireActive('xuất video'); } catch (e) { if (typeof setStatus7 === 'function') setStatus7(e.message, 'error'); return; }
   // Bộ dựng Nova Scene → đi đường riêng (Chromium + spec AI), không qua ffmpeg bên dưới.
   if ((document.getElementById('t7ExpEngine')?.value || 'ffmpeg') === 'nova'){
     if (typeof t7CloseExport === 'function') t7CloseExport();

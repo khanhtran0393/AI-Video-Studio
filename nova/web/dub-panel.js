@@ -27,6 +27,21 @@
     ['pt', 'Português'],
   ];
 
+  // Preset thể loại (2026-09-18) — mirror của nova/srt-translate/genres.js.
+  // Chỉ có tác dụng khi "Dịch SRT trước khi lồng" khác "Không dịch".
+  const DUB_GENRES = [
+    ['', 'Mặc định — dịch trung tính'],
+    ['ke_chuyen', 'Kể truyện / Tóm tắt phim'],
+    ['cot_trang', 'Cổ trang / Tiên hiệp'],
+    ['anime', 'Anime / Donghua'],
+    ['han_quoc', 'Phim Hàn Quốc'],
+    ['au_my', 'Phim Âu Mỹ'],
+    ['hai_kich', 'Hài kịch / Giải trí'],
+    ['kinh_di', 'Kinh dị / Ly kỳ'],
+    ['hanh_dong', 'Hành động'],
+    ['tai_lieu', 'Tài liệu / Review'],
+  ];
+
   const state = {
     videoPath: null, videoName: null,
     srtPath: null, srtName: null, srtCount: 0,
@@ -63,6 +78,7 @@
         </label>
         <label class="dub-lbl">Ngôn ngữ đọc ${optsSel('dubLang', LANGS, 'vi')}</label>
         <label class="dub-lbl">Dịch SRT trước khi lồng ${optsSel('dubTranslate', [['', 'Không dịch — đọc nguyên văn SRT'], ['vi', '→ Tiếng Việt'], ['en', '→ English'], ['zh', '→ 中文'], ['ja', '→ 日本語'], ['ko', '→ 한국어']], '')}</label>
+        <label class="dub-lbl">Phong cách dịch (thể loại) ${optsSel('dubGenre', DUB_GENRES, '')}</label>
         <div class="dub-row">
           <label class="dub-lbl">Trần tốc độ (×)
             <input class="dub-num" id="dubMaxSpeed" type="number" min="1" max="2.5" step="0.05" value="1.35">
@@ -268,6 +284,7 @@
         voicePid: (el('dubVoice') || {}).value || '',
         language: (el('dubLang') || {}).value || 'vi',
         translateTo: ((el('dubTranslate') || {}).value || '').trim(),
+        genre: ((el('dubGenre') || {}).value || '').trim(),
         maxSpeed: Number((el('dubMaxSpeed') || {}).value) || 1.35,
         mixMode: (el('dubMix') || {}).value || 'replace',
         origVolume: Number((el('dubOrigVol') || {}).value) || 0.25,
@@ -316,6 +333,7 @@
       voicePid: (el('dubVoice') || {}).value || '',
       language: (el('dubLang') || {}).value || 'vi',
       translateTo: ((el('dubTranslate') || {}).value || '').trim(),
+      genre: ((el('dubGenre') || {}).value || '').trim(),
       maxSpeed: Number((el('dubMaxSpeed') || {}).value) || 1.35,
       mixMode: (el('dubMix') || {}).value || 'replace',
       origVolume: Number((el('dubOrigVol') || {}).value) || 0.25,
@@ -338,6 +356,7 @@
       }
       if (c.language) setVal('dubLang', c.language);
       setVal('dubTranslate', c.translateTo || '');
+      setVal('dubGenre', c.genre || '');
       if (num(c.maxSpeed)) setVal('dubMaxSpeed', String(c.maxSpeed));
       if (c.mixMode) setVal('dubMix', c.mixMode);
       if (num(c.origVolume)) setVal('dubOrigVol', String(c.origVolume));
@@ -471,6 +490,7 @@
         voicePid: (el('dubVoice') || {}).value || '',
         language: (el('dubLang') || {}).value || 'vi',
         translateTo: ((el('dubTranslate') || {}).value || '').trim(),
+        genre: ((el('dubGenre') || {}).value || '').trim(),
         maxSpeed: Number((el('dubMaxSpeed') || {}).value) || 1.35,
         mixMode: (el('dubMix') || {}).value || 'replace',
         origVolume: Number((el('dubOrigVol') || {}).value) || 0.25,

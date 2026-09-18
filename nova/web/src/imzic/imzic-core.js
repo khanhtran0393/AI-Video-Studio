@@ -33,6 +33,10 @@ const state = {
   waveOn:false, waveStyle:'line', wavePos:100, wavePosX:50, waveSize:4, waveHeight:60, waveWidth:85, waveColor:'#9b8bff',
   // E5 (2026-09-15q): cột uốn cong — 0=thẳng đứng, 1=vòng tròn khép kín
   waveCurve:0, waveCurveDir:'fwd',
+  // 2026-09-18j: hiệu ứng "Uốn cong" (waveStyle='bend') — uốn KIỂU SÓNG NỀN này
+  // theo waveCurve (0% đường thẳng, 100% hình tròn). Tự nắm kiểu đang chọn trước
+  // khi user chuyển sang 'bend' (xem imzic-controls.js); không hợp lệ → 'line'.
+  waveBendBase:'line',
   // fitMode 'square' — bố cục "Ô vuông giữa + nền mờ": bgImg/bgFile = ảnh nền
   // RIÊNG (tuỳ chọn — không chọn thì nền tự dùng chính ảnh đang phát);
   // bgBlur = độ mờ nền (logic px), bgBlurSide = lệch mờ trái(-)/phải(+);
@@ -91,7 +95,10 @@ function imzExportUpscaleOf(baseW, baseH){
 // H.264/YUV cần kích thước CHẴN pixel — ép chẵn sau khi phóng (làm tròn lên).
 function imzEvenDim(n){ const r = Math.round(n); return (r % 2) ? r + 1 : r; }
 // 2026-09-17z (B9b, ROLLBACK): thử thêm willReadFrequently: true để fix warning + giảm GPU memory nhưng GÂY crash app ngay khi start (lifecycle 02:32 cụm exitCode=-1 cuối session). Rollback về getContext('2d') thuần. Crash root cause KHÔNG phải ở option này.
-const ctx = canvas.getContext('2d');
+// 2026-09-18j: `let` (trước là const) — hiệu ứng "Uốn cong" (imzic-draw.js /
+// drawWaveBent) cần HOÁN TUẦN thời gian ngắn ctx sang canvas tạm để vẽ kiểu nền,
+// rồi trả lại ngay trong finally. Không có dùng async giữa chừng — an toàn.
+let ctx = canvas.getContext('2d');
 const glowRing = $('glowRing');
 const emptyState = $('emptyState');
 

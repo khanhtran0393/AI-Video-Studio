@@ -45,6 +45,9 @@
     "check:shared-shadow": "node nova/scripts/shared-shadow-check.js",
     "test:viral-cut": "node nova/viral-cut/test.js",
     "test:dub": "node nova/dubbing/test.js",
+"test:hardsub": "node nova/hardsub/test.js",
+    "test:diarize": "node nova/diarization/test.js",
+    "test:binman": "node nova/bin-manifest/test.js",
     "test:ffx-smoke": "node nova/scripts/ffx-smoke.js",
     "test:t7-ai": "node nova/scripts/t7-ai-core-test.js",
     "test:imzic": "node nova/scripts/imzic-core-test.js"

@@ -95,6 +95,8 @@ Return ONLY a JSON array of exactly ${count} strings (the prompts).`;
 
 async function t10Generate(){
   if (typeof gateTool==='function' && gateTool('tool9')) return;
+  // Chặn mềm profile: chưa có Profile thì không sinh sản phẩm thumbnail (đầu ra phải lưu theo profile)
+  if (typeof _pfRequireActive === 'function') { try { _pfRequireActive('tạo thumbnail'); } catch (e) { setStatus10(e.message, 'error'); return; } }
   const title = t10GetTitle();
   if (!title) return setStatus10('Cần TIÊU ĐỀ (tự lấy từ Tạo Kịch Bản/SEO, hoặc gõ vào ô Tiêu đề).', 'error');
 

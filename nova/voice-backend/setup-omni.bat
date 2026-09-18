@@ -67,6 +67,10 @@ if errorlevel 1 (
 )
 
 echo.
+echo CHU Y: Neu ban da bat "Runtime AI (GPU)" cho giong doc trong Nova Studio,
+echo buoc cai nay tra torch ve ban CPU. Mo Nova -^> Cai dat -^> "May cua ban & Toi uu"
+echo va bam lai "Tai Runtime AI (GPU)" de bat lai gia toc GPU.
+echo.
 echo ==================== XONG! ====================
 echo Da cai du 3 engine: OmniVoice + VieNeu + XTTS.
 echo Quay lai Nova Studio -^> tab "Tao giong noi" -^> bam "Kiem tra lai".

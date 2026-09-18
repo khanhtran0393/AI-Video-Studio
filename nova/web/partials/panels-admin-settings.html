@@ -122,6 +122,22 @@
 
           <div class="settings-h" style="margin-top:22px">🎬 Tài khoản Google Flow (tạo ảnh + video)</div>
           <div id="settingsFlowSlot"></div>
+
+          <div class="settings-h" style="margin-top:22px">🖥️ Máy của bạn &amp; Tối ưu</div>
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:16px 18px">
+            <!-- hwz.js (utility) render toàn bộ nội dung + nút. Đơn giản: 1 container
+                 vì mọi dòng phụ thuộc kết quả dò phần cứng THẬT từng máy. -->
+            <div id="hwzCard"><div style="color:var(--text-muted);font-size:12px">Đang dò phần cứng…</div></div>
+            <div id="hwzLog" style="display:none;margin-top:10px;max-height:180px;overflow-y:auto;font-family:monospace;font-size:11px;line-height:1.55;color:var(--text-dim);background:rgba(0,0,0,.25);border-radius:8px;padding:8px 10px"></div>
+          </div>
+
+          <div class="settings-h" style="margin-top:22px">🧾 Toàn vẹn binary</div>
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:16px 18px">
+            <!-- binman.js (utility) render — IIFE, không thêm tên global, id DOM tiền tố binman*.
+                 Kiểm sha256 binary runtime (nova/ytdlp-bin + ffmpeg/ffprobe-static) vs baseline
+                 trong userData + SHA2-256SUMS upstream của yt-dlp. -->
+            <div id="binmanCard"><div style="color:var(--text-muted);font-size:12px">Đang kiểm tra binary…</div></div>
+          </div>
         </section>
       </div>
     </div>

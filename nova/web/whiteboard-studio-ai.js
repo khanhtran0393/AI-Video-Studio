@@ -28,7 +28,9 @@
       sinh ảnh line-art cho TỪNG câu (aspect ép 16:9 khớp canvas
       1280×720; model/quality theo tab Tạo Ảnh; multi-account dùng
       POOL, 1 account dùng project riêng), (c) lưu ảnh vào
-      <thư mục lưu>/whiteboard-anh/<profile = tên bản TTS>/cau-NNN.png
+      <thư mục lưu>/whiteboard-anh/<Tên kênh = Profile hiện hành>/
+      <profile = tên bản TTS>/cau-NNN.png — chưa có Profile thì
+      LUỒNG AI KHÔNG CHẠY (chặn mềm, Luật 10: fail lộ liễu)
       (saveFile IPC, kèm metadata cau-NNN.json: prompt + text + khung
       thời gian SRT + objects + cấu hình Flow) rồi gán vào cảnh đúng
       khung thời gian SRT, (d) wbAiRegionsCore tự khoanh vùng
@@ -36,7 +38,7 @@
       nhịp kẻ. Câu đã có ảnh được bỏ qua — chạy lại để tạo tiếp.
 
    3) Metadata tự lưu trong luồng auto: mỗi ảnh gen xong được ghi kèm
-   sidecar cau-NNN.json vào <thư mục lưu>/whiteboard-anh/<profile =
+   sidecar cau-NNN.json vào <thư mục lưu>/whiteboard-anh/<Tên kênh =
    tên bản TTS>/ (prompt + text + khung thời gian SRT + objects + cấu
    hình Flow + đường dẫn ảnh) — dữ liệu kiểm chứng mapping
    prompt↔ảnh↔timeline, KHÔNG có UI/nút riêng nào.
@@ -504,10 +506,23 @@
   async function wbAiGenStatus() {
     if (!(await flowBridge.waitReady(1500))) throw new Error('chưa kết nối Flow');
     const st = await flowBridge.call('GET_STATUS');
-    if (!st || (!st.hasToken && !((st.accountCount || 0) > 0))) {
-      throw new Error('chưa đăng nhập Flow — mở tab "Tạo Ảnh Hàng Loạt" để thêm/đăng nhập tài khoản rồi thử lại');
+    if (st && (st.hasToken || (st.accountCount || 0) > 0)) return st;
+    /* flow-native/extension không có account dùng được → rẽ sang Chrome engine
+       (account migrated — giao thức mới flow.google.com không cấp token ya29 nên
+       extension không bao giờ nhận được bơm; genBX chạy trong app là đường sống).
+       Lộ liễu qua st.chrome=true — không fallback ngầm (Luật 10). */
+    if (window.native && typeof window.native.flowChrome === 'function') {
+      const s = await window.native.flowChrome('GET_ACCOUNTS').catch(() => null);
+      const accs = (s && s.accounts) || [];
+      const ids = accs.filter((a) => a && a.enabled !== false && !a.needLogin && a.projectId).map((a) => a.id);
+      if (ids.length) {
+        log('ℹ native/extension chưa có account token → dùng Chrome engine (genBX trong app): ' + ids.length + ' account (id ' + ids.join(', ') + ')');
+        return { chrome: true, chromeIds: ids, accountCount: ids.length, hasToken: false, paygateTier: null };
+      }
+      const detail = accs.map((a) => '#' + a.id + (a.needLogin ? ' cần-đăng-nhập' : (a.projectId ? '' : ' thiếu-project'))).join(', ') || '0 account';
+      throw new Error('chưa đăng nhập Flow — không có account nào dùng được (native/extension 0, Chrome engine: ' + detail + ')');
     }
-    return st;
+    throw new Error('chưa đăng nhập Flow — mở tab "Tạo Ảnh Hàng Loạt" để thêm/đăng nhập tài khoản rồi thử lại');
   }
 
   async function wbAiGenSave(dataUrl, idx, opts) {
@@ -553,11 +568,34 @@
     return sv.path;
   }
 
+  /* Chrome engine (2026-09-18): account migrated không thể bơm token ya29 cho
+     extension (flow-chrome/gen.js:551 bỏ qua có chủ đích) — gen chạy qua genBX
+     batchexecute trong app (flowChrome 'GEN_TEST' → genImageAccount, ogiZ0b).
+     Kết quả là URL ảnh (flow-content.google, có chữ ký + Expires) → FETCH_URL_B64
+     tải bytes về main rồi bọc media_entries[0].dataUrl — giữ nguyên hợp đồng
+     trả về của tfDispatchGen (Luật 1). Round-robin tuần tự qua chromeIds. */
+  let _wbChromeIdx = 0;
+  async function wbAiChromeGenOne(ctx, prompt) {
+    if (!window.native || typeof window.native.flowChrome !== 'function') return { error: 'WB_CHROME_NO_BRIDGE' };
+    const id = ctx.chromeIds[_wbChromeIdx % ctx.chromeIds.length];
+    _wbChromeIdx++;
+    const r = await window.native.flowChrome('GEN_TEST', { id, prompt });
+    if (!r) return { error: 'WB_CHROME_NO_RESULT' };
+    if (r.error) return r;
+    const url = r.url || ((((r.media_entries || [])[0]) || {}).url) || null;
+    if (!url) return { error: 'WB_CHROME_NO_URL: genBX không trả URL ảnh' };
+    const dl = await window.native.flowChrome('FETCH_URL_B64', { url });
+    if (!dl || dl.error || !dl.base64) return { error: 'WB_CHROME_DL_FAIL: ' + ((dl && dl.error) || 'không rõ') };
+    return { media_entries: [{ dataUrl: 'data:' + (dl.mime || 'image/png') + ';base64,' + dl.base64 }] };
+  }
+
   /* gen 1 ảnh + retry lỗi mềm (giống tfGenScenes: mềm ≤2 lần, bị chặn traffic ≤3 lần) */
   async function wbAiGenOne(prompt, ctx) {
     let e0 = null, err = '', rotated = null;
     for (let att = 0; ; att++) {
-      const r = await tfDispatchGen(prompt, [], ctx);
+      const r = (ctx && ctx.chromeIds && ctx.chromeIds.length)
+        ? await wbAiChromeGenOne(ctx, prompt)
+        : await tfDispatchGen(prompt, [], ctx);
       e0 = ((r && r.media_entries) || []).find((e) => e && e.dataUrl) || null;
       err = (r && r.error) || (!e0 ? 'phản hồi không có ảnh' : '');
       rotated = (r && r.rotated) || null;
@@ -619,6 +657,10 @@
   async function wbAiGenImages() {
     if (!state.scenes.length) { log('⚠ chưa có cảnh — bấm "🧩 Chia theo câu (SRT)" trước'); return; }
     if (typeof callLLMJson !== 'function') { log('⚠ chưa có bộ gọi AI (callLLMJson) — chạy panel trong app Nova'); return; }
+    /* Chặn mềm Profile (2026-09-18): chưa có Profile → KHÔNG sinh/lưu ảnh —
+       sản phẩm phải nằm trong <gốc>/<Tên kênh>/whiteboard-anh/... (Luật 10:
+       fail lộ liễu, không fallback vào thư mục chung). */
+    try { _pfRequireActive('sinh ảnh Whiteboard'); } catch (e) { log('❌ ' + String((e && e.message) || e).replace(/^PF_NO_PROFILE:\s*/, '')); return; }
     try {
       wbAiGenEngine();
       const st = await wbAiGenStatus();
@@ -642,11 +684,20 @@
       const cfg = (typeof tfCfg === 'function') ? tfCfg() : { model: '', aspect: '16:9', quality: '', conc: 2, delay: 0 };
       cfg.kind = 'image';
       cfg.aspect = '16:9';
-      const multi = flowBridge.mode === 'extension' ? (st.accountCount || 0) >= 1 : (st.accountCount || 0) > 1;
+      const multi = st.chrome ? st.chromeIds.length > 1
+        : (flowBridge.mode === 'extension' ? (st.accountCount || 0) >= 1 : (st.accountCount || 0) > 1);
       let projectId = null;
-      if (multi) await flowBridge.call('POOL_RESET');
+      if (st.chrome) {
+        /* Chrome engine: genBX tự dùng project của account (projectId học sẵn) —
+           KHÔNG POOL_RESET (kênh flowBridge không có account nào) và KHÔNG
+           tfEnsureProject (tRPC createProject giao thức cũ ĐÃ CHẾT — gen.js:46).
+           Serial: Chrome engine mở page từng account, chạy song song sẽ đè
+           capture/token của nhau → conc=1 + delay tối thiểu 2s. */
+        cfg.conc = 1;
+        cfg.delay = Math.max(cfg.delay || 0, 2000);
+      } else if (multi) await flowBridge.call('POOL_RESET');
       else projectId = await tfEnsureProject();
-      const ctx = { multi, cfg, imgMap: {}, projectId, tier: st.paygateTier };
+      const ctx = { multi, cfg, imgMap: {}, projectId, tier: st.paygateTier, chromeIds: st.chrome ? st.chromeIds.slice() : null };
       /* thư mục riêng theo profile: <lưu>/whiteboard-anh/<tên bản TTS> (Bước 2).
          Chưa nhận TTS → chay-<timestamp>. Giữ nguyên trong phiên để gen tiếp/
          retry vào đúng thư mục đó; đổi TTS → tự sang thư mục mới. */
@@ -657,7 +708,11 @@
         if (!state.wbImgGroup) state.wbImgGroup = null;
       }
       if (!state.wbImgGroup) state.wbImgGroup = 'chay-' + new Date().toISOString().replace(/\D/g, '').slice(0, 14);
-      const wbSubdir = 'whiteboard-anh/' + state.wbImgGroup;
+      /* Tầng Profile (2026-09-18): <lưu>/whiteboard-anh/<Tên kênh>/<tên bản TTS> —
+         gate ở đầu hàm đảm bảo Profile luôn tồn tại, slug luôn khác rỗng;
+         giữ cột điều kiện để an toàn khi gọi trực tiếp. */
+      const _pfS = (typeof _pfOutSlug === 'function') ? _pfOutSlug() : '';
+      const wbSubdir = 'whiteboard-anh/' + (_pfS ? _pfS + '/' : '') + state.wbImgGroup;
       const wbMetaOf = (s, idx) => ({
         v: 1, scene: idx + 1, profile: state.wbImgGroup,
         text: s.text || '', imagePrompt: s.imagePrompt || '',
@@ -670,6 +725,7 @@
         log('🖼 Flow bắt đầu tạo ' + gen.length + ' ảnh' + (multi ? ' (⚡ ' + st.accountCount + ' tài khoản, ' + conc + ' luồng)' : (' · ' + conc + ' luồng')) + ' → ' + wbSubdir + '…');
 
         /* (c)+(d) pool đơn giản: mỗi câu — gen → lưu → gán → AI khoanh vùng */
+      let done = 0, failed = 0;
       let i = 0;
       const runner = async () => {
         while (i < gen.length) {

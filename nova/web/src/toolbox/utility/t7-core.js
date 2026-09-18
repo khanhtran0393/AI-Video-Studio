@@ -271,7 +271,10 @@ function _t7SyncColHeight(){
       const pbar = shell ? shell.querySelector('.t7-pbar') : null;
       const pbarH = pbar ? Math.round(pbar.getBoundingClientRect().height) : 0;
       const pTop = Math.round(player.getBoundingClientRect().top + (window.scrollY || window.pageYOffset || 0));
-      const moc = Math.max(220, window.innerHeight - pTop - pbarH - 14 - 64 - 16);
+      // t7-studio: timeline mở lại dưới cùng → trừ thêm chiều cao thật của nó (không phải đoán)
+      const _tl = document.getElementById('t7Tl');
+      const tlH = (_tl && _tl.style.display !== 'none' && _tl.offsetHeight > 40) ? _tl.offsetHeight + 12 : 0;
+      const moc = Math.max(220, window.innerHeight - pTop - pbarH - 14 - 64 - 16 - tlH);
       _t7SyncColHeight._moc = moc;
       if (player.style.maxHeight !== moc + 'px'){   // cùng giá trị → khỏi ghi → không đánh thức RO
         player.style.maxHeight = moc + 'px';
@@ -325,7 +328,13 @@ function _t7RailCount(k){
     if (k === 'motion') return (_t7Cat || []).length + (_t7Bits || []).length;
     if (k === 'text')   return (_t7Cat || []).filter(_t7IsTextTpl).length;
     if (k === 'audio')  return (_t7Sfx || []).length;
-    if (k === 'subs')   return Object.keys(typeof T7_SUBSTYLES === 'object' ? T7_SUBSTYLES : {}).length;
+    if (k === 'subs')   return (t7State.clips || []).filter(c => c && !c.imported).length;   // số phân đoạn phụ đề thật
+    if (k === 'dub'){    // số phân đoạn CHƯA có giọng (badge việc còn lại trên rail)
+      const clips = (t7State.clips || []).filter(c => c && !c.imported);
+      if (!t7State.audioFile) return clips.length;
+      const marks = state.t7SubAudioAt || {};
+      return clips.filter(c => !marks[c.sceneId]).length;
+    }
   } catch (_) {}
   return 0;
 }
@@ -351,20 +360,9 @@ async function _t7RailAudio(){
 }
 
 function _t7RailSubs(){
-  const box = document.getElementById('t7RailPanel'); if (!box) return;
-  box.innerHTML = `<div class="t7-dim" style="font-size:11px;margin-bottom:8px">Kiểu chữ khi burn phụ đề vào video.</div>
-    <div id="t7SubStyleChipsRail" style="display:flex;gap:7px;flex-wrap:wrap"></div>
-    <label class="t7-mlab" style="display:flex;align-items:center;gap:8px;margin-top:12px;cursor:pointer">
-      <input type="checkbox" id="t7SubsRailOn" style="accent-color:var(--accent);width:15px;height:15px"
-             onchange="(function(v){const e=document.getElementById('t7ExpSubs');if(e){e.checked=v;} if(typeof t7RenderPreview==='function'&&!t7State.playing)t7RenderPreview();})(this.checked)">
-      Ghi phụ đề vào video khi xuất
-    </label>`;
-  const on = document.getElementById('t7ExpSubs'); const cb = document.getElementById('t7SubsRailOn');
-  if (on && cb) cb.checked = !!on.checked;
-  // Dùng lại đúng bộ chip của hộp Xuất — một nguồn sự thật, không dựng bản thứ hai.
-  try { const src = document.getElementById('t7SubStyleChips'); const dst = document.getElementById('t7SubStyleChipsRail');
-    if (typeof t7RenderSubStyleChips === 'function') t7RenderSubStyleChips();
-    if (src && dst) dst.innerHTML = src.innerHTML; } catch (_) {}
+  /* 2026-09-18: tab Phụ đề chuyển thành bảng phân đoạn kiểu EZMAXSUB — toàn bộ nội dung
+     (danh sách + dịch + TTS + nhập SRT + kiểu chữ) chuyển sang src/toolbox/t7-subpanel.js. */
+  t7SubRender();
 }
 
 function _t7RailAi(){

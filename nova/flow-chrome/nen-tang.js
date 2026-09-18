@@ -65,7 +65,7 @@ const accounts = new Map();   // id -> { id, email, tier, credits, cookieExpiry,
 function persist() {
   try {
     fs.mkdirSync(profilesRoot(), { recursive: true });
-    const data = S.order.map((id) => { const a = accounts.get(id); const tk = S.tokens.get(id); return { id: a.id, email: a.email, tier: a.tier, credits: a.credits, cookieExpiry: a.cookieExpiry || null, enabled: a.enabled !== false, proxy: a.proxy || null, projectId: a.projectId || null, useImage: a.useImage !== false, useVideo: a.useVideo !== false, token: (tk && tk.token) || null, tokenExpiry: (tk && tk.expiry) || null }; });
+    const data = S.order.map((id) => { const a = accounts.get(id); const tk = S.tokens.get(id); return { id: a.id, email: a.email, tier: a.tier, credits: a.credits, cookieExpiry: a.cookieExpiry || null, enabled: a.enabled !== false, proxy: a.proxy || null, projectId: a.projectId || null, useImage: a.useImage !== false, useVideo: a.useVideo !== false, migrated: !!a.migrated, token: (tk && tk.token) || null, tokenExpiry: (tk && tk.expiry) || null }; });
     fs.writeFileSync(storeFile(), JSON.stringify({ nextId: S.nextId, accounts: data }, null, 2));
   } catch (e) { LOG('persist lỗi', e && e.message); }
 }
@@ -74,7 +74,7 @@ function restore() {
     const d = JSON.parse(fs.readFileSync(storeFile(), 'utf8'));
     S.nextId = d.nextId || 1; S.order = [];
     for (const a of (d.accounts || [])) {
-      accounts.set(a.id, { id: a.id, email: a.email || null, tier: a.tier || null, credits: a.credits ?? null, cookieExpiry: a.cookieExpiry || null, enabled: a.enabled !== false, proxy: a.proxy || null, projectId: a.projectId || null, useImage: a.useImage !== false, useVideo: a.useVideo !== false });
+      accounts.set(a.id, { id: a.id, email: a.email || null, tier: a.tier || null, credits: a.credits ?? null, cookieExpiry: a.cookieExpiry || null, enabled: a.enabled !== false, proxy: a.proxy || null, projectId: a.projectId || null, useImage: a.useImage !== false, useVideo: a.useVideo !== false, migrated: a.migrated === true });
       S.order.push(a.id);
       // Khôi phục token cache nếu CÒN HẠN (24h) → mở app KHỎI mint lại (không mở Chrome).
       if (a.token && a.tokenExpiry && Date.now() < a.tokenExpiry - 5 * 60 * 1000) S.tokens.set(a.id, { token: a.token, at: Date.now(), expiry: a.tokenExpiry });
@@ -92,9 +92,9 @@ function restore() {
 function statusPayload() {
   return { engine: 'chrome', count: S.order.length, accounts: S.order.map((id) => {
     const a = accounts.get(id); const tk = S.tokens.get(id);
-    return { id: a.id, email: a.email || ('Chrome ' + a.id), tier: a.tier, credits: a.credits, cookieExpiry: a.cookieExpiry || null,
+    return { id: a.id, email: a.email || ('Chrome ' + a.id), tier: a.tier, credits: a.credits, cookieExpiry: a.cookieExpiry || null, projectId: a.projectId || null,
       tokenExpiry: tk ? (tk.expiry || (tk.at + 55 * 60 * 1000)) : null, enabled: a.enabled !== false, proxy: a.proxy || null,
-      hasToken: !!tk, needLogin: a.needLogin === true, useImage: a.useImage !== false, useVideo: a.useVideo !== false,
+      hasToken: !!tk, needLogin: a.needLogin === true, migrated: a.migrated === true, useImage: a.useImage !== false, useVideo: a.useVideo !== false,
       ssoConsent: S.ssoConsent || null };
   }) };
 }

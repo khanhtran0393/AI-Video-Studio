@@ -10,6 +10,27 @@
  * build step — AGENTS.md §4/§8).
  */
 
+// 2026-09-18j: dispatch 16 kiểu sóng tách thành hàm riêng — dùng chung bởi
+// drawWave (kiểu thường) và drawWaveBent (hiệu ứng "Uốn cong" vẽ kiểu nền vào
+// canvas tạm). Bảng ánh xạ kiểu → hàm vẽ GIỮ NGUYÊN so với trước.
+function imzWaveDrawStyle(style,bins,w,h,baseY,startX,widthPx,amp){
+  if(style==='ribbon') drawWaveRibbon(bins,w,h,baseY,startX,widthPx,amp);
+  else if(style==='bars') drawWaveBars(bins,w,h,baseY,startX,widthPx,amp);
+  else if(style==='circular') drawWaveCircular(bins,w,h,baseY,startX,widthPx,amp);
+  else if(style==='dots') drawWaveDots(bins,w,h,baseY,startX,widthPx,amp);
+  else if(style==='rainbow') drawWaveRainbow(bins,w,h,baseY,startX,widthPx,amp);
+  else if(style==='bottombars') drawWaveBottomBars(bins,w,h,baseY,startX,widthPx,amp);
+  else if(style==='arc') drawWaveArc(bins,w,h,baseY,startX,widthPx,amp);
+  else if(style==='glow') drawWaveGlow(bins,w,h,baseY,startX,widthPx,amp);
+  else if(style==='twin') drawWaveTwin(bins,w,h,baseY,startX,widthPx,amp);
+  else if(style==='dashed') drawWaveDashed(bins,w,h,baseY,startX,widthPx,amp);
+  else if(style==='spiral') drawWaveSpiral(bins,w,h,baseY,startX,widthPx,amp);
+  else if(style==='circledots') drawWaveCircleDots(bins,w,h,baseY,startX,widthPx,amp);
+  else if(style==='neon') drawWaveNeon(bins,w,h,baseY,startX,widthPx,amp);
+  else if(style==='curved') drawWaveCurved(bins,w,h,baseY,startX,widthPx,amp);
+  else drawWaveLine(bins,w,h,baseY,startX,widthPx,amp);
+}
+
 function drawWave(dt){
   if(!state.waveOn) return;
   waveTime += dt * 0.045;
@@ -22,7 +43,14 @@ function drawWave(dt){
   const amp = state.waveHeight;
 
   ctx.save();
-  const grad = buildWaveGradient(startX, widthPx);
+  // 2026-09-18j: hiệu ứng "Uốn cong" — tự dựng style setup riêng vì gradient
+  // phải tạo từ context của canvas tạm (xem drawWaveBent).
+  if(state.waveStyle==='bend'){
+    drawWaveBent(bins,w,h,baseY,startX,widthPx,amp);
+    ctx.restore();
+    return;
+  }
+  const grad = buildWaveGradient(startX, widthPx, ctx);
   ctx.strokeStyle = grad;
   ctx.fillStyle = grad;
   ctx.lineWidth = state.waveSize;
@@ -32,23 +60,92 @@ function drawWave(dt){
   ctx.shadowColor = state.waveColor;
   ctx.shadowBlur = state.waveSize * 3.4;
 
-  if(state.waveStyle==='ribbon') drawWaveRibbon(bins,w,h,baseY,startX,widthPx,amp);
-  else if(state.waveStyle==='bars') drawWaveBars(bins,w,h,baseY,startX,widthPx,amp);
-  else if(state.waveStyle==='circular') drawWaveCircular(bins,w,h,baseY,startX,widthPx,amp);
-  else if(state.waveStyle==='dots') drawWaveDots(bins,w,h,baseY,startX,widthPx,amp);
-  else if(state.waveStyle==='rainbow') drawWaveRainbow(bins,w,h,baseY,startX,widthPx,amp);
-  else if(state.waveStyle==='bottombars') drawWaveBottomBars(bins,w,h,baseY,startX,widthPx,amp);
-  else if(state.waveStyle==='arc') drawWaveArc(bins,w,h,baseY,startX,widthPx,amp);
-  else if(state.waveStyle==='glow') drawWaveGlow(bins,w,h,baseY,startX,widthPx,amp);
-  else if(state.waveStyle==='twin') drawWaveTwin(bins,w,h,baseY,startX,widthPx,amp);
-  else if(state.waveStyle==='dashed') drawWaveDashed(bins,w,h,baseY,startX,widthPx,amp);
-  else if(state.waveStyle==='spiral') drawWaveSpiral(bins,w,h,baseY,startX,widthPx,amp);
-  else if(state.waveStyle==='circledots') drawWaveCircleDots(bins,w,h,baseY,startX,widthPx,amp);
-  else if(state.waveStyle==='neon') drawWaveNeon(bins,w,h,baseY,startX,widthPx,amp);
-  else if(state.waveStyle==='curved') drawWaveCurved(bins,w,h,baseY,startX,widthPx,amp);
-  else drawWaveLine(bins,w,h,baseY,startX,widthPx,amp);
+  imzWaveDrawStyle(state.waveStyle,bins,w,h,baseY,startX,widthPx,amp);
 
   ctx.restore();
+}
+
+// ---- 2026-09-18j: hiệu ứng "Uốn cong" (waveStyle='bend') ----
+// Uốn KIỂU SÓNG NỀN (state.waveBendBase) theo mức uốn state.waveCurve:
+//   0% = đường thẳng (vẽ kiểu nền trực tiếp), 100% = khép kín thành hình tròn.
+// Cách làm tổng quát cho MỌI kiểu sóng: vẽ kiểu nền vào canvas tạm cùng kích
+// thước khung (hoán tạm ctx), rồi ghép các lát dọc của canvas tạm lên canvas
+// chính dọc theo cung tròn. Công thức cung bảo toàn chiều dài:
+//   R = widthPx/(2π·c)            → chiều dài cung = R·2πc = widthPx (khớp c=1)
+//   φ(t) = π/2 − 2π·c·t           → điểm đầu (t=0) tại (startX, baseY), tiếp
+//                                   tuyến nằm ngang; cung vồng LÊN trên baseline
+//   P(t) = (startX, baseY−R) + R·(cosφ, sinφ)
+// Tại c→0: R→∞, P(t) → đường thẳng (khai triển Taylor liên tục) — chuyển mượt.
+// Export vẫn đi qua drawWave này nên hiệu ứng có mặt trong file xuất (canvas tạm
+// dựng ở kích thước LOGIC, ctx chính đang mang transform phóng của export tự áp).
+let imzBendCv = null, imzBendCvw = 0, imzBendCvh = 0;
+function imzBendCanvas(w,h){
+  if(!imzBendCv || imzBendCvw!==w || imzBendCvh!==h){
+    imzBendCv = document.createElement('canvas');
+    imzBendCv.width = w; imzBendCv.height = h;
+    imzBendCvw = w; imzBendCvh = h;
+  }
+  return imzBendCv;
+}
+function imzBendBaseStyleOf(){
+  // kiểu nền khai báo rõ: mặc định 'line', không nhận 'off'/'bend' làm nền
+  return (state.waveBendBase && state.waveBendBase!=='off' && state.waveBendBase!=='bend')
+    ? state.waveBendBase : 'line';
+}
+function drawWaveBent(bins,w,h,baseY,startX,widthPx,amp){
+  const base = imzBendBaseStyleOf();
+  const c = Math.max(0, Math.min(1, state.waveCurve == null ? 0 : +state.waveCurve));
+  if(c <= 0.001){
+    // 0% = đường thẳng — vẽ kiểu nền như bình thường, không tốn canvas tạm
+    const grad0 = buildWaveGradient(startX, widthPx, ctx);
+    ctx.strokeStyle = grad0; ctx.fillStyle = grad0;
+    ctx.lineWidth = state.waveSize; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.shadowColor = state.waveColor; ctx.shadowBlur = state.waveSize * 3.4;
+    imzWaveDrawStyle(base,bins,w,h,baseY,startX,widthPx,amp);
+    return;
+  }
+  // 1) vẽ kiểu nền vào canvas tạm (hoán tạm ctx — thuật toán vẽ đọc ctx toàn cục)
+  const cv = imzBendCanvas(w,h);
+  const bctx = cv.getContext('2d');
+  bctx.setTransform(1,0,0,1,0,0);
+  bctx.clearRect(0,0,w,h);
+  const saved = ctx;
+  ctx = bctx;
+  try{
+    bctx.save();
+    const grad = buildWaveGradient(startX, widthPx, bctx);
+    bctx.strokeStyle = grad; bctx.fillStyle = grad;
+    bctx.lineWidth = state.waveSize; bctx.lineCap = 'round'; bctx.lineJoin = 'round';
+    bctx.shadowColor = state.waveColor; bctx.shadowBlur = state.waveSize * 3.4;
+    imzWaveDrawStyle(base,bins,w,h,baseY,startX,widthPx,amp);
+    bctx.restore();
+  } finally {
+    ctx = saved; // trả ctx chính — Luật 10: không nuốt lỗi, lỗi vẽ vẫn ném ra
+  }
+  // 2) ghép các lát dọc theo cung — dir chỉ đổi THỨ TỰ quét nội dung (như 'curved')
+  const pad = 36; // đệm phủ glow/bán độ rộng cột tràn khỏi dải sóng
+  const x0 = startX - pad, x1 = startX + widthPx + pad;
+  const segN = Math.max(48, Math.min(160, Math.round(widthPx/8)));
+  const segW = (x1 - x0) / segN;
+  const R = widthPx / (2 * Math.PI * c);
+  const cx = startX, cy = baseY - R;
+  const dir = (state.waveCurveDir === 'rev') ? -1 : 1;
+  for(let i=0;i<segN;i++){
+    const tg = (i + 0.5) / segN;
+    const tScan = dir > 0 ? tg : (1 - tg);
+    const phi = Math.PI/2 - 2*Math.PI*c*tScan;
+    const px = cx + Math.cos(phi)*R;
+    const py = cy + Math.sin(phi)*R;
+    // tiếp tuyến P'(t) ∝ (sinφ, −cosφ) — góc xoay của lát
+    const ang = Math.atan2(-Math.cos(phi), Math.sin(phi));
+    const sx = x0 + i*segW;
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.rotate(ang);
+    // lát dày hơn khoảng cách 1.5px để khít mép ghép (che khe hở vòng cung)
+    ctx.drawImage(cv, sx, 0, segW + 1.5, h, -segW/2 - 0.75, -baseY, segW + 1.5, h);
+    ctx.restore();
+  }
 }
 
 function drawLeaf(cx,cy,r,rot){

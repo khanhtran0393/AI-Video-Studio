@@ -41,8 +41,11 @@ function t7DupSel(){
 
 function t7Build(){
   if (!document.getElementById('tool-tool7')) return;
-  document.body.classList.add('t7-lean');     // bố cục gọn: khung xem + danh sách cảnh
-  try { t7CloseInsp(); } catch (e) {}         // ngăn chi tiết luôn đóng lúc mở tab
+  document.body.classList.add('t7-lean');     // giữ các nhánh JS phụ thuộc lean (danh sách cảnh dạng hàng)
+  // 2026-09-18 (t7-studio): bố cục kiểu EZMAXSUB — 3 cột (danh sách | khung xem | Phụ đề/Chi tiết)
+  // + timeline nhiều track mở lại chạy hết ngang dưới cùng (CSS trong build-video.css).
+  document.getElementById('tool-tool7').classList.add('t7-studio');
+  try { t7CloseInsp(); } catch (e) {}         // mở tab → cột phải về tab Phụ đề (t7CloseInsp đã hook tab phải)
   try { t7RenderRail(); } catch (e) {}      // thanh biểu tượng dựng ngay, khỏi chờ timeline
   // Nạp trước danh mục để con số trên rail đúng từ đầu (nếu không thì hiện 0 rồi mới nhảy).
   try { if (!_t7Cat || !_t7Trans || !_t7Bits) _t7LoadFx().then(() => { try { t7RenderRail(); if (typeof t7SetMediaTab === 'function') t7SetMediaTab(t7State.mediaTab || 'scenes'); } catch (e) {} }); } catch (e) {}
@@ -67,6 +70,7 @@ function t7Build(){
     if (state.tool !== 'tool7') return;   // user đã chuyển tab khác → khỏi vẽ
     t7RenderTimeline(); t7RenderPreview();
     t7RenderMedia(); t7SetMediaTab(t7State.mediaTab || 'scenes');
+    if (typeof t7SubRender === 'function') t7SubRender();   // panel Phụ đề ở cột phải (t7-studio)
     _t7HookColSync();
     setTimeout(() => { if (state.tool === 'tool7') _t7PersistClips(); }, 400);   // lưu clip HOÃN lại (không chặn lúc vào tab)
   });
@@ -112,7 +116,7 @@ function t7SetMediaTab(tab){
   t7State.mediaTab = t;
   const el = (id) => document.getElementById(id);
   const isFx = (t === 'text' || t === 'motion' || t === 'trans');
-  const isOwn = (t === 'audio' || t === 'subs' || t === 'ai');
+  const isOwn = (t === 'audio' || t === 'subs' || t === 'ai' || t === 'dub');
   const show = (id, on) => { const e = el(id); if (e) e.style.display = on ? '' : 'none'; };
   show('t7Rows', t === 'scenes'); show('t7MediaPanel', t === 'media');
   show('t7FxPanel', isFx); show('t7RailPanel', isOwn);
@@ -127,6 +131,7 @@ function t7SetMediaTab(tab){
   else if (t === 'audio') _t7RailAudio();
   else if (t === 'subs') _t7RailSubs();
   else if (t === 'ai') _t7RailAi();
+  else if (t === 'dub') _t7RailDub();   // panel Thuyết minh kiểu EZMAXSUB (t7-dubpanel.js)
 }
 
 async function t7ImportMedia(files){

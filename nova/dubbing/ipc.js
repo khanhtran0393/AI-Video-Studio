@@ -181,6 +181,7 @@ function registerDubbingIpc(ipcMain, { getState } = {}) {
       const mixMode = p.mixMode === 'mix' ? 'mix' : 'replace';
       const origVolume = Math.max(0, Math.min(1, Number(p.origVolume) || 0.25));
       const translateTo = String(p.translateTo || '').trim();
+      const genre = String(p.genre || '').trim(); // preset thể loại khi có dịch AI (2026-09-18)
       const speakerMode = !!p.speakerMode;
       const speakerVoiceList = Array.isArray(p.speakerVoices)
         ? p.speakerVoices.map((v) => String(v || '').trim()).filter(Boolean) : [];
@@ -205,7 +206,7 @@ function registerDubbingIpc(ipcMain, { getState } = {}) {
         /* 2) Dịch AI (tuỳ chọn) — tái dùng engine Dịch SRT, API đã cấu hình */
         if (translateTo) {
           prog('translate', 2, 'Dịch SRT qua AI sang "' + translateTo + '"…');
-          cues = await SRTT.translateCues(cues, { targetLang: translateTo, sourceLang: p.translateFrom || 'auto' });
+          cues = await SRTT.translateCues(cues, { targetLang: translateTo, sourceLang: p.translateFrom || 'auto', genre });
           if (canceled()) throw errCode('DUB_CANCELLED', 'Đã huỷ bởi người dùng.');
         }
 

@@ -126,9 +126,19 @@
           <div id="t7PreviewCap" class="t7-pcap" style="display:none"></div>
         </section>
 
-        <!-- INSPECTOR: detail + audio + export -->
+        <!-- INSPECTOR → CỘT PHẢI KIỂU EZMAXSUB: 2 tab [💬 Phụ đề | ⚙ Chi tiết cảnh].
+             2026-09-18: t7-studio — panel Phụ đề (t7-subpanel.js) render vào #t7SubPanel;
+             nội dung chi tiết cảnh + tiến độ xuất + trạng thái dời vào #t7InspBody (tab 2). -->
         <aside class="t7-panel t7-inspector">
-          <div class="t7-ph2"><span class="t7-lbl">Chi tiết cảnh</span><span class="t7-chip" id="t7DetailChip"></span><span class="sp" style="flex:1"></span><button class="t7-mini" id="t7SetBtn" onclick="t7ToggleSettings()" title="Khung hình & dòng thời gian — thiết lập chung + số liệu dự án">⚙</button><button class="t7-mini" onclick="t7CloseInsp()" title="Đóng">✕</button></div>
+          <div class="t7-rtabs">
+            <button id="t7RTabSubs" class="on" onclick="t7RightTab('subs')" title="Danh sách phụ đề theo timeline">💬 Phụ đề</button>
+            <button id="t7RTabInsp" onclick="t7RightTab('insp')" title="Chi tiết cảnh đang chọn + thiết lập">⚙ Chi tiết cảnh</button>
+          </div>
+          <div id="t7SubPanel" class="t7-rightbody">
+            <div class="t7-empty" style="padding:16px">Đang nạp phụ đề…</div>
+          </div>
+          <div id="t7InspBody" class="t7-inspwrap" style="display:none">
+          <div class="t7-ph2"><span class="t7-lbl">Chi tiết cảnh</span><span class="t7-chip" id="t7DetailChip"></span><span class="sp" style="flex:1"></span><button class="t7-mini" id="t7SetBtn" onclick="t7ToggleSettings()" title="Khung hình & dòng thời gian — thiết lập chung + số liệu dự án">⚙</button><button class="t7-mini" onclick="t7CloseInsp()" title="Về tab Phụ đề">✕</button></div>
           <div id="t7SetPanel" style="display:none"></div>
           <div id="t7Detail" class="t7-inspbody">
             <div class="t7-empty" style="padding:16px">Chọn một cảnh để chỉnh.</div>
@@ -144,6 +154,7 @@
               <div style="background:var(--surface-2);border-radius:4px;height:7px;overflow:hidden"><div id="t7ProgBar" style="background:var(--accent);height:100%;width:0%;transition:width .3s"></div></div>
             </div>
             <div id="status7" style="margin-top:4px;font-size:12px;color:var(--text-muted);min-height:16px"></div>
+          </div>
           </div>
         </aside>
       </div>
@@ -199,23 +210,38 @@
       </div>
 
       <!-- TIMELINE -->
-      <!-- Dòng thời gian ĐÃ GỠ khỏi tab này (23/08). Giữ DOM, chỉ ẩn: hàng chục hàm
-           t7Render*/t7Drag* vẫn trỏ vào các phần tử bên trong, xoá hẳn là null-crash
-           rải rác. Tab Edit Video (bàn dựng cũ) đã gỡ hẳn ở 0.1.33. -->
-      <div class="t7-tl" id="t7Tl" style="display:none">
+      <!-- 2026-09-18 (t7-studio): MỞ LẠI timeline theo bố cục EZMAXSUB — chạy hết ngang dưới
+           cùng, kèm thanh transport (t7-tlbar). Đợt 23/08 từng ẩn vì redesign lean; giờ là
+           trung tâm của màn hình dựng: rãnh Cảnh (filmstrip thumbnail) + Đồ hoạ + Chuyển cảnh
+           + Ảnh đè + Giọng đọc + Nhạc nền + SFX. DOM + toàn bộ hàm t7Render*/t7Drag* giữ
+           nguyên — chỉ bỏ display:none. -->
+      <div class="t7-tl" id="t7Tl">
+        <!-- Transport 3 vùng kiểu EZMAXSUB: trái = timecode + công cụ cắt ghép ·
+             giữa = nút Phát gold · phải = nhập âm/ảnh + bám mốc + thu phóng. -->
         <div class="t7-tlbar">
-          <span class="lb">Dòng thời gian</span>
-          <button class="t7-tlbtn" id="t7UndoBtn" title="Hoàn tác (Ctrl/⌘+Z)" onclick="t7Undo()">↶</button>
-          <button class="t7-tlbtn" id="t7RedoBtn" title="Làm lại (Ctrl/⌘+Shift+Z)" onclick="t7Redo()">↷</button>
-          <button class="t7-tlbtn" title="Cắt tại playhead (S)" onclick="t7SplitAtPlayhead()">✂ Tách</button>
-          <button class="t7-tlbtn" title="Nhân đôi clip đang chọn" onclick="t7DupSel()">⧉ Nhân đôi</button>
-          <button class="t7-tlbtn" title="Xoá clip đang chọn (Delete)" onclick="t7DeleteSel()">🗑 Xoá</button>
-          <button class="t7-tlbtn" title="Thêm ảnh đè (full-frame) lên video" onclick="document.getElementById('t7OverlayInput').click()">🖼 Ảnh đè</button>
-          <button class="t7-tlbtn" title="Thêm hiệu ứng âm thanh (SFX) tại vạch phát" onclick="t7SfxLibOpen()">🔊 SFX</button>
-          <span class="t7-dlab" id="t7TlTotal" style="margin-left:12px">0s</span>
-          <span class="t7-dim" id="t7TlStats" style="font-size:10.5px"></span>
-          <span id="t7Snap" class="t7-snap on" onclick="t7ToggleSnap()" title="Kéo clip tự dính vào mép cảnh khác và vạch phát">🧲 Bám mốc</span>
-          <div class="zt">Thu phóng <input type="range" id="t7Zoom" min="40" max="200" value="80" style="width:110px" oninput="t7RenderTimeline()"></div>
+          <div class="t7-tlg t7-tlg-l">
+            <span class="tc" id="t7TlTime" title="Vị trí vạch phát / tổng thời lượng">00:00 / 00:00</span>
+            <button class="t7-tlbtn" id="t7UndoBtn" title="Hoàn tác (Ctrl/⌘+Z)" onclick="t7Undo()">↶</button>
+            <button class="t7-tlbtn" id="t7RedoBtn" title="Làm lại (Ctrl/⌘+Shift+Z)" onclick="t7Redo()">↷</button>
+            <button class="t7-tlbtn" title="Cắt tại playhead (S)" onclick="t7SplitAtPlayhead()">✂</button>
+            <button class="t7-tlbtn" title="Nhân đôi clip đang chọn" onclick="t7DupSel()">⧉</button>
+            <button class="t7-tlbtn" title="Xoá clip đang chọn (Delete)" onclick="t7DeleteSel()">🗑</button>
+          </div>
+          <div class="t7-tlg t7-tlg-c">
+            <span class="b" id="t7PlayBtn2" onclick="t7TogglePlay()" title="Phát / Dừng (Space)">▶</span>
+          </div>
+          <div class="t7-tlg t7-tlg-r">
+            <button class="t7-tlbtn" title="Nhập giọng đọc (MP3/WAV) cho bản dựng" onclick="document.getElementById('t7VoInput').click()">🎙</button>
+            <button class="t7-tlbtn" title="Nhập nhạc nền (MP3/WAV)" onclick="document.getElementById('t7BgmInput').click()">🎵</button>
+            <button class="t7-tlbtn" title="Thêm ảnh đè (full-frame) lên video" onclick="document.getElementById('t7OverlayInput').click()">🖼</button>
+            <button class="t7-tlbtn" title="Thêm hiệu ứng âm thanh (SFX) tại vạch phát" onclick="t7SfxLibOpen()">🔊</button>
+            <button class="t7-tlbtn" title="Đồng bộ lại cảnh từ tab Phân Cảnh" onclick="t7Build()">↻</button>
+            <span class="t7-dlab" id="t7TlTotal">0s</span>
+            <span class="t7-dim" id="t7TlStats" style="font-size:10.5px"></span>
+            <span id="t7Snap" class="t7-snap on" onclick="t7ToggleSnap()" title="Kéo clip tự dính vào mép cảnh khác và vạch phát">🧲 Bám mốc</span>
+            <div class="zt">Thu phóng <input type="range" id="t7Zoom" min="40" max="200" value="80" style="width:110px" oninput="t7RenderTimeline()"></div>
+          </div>
+        </div>
         </div>
         <div class="t7-tlscroll">
           <div class="t7-tlinner" id="t7TlInner">

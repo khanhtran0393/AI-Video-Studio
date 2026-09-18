@@ -56,14 +56,20 @@ function hexToHsl(hex){
 // Cache theo (màu, drift làm tròn 1°, vị trí) — drift chạy 14°/s nên làm tròn
 // 1° chỉ đổi màu ~70ms/lần, mắt không phân biệt. Cache dọn khi quá 1024 mục.
 const imzWaveGradCache = new Map();
-function buildWaveGradient(startX,widthPx){
+// 2026-09-18j: gradient gắn với context TẠO ra nó — canvas tạm của hiệu ứng
+// "Uốn cong" (drawWaveBent) không dùng được gradient tạo từ ctx chính và ngược
+// lại, nên cache phải tách key theo tag M(ctx chính)/B(canvas tạm).
+const IMZ_MAIN_CTX = ctx;
+function buildWaveGradient(startX,widthPx,ctxArg){
+  const c2 = ctxArg || ctx;
+  const tag = (c2 === IMZ_MAIN_CTX) ? 'M' : 'B';
   const driftQ = Math.round(waveTime*14) % 360;
-  const key = state.waveColor + '|' + driftQ + '|' + Math.round(startX) + '|' + Math.round(widthPx);
+  const key = tag + '|' + state.waveColor + '|' + driftQ + '|' + Math.round(startX) + '|' + Math.round(widthPx);
   const cached = imzWaveGradCache.get(key);
   if(cached) return cached;
   const [h,s,l] = hexToHsl(state.waveColor);
   const drift = driftQ;
-  const grad = ctx.createLinearGradient(startX,0,startX+widthPx,0);
+  const grad = c2.createLinearGradient(startX,0,startX+widthPx,0);
   grad.addColorStop(0,    `hsla(${h-32+drift},${Math.min(100,s+8)}%,${Math.min(80,l+18)}%,0.92)`);
   grad.addColorStop(0.35, `hsla(${h+drift},${s}%,${l}%,1)`);
   grad.addColorStop(0.65, `hsla(${h+26+drift},${s}%,${Math.max(28,l-8)}%,1)`);

@@ -7,6 +7,7 @@ function t7UpdatePlayhead(){
   const ph = document.getElementById('t7Playhead'); if (ph) ph.style.left = (_T7_GUT + Math.min(t7State.playT, total) * pps) + 'px';
   const fill = document.getElementById('t7SeekFill'); if (fill) fill.style.width = (total ? (Math.min(t7State.playT, total) / total * 100) : 0) + '%';
   const tc = document.getElementById('t7TimeCode'); if (tc) tc.textContent = _t7Fmt(t7State.playT) + ' / ' + _t7Fmt(total);
+  const tc2 = document.getElementById('t7TlTime'); if (tc2) tc2.textContent = _t7Fmt(t7State.playT) + ' / ' + _t7Fmt(total);   // timecode trên thanh transport (t7-studio)
 }
 
 function t7TrimPointerDown(e, id){
@@ -144,6 +145,7 @@ function t7Play(){
   if (t7State.playT >= total) t7State.playT = 0;
   t7State.playing = true;
   document.getElementById('t7PlayBtn').textContent = '⏸';
+  const b2 = document.getElementById('t7PlayBtn2'); if (b2) b2.textContent = '⏸';   // nút Phát trên transport (t7-studio)
   const au = document.getElementById('t7PreviewAudio');
   if (t7State.audioFile && au){
     // audioFile có thể khôi phục từ phiên trước mà chưa gán src → gán lại để nghe được.
@@ -182,6 +184,7 @@ function t7Play(){
 function t7Pause(){
   t7State.playing = false;
   const b = document.getElementById('t7PlayBtn'); if (b) b.textContent = '▶';
+  const b2 = document.getElementById('t7PlayBtn2'); if (b2) b2.textContent = '▶';   // nút Phát trên transport (t7-studio)
   const au = document.getElementById('t7PreviewAudio'); if (au) { try { au.pause(); } catch (e) {} }
   // Clip của cảnh chạy bằng thẻ <video> RIÊNG, không dính vào vòng lặp phát.
   // Trước đây chỉ dừng giọng đọc + huỷ rAF → bấm ⏸ mà hình vẫn chạy tiếp.

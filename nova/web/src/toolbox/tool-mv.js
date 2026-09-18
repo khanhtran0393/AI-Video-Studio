@@ -36,6 +36,8 @@ function mvRemoveUpload(id){ mvUploaded = mvUploaded.filter(u => u.id !== id); m
 
 async function mvGenerate(){
   if (typeof gateTool==='function' && gateTool('tool6')) return;
+  // Chặn mềm profile: chưa có Profile thì không sinh sản phẩm (đầu ra phải lưu theo profile)
+  if (typeof _pfRequireActive === 'function') { try { _pfRequireActive('sinh prompt chuyển động'); } catch (e) { setStatusBar('statusMvVid', e.message, 'error'); return; } }
   if (!mvScenes.length){ setStatusBar('statusMvVid', 'Chưa có ảnh — tải ảnh lên (test) hoặc "Lấy ảnh cảnh đã tạo".', 'error'); return; }
   const cfg = _mvCfg();
   if (!state.motionPrompts) state.motionPrompts = {};
@@ -86,6 +88,8 @@ function mvRender(){ if (typeof tvRenderRows === 'function') tvRenderRows(); }
 
 async function mvVideoGenerate(){
   if (typeof gateTool==='function' && gateTool('tool6')) return;
+  // Chặn mềm profile: chưa có Profile thì không đốt credit Veo (đầu ra phải lưu theo profile)
+  if (typeof _pfRequireActive === 'function') { try { _pfRequireActive('tạo video Veo'); } catch (e) { setStatusBar('statusMvVid', e.message, 'error'); return; } }
   const flow = (a, p) => flowBridge.call(a, p);   // theo chế độ: extension mode → extension, builtin → native
   if (typeof flowBridge === 'undefined' || !(await flowBridge.waitReady(1500))) { setStatusBar('statusMvVid', 'Chưa kết nối tài khoản. Vào Cài đặt kết nối/đăng nhập trước.', 'error'); return; }
   if (!mvScenes.length) mvLoadScenes();

@@ -6,6 +6,7 @@ const t7State = {
   clips: [], selClip: null, past: [], future: [], _seq: 0,
   overlays: [], selOverlay: null,   // 🖼 Lớp trên (ảnh đè full-frame): {id,dataUrl,name,start,dur}
   media: [], mediaTab: 'scenes',    // 📁 Thư viện phương tiện nhập vào: {id,kind:image|video|audio,name,dataUrl,dur}
+                                    // 2026-09-18 (t7-studio): Phụ đề có cột phải riêng (tab 💬) → bin trái về mặc định Cảnh
   audioFile: null, audioPeaks: null, audioDur: 0,
   bgmFile: null, bgmPeaks: null, bgmDur: 0,
   selId: null,
@@ -23,9 +24,10 @@ const _T7_RAIL = [
   { k: 'trans',  ic: '⇄',  lb: 'Chuyển cảnh' },
   { k: 'sep' },
   { k: 'audio',  ic: '🔊', lb: 'Âm thanh' },
-  { k: 'subs',   ic: '💬', lb: 'Phụ đề' },
+  { k: 'dub',    ic: '🎙', lb: 'Thuyết minh' },
   { k: 'ai',     ic: '🪄', lb: 'Trợ lý' },
-];
+];  // 2026-09-18 (t7-studio): bỏ 'subs' — Phụ đề có cột phải riêng với tab 💬 (t7RightTab);
+    // thêm 'dub' — panel Thuyết minh kiểu EZMAXSUB (t7-dubpanel.js → _t7RailDub)
 
 // === L?: const _t7IsTextTpl ===
 const _t7IsTextTpl = (t) => !/vignette|film-grain|light-leak|blur-background|gradient-wipe|zoom-in|progress|circle|frame|khung/i.test(t.template + ' ' + (t.label || ''));
@@ -44,10 +46,10 @@ const _T7_GUT = (() => {
 let _t7Sfx = null, _t7RailQ = '';
 
 // === L?: const _T7_TABS ===
-const _T7_TABS = ['scenes','media','text','motion','trans','audio','subs','ai'];
+const _T7_TABS = ['scenes','media','text','motion','trans','audio','dub','subs','ai'];
 
 // === L?: const _T7_TITLE ===
-const _T7_TITLE = { scenes:'Cảnh', media:'Ảnh', text:'Chữ', motion:'Chuyển động', trans:'Chuyển cảnh', audio:'Âm thanh', subs:'Phụ đề', ai:'Trợ lý' };
+const _T7_TITLE = { scenes:'Cảnh', media:'Ảnh', text:'Chữ', motion:'Chuyển động', trans:'Chuyển cảnh', audio:'Âm thanh', dub:'Thuyết minh', subs:'Phụ đề', ai:'Trợ lý' };
 
 // === L?: let _t7GfxSel ===
 let _t7GfxSel = null;

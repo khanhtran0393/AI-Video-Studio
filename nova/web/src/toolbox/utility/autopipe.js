@@ -142,6 +142,8 @@ async function _purgeJobVideo(job){
 }
 
 async function _runPipeline(job){
+  // Chặn mềm profile: chưa có Profile → fail lộ liễu cả job (đầu ra phải lưu theo profile)
+  if (typeof _pfRequireActive === 'function') _pfRequireActive('chạy sản xuất tự động');
   const topic = job.topic || ''; const startFrom = job.startFrom || 'script';
   const resuming = !!job.videoId;   // đã có video → đang làm tiếp (chỉ bù bước/ảnh còn thiếu)
 
@@ -302,8 +304,12 @@ async function _runPipeline(job){
         const first = t10State.results[0];
         if (first && first.dataUrl) {
           const v = getVid(); if (v) { if (!v.workData) v.workData = createEmptyWorkData(); v.workData.thumbUrl = await _shrinkDataUrl(first.dataUrl, 360, 0.72); }
-          const idir = (job.saveDir != null ? job.saveDir : (_autoOutDir || _autoDefaultDir)) || '';
-          if (idir && window.native?.saveFile) { try { await window.native.saveFile({ dir: idir, subdir: _slug(job.title), name: 'thumbnail.png', base64: first.dataUrl }); } catch (e) {} }
+          const idir0 = (job.saveDir != null ? job.saveDir : (_autoOutDir || _autoDefaultDir)) || '';
+          if (idir0 && window.native?.saveFile) {
+            // Tầng profile: thumbnail lưu <gốc>/<Tên kênh>/<tên video>/thumbnail.png
+            const pSlug = (typeof _pfOutSlug === 'function') ? _pfOutSlug() : '';
+            try { await window.native.saveFile({ dir: idir0, subdir: (pSlug ? pSlug + '/' : '') + _slug(job.title), name: 'thumbnail.png', base64: first.dataUrl }); } catch (e) {}
+          }
         }
       } catch (e) {}
       return { sub: t10State.results.length + ' ảnh' };
@@ -313,6 +319,9 @@ async function _runPipeline(job){
       if (!(window.native && typeof window.native.renderVideo === 'function')) return { skip: true, sub: 'chỉ desktop' };
       // Nơi lưu RIÊNG của video này (đã ghi lúc thêm); fallback về cài đặt chung nếu job cũ.
       let base = (job.saveDir != null ? job.saveDir : (_autoOutDir || _autoDefaultDir)) || '';
+      // Tầng profile (2026-09-18): video xuất ra <gốc>/<Tên kênh>/<tên video>.mp4 — pipeline đã
+      // switchProfile đúng profile của job nên _pfOutSlug() chính là profile sở hữu sản phẩm này.
+      { const pSlug = (typeof _pfOutSlug === 'function') ? _pfOutSlug() : ''; if (pSlug && base) base = base + '/' + pSlug; }
       const wrap = ((job.saveName != null ? job.saveName : _autoSaveName) || '').trim();
       const mode = job.saveMode || _autoSaveMode || 'perTask';
       if (wrap) base = base ? (base + '/' + _slug(wrap)) : _slug(wrap);

@@ -10,6 +10,8 @@
    ============================================================ */
 (function () {
   const native = () => (window.native && window.native.srtTranslate) || null;
+  // Hardsub OCR — bridge riêng `window.native.hardsub` (kênh `hardsub:*`)
+  const hsNative = () => (window.native && window.native.hardsub) || null;
 
   const LANGS = [
     ['auto', 'Tự phát hiện (Auto)'],
@@ -31,6 +33,21 @@
     ['claude', 'Claude Haiku 4.5'],
   ];
 
+  // Preset thể loại (2026-09-18) — mirror của nova/srt-translate/genres.js.
+  // Đổi danh sách ở main thì đổi cả ở đây (renderer không require được main).
+  const GENRES = [
+    ['', 'Mặc định — dịch trung tính'],
+    ['ke_chuyen', 'Kể truyện / Tóm tắt phim'],
+    ['cot_trang', 'Cổ trang / Tiên hiệp'],
+    ['anime', 'Anime / Donghua'],
+    ['han_quoc', 'Phim Hàn Quốc'],
+    ['au_my', 'Phim Âu Mỹ'],
+    ['hai_kich', 'Hài kịch / Giải trí'],
+    ['kinh_di', 'Kinh dị / Ly kỳ'],
+    ['hanh_dong', 'Hành động'],
+    ['tai_lieu', 'Tài liệu / Review'],
+  ];
+
   const fmt = (ms) => {
     const t = Math.round(Number(ms) || 0);
     const h = String(Math.floor(t / 3600000)).padStart(2, '0');
@@ -40,6 +57,11 @@
     return h + ':' + m + ':' + s + ',' + ms3;
   };
 
+  // Dựng SRT từ cues (dùng sau khi OCR hardsub) — timestamp từ fmt()
+  const cuesToSrt = (cues) => cues.map((c, i) =>
+    (i + 1) + '\n' + fmt(c.startMs) + ' --> ' + fmt(c.endMs) + '\n' + String(c.text || '') + '\n'
+  ).join('\n');
+
   const esc = (s) => String(s == null ? '' : s)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
@@ -47,8 +69,13 @@
   const state = {
     srtPath: null, srtName: null, cues: [],
     sourceLang: 'auto', targetLang: 'vi', batchSize: 15,
-    model: 'gemini', maxConcurrent: 3,
+    model: 'gemini', maxConcurrent: 3, genre: '',
     outPath: null, busy: false,
+    // Hardsub OCR (Bước 2 lộ trình ezmaxsub)
+    videoPath: null, videoName: null, hsBusy: false, hsResult: false,
+    // Diarization (Bước 3 lộ trình ezmaxsub)
+    dzVideoPath: null, dzVideoName: null, dzBusy: false,
+    dzSpeakers: null, dzSrtText: null, dzAssignment: null,
   };
 
   const optsSel = (id, opts, selected) =>
@@ -64,6 +91,31 @@
         <div class="st-h">1 · Chọn file SRT</div>
         <button class="btn primary" id="stPickSrt" type="button">📂 Chọn file SRT</button>
         <div class="st-hint" id="stFileInfo">Chưa chọn file.</div>
+        <div class="st-note" style="margin-top:14px">— hoặc trích SRT từ phụ đề chèn sẵn (hardsub) —</div>
+        <button class="btn ghost" id="stHsPick" type="button">🎬 Chọn video có phụ đề chèn sẵn</button>
+        <div class="st-row">
+          <label class="st-lbl">FPS lấy khung
+            <input class="st-num" id="stHsFps" type="number" min="0.5" max="5" step="0.5" value="2">
+          </label>
+          <label class="st-lbl">Vùng phụ đề — đáy khung %
+            <input class="st-num" id="stHsRegion" type="number" min="10" max="90" value="30">
+          </label>
+        </div>
+        <div class="st-actions">
+          <button class="btn primary" id="stHardsub" type="button" disabled>🔍 Trích SRT (OCR)</button>
+          <button class="btn ghost" id="stHsCancel" type="button" style="display:none">⏹ Huỷ</button>
+        </div>
+        <div class="st-hint" id="stHsInfo">Chưa chọn video.</div>
+        <button class="btn ghost" id="stHsSave" type="button" style="display:none">💾 Lưu SRT đã trích</button>
+        <div class="st-note">OCR chạy offline (RapidOCR/PP-OCR trong máy, qua venv OmniVoice). Trích xong → Lưu SRT → dịch tiếp hoặc dùng cho Lồng Tiếng.</div>
+        <div class="st-note" style="margin-top:14px">— hoặc tách người nói để Lồng Tiếng nhiều giọng (Bước 3) —</div>
+        <div class="st-actions">
+          <button class="btn ghost" id="stDzPick" type="button">🎙️ Chọn video/audio</button>
+          <button class="btn ghost" id="stDiarize" type="button" disabled>👥 Tách người nói & gán giọng</button>
+          <button class="btn ghost" id="stDzCancel" type="button" style="display:none">⏹ Huỷ</button>
+        </div>
+        <div class="st-hint" id="stDzInfo">Dùng SRT đang mở + video/audio để tách người nói theo cao độ giọng (F0), gán giọng Nam/Nữ tự động, SRT nhận prefix "Tên:" cho Lồng Tiếng.</div>
+        <button class="btn ghost" id="stDzSave" type="button" style="display:none">💾 Lưu SRT tách người nói</button>
       </section>
       <section class="st-card">
         <div class="st-h">2 · Ngôn ngữ</div>
@@ -72,6 +124,7 @@
           <label class="st-lbl">→ Sang ${optsSel('stDstLang', LANGS, state.targetLang)}</label>
         </div>
         <label class="st-lbl">Model AI ${optsSel('stModel', MODELS, state.model)}</label>
+        <label class="st-lbl">Thể loại nội dung ${optsSel('stGenre', GENRES, state.genre)}</label>
         <div class="st-row">
           <label class="st-lbl">Cỡ lô (dòng/lần gọi AI)
             <input class="st-num" id="stBatch" type="number" min="1" max="50" value="${state.batchSize}">
@@ -163,6 +216,28 @@
       const info = root.querySelector('#stOutInfo');
       if (info) info.textContent = state.outPath;
     }
+    // Hardsub OCR (Bước 2 lộ trình ezmaxsub)
+    const btnHs = root.querySelector('#stHardsub');
+    const btnHsC = root.querySelector('#stHsCancel');
+    const btnHsS = root.querySelector('#stHsSave');
+    if (btnHs) btnHs.disabled = !state.videoPath || state.hsBusy || state.busy;
+    if (btnHsC) btnHsC.style.display = state.hsBusy ? '' : 'none';
+    if (btnHsS) btnHsS.style.display = (state.hsResult && state.cues.length && !state.hsBusy) ? '' : 'none';
+    if (state.videoPath) {
+      const info = root.querySelector('#stHsInfo');
+      if (info) info.textContent = state.videoName + ' — sẵn sàng trích OCR.';
+    }
+    // Diarization (Bước 3 lộ trình ezmaxsub)
+    const btnDz = root.querySelector('#stDiarize');
+    const btnDzC = root.querySelector('#stDzCancel');
+    const btnDzS = root.querySelector('#stDzSave');
+    if (btnDz) btnDz.disabled = !state.dzVideoPath || !state.cues.length || state.dzBusy || state.busy;
+    if (btnDzC) btnDzC.style.display = state.dzBusy ? '' : 'none';
+    if (btnDzS) btnDzS.style.display = (state.dzSrtText && !state.dzBusy) ? '' : 'none';
+    if (state.dzVideoPath) {
+      const info = root.querySelector('#stDzInfo');
+      if (info && !state.dzSpeakers) info.textContent = state.dzVideoName + ' — SRT hiện tại: ' + state.cues.length + ' dòng. Bấm "👥 Tách người nói".';
+    }
   }
 
   function bind() {
@@ -175,6 +250,7 @@
         state.srtPath = r.path;
         state.srtName = r.name;
         state.cues = r.cues || [];
+        state.hsResult = false; // cues từ file SRT thật — ẩn nút lưu OCR
         status('Đã nạp ' + r.count + ' dòng.', 'ok');
         refreshList();
       } else {
@@ -183,9 +259,161 @@
       refreshControls();
     });
 
+    /* ── Hardsub OCR (Bước 2 lộ trình ezmaxsub) ── */
+    root.querySelector('#stHsPick').addEventListener('click', async () => {
+      const n = hsNative();
+      if (!n) return status('Bridge chưa sẵn sàng.', 'err');
+      const r = await n.pickVideo();
+      if (r && r.canceled) return;
+      if (r && r.ok) {
+        state.videoPath = r.path;
+        state.videoName = r.name;
+        state.hsResult = false;
+        status('Đã chọn video: ' + r.name);
+      }
+      refreshControls();
+    });
+
+    root.querySelector('#stHardsub').addEventListener('click', async () => {
+      const n = native();
+      if (!n) return status('Bridge chưa sẵn sàng.', 'err');
+      if (!state.videoPath) return status('Chưa chọn video.', 'err');
+      const fps = Math.max(0.5, Math.min(5, Number((root.querySelector('#stHsFps') || {}).value) || 2));
+      const region = Math.max(10, Math.min(90, Number((root.querySelector('#stHsRegion') || {}).value) || 30));
+      state.hsBusy = true;
+      refreshControls();
+      const offProg = (n.onProgress) ? n.onProgress((p) => {
+        status('Đang OCR ' + state.videoName + '… ' + ((p && p.pct) || 0) + '%' + (p && p.detail ? ' — ' + p.detail : ''));
+      }) : null;
+      status('Đang OCR ' + state.videoName + ' — có thể mất vài phút với video dài…');
+      const r = await n.run({ videoPath: state.videoPath, sampleFps: fps, bottomPct: region });
+      if (offProg) offProg();
+      state.hsBusy = false;
+      if (r && r.ok) {
+        state.cues = r.cues || [];
+        state.hsResult = true;
+        state.srtPath = null; state.srtName = null; state.outPath = null;
+        status('OCR xong: ' + r.count + ' cue từ ' + r.frameCount + ' khung (' + (r.model || 'PP-OCR') + '). Bấm "💾 Lưu SRT đã trích" để lưu / dịch tiếp.', 'ok');
+        refreshList();
+      } else if (r && r.code === 'HS_CANCELLED') {
+        status('Đã huỷ OCR.');
+      } else {
+        status('Lỗi OCR [' + ((r && r.code) || 'HS_ERROR') + ']: ' + ((r && r.error) || 'Thất bại'), 'err');
+      }
+      refreshControls();
+    });
+
+    root.querySelector('#stHsCancel').addEventListener('click', async () => {
+      const n = hsNative();
+      if (n) await n.cancel();
+    });
+
+    root.querySelector('#stHsSave').addEventListener('click', async () => {
+      const n = hsNative();
+      if (!n) return status('Bridge chưa sẵn sàng.', 'err');
+      if (!state.cues.length) return status('Chưa có cue nào để lưu.', 'err');
+      const base = (state.videoName || 'video').replace(/\.[^.]+$/, '') + '.hardsub.srt';
+      const r = await n.saveSrt({ srtText: cuesToSrt(state.cues), defaultName: base });
+      if (r && r.canceled) return;
+      if (r && r.ok) {
+        state.srtPath = r.path;
+        state.srtName = base;
+        status('Đã lưu: ' + r.path, 'ok');
+        refreshControls();
+      } else if (r && r.error) {
+        status('Lỗi [' + ((r && r.code) || 'HS_ERROR') + ']: ' + r.error, 'err');
+      }
+    });
+
+    /* ── Diarization (Bước 3 lộ trình ezmaxsub) ── */
+    const dzNative = () => (window.native && window.native.diarize) || null;
+
+    root.querySelector('#stDzPick').addEventListener('click', async () => {
+      const n = dzNative();
+      if (!n) return status('Bridge chưa sẵn sàng (cần restart app sau khi cập nhật preload).', 'err');
+      const r = await n.pickVideo();
+      if (r && r.canceled) return;
+      if (r && r.ok) {
+        state.dzVideoPath = r.path;
+        state.dzVideoName = r.name;
+        state.dzSpeakers = null; state.dzSrtText = null; state.dzAssignment = null;
+        status('Đã chọn video/audio: ' + r.name);
+      }
+      refreshControls();
+    });
+
+    root.querySelector('#stDiarize').addEventListener('click', async () => {
+      const n = dzNative();
+      if (!n) return status('Bridge chưa sẵn sàng (cần restart app sau khi cập nhật preload).', 'err');
+      if (!state.dzVideoPath) return status('Chưa chọn video/audio cho diarization.', 'err');
+      if (!state.cues.length) return status('Chưa có SRT — mở file SRT hoặc trích OCR trước.', 'err');
+      state.dzBusy = true;
+      refreshControls();
+      // nạp giọng OmniVoice để gán theo giới tính (thiếu → vẫn tách được, chỉ bỏ gán)
+      let voices = [];
+      try {
+        const vr = await ((window.native.dub && window.native.dub.voices) ? window.native.dub.voices() : Promise.resolve(null));
+        if (vr && vr.ok && Array.isArray(vr.voices)) voices = vr.voices;
+      } catch (_) { voices = []; }
+      const offProg = (n.onProgress) ? n.onProgress((p) => {
+        status('Đang tách người nói… ' + ((p && p.pct) || 0) + '%' + (p && p.detail ? ' — ' + p.detail : ''));
+      }) : null;
+      status('Đang tách người nói ' + state.dzVideoName + '…');
+      const r = await n.analyze({ videoPath: state.dzVideoPath, srtText: cuesToSrt(state.cues), voices });
+      if (offProg) offProg();
+      state.dzBusy = false;
+      if (r && r.ok) {
+        state.dzSpeakers = r.speakers || [];
+        state.dzSrtText = r.srt || '';
+        state.dzAssignment = (r.voiceAssignment && r.voiceAssignment.assignment) || null;
+        // cập nhật cue hiển thị/dịch với prefix "Tên:" theo speaker (cue đã có prefix → giữ nguyên)
+        state.cues = (r.cueSpeakers || []).map((si, i) => {
+          const c = state.cues[i] || {};
+          const sp = state.dzSpeakers[si] || {};
+          const text = String(c.text || '');
+          return Object.assign({}, c, { text: /^([^:：\n]{1,24})\s*[:：]\s+/.test(text) ? text : ((sp.name || '') + ': ' + text) });
+        });
+        const sum = state.dzSpeakers.map((s) => s.name + ' (' + s.gender + ', ' + s.f0Mean + 'Hz, ' + s.cueCount + ' cue)').join('; ');
+        let msg = 'Tách xong: ' + state.dzSpeakers.length + ' người nói — ' + sum + '. ';
+        if (state.dzAssignment && state.dzAssignment.length) {
+          const pids = state.dzAssignment.map((a) => a.pid).join(', ');
+          msg += 'Giọng đề xuất (paste vào ô giọng Lồng Tiếng, chế độ nhiều nhân vật): ' + pids + '.';
+        } else {
+          msg += 'Không gán được giọng (thiếu danh sách giọng có nhãn giới tính) — Lưu SRT tách người nói rồi tự chọn giọng.';
+        }
+        status(msg, 'ok');
+        refreshList();
+      } else if (r && r.code === 'DIAZ_CANCELLED') {
+        status('Đã huỷ tách người nói.');
+      } else {
+        status('Lỗi tách người nói [' + ((r && r.code) || 'DIAZ_ERROR') + ']: ' + ((r && r.error) || 'Thất bại'), 'err');
+      }
+      refreshControls();
+    });
+
+    root.querySelector('#stDzCancel').addEventListener('click', async () => {
+      const n = dzNative();
+      if (n) await n.cancel();
+    });
+
+    root.querySelector('#stDzSave').addEventListener('click', async () => {
+      const n = dzNative();
+      if (!n) return status('Bridge chưa sẵn sàng.', 'err');
+      if (!state.dzSrtText) return status('Chưa có SRT tách người nói để lưu.', 'err');
+      const base = (state.dzVideoName || state.srtName || 'subtitle').replace(/\.[^.]+$/, '') + '.speakers.srt';
+      const r = await n.saveSrt({ srtText: state.dzSrtText, defaultName: base });
+      if (r && r.canceled) return;
+      if (r && r.ok) {
+        status('Đã lưu SRT tách người nói: ' + r.path + ' — dùng cho Lồng Tiếng (chế độ nhiều nhân vật).', 'ok');
+      } else if (r && r.error) {
+        status('Lỗi [' + ((r && r.code) || 'DIAZ_ERROR') + ']: ' + r.error, 'err');
+      }
+    });
+
     root.querySelector('#stSrcLang').addEventListener('change', (e) => { state.sourceLang = e.target.value; });
     root.querySelector('#stDstLang').addEventListener('change', (e) => { state.targetLang = e.target.value; });
     root.querySelector('#stModel').addEventListener('change', (e) => { state.model = e.target.value; });
+    root.querySelector('#stGenre').addEventListener('change', (e) => { state.genre = e.target.value; });
     root.querySelector('#stBatch').addEventListener('change', (e) => {
       state.batchSize = Math.max(1, Math.min(50, Number(e.target.value) || 15));
     });
@@ -229,6 +457,7 @@
           batchSize: state.batchSize,
           model: state.model,
           maxConcurrent: state.maxConcurrent,
+          genre: state.genre,
         })
         : await n.translate({
           srcPath: state.srtPath,
@@ -238,6 +467,7 @@
           batchSize: state.batchSize,
           model: state.model,
           maxConcurrent: state.maxConcurrent,
+          genre: state.genre,
         });
       state.busy = false;
       refreshControls();

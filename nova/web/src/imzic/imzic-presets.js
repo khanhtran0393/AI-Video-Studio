@@ -23,6 +23,8 @@ function selOptionText(id){
 const SECTION_HINTS = {
   secFiles(){
     // 2026-09-17zq: ảnh / video / nhạc — gộp thành 1 mục "Tệp gốc"
+    // 2026-09-18: trong mục 1 chia 3 nhóm con 🖼 Ảnh / 🎬 Video / 🎵 Audio (chỉ markup,
+    // logic state + hint này giữ nguyên)
     const hasMedia = state.imgFile || state.slides.length || state.videoFile || state.videos.length;
     const mediaLabel = hasMedia ? 'Media ✓' : 'Media ✗';
     return mediaLabel + ' · ' + (state.audioFile ? 'Nhạc ✓' : 'Nhạc ✗');
@@ -37,6 +39,13 @@ const SECTION_HINTS = {
       const c = Math.round((state.waveCurve == null ? 0 : +state.waveCurve) * 100);
       const dir = (state.waveCurveDir === 'rev') ? '↺' : '↻';
       return base + ' · ' + dir + ' ' + c + '%';
+    }
+    // 2026-09-18j: hiệu ứng "Uốn cong" (bend) — hint kèm kiểu sóng nền đang uốn
+    if(state.waveStyle === 'bend'){
+      const baseTxt = selOptionText('waveBendBaseSel') || state.waveBendBase || 'line';
+      const c = Math.round((state.waveCurve == null ? 0 : +state.waveCurve) * 100);
+      const dir = (state.waveCurveDir === 'rev') ? '↺' : '↻';
+      return base + ' (' + baseTxt + ') · ' + dir + ' ' + c + '%';
     }
     return base;
   },
@@ -57,7 +66,7 @@ const SECTION_HINT_SOURCES = {
   secFiles:    ['imgInput','audInput'],
   secZoom:     ['zoomMin','zoomMax'],
   secEffect:   ['effectSel'],
-  waveSection: ['waveStyleSel','waveCurve','waveCurveDirSel'],
+  waveSection: ['waveStyleSel','waveCurve','waveCurveDirSel','waveBendBaseSel'],
   secLead:     ['leadMs'],
   secFx:       ['fxSel'],
   secFrame:    ['ratioSel'],

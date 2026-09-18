@@ -8,7 +8,7 @@ const path = require('path');
 const { FLOW_API_BASE, FLOW_API_KEY, accounts, LOG, evalInPage, FLOW_URL, sleep, evalInPageT, persist, SITE_KEY } = require('./nen-tang');
 const { ensureLive, pageEval } = require('./token-captcha');
 const { closeChrome, apiFetch, running, readCookies, openForOperation } = require('./tien-trinh');
-const { genImageBX } = require('./gen-bx');
+const { genImageBX, genVideoBX } = require('./gen-bx');
 
 // â”€â”€ HÃ m thuáº§n (copy tá»« flow-native Ä‘á»ƒ test Ä‘á»™c láº­p, khÃ´ng Ä‘á»¥ng engine cÅ©) â”€â”€
 const TRPC_CREATE_PROJECT = 'https://labs.google/fx/api/trpc/project.createProject';
@@ -416,8 +416,54 @@ async function upsampleVideo(id, { mediaId, projectId, aspect, withData }) {
 }
 
 // Táº¡o 1 video trÃªn 1 account Chrome (mirror runVideoOnToken cá»§a extension). Tráº£ {ok,...}|{error}.
+// Video qua GIAO THỨC MỚI flow.google.com (batchexecute) cho account migrated —
+// mirror genImageAccount: BX KHÔNG cần token labs.google, chỉ cần CDP + page project.
+// t2v: rpcid YhhmEf + poll as29s (gen-bx.js — E2E PASS 11/9/2026: 720p·8s=12cr,
+// 720p·4s=7cr, 360p·8s=6cr). i2v (jIps6) cần mediaId ảnh SẴN trong project — app
+// chưa có đường upload ảnh qua BX → lỗi lộ liễu BX_NO_I2V_UPLOAD (Luật 10).
+// Model key: abra_t2v_* là key ĐO THẬT; alias UI map qua DEFAULT_VIDEO.modelKeys;
+// key lạ vẫn truyền thẳng kèm cảnh báo — server từ chối thì BX_RPC_ERROR_* lộ liễu.
+async function genVideoBxAccount(id, params) {
+  if (!accounts.has(id)) return { error: 'NO_ACC' };
+  let live; try { live = await ensureLive(id); } catch (e) {
+    LOG('acc', id, 'genVideoBX: ensureLive fail (' + (e.message || e) + ') — mở Chrome không-token');
+    try { const rec = await openForOperation(id); live = { cdp: rec.cdp }; }
+    catch (e2) { return { error: 'Mở Chrome lỗi: ' + (e2.message || e2) }; }
+  }
+  const { cdp } = live; const a = accounts.get(id);
+  const projectId = (a && a.projectId) || null;
+  if (!projectId) return { error: 'BX_NO_PROJECT: account chưa có projectId Flow (mở 1 project trên flow.google.com bằng account này rồi REFRESH app)' };
+  if (params.image && params.image.base64) {
+    return { error: 'BX_NO_I2V_UPLOAD: giao thức mới chưa có đường upload ảnh (i2v jIps6 cần mediaId sẵn trong project) — t2v hoạt động bình thường' };
+  }
+  try {
+    let typed = null;
+    const rawKey = params.modelKey || params.modelName;
+    if (rawKey) typed = _vResolveModelKey(String(rawKey).replace(/^veo[-\s]?3\.1/i, 'veo31'));   // 'veo-3.1-fast' → 'veo31-fast' → map có sẵn
+    if (typed && !/^abra/.test(typed)) LOG('acc', id, '⚠️ model key', typed, 'chưa đo trên giao thức mới (đo thật: abra_t2v_4s/6s/8s/10s ± _360p) — server từ chối sẽ lỗi lộ liễu');
+    LOG('acc', id, 'genVideoBX: YhhmEf qua page project', projectId.slice(0, 8) + '…');
+    const r = await genVideoBX(cdp, {
+      prompt: params.prompt,
+      projectId,
+      model: typed || undefined,
+      durationS: params.durationSecs != null ? Number(params.durationSecs) : undefined,
+      p360: typeof params.p360 === 'boolean' ? params.p360 : undefined,
+    });
+    LOG('acc', id, 'genVideoBX OK', r.mediaId, String(r.videoUrl || '').slice(0, 60));
+    if (typeof r.creditsAfter === 'number' && a.credits !== r.creditsAfter) { a.credits = r.creditsAfter; persist(); }   // ghi ngược tín dụng phản hồi trigger
+    let vid = null;
+    if (r.videoUrl && !/^blob:/.test(r.videoUrl) && params.withData) {
+      try { vid = await fetchVideoData(id, r.videoUrl); } catch (e) { vid = null; }
+    }
+    if (/1080/.test(String(params.resolution || ''))) LOG('acc', id, '⚠️ nâng 1080p cần template/token giao thức cũ — giữ 720p trên account migrated');
+    return { ok: true, mediaId: r.mediaId, projectId, videoUrl: r.videoUrl || null, video: vid, credits: typeof r.creditsAfter === 'number' ? r.creditsAfter : null, resolution: '720p' };
+  } catch (e) { return { error: 'genVideoBX: ' + (e.message || e) }; }
+}
+
 async function genVideo(id, params) {
   if (!accounts.has(id)) return { error: 'NO_ACC' };
+  const _a0 = accounts.get(id);
+  if (_a0 && _a0.migrated) return genVideoBxAccount(id, params);   // giao thức mới flow.google.com — token ya29 không tồn tại trên account này
   let token; try { token = (await ensureLive(id)).token; } catch (e) { return { error: 'Má»Ÿ Chrome lá»—i: ' + (e.message || e) }; }
   let projectId; try { projectId = await vEnsureProject(id, token); } catch (e) { return { error: e.message || 'NO_PROJECT' }; }
   let imageMediaId = null;
@@ -502,6 +548,7 @@ async function getAllTokens(force) {
     for (const id of S.order) {
       const a = accounts.get(id);
       if (!a || a.enabled === false) continue;
+      if (a.migrated) { LOG('acc', id, 'giao thức mới flow.google.com — không mint token ya29 để bơm extension (gen account chạy qua genBX trong app), bỏ qua'); continue; }
       if (force) S.tokens.delete(id);   // Ã©p mint token Má»šI
       // Token cache CÃ’N Háº N THáº¬T (24h) + Ä‘Ã£ cÃ³ project + email â†’ DÃ™NG Láº I, KHá»ŽI má»Ÿ Chrome (chuyá»ƒn cháº¿ Ä‘á»™/refresh khÃ´ng má»Ÿ Chrome vÃ´ Ã­ch).
       const tk = S.tokens.get(id);

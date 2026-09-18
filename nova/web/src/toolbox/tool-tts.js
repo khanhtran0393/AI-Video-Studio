@@ -1,6 +1,8 @@
 /* AUTO-EXTRACTED from index.html block 3 - prefix: tts */
 
 async function ttsDoc(text, onTien){
+  // Chặn mềm profile: chưa có Profile thì không sinh sản phẩm TTS (throw — caller hiển thị lỗi)
+  if (typeof _pfRequireActive === 'function') _pfRequireActive('tạo giọng đọc TTS');
   const uu = _giongDS.find(v => v.key === _giongChon) || _giongDS[0];
   if (!uu) throw new Error('Chưa có giọng nào trong thư viện.');
   const thu = [_voiceBackend].concat(Object.keys(_TTS_TEN).filter(e => e !== _voiceBackend));

@@ -11,6 +11,7 @@
    ============================================================ */
 const { parseSrtCues } = require('../web/whiteboard-annotation.js');
 const { claude } = require('../editor-pro/niche');
+const { resolveGenre } = require('./genres');
 
 const LANGS = {
   auto: 'Tự phát hiện (Auto)',
@@ -83,6 +84,14 @@ async function translateCues(cues, opts = {}) {
   }
   const target = String(opts.targetLang || 'vi');
   const source = String(opts.sourceLang || 'auto');
+  /* Preset thể loại (2026-09-18): user chọn tên preset trong UI → engine ghép
+     quy tắc phong cách vào SYSTEM prompt. Rỗng → không áp (dịch trung tính).
+     ID lạ → SRTT_GENRE_UNKNOWN lộ liễu (Luật 10). */
+  const genre = resolveGenre(opts.genre);
+  const systemPrompt = genre
+    ? SYSTEM + '\n\nPHONG CÁCH THỂ LOẠI — ' + genre.label + ':\n' + genre.prompt +
+      '\n(Quy tắc thể loại trên CHỈ điều chỉnh giọng văn/xưng hô/tên riêng — vẫn tuân thủ tuyệt đối các QUY TẮC định dạng ở trên.)'
+    : SYSTEM;
   const batchSize = Math.max(1, Math.min(50, Number(opts.batchSize) || 15));
   const maxConcurrent = Math.max(1, Math.min(10, Number(opts.maxConcurrent) || 3));
   // Model AI mặc định là Google AI Studio (Gemini) — không cần Claude CLI.
@@ -111,7 +120,7 @@ async function translateCues(cues, opts = {}) {
         payload,
       ].join('\n');
 
-      const raw = await claude(SYSTEM, prompt, { provider, model });
+      const raw = await claude(systemPrompt, prompt, { provider, model });
       const parsed = safeJson(raw);
       if (!Array.isArray(parsed)) {
         const e = new Error('AI không trả về mảng JSON hợp lệ.');

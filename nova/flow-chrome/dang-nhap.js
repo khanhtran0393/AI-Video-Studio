@@ -6,7 +6,7 @@ const { app } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const { launchChrome, freeProfile, killProfileChrome, markCleanExit, closeChrome, captureToken, readCookies, cookieExpiryOf, apiFetch, openForOperation } = require('./tien-trinh');
-const { sleep, profileLoggedIn, profileDir, accounts, persist, LOG, evalInPageT, FLOW_API_BASE, FLOW_API_KEY } = require('./nen-tang');
+const { sleep, profileLoggedIn, profileDir, profilesRoot, accounts, persist, LOG, evalInPageT, FLOW_API_BASE, FLOW_API_KEY } = require('./nen-tang');
 
 // ── Đăng nhập (không debug) ───────────────────────────────────────────
 let _login = null;   // { id, proc }
@@ -180,7 +180,7 @@ async function refreshOne(id) {
   if (v.email) a.email = v.email; if (v.tier) a.tier = v.tier;
   if (v.credits != null) a.credits = v.credits; if (v.cookieExpiry) a.cookieExpiry = v.cookieExpiry;
   persist();
-  return { ok: true, id, email: a.email, tier: a.tier, credits: a.credits, creditsStatus: v.creditsStatus ?? null };
+  return { ok: true, id, email: a.email, tier: a.tier, credits: a.credits, creditsStatus: v.creditsStatus ?? null, migrated: v.migrated === true, projectId: a.projectId || null };
 }
 
 // ── Verify giao thức MỚI (flow.google.com — AiSandboxAngularFrontend) ─────
@@ -251,9 +251,29 @@ async function _verifyMigrated(id, cdp) {
     return { error: 'FLOW_MIGRATED: Không đọc được tier/credits từ flow.google.com (batchexecute) — profile có thể chưa đăng nhập, hoặc trang không tải xong trong 40s. Thử bấm ↻ lại; nếu vẫn lỗi nghĩa là Google đổi rpcid → cần probe lại.', needLogin: true, migrated: true };
   }
   const tier = tierText ? (MIGRATED_TIER_MAP[tierText.toUpperCase()] || 'PAYGATE_TIER_FREE') : null;
-  if (a) { a.needLogin = false; a.migrated = true; if (tier) a.tier = tier; if (credits != null) a.credits = credits; if (email) a.email = email; persist(); }
-  LOG('acc', id, '→ ✓ (giao thức mới) tier', tierText || '?', '· credits', credits, '· email', email);
-  return { ok: true, id, hasToken: false, token: null, credits, tier, email, cookieExpiry: null, creditsStatus: 'batchexecute', migrated: true };
+  // Học projectId cho giao thức mới (genBX ảnh/video BẮT BUỘC projectId — thiếu → BX_NO_PROJECT).
+  // Nguồn 1 (state sống): page đang đứng ở /project/<uuid>.
+  // Nguồn 2 (dự phòng, có khai báo): BX template thu hoạch từ MỘT gen thật của account này
+  //   (chrome-accounts/flow-bx-template.json — rpcid ogiZ0b, slot ctx [1][0][7][5]).
+  //   KHÔNG bịa id — chỉ đọc capture có sẵn; nếu project không còn, genBX sẽ fail lộ liễu
+  //   (BX_NAVIGATE/BX_HTTP_*) theo Luật 10, không fallback ngầm.
+  let projectId = null;
+  try {
+    const loc = await cdp.send('Runtime.evaluate', { expression: 'location.pathname', returnByValue: true });
+    const m = String((loc.result && loc.result.value) || '').match(/^\/project\/([0-9a-f][0-9a-f-]{35})/i);
+    if (m) { projectId = m[1]; LOG('acc', id, 'projectId học từ trang (state sống):', projectId); }
+  } catch {}
+  if (!projectId && a && !a.projectId) {
+    try {
+      const tpl = JSON.parse(fs.readFileSync(path.join(profilesRoot(), 'flow-bx-template.json'), 'utf8'));
+      const ctx = (tpl && tpl.rpcid === 'ogiZ0b' && Array.isArray(tpl.payload) && Array.isArray(tpl.payload[1]) && Array.isArray(tpl.payload[1][0]) && Array.isArray(tpl.payload[1][0][7])) ? tpl.payload[1][0][7] : null;
+      const pid = (ctx && typeof ctx[5] === 'string' && /^[0-9a-f][0-9a-f-]{35}$/i.test(ctx[5])) ? ctx[5] : null;
+      if (pid) { projectId = pid; LOG('acc', id, 'projectId học từ BX template (capture gen thật):', pid); }
+    } catch (e) { LOG('acc', id, 'đọc BX template (bỏ qua):', e && e.message); }
+  }
+  if (a) { a.needLogin = false; a.migrated = true; if (tier) a.tier = tier; if (credits != null) a.credits = credits; if (email) a.email = email; if (projectId && !a.projectId) a.projectId = projectId; persist(); }
+  LOG('acc', id, '→ ✓ (giao thức mới) tier', tierText || '?', '· credits', credits, '· email', email, '· projectId', (a && a.projectId) || '-');
+  return { ok: true, id, hasToken: false, token: null, credits, tier, email, cookieExpiry: null, creditsStatus: 'batchexecute', migrated: true, projectId: (a && a.projectId) || null };
 }
 
 // ── Verify (GĐ1): mở có debug → token + cookie + credits + email ───────

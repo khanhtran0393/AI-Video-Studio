@@ -15,6 +15,19 @@ async function handle(action, payload = {}) {
     case 'PING':          return { ok: true, engine: 'chrome' };
     case 'GET_ACCOUNTS':  return statusPayload();
     case 'GET_ALL_TOKENS': return { accounts: await getAllTokens(payload.force) };
+    case 'FETCH_URL_B64': {
+      // Tải bytes ảnh genBX (flow-content.google có chữ ký + Expires) về main —
+      // renderer không fetch trực tiếp được (CORS + URL ký). Chỉ whitelist host Google Flow.
+      const u = String((payload && payload.url) || '');
+      if (!/^https:\/\/([a-z0-9-]+\.googleusercontent\.com|flow-content\.google)\//i.test(u)) {
+        return { error: 'FETCH_URL_BAD: host không thuộc whitelist Google Flow' };
+      }
+      const resp = await fetch(u);
+      if (!resp.ok) return { error: 'FETCH_URL_HTTP_' + resp.status };
+      const buf = Buffer.from(await resp.arrayBuffer());
+      const mime = String(resp.headers.get('content-type') || 'image/png').split(';')[0];
+      return { base64: buf.toString('base64'), mime };
+    }
     case 'GEN_TEST':      return await genTest(payload.id, payload.prompt || 'a cute cat astronaut, cinematic', payload.tokenId);
     case 'LOGIN_START':   return loginStart();
     case 'LOGIN_CANCEL':  return loginCancel();
