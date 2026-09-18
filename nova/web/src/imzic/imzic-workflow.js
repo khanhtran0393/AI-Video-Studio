@@ -152,9 +152,18 @@ function imzicAutoEffect(){
   const waveOn = (Math.random() < 0.65);
   let waveStyle = 'off';
   if(waveOn){
-    waveStyle = pick(['line', 'ribbon', 'bars', 'circular', 'bottombars', 'arc', 'glow', 'twin', 'spiral', 'neon', 'curved']);
+    // 2026-09-18n: thêm 'bend' vào danh sách random — khi rơi vào bend, base
+    // tự động nắm kiểu trước đó (imzPrevWaveStyle) ở imzic-controls.js. Trọng
+    // số ngầm: bend hiếm hơn 16 kiểu còn lại để giữ preset đa dạng.
+    waveStyle = pick(['line', 'ribbon', 'bars', 'circular', 'bottombars', 'arc', 'glow', 'twin', 'spiral', 'neon', 'curved', 'bend']);
     $('waveColor').value = pick(['#9b8bff', '#7dd3fc', '#fca5a5', '#86efac', '#fcd34d', '#f0abfc', '#a5b4fc', '#5eead4']);
     dispatch('waveColor', 'input');
+    // 2026-09-18n: nếu rơi 'bend' thì random mức uốn 50–100 + điểm uốn + hướng
+    if(waveStyle === 'bend'){
+      $('waveCurve').value = String(pick([50, 65, 80, 95, 100])); dispatch('waveCurve', 'input');
+      $('waveBendAnchorSel').value = pick(['start', 'center', 'end']); dispatch('waveBendAnchorSel', 'change');
+      $('waveBendSideSel').value = (Math.random() < 0.3) ? 'down' : 'up'; dispatch('waveBendSideSel', 'change');
+    }
   }
   $('waveStyleSel').value = waveStyle; dispatch('waveStyleSel', 'change');
   // 5) FX toàn khung — danh sách an toàn cho xuất nhanh

@@ -505,7 +505,15 @@
 
   async function wbAiGenStatus() {
     if (!(await flowBridge.waitReady(1500))) throw new Error('chưa kết nối Flow');
-    const st = await flowBridge.call('GET_STATUS');
+    /* GET_STATUS có thể treo vĩnh viễn khi service worker của extension chết
+       (quan sát 2026-09-18: auto-run đứng câm sau prompt phase — bridge gửi
+       message nhưng không bao giờ có hồi âm). Race timeout 8s: hết giờ → coi
+       như extension không có account dùng được → rẽ Chrome engine LỘ LIỄU. */
+    const st = await Promise.race([
+      flowBridge.call('GET_STATUS'),
+      new Promise((res) => setTimeout(() => res(null), 8000)),
+    ]);
+    if (st === null) log('⚠ Flow bridge (extension) không phản hồi GET_STATUS trong 8s — coi như không có account token, rẽ Chrome engine.');
     if (st && (st.hasToken || (st.accountCount || 0) > 0)) return st;
     /* flow-native/extension không có account dùng được → rẽ sang Chrome engine
        (account migrated — giao thức mới flow.google.com không cấp token ya29 nên

@@ -303,11 +303,37 @@ function sklRender(){
     return;
   }
   var html = list.map(function (s){
+    // Chip metadata (2026-09-18o đợt 2, đề xuất #5) — tóm tắt nhanh trường
+    // mở rộng v2/v4/v5: số mục QA, số nhãn hook, swatch color palette, version.
+    // Chỉ đọc — không sinh event. Click vào card vẫn mở modal Hướng dẫn.
+    var chips = [];
+    var ver = s.version || 'v1';
+    chips.push('<span style="display:inline-block;padding:1px 6px;border-radius:6px;background:' + (ver === 'v1' ? 'var(--bg-elev,#222)' : 'rgba(255,200,80,0.15)') + ';color:' + (ver === 'v1' ? 'var(--text-muted)' : '#d4a045') + ';font-size:10px;font-weight:600">v' + (ver.replace(/^v/, '')) + '</span>');
+    if (Array.isArray(s.qaChecklist) && s.qaChecklist.length)
+      chips.push('<span title="' + s.qaChecklist.length + ' mục QA" style="display:inline-block;padding:1px 6px;border-radius:6px;background:rgba(80,200,120,0.15);color:#5fb87a;font-size:10px">✓ ' + s.qaChecklist.length + ' QA</span>');
+    if (Array.isArray(s.hookLabels) && s.hookLabels.length)
+      chips.push('<span title="' + s.hookLabels.length + ' nhãn hook: ' + s.hookLabels.join(', ') + '" style="display:inline-block;padding:1px 6px;border-radius:6px;background:rgba(120,160,255,0.15);color:#8ab0ff;font-size:10px">🏷 ' + s.hookLabels.length + '</span>');
+    if (Array.isArray(s.negativePrompts) && s.negativePrompts.length)
+      chips.push('<span title="' + s.negativePrompts.length + ' câu cấm AI đề xuất" style="display:inline-block;padding:1px 6px;border-radius:6px;background:rgba(255,120,120,0.15);color:#ff8888;font-size:10px">🚫 ' + s.negativePrompts.length + '</span>');
+    if (Array.isArray(s.seedQuestions) && s.seedQuestions.length)
+      chips.push('<span title="' + s.seedQuestions.length + ' câu hỏi hạt giống" style="display:inline-block;padding:1px 6px;border-radius:6px;background:rgba(200,160,255,0.15);color:#c4a0f0;font-size:10px">🌱 ' + s.seedQuestions.length + '</span>');
+    if (s.visualHints && Array.isArray(s.visualHints.colorPalette) && s.visualHints.colorPalette.length){
+      var swatches = s.visualHints.colorPalette.slice(0, 6).map(function (c){
+        // Mỗi mục có thể là tên màu ("đen") hoặc hex ("#1a1a1a"). Thử parse hex trước.
+        var cstr = String(c).trim();
+        var isHex = /^#?[0-9a-f]{3,8}$/i.test(cstr);
+        var bg = isHex ? (cstr.startsWith('#') ? cstr : '#' + cstr) : cstr;   // browser chấp nhận tên màu CSS
+        return '<span title="' + sklEsc(c) + '" style="display:inline-block;width:12px;height:12px;border-radius:3px;border:1px solid var(--border);background:' + bg + ';vertical-align:middle;margin-right:2px"></span>';
+      }).join('');
+      if (s.visualHints.colorPalette.length > 6) swatches += '<span style="font-size:10px;color:var(--text-muted)">+' + (s.visualHints.colorPalette.length - 6) + '</span>';
+      chips.push('<span title="Bảng màu gợi ý" style="display:inline-flex;align-items:center;gap:0;padding:1px 6px;border-radius:6px;background:var(--bg-elev,#222);font-size:10px">' + swatches + '</span>');
+    }
     return '<div style="border:1px solid var(--border);border-radius:10px;padding:10px 12px;background:var(--bg)">'
       + '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap">'
-      + '<div style="font-weight:600;font-size:13px">' + sklEsc(s.name) + '</div>'
+      + '<div style="font-weight:600;font-size:13px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">' + sklEsc(s.name) + ' ' + chips.join(' ') + '</div>'
       + '<div style="display:flex;gap:6px">'
       + '<button class="btn ghost sm" onclick="sklUse(\'' + s.id + '\')" title="Chọn skill này trong tab Tạo Kịch Bản">✍️ Dùng</button>'
+      + '<button class="btn ghost sm" onclick="sklShowGuide(\'' + s.id + '\')" title="Xem + Copy prompt hướng dẫn AI" style="color:var(--accent);border-color:var(--accent)">📋 Hướng dẫn</button>'
       + '<button class="btn ghost sm" onclick="sklEdit(\'' + s.id + '\')">✏️</button>'
       + '<button class="btn ghost sm" onclick="sklDownload(\'' + s.id + '\')" title="Tải skill này xuống máy (file .json)">⬇</button>'
       + '<button class="btn ghost sm" style="color:var(--red);border-color:var(--red)" onclick="sklDelete(\'' + s.id + '\')">🗑</button>'
@@ -317,6 +343,176 @@ function sklRender(){
       + '</div>';
   }).join('');
   box.innerHTML = html;
+}
+
+/* ── Xem + Copy hướng dẫn (2026-09-18o đợt 2, đề xuất #1) ──────────────────── */
+/* Modal dùng theme app (AGENTS §8 cấm alert/confirm hệ thống): backdrop blur,
+   nút .btn primary/ghost, Esc = đóng, click nền = đóng. Trả về text prompt
+   để user copy hoặc dán vào Tạo Kịch Bản (tool-ts). Nếu entry không tìm
+   thấy hoặc sklGuideFor trả rỗng → báo rõ "chưa có hướng dẫn mở rộng". */
+function sklShowGuide(id){
+  var it = sklLoadAll().find(function (s){ return s.id === id; });
+  if (!it){ sklSetStatus('Skill không tồn tại trong kho.', 'error'); return; }
+  var guide = sklGuideFor(it.name) || '';
+  // Xoá modal cũ nếu có (idempotent)
+  var old = document.getElementById('sklGuideModal');
+  if (old) old.remove();
+
+  var overlay = document.createElement('div');
+  overlay.id = 'sklGuideModal';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);backdrop-filter:blur(4px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:24px';
+  var panel = document.createElement('div');
+  panel.style.cssText = 'background:var(--surface);border:1px solid var(--border);border-radius:14px;max-width:720px;width:100%;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,0.4)';
+  panel.innerHTML = ''
+    + '<div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:12px">'
+    +   '<div style="font-weight:600;font-size:14px">📋 Hướng dẫn AI — ' + sklEsc(it.name) + '</div>'
+    +   '<button class="btn ghost sm" data-act="close" style="padding:2px 8px">✕</button>'
+    + '</div>'
+    + '<div style="padding:14px 18px;overflow:auto;flex:1;font-family:var(--mono,monospace);font-size:12px;line-height:1.5;white-space:pre-wrap;color:var(--text)" id="sklGuideText">' + (guide ? sklEsc(guide) : '<em style="color:var(--text-muted)">(Skill này chưa có hướng dẫn mở rộng — chỉ có "instructions" ngắn. Mở ✏️ để nâng cấp lên v2/v4/v5.)</em>') + '</div>'
+    + '<div style="padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end">'
+    +   '<button class="btn ghost sm" data-act="close">Đóng</button>'
+    +   '<button class="btn primary sm" data-act="copy"' + (guide ? '' : ' disabled style="opacity:0.5;cursor:not-allowed"') + '>📋 Copy prompt</button>'
+    + '</div>';
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+
+  // Event delegation
+  overlay.addEventListener('click', function (e){
+    if (e.target === overlay) overlay.remove();        // click nền = đóng
+    var act = e.target.getAttribute && e.target.getAttribute('data-act');
+    if (act === 'close') overlay.remove();
+    if (act === 'copy' && guide){
+      var ok = false;
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText){
+          navigator.clipboard.writeText(guide).then(function(){
+            sklSetStatus('✓ Đã copy ' + guide.length + ' ký tự hướng dẫn vào clipboard.', 'ok');
+          }).catch(function(){
+            // fallback khi clipboard API fail (Electron có thể chặn)
+            sklFallbackCopy(guide);
+          });
+          ok = true;
+        }
+      } catch (ex){}
+      if (!ok) sklFallbackCopy(guide);
+      overlay.remove();
+    }
+  });
+  // Esc = đóng
+  function onKey(e){
+    if (e.key === 'Escape'){ overlay.remove(); document.removeEventListener('keydown', onKey); }
+  }
+  document.addEventListener('keydown', onKey);
+}
+
+/* Fallback copy: dùng textarea + execCommand khi clipboard API fail.
+   KHÔNG dùng cho dữ liệu nhạy cảm (chỉ là text prompt của user). */
+function sklFallbackCopy(text){
+  try {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.cssText = 'position:fixed;left:-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    var ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    if (ok) sklSetStatus('✓ Đã copy ' + text.length + ' ký tự (fallback).', 'ok');
+    else sklSetStatus('⚠ Không copy được — tự chọn text và Ctrl+C.', 'error');
+  } catch (e){
+    sklSetStatus('⚠ Copy lỗi: ' + (e && e.message || e), 'error');
+  }
+}
+
+/* ── Validate entry schema (2026-09-18o đợt 2, đề xuất #7) ────────────── */
+/* Trả về mảng lỗi (rỗng = OK). Không silent skip — ghi rõ trường nào sai
+   để người dùng/bảo trì sửa. Áp dụng trong sklImportCatalog (fail-fast
+   per-entry) + có thể dùng cho sklSave nếu user tự nhập tay.
+
+   Schema cho mỗi trường mở rộng (v2 + v4 + v5):
+   - role/audience/voice/personaVN: string 1-dòng, 0..500 ký tự
+   - structure/hookTemplates/rules/antiPatterns/voiceUse/voiceAvoid/
+     qaChecklist/hookLabels/negativePrompts/seedQuestions: string[] (mỗi mục 1..500 ký tự, 0..50 mục)
+   - examples: object { hook?, outro?, scene? } (mỗi key optional string 0..1000 ký tự) HOẶC string cũ (back-compat)
+   - visualHints: object { colorPalette?, wardrobe?, locations?, camera?, fx?, props?, forbidden? } mỗi key string[] 0..50 mục
+   - crosswalk: object { related?, contrast?, genre?, noMix? } mỗi key string|string[] 0..50
+   - pacing: object { tempo?, beatMap? } tempo string, beatMap string[] 0..30
+   - voiceSample: string 0..500 ký tự (1 đoạn mẫu) */
+var SKL_FIELD_SCHEMA = {
+  // string
+  role:        { type: 'string', maxLen: 500 },
+  audience:    { type: 'string', maxLen: 500 },
+  voice:       { type: 'string', maxLen: 500 },
+  personaVN:   { type: 'string', maxLen: 500 },
+  voiceSample: { type: 'string', maxLen: 500 },
+  // string[]
+  structure:       { type: 'array', of: 'string', maxItems: 50, itemMaxLen: 500 },
+  hookTemplates:   { type: 'array', of: 'string', maxItems: 50, itemMaxLen: 500 },
+  rules:           { type: 'array', of: 'string', maxItems: 50, itemMaxLen: 500 },
+  antiPatterns:    { type: 'array', of: 'string', maxItems: 50, itemMaxLen: 500 },
+  voiceUse:        { type: 'array', of: 'string', maxItems: 50, itemMaxLen: 500 },
+  voiceAvoid:      { type: 'array', of: 'string', maxItems: 50, itemMaxLen: 500 },
+  qaChecklist:     { type: 'array', of: 'string', maxItems: 50, itemMaxLen: 500 },
+  hookLabels:      { type: 'array', of: 'string', maxItems: 50, itemMaxLen: 500 },
+  negativePrompts: { type: 'array', of: 'string', maxItems: 50, itemMaxLen: 500 },
+  seedQuestions:   { type: 'array', of: 'string', maxItems: 50, itemMaxLen: 500 },
+  // object với sub-key cố định
+  examples:    { type: 'object', shape: { hook: 'string', outro: 'string', scene: 'string' }, loose: true },
+  visualHints: { type: 'object', shape: { colorPalette: 'array', wardrobe: 'array', locations: 'array', camera: 'array', fx: 'array', props: 'array', forbidden: 'array' } },
+  crosswalk:   { type: 'object', shape: { related: 'mixed', contrastWith: 'mixed', genre: 'mixed', forbidMix: 'mixed' } },
+  pacing:      { type: 'object', shape: { tempo: 'string', beatMap: 'array' } }
+};
+
+function sklValidateEntry(name, entry){
+  var errs = [];
+  if (!entry || typeof entry !== 'object'){
+    errs.push('entry không phải object');
+    return errs;
+  }
+  Object.keys(SKL_FIELD_SCHEMA).forEach(function (key){
+    var v = entry[key];
+    if (v === undefined || v === null) return;   // optional
+    var s = SKL_FIELD_SCHEMA[key];
+    if (s.type === 'string'){
+      if (typeof v !== 'string'){ errs.push(key + ': phải là string, nhận ' + typeof v); return; }
+      if (v.length > s.maxLen) errs.push(key + ': ' + v.length + ' ký tự > ' + s.maxLen);
+    } else if (s.type === 'array'){
+      if (!Array.isArray(v)){ errs.push(key + ': phải là array, nhận ' + typeof v); return; }
+      if (v.length > s.maxItems) errs.push(key + ': ' + v.length + ' mục > ' + s.maxItems);
+      v.forEach(function (it, i){
+        if (s.of === 'string' && typeof it !== 'string'){
+          errs.push(key + '[' + i + ']: phải là string, nhận ' + typeof it);
+        } else if (s.of === 'string' && it.length > s.itemMaxLen){
+          errs.push(key + '[' + i + ']: ' + it.length + ' ký tự > ' + s.itemMaxLen);
+        }
+      });
+    } else if (s.type === 'object'){
+      // Nếu loose = true (vd examples cho phép string back-compat v1) → chấp nhận string.
+      if (s.loose && typeof v === 'string') return;
+      if (typeof v !== 'object' || Array.isArray(v)){
+        errs.push(key + ': phải là object, nhận ' + (Array.isArray(v) ? 'array' : typeof v));
+        return;
+      }
+      // shape check: mỗi sub-key khai báo trong schema
+      Object.keys(s.shape).forEach(function (sub){
+        var subV = v[sub];
+        if (subV === undefined || subV === null) return;
+        var expected = s.shape[sub];
+        if (expected === 'string' && typeof subV !== 'string'){
+          errs.push(key + '.' + sub + ': phải là string, nhận ' + typeof subV);
+        } else if (expected === 'array' && !Array.isArray(subV)){
+          errs.push(key + '.' + sub + ': phải là array, nhận ' + typeof subV);
+        }
+        // 'mixed' = chấp nhận string|string[] (vd crosswalk.related có thể "CORE 02" hoặc ["CORE 02","CORE 09"])
+      });
+      // Nếu !loose, các sub-key NGOÀI shape → cảnh báo
+      if (!s.loose){
+        Object.keys(v).forEach(function (sub){
+          if (!(sub in s.shape)) errs.push(key + '.' + sub + ': sub-key không có trong schema');
+        });
+      }
+    }
+  });
+  return errs;
 }
 
 /* ── Catalog: nạp trọn bộ skill mẫu (SKL_CATALOG — skill-catalog.js) ──────── */
@@ -434,12 +630,33 @@ function sklImportCatalog(){
       createdAt: new Date().toISOString(),
     };
     // Mang theo trường v2 (role/audience/voice/structure/hookTemplates/rules/
-    // antiPatterns/examples) nếu có — dùng cho sklGuideFor mở rộng prompt.
-    ['role', 'audience', 'voice', 'structure', 'hookTemplates', 'rules', 'antiPatterns', 'examples'].forEach(function (k){
+    // antiPatterns/examples) + nâng cấp v4 (visualHints/voiceUse/voiceAvoid/
+    // crosswalk/qaChecklist/personaVN/hookLabels — 7 trường) + v5
+    // (negativePrompts/seedQuestions/pacing/voiceSample) nếu có — dùng cho
+    // sklGuideFor mở rộng prompt. Validate fail-fast (Luật 10) trước khi
+    // đẩy vào kho: entry nào sai schema → bỏ qua + ghi log, không silent.
+    // examples.scene hiện hoãn (chờ user cung cấp content thật).
+    ['role', 'audience', 'voice', 'structure', 'hookTemplates', 'rules', 'antiPatterns', 'examples',
+     'visualHints', 'voiceUse', 'voiceAvoid', 'crosswalk', 'qaChecklist', 'personaVN', 'hookLabels',
+     'negativePrompts', 'seedQuestions', 'pacing', 'voiceSample'
+    ].forEach(function (k){
       if (c[k] !== undefined && c[k] !== null && c[k] !== ''){
         entry[k] = c[k];
       }
     });
+    // Schema validation (2026-09-18o đợt 2) — fail-fast per-entry, log cảnh báo
+    // nhưng KHÔNG nuốt (không silent skip): nếu errs rỗng → add; nếu có errs
+    // → tăng `badCount` và in console.group để user/bảo trì thấy ngay.
+    var errs = sklValidateEntry(rawName, entry);
+    if (errs.length){
+      if (window.console && console.groupCollapsed){
+        console.groupCollapsed('⚠ SKL_CATALOG entry "' + rawName + '" (' + cver + ') bỏ qua — ' + errs.length + ' lỗi schema');
+        errs.forEach(function (e){ console.warn('  · ' + e); });
+        console.groupEnd();
+      }
+      skipped++;
+      return;
+    }
     list.push(entry);
     byKey[sklKeyOf(finalName, cver)] = true;   // canonical key, không phân biệt có/không "(v2)"
     added++;
@@ -449,7 +666,7 @@ function sklImportCatalog(){
     return;
   }
   sklSaveAll(list); sklRender();
-  var msg = '✓ Đã nạp ' + added + ' skill mẫu' + (skipped ? ' (bỏ qua ' + skipped + ' trùng key)' : '');
+  var msg = '✓ Đã nạp ' + added + ' skill mẫu' + (skipped ? ' (bỏ qua ' + skipped + ' trùng key / schema lỗi — xem DevTools console)' : '');
   if (upgraded){ msg += ' — trong đó ' + upgraded + ' bản v2 được thêm song song với v1 cùng tên'; }
   msg += '. Skill đã có trong kho KHÔNG bị ghi đè.';
   sklSetStatus(msg, 'ok');
@@ -531,6 +748,82 @@ function sklGuideFor(name){
     if (it.examples.outro) lines.push('  — Kết: ' + String(it.examples.outro).trim());
   }
   if (it.instructions) lines.push('\n▶ GHI CHÚ THÊM: ' + String(it.instructions).trim());
+
+  // ── Upgrade v4 (P0+P1+P2, 2026-09-18) — 6 section mới ──
+  // Hiển thị có điều kiện: chỉ khi trường tồn tại và có nội dung. Trường rỗng
+  // KHÔNG in header rỗng (giữ prompt gọn).
+  function _pushLines(prefix, arr){
+    if (!Array.isArray(arr) || !arr.length) return;
+    lines.push('\n▶ ' + prefix + ':');
+    arr.forEach(function (x){ lines.push('  • ' + String(x).trim()); });
+  }
+  if (Array.isArray(it.voiceUse) && it.voiceUse.length){
+    _pushLines('GIỌNG NÊN DÙNG', it.voiceUse);
+  }
+  if (Array.isArray(it.voiceAvoid) && it.voiceAvoid.length){
+    _pushLines('GIỌNG CẦN TRÁNH', it.voiceAvoid);
+  }
+  if (it.visualHints && typeof it.visualHints === 'object'){
+    var vh = it.visualHints;
+    var vhParts = [];
+    if (Array.isArray(vh.colorPalette) && vh.colorPalette.length) vhParts.push('màu: ' + vh.colorPalette.join(', '));
+    if (Array.isArray(vh.wardrobe) && vh.wardrobe.length)         vhParts.push('trang phục: ' + vh.wardrobe.join(', '));
+    if (Array.isArray(vh.locations) && vh.locations.length)       vhParts.push('bối cảnh: ' + vh.locations.join(', '));
+    if (typeof vh.camera === 'string' && vh.camera.trim())         vhParts.push('camera: ' + vh.camera.trim());
+    if (typeof vh.fx === 'string' && vh.fx.trim())                 vhParts.push('hiệu ứng: ' + vh.fx.trim());
+    if (Array.isArray(vh.props) && vh.props.length)                vhParts.push('đạo cụ: ' + vh.props.join(', '));
+    if (vhParts.length){
+      lines.push('\n▶ GỢI Ý HÌNH ẢNH:');
+      vhParts.forEach(function (p){ lines.push('  • ' + p); });
+    }
+  }
+  if (it.crosswalk && typeof it.crosswalk === 'object'){
+    var cw = it.crosswalk;
+    var cwParts = [];
+    if (Array.isArray(cw.relatedSkills) && cw.relatedSkills.length)
+      cwParts.push('liên quan: ' + cw.relatedSkills.join(' · '));
+    if (Array.isArray(cw.contrastWith) && cw.contrastWith.length)
+      cwParts.push('đối chiếu: ' + cw.contrastWith.join(' · '));
+    if (typeof cw.genre === 'string' && cw.genre.trim())
+      cwParts.push('thể loại: ' + cw.genre.trim());
+    if (typeof cw.forbidMix === 'string' && cw.forbidMix.trim())
+      cwParts.push('CẤM trộn: ' + cw.forbidMix.trim());
+    if (cwParts.length){
+      lines.push('\n▶ LIÊN KẾT VỚI SKILL KHÁC:');
+      cwParts.forEach(function (p){ lines.push('  • ' + p); });
+    }
+  }
+  if (Array.isArray(it.qaChecklist) && it.qaChecklist.length){
+    _pushLines('CHECKLIST TỰ KIỂM', it.qaChecklist);
+  }
+  if (typeof it.personaVN === 'string' && it.personaVN.trim()){
+    lines.push('\n▶ CHẤT VIỆT (persona): ' + it.personaVN.trim());
+  }
+  if (Array.isArray(it.hookLabels) && it.hookLabels.length){
+    lines.push('\n▶ NHÃN HOOK GỢI Ý: ' + it.hookLabels.join(', '));
+  }
+  // v5 (2026-09-18o đợt 2): 4 section mới phục vụ AI generate chuyên sâu hơn
+  if (Array.isArray(it.negativePrompts) && it.negativePrompts.length){
+    _pushLines('CẤM ĐỀ XUẤT (negative prompts)', it.negativePrompts);
+  }
+  if (Array.isArray(it.seedQuestions) && it.seedQuestions.length){
+    _pushLines('CÂU HỎI HẠT GIỐNG (seed)', it.seedQuestions);
+  }
+  if (it.pacing && typeof it.pacing === 'object'){
+    var pParts = [];
+    if (typeof it.pacing.tempo === 'string' && it.pacing.tempo.trim())
+      pParts.push('nhịp: ' + it.pacing.tempo.trim());
+    if (Array.isArray(it.pacing.beatMap) && it.pacing.beatMap.length)
+      pParts.push('beat: ' + it.pacing.beatMap.join(' → '));
+    if (pParts.length){
+      lines.push('\n▶ PACING (nhịp kể):');
+      pParts.forEach(function (p){ lines.push('  • ' + p); });
+    }
+  }
+  if (typeof it.voiceSample === 'string' && it.voiceSample.trim()){
+    lines.push('\n▶ MẪU GIỌNG (1 câu chuẩn):');
+    lines.push('  "' + it.voiceSample.trim() + '"');
+  }
 
   return lines.join('\n');
 }

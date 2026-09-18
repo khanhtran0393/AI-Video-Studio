@@ -710,6 +710,29 @@
         <div style="font-size:11px;color:var(--muted);margin-top:6px;">Kiểu sóng gốc sẽ bị uốn cong — mặc định là kiểu bạn đang chọn trước khi chuyển sang "Uốn cong".</div>
       </div>
 
+      <!-- 2026-09-18m: điểm neo khi uốn — 'center' = uốn TỪ TÂM SÓNG: giữa sóng
+           đứng yên, 2 đầu gập lên đối xứng và trùng nhau khi mức uốn 100%
+           2026-09-18n: thêm 'end' (cuối sóng neo, giống start nhưng lật) -->
+      <div class="field" id="waveBendAnchorField" style="display:none">
+        <div class="field-row"><label>Điểm uốn</label></div>
+        <select class="sel" id="waveBendAnchorSel">
+          <option value="start" selected>⌐ Đầu sóng — đầu neo, sóng vồng lên</option>
+          <option value="center">⊕ Tâm sóng — giữa neo, 2 đầu gặp nhau</option>
+          <option value="end">¬ Cuối sóng — cuối neo, đối xứng đầu</option>
+        </select>
+      </div>
+
+      <!-- 2026-09-18n: hướng vồng — 'down' = vồng xuống dưới baseline, mặc định
+           'up' vồng lên trên (giữ hành vi cũ). Kết hợp với điểm neo để tạo 6
+           biến thể (start/center/end × up/down). -->
+      <div class="field" id="waveBendSideField" style="display:none">
+        <div class="field-row"><label>Hướng vồng</label></div>
+        <select class="sel" id="waveBendSideSel">
+          <option value="up" selected>↥ Vồng lên (trên baseline)</option>
+          <option value="down">↧ Vồng xuống (dưới baseline)</option>
+        </select>
+      </div>
+
       <div class="row2" id="waveCurveField" style="display:none">
         <div class="field">
           <div class="field-row"><label>Mức uốn (0% thẳng ⟶ 100% vòng tròn)</label><span class="val" id="v-wcurve">0%</span></div>
@@ -723,7 +746,7 @@
           </select>
         </div>
       </div>
-      <div id="waveCurveHint" style="display:none;font-size:11px;color:var(--muted);margin:-4px 0 10px 0;line-height:1.5;">Uốn cong dáng sóng thành 1 vòng cung: 0% là đường thẳng, 100% khép kín thành hình tròn. Dùng cho cả hiệu ứng "↷ Uốn cong" (uốn kiểu sóng đã chọn) lẫn kiểu "）Cột uốn cong". Kéo thanh để uốn dần.</div>
+      <div id="waveCurveHint" style="display:none;font-size:11px;color:var(--muted);margin:-4px 0 10px 0;line-height:1.5;">Uốn cong dáng sóng thành 1 vòng cung: 0% là đường thẳng, 100% khép kín thành hình tròn. "Điểm uốn" chọn neo (đầu / tâm / cuối) — tâm thì 2 đầu gặp nhau, đầu/cuối thì 1 đầu neo. "Hướng vồng" chọn vồng lên hay xuống. Dùng cho cả hiệu ứng "↷ Uốn cong" (uốn kiểu sóng đã chọn) lẫn kiểu "）Cột uốn cong". Kéo thanh để uốn dần.</div>
 
       <div id="waveParams" style="display:none;">
       <div class="field">

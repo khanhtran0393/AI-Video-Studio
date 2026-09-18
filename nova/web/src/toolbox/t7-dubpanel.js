@@ -66,8 +66,11 @@ function _t7RailDub(){
 }
 
 function _t7dpHtmlActions(nText, nCues){
-  return /* Nút gold chính — chạy xích 2 bước có thật: dịch → tạo giọng */
-    '<button class="t7dp-run" id="t7dpRunBtn" type="button" onclick="t7dpRunAll()" title="Chạy liền: Dịch thuyết minh → Tạo giọng thuyết minh">' +
+  /* Nút gold chính — chạy xích 2 bước có thật: dịch → tạo giọng.
+     LƯU Ý: comment PHẢI đứng TRƯỚC dòng return — nếu đặt `return /*…*∕` cuối dòng,
+     LineTerminator sau comment kích hoạt ASI → `return;` ngầm → hàm trả undefined
+     → panel Thuyết minh mất nút "Xử lý video" + hiện chữ "undefined" (bug 2026-09-18). */
+  return '<button class="t7dp-run" id="t7dpRunBtn" type="button" onclick="t7dpRunAll()" title="Chạy liền: Dịch thuyết minh → Tạo giọng thuyết minh">' +
       '✨ Xử lý video</button>' +
     /* Hàng 3 nút nhanh (mỗi bước chạy riêng) */
     '<div class="t7dp-chips">' +

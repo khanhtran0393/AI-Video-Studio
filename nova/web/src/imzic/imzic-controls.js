@@ -95,12 +95,18 @@ setupSel('waveStyleSel','waveStyle', ()=>{
   const on = (state.waveStyle === 'curved' || state.waveStyle === 'bend');
   if(f) f.style.display = on ? '' : 'none';
   if(h) h.style.display = on ? '' : 'none';
-  // chỉ 'bend' mới hiện chọn kiểu sóng nền
+  // chỉ 'bend' mới hiện chọn kiểu sóng nền + điểm uốn + hướng vồng
   const bf = $('waveBendBaseField');
   if(bf) bf.style.display = (state.waveStyle === 'bend') ? '' : 'none';
+  const af = $('waveBendAnchorField'); // 2026-09-18m: điểm neo khi uốn
+  if(af) af.style.display = (state.waveStyle === 'bend') ? '' : 'none';
+  const sf = $('waveBendSideField'); // 2026-09-18n: hướng vồng lên/xuống
+  if(sf) sf.style.display = (state.waveStyle === 'bend') ? '' : 'none';
 });
 setupSel('waveCurveDirSel','waveCurveDir');
 setupSel('waveBendBaseSel','waveBendBase');
+setupSel('waveBendAnchorSel','waveBendAnchor'); // 2026-09-18m: 'start'|'center'|'end'
+setupSel('waveBendSideSel','waveBendSide'); // 2026-09-18n: 'up'|'down'
 $('waveCurve').addEventListener('input', e=>{
   state.waveCurve = Math.max(0, Math.min(1, (+e.target.value || 0) / 100));
   const lbl = $('v-wcurve'); if(lbl) lbl.textContent = e.target.value + '%';
@@ -598,6 +604,21 @@ $('lyricPosY').addEventListener('input', e=>{ state.lyricPosY = +e.target.value;
   if(h) h.style.display = on ? '' : 'none';
   const bf = $('waveBendBaseField');
   if(bf) bf.style.display = (state.waveStyle === 'bend') ? '' : 'none';
+  // 2026-09-18m: giá trị "Điểm uốn" + ẩn/hiện (fallback khai báo — không để rỗng)
+  const asel = $('waveBendAnchorSel');
+  if(asel){
+    asel.value = (state.waveBendAnchor === 'center' || state.waveBendAnchor === 'end')
+      ? state.waveBendAnchor : 'start';
+    const af = $('waveBendAnchorField');
+    if(af) af.style.display = (state.waveStyle === 'bend') ? '' : 'none';
+  }
+  // 2026-09-18n: hướng vồng — fallback 'up' nếu state rỗng/giá trị lạ
+  const ssel = $('waveBendSideSel');
+  if(ssel){
+    ssel.value = (state.waveBendSide === 'down') ? 'down' : 'up';
+    const sf = $('waveBendSideField');
+    if(sf) sf.style.display = (state.waveStyle === 'bend') ? '' : 'none';
+  }
 })();
 
 rebuildParticles();
@@ -610,7 +631,7 @@ const SETTINGS_RANGE_IDS = ['zoomMin','zoomMax','sensitivity','smoothness','dens
 // 2026-09-17zp: sqX/sqY lưu riêng vì do nút bấm dịch chuyển (không qua range)
 const SETTINGS_SQXY = ['sqX','sqY','sourceMode'];
 const SETTINGS_COLOR_IDS = ['pcolor','waveColor','lyricColor','lyricAccent'];
-const SETTINGS_SELECT_IDS = ['lyricFont','effectSel','dirSel','waveStyleSel','ratioSel','lyricShadowSel','fxSel','slideModeSel','slideOrderSel','transSel','fitSel','lyricKaraokeSel','lyricStyleSel','lyricAnimSel','exportFpsSel','qualitySel','exportResSel','bcPresetSel','loudnormSel','slideBeatSel','wmPosSel','waveCurveDirSel','waveBendBaseSel'];
+const SETTINGS_SELECT_IDS = ['lyricFont','effectSel','dirSel','waveStyleSel','ratioSel','lyricShadowSel','fxSel','slideModeSel','slideOrderSel','transSel','fitSel','lyricKaraokeSel','lyricStyleSel','lyricAnimSel','exportFpsSel','qualitySel','exportResSel','bcPresetSel','loudnormSel','slideBeatSel','wmPosSel','waveCurveDirSel','waveBendBaseSel','waveBendAnchorSel','waveBendSideSel'];
 const SETTINGS_NUMBER_IDS = ['customW','customH','trimStart','trimEnd','fadeIn','fadeOut'];
 // chip-group đã gom thành dropdown — bản lưu cũ có {chips:{}} được đổi tên ở loadSettings.
 // waveChips bản cũ là bật/tắt ('on'/'off') → hợp nhất vào waveStyleSel ('off' = tắt).

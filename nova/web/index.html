@@ -84,6 +84,7 @@
   <main class="main">
 
 <!--#include "partials/panels-small-a.html" -->
+<!--#include "partials/panel-review.html" -->
 <!--#include "partials/panel-dash-tool1.html" -->
 <!--#include "partials/panel-toolscript.html" -->
 <!--#include "partials/panels-tool2-3.html" -->
@@ -106,6 +107,11 @@
 
 <!-- Block 3 split into per-tool files - see nova/web/src/toolbox/ -->
 <script src="src/toolbox/shared-state.js"></script>
+<!-- shared/consts.js — khai báo cache/hằng chéo tool (_T7_STYLES, NOVA_ANIM_LABELS, _animLoaded,
+     _t7SfxAudioCache, _t2Sel, _t2Snapshots, _T2_SNAP_MAX, _t2DragSrc, _nfLast, _nfIdeas) khôi phục
+     verbatim từ shared-consts.js (068263fe) sau khi khối shared/ bị xoá 2026-09-11 — cùng lớp bug
+     `_t7FxSw` mất khai báo (MEMORY 2026-09-18r). Nạp TRƯỚC mọi peer dùng nó. -->
+<script src="src/toolbox/shared/consts.js"></script>
 <!-- shared-consts.js god-file tÃ¡ch verbatim 2026-09-11 thÃ nh 12 module shared/ â€”
      giá»¯ Ä‘Ãºng thá»© tá»± dáº£i dÃ²ng gá»‘c (sau shared-state.js, trÆ°á»›c utility/) Ä‘á»ƒ ngá»¯ nghÄ©a
      load-order/override khÃ´ng Ä‘á»•i; marker DEDUP-DUPLICATE/fn shadow giá»¯ nguyÃªn (dá»n dead code lÃ  task riÃªng) -->
@@ -196,6 +202,7 @@
 <script src="src/toolbox/tool-upg.js"></script>
 <!-- CÃ´ng cá»¥ FFmpeg (sidebar dropdown): TÃ¡ch MP3 / Cáº¯t / GhÃ©p / Loop â€” IPC ffx:* -->
 <script src="src/toolbox/tool-ffx.js"></script>
+<script src="src/toolbox/tool-ffx-canvas.js"></script>
 <script src="src/toolbox/tool-live.js"></script>
 
 <script src="src/toolbox/utility/collapse.js"></script>
@@ -229,6 +236,7 @@
 <!-- Lá»“ng tiáº¿ng theo phá»¥ Ä‘á»: panel UI (IPC dub:* qua window.native.dub) -->
 <script src="dub-panel.js?v=dub1"></script>
 <script src="viral-cut-panel.js?v=vc1"></script>
+<script src="review-panel.js?v=rv1"></script>
 <script src="spy-panel.js?v=spy1"></script>
 
 <script src="src/toolbox/utility/veo-init.js"></script>

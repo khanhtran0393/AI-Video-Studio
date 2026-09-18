@@ -1,3 +1,144 @@
+## 2026-09-19a — Tool mới: "🎬 Trình Soạn Thảo Video" (canvas editor kiểu EZMAXSUB) trong panel Công cụ FFmpeg
+
+- **Yêu cầu user** (kèm 4 ảnh canvas editor của `D:\ezmaxsub` + chốt "gắn vào panel có sẵn"): tái tạo mục editor trong ảnh — toolbar trái (crop icon, ratio Original/16:9/9:16/1:1/4:3/3:4/21:9, zoom out/label/zoom in/"Khôi phục 100%" fit_screen) + pill 8 tool (Chọn/Kéo khung nhìn/Chữ/Làm mờ/Khối màu/Ảnh-GIF-Âm thanh-Video/Filter màu/Nền video) + empty state "Nhấn để nhập video · MP4·MKV·MOV·WEBM" + menu "HIỆU ỨNG LÀM MỜ / XOÁ" đúng 5 mục (Pixelate/Blur Strip/Frosted Glass/Remove Logo/Remove Subtitle) + tích hợp LOGIC TẤT CẢ các nút. Nguồn trích thật: markup `ezmaxsub\app\frontend\index.html` (toolbar @96600, blur-menu @104500), metadata hiệu ứng Yc trong bundle (`pixelate 16`, `blurStrip 120/35`, `frostedGlass 160/30`, `removeLogo band 4`, `removeSubtitle band 6`, softness .5), kích thước khung PE() (fit cạnh ngắn), exporter = ffmpeg build-graph.
+- **Điểm lắp**: tool block mới `tool-toolffxcanvas` cuối `partials/panels-ffmpeg-tools.html` (12 tool của ffx) + nav "Trình Soạn Thảo" sau `toolffxads` trong `partials/app-sidebar.html` + `<script src="src/toolbox/tool-ffx-canvas.js">` ngay sau tool-ffx.js. Renderer `tool-ffx-canvas.js` (~650 dòng, tiền tố `ffxCv*`, tái dùng `ffxPickOutput/ffxShowProgress/ffxSetStatus/ffxActiveStatus` của tool-ffx.js — progress+huỷ dùng chung hạ tầng). Main: `media-tools.burnOverlays` (filter_complex: mosaic neighbor/boxblur+drawbox/blur+noise/delogo/drawtext/drawbox/overlay media `eof_action=pass` + gif `-stream_loop`/eq-color preset/pad màu nền khi đổi ratio/amix `normalize=0` âm thanh ngoài) + 2 hàm thuần test được (`overlayCanvasSize`, `buildOverlayVf`) + `ovEnable`/`ovRect`/`ovEscapeText`. IPC mới `ffx:overlay-burn` (handleOp pattern, progress `ffx:progress`) + preload `window.native.ffx.overlayBurn`; inventory tự sinh lại (269 kênh).
+- **Preview renderer**: pixelate vẽ canvas rAF (vùng video contain → thu nhỏ/phóng neighbor — đúng cách ezmaxsub kD), blur/frosted bằng backdrop-filter + noise SVG data-uri, blurStrip thêm dải phủ tối, removeLogo/Subtitle chip "delogo", filter màu áp CSS filter lên `<video>`, nền letterbox = màu background. Tương tác: vẽ vùng kéo thả (tool blur/rect), move/resize 8 chấm, Delete/Esc, wheel zoom, hand pan, layer dropdown + khung thuộc tính theo loại lớp (controls đúng Yc) + start/end giây per-layer.
+- **Kiểm định**: `npm run test:ffx-canvas` (script mới, đăng ký package.json + AGENTS.md §3.2) — **36/36 PASS**; `npm run check` **EXIT 0** (10 bước; toplevel 1900 tên 0 xung đột; check:shadow bắt 1 lỗi thật id `ffxCvZoomReset` đè hàm toàn cục → đổi hàm thành `ffxCvZoomReset100`). Lưu ý: 16:9 ngang → 9:16 dọc cho khung 1080×1920 (fit cạnh ngắn, video thu nhỏ + pad nền — đúng PE ezmaxsub, KHÔNG crop).
+- **Còn treo (test app thật — chờ user)**: RESTART app (preload đổi) → sidebar "Công cụ FFmpeg" → "Trình Soạn Thảo" → nhập video thật → thử từng tool + Xuất video, kiểm file output trong `output/`. Burns GPU chỉ bật qua `useGpu` (mặc định CPU libx264 crf23).
+- **Bài học**: Add-Content PowerShell 5.1 ghi ANSI → hỏng tiếng Việt trong JS (đã phát hiện bằng IndexOf chuỗi UTF-8 + truncate, viết lại bằng editor tool UTF-8); luồng text dài phải luôn qua editor tool, không qua shell heredoc.
+
+
+## 2026-09-18s — Fix chữ "undefined" panel Thuyết minh Dựng Video (bẫy ASI `return /*…*/` cuối dòng)
+
+- **Báo cáo user**: Dựng Video → rail 🎙 Thuyết minh → panel hiện đúng 3 accordion (Nhận dạng giọng nói / Dịch thuật / Thuyết minh) rồi chữ "undefined", mất nút gold "✨ Xử lý video" + hàng nút nhanh + khối Hoàn tác + footer. User nghi "sửa nhầm nhánh".
+- **Hợp lệ hoá**: nhánh `main` đúng; panel là module `nova/web/src/toolbox/t7-dubpanel.js` của phiên 18m (đã commit 546d74db). Web server phục vụ đúng bản trên đĩa (HTTP :47280 so disk = 9411/9411 bytes).
+- **ROOT CAUSE (tái hiện được bằng sandbox vm, không đoán)**: `_t7dpHtmlActions` viết `return /* comment… */` rồi xuống dòng mới đặt chuỗi HTML → LineTerminator sau comment kích hoạt **ASI** → chèn `;` ngầm sau `return` → hàm trả **undefined** → phép nối chuỗi `innerHTML = … + acc() + _t7dpHtmlActions(…)` sinh chữ "undefined" và mất toàn bộ khối hành động. Node không báo lỗi gì (cú pháp hợp lệ) — `node --check` vẫn PASS.
+- **Fix** (`t7-dubpanel.js` duy nhất — quét toàn `nova/web/` bằng regex `^\s*return\s+/\*…\*/$` cho thấy chỉ đúng 1 chỗ dính): chuyển comment lên TRƯỚC dòng `return` + comment cảnh báo tại chỗ về bẫy ASI này.
+- **Kiểm chứng**: harness vm nạp nguyên văn `t7-subpanel.js` + `t7-dubpanel.js`, gọi `_t7RailDub()`: trước fix → innerHTML đuôi là chữ "undefined", 0 nút; sau fix → 0 "undefined", đủ nút "✨ Xử lý video" + 3 nút nhanh + Hoàn tác + footer "phân đoạn có chữ". `node --check` OK. `npm run check` từng bước: syntax/ipc/exports/shared/shared-shadow/size/toplevel/docs (49 script) **EXIT 0**; `check:shadow` FAIL pre-existing (cảnh báo C2 ở `utility/veo.js`, `t2-audio/t2-prompts/t2-split.js`, `tf.js`, `tier.js`… — file committed của phiên khác, không thuộc phạm vi fix này, xem MEMORY 18q về tiền lệ); HTTP :47280 phục vụ bản đã sửa (có `return '<button…`).
+- **Bài học**: comment khối đặt NGAY SAU `return` trước biểu thức xuống dòng = `return;` ngầm — họ lỗi với bẫy `/*…*/` lồng nhau; script kiểm định tĩnh không bắt được dạng này (syntax vẫn PASS), chỉ test render thật mới thấy.
+- **Cho user**: KHÔNG nhầm nhánh (đang ở `main`); lỗi là bug có sẵn trong commit sync 546d74db, đã sửa tại chỗ. Reload app (Ctrl+R ở trang Dựng Video) hoặc restart qua `khoidong.bat` — renderer đang giữ JS cũ trong bộ nhớ.
+
+
+## 2026-09-18q — Fix root-cause panel T7 kẹt "Đang nạp…" + cache bền kho FX (localStorage)
+
+- **Báo cáo user**: rail Dựng Video — tab Chữ (9) / Chuyển động (10) / Chuyển cảnh (23) kẹt "Đang nạp…" lâu/không xong; yêu cầu nạp 1 lần rồi lưu lại cho các lần sau.
+- **ROOT CAUSE thật (không phải dữ liệu nặng)**: `let _t7FxSw` MẤT KHAI BÁO từ đợt dedup ("[P0a] fn chet da xoa") — mọi phép ĐỌC (`_t7FxSwatchLoad` guard `if (_t7FxSw)` + `t7-fx.js:41` khi vẽ thẻ FX) ném `ReferenceError` → `t7FxTab` chết giữa chừng SAU khi set "Đang nạp…" → panel kẹt vĩnh viễn, badge vẫn hiện vì `t7SetMediaTab` set trước. Đã xác minh bằng sandbox vm (đọc biến chưa khai báo → throw y hệt).
+- **Fix + tính năng** (`nova/web/src/toolbox/utility/t7-gfx.js`, không đổi IPC/export/state nào):
+  - Khôi phục `let _t7FxSw = null` (có comment lịch sử).
+  - **Cache bền `localStorage` key `t7FxKhoCacheV1`**: lưu cat/trans/bits/prev/sw + fingerprint djb2 (id+nhãn+params mẫu, id chuyển cảnh, bits, khoá preview) + `_T7_FX_CACHE_VER`. Lần đầu nạp sống → lưu; các phiên sau (kể cả restart app) **hydrate ĐỒNG BỘ** → panel vẽ NGAY, 0 IPC trước render.
+  - **Revalidate ngầm** (`_t7FxRevalidate`, stale-while-revalidate): 4 IPC rẻ song song → so fingerprint; lệch → thay dữ liệu sống + xoá swatch sinh lại + lưu + vẽ lại rail/tab; IPC lỗi → GIỮ cache + `setStatus7` cảnh báo rõ (Luật 10 — degrade khai báo, không fallback câm).
+  - Single-flight `_t7LoadFx`/`_t7FxSwatchLoad` (trước đây 2 vòng nạp song song chạy trùng); swatch 6 mẫu `fx-*` chạy `Promise.all` song song (trước đây tuần tự).
+  - Đổi logic sinh preview/swatch phía main (templates/anim/effects/preview.js) → PHẢI tăng `_T7_FX_CACHE_VER`.
+- **Kiểm định mới chính thức**: `npm run test:t7-fxcache` (`nova/scripts/t7-fxcache-test.js`) — vm sandbox nạp nguyên văn t7-gfx.js, stub localStorage/native đúng thứ tự nạp; 14 mốc PASS: lần đầu lưu cache, phiên sau hydrate không gọi previewLayers, revalidate bắt thay đổi kho + vẽ lại + ghi đè cache, IPC lỗi giữ cache + khai báo, cache sai version bị vứt. Đã thêm vào package.json + AGENTS.md §3.2 (docs-sync 48 script khớp).
+- **Verify**: syntax 533 file ✓, ipc/exports/shared/shared-shadow ✓, size 0/0 ✓, toplevel 0 xung đột ✓, docs 48 khớp ✓, selftest 10/10 ✓, HTTP :47280 trả bản mới (có cache + khai báo) ✓. **`check:shadow` FAIL 1 LOI do PHIÊN SONG SONG**: `partials/panels-ffmpeg-tools.html:883` handler `ffxCvZoomReset(...)` đè bởi element id `#ffxCvZoomReset` → click sẽ throw — cần đổi `window.ffxCvZoomReset(...)` hoặc đổi id (file đó không thuộc phiên này).
+- **Sự cố xử lý**: một lần editor ghi `package.json` thành 0 byte (JSON parse FAIL ở check:ipc) — đã `git checkout -- package.json` khôi phục + thêm lại `test:t7-fxcache` (45 script, JSON OK).
+- **Đã rà**: bit Remotion rỗng (badge Chuyển động = catalog 10 + bits 0) là CHỦ Ý — BitRegistry.tsx xoá sạch 2026-08-20, không phải bug. Preview JPG trên đĩa 0 file (dev) → thẻ FX dùng swatch CSS sống.
+- **Cho user**: Ctrl+R trong app → lần này nạp sống 1 lần (nhanh vì đã sửa throw) + lưu cache; từ lần mở app sau panel Chữ/Chuyển động/Chuyển cảnh hiện NGAY không chờ IPC.
+- **Còn treo**: `check:shadow` LOI phía ffmpeg-canvas của phiên song song (bên trên) — chờ phiên đó tự sửa hoặc user chỉ định.
+
+
+## 2026-09-18p — Tóm tắt/Review (Bước 4 lộ trình ezmaxsub): UI + pipeline đầy đủ, BỎ paywall
+
+- **Yêu cầu user**: port panel "Tóm tắt/Review" từ `D:\ezmaxsub` vào app — UI + pipeline đầy đủ, **bỏ phương thức nâng cấp, ai dùng cũng được** (khớp quy chuẩn app không đăng nhập).
+- **Module mới `nova/review/`** (kênh IPC `review:*`, đăng ký qua `registerReviewIpc` trong `main/ipc/index.js`, preload `window.native.review`):
+  - `engine.js` (thuần Node, 56 test pass): `chunksFromCues` (chunk 8 phút, trần 60 chunk, `RV_NO_SOURCE_TEXT`), `buildChunkPrompt` (target từ = ratio × chunk, floor 30, nhớ prevSummary nối mạch), `parseScenesJson` (JSON lỏng lẻo — fence/`{scenes}`/`{canh}`/từng dòng/mm:ss → `RV_AI_BADJSON`), `scenesFromParsed` (clamp khung chunk + khử chồng lấn + clamp videoDur, khai báo clamp/drop), `narrationPlan` (**TTS là master clock** — sceneDur = lời bình + gap 120ms, minScene 2.5s; thiếu hình gốc → shortfall; thiếu probe → `RV_PROBE`), `sentenceCues`/`clusterCues` (≤ maxWords), `estimateFromCues`, `buildScriptMd`.
+  - `ipc.js`: ① `review:analyze` — SRT chọn sẵn hoặc OCR hardsub (engine `nova/hardsub`, KHÔNG Whisper) → chunk → AI từng chunk qua `claude()` (`editor-pro/niche`, `noRetry+noBridge` — ĐÚNG API user cấu hình); chunk lỗi → đánh dấu error, chạy tiếp (khai báo), toàn hỏng → `RV_NO_SCENES`; state lưu `<userData>/review-tmp/<jobId>.state.json`. ② `review:build` — TTS từng câu (backend OmniVoice, cache `<userData>/review-cache` key sha1(text|giọng|lang|speed), trần 600 câu) → `narrationPlan` (`RV_SOURCE_SHORT` nếu video gốc hết hình — KHÔNG loop ngầm) → `cutMulti` accurate → track lời bình `adelay/amix` → mix/thay tiếng gốc → nhạc nền `addMusic` → burn SRT → `faststartRemux` → xuất `<base>.review.mp4/.review.srt/.review-kich-ban.md/.review-plan.json`, dọn workDir giữ state. `review:run` = ①+② full; `review:cancel` cờ + kill con; event `review:progress`.
+  - `test.js` + `npm run test:review` — **56/56 PASS** (đã chạy thật).
+- **UI** (`nova/web/partials/panel-review.html` + `nova/web/review-panel.js`, IIFE `window.ReviewPanel`, init qua nav.js): tab "Thuyết minh" (nav tới tool Dịch SRT/Lồng Tiếng đã có) | "Tóm tắt/Review"; thẻ TÀI KHOẢN AI → **chip trạng thái AI đã cấu hình** (`review:aiStatus` đọc `_KHO()` — không paywall); KIỂU & ĐỘ DÀI (ngôn ngữ, kiểu review, prompt riêng, slider độ dài 5–50%, slider từ/cụm 1–20, giữ câu nguyên văn); GIỌNG ĐỌC (nạp giọng OmniVoice, tốc độ 0.85–1.3×, thay/trộn tiếng gốc, burn phụ đề); TIẾN TRÌNH (bar + grid chunk Chờ/Đang chạy/Xong/Lỗi + legend + log chi tiết + warnbox); nút chạy chính + ①② + Huỷ. Footer "miễn phí cho mọi người dùng".
+- **Điều hướng**: nav item "Tóm tắt/Review" (`toolreview`) trong nhóm Công cụ AI, sau Viral Cut.
+- **Verify**: `npm run check` từng bước PASS (syntax 528 file, ipc 268 kênh — bắt đủ 10 kênh `review:*` + event, exports 37 module, shared 20 key, shadow 0, shared-shadow 0, size 0/0, toplevel 1845 tên 0 xung đột, docs 45 script khớp, selftest 10/10); chain exit 1 là quirk PowerShell đã biết (MEMORY 18m).
+- **Còn treo**: test pipeline thật (OCR/AI/TTS/dựng) bằng dữ liệu video thật trong app qua `khoidong.bat` — chờ user chạy tay (Luật 6: cần dữ liệu thật, không fixture). `scan:lifecycle` sau smoke khởi động: xem bên dưới.
+
+## 2026-09-18r — I-MZic "Uốn cong": cải thiện 8/8 đề xuất + tách engine thuần
+
+- **Yêu cầu user (tiếp 18l, 18m)**: cải thiện tất cả 8 đề xuất cho hiệu ứng "Uốn cong" — đã làm **đủ 8/8**.
+- **Module mới `nova/imzic-bend/`** (engine thuần, test bằng `node`):
+  - `engine.js` (~85 dòng): `imzBendCEff(c, beat, kBeat)` — c hữu dụng sau hơi thở theo nhạc, clamp [0,1] (c âm = thẳng, c >1 = 1, fail-fast với `IMZIC_BEND_C` cho NaN/beat ngoài khoảng); `imzBendRadius(W, cEff) = W/(2π·cEff)`; `imzBendArcPoint(t, cEff, anchor, side, startX, W, y0)` trả `{x, y, angle}` cho 6 biến thể (anchor ∈ {start, center, end} × side ∈ {up, down}), đảm bảo neo đúng vị trí + P(0)=P(1) khép kín khi c=1 + arcLen ≡ widthPx; `imzBendSegCount(W, cEff)` = `max(48, min(240, round(base·(1+cEff·0.5))))` — tăng theo c để khử răng cưa khi đóng vòng. **Tách inline thuần (công thức cũ ẩn trong vòng for) thành hàm độc lập có thể test bằng node.**
+  - `test.js` + `npm run test:imzic-bend` — **43/43 PASS** (đã chạy thật). Test bao phủ: neo start/center/end × up/down, c_eff clamp, arcLen preservation, ràng buộc fail-fast có mã lỗi.
+- **Renderer `nova/web/src/imzic/imzic-draw.js`**: nhúng bản sao inline `imzBend*` (renderer không có build step → không `require`) — comment đầu file tham chiếu engine + cảnh báo "mất đồng bộ = lỗi thật", đồng bộ bằng `test:imzic-bend`. `drawWaveBent` tái cấu trúc: 
+  1. **Nâng ngưỡng fast-path** 0.001 → 0.03 (dưới ngưỡng gần như thẳng → vẽ thẳng cho rẻ, tránh sinh canvas tạm).
+  2. **Slice-compositing chống artifact** (`alpha<1` → lát vừa khít `segW` không overlap; `alpha=1` vẫn overlap nhẹ 1.5px như cũ) + `imageSmoothingQuality='high'` → bỏ seam tối ở chỗ 2 lát chồng alpha.
+  3. **Hơi thở theo nhạc** `imzBendBeatOf(bins)` — bass 70% + treble 30%, smoothing attack 0.18 / release 0.06 (giật ít khi nhịp thay đổi đột ngột), `c_eff = c·(1+0.4·beat)`, chỉ bật khi `waveOn && c>0.4` (vùng cong thật).
+  4. **Xoay chậm khi đóng vòng** — `cEff ≥ 0.85` + `anchor='center'` → `spin = waveTime·0.06` (≈ 1 vòng/phút). Hint ngầm cho user thấy đã "đóng thành hình tròn".
+  5. **Side 'down' (vồng xuống)**: `cy = baseY + R`, `phi0 = -π/2` (khởi điểm đỉnh trên vòng, đi xuống đáy rồi lên), đảm bảo P(0)=P(1) ở y0 + P(0.5) ở đáy vòng (xa baseline nhất 2R). Hành vi đối xứng hoàn toàn với 'up' cho cả 3 neo.
+  6. **Anchor 'end' (cuối sóng neo)**: `tOff=1`, `cx = startX + W` — đối xứng với 'start' qua trục dọc, P(1) ở (startX+W, y0), P(0) đi xa.
+- **UI** (`img-to-vid.html`): thêm option "¬ Cuối sóng — cuối neo, đối xứng đầu" vào `waveBendAnchorSel` + field mới "Hướng vồng" (`waveBendSideSel`) với "↥ Vồng lên" / "↧ Vồng xuống". Hint `waveCurveHint` cập nhật. `imzic-presets.js`: thêm '¬' (cuối) + '↧' (xuống) vào section hint, source refresh kèm `waveBendSideSel`. `imzic-controls.js`: `setupSel`/`init-sync` + `SETTINGS_SELECT_IDS` cho `waveBendSideSel`, init-sync chấp nhận 'end' cho anchor.
+- **Workflow random** (`imzic-workflow.js`): thêm `'bend'` vào danh sách random style; khi rơi 'bend' thì random mức uốn 50–100 + anchor (start/center/end) + 30% cơ hội vồng xuống.
+- **Verify**: `npm run check` từng bước PASS (syntax 533 file, ipc 269 kênh, exports 37 module, shared 20 key, shared-shadow 0, size 0/0, toplevel 1893 tên 0 xung đột, docs 48 script khớp — tăng từ 47 do thêm `test:imzic-bend`, selftest 10/10); `npm run test:imzic-bend` 43/43; `npm run test:imzic` 7/7; `npm run test:foundation` PASS. Lỗi `check:shadow` 1 cái pre-existing về `ffxCvZoomReset` (panels-ffmpeg-tools.html:883) — **KHÔNG liên quan** task này (đụng dây từ trước, không sửa theo chỉ đạo "không sửa ngoài phạm vi").
+- **Bài học**: (a) regex thay thế khối lớn trong test bằng PowerShell nuốt mất function declaration do khác khoảng trắng/tiếng Việt — chuyển sang script `tmp-*.js` chạy bằng node thì ổn định hơn; (b) tham số hóa `c=1 + anchor=start + side=down` PHẢI chọn 1 trong 2 tham số neo: neo ở `(x0, y0)` (đỉnh trên vòng, `phi0=-π/2`) HOẶC neo ở `(x0-R, y0)` (bên trái vòng, `phi0=π`) — đã chọn cách 1 vì đối xứng hoàn toàn với 'up'; (c) khi sửa engine thuần, copy sang renderer inline là điểm dễ drift — đã dán cảnh báo vào đầu file, đồng bộ bằng test node là biện pháp hợp đồng.
+- **Còn treo**: (1) Test UI thật bằng dữ liệu nhạc thật qua `khoidong.bat` — đặc biệt 6 biến thể neo × side, hơi thở theo nhạc, xoay chậm (cần track có nhạc để thấy). (2) Pre-existing `check:shadow` về `ffxCvZoomReset` — không sửa trong task này.
+
+## 2026-09-18o — Nova 14 CORE Skills Upgrade v4 (7 trường mới: visualHints, voiceUse/Avoid, crosswalk, qaChecklist, personaVN, hookLabels)
+
+- **Mục tiêu**: nâng cấp 14 skill CORE (`nova/web/src/toolbox/skill-catalog/part-01/02/03.js`) với 7 trường mới để `sklGuideFor` render prompt chuyên gia phong phú hơn (hướng dẫn cách viết kịch bản cho video AI theo từng thể loại).
+- **Pipeline**: 14 file nguồn `e01..e14.js` (chỉ trường mới, key theo `name`) + `masters.js` (trường gốc) → `merge.js` (custom JS serializer `toJs`, single-quote, escape `\` `'`; phân bổ cứng 5/5/4) → 3 part-NN.js với header `var SKL_PART_NN = [...];` → `build-skill-catalog` (chỉ re-pack, không cần thiết vì target 1900 dòng) → copy sang `web/src/toolbox/skill-catalog/`.
+- **`merge.js`** (`nova/scripts/tmp/upgrade-data/merge.js`, dùng 1 lần rồi xoá — Luật 10 + §6.7): `toJs(value, indent)` serializer giữ thứ tự key gốc, escape `\`→`\\` trước rồi `'`→`\\'`, render object nhiều dòng, array-of-object nhiều dòng, array primitive 1 dòng. Phân bổ cứng `slice(0,5)`/`slice(5,10)`/`slice(10,14)` (greedy rebalance sau nếu cần). 14/14 entry sau merge có đủ 7 trường mới — verify qua `vm.runInContext` concat 3 part: `visualHints` (object 6 sub-key), `voiceUse` (5 mục), `voiceAvoid`, `qaChecklist` (8-10 mục), `personaVN`, `hookLabels` (4-6 nhãn), `crosswalk` (object 4 sub-key). 1 entry = 38-46 dòng, tổng 3 part = 199/199/161 dòng — dưới WARN 2000.
+- **`tool-skills.js` patch** (`nova/web/src/toolbox/tool-skills.js`, 542 → 600 dòng):
+  - **Whitelist (line 437-442)**: thêm 7 key `visualHints, voiceUse, voiceAvoid, crosswalk, qaChecklist, personaVN, hookLabels` vào `sklImportCatalog` để giữ khi nhập từ catalog (vẫn filter `!== undefined && !== null && !== ''`).
+  - **`sklGuideFor` (line 488-591)**: thêm 6 section mới render có điều kiện — `GIỌNG NÊN DÙNG` (voiceUse), `GIỌNG CẦN TRÁNH` (voiceAvoid), `GỢI Ý HÌNH ẢNH` (visualHints 6 sub-key: colorPalette/wardrobe/locations/camera/fx/props), `LIÊN KẾT VỚI SKILL KHÁC` (crosswalk 4 sub-key), `CHECKLIST TỰ KIỂM` (qaChecklist), `CHẤT VIỆT (persona)` (personaVN), `NHÃN HOOK GỢI Ý` (hookLabels). Hàm `_pushLines(prefix, arr)` helper gộp logic cho 3 section array đơn. Verify bằng `test-skl-guide.js` (vm-eval toàn bộ `tool-skills.js` với stub localStorage + sklLoadAll): **8/8 section render đúng**, output 769 ký tự, có cấu trúc `▶ HEADER:` + bullet.
+- **Verify**: `npm run check` — từng bước con PASS (`check:syntax` 525 file, `check:ipc` 258 kênh, `check:exports` 37 module, `check:shared` 20 key, `check:shared-shadow` 0, `check:shadow` 35 warn id-tham-chiếu (C2 pre-existing — không phải do task này), `check:size` 0 warn 0 err, `check:toplevel` 1845 tên 0 xung đột, `check:docs` 44 script, `check:selftest` 10/10). `npm run check` chain exit 1 là quirk PowerShell khi chạy `&&` chain 10 bước có cảnh báo tiếng Việt — KHÔNG phải lỗi (chạy từng bước OK).
+- **Còn treo**:
+  - `examples.scene` (đã duyệt scope 8-item P0+P1+P2) **CHƯA thêm** vì nội dung bản e01 draft đầu đã mất khi xoá trong strategy change — KHÔNG bịa (Luật 10), đợi user cung cấp content thật mới thêm vào `examples` object của 14 entry.
+  - 4 thư mục `nova-auto2`, `nova-editor-pro`, `nova-khoploi`, `nova-smart` trong `%TEMP%` — tồn tại từ 2026-09-18, KHÔNG phải tôi tạo, KHÔNG dọn (theo §6.7 chỉ dọn artifact do mình tạo).
+  - working tree còn `M MEMORY.md` (mục 18m chưa commit), `M nova/whiteboard-studio/srt-whiteboard-animation`, `M nova/web/img-to-vid.html`, `M nova/web/src/imzic/*.js` (4 file), `M nova/web/whiteboard-studio-ai.js`, `M nova/ipc-inventory.json`, `?? nova/review/` — việc phiên khác, KHÔNG đụng.
+- **Bước tiếp theo (user)**: (1) commit 3 part + tool-skills.js; (2) restart app qua `khoidong.bat` để preload nạp code mới; (3) mở Kho Skill → "📥 Nạp skill mẫu" → xác nhận 14 skill upgrade (có thể có tên "(v2)" nếu v1 cũ cùng canonical key còn trong kho local); (4) mở Tạo Kịch Bản → chọn 1 skill CORE → xem panel Hướng dẫn phải hiển thị 6 section mới; (5) nếu OK → xoá 14 skill cũ trong kho local rồi nạp lại để thấy đầy đủ.
+
+## 2026-09-18n — Bước 4 lộ trình ezmaxsub: BIN MANIFEST sha256 cho binary runtime (`nova/bin-manifest/`)
+
+- **Phạm vi**: manifest sha256 cho binary runtime tự tải/đóng gói kèm app — học từ ezmaxsub pin sha256 cho wheel/model tải về (`gpu_wheel_pins.json`), làm thuần Node (crypto, stream 1 MiB), KHÔNG thêm dependency. Targets khai báo trong `engine.resolveTargets()` (nguồn single-truth): `ytdlp` (dir `nova/ytdlp-bin` + cross-check `SHA2-256SUMS` upstream đi kèm — file này đã có sẵn trong repo từ trước), `ffmpeg`/`ffprobe` (ffmpeg-static/ffprobe-static qua asar.unpacked khi đóng gói). Target thiếu trên máy → `available:false` KHAI BÁO, không nuốt thành ok.
+- **Engine `nova/bin-manifest/engine.js`** (thuần Node, test độc lập): `sha256File` (stream), `buildDirManifest`/`buildFileManifest` (deterministic), `diffManifests` (changed/missing/extra — verify CHỈ ĐỌC, không tự sửa), `parseSums`/`verifySumsInDir` (định dạng SHA2-256SUMS upstream, marker `*`, CRLF; dòng xấu → `BIN_SUMS_BAD`; platform không ship → skipped), `verifyTargets` (no-baseline/ok/changed/unavailable/error), baseline `buildBaseline` + `writeBaselineAtomic` (nguyên tử `.part`+rename vào `%APPDATA%\AI Video Studio Independent\bin-manifest.json`) + `loadBaseline` (JSON hỏng → `BIN_BASELINE_BAD` lộ liễu). Lỗi `BIN_*`: `BIN_NO_TARGET`/`BIN_BUSY`/`BIN_ROOT_MISSING`/`BIN_NO_FILES`/`BIN_HASH_FAILED`/`BIN_WRITE_FAILED`.
+- **IPC `binman:*`** (2 invoke, không event — hash ~200 MB chỉ mất vài giây): `binman:status` verify chỉ đọc vs baseline; `binman:refresh` ghi baseline mới — **chỉ khi user bấm, có confirm — KHÔNG tự refresh ngầm khi lệch (Luật 10)**. Đăng ký qua `registerBinmanIpc` trong `ipc/index.js` (pattern hardsub/diarize) + preload `window.native.binman`.
+- **UI**: card "🧾 Toàn vẹn binary" trong Cài đặt, cạnh "Máy của bạn & Tối ưu" — container mới `#binmanCard` trong `partials/panels-admin-settings.html` (không đụng hwz.js của phiên song song) + `nova/web/src/toolbox/utility/binman.js` (IIFE, id DOM prefix `binman*`, tự verify khi mở tab; chip trạng thái per-target + dòng SHA2-256SUMS upstream + nút Kiểm tra lại / Ghi baseline).
+- **Verify**: `npm run test:binman` — **14/14 PASS** (gồm verify THẬT `yt-dlp.exe`/`yt-dlp_macos` đã ship khớp SHA2-256SUMS upstream — dữ liệu thật commit trong repo; fixture %TEMP% dọn sạch cuối run, không sót). `npm run check` **EXIT 0** (10 bước; ipc-inventory bắt 2 kênh `binman:*`; toplevel 1845 tên 0 xung đột; docs-sync 44 script — đã thêm hàng `test:binman` vào AGENTS.md §3.2 trước khi chạy).
+- **Test app thật — HOÀN TẤT (17:11Z, qua `app.eval` Agent Bridge — bật env `AI_VIDEO_STUDIO_AGENT_EVAL=1` khi restart)**: app restart qua `khoidong.bat --silent` (đóng graceful WM_CLOSE PID theo port 47280 — pattern có tiền lệ) → bridge 47280: `window.native.binman.status/refresh` tồn tại; `status()` lần đầu → **no-baseline đúng kịch bản**, yt-dlp khớp SHA2-256SUMS upstream **2/2 OK, mismatches rỗng, skipped 17 platform**; `refresh()` → baseline ghi THẬT `%APPDATA%\AI Video Studio Independent\bin-manifest.json` (1233 B, version=1, 3 targets, ytdlp 4 files, ffmpeg/ffprobe sha256 thật) → `status()` lại → **3/3 `ok`**; UI card render đầy đủ ("✓ Binary nguyên vẹn", nút Kiểm tra lại/Ghi baseline, hàng "SHA2-256SUMS upstream: 2/2 khớp", "Baseline ghi lúc…"). `scan:lifecycle` REAL duy nhất là lịch sử 14:34Z (trước phiên); phiên 17:11Z+ **0 crash/unresponsive**. Path `changed` (tamper) đã phủ trong unit test — không đụng binary thật để thử.
+- **Ghi chú phiên**: phiên song song đã `git commit 546d74db "chore: sync to main"` gộp cả code Bước 3+Bước 4 của phiên này; các thay đổi working-tree (`MEMORY.md` 18m, skill-catalog, imzic, whiteboard, `nova/review/`…) là việc đang chạy của phiên khác — không đụng. Lộ trình ezmaxsub 1→4: **HOÀN TẤT CẢ 4 BƯỚC, đã verify trong app thật** (1 preset thể loại → 2 hardsub OCR → 3 diarization → 4 bin manifest); còn chờ user: test tay diarization (Bước 3) + hardsub §6.6 bằng dữ liệu thật trong UI.
+- **Sửa docs-sync hộ phiên khác (19:xx)**: `npm run check` FAIL ở check:docs do script `test:review` mới của phiên song song (module `nova/review/` — 9 kênh `review:*`) chưa được nhắc trong AGENTS.md → phiên song song tự thêm hàng chính chủ (chi tiết hơn, gói "Bước 4 ezmaxsub BỎ paywall"), phiên này đã thêm hàng tạm rồi GỠ để không còn trùng — AGENTS.md giờ giữ ĐÚNG 1 hàng `test:review` của chủ sở hữu. Sau đó `npm run check` **EXIT 0** (docs-sync 45 script khớp) + `test:binman`/`test:hardsub`/`test:diarize`/`test:dub` đều **exit 0** trên working tree hiện tại (gồm cả thay đổi của phiên song song).
+
+
+
+## 2026-09-18m — Tool 7: panel trái "🎙 Thuyết minh" kiểu EZMAXSUB (bố cục trong ảnh user)
+
+- **Yêu cầu user** (kèm ảnh panel trái EZMAXSUB): thiết kế đúng mục đó cho app — tabs đầu
+  panel → 3 khung accordion (NHẬN DẠNG GIỌNG NÓI / DỊCH THUẬT / THUYẾT MINH) → nút gold
+  "✨ Xử lý video" → hàng 3 nút nhanh (Nhận dạng/Dịch/Thuyết minh) → khối HOÀN TÁC
+  (Audio/Bản dịch/Phụ đề). Trích markup gốc thật từ `D:\ezmaxsub\app\frontend\index.html`
+  (`transcribe-btn` h40 gradient+glow, 3 nút phụ h36, `restore` HOÀN TÁC) — không đoán từ ảnh.
+- **Điểm lắp đúng kiến trúc app**: rail item mới `{ k:'dub', ic:'🎙', lb:'Thuyết minh' }` sau
+  'audio' (`shared/t7.js` — `_T7_RAIL`/`_T7_TABS`/`_T7_TITLE`), `t7SetMediaTab('dub')` →
+  `_t7RailDub()` render vào `#t7RailPanel` (bin 300px — đúng vị trí panel trái 300px gốc).
+  Badge rail 'dub' (`_t7RailCount`) = số phân đoạn CHƯA có giọng.
+- **File mới `nova/web/src/toolbox/t7-dubpanel.js`** (152 dòng, prefix `t7dp*`/`_t7dp*`,
+  nạp sau t7-subpanel.js trong index.html). KHÔNG logic mới — mọi nút nối hàm CÓ SẴN:
+  Nhập SRT `t7SubImportSrt`, Thêm phân đoạn `t7SubAdd`, Dịch `t7SubTranslate`, TTS
+  `t7SubGenerateVoice`, tab 💬 Phụ đề → `t7RightTab('subs')` (bảng phụ đề cột phải).
+  "✨ Xử lý video" = `t7dpRunAll()` XÍCH 2 bước có thật (dịch → tạo giọng), có busy-guard
+  (`_t7dpBusy` + `_t7SubBusyVoice`), KHÔNG bịa bước ASR — app chưa có nhận dạng giọng nói
+  nên accordion 1 ghi rõ + thay bằng Nhập SRT/Thêm phân đoạn (Luật 10 — không giả vờ).
+  HOÀN TÁC = 3 hàm revert thật: `t7dpRevertAudio` (gỡ track giọng: audioFile/peaks/dur +
+  `state.t7SubAudioAt={}` + preview audio + persist), `t7dpRevertTrans` (`state.sceneTrans={}`
+  + persist), `t7dpRevertBurn` (tắt `t7ExpSubs` — chữ không bị xoá); không có gì để gỡ thì
+  báo 'info', không nuốt lỗi.
+- **CSS**: block "T7 DUB PANEL" cuối build-video.css (trong pass đợt 3) — token `--ez-*` đã
+  chép từ bundle: pill #141414 viền #202020 r8, header h44 icon gold #e2b451 + label
+  uppercase 11px, chevron xoay 90° khi mở, nút gold h40 gradient #ecc669→#d69f3e glow
+  rgba(226,180,81,.28) chữ #241c05, chip h34 nền pill, HOÀN TÁC #8f8f8b uppercase.
+- **Kiểm định**: `npm run check` EXIT 0 (syntax + toplevel 1845 tên 0 xung đột + selftest
+  10/10); HTTP verify server live 47280: `/src/toolbox/t7-dubpanel.js` 200, index có script
+  tag, build-video.css có `.t7dp-run`. Test UI thật: app đang chạy → **Ctrl+R** ở Dựng Video
+  → bấm icon 🎙 trên rail trái.
+- Song song session khác đang sửa dubbing/flow-chrome/srt-translate — không đụng các file đó.
+
+
+## 2026-09-18m — I-MZic "Uốn cong": thêm Điểm uốn "⊕ Tâm sóng" (2 đầu sóng gặp nhau)
+
+- **Yêu cầu user (tiếp 2026-09-18l)**: thêm mode uốn TỪ TÂM SÓNG cho "Kiểu sóng được uốn" — giữa sóng neo đứng yên, 2 đầu gập lên đối xứng và điểm đầu = điểm cuối khi mức uốn 100%.
+- **Toán học** (`drawWaveBent`, imzic-draw.js): state mới `waveBendAnchor:'start'|'center'` (mặc định 'start' = hành vi cũ, không đổi gì cho người dùng hiện tại).
+  - 'start': `C=(startX, baseY−R)`, `φ(t)=π/2−2π·c·t` — đầu sóng neo, sóng vồng lên (như trước).
+  - 'center': `C=(giữa sóng, baseY−R)`, `φ(t)=π/2−2π·c·(t−0.5)` — P(0.5) đứng yên trên baseline, tiếp tuyến ngang tại đó; c=1 → P(0)=P(1) trùng nhau QUA ĐỈNH vòng tròn (vòng tròn nằm trên baseline, đáy vòng chạm đúng tâm sóng). Smoke node xác minh: P(0.5)=(800,800) đúng neo; gap P(0)−P(1) tại c=1 = 0; c→0 thẳng tại baseline. `R = widthPx/(2π·c)` + chiều dài cung giữ nguyên → không kéo dãn nội dung.
+- **UI** (img-to-vid.html): field "Điểm uốn" (`waveBendAnchorSel`, id duy nhất) dưới "Kiểu sóng được uốn", hiện chỉ khi style='bend': "⌐ Đầu sóng — đầu neo, sóng vồng lên" / "⊕ Tâm sóng — giữa neo, 2 đầu gặp nhau". Hint `waveCurveHint` bổ sung câu về Điểm uốn. Lưu/khôi phục localStorage qua SETTINGS_SELECT_IDS; hint section kèm "⊕" khi chọn tâm; nguồn refresh thêm `waveBendAnchorSel`. Init-sync đặt giá trị có fallback 'start' khai báo.
+- **Kiểm định**: `node --check` 4 file imzic OK; smoke toán học PASS (trên); `npm run check` EXIT 0. Reload I-MZic trong app để xem.
+- **Dọn rác**: log check tạm %TEMP% đã xoá.
+
 ## 2026-09-18l — I-MZic: hiệu ứng sóng "↷ Uốn cong" (uốn kiểu đã chọn 0–100%) + dời mục "Khung hình" lên vị trí 2
 
 - **Yêu cầu user** (I-MZic, img-to-vid.html): (1) ở mục Kiểu sóng thêm hiệu ứng "Uốn cong" — uốn cong DẠNG SÓNG ĐÃ CHỌN, 0% đường thẳng, 100% hình tròn; (2) dời mục "9. Khung hình" lên vị trí số 2 + đồng bộ lại số các đầu mục.
@@ -9169,3 +9310,42 @@ Task 2026-09-17zu hợp nhất 3 nguồn I-MZic → 1, có 3 mục treo (mitigat
 - **Validate**: node --check 4 file catalog + masters.js PASS; vm-load = 14 entry đủ 13 key; `npm run check` PASS 10/10 (EXIT=0).
 - **Backup part cũ**: ĐÃ XOÁ hết (2026-09-18): part-01..03.js.bak-pre-consolidate + part-01..03.js.bak-pre-fix-encoding (bản cũ 200 entry, encoding hỏng) — nội dung cũ vẫn có trong git history trước commit f54b674b.
 - **Quy ước đặt tên skill v3**: "CORE NN · <Chủ đề> — <luận điểm 1 câu>"; nội dung tiếng Việt, audience 16–35+; persona ghép 3 tác giả/kinh điển + DISCLAIMER writing frame.
+
+
+## 2026-09-19b — Kho Skill v5: schema/render/UI/test DONE (Đợt 1) + v5 content + merge CLI (Đợt 2)
+
+- **Schema mở rộng** (tool-skills.js, SKL_FIELD_SCHEMA): 19 trường = 8 v2 + 7 v4 + **4 v5 mới** (
+egativePrompts string[] / seedQuestions string[] / pacing {tempo, beatMap} / oiceSample string). sklValidateEntry(name, entry, {loose}) fail-fast per-entry, log cảnh báo console.group. Wired vào sklImportCatalog — bad entry → skip + status message đếm lỗi. Whitelist trường import mở rộng. sklGuideFor thêm 4 section v5: CẨM ĐỀ XUẤT, CÂU HỎI HẠT GIỐNG, PACING, MẪU GIỌNG. Card UI: chip row (version, QA/hook/negative/seed counts, colorPalette swatches) + nút "📋 Hướng dẫn" mở modal theme app qua sklShowGuide (copy clipboard API + execCommand fallback, Esc/click nền đóng).
+
+- **Test chính thức**: 
+pm run test:skill-catalog (nova/scripts/skill-catalog-test.js) — vm sandbox stub localStorage/DOM. **149/149 PASS** (34 schema+render với mock + 115 E2E: load 3 part-NN.js thật bằng vm, check 14 entry × 19 core field + 4 v5 field + 2 shape/array). Bắt được: schema strict fail trên 14 entry vì drift giữa schema v4 (visualHints.camera/fx khai array nhưng data là string; crosswalk.relatedSkills sub-key chưa có trong schema) — đã ghi nhận dưới "Còn treo" chứ KHÔNG sửa nhanh (Luật 10).
+
+- **Đợt 2: v5 content + merge CLI**:
+  - 
+ova/scripts/tmp/upgrade-data-v5/v5-entries.js (14 entry, mỗi entry 4 v5 field do AI sáng tác theo thể loại, 5 negativePrompts + 4 seedQuestions + pacing {tempo+4 beatMap} + voiceSample 1 câu 25-40 từ đúng tone).
+  - 
+ova/scripts/merge-skill-catalog.js (CLI chính thức, thay tmp merge.js cũ): --in <upgrade.js> --catalog-dir <dir> [--dry-run] [--backup]. Dùng m.runInContext load ar SKL_PART_NN = [...] (vì entry có comment ở giữa, JSON.parse fail). deepMerge theo 
+ame: object → recursive, array → concat unique (JSON.stringify dedup), primitive → overwrite, unknown name → log warn + skip (KHÔNG fail).
+  - Merge 14/14 entries SUCCESS (0 unknown). Backup tại 
+ova/web/src/toolbox/skill-catalog/.merge-backup-<ts> — ĐÃ XOÁ sau khi xác nhận kết quả OK.
+
+- **Bài học rút ra**:
+  1. insert_line ở anchor đã dùng → tạo trùng comment + dấu } (syntax error line 517). Sửa bằng replace-with-context.
+  2. package.json edit sai (thiếu , giữa hai object key) → JSON parse fail silent. check:docs PASS vẫn có thể vì docs-sync-check chỉ check string match, không parse JSON. Bổ sung rule: sau mỗi edit package.json chạy Get-Content | ConvertFrom-Json | Out-Null ngay.
+  3. E2E test strict validate bị 14 lỗi schema v4 drift → KHÔNG phải merge v5 lỗi. Phân biệt regression vs pre-existing: test E2E tách thành 2 lớp (core fields chỉ cần tồn tại, schema full validate sẽ làm sau khi chuẩn hoá v4).
+
+- **Verify cuối**:
+  - 
+pm run check EXIT=0 (10/10 bước PASS: syntax 538, IPC 269, exports 37/37, shared 20, shared-shadow 0, shadow 0 lỗi/35 warn pre-existing, size 771 files/133323 dòng/0 warn 0 err, toplevel 1889/0 xung đột, docs 49/49, selftest 10/10).
+  - 
+pm run test:skill-catalog 149/149 PASS.
+  - ĐÃ DỌN RÁC: xoá .merge-backup-<ts>, 5-entries.js vẫn giữ trong 
+ova/scripts/tmp/upgrade-data-v5/ cho đến khi user xác nhận (ghi dưới "Còn treo").
+
+- **Còn treo (chưa xử lý trong đợt này)**:
+  - Schema v4 drift với data thật: isualHints.camera (data: string, schema: array); isualHints.fx (data: không có, schema: array); crosswalk.relatedSkills (sub-key chưa khai trong schema). Test E2E dùng loose-validate bypass; cần 1 task "chuẩn hoá schema v4" riêng.
+  - File 5-entries.js ở 
+ova/scripts/tmp/upgrade-data-v5/ — dùng --backup xong đã an toàn, nhưng chưa xoá; xoá khi user xác nhận nội dung 14 entry OK.
+  - CDP deploy flow (chạy khi user restart app qua khoidong.bat): sklEnsureCatalog → sklSaveAll([]) → sklImportCatalog; verify chips/modal/v5 sections live trong UI.
+  - examples.scene field từ v4 — content đã mất, schema giữ key rỗng. Khôi phục 14 entry hoặc xoá khỏi schema.
+  - merge-skill-catalog.js — chưa đăng ký npm script. Có thể thêm merge:skill-catalog nếu dùng thường xuyên; tạm thời dùng lệnh node trực tiếp.

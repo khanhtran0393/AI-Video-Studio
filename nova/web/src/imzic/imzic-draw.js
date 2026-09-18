@@ -13,6 +13,51 @@
 // 2026-09-18j: dispatch 16 kiểu sóng tách thành hàm riêng — dùng chung bởi
 // drawWave (kiểu thường) và drawWaveBent (hiệu ứng "Uốn cong" vẽ kiểu nền vào
 // canvas tạm). Bảng ánh xạ kiểu → hàm vẽ GIỮ NGUYÊN so với trước.
+// 2026-09-18n: nhúng bản sao hàm thuần imzBend* từ nova/imzic-bend/engine.js
+// (renderer không có build step — không require). Khi sửa hằng số/điều kiện
+// trong engine, COPY LẠI bản inline dưới đây cho khớp (mất đồng bộ là lỗi
+// thật — kiểm chứng bằng test node nova/imzic-bend/test.js + hàm dưới).
+const IMZ_BEND_PI = Math.PI;
+function imzBend_check(cond, code, msg){ if(!cond) throw new Error(code+': '+msg); }
+function imzBendCEff(c, beat, kBeat){
+  imzBend_check(Number.isFinite(c), 'IMZIC_BEND_C', 'c not finite');
+  const c0 = Math.min(1, Math.max(0, c));
+  if(c0 <= 0) return 0;
+  if(!kBeat) return c0;
+  imzBend_check(Number.isFinite(beat), 'IMZIC_BEND_C', 'beat not finite');
+  imzBend_check(beat >= 0 && beat <= 1, 'IMZIC_BEND_C', 'beat not in [0,1]');
+  return Math.min(1, c0 * (1 + kBeat * beat));
+}
+function imzBendRadius(widthPx, cEff){
+  imzBend_check(widthPx > 0, 'IMZIC_BEND_W', 'widthPx <= 0');
+  return widthPx / (2 * IMZ_BEND_PI * cEff);
+}
+function imzBendArcPoint(t, cEff, anchor, side, startX, widthPx, baseY){
+  imzBend_check(Number.isFinite(t), 'IMZIC_BEND_T', 't not finite');
+  imzBend_check(t >= 0 && t <= 1, 'IMZIC_BEND_T', 't not in [0,1]');
+  imzBend_check(anchor==='start'||anchor==='center'||anchor==='end','IMZIC_BEND_ANCHOR','anchor='+anchor);
+  imzBend_check(side==='up'||side==='down','IMZIC_BEND_SIDE','side='+side);
+  if(cEff <= 0) return { x: startX + t*widthPx, y: baseY, angle: 0 };
+  const R = imzBendRadius(widthPx, cEff);
+  const tOff = anchor==='center' ? 0.5 : (anchor==='end' ? 1 : 0);
+  const cx = anchor==='center' ? (startX + widthPx/2) : (anchor==='end' ? (startX + widthPx) : startX);
+  const cy = side==='down' ? (baseY + R) : (baseY - R);
+  const phi0 = side==='down' ? -IMZ_BEND_PI/2 : IMZ_BEND_PI/2;
+  const phi = phi0 - 2*IMZ_BEND_PI*cEff*(t - tOff);
+  const tx = Math.sin(phi);
+  const ty = -Math.cos(phi);
+  return {
+    x: cx + Math.cos(phi)*R,
+    y: cy + Math.sin(phi)*R,
+    angle: Math.atan2(ty, tx)
+  };
+}
+function imzBendSegCount(widthPx, cEff){
+  imzBend_check(widthPx > 0, 'IMZIC_BEND_W', 'widthPx <= 0');
+  imzBend_check(cEff >= 0, 'IMZIC_BEND_C', 'cEff < 0');
+  const base = Math.max(48, Math.min(160, Math.round(widthPx/8)));
+  return Math.max(48, Math.min(240, Math.round(base * (1 + cEff*0.5))));
+}
 function imzWaveDrawStyle(style,bins,w,h,baseY,startX,widthPx,amp){
   if(style==='ribbon') drawWaveRibbon(bins,w,h,baseY,startX,widthPx,amp);
   else if(style==='bars') drawWaveBars(bins,w,h,baseY,startX,widthPx,amp);
@@ -65,19 +110,11 @@ function drawWave(dt){
   ctx.restore();
 }
 
-// ---- 2026-09-18j: hiệu ứng "Uốn cong" (waveStyle='bend') ----
-// Uốn KIỂU SÓNG NỀN (state.waveBendBase) theo mức uốn state.waveCurve:
-//   0% = đường thẳng (vẽ kiểu nền trực tiếp), 100% = khép kín thành hình tròn.
-// Cách làm tổng quát cho MỌI kiểu sóng: vẽ kiểu nền vào canvas tạm cùng kích
-// thước khung (hoán tạm ctx), rồi ghép các lát dọc của canvas tạm lên canvas
-// chính dọc theo cung tròn. Công thức cung bảo toàn chiều dài:
-//   R = widthPx/(2π·c)            → chiều dài cung = R·2πc = widthPx (khớp c=1)
-//   φ(t) = π/2 − 2π·c·t           → điểm đầu (t=0) tại (startX, baseY), tiếp
-//                                   tuyến nằm ngang; cung vồng LÊN trên baseline
-//   P(t) = (startX, baseY−R) + R·(cosφ, sinφ)
-// Tại c→0: R→∞, P(t) → đường thẳng (khai triển Taylor liên tục) — chuyển mượt.
-// Export vẫn đi qua drawWave này nên hiệu ứng có mặt trong file xuất (canvas tạm
-// dựng ở kích thước LOGIC, ctx chính đang mang transform phóng của export tự áp).
+// ---- 2026-09-18j: hiệu ứng "Uốn cong" (waveStyle='bend') — đã tái cấu trúc
+// 2026-09-18n dùng hàm thuần imzBend* (định nghĩa ở đầu file). Vẫn render kiểu
+// nền vào canvas tạm (cùng kích thước khung), rồi ghép các lát dọc lên canvas
+// chính dọc theo cung. arcLen = widthPx đảm bảo, neo 3 kiểu (start/center/end),
+// hướng vồng 2 kiểu (up/down), hơi thở theo nhạc, xoay chậm khi đóng vòng.
 let imzBendCv = null, imzBendCvw = 0, imzBendCvh = 0;
 function imzBendCanvas(w,h){
   if(!imzBendCv || imzBendCvw!==w || imzBendCvh!==h){
@@ -88,15 +125,32 @@ function imzBendCanvas(w,h){
   return imzBendCv;
 }
 function imzBendBaseStyleOf(){
-  // kiểu nền khai báo rõ: mặc định 'line', không nhận 'off'/'bend' làm nền
   return (state.waveBendBase && state.waveBendBase!=='off' && state.waveBendBase!=='bend')
     ? state.waveBendBase : 'line';
 }
+// 2026-09-18n: lấy năng lượng nhịp thật từ bins — tính theo dải bass/treble,
+// chuẩn hoá 0..1, làm mượt (attack nhanh / release chậm) để không giật.
+let imzBendBeatSmooth = 0;
+function imzBendBeatOf(bins){
+  if(!bins || !bins.length) return 0;
+  const n = bins.length;
+  const bn = Math.max(1, Math.floor(n/8));
+  const tn = Math.max(1, Math.floor(n/4));
+  let s = 0; for(let i=0;i<bn;i++) s += bins[i];
+  const bass = s / (bn * 255);
+  s = 0; for(let i=n-tn;i<n;i++) s += bins[i];
+  const treble = s / (tn * 255);
+  const e = Math.min(1, bass*0.7 + treble*0.3);
+  if(e > imzBendBeatSmooth) imzBendBeatSmooth = imzBendBeatSmooth*0.82 + e*0.18;
+  else                      imzBendBeatSmooth = imzBendBeatSmooth*0.94 + e*0.06;
+  return imzBendBeatSmooth;
+}
 function drawWaveBent(bins,w,h,baseY,startX,widthPx,amp){
   const base = imzBendBaseStyleOf();
-  const c = Math.max(0, Math.min(1, state.waveCurve == null ? 0 : +state.waveCurve));
-  if(c <= 0.001){
-    // 0% = đường thẳng — vẽ kiểu nền như bình thường, không tốn canvas tạm
+  const cRaw = Math.max(0, Math.min(1, state.waveCurve == null ? 0 : +state.waveCurve));
+  // 2026-09-18n: nâng ngưỡng fast-path 0.001 → 0.03 — dưới ngưỡng gần như thẳng,
+  // vẽ thẳng cho rẻ, tránh sinh canvas tạm + ghép lát cho c rất nhỏ.
+  if(cRaw <= 0.03){
     const grad0 = buildWaveGradient(startX, widthPx, ctx);
     ctx.strokeStyle = grad0; ctx.fillStyle = grad0;
     ctx.lineWidth = state.waveSize; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
@@ -104,7 +158,11 @@ function drawWaveBent(bins,w,h,baseY,startX,widthPx,amp){
     imzWaveDrawStyle(base,bins,w,h,baseY,startX,widthPx,amp);
     return;
   }
-  // 1) vẽ kiểu nền vào canvas tạm (hoán tạm ctx — thuật toán vẽ đọc ctx toàn cục)
+  // 2026-09-18n: hơi thở theo nhạc — beat 0..1 nhân hệ số 0.4 (c_eff = c·(1+0.4·beat)),
+  // kẹp ≤ 1. Chỉ bật khi waveOn + c>0.4 (vùng cong thật, tránh dao động ở thẳng).
+  const beat = (state.waveOn && cRaw > 0.4) ? imzBendBeatOf(bins) : 0;
+  const cEff = imzBendCEff(cRaw, beat, 0.4);
+  // 1) vẽ kiểu nền vào canvas tạm (hoán tạm ctx)
   const cv = imzBendCanvas(w,h);
   const bctx = cv.getContext('2d');
   bctx.setTransform(1,0,0,1,0,0);
@@ -120,32 +178,40 @@ function drawWaveBent(bins,w,h,baseY,startX,widthPx,amp){
     imzWaveDrawStyle(base,bins,w,h,baseY,startX,widthPx,amp);
     bctx.restore();
   } finally {
-    ctx = saved; // trả ctx chính — Luật 10: không nuốt lỗi, lỗi vẽ vẫn ném ra
+    ctx = saved;
   }
-  // 2) ghép các lát dọc theo cung — dir chỉ đổi THỨ TỰ quét nội dung (như 'curved')
-  const pad = 36; // đệm phủ glow/bán độ rộng cột tràn khỏi dải sóng
+  // 2) ghép lát dọc theo cung — neo + hướng vồng + hơi thở
+  const pad = 36;
   const x0 = startX - pad, x1 = startX + widthPx + pad;
-  const segN = Math.max(48, Math.min(160, Math.round(widthPx/8)));
+  const segN = imzBendSegCount(widthPx, cEff);
   const segW = (x1 - x0) / segN;
-  const R = widthPx / (2 * Math.PI * c);
-  const cx = startX, cy = baseY - R;
+  const anchor = (state.waveBendAnchor === 'center' || state.waveBendAnchor === 'end')
+    ? state.waveBendAnchor : 'start';
+  const side   = (state.waveBendSide === 'down') ? 'down' : 'up';
   const dir = (state.waveCurveDir === 'rev') ? -1 : 1;
+  // 2026-09-18n: alpha<1 → lát vừa khít (không overlap) tránh seam tối; alpha=1
+  // vẫn overlap nhẹ 1.5px như cũ để che khe hở do số học dấu phẩy động.
+  const alpha = (state.alpha == null ? 0.85 : +state.alpha);
+  const sliceW = (alpha < 0.999) ? segW : segW + 1.5;
+  const sliceXOffset = (alpha < 0.999) ? 0 : -0.75;
+  // 2026-09-18n: xoay chậm khi đã gần đóng vòng (cEff≥0.85) + neo center.
+  // Tốc độ 0.06 rad/s (~1 vòng/phút), waveTime đã tăng theo dt ở drawWave.
+  const spin = (anchor === 'center' && cEff >= 0.85) ? (waveTime * 0.06) : 0;
+  // 2026-09-18n: chất lượng nội suy cao khi ghép lát cung
+  const prevQ = ctx.imageSmoothingQuality;
+  ctx.imageSmoothingQuality = 'high';
   for(let i=0;i<segN;i++){
     const tg = (i + 0.5) / segN;
     const tScan = dir > 0 ? tg : (1 - tg);
-    const phi = Math.PI/2 - 2*Math.PI*c*tScan;
-    const px = cx + Math.cos(phi)*R;
-    const py = cy + Math.sin(phi)*R;
-    // tiếp tuyến P'(t) ∝ (sinφ, −cosφ) — góc xoay của lát
-    const ang = Math.atan2(-Math.cos(phi), Math.sin(phi));
-    const sx = x0 + i*segW;
+    const p = imzBendArcPoint(tScan, cEff, anchor, side, startX, widthPx, baseY);
+    const sx = x0 + i*segW + sliceXOffset;
     ctx.save();
-    ctx.translate(px, py);
-    ctx.rotate(ang);
-    // lát dày hơn khoảng cách 1.5px để khít mép ghép (che khe hở vòng cung)
-    ctx.drawImage(cv, sx, 0, segW + 1.5, h, -segW/2 - 0.75, -baseY, segW + 1.5, h);
+    ctx.translate(p.x, p.y);
+    ctx.rotate(p.angle + spin);
+    ctx.drawImage(cv, sx, 0, sliceW, h, -sliceW/2, -baseY, sliceW, h);
     ctx.restore();
   }
+  ctx.imageSmoothingQuality = prevQ || 'low';
 }
 
 function drawLeaf(cx,cy,r,rot){

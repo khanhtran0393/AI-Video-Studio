@@ -47,10 +47,15 @@
     "test:dub": "node nova/dubbing/test.js",
 "test:hardsub": "node nova/hardsub/test.js",
     "test:diarize": "node nova/diarization/test.js",
+    "test:t7-fxcache": "node nova/scripts/t7-fxcache-test.js",
     "test:binman": "node nova/bin-manifest/test.js",
     "test:ffx-smoke": "node nova/scripts/ffx-smoke.js",
+    "test:ffx-canvas": "node nova/scripts/ffx-canvas-test.js",
     "test:t7-ai": "node nova/scripts/t7-ai-core-test.js",
-    "test:imzic": "node nova/scripts/imzic-core-test.js"
+    "test:imzic": "node nova/scripts/imzic-core-test.js",
+    "test:imzic-bend": "node nova/imzic-bend/test.js",
+    "test:review": "node nova/review/test.js",
+    "test:skill-catalog": "node nova/scripts/skill-catalog-test.js"
   },
   "dependencies": {
     "@remotion/bundler": "4.0.518",

@@ -181,7 +181,92 @@ function _t7GlobEditor(){
   ${_t7LayerPanel(L, { scene: false, timing, tail })}`;
 }
 
-async function _t7LoadFx(){
+// ══ Cache bền kho FX (localStorage) — IPC chỉ chạy thật MỘT lần đầu tiên; các phiên sau
+// hydrate ĐỒNG BỘ từ cache rồi mới kiểm chứng ngầm (stale-while-revalidate, có khai báo).
+// Đổi logic sinh preview/swatch phía main (templates.js/anim.js/effects.js/preview.js) →
+// PHẢI tăng _T7_FX_CACHE_VER để cache cũ bị vứt, không dâng dữ liệu stale.
+const _T7_FX_CACHE_KEY = 't7FxKhoCacheV1';
+const _T7_FX_CACHE_VER = 'v1-2026-09-18';
+let _t7FxHydrated = false;   // đã thử hydrate từ localStorage trong phiên này chưa
+let _t7FxLoading = null;     // single-flight cho _t7LoadFx (chặn 2 vòng nạp trùng nhau)
+let _t7FxSwP = null;         // single-flight cho _t7FxSwatchLoad
+// ⚠️ KHỐI PHỤC HỒI (2026-09-18): `let _t7FxSw` bị mất trong đợt dedup — mọi phép ĐỌC
+// (_t7FxSwatchLoad + t7-fx.js khi vẽ thẻ FX) ném ReferenceError → t7FxTab chết giữa
+// chừng → panel Chữ/Chuyển động/Chuyển cảnh kẹt vĩnh viễn ở "Đang nạp…".
+let _t7FxSw = null;          // swatch CSS sống của mẫu fx-* (đồng bộ với cache localStorage)
+
+// Vân tay nội dung kho: id + nhãn + tham số mẫu, id chuyển cảnh, danh sách bit, khoá ảnh preview.
+function _t7FxFp(cat, trans, bits, prev){
+  const sig = JSON.stringify({
+    c: (cat || []).map(t => [t.template, t.label, t.params || []]),
+    t: (trans || []).map(x => x.id),
+    b: bits || [],
+    p: Object.keys(prev || {}).sort(),
+  });
+  let h = 5381; for (let i = 0; i < sig.length; i++) h = ((h << 5) + h + sig.charCodeAt(i)) | 0;   // djb2
+  return (h >>> 0) + ':' + sig.length;
+}
+
+function _t7FxReady(){ return !!(_t7Cat && _t7Trans && _t7Bits && _t7Prev); }
+
+function _t7FxBadge(){
+  const n = (_t7Cat || []).length + (_t7Trans || []).length + (_t7Bits || []).length;
+  const c = document.getElementById('t7FxCount'); if (c) c.textContent = n || '—';
+  return n;
+}
+
+function _t7FxCacheSave(){
+  try {
+    localStorage.setItem(_T7_FX_CACHE_KEY, JSON.stringify({
+      v: _T7_FX_CACHE_VER,
+      fp: _t7FxFp(_t7Cat, _t7Trans, _t7Bits, _t7Prev),
+      cat: _t7Cat, trans: _t7Trans, bits: _t7Bits, prev: _t7Prev, sw: _t7FxSw || {},
+    }));
+  } catch (e) { console.warn('[T7] Không lưu được cache kho FX (quota?):', (e && e.message) || e); }
+}
+
+function _t7FxCacheLoad(){
+  try {
+    const raw = localStorage.getItem(_T7_FX_CACHE_KEY); if (!raw) return false;
+    const j = JSON.parse(raw);
+    if (!j || j.v !== _T7_FX_CACHE_VER || !Array.isArray(j.cat) || !Array.isArray(j.trans) || !Array.isArray(j.bits)) return false;
+    _t7Cat = j.cat; _t7Trans = j.trans; _t7Bits = j.bits; _t7Prev = j.prev || {}; _t7FxSw = j.sw || {};
+    return true;
+  } catch (e) { return false; }
+}
+
+// Kiểm chứng ngầm KHÔNG chặn render: 4 IPC rẻ tiền → so vân tay. Lệch → thay dữ liệu sống,
+// xoá swatch (sinh lại), lưu cache, vẽ lại rail + tab đang mở. IPC lỗi → degrade CÓ KHAI BÁO.
+async function _t7FxRevalidate(){
+  try {
+    const nat = window.native || {};
+    const [cat, tr, bits, prev] = await Promise.all([
+      typeof nat.sceneTemplates === 'function' ? nat.sceneTemplates() : null,
+      typeof nat.sceneTransitions === 'function' ? nat.sceneTransitions() : null,
+      typeof nat.sceneBits === 'function' ? nat.sceneBits() : null,
+      typeof nat.fxPreviews === 'function' ? nat.fxPreviews() : null,
+    ]);
+    const liveCat = (cat && cat.ok && Array.isArray(cat.items)) ? cat.items : null;
+    const liveTr = (tr && tr.ok && Array.isArray(tr.items) && tr.items.length) ? tr.items : null;
+    if (!liveCat || !liveTr) throw new Error('IPC kho FX không trả dữ liệu hợp lệ');
+    const liveBits = (bits && bits.ok) ? (bits.items || []) : [];
+    const livePrev = (prev && prev.ok) ? (prev.items || {}) : {};
+    if (_t7FxFp(liveCat, liveTr, liveBits, livePrev) !== _t7FxFp(_t7Cat, _t7Trans, _t7Bits, _t7Prev)){
+      _t7Cat = liveCat; _t7Trans = liveTr; _t7Bits = liveBits; _t7Prev = livePrev; _t7FxSw = {};
+      _t7FxCacheSave();
+      try { t7RenderRail(); } catch (e2) {}
+      const t = (typeof t7State !== 'undefined' && t7State.mediaTab) || '';
+      if (t === 'text' || t === 'motion' || t === 'trans') t7FxTab(t);
+      setStatus7('↻ Kho hiệu ứng đã thay đổi — đã nạp bản mới.', 'ok');
+    }
+  } catch (e) {
+    // Degrade có chủ đích (Luật 10): giữ dữ liệu cache đã lưu, báo rõ chứ không fallback câm.
+    console.warn('[T7] Không kiểm chứng được kho FX — đang dùng cache lần trước:', (e && e.message) || e);
+    try { setStatus7('⚠️ Không kiểm chứng được kho hiệu ứng — đang dùng bản đã lưu từ lần trước.', 'warn'); } catch (e2) {}
+  }
+}
+
+async function _t7LoadFxLive(){
   if (!_t7Cat) await _t7Catalog();
   if (!_t7Trans) await _t7LoadTrans();
   if (!_t7Bits && window.native && typeof window.native.sceneBits === 'function'){
@@ -192,25 +277,45 @@ async function _t7LoadFx(){
     try { const r = await window.native.fxPreviews(); _t7Prev = (r && r.ok) ? (r.items || {}) : {}; } catch (e) { _t7Prev = {}; }
   }
   if (!_t7Prev) _t7Prev = {};
-  const n = (_t7Cat || []).length + (_t7Trans || []).length + _t7Bits.length;
-  const c = document.getElementById('t7FxCount'); if (c) c.textContent = n || '—';
-  return n;
+  _t7FxCacheSave();
+  return _t7FxBadge();
+}
+
+async function _t7LoadFx(){
+  if (_t7FxReady()) return _t7FxBadge();
+  if (!_t7FxHydrated){
+    _t7FxHydrated = true;
+    if (_t7FxCacheLoad()){
+      const n = _t7FxBadge();          // hydrate đồng bộ → tab vẽ NGAY, không chờ IPC
+      _t7FxRevalidate();               // kiểm chứng ngầm, không await
+      return n;
+    }
+  }
+  if (_t7FxLoading) return _t7FxLoading;
+  _t7FxLoading = _t7LoadFxLive().finally(() => { _t7FxLoading = null; });
+  return _t7FxLoading;
 }
 
 async function _t7FxSwatchLoad(){
   if (_t7FxSw) return _t7FxSw;
-  _t7FxSw = {};
-  const fxs = (_t7Cat || []).filter(t => /^fx-/.test(t.template));
-  for (const t of fxs){
-    try {
-      const r = await window.native.previewLayers({ spec: { durationSec: 2, layers: [{ template: t.template }] }, t: 1.2 });
-      const it = (r && r.ok && r.items || []).find(x => x && x.kind === 'fx');
-      if (it && (it.pieces || []).length){
-        _t7FxSw[t.template] = '<div style="position:relative;width:100%;height:100%;overflow:hidden">' + _t7LayerHtml(it) + '</div>';
-      }
-    } catch (e) {}
-  }
-  return _t7FxSw;
+  if (_t7FxSwP) return _t7FxSwP;
+  _t7FxSwP = (async () => {
+    const sw = {};
+    const fxs = (_t7Cat || []).filter(t => /^fx-/.test(t.template));
+    await Promise.all(fxs.map(async (t) => {      // song song — trước đây tuần tự từng IPC
+      try {
+        const r = await window.native.previewLayers({ spec: { durationSec: 2, layers: [{ template: t.template }] }, t: 1.2 });
+        const it = (r && r.ok && r.items || []).find(x => x && x.kind === 'fx');
+        if (it && (it.pieces || []).length){
+          sw[t.template] = '<div style="position:relative;width:100%;height:100%;overflow:hidden">' + _t7LayerHtml(it) + '</div>';
+        }
+      } catch (e) {}
+    }));
+    _t7FxSw = sw;
+    _t7FxCacheSave();
+    return _t7FxSw;
+  })().finally(() => { _t7FxSwP = null; });
+  return _t7FxSwP;
 }
 
 function _t7ABImgs(){

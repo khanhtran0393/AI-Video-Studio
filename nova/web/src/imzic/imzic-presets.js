@@ -41,11 +41,16 @@ const SECTION_HINTS = {
       return base + ' · ' + dir + ' ' + c + '%';
     }
     // 2026-09-18j: hiệu ứng "Uốn cong" (bend) — hint kèm kiểu sóng nền đang uốn
+    // 2026-09-18m: kèm điểm uốn (⊕ tâm sóng khi chọn 'center')
+    // 2026-09-18n: thêm ¬ cuối, ↧ vồng xuống để dễ phân biệt preset
     if(state.waveStyle === 'bend'){
       const baseTxt = selOptionText('waveBendBaseSel') || state.waveBendBase || 'line';
       const c = Math.round((state.waveCurve == null ? 0 : +state.waveCurve) * 100);
       const dir = (state.waveCurveDir === 'rev') ? '↺' : '↻';
-      return base + ' (' + baseTxt + ') · ' + dir + ' ' + c + '%';
+      const anchor = (state.waveBendAnchor === 'center') ? ' ⊕'
+                   : (state.waveBendAnchor === 'end')    ? ' ¬' : '';
+      const side = (state.waveBendSide === 'down') ? ' ↧' : '';
+      return base + ' (' + baseTxt + anchor + side + ') · ' + dir + ' ' + c + '%';
     }
     return base;
   },
@@ -66,7 +71,7 @@ const SECTION_HINT_SOURCES = {
   secFiles:    ['imgInput','audInput'],
   secZoom:     ['zoomMin','zoomMax'],
   secEffect:   ['effectSel'],
-  waveSection: ['waveStyleSel','waveCurve','waveCurveDirSel','waveBendBaseSel'],
+  waveSection: ['waveStyleSel','waveCurve','waveCurveDirSel','waveBendBaseSel','waveBendAnchorSel','waveBendSideSel'],
   secLead:     ['leadMs'],
   secFx:       ['fxSel'],
   secFrame:    ['ratioSel'],

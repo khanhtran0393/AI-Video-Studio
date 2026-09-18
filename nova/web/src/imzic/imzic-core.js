@@ -37,6 +37,14 @@ const state = {
   // theo waveCurve (0% đường thẳng, 100% hình tròn). Tự nắm kiểu đang chọn trước
   // khi user chuyển sang 'bend' (xem imzic-controls.js); không hợp lệ → 'line'.
   waveBendBase:'line',
+  // 2026-09-18m: điểm neo khi uốn — 'start' = đầu sóng neo (hành vi cũ), 'center'
+  // = tâm sóng neo: giữa sóng đứng yên, 2 đầu gập lên ĐỐI XỨNG và trùng nhau
+  // khi 100% (khép kín vòng tròn qua đỉnh)
+  // 2026-09-18n: thêm 'end' (cuối sóng neo — đối xứng với 'start' qua trục dọc)
+  waveBendAnchor:'start',
+  // 2026-09-18n: hướng vồng — 'up' (lên trên baseline, hành vi cũ) hoặc 'down'
+  // (xuống dưới baseline — phản chiếu đối xứng cả vòng)
+  waveBendSide:'up',
   // fitMode 'square' — bố cục "Ô vuông giữa + nền mờ": bgImg/bgFile = ảnh nền
   // RIÊNG (tuỳ chọn — không chọn thì nền tự dùng chính ảnh đang phát);
   // bgBlur = độ mờ nền (logic px), bgBlurSide = lệch mờ trái(-)/phải(+);

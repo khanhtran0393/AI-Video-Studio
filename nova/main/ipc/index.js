@@ -30,6 +30,7 @@ const { registerViralCutIpc } = require('../../viral-cut/ipc');
 const { registerDubbingIpc } = require('../../dubbing/ipc');
 const { registerHardsubIpc } = require('../../hardsub/ipc');
 const { registerDiarizeIpc } = require('../../diarization/ipc');
+const { registerReviewIpc } = require('../../review/ipc');
 const { registerBinmanIpc } = require('../../bin-manifest/ipc');
 const { registerAgentCopilotIpc } = require('./agent-copilot');
 
@@ -85,6 +86,12 @@ function registerAllIpc() {
   try {
     registerDiarizeIpc(ipcMain, { getState: () => state });
   } catch (e) { console.warn('[diarization]', e && e.message); }
+
+  // ── Tóm tắt/Review (Bước 4 lộ trình ezmaxsub, BỎ paywall): transcript
+  //    (SRT/OCR) → AI viết kịch bản chia cảnh → TTS OmniVoice → dựng MP4 ──
+  try {
+    registerReviewIpc(ipcMain, { getState: () => state });
+  } catch (e) { console.warn('[review]', e && e.message); }
 
   // ── Bin manifest (Bước 4 lộ trình ezmaxsub): toàn vẹn sha256 binary
   //    runtime (nova/ytdlp-bin, ffmpeg/ffprobe-static) — verify chỉ đọc +

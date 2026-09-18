@@ -151,6 +151,8 @@ function registerFfmpegToolsIpc() {
   });
   // ── Đóng phụ đề cứng (burn-in — filter subtitles/libass, re-encode hình) ──
   handleOp('ffx:burn-subtitles', (p, onProgress) => mediaTools.burnSubtitles(Object.assign({}, p, { onProgress })));
+  // ── Trình Soạn Thảo Video (2026-09-19): burn lớp phủ canvas (blur/chữ/khối màu/media/filter/nền) ──
+  handleOp('ffx:overlay-burn', (p, onProgress) => mediaTools.burnOverlays(Object.assign({}, p, { onProgress })));
   // Thumbnail 1 frame (grid thẻ Ghép Video) — nhanh, không cần progress.
   ipcMain.handle('ffx:thumb', async (_e, payload = {}) => {
     try { return await mediaTools.makeThumb(payload || {}); }

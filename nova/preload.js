@@ -284,6 +284,24 @@ contextBridge.exposeInMainWorld('native', {
       return () => ipcRenderer.removeListener('dub:progress', listener);
     },
   },
+  // Tóm tắt/Review (bước 4 lộ trình ezmaxsub, BỎ paywall): transcript
+  // (SRT/OCR hardsub) → AI viết kịch bản chia cảnh → TTS → dựng video.
+  review: {
+    pickVideo: () => ipcRenderer.invoke('review:pickVideo'),
+    pickSrt: () => ipcRenderer.invoke('review:pickSrt'),
+    pickOutDir: () => ipcRenderer.invoke('review:pickOutDir'),
+    aiStatus: () => ipcRenderer.invoke('review:aiStatus'),
+    voices: () => ipcRenderer.invoke('review:voices'),
+    analyze: (payload) => ipcRenderer.invoke('review:analyze', payload || {}),
+    build: (payload) => ipcRenderer.invoke('review:build', payload || {}),
+    run: (payload) => ipcRenderer.invoke('review:run', payload || {}),
+    cancel: () => ipcRenderer.invoke('review:cancel'),
+    onProgress: (cb) => {
+      const listener = (_e, s) => { if (cb) cb(s); };
+      ipcRenderer.on('review:progress', listener);
+      return () => ipcRenderer.removeListener('review:progress', listener);
+    },
+  },
   // Công cụ FFmpeg (sidebar): tách MP3/M4A/WAV, cắt, ghép, loop, nén, trích frame,
   // xoá tiếng, đổi định dạng, ghép nhạc, GIF — FFmpeg local, dialog thật, progress + cancel.
   ffx: {
@@ -326,6 +344,8 @@ contextBridge.exposeInMainWorld('native', {
     // Đóng phụ đề cứng (2026-09-17ze): filter subtitles/libass, re-encode hình
     pickSrt: () => ipcRenderer.invoke('ffx:pick-srt'),
     burnSubtitles: (payload) => ipcRenderer.invoke('ffx:burn-subtitles', payload),
+    // Trình Soạn Thảo Video (2026-09-19): burn lớp phủ canvas (blur/chữ/khối màu/media/filter/nền).
+    overlayBurn: (payload) => ipcRenderer.invoke('ffx:overlay-burn', payload),
     // Electron 43 gỡ File.path → drag-drop file vào GUI phải đi qua webUtils.getPathForFile
     // (hàm đồng bộ, chạy trong preload — KHÔNG phải kênh IPC mới).
     pathForFile: (file) => webUtils.getPathForFile(file),
