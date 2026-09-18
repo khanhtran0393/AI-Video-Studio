@@ -190,6 +190,9 @@ parts.forEach(function (arr, idx) {
   }).join('\n\n');
   var header = firstHeader;
   header = header.replace(/\(\d+ entries\)/, '(' + arr.length + ' entries)');
+  // Fix: header nguồn chứa "var SKL_PART_01 = [" — mỗi part output phải khai
+  // báo tên biến riêng (SKL_PART_01..NN) để index.js concat đúng, không đè nhau.
+  header = header.replace(/var SKL_PART_\d+ = \[/, 'var SKL_PART_' + pn + ' = [');
   var content = header + '\n\n' + entriesText + '\n\n' + (lastFooter || '');
   fs.writeFileSync(file, content, 'utf8');
   var realLines = content.split('\n').length;
