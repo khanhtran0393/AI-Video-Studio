@@ -18,6 +18,13 @@ const state = {
   slides:[],                    // slideshow nhiều ảnh [{img,name}]
   slideMode:'time', slideSecs:4,
   slideOrder:'order', slideShuffleSeed:0,   // thứ tự slideshow: theo thứ tự chọn / xáo trộn (seed đổi khi bấm "Xáo lại")
+  // 2026-09-17zq: gộp 3 mục + thêm video.
+  // - videos: slideshow video [{el,name,duration}] — 1 hoặc nhiều video, loop đến hết nhạc
+  // - videoFile: file 1 video đơn (nếu chọn)
+  // - videoEl: HTMLVideoElement ẩn dùng để vẽ frame (mỗi video trong videos có .el riêng)
+  // - sourceMode: 'image' (ưu tiên ảnh) hoặc 'video' (ưu tiên video) — khi có cả 2
+  // - videoSlidesSchedule: cache lịch chuyển cảnh video (tương tự getSlideSchedule cho ảnh)
+  videos:[], videoFile:null, sourceMode:'image', videoSlidesSchedule:null,
   fitMode:'cover', transition:'fade',
   audioFile:null,
   effect:'none', direction:'random', dirTouched:false,
@@ -29,8 +36,10 @@ const state = {
   // fitMode 'square' — bố cục "Ô vuông giữa + nền mờ": bgImg/bgFile = ảnh nền
   // RIÊNG (tuỳ chọn — không chọn thì nền tự dùng chính ảnh đang phát);
   // bgBlur = độ mờ nền (logic px), bgBlurSide = lệch mờ trái(-)/phải(+);
-  // sqSize = cỡ ô vuông (% của 1/3 chiều cao), sqTilt = xoay (°), sqSkew = nghiêng (°).
-  bgImg:null, bgFile:null, bgBlur:12, bgBlurSide:0, sqSize:100, sqTilt:0, sqSkew:0,
+  // sqSize = cỡ ô vuông (% của 1/3 chiều cao), sqTilt = xoay (°), sqSkew = nghiêng (°);
+  // sqX/sqY = dịch ảnh ô vuông (đơn vị % chiều rộng/cao logic, 0 = giữa khung) — 4 nút
+  // ↑↓←→ trong panel cho phép lệch khi ảnh gốc chủ thể nằm lệch tâm.
+  bgImg:null, bgFile:null, bgBlur:12, bgBlurSide:0, sqSize:100, sqTilt:0, sqSkew:0, sqX:0, sqY:0, sqStep:5,
   fx:'none', fxLevel:0.6, bcPreset:'',
   leadMs:300,
   orientation:'portrait',
@@ -40,6 +49,10 @@ const state = {
   trimStart:0, trimEnd:0, fadeIn:0, fadeOut:0,
   loudnorm:false,              // C3: chuẩn hoá âm lượng EBU R128 (⚡ Xuất nhanh)
   slideBeatSnap:false,         // E1: ranh giới ảnh slideshow bám nhịp
+  // E6 (2026-09-15s): Text lên màn hình — nhiều dòng chữ tự do đè lên khung
+  // (khác lời hát .srt). Mỗi dòng: { text, font, size, color, x, y, fx, beat };
+  // fx ∈ none/fade/pop/type/glow/bounce; beat = pulse theo nhịp đã phân tích.
+  textLines:[],
   wmImg:null, wmName:'',       // E4: logo/watermark (img Element không lưu settings)
   wmPos:'br', wmSize:18, wmAlpha:0.6,
   exportFps:30, exportQuality:'high', exportRes:'auto',

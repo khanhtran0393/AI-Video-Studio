@@ -1,4 +1,13 @@
-## 2026-09-17zs — Whiteboard Bước 3: GỠ 2 nút "🖼 Gen ảnh"/"📥 Gọi lại ảnh" theo quyết định user ("theo flow, không thêm gì cả") — giữ metadata tự lưu
+## 2026-09-17zv — E2E thật "Chạy tự động 1→5": Bước 1–2 ĐẠT + FIX BUG persist bản gộp >64MB; dừng lộ liễu ở Bước 3 (0 tài khoản Flow)
+
+- **Bước 1–2 THẬT đạt** (kịch bản thật 2694 từ trong tsOutput; giọng thật `omni:factory_vi_minh_duc`): TTS 12 đoạn OmniVoice (đoạn 7/12 = 74.95s), ghép xong **778s**, SRT ghép chuẩn, `useVoiceFromVoiceTab` nạp **39 cue** vào Bước 2 → audioTrack gán voice-over thật.
+- **BUG thật + FIX**: `_giongSuLuuDia` âm thầm `return` khi blob >64MB — bản gộp 12 đoạn WAV = **68.621.388 B > 67.108.864 (64MB)** → không persist → sau reload `voiceHistoryPath` ném `WB_VOICE_GONE` → auto dừng `WB_NO_TTS_PRODUCT` (fail-loud đúng Luật 10, không fallback ngầm — luồng không tự bịa dữ liệu). **Fix giữ hợp đồng (không IPC mới, không dep mới):** main `voiceZoneSave` (`nova/main/ipc/voice.js`) thêm `nenWavNeuTo` — WAV >64MB nén MP3 bằng ffmpeg-static (`libmp3lame -q:a 4`), `meta.ext` đuổi theo ext lưu thật, lỗi nén trả `VOICE_COMPRESS_FAILED` lộ liễu; renderer `voice.js` `_giongSuLuuDia` nâng trần gửi 64→256MB + **log khai báo** khi save trả lỗi (hết nuốt lặng lẽ); `_giongGhepMuc` await persist. Verify thật: bản gộp persist thành công **6.14MB mp3 + json** (15:22:05).
+- **Bước 3 dừng lộ liễu ĐÚNG thiết kế**: tách **77 câu** (nhiều câu "không khớp SRT — ước lượng Xs" khai báo rõ), AI prompt **77/77** thật xong → sinh ảnh Flow lỗi `WB_GEN_INCOMPLETE 77/77` với nguyên nhân gốc: **app có 0 tài khoản Flow** (`flow-accounts.json` order:0 + `chrome-accounts/` 0 profile — cả hai store đều rỗng sau restart). **18 key ở entry zk là Gemini API keys (bậc 3 vision), KHÔNG phải tài khoản sinh ảnh Flow.** Thêm tài khoản = thao tác tương tác của user (dán cookie/đăng nhập tab Tạo Ảnh Hàng Loạt) — Luật 6: dừng hỏi user.
+- **Bài học process**: (a) session agent song song tạo window mới lúc 13:56:58 → trang renderer thay thế → `wbAutoRunning` chết im lặng giữa luồng (auto 1→5 KHÔNG chống reload — dữ liệu nửa chừng chỉ còn ở voice-cache); (b) `voice-cache` hiện 19 mp3 nhưng 12 json — mp3 không json là "mồ côi" bị `voiceZoneList` bỏ qua (chỉ đọc json); (c) CDP ws `/devtools/page/<id>` đổi sau mỗi reload — luôn fetch `/json/list` mới trước mỗi probe, và probe phải tuần tự (ws client đơn).
+- **Kiểm định**: `npm run check` đủ 10 bước (selftest 10/10), `npm run test:voice` PASS. Tmp của session này đã dọn; 13 file `tmp-wb-*` cũ của các session khác vẫn trong `nova/scripts/tmp/` — session phụ trách tự dọn theo §6.7.
+- **Còn treo**: E2E Bước 3→5 (77 ảnh Flow + 77×2 vision + preview) chờ user thêm tài khoản Flow; lưu ý 77 cảnh là job lớn — cân nhắc kịch bản ngắn hơn khi test lại.
+
+
 
 - **Quyết định user**: luồng Bước 3 chỉ còn nút "🧠 Phân tích prompt"; KHÔNG thêm UI nào. Giữ nguyên phần dữ liệu: sidecar `cau-NNN.json` + thư mục profile `whiteboard-anh/<tên bản TTS>` tự lưu trong luồng auto (`wbAiGenSave`/`wbAiGenImages`/`wbMetaOf` — không đổi).
 - **Đã gỡ**: markup + ids + `showGenImagesBtn` trong `whiteboard-studio-panel.js`; block `wbRecall*` (ReadJson/Join/ApplyMeta/TimingDiff/Images) + bindings + export `wbRecallImages` + gọi `C.showGenImagesBtn()` trong `whiteboard-studio-ai.js`. Syntax OK, 0 tham chiếu còn lại.
@@ -8889,3 +8898,68 @@ ova/web/src/toolbox/skill-catalog/{index.js,part-01.js,part-02.js,part-03.js} (4
 
 
 \n
+## 2026-09-17zv
+
+**Mitigation 3 fix cho I-MZic video (queue slideshow + nền đen đầu frame).** Sửa 3 mitigation
+còn treo từ task 2026-09-17zu, theo yêu cầu user tiếp tục.
+
+### Bối cảnh
+Task 2026-09-17zu hợp nhất 3 nguồn I-MZic → 1, có 3 mục treo (mitigation):
+1. Nền đen 1-2 frame đầu khi play (chưa decode xong)
+2. Export WebM lệch 1-2 frame (canvas chụp frame cũ)
+3. Queue slideshow video lưu chỉ tên → mất khi đóng phiên
+
+### Mitigation 1: đợi `oncanplay` thay vì `onloadedmetadata` (frame ready)
+- File: `nova/web/src/imzic/imzic-render.js` (dòng ~496 + 553)
+- Đổi `v.onloadedmetadata` → `v.oncanplay` (readyState ≥ 3, có frame decode sẵn)
+- Fallback `setTimeout(finalize, 4000)` nếu codec lạ không bắn oncanplay → không kẹt UI
+- Cờ `resolved` để `onerror` không gọi resolve 2 lần
+- Áp dụng cả 2 chỗ: `imzicLoadVideoFile` (1 video) + `imzicLoadVideoSlidesFiles` (slideshow N video)
+
+### Mitigation 2: ép seek nhẹ khi offline + delta vừa
+- File: `nova/web/src/imzic/imzic-render.js` `syncVideoTime` (dòng ~35)
+- Khi `offlineRendering=true` (đang trong "⚡ Xuất nhanh") + `|currentTime - t| > 0.1` VÀ `< 0.5`
+  → `el.currentTime = t` (delta < 0.5s để browser KHÔNG re-decode toàn bộ)
+- Không áp dụng cho preview realtime (`offlineRendering=false`): audioEl chạy tự nhiên
+- Không áp dụng khi `t >= duration - 0.5` (gần hết → loop ưu tiên hơn seek)
+
+### Mitigation 3: queue slideshow lưu dataUrl
+- File: `nova/web/src/imzic/imzic-workflow.js`
+- Thêm helper `imzFileToDataUrl(f)` (FileReader.readAsDataURL) + `imzDataUrlToFile(url,name,type)` (fetch+blob)
+- Giới hạn `IMZIC_QUEUE_FILE_MAX_BYTES = 5 MB` (localStorage quota 5-10 MB)
+- `queueAddBtn` push: videoFile = `{name,size,type,dataUrl}` (dataUrl null nếu > 5MB + cảnh báo)
+- `imzicQueueApplyItem` apply: nếu `it.videoFile.dataUrl` → tái dựng File qua `imzDataUrlToFile`
+  rồi `imzicLoadVideoFile(f, $('videoInput'))`. Throw `IMZIC_QUEUE_VIDEO_DATAURL` nếu dataUrl lỗi.
+- Fallback cho mục cũ (không có dataUrl): truyền thẳng object cũ vào imzicLoadVideoFile
+- TODO nâng cấp: slideshow video chưa lưu dataUrl (state.videos[i].el là HTMLVideoElement, không có File gốc)
+  → cần refactor state.videosFiles[] song song. Hiện tại slideshow video chỉ lưu tên, setStatus cảnh báo khi apply.
+
+### Verify
+- `npm run check` PASS 10/10 (CHECK EXIT 0)
+- `tmp-zu-verify2.js` (dataUrl): 6/6 PASS
+  - T1: file nhỏ → dataUrl
+  - T2: file 6MB → reject `IMZIC_QUEUE_FILE_TOO_BIG` lộ liễu
+  - T3: dataUrl → File tái dựng đúng name/type
+  - T5: apply video có dataUrl → gọi imzicLoadVideoFile với File đúng
+  - T6: apply mục cũ (không dataUrl) → fallback cũ vẫn hoạt động
+  - T7: apply dataUrl lỗi → throw `IMZIC_QUEUE_VIDEO_DATAURL` lộ liễu
+- `tmp-zu-verify3.js` (oncanplay + syncVideoTime): 7/7 PASS
+  - T1: imzicLoadVideoFile resolve sau oncanplay (≥ 5ms)
+  - T2: imzicLoadVideoSlidesFiles resolve khi cả N video oncanplay
+  - T3: syncVideoTime offline + delta 0.3s → seek
+  - T3b: syncVideoTime offline + delta 2.5s (lớn) → KHÔNG seek (tránh re-decode)
+  - T4: syncVideoTime offline + delta 0.05s → KHÔNG seek (vẫn chấp nhận frame cũ)
+  - T5: syncVideoTime preview + lệch → KHÔNG seek (realtime tự nhiên)
+  - T6: syncVideoTime loop khi currentTime >= duration-0.1 → seek 0
+
+### Còn treo
+- Slideshow video trong queue vẫn chưa lưu dataUrl → cần refactor state.videosFiles[].
+- Cần test app thật qua `khoidong.bat` để xác minh nền đen đầu frame đã hết.
+
+### File đã sửa
+- `nova/web/src/imzic/imzic-render.js` (3 chỗ: syncVideoTime, imzicLoadVideoFile, imzicLoadVideoSlidesFiles)
+- `nova/web/src/imzic/imzic-workflow.js` (helpers + push + apply)
+
+### File rác (đã dọn theo AGENTS.md §6.7)
+- ~~`nova/scripts/tmp/tmp-zu-verify2.js`~~ — xoá sau khi PASS
+- ~~`nova/scripts/tmp/tmp-zu-verify3.js`~~ — xoá sau khi PASS

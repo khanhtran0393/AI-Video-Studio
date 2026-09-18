@@ -21,7 +21,12 @@ function selOptionText(id){
   return o ? o.textContent.trim() : '';
 }
 const SECTION_HINTS = {
-  secFiles(){ return (state.imgFile ? 'Ảnh ✓' : 'Ảnh ✗') + ' · ' + (state.audioFile ? 'Nhạc ✓' : 'Nhạc ✗'); },
+  secFiles(){
+    // 2026-09-17zq: ảnh / video / nhạc — gộp thành 1 mục "Tệp gốc"
+    const hasMedia = state.imgFile || state.slides.length || state.videoFile || state.videos.length;
+    const mediaLabel = hasMedia ? 'Media ✓' : 'Media ✗';
+    return mediaLabel + ' · ' + (state.audioFile ? 'Nhạc ✓' : 'Nhạc ✗');
+  },
   secZoom(){ return state.zoomMin.toFixed(2) + '–' + state.zoomMax.toFixed(2) + 'x'; },
   secEffect(){ return state.effect === 'none' ? 'Không' : (selOptionText('effectSel') || 'Có'); },
   waveSection(){
@@ -39,6 +44,7 @@ const SECTION_HINTS = {
   secFx(){ return state.fx === 'none' ? 'Tắt' : (selOptionText('fxSel') || 'Bật'); },
   secFrame(){ return selOptionText('ratioSel'); },
   secLyric(){ return (state.lyricsCues && state.lyricsCues.length) ? (state.lyricsCues.length + ' dòng') : 'Chưa có'; },
+  secText(){ return (state.textLines && state.textLines.length) ? (state.textLines.length + ' dòng') : 'Tắt'; },
 };
 function refreshSectionHints(){
   Object.keys(SECTION_HINTS).forEach(id=>{
@@ -105,8 +111,13 @@ function refreshPresetSel(selected){
   names.forEach(n=>{ const o = document.createElement('option'); o.value = n; o.textContent = n; sel.appendChild(o); });
   if(selected && presets[selected]) sel.value = selected;
 }
-$('savePresetBtn').addEventListener('click', ()=>{
-  const name = (window.prompt('Tên preset:', 'Preset ' + new Date().toLocaleString()) || '').trim();
+$('savePresetBtn').addEventListener('click', async ()=>{
+  const name = ((await imzModalPrompt({
+    title:'Lưu preset',
+    message:'Đặt tên cho bộ cài đặt hiện tại:',
+    value:'Preset ' + new Date().toLocaleString(),
+    okText:'Lưu'
+  })) || '').trim();
   if(!name) return;
   const presets = readPresets();
   presets[name] = collectSettingsInputs();

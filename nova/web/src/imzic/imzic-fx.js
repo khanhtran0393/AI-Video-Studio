@@ -401,7 +401,7 @@ function applyFx(bassEnergy){
         ctx.drawImage(bcCanvas, 0, 0, W, H);
       } else if(!bcWarnedLost){
         bcWarnedLost = true;
-        setStatus('FX Milkdrop không render được (thiếu lib Butterchurn hoặc mất WebGL2) — khung đang chỉ vẽ nội dung gốc. Chọn lại FX trong mục 7 để thử lại.', true);
+        setStatus('FX Milkdrop không render được (thiếu lib Butterchurn hoặc mất WebGL2) — khung đang chỉ vẽ nội dung gốc. Chọn lại FX trong mục 8 để thử lại.', true);
       }
     }
   } finally {

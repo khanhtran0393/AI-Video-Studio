@@ -81,6 +81,35 @@ const MERGE_SCRIPT = path.join(SCRIPTS_DIR, 'merge_scenes.py');
 const PREPARE_SCRIPT = path.join(SCRIPTS_DIR, 'prepare_env.py');
 const PREVIEW_SCRIPT = path.join(SCRIPTS_DIR, 'render_annotation_preview.py');
 const HAND_PNG = path.join(REPO_DIR, 'assets', 'drawing-hand.png');
+/* sprite HD do tmp-gen-hd-sprites.py sinh (nova/whiteboard-studio/assets/hands/):
+   4 biến thể da bàn tay + 5 sprite chỉ-có-đầu-bút theo contract anchor (26,26) —
+   _load_hand cắt theo bbox alpha nên đầu bút pass thẳng làm arg hand của engine */
+const HANDS_DIR = path.join(__dirname, 'assets', 'hands');
+/* bàn tay mẫu kèm sẵn trong assets (không phụ thuộc file trên máy user) —
+   chọn qua whiteboard:pickHand với preset id; ghi đè bằng handPath tuỳ chọn vẫn được */
+const BUILTIN_HANDS = {
+  pngtree: path.join(REPO_DIR, 'assets', 'drawing-hand-pngtree.png'), // ✋ tay cầm bút (PNGtree, 2000×2000 nền trong suốt)
+  'hand-pale': path.join(HANDS_DIR, 'hand-pale.png'),     // ✍🏻 da sáng (HD)
+  'hand-tan': path.join(HANDS_DIR, 'hand-tan.png'),       // ✍🏼 da vàng ấm (HD)
+  'hand-deep': path.join(HANDS_DIR, 'hand-deep.png'),     // ✍🏾 da nâu đậm (HD)
+  'hand-glove': path.join(HANDS_DIR, 'hand-glove.png'),   // 🧤 găng tay trắng (HD)
+};
+const BUILTIN_TIPS = {
+  'tip-pencil': path.join(HANDS_DIR, 'tip-pencil.png'),       // ✏️ bút chì
+  'tip-fountain': path.join(HANDS_DIR, 'tip-fountain.png'),   // 🖋️ bút máy
+  'tip-crayon': path.join(HANDS_DIR, 'tip-crayon.png'),       // 🖍️ bút sáp
+  'tip-brush': path.join(HANDS_DIR, 'tip-brush.png'),         // 🖌️ cọ vẽ
+  'tip-marker': path.join(HANDS_DIR, 'tip-marker.png'),       // 🖊️ bút dạ
+};
+
+function builtinHandPath(id) {
+  if (!id || typeof id !== 'string') return null;
+  return Object.prototype.hasOwnProperty.call(BUILTIN_HANDS, id) ? BUILTIN_HANDS[id] : null;
+}
+function builtinTipPath(id) {
+  if (!id || typeof id !== 'string') return null;
+  return Object.prototype.hasOwnProperty.call(BUILTIN_TIPS, id) ? BUILTIN_TIPS[id] : null;
+}
 const DEPS_CODE = 'import cv2, numpy, av, PIL';
 // voice → SRT local (faster-whisper) — script của Nova, KHÔNG thuộc repo vendored
 // (cùng pattern render-progress-bridge.py), luôn chạy bằng python của .venv.
@@ -90,7 +119,9 @@ const WHISPER_DEPS_CODE = 'import faster_whisper';
 const DEFAULTS = {
   inkPath: 'grid',          // grid | skeleton
   colorFill: 'contour-wipe', // contour-wipe | brush
-  tipMode: 'hand',           // hand (bàn tay cầm bút) | pen (ngòi bút) | none (không hiệu ứng)
+  tipMode: 'hand',           // hand (tay mặc định engine) | pngtree | hand-pale|tan|deep|glove
+                             // | tip-pencil|fountain|crayon|brush|marker | pen (procedural, cũ) | none
+  handPath: null,            // null = theo tipMode; path PNG tuỳ chọn đè khi tipMode='hand'
   brushRadius: null,         // null = mặc định renderer
   capLongEdge: 1080,
   fps: null,                 // null = mặc định renderer
@@ -554,8 +585,31 @@ async function exportVideo({ scenes, outputPath, audioTracks, musicTrack, option
       const sceneOut = path.join(workDir, base + '.mp4');
       fs.writeFileSync(annPath, JSON.stringify(ann, null, 2), 'utf8');
 
-      // tipMode: 'hand' → sprite bàn tay | 'pen' → hand='' (engine tự vẽ ngòi bút procedural) | 'none' → --bare-tip
-      const handArg = opt.tipMode === 'pen' ? '' : HAND_PNG;
+      // tipMode: 'hand' → sprite tay mặc định engine (handPath tuỳ chỉnh vẫn đè được,
+      //          thiếu → fail lộ liễu WB_HAND_MISSING)
+      //          | 'pngtree' | 'hand-pale|tan|deep|glove' → sprite tay built-in
+      //          | 'tip-pencil|fountain|crayon|brush|marker' → sprite chỉ-có-đầu-bút
+      //          | 'pen' → hand='' (ngòi procedural — GIỮ cho project cũ, UI không còn
+      //          đưa ra) | 'none' → --bare-tip
+      //          id lạ → WB_TIP_UNKNOWN; asset khai báo thiếu → WB_TIP_MISSING (Luật 10)
+      let handArg = HAND_PNG;
+      if (opt.tipMode === 'none' || opt.tipMode === 'pen') handArg = '';
+      else if (opt.tipMode !== 'hand') {
+        const p = builtinHandPath(opt.tipMode) || builtinTipPath(opt.tipMode);
+        if (!p) {
+          return fail('WB_TIP_UNKNOWN (không có mẫu bút/tay này): ' + opt.tipMode);
+        }
+        if (!fs.existsSync(p)) {
+          return fail('WB_TIP_MISSING (asset mẫu bút/tay thiếu): ' + p);
+        }
+        handArg = p;
+      } else if (opt.handPath) {
+        /* Luật 10: bàn tay tuỳ chọn khai báo mà file không tồn tại → lỗi lộ liễu, KHÔNG rơi ngầm về tay mặc định */
+        if (!fs.existsSync(opt.handPath)) {
+          return fail('WB_HAND_MISSING (file bàn tay tuỳ chọn không tồn tại): ' + opt.handPath);
+        }
+        handArg = String(opt.handPath);
+      }
       const args = [
         scene.image, annPath, sceneOut, handArg,   // chạy qua BRIDGE_SCRIPT (đếm khung thật) — bridge tự thêm RENDER_SCRIPT
         '--total-ms', String(durationMs),
@@ -752,5 +806,6 @@ module.exports = {
   status, prepare, parseSrt, cancelAll, exportVideo, previewAnnotation,
   probeImageSize, probeMediaDuration, repoDir: REPO_DIR, sweepStale,
   whisperReady, prepareWhisper, transcribeVoice,
+  builtinHandPath, builtinTipPath,
 };
 

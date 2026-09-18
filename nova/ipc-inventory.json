@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-17T05:52:06.225Z",
+  "generatedAt": "2026-09-17T08:47:31.460Z",
   "sourceFiles": [
     "chrome-extension/app.js",
     "chrome-extension/background.js",
@@ -3310,11 +3310,13 @@
     "web/src/imzic/imzic-fx.js",
     "web/src/imzic/imzic-glsl.js",
     "web/src/imzic/imzic-lyrics.js",
+    "web/src/imzic/imzic-modal.js",
     "web/src/imzic/imzic-noise.js",
     "web/src/imzic/imzic-particles.js",
     "web/src/imzic/imzic-presets.js",
     "web/src/imzic/imzic-render.js",
     "web/src/imzic/imzic-slideshow.js",
+    "web/src/imzic/imzic-text.js",
     "web/src/imzic/imzic-wave.js",
     "web/src/imzic/imzic-workflow.js",
     "web/src/toolbox/agent-copilot-ui.js",
@@ -3658,6 +3660,7 @@
     "whiteboard:parseSrt",
     "whiteboard:pickAnnotation",
     "whiteboard:pickAudio",
+    "whiteboard:pickHand",
     "whiteboard:pickImage",
     "whiteboard:pickImages",
     "whiteboard:pickImagesDir",

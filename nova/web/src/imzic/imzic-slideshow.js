@@ -165,6 +165,42 @@ function getSquareBlurBg(img){
   }
   return base;
 }
+// ---- nền blur cho ẢNH ĐƠN (fitMode 'blur' khi state.slides rỗng) ----
+// 2026-09-17zp: trước đây ảnh đơn BỎ QUA fitMode (luôn cover cứng → ảnh bị cắt dù
+// user chọn contain/blur); nay áp dụng đủ 4 nhánh như slideshow. Hàm này tách hẳn
+// khỏi getSlideBlurBg (slide cache theo idx, ảnh đơn chỉ có 1) để cache key đơn
+// giản + không bị clear khi load slideshow mới.
+const imageBlurCache = new Map(); // src+blur+size → canvas blur
+function getImageBlurBg(img){
+  if(!img || !img.width || !img.height) return null;
+  const w = canvas.width, h = canvas.height;
+  // dùng độ mờ cố định 22px logic (đủ "blur nền", khớp cảm giác slideshow
+  // khi chưa chỉnh); nếu sau này muốn tuỳ chỉnh thì đổi sang state.bgBlurBlur.
+  const b = 22;
+  const key = [img.src || '', img.width, img.height, w, h, b].join('|');
+  const hit = imageBlurCache.get(key);
+  if(hit) return hit;
+  const K = 10;
+  const sw = Math.max(16, Math.round(w/K)), sh = Math.max(16, Math.round(h/K));
+  const base = document.createElement('canvas'); base.width = sw; base.height = sh;
+  const bx = base.getContext('2d');
+  const cover = Math.max(sw/img.width, sh/img.height);
+  const dw = img.width*cover, dh = img.height*cover;
+  const kBlur = sw / logicW;
+  bx.filter = 'blur(' + (b*kBlur).toFixed(2) + 'px)';
+  bx.drawImage(img, (sw-dw)/2, (sh-dh)/2, dw, dh);
+  bx.filter = 'none';
+  // làm tối nhẹ (đồng bộ getSquareBlurBg để ảnh chính nổi lên)
+  bx.fillStyle = 'rgba(0,0,0,0.22)';
+  bx.fillRect(0, 0, sw, sh);
+  imageBlurCache.set(key, base);
+  while(imageBlurCache.size > 3){
+    const first = imageBlurCache.keys().next().value;
+    if(first === key) break;
+    imageBlurCache.delete(first);
+  }
+  return base;
+}
 // vẽ cả bố cục: nền mờ fullscreen + ô vuông chính giữa. ai gọi truyền (ảnh
 // chính, raster đã quét sẵn của ảnh đó — không có thì vẽ từ ảnh gốc)
 function drawSquareLayout(img, raster){
@@ -180,7 +216,12 @@ function drawSquareLayout(img, raster){
   const sside = Math.min(src.width, src.height);
   const sx = (src.width - sside)/2, sy = (src.height - sside)/2;
   ctx.save();
-  ctx.translate(w/2, h/2);
+  // dịch ô vuông khỏi trung tâm (sqX/sqY = % chiều rộng/cao logic). Lệch ±100%
+  // = dịch đúng 1 nửa khung về mỗi phía — vẫn còn 1 phần ô vuông trong khung
+  // (giúp preview hữu ích hơn là trượt hẳn ra ngoài).
+  const ox = (Number(state.sqX) || 0) / 100 * w;
+  const oy = (Number(state.sqY) || 0) / 100 * h;
+  ctx.translate(w/2 + ox, h/2 + oy);
   if(state.sqTilt) ctx.rotate(state.sqTilt * Math.PI/180);
   if(state.sqSkew) ctx.transform(1, 0, Math.tan(state.sqSkew * Math.PI/180), 1, 0, 0);
   // đổ bóng nhẹ để ô vuông tách khỏi nền mờ

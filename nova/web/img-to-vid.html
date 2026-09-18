@@ -205,7 +205,7 @@
     position:relative;
     flex:0 0 auto;          /* không cho flexbox bóp dẹt khung preview (overflow:hidden → min auto = 0) */
     width:min(92%, 620px);
-    aspect-ratio: 9/16;     /* mục 7 — JS ghi đè inline khi đổi khổ (setOrientation) */
+    aspect-ratio: 9/16;     /* mục 9 — JS ghi đè inline khi đổi khổ (setOrientation) */
     border-radius:20px;
     background:#000;
     overflow:hidden;
@@ -223,6 +223,10 @@
     position:absolute; inset:0; display:flex; flex-direction:column;
     align-items:center; justify-content:center; text-align:center;
     color:var(--muted); font-size:13px; gap:8px; padding:30px;
+    /* 2026-09-17zo: ẩn placeholder "Chọn ảnh + nhạc ở bên trái…" — user thấy gây khó chịu.
+       DOM + JS toggle (imzic-core.js / imzic-render.js / imzic-workflow.js) giữ nguyên
+       để không phá hợp đồng; bật lại chỉ xoá 1 dòng dưới. */
+    display:none !important;
   }
   .empty-state .big{font-size:34px;}
 
@@ -241,6 +245,35 @@
   .btn.primary:hover{filter:brightness(1.08);}
   .btn.gold{background:var(--accent-2); border-color:var(--accent-2); color:var(--on-accent);}
   .btn:disabled{opacity:.4; cursor:not-allowed;}
+
+  /* ---- modal xác nhận / nhập liệu (imzic-modal.js) — thay popup native ---- */
+  .imz-modal-overlay{
+    position:fixed; inset:0; z-index:9999;
+    background:rgba(0,0,0,.55); backdrop-filter:blur(2px);
+    display:none; align-items:center; justify-content:center;
+    animation:imzModalFade .12s ease;
+  }
+  .imz-modal{
+    width:min(92%,380px);
+    background:var(--panel); border:1px solid var(--border);
+    border-radius:14px; padding:18px;
+    box-shadow:0 18px 50px rgba(0,0,0,.45);
+    animation:imzModalPop .14s ease;
+  }
+  .imz-modal-title{font-size:14px; font-weight:700; color:var(--text); margin-bottom:10px;}
+  .imz-modal-msg{font-size:12.5px; color:var(--muted); line-height:1.6; white-space:pre-line; margin-bottom:14px;}
+  .imz-modal-input{
+    width:100%; background:var(--panel-2); color:var(--text);
+    border:1px solid var(--border); border-radius:9px; padding:9px 10px;
+    font-size:13px; font-family:inherit; margin-bottom:14px;
+  }
+  .imz-modal-input:focus{outline:none; border-color:var(--accent);}
+  .imz-modal-btns{display:flex; gap:8px; justify-content:flex-end;}
+  .imz-modal-btns .btn{padding:8px 14px; font-size:12.5px;}
+  .imz-modal-btns .btn.danger{background:#dc2626; border-color:#dc2626; color:#fff;}
+  .imz-modal-btns .btn.danger:hover{filter:brightness(1.1);}
+  @keyframes imzModalFade{from{opacity:0}to{opacity:1}}
+  @keyframes imzModalPop{from{transform:scale(.96); opacity:0}to{transform:scale(1); opacity:1}}
 
   .seek{
     width:min(92%,620px); display:flex; align-items:center; gap:10px; font-size:11.5px; color:var(--muted);
@@ -322,17 +355,17 @@
       <label class="upload-box" style="margin-bottom:6px;">
         <div class="ic">🖼️</div>
         <div class="meta">
-          <div class="name" id="imgName">Chọn ảnh nền</div>
+          <div class="name" id="imgName">Chọn 1 ảnh nền</div>
           <div class="hint">JPG / PNG / WEBP</div>
         </div>
         <input type="file" id="imgInput" accept="image/*">
       </label>
       <button class="btn" id="imgClearBtn" style="display:none;width:100%;justify-content:center;margin-bottom:10px;">🗑 Bỏ ảnh nền</button>
-      <label class="upload-box" style="margin-bottom:6px;">
+      <label class="upload-box" id="bgBox" style="display:none;margin-bottom:6px;">
         <div class="ic">🌆</div>
         <div class="meta">
           <div class="name" id="bgName">Chọn ảnh nền riêng (tuỳ chọn)</div>
-          <div class="hint">Dùng làm nền mờ cho hiệu ứng "Ô vuông giữa" — bỏ trống thì nền tự lấy chính ảnh</div>
+          <div class="hint">Dùng làm nền mờ cho hiệu ứng "Ô vuông giữa" — bỏ trống thì nền tự lấy chính ảnh. Chỉ hiện khi chọn 1 ảnh đơn và bật "Ô vuông giữa + nền mờ".</div>
         </div>
         <input type="file" id="bgInput" accept="image/*">
       </label>
@@ -347,13 +380,40 @@
       </label>
       <button class="btn" id="audClearBtn" style="display:none;width:100%;justify-content:center;margin-bottom:10px;">🗑 Bỏ file nhạc</button>
       <label class="upload-box" style="margin-bottom:10px;">
-        <div class="ic">🎞️</div>
+        <div class="ic">🎞</div>
         <div class="meta">
           <div class="name" id="slidesName">Slideshow nhiều ảnh (tuỳ chọn)</div>
           <div class="hint" id="slidesHint">Chọn nhiều ảnh — tự chuyển cảnh theo nhạc</div>
         </div>
         <input type="file" id="slidesInput" accept="image/*" multiple>
       </label>
+      <hr style="border:none;border-top:1px dashed var(--border);margin:6px 0;">
+      <div class="field" id="sourceModeField" style="display:none;">
+        <div class="field-row"><label>Nguồn hiển thị chính</label></div>
+        <select class="sel" id="sourceModeSel">
+          <option value="image">🖼️ Ảnh (1 ảnh hoặc slideshow ảnh)</option>
+          <option value="video">🎬 Video (1 video hoặc slideshow video)</option>
+        </select>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;">Chọn ảnh ở khối trên thì ưu tiên ảnh; chọn video ở khối dưới thì ưu tiên video. Dùng mục này để chuyển qua lại nếu đã chọn cả 2.</div>
+      </div>
+      <label class="upload-box" style="margin-bottom:6px;">
+        <div class="ic">🎬</div>
+        <div class="meta">
+          <div class="name" id="videoName">Chọn 1 video (tuỳ chọn)</div>
+          <div class="hint">MP4 / WEBM — phát làm nền, lặp đến hết nhạc</div>
+        </div>
+        <input type="file" id="videoInput" accept="video/*">
+      </label>
+      <button class="btn" id="videoClearBtn" style="display:none;width:100%;justify-content:center;margin-bottom:6px;">🗑 Bỏ video</button>
+      <label class="upload-box" style="margin-bottom:6px;">
+        <div class="ic">📽️</div>
+        <div class="meta">
+          <div class="name" id="vslidesName">Slideshow nhiều video (tuỳ chọn)</div>
+          <div class="hint" id="vslidesHint">Chọn nhiều video — tự chuyển cảnh theo nhạc</div>
+        </div>
+        <input type="file" id="vslidesInput" accept="video/*" multiple>
+      </label>
+      <button class="btn" id="vslidesClearBtn" style="display:none;width:100%;justify-content:center;margin-bottom:10px;">🗑 Bỏ slideshow video (về 1 video)</button>
       <div class="field" id="slideModeField" style="display:none;">
         <div class="field-row"><label>Chuyển cảnh theo</label></div>
         <select class="sel" id="slideModeSel">
@@ -399,7 +459,7 @@
           <option value="contain">Vừa đủ ảnh, viền đen 2 bên</option>
           <option value="square">🔲 Ô vuông giữa + nền mờ</option>
         </select>
-        <div style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5;">"Ô vuông giữa + nền mờ" áp dụng cho cả 1 ảnh lẫn slideshow; 2 kiểu còn lại chỉ áp dụng cho slideshow.</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5;">"Ô vuông giữa + nền mờ" áp dụng cho cả 1 ảnh, slideshow ảnh, 1 video, slideshow video; nếu không có ảnh nền riêng thì nền mờ tự lấy chính khung hình đang phát.</div>
       </div>
       <div id="squareFields" style="display:none;">
         <div class="field">
@@ -425,7 +485,23 @@
             <input type="range" id="sqSkew" min="-25" max="25" step="1" value="0">
           </div>
         </div>
-        <div style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5;">Ô vuông luôn căn giữa khung (chia điều tâm), cắt vuông từ tâm ảnh; có chọn ảnh nền riêng thì nền mờ dùng ảnh đó, không thì nền tự lấy chính ảnh.</div>
+        <div class="field">
+          <div class="field-row"><label>Dịch ảnh ô vuông</label><span class="val" id="v-sqXY">giữa (0, 0)</span></div>
+          <div id="sqXYPad" style="display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);gap:4px;width:100%;max-width:180px;aspect-ratio:1;margin-top:4px;">
+            <div></div>
+            <button class="btn" type="button" id="sqUpBtn"    title="Lên"    style="margin:0;padding:0;font-size:18px;line-height:1;">↑</button>
+            <div></div>
+            <button class="btn" type="button" id="sqLeftBtn"  title="Trái"   style="margin:0;padding:0;font-size:18px;line-height:1;">←</button>
+            <button class="btn" type="button" id="sqResetBtn" title="Về giữa" style="margin:0;padding:0;font-size:11px;line-height:1;">↺</button>
+            <button class="btn" type="button" id="sqRightBtn" title="Phải"   style="margin:0;padding:0;font-size:18px;line-height:1;">→</button>
+            <div></div>
+            <button class="btn" type="button" id="sqDownBtn"  title="Xuống"  style="margin:0;padding:0;font-size:18px;line-height:1;">↓</button>
+            <div></div>
+          </div>
+          <input type="range" id="sqStep" min="1" max="20" step="1" value="5" style="margin-top:6px;">
+          <div style="font-size:11px;color:var(--muted);margin-top:4px;">Bước dịch: <span id="v-sqStep">5%</span> / lần bấm. Lệch tối đa ±100% (= 1/2 khung về mỗi phía).</div>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5;">Ô vuông cắt vuông từ tâm ảnh; có chọn ảnh nền riêng thì nền mờ dùng ảnh đó, không thì nền tự lấy chính ảnh. Dùng ↑↓←→ để lệch khi chủ thể ảnh nằm lệch tâm.</div>
       </div>
       <button class="btn" id="slidesClearBtn" style="display:none;width:100%;justify-content:center;margin-bottom:10px;">🗑 Xoá slideshow (về 1 ảnh nền)</button>
       <div style="font-size:11px;color:var(--muted);margin-top:8px;line-height:1.5;">
@@ -702,7 +778,7 @@
 
     <details class="section" id="secWm">
       <summary class="section-title">
-        <span>Logo / Watermark</span>
+        <span>7. Logo / Watermark</span>
         <span class="hgroup">
           <span class="hint2" id="secWmHint">Chưa chọn logo</span>
           <span class="cv">⌄</span>
@@ -710,8 +786,14 @@
       </summary>
       <div class="section-body">
       <div class="field">
-        <div class="field-row"><label>Ảnh logo (PNG trong suốt là đẹp nhất)</label><span class="val" id="wmName">(chưa chọn)</span></div>
-        <input type="file" id="wmInput" accept="image/*">
+        <label class="upload-box" style="margin-bottom:12px;">
+          <div class="ic">🏷️</div>
+          <div class="meta">
+            <div class="name" id="wmName">(chưa chọn)</div>
+            <div class="hint">PNG trong suốt là đẹp nhất — bấm để chọn logo</div>
+          </div>
+          <input type="file" id="wmInput" accept="image/*">
+        </label>
       </div>
       <div class="field">
         <div class="field-row"><label>Vị trí</label></div>
@@ -743,7 +825,7 @@
 
     <details class="section" id="secFx">
       <summary class="section-title">
-        <span>7. Hiệu ứng FX toàn khung</span>
+        <span>8. Hiệu ứng FX toàn khung</span>
         <span class="hgroup">
           <span class="hint2" id="secFxHint">Tắt</span>
           <span class="cv">⌄</span>
@@ -792,7 +874,7 @@
 
     <details class="section" id="secFrame">
       <summary class="section-title">
-        <span>8. Khung hình</span>
+        <span>9. Khung hình</span>
         <span class="hgroup">
           <span class="hint2" id="secFrameHint">▯ Dọc • 9:16</span>
           <span class="cv">⌄</span>
@@ -825,7 +907,7 @@
 
     <details class="section" id="secLyric">
       <summary class="section-title">
-        <span>9. Lời bài hát (.srt)</span>
+        <span>10. Lời bài hát (.srt)</span>
         <span class="hgroup">
           <span class="hint2" id="secLyricHint">Chưa có</span>
           <span class="cv">⌄</span>
@@ -950,9 +1032,29 @@
 
     <hr class="sep">
 
+    <details class="section" id="secText">
+      <summary class="section-title">
+        <span>11. Text lên màn hình (tuỳ chọn)</span>
+        <span class="hgroup">
+          <span class="hint2" id="secTextHint">Tắt</span>
+          <span class="cv">⌄</span>
+        </span>
+      </summary>
+      <div class="section-body">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.5;">Chữ tự do đè lên video (khác lời hát .srt ở mục 10 — có thể dùng cả hai). Thêm bao nhiêu dòng tuỳ ý, mỗi dòng chỉnh riêng font, cỡ, màu, hiệu ứng, vị trí. "✨ Phát sáng theo nhạc" và tick "🥁 Nhịp theo nhạc" cần dữ liệu nhịp — tool tự chạy phân tích nhạc một lần mỗi file.</div>
+      <div id="textList" style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px;"></div>
+      <div class="row2">
+        <button class="btn" id="textAddBtn" style="justify-content:center;">＋ Thêm dòng chữ</button>
+        <button class="btn" id="textClearBtn" style="justify-content:center;">🗑 Xoá hết chữ</button>
+      </div>
+      </div>
+    </details>
+
+    <hr class="sep">
+
     <details class="section" id="secQueue">
       <summary class="section-title">
-        <span>10. Hàng chờ xuất video</span>
+        <span>12. Hàng chờ xuất video</span>
         <span class="hgroup">
           <span class="hint2" id="secQueueHint">Trống</span>
           <span class="cv">⌄</span>
@@ -1061,12 +1163,14 @@
      (đã kiểm chứng bằng AST — mọi lệnh chạy ngay chỉ đọc tên khai báo trước nó).
      Không đổi thứ tự, không đổi tên file. -->
 <script src="src/imzic/imzic-core.js"></script>
+<script src="src/imzic/imzic-modal.js"></script>
 <script src="src/imzic/imzic-particles.js"></script>
 <script src="src/imzic/imzic-wave.js"></script>
 <script src="src/imzic/imzic-lyrics.js"></script>
 <script src="src/imzic/imzic-draw.js"></script>
 <script src="src/imzic/imzic-slideshow.js"></script>
 <script src="src/imzic/imzic-analysis.js"></script>
+<script src="src/imzic/imzic-text.js"></script>
 <script src="src/imzic/imzic-noise.js"></script>
 <script src="src/imzic/imzic-glsl.js"></script>
 <script src="src/imzic/imzic-fx.js"></script>

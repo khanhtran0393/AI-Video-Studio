@@ -9,6 +9,29 @@ const { app, shell, dialog, ipcMain } = require('electron');
 const state = require('../state');
 const { novaRoot, unpackedNovaRoot, canWriteDir } = require('../fs-utils');
 const voiceNative = require('../../voice-native');
+const { FFMPEG, run } = require('../../native-tools/ffmpeg');
+
+// ── Trần nén WAV khi persist (khớp trần prune 64MB/bản của voiceZoneList) ──
+// Bản gộp kịch bản dài (WAV PCM 16-bit ~10MB/phút) vượt trần này → nếu ghi
+// nguyên bản, lần list sau prune sẽ xoá ngay; renderer cũng âm thầm bỏ qua.
+// Giải pháp: nén sang MP3 bằng ffmpeg-static có sẵn (~1/5 kích thước) — lỗi
+// nén trả lỗi lộ liễu VOICE_COMPRESS_FAILED (Luật 10, không fallback ngầm).
+const VOICE_WAV_COMPRESS_BYTES = 64 * 1024 * 1024;
+async function nenWavNeuTo(dir, id, buf) {
+  if (buf.length <= VOICE_WAV_COMPRESS_BYTES) return { buf, ext: '.wav' };
+  const wavPath = path.join(dir, id + '.tmp-nen.wav');
+  const mp3Path = path.join(dir, id + '.tmp-nen.mp3');
+  try {
+    await fsp.writeFile(wavPath, Buffer.from(buf));
+    await run(FFMPEG, ['-y', '-i', wavPath, '-codec:a', 'libmp3lame', '-q:a', '4', mp3Path]);
+    const mp3 = await fsp.readFile(mp3Path);
+    if (!mp3.length) throw new Error('MP3 rỗng sau nén');
+    return { buf: new Uint8Array(mp3), ext: '.mp3' };
+  } finally {
+    try { await fsp.rm(wavPath, { force: true }); } catch (_) {}
+    try { await fsp.rm(mp3Path, { force: true }); } catch (_) {}
+  }
+}
 
 function hasVoiceBackend(root) {
   if (!root) return false;
@@ -181,11 +204,17 @@ ipcMain.handle('voice-engines', () => require('../../voice-native/engines').list
     const { khi, ext, buf, meta, cache } = payload || {};
     const id = String(khi || '').replace(/[^0-9]/g, '').slice(0, 16);
     if (!id || !(buf instanceof Uint8Array) || !buf.length) return { error: 'DỮ_LIỆU_KHÔNG_HỢP_LỆ' };
+    // WAV quá to (>64MB — bản gộp kịch bản dài) → nén MP3 trước khi ghi để nằm
+    // trong trần prune của vùng; meta.ext đuổi theo định dạng lưu THẬT.
+    let luu;
+    try { luu = await nenWavNeuTo(voiceZoneDir(!!cache), id, buf); }
+    catch (e) { return { error: 'VOICE_COMPRESS_FAILED: nén WAV quá lớn thất bại — ' + String((e && e.message) || e) }; }
+    const metaLuu = Object.assign({}, (meta && typeof meta === 'object') ? meta : {}, { ext: luu.ext });
     const dir = voiceZoneDir(!!cache);
     await fsp.mkdir(dir, { recursive: true });
-    await fsp.writeFile(path.join(dir, id + (ext === '.mp3' ? '.mp3' : '.wav')), Buffer.from(buf));
-    await fsp.writeFile(path.join(dir, id + '.json'), JSON.stringify(meta && typeof meta === 'object' ? meta : {}), 'utf8');
-    return { ok: true };
+    await fsp.writeFile(path.join(dir, id + luu.ext), Buffer.from(luu.buf));
+    await fsp.writeFile(path.join(dir, id + '.json'), JSON.stringify(metaLuu), 'utf8');
+    return { ok: true, ext: luu.ext };
   }
   // Liệt kê 1 vùng + prune (≤40 bản mới nhất, ≤64MB — phần cũ xoá cho nhẹ đĩa).
   async function voiceZoneList(cache){

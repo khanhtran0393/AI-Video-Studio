@@ -1,7 +1,11 @@
 'use strict';
 /* toplevel-check.js — kiểm tra xung đột khai báo top-level giữa các file
  * renderer theo THỨ TỰ NẠP trong index.html (một nguồn: thẻ <script>).
- * Quy tắc: function redeclare chéo file = OK (last wins, hoisted).
+ * Quy tắc (siết 2026-09-17 sau bug _tsButPhapNote): function redeclare CHÉO FILE
+ * = FAIL lộ liễu — file nạp sau đè lặng lẽ làm hỏng prompt/logic của file trước
+ * (fn-fn đè từng được coi "last wins" nhưng đã sinh bug thật: tool-ts.js đè
+ * _tsButPhapNote của ts-prompt.js → Novel mất chi tiết bút pháp). Redeclare
+ * TRONG CÙNG file vẫn OK (pattern hoisting cục bộ).
  * let/const/class trùng tên ở top-level giữa 2 file = SyntaxError lúc nạp.
  * let/const/class (file A) + function cùng tên (file B) = SyntaxError.
  * Nâng cấp từ tmp-check-toplevel.js sau đợt audit file-split — rủi ro số 1
@@ -78,10 +82,9 @@ for (const item of loadOrder) {
 // 3) Đối chiếu chéo: name đã thấy (bất kỳ loại nào) gặp lại:
 //    - lex gặp lex → chết
 //    - lex (đã thấy) gặp fn → chết
-//    - fn gặp fn → OK (last wins)
+//    - fn gặp fn → chết (siết 2026-09-17: đè lặng lẽ chéo file = bug _tsButPhapNote)
 const seen = new Map(); // name -> {kind, file}
 const errors = [];
-const fnOverwrites = [];
 for (const f of perFile) {
   for (const [name, kind] of f.decls) {
     const prev = seen.get(name);
@@ -89,7 +92,7 @@ for (const f of perFile) {
     if (prev.kind === 'lex' || kind === 'lex') {
       errors.push(`${name}: ${prev.kind} @ ${prev.file}  VS  ${kind} @ ${f.name}`);
     } else {
-      fnOverwrites.push(`${name}: ${prev.file} → bị đè bởi ${f.name}`);
+      errors.push(`${name}: function @ ${prev.file} → bị ĐÈ LẶNG LẼ bởi function @ ${f.name} (đổi tên theo tiền tố feature của một bên, hoặc gộp về một nguồn duy nhất)`);
     }
     seen.set(name, { kind, file: f.name });
   }
@@ -97,14 +100,10 @@ for (const f of perFile) {
 
 console.log(`Đã quét ${perFile.length} đơn vị nạp (src + inline) theo thứ tự index.html.`);
 console.log(`Tổng tên top-level: ${seen.size}`);
-if (fnOverwrites.length) {
-  console.log(`\n— ${fnOverwrites.length} function bị đè chéo file (hợp lệ nhưng cần biết):`);
-  fnOverwrites.slice(0, 80).forEach((s) => console.log('  ' + s));
-}
 if (errors.length) {
-  console.error(`\n❌ ${errors.length} XUNG ĐỘT KHAI BÁO TOP-LEVEL (SyntaxError lúc nạp):`);
+  console.error(`\n❌ ${errors.length} XUNG ĐỘT KHAI BÁO TOP-LEVEL (đè lặng lẽ hoặc SyntaxError lúc nạp):`);
   errors.forEach((s) => console.error('  ' + s));
   process.exitCode = 1;
 } else {
-  console.log('\n✅ Không có xung đột let/const/class chéo file.');
+  console.log('\n✅ Không có xung đột khai báo top-level chéo file (let/const/class + function).');
 }

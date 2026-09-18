@@ -1,31 +1,31 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="vi">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AI Video Studio</title>
 <script>
-  // Restore dark mode lúc boot (lưu bởi toggleTheme trong shell.js, key 'darkMode' '1'/'0').
-  // Chạy sớm trước khi render để tránh nháy; iframe tool (img-to-vid.html) đọc cùng key để đồng bộ.
+  // Restore dark mode lÃºc boot (lÆ°u bá»Ÿi toggleTheme trong shell.js, key 'darkMode' '1'/'0').
+  // Cháº¡y sá»›m trÆ°á»›c khi render Ä‘á»ƒ trÃ¡nh nhÃ¡y; iframe tool (img-to-vid.html) Ä‘á»c cÃ¹ng key Ä‘á»ƒ Ä‘á»“ng bá»™.
   document.documentElement.classList.toggle('dark', localStorage.getItem('darkMode') === '1');
 </script>
 
-<!-- Nhận diện AI Video Studio -->
+<!-- Nháº­n diá»‡n AI Video Studio -->
 <link rel="icon" type="image/png" href="brand-logo.png">
 <link rel="apple-touch-icon" href="brand-logo.png">
 
-<!-- Be Vietnam Pro (self-hosted qua @import trong base.css để không phụ thuộc CDN) -->
+<!-- Be Vietnam Pro (self-hosted qua @import trong base.css Ä‘á»ƒ khÃ´ng phá»¥ thuá»™c CDN) -->
 
-<!-- Kho cài đặt BỀN cho API key — phải chạy TRƯỚC mọi script khác.
-     Trang được phục vụ ở http://localhost:<port>, mà localStorage gắn chặt vào origin:
-     port đổi (47280 bận → 47281/…/ngẫu nhiên) hoặc Chromium dọn kho là toàn bộ key bay sạch
-     → "nhập key, thoát ra vào lại là mất". Ở đây đồng bộ hai chiều với file nova-settings.json
-     trong userData (không dính origin) rồi soi localStorage.setItem để mọi lần lưu sau đều ghi kèm ra file. -->
+<!-- Kho cÃ i Ä‘áº·t Bá»€N cho API key â€” pháº£i cháº¡y TRÆ¯á»šC má»i script khÃ¡c.
+     Trang Ä‘Æ°á»£c phá»¥c vá»¥ á»Ÿ http://localhost:<port>, mÃ  localStorage gáº¯n cháº·t vÃ o origin:
+     port Ä‘á»•i (47280 báº­n â†’ 47281/â€¦/ngáº«u nhiÃªn) hoáº·c Chromium dá»n kho lÃ  toÃ n bá»™ key bay sáº¡ch
+     â†’ "nháº­p key, thoÃ¡t ra vÃ o láº¡i lÃ  máº¥t". á»ž Ä‘Ã¢y Ä‘á»“ng bá»™ hai chiá»u vá»›i file nova-settings.json
+     trong userData (khÃ´ng dÃ­nh origin) rá»“i soi localStorage.setItem Ä‘á»ƒ má»i láº§n lÆ°u sau Ä‘á»u ghi kÃ¨m ra file. -->
 <script>
 (function () {
   var W = window.novaStore;
-  if (!W || !W.seed || !window.localStorage) return;   // chạy trên web thường: giữ nguyên hành vi cũ
-  // Chỉ giữ nhóm CẤU HÌNH/API. Dữ liệu nặng (hàng đợi, lịch sử, project…) vẫn nằm yên ở localStorage.
+  if (!W || !W.seed || !window.localStorage) return;   // cháº¡y trÃªn web thÆ°á»ng: giá»¯ nguyÃªn hÃ nh vi cÅ©
+  // Chá»‰ giá»¯ nhÃ³m Cáº¤U HÃŒNH/API. Dá»¯ liá»‡u náº·ng (hÃ ng Ä‘á»£i, lá»‹ch sá»­, projectâ€¦) váº«n náº±m yÃªn á»Ÿ localStorage.
   var PREFIX = ['api_', 'json_fb_', 't8_', 'skl_'];
   var EXACT = { 'yt_api_key': 1, 'pexels-key': 1, 'pixabay-key': 1, 'unsplash-key': 1 };
   function persisted(k) {
@@ -36,14 +36,14 @@
   var ls = window.localStorage, proto = Storage.prototype;
   var _set = proto.setItem, _del = proto.removeItem;
 
-  // 1) File → localStorage. File là bản GỐC: localStorage có thể vừa bị xoá trắng hoặc là origin mới toanh.
+  // 1) File â†’ localStorage. File lÃ  báº£n Gá»C: localStorage cÃ³ thá»ƒ vá»«a bá»‹ xoÃ¡ tráº¯ng hoáº·c lÃ  origin má»›i toanh.
   var seed = W.seed, seeded = {};
   for (var k in seed) {
     if (!Object.prototype.hasOwnProperty.call(seed, k)) continue;
-    try { _set.call(ls, k, seed[k]); seeded[k] = 1; } catch (e) { /* đầy kho cũng kệ, file mới là chỗ dựa */ }
+    try { _set.call(ls, k, seed[k]); seeded[k] = 1; } catch (e) { /* Ä‘áº§y kho cÅ©ng ká»‡, file má»›i lÃ  chá»— dá»±a */ }
   }
 
-  // 2) localStorage → file: chuyển nhà một lần cho key user đã nhập từ trước bản vá này.
+  // 2) localStorage â†’ file: chuyá»ƒn nhÃ  má»™t láº§n cho key user Ä‘Ã£ nháº­p tá»« trÆ°á»›c báº£n vÃ¡ nÃ y.
   try {
     for (var i = 0; i < ls.length; i++) {
       var key = ls.key(i);
@@ -51,7 +51,7 @@
     }
   } catch (e) { /* */ }
 
-  // 3) Từ giờ: lưu key nào là ghi thẳng ra file trước, rồi mới vào localStorage.
+  // 3) Tá»« giá»: lÆ°u key nÃ o lÃ  ghi tháº³ng ra file trÆ°á»›c, rá»“i má»›i vÃ o localStorage.
   proto.setItem = function (k, v) {
     var key = String(k);
     if (this === ls && persisted(key)) { try { W.set(key, v == null ? '' : String(v)); } catch (e) { /* */ } }
@@ -106,9 +106,9 @@
 
 <!-- Block 3 split into per-tool files - see nova/web/src/toolbox/ -->
 <script src="src/toolbox/shared-state.js"></script>
-<!-- shared-consts.js god-file tách verbatim 2026-09-11 thành 12 module shared/ —
-     giữ đúng thứ tự dải dòng gốc (sau shared-state.js, trước utility/) để ngữ nghĩa
-     load-order/override không đổi; marker DEDUP-DUPLICATE/fn shadow giữ nguyên (dọn dead code là task riêng) -->
+<!-- shared-consts.js god-file tÃ¡ch verbatim 2026-09-11 thÃ nh 12 module shared/ â€”
+     giá»¯ Ä‘Ãºng thá»© tá»± dáº£i dÃ²ng gá»‘c (sau shared-state.js, trÆ°á»›c utility/) Ä‘á»ƒ ngá»¯ nghÄ©a
+     load-order/override khÃ´ng Ä‘á»•i; marker DEDUP-DUPLICATE/fn shadow giá»¯ nguyÃªn (dá»n dead code lÃ  task riÃªng) -->
 <script src="src/toolbox/shared/shell.js"></script>
 <script src="src/toolbox/shared/llm.js"></script>
 <script src="src/toolbox/shared/voice.js"></script>
@@ -123,8 +123,8 @@
 <script src="src/toolbox/shared/t7.js"></script>
 <script src="src/toolbox/shared/t8-t10.js"></script>
 <script src="src/toolbox/utility.js"></script>
-<!-- utility.js (kernel) + 27 module cụm nghiệp vụ utility/*.js — tách verbatim từ utility.js god-file,
-     mọi thẻ nạp SAU khối shared/ (12 module tách từ shared-consts.js, xoá 2026-09-11) để hàm trùng tên peer vẫn được override đúng -->
+<!-- utility.js (kernel) + 27 module cá»¥m nghiá»‡p vá»¥ utility/*.js â€” tÃ¡ch verbatim tá»« utility.js god-file,
+     má»i tháº» náº¡p SAU khá»‘i shared/ (12 module tÃ¡ch tá»« shared-consts.js, xoÃ¡ 2026-09-11) Ä‘á»ƒ hÃ m trÃ¹ng tÃªn peer váº«n Ä‘Æ°á»£c override Ä‘Ãºng -->
 <script src="src/toolbox/utility/keys.js"></script>
 <script src="src/toolbox/utility/tier.js"></script>
 <script src="src/toolbox/utility/shell.js"></script>
@@ -173,7 +173,7 @@
 <script src="src/toolbox/tool-t11.js"></script>
 <script src="src/toolbox/tool-t2.js"></script>
 <script src="src/toolbox/tool-t7.js"></script>
-<!-- T7 tách 2026-09-11 (verbatim theo dải dòng từ tool-t7.js — toàn bộ function declaration, thứ tự nạp không ảnh hưởng) -->
+<!-- T7 tÃ¡ch 2026-09-11 (verbatim theo dáº£i dÃ²ng tá»« tool-t7.js â€” toÃ n bá»™ function declaration, thá»© tá»± náº¡p khÃ´ng áº£nh hÆ°á»Ÿng) -->
 <script src="src/toolbox/t7-fx.js"></script>
 <script src="src/toolbox/t7-layers.js"></script>
 <script src="src/toolbox/t7-src.js"></script>
@@ -186,45 +186,45 @@
 <script src="src/toolbox/tool-t8.js"></script>
 <script src="src/toolbox/tool-t9.js"></script>
 <script src="src/toolbox/tool-ts.js"></script>
-<!-- Skill Catalog (2026-09-17x): LAZY-LOAD — 670KB chỉ nạp khi user bấm "Import Catalog".
-     tool-skills.js → sklEnsureCatalog() nạp động 4 file theo đúng thứ tự cũ. -->
-<!-- Skill Panel: kho skill viết kịch bản theo chủ đề & phong cách — sidebar nhóm "Cài đặt" (nạp SAU tool-ts vì chèn option vào #tsSkill) -->
+<!-- Skill Catalog (2026-09-17x): LAZY-LOAD â€” 670KB chá»‰ náº¡p khi user báº¥m "Import Catalog".
+     tool-skills.js â†’ sklEnsureCatalog() náº¡p Ä‘á»™ng 4 file theo Ä‘Ãºng thá»© tá»± cÅ©. -->
+<!-- Skill Panel: kho skill viáº¿t ká»‹ch báº£n theo chá»§ Ä‘á» & phong cÃ¡ch â€” sidebar nhÃ³m "CÃ i Ä‘áº·t" (náº¡p SAU tool-ts vÃ¬ chÃ¨n option vÃ o #tsSkill) -->
 <script src="src/toolbox/tool-skills.js"></script>
 <script src="src/toolbox/tool-tts.js"></script>
 <script src="src/toolbox/tool-upg.js"></script>
-<!-- Công cụ FFmpeg (sidebar dropdown): Tách MP3 / Cắt / Ghép / Loop — IPC ffx:* -->
+<!-- CÃ´ng cá»¥ FFmpeg (sidebar dropdown): TÃ¡ch MP3 / Cáº¯t / GhÃ©p / Loop â€” IPC ffx:* -->
 <script src="src/toolbox/tool-ffx.js"></script>
 <script src="src/toolbox/tool-live.js"></script>
 
 <script src="src/toolbox/utility/collapse.js"></script>
 
-  <!-- Video Agent panel: tách từ video-agent-panel.js (2026-09-12) — 5 file IIFE
-       góp tên vào window.vaPanelCtx; THỨ TỰ NẠP = NGỮ NGHĨA (core → easy-ui →
-       easy-flow → advanced → main), không đổi thứ tự -->
+  <!-- Video Agent panel: tÃ¡ch tá»« video-agent-panel.js (2026-09-12) â€” 5 file IIFE
+       gÃ³p tÃªn vÃ o window.vaPanelCtx; THá»¨ Tá»° Náº P = NGá»® NGHÄ¨A (core â†’ easy-ui â†’
+       easy-flow â†’ advanced â†’ main), khÃ´ng Ä‘á»•i thá»© tá»± -->
   <script src="src/va/va-core.js"></script>
   <script src="src/va/va-easy-ui.js"></script>
   <script src="src/va/va-easy-flow.js"></script>
   <script src="src/va/va-advanced.js"></script>
   <script src="src/va/va-main.js"></script>
-  <!-- Whiteboard Studio: annotation core (UMD — dùng chung main + renderer) + panel (UI luồng srt-whiteboard-animation) -->
+  <!-- Whiteboard Studio: annotation core (UMD â€” dÃ¹ng chung main + renderer) + panel (UI luá»“ng srt-whiteboard-animation) -->
   <script src="whiteboard-annotation.js?v=hdlasso6"></script>
-  <script src="whiteboard-studio-panel.js?v=wbui4"></script>
-  <!-- Whiteboard Studio: AI (prompt ảnh theo câu SRT + vision khoanh vùng vật thể) + Xem trước ghép CapCut-like
-       (IIFE góp tên vào window.wbStudioCtx do panel expose — nạp SAU panel, KHÔNG import/export) -->
+  <script src="whiteboard-studio-panel.js?v=wbui6"></script>
+  <!-- Whiteboard Studio: AI (prompt áº£nh theo cÃ¢u SRT + vision khoanh vÃ¹ng váº­t thá»ƒ) + Xem trÆ°á»›c ghÃ©p CapCut-like
+       (IIFE gÃ³p tÃªn vÃ o window.wbStudioCtx do panel expose â€” náº¡p SAU panel, KHÃ”NG import/export) -->
   <script src="whiteboard-studio-ai.js?v=wbaigen1"></script>
   <script src="whiteboard-studio-preview.js?v=wbprev1"></script>
-  <!-- Vẽ Tay Ảnh: tách phần animation vẽ tay từ Whiteboard Studio (tái dùng whiteboard-annotation.js + IPC whiteboard:*) -->
-  <!-- Tách từ handdraw-studio-panel.js thành 6 module IIFE góp tên vào window.hdPanelCtx
-       (mô hình src/va — AGENTS.md §4/§8). Thứ tự nạp = ngữ nghĩa. KHÔNG import/export. -->
+  <!-- Váº½ Tay áº¢nh: tÃ¡ch pháº§n animation váº½ tay tá»« Whiteboard Studio (tÃ¡i dÃ¹ng whiteboard-annotation.js + IPC whiteboard:*) -->
+  <!-- TÃ¡ch tá»« handdraw-studio-panel.js thÃ nh 6 module IIFE gÃ³p tÃªn vÃ o window.hdPanelCtx
+       (mÃ´ hÃ¬nh src/va â€” AGENTS.md Â§4/Â§8). Thá»© tá»± náº¡p = ngá»¯ nghÄ©a. KHÃ”NG import/export. -->
   <script src="src/hd/hd-core.js"></script>
   <script src="src/hd/hd-scenes.js"></script>
   <script src="src/hd/hd-canvas.js"></script>
   <script src="src/hd/hd-ai-export.js"></script>
   <script src="src/hd/hd-render.js"></script>
   <script src="src/hd/hd-main.js"></script>
-  <!-- Dịch SRT: panel UI (IPC srt-translate:* qua window.native.srtTranslate) -->
+  <!-- Dá»‹ch SRT: panel UI (IPC srt-translate:* qua window.native.srtTranslate) -->
   <script src="srt-translate-panel.js?v=srtt1"></script>
-<!-- Lồng tiếng theo phụ đề: panel UI (IPC dub:* qua window.native.dub) -->
+<!-- Lá»“ng tiáº¿ng theo phá»¥ Ä‘á»: panel UI (IPC dub:* qua window.native.dub) -->
 <script src="dub-panel.js?v=dub1"></script>
 <script src="viral-cut-panel.js?v=vc1"></script>
 <script src="spy-panel.js?v=spy1"></script>
@@ -243,9 +243,9 @@
 
 <!--#include "partials/modal-t7export.html" -->
 <script src="src/toolbox/utility/flow-keys.js"></script>
-<!-- Session Snapshot: ảnh chốt "làm dở" GUI (input chưa lưu, scroll) + dữ liệu
-     resume của panel (Video Agent projectDir gần nhất) — khôi phục qua hook
-     trong profiles.js. Phải nạp TRƯỚC boot.js. -->
+<!-- Session Snapshot: áº£nh chá»‘t "lÃ m dá»Ÿ" GUI (input chÆ°a lÆ°u, scroll) + dá»¯ liá»‡u
+     resume cá»§a panel (Video Agent projectDir gáº§n nháº¥t) â€” khÃ´i phá»¥c qua hook
+     trong profiles.js. Pháº£i náº¡p TRÆ¯á»šC boot.js. -->
 <script src="src/toolbox/utility/session-snapshot.js"></script>
 
 

@@ -608,15 +608,24 @@ async function _giongLuuBan(blob, giong, engine, text, nhan, laSanPhamCuoi, srt)
 async function _giongSuLuuDia(h, cache){
   try {
     if (!(window.native && window.native.voiceHistorySave) || !h || !h.blob) return;
-    if (h.blob.size > 64 * 1024 * 1024) return;   // main cũng prune ở 64MB — bỏ qua bản quá to
+    // Trần gửi IPC 256MB: vượt → khai báo rõ, không lưu (trước đây im lặng ở
+    // 64MB làm bản gộp kịch bản dài mất persist → luồng auto nhận "bản không
+    // còn trên đĩa"). WAV 64–256MB main tự nén MP3 khi persist (voiceZoneSave).
+    if (h.blob.size > 256 * 1024 * 1024){
+      try { _voiceLog('⚠ Bản "' + (h.ten || '') + '" quá lớn (>256MB) — không lưu đĩa. Bản vẫn dùng được trong phiên.'); } catch (_){}
+      return;
+    }
     const ext = /(mpeg|mp3)/.test(h.blob.type) ? '.mp3' : '.wav';
     const buf = new Uint8Array(await h.blob.arrayBuffer());
-    await window.native.voiceHistorySave({
+    const r = await window.native.voiceHistorySave({
       khi: h.khi, ext, buf, cache: !!cache,
       // srt: phụ đề đồng bộ do backend sinh (timing thật) — main lưu meta nguyên
       // bản, thêm trường không cần đổi gì phía main. Vài KB, không đụng trần 64MB.
       meta: { khi: h.khi, ten: h.ten || '', engine: h.engine || '', giay: h.giay || 0, text: h.text || '', ext, srt: h.srt || '' },
     });
+    if (r && r.error){
+      try { _voiceLog('⚠ Lưu đĩa lỗi (bản "' + (h.ten || '') + '"): ' + r.error); } catch (_){}
+    }
   } catch (_){}
 }
 
@@ -946,7 +955,7 @@ async function _giongGhepMuc(items, ten){
   _giongSu.unshift(hGhep);
   _giongSu = _giongSu.slice(0, 40);
   giongSuVe();
-  try { _giongSuLuuDia(hGhep); } catch (_){}   // bản gộp cũng persist đĩa
+  try { await _giongSuLuuDia(hGhep); } catch (_){}   // bản gộp cũng persist đĩa (lỗi save được log trong _giongSuLuuDia)
   try { _voiceLog('Đã ghép ' + items.length + ' bản thành 1 file WAV ' + Math.round(out.duration) + ' giây — "' + ten + '".'); } catch (_){}
   try { novaLog('🎙 Đã ghép ' + items.length + ' bản giọng nói → "' + ten + '" (' + Math.round(out.duration) + 's)'); } catch (_){}
   return hGhep;

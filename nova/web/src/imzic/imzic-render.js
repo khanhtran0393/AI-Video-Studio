@@ -13,6 +13,122 @@
 // ---- vẽ nền: 1 ảnh hoặc slideshow (chuyển cảnh + Ken Burns + fit-mode) ----
 // scale = zoom bass (như cũ); KB = Ken Burns per-slide deterministic.
 const KB_HEADROOM = 1.15;   // raster đủ cho zoom bass × Ken Burns đỉnh (1.18×1.14)
+
+// 2026-09-17zq: video phát làm nền, loop đến hết nhạc. Mỗi phần tử `videos[i]`
+// có `.el` (HTMLVideoElement ẩn, muted, autoplay theo t) và `.name`. Khi `t`
+// vượt duration, tua `currentTime` về 0 (không pause — phát tiếp) để nối mượt.
+// Loop CHỈ áp dụng khi nhạc còn chạy (audioEl.duration - audioEl.currentTime > 0.5);
+// khi nhạc gần hết, video freeze tại frame cuối (đỡ giật).
+function syncVideoTime(el, t){
+  if(!el || !el.duration || !isFinite(el.duration)) return;
+  if(t < 0) t = 0;
+  // tua về 0 nếu đã chạy hết — KHÔNG pause (giữ frame cuối nếu muốn thì thêm pause)
+  if(el.currentTime >= el.duration - 0.1){
+    try { el.currentTime = 0; } catch(e){}
+  }
+  // 2026-09-17zu (mitigation 2): trong export offline, mỗi khung `t` tăng theo
+  // loop nhưng browser có thể chưa decode frame mới → vẽ frame cũ lên canvas →
+  // VideoFrame capture trễ 1-2 frame. Nếu lệch > 0.1s mà CHƯA vượt duration
+  // → ép seek nhẹ về `t` (delta < 0.5s để browser KHÔNG re-decode toàn bộ).
+  // Lưu ý: chỉ làm khi offlineRendering (xuất nhanh), không áp dụng cho
+  // preview realtime (ở đó audioEl.currentTime chạy tự nhiên theo t).
+  if(typeof offlineRendering !== 'undefined' && offlineRendering && t < el.duration - 0.5){
+    const dt = Math.abs(el.currentTime - t);
+    if(dt > 0.1 && dt < 0.5){
+      try { el.currentTime = t; } catch(e){}
+    }
+  }
+}
+
+// Vẽ 1 frame video tại thời điểm `t` (giây) theo `fitMode`.
+// fitMode ∈ cover/contain/blur/square — giống ảnh đơn (xem drawBackground dưới).
+// scale = zoom bass; kb = Ken Burns (đã tính sẵn cho ảnh, ở đây bỏ qua vì video
+// đã có chuyển động riêng — chỉ áp zoom bass cho cover, các mode khác cố định).
+function drawVideoFrame(el, w, h, fitMode, scale, t){
+  if(!el) return;
+  if(el.readyState < 2) return; // HAVE_CURRENT_DATA
+  syncVideoTime(el, t);
+  const vw = el.videoWidth, vh = el.videoHeight;
+  if(!vw || !vh) return;
+  if(fitMode === 'square'){
+    // "Ô vuông giữa + nền mờ" — dùng cùng logic ảnh, lấy frame video hiện tại
+    // làm nguồn cho cả nền mờ lẫn ô vuông (bgImg riêng nếu có ưu tiên bgImg trước).
+    if(state.bgImg){
+      drawSquareLayout(state.bgImg, null);
+    } else {
+      // tạo canvas tạm chứa frame hiện tại rồi dùng làm "ảnh" cho drawSquareLayout
+      const tmp = imzVideoFrameCanvas(el);
+      if(tmp) drawSquareLayout(tmp, tmp);
+    }
+    return;
+  }
+  if(fitMode === 'blur'){
+    // nền mờ từ chính frame video (kéo dãn đầy khung rồi blur)
+    const tmp = imzVideoFrameCanvas(el, w, h);
+    if(tmp){
+      ctx.filter = 'blur(' + Math.max(4, state.bgBlur || 12) + 'px)';
+      ctx.drawImage(tmp, 0, 0, w, h);
+      ctx.filter = 'none';
+    } else {
+      ctx.fillStyle = '#050508'; ctx.fillRect(0,0,w,h);
+    }
+    // ảnh chính: vừa đủ (contain), không zoom bass
+    const s2 = Math.min(w/vw, h/vh);
+    const dw2 = vw*s2, dh2 = vh*s2;
+    ctx.drawImage(el, (w-dw2)/2, (h-dh2)/2, dw2, dh2);
+    return;
+  }
+  if(fitMode === 'contain'){
+    // viền đen + ảnh chính vừa đủ
+    ctx.fillStyle = '#050508'; ctx.fillRect(0,0,w,h);
+    const s2 = Math.min(w/vw, h/vh) * scale;
+    const dw2 = vw*s2, dh2 = vh*s2;
+    ctx.drawImage(el, (w-dw2)/2, (h-dh2)/2, dw2, dh2);
+    return;
+  }
+  // cover: lấp đầy khung + zoom bass
+  const cover = Math.max(w/vw, h/vh) * scale;
+  const dw = vw*cover, dh = vh*cover;
+  ctx.drawImage(el, (w-dw)/2, (h-dh)/2, dw, dh);
+}
+
+// Helper: tạo canvas chứa frame video hiện tại (dùng cho square/blur).
+// Không cache vì video là live (frame đổi liên tục) — mỗi frame vẽ 1 lần.
+// Tối ưu: nếu chỉ cần kích thước gốc thì truyền w/h=null; nếu cần scale thì truyền.
+function imzVideoFrameCanvas(el, sw, sh){
+  if(!el || el.readyState < 2) return null;
+  const vw = el.videoWidth, vh = el.videoHeight;
+  if(!vw || !vh) return null;
+  const c = document.createElement('canvas');
+  c.width = sw || vw;
+  c.height = sh || vh;
+  const cctx = c.getContext('2d');
+  if(sw && sh){
+    // cover fit: lấp đầy canvas (sw×sh)
+    const sc = Math.max(sw/vw, sh/vh);
+    const dw = vw*sc, dh = vh*sc;
+    cctx.drawImage(el, (sw-dw)/2, (sh-dh)/2, dw, dh);
+  } else {
+    cctx.drawImage(el, 0, 0, vw, vh);
+  }
+  return c;
+}
+
+// Lấy videoEl hiện tại theo `t` (giây) — hỗ trợ cả 1 video lẫn slideshow video.
+// videos: [{el,name,duration}]; nếu chỉ 1 video thì trả về luôn (loop mượt).
+// Trả về null nếu videos rỗng.
+function imzGetCurrentVideoEl(t){
+  const vids = state.videos;
+  if(!vids || !vids.length) return null;
+  if(vids.length === 1) return vids[0].el;
+  // slideshow: chia đều theo duration nhạc
+  const dur = isFinite(audioEl.duration) ? audioEl.duration : 0;
+  if(dur <= 0) return vids[0].el;
+  const segs = vids.length;
+  const idx = Math.max(0, Math.min(segs-1, Math.floor(t / dur * segs)));
+  return vids[idx].el;
+}
+
 function drawBackground(scale, t){
   const w = logicW, h = logicH;
   if(state.slides.length){
@@ -67,16 +183,45 @@ function drawBackground(scale, t){
     }
     return;
   }
+  // 2026-09-17zq: video nguồn — ưu tiên khi state.sourceMode === 'video' VÀ có
+  // video. Nếu user chọn cả ảnh + video, mặc định ưu tiên ảnh (sourceMode='image')
+  // — đổi qua 'video' bằng dropdown `sourceModeSel`.
+  if(state.sourceMode === 'video' && state.videos.length){
+    drawVideoFrame(imzGetCurrentVideoEl(t), w, h, state.fitMode || 'cover', scale, t);
+    return;
+  }
   if(state.img){
-    // fitMode 'square': bố cục "Ô vuông giữa + nền mờ" (áp dụng cho cả ảnh đơn)
-    if(state.fitMode === 'square'){
+    const fm = state.fitMode || 'cover';
+    // 2026-09-17zp: ảnh đơn tôn trọng ĐỦ 4 fitMode (trước đây chỉ square đặc
+    // biệt, còn lại rơi về cover cứng → ảnh bị cắt dù user chọn contain/blur).
+    if(fm === 'square'){
       drawSquareLayout(state.img, getImageRaster());
       return;
     }
-    // #perf: vẽ từ raster đã quét sẵn (luôn ≥ khổ hiển thị) thay vì resample
-    // ảnh gốc độ phân giải đầy đủ mỗi frame — vị trí/kích thước giữ nguyên.
     const raster = getImageRaster();
     const iw = state.img.width, ih = state.img.height;
+    if(fm === 'blur'){
+      const bg = getImageBlurBg(state.img);
+      if(bg) ctx.drawImage(bg, 0, 0, w, h);
+      // ảnh chính: vừa đủ trên nền mờ (giống nhánh 'blur' của slideshow) — không
+      // zoom bass để viền không phập phồng khi không có slideshow.
+      const s2 = Math.min(w/iw, h/ih);
+      const dw2 = iw*s2, dh2 = ih*s2;
+      ctx.drawImage(raster || state.img, (w-dw2)/2, (h-dh2)/2, dw2, dh2);
+      return;
+    }
+    if(fm === 'contain'){
+      // vừa đủ khung, viền đen 2 bên nếu lệch tỉ lệ — zoom bass nhẹ 1× để không
+      // giật, giữ ảnh không bị cắt (nghĩa đen 'contain').
+      const s2 = Math.min(w/iw, h/ih) * scale;
+      const dw2 = iw*s2, dh2 = ih*s2;
+      ctx.drawImage(raster || state.img, (w-dw2)/2, (h-dh2)/2, dw2, dh2);
+      return;
+    }
+    // cover: lấp đầy khung (giữ tương thích tuyệt đối với hành vi cũ) — đây
+    // là nhánh mặc định state.fitMode === 'cover'.
+    // #perf: vẽ từ raster đã quét sẵn (luôn ≥ khổ hiển thị) thay vì resample
+    // ảnh gốc độ phân giải đầy đủ mỗi frame — vị trí/kích thước giữ nguyên.
     const cover = Math.max(w/iw, h/ih) * scale;
     const dw = iw*cover, dh = ih*cover;
     const dx = (w-dw)/2, dy = (h-dh)/2;
@@ -181,6 +326,7 @@ function renderFrame(now){
   drawWave(dt);
   drawParticles(dt, smoothedTreble); // #bands: hạt nhịp theo dải treble
   drawLyrics(tNow);
+  drawTextLines(tNow); // E6: Text lên màn hình (mục 11) — dưới FX toàn khung, khớp lời hát
   applyFx(smoothedEnergy); // FX toàn khung phủ trên cùng (như z:90 của Nova)
   drawWatermark();         // E4: logo vẽ CUỐI cùng — trên mọi FX, luôn nét
 
@@ -220,6 +366,8 @@ function imzicLoadImageFile(f, inputEl){
       if(imgObjUrl && imgObjUrl !== url) URL.revokeObjectURL(imgObjUrl);
       imgObjUrl = url;
       state.img = im;
+      // 2026-09-17zp: ảnh mới → cache blur của ảnh cũ vô dụng, key dựa src
+      if(typeof imageBlurCache !== 'undefined' && imageBlurCache.clear) imageBlurCache.clear();
       // 2026-09-15r: hiện nút "Bỏ ảnh nền" sau khi nạp thành công
       if($('imgClearBtn')) $('imgClearBtn').style.display = '';
       // CHỈ CHỌN 1 TRONG 2: ảnh nền đơn và slideshow loại trừ lẫn nhau
@@ -263,6 +411,8 @@ $('imgClearBtn').addEventListener('click', ()=>{
   if(!state.img && !state.imgFile) return;
   if(imgObjUrl){ URL.revokeObjectURL(imgObjUrl); imgObjUrl = null; }
   state.img = null; state.imgFile = null;
+  // 2026-09-17zp: bỏ ảnh → cache blur của ảnh cũ cũng vô dụng
+  if(typeof imageBlurCache !== 'undefined' && imageBlurCache.clear) imageBlurCache.clear();
   $('imgName').textContent = 'Chọn ảnh nền';
   if($('imgInput')) $('imgInput').value = '';
   $('imgClearBtn').style.display = 'none';
@@ -323,6 +473,172 @@ $('bgClearBtn').addEventListener('click', ()=>{
   $('bgClearBtn').style.display = 'none';
   if(typeof squareBlurCache !== 'undefined' && squareBlurCache.clear) squareBlurCache.clear();
   setStatus('Đã bỏ ảnh nền riêng — nền mờ sẽ tự dùng chính ảnh đang phát.', false);
+});
+
+// 2026-09-17zq: video nguồn (1 video hoặc slideshow video) — thay thế ảnh đơn.
+let videoObjUrls = [];   // mỗi video 1 url, thu hồi khi clear
+function imzicLoadVideoFile(f, inputEl){
+  const looksVideo = (f.type && f.type.startsWith('video')) || /\.(mp4|webm|mov|m4v|ogv|mkv)$/i.test(f.name);
+  if(!looksVideo){
+    setStatus('File này có vẻ không phải video — chọn lại file mp4/webm nhé.', true);
+    if(inputEl) inputEl.value = '';
+    return Promise.reject(Object.assign(new Error('File không phải video: ' + f.name), { code: 'IMZIC_NOT_VIDEO' }));
+  }
+  state.videoFile = f;
+  $('videoName').textContent = f.name;
+  const url = URL.createObjectURL(f);
+  videoObjUrls.push(url);
+  const v = document.createElement('video');
+  v.muted = true; v.playsInline = true; v.preload = 'auto';
+  v.style.cssText = 'position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;left:-9999px;top:-9999px;';
+  document.body.appendChild(v);
+  return new Promise((resolve, reject)=>{
+    // 2026-09-17zu (mitigation 1): đợi `oncanplay` (readyState ≥ 3, có frame decode sẵn)
+    // thay vì `onloadedmetadata` (chỉ có metadata, chưa có frame). Giải quyết
+    // nền đen 1-2 frame đầu khi drawVideoFrame bị gọi trước khi decode xong.
+    let resolved = false;
+    const finalize = ()=>{
+      if(resolved) return; resolved = true;
+      // 1 video đơn → thay thế state.videos (xoá slideshow video nếu có)
+      if(state.videos.length){
+        imzicClearVideos();
+      }
+      state.videos = [{el: v, name: f.name, duration: isFinite(v.duration) ? v.duration : 0}];
+      if($('videoClearBtn')) $('videoClearBtn').style.display = '';
+      // CHỈ 1 TRONG 2: video và ảnh (đơn + slideshow) loại trừ lẫn nhau — nếu đã
+      // có ảnh, dùng mặc định sourceMode='image' (xem dropdown để đổi).
+      if(typeof updateSlideFields === 'function') updateSlideFields();
+      checkReady();
+      const dur = isFinite(v.duration) ? v.duration.toFixed(1) + 's' : '?';
+      setStatus('Đã nạp video: ' + f.name + ' (dài ' + dur + ') — chuyển "Nguồn hiển thị chính" sang 🎬 Video để xem.', false);
+      resolve(v);
+    };
+    v.oncanplay = finalize;
+    // fallback 4s: nếu oncanplay không bắn (codec lạ, file nhỏ decode < 16ms) → vẫn
+    // resolve để không kẹt UI. Kinh nghiệm: video mp4 thường bắn oncanplay < 200ms.
+    setTimeout(()=>{ if(!resolved) finalize(); }, 4000);
+    v.onerror = ()=>{
+      if(resolved) return; resolved = true;
+      URL.revokeObjectURL(url);
+      try { v.remove(); } catch(e){}
+      setStatus('Không đọc được file video này (file hỏng hoặc codec không hỗ trợ) — chọn video khác nhé.', true);
+      if(inputEl) inputEl.value = '';
+      reject(Object.assign(new Error('Không đọc được file video: ' + f.name), { code: 'IMZIC_BAD_VIDEO' }));
+    };
+    v.src = url;
+    v.load();
+  });
+}
+function imzicLoadVideoSlidesFiles(files, inputEl){
+  if(!files || !files.length){
+    return Promise.reject(Object.assign(new Error('Không có file video nào'), { code: 'IMZIC_NO_VIDEO' }));
+  }
+  for(const f of files){
+    const ok = (f.type && f.type.startsWith('video')) || /\.(mp4|webm|mov|m4v|ogv|mkv)$/i.test(f.name);
+    if(!ok){
+      setStatus('File "' + f.name + '" không phải video — chỉ chấp nhận mp4/webm/mov.', true);
+      if(inputEl) inputEl.value = '';
+      return Promise.reject(Object.assign(new Error('File không phải video: ' + f.name), { code: 'IMZIC_NOT_VIDEO' }));
+    }
+  }
+  imzicClearVideos();
+  const results = [];
+  const promises = files.map(f => new Promise((resolve, reject)=>{
+    const url = URL.createObjectURL(f);
+    videoObjUrls.push(url);
+    const v = document.createElement('video');
+    v.muted = true; v.playsInline = true; v.preload = 'auto';
+    v.style.cssText = 'position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;left:-9999px;top:-9999px;';
+    document.body.appendChild(v);
+    // 2026-09-17zu (mitigation 1): đợi `oncanplay` thay vì `onloadedmetadata` —
+    // đảm bảo frame decode sẵn trước khi slideshow chiếu. Fallback 4s.
+    let resolved = false;
+    const finalize = ()=>{
+      if(resolved) return; resolved = true;
+      results.push({el: v, name: f.name, duration: isFinite(v.duration) ? v.duration : 0});
+      resolve();
+    };
+    v.oncanplay = finalize;
+    setTimeout(()=>{ if(!resolved) finalize(); }, 4000);
+    v.onerror = ()=>{
+      if(resolved) return; resolved = true;
+      URL.revokeObjectURL(url);
+      try { v.remove(); } catch(e){}
+      reject(Object.assign(new Error('Không đọc được video: ' + f.name), { code: 'IMZIC_BAD_VIDEO' }));
+    };
+    v.src = url;
+    v.load();
+  }));
+  return Promise.all(promises).then(()=>{
+    state.videos = results;
+    if($('vslidesHint')) $('vslidesHint').textContent = results.length + ' video';
+    if($('vslidesClearBtn')) $('vslidesClearBtn').style.display = '';
+    if(typeof updateSlideFields === 'function') updateSlideFields();
+    checkReady();
+    setStatus('Đã nạp slideshow ' + results.length + ' video — chia đều theo nhạc. Chuyển "Nguồn hiển thị chính" sang 🎬 Video để xem.', false);
+    return results;
+  }).catch(err=>{
+    setStatus(err.message || 'Lỗi không đọc được slideshow video.', true);
+    if(inputEl) inputEl.value = '';
+    throw err;
+  });
+}
+function imzicClearVideos(){
+  for(const it of state.videos){
+    try { it.el.pause(); } catch(e){}
+    try { it.el.remove(); } catch(e){}
+  }
+  for(const u of videoObjUrls){ try { URL.revokeObjectURL(u); } catch(e){} }
+  videoObjUrls = [];
+  state.videos = [];
+  state.videoFile = null;
+  if($('videoName')) $('videoName').textContent = 'Chọn 1 video (tuỳ chọn)';
+  if($('vslidesHint')) $('vslidesHint').textContent = '';
+  if($('videoInput')) $('videoInput').value = '';
+  if($('vslidesInput')) $('vslidesInput').value = '';
+  if($('videoClearBtn')) $('videoClearBtn').style.display = 'none';
+  if($('vslidesClearBtn')) $('vslidesClearBtn').style.display = 'none';
+  if(typeof updateSlideFields === 'function') updateSlideFields();
+  checkReady();
+}
+// Listeners cho input/clear video — đặt NGAY SAU loader để tránh biến undefined
+if($('videoInput')) $('videoInput').addEventListener('change', e=>{
+  const f = e.target.files[0];
+  if(!f) return;
+  if(isExporting){ setStatus('Đang ghi video — không đổi video giữa chừng (bản ghi sẽ hỏng). Chờ ghi xong rồi đổi nhé.', true); e.target.value = ''; return; }
+  imzicLoadVideoFile(f, e.target);
+});
+if($('vslidesInput')) $('vslidesInput').addEventListener('change', e=>{
+  const files = Array.from(e.target.files || []);
+  if(!files.length) return;
+  if(isExporting){ setStatus('Đang ghi video — không đổi slideshow video giữa chừng (bản ghi sẽ hỏng).', true); e.target.value = ''; return; }
+  imzicLoadVideoSlidesFiles(files, e.target);
+});
+if($('videoClearBtn')) $('videoClearBtn').addEventListener('click', ()=>{
+  if(isExporting){ setStatus('Đang ghi video — không bỏ video giữa chừng (bản ghi sẽ hỏng).', true); return; }
+  imzicClearVideos();
+  setStatus('Đã bỏ video. Chọn video mới hoặc thêm slideshow video để tiếp tục.', false);
+});
+if($('vslidesClearBtn')) $('vslidesClearBtn').addEventListener('click', ()=>{
+  if(isExporting){ setStatus('Đang ghi video — không bỏ slideshow video giữa chừng (bản ghi sẽ hỏng).', true); return; }
+  // chỉ xoá slideshow video, giữ 1 video nếu có
+  const keep = state.videos.length > 1 ? [state.videos[0]] : [];
+  for(let i = 1; i < state.videos.length; i++){
+    try { state.videos[i].el.pause(); } catch(e){}
+    try { state.videos[i].el.remove(); } catch(e){}
+  }
+  state.videos = keep;
+  if($('vslidesHint')) $('vslidesHint').textContent = '';
+  if($('vslidesClearBtn')) $('vslidesClearBtn').style.display = 'none';
+  if($('vslidesInput')) $('vslidesInput').value = '';
+  if(typeof updateSlideFields === 'function') updateSlideFields();
+  checkReady();
+  setStatus('Đã bỏ slideshow video' + (keep.length ? ' (còn 1 video).' : '.'), false);
+});
+if($('sourceModeSel')) $('sourceModeSel').addEventListener('change', e=>{
+  state.sourceMode = e.target.value;
+  if(typeof updateSlideFields === 'function') updateSlideFields();
+  setStatus('Nguồn hiển thị chính: ' + (state.sourceMode === 'video' ? '🎬 Video' : '🖼️ Ảnh') + '.', false);
 });
 
 let audObjUrl = null;

@@ -55,7 +55,7 @@ Chuỗi tuần tự, bước nào FAIL thì dừng cả chuỗi:
 | `npm run check:shared-shadow` | khối `shared/` không chứa fn chết bị peer load sau shadow (dead code — xem MEMORY 2026-09-11t) |
 | `npm run check:shadow` | handler IPC không bị ghi đè lặng lẽ |
 | `npm run check:size` | ngân sách kích thước file |
-| `npm run check:toplevel` | xung đột khai báo top-level renderer theo thứ tự nạp index.html |
+| `npm run check:toplevel` | xung đột khai báo top-level renderer theo thứ tự nạp index.html — gồm cả **function đè chéo file = FAIL** (siết 2026-09-17 sau bug `_tsButPhapNote`; đè trong cùng 1 file vẫn OK) |
 | `npm run check:docs` | AGENTS.md ↔ package.json đồng bộ: mọi script được nhắc phải tồn tại, mọi script phải được nhắc ở đây (chống drift tài liệu) |
 | `npm run check:selftest` | "kiểm định của kiểm định": chạy fixture trong %TEMP% khẳng định `check:exports`/`check:docs` FAIL đúng vi phạm, PASS đúng nguồn sạch (`nova/scripts/checker-fixture-test.js`) |
 
@@ -257,9 +257,26 @@ COMPLETED | FAILED | CANCELLED`.
    được kiểm chứng từ artifact do app ghi ra (file trong `output/`, `job.json`,
    event/QA, `lifecycle.log`…), không chấp nhận log "thành công" mà không có
    artifact thật tương ứng.
-7. **Ghi nhận**: cập nhật `MEMORY.md` (quyết định, phát hiện, vấn đề còn treo)
+7. **Dọn rác sau khi test (BẮT BUỘC)**: khi quá trình test hoàn tất, agent PHẢI
+   dọn sạch mọi artifact tạm mình đã sinh ra trong lúc test, trước khi kết thúc
+   task — không để lại rác cho phiên sau:
+   - Script kiểm thử dùng một lần: `tmp-*.js` / `tmp-*.cmd` trong `nova/scripts/tmp/`
+     và mọi script/fixture tạm tạo ở gốc repo (kể cả file `.gitignore` che —
+     bị ignore không có nghĩa là được phép tồn lại).
+   - File fixture/output tạm trong `%TEMP%`, thư mục test tự tạo, log/ảnh/video
+     probe sinh chỉ cho việc verify.
+   - Phần mềm/agent trung gian: process electron/node thừa do harness spawn,
+     worktree (nếu có — `git worktree remove`, xem mục 9).
+   Phạm vi KHÔNG dọn: dữ liệu THẬT của app (`%APPDATA%\AI Video Studio Independent`,
+   `output/job.json`, tài nguyên trong `output/` sinh từ quy trình thật) và mọi
+   script kiểm định chính thức trong `nova/scripts/` — đó là tài sản, không phải rác.
+   Nếu bắt buộc phải giữ lại một file tạm (vd. còn cần cho lần verify kế tiếp),
+   phải khai báo rõ trong `MEMORY.md` mục "Còn treo" kèm lý do + điều kiện dọn.
+   Bước dọn rác là một phần của định nghĩa "task hoàn tất": test PASS mà còn rác
+   = task CHƯA xong.
+8. **Ghi nhận**: cập nhật `MEMORY.md` (quyết định, phát hiện, vấn đề còn treo)
    trong cùng thay đổi. Không ghi log vào AGENTS.md — file này chỉ chứa quy chuẩn ổn định.
-8. **CẤM tạo git worktree / bản sao repo song song.** App desktop chạy trực tiếp
+9. **CẤM tạo git worktree / bản sao repo song song.** App desktop chạy trực tiếp
    từ checkout chính (`d:\AI Video Studio`) và phục vụ UI qua server nội bộ đọc
    `nova/web` mỗi request — sửa trong worktree thì app KHÔNG bao giờ thấy, gây
    ảo giác "sửa nhưng UI không đổi" (sự cố 2026-09-17zn). Mọi agent sửa code

@@ -40,7 +40,7 @@
     exporting: false,
     /* lựa chọn mẫu bút/bàn tay (Bước 3) — đọc khi export, không dính nút Xuất MP4 */
     brush: {
-      tipMode: 'hand',            // hand | pen | none
+      tipMode: 'hand',            // hand | pngtree | hand-pale|tan|deep|glove | tip-pencil|fountain|crayon|brush|marker | pen (cũ) | none
       inkPath: 'grid',            // grid | skeleton
       colorFill: 'contour-wipe',  // contour-wipe | brush
       brushRadius: null,          // null = mặc định engine

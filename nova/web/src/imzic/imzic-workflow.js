@@ -13,13 +13,39 @@
  * tự đặt tên file theo từng mục và KHÔNG ghi đè file có sẵn (thêm hậu tố " (n)").
  */
 
+// 2026-09-17zu (mitigation 3): helper đọc File → dataUrl (base64) để lưu vào
+// hàng chờ; tái dựng File từ dataUrl khi apply. Giới hạn 5 MB/ file để queue
+// JSON không phình quá localStorage quota (5-10 MB) — vượt → setStatus cảnh báo
+// + skip lưu (chỉ lưu tên, hàng chờ chạy sẽ fail lộ liễu khi apply).
+const IMZIC_QUEUE_FILE_MAX_BYTES = 5 * 1024 * 1024; // 5 MB
+function imzFileToDataUrl(f){
+  return new Promise((resolve, reject)=>{
+    if(!f) { reject(new Error('Không có file')); return; }
+    if(typeof f.size === 'number' && f.size > IMZIC_QUEUE_FILE_MAX_BYTES){
+      reject(Object.assign(new Error('File ' + f.name + ' quá lớn (' + (f.size/1024/1024).toFixed(1) + ' MB > 5 MB) — không lưu được vào hàng chờ. Chạy ngay trong phiên hoặc dùng file nhỏ hơn.'), { code: 'IMZIC_QUEUE_FILE_TOO_BIG', size: f.size }));
+      return;
+    }
+    const fr = new FileReader();
+    fr.onload = ()=> resolve(fr.result);
+    fr.onerror = ()=> reject(Object.assign(new Error('Đọc file thất bại: ' + f.name), { code: 'IMZIC_QUEUE_READ_FAIL' }));
+    fr.readAsDataURL(f);
+  });
+}
+async function imzDataUrlToFile(dataUrl, name, type){
+  const res = await fetch(dataUrl);
+  const blob = await res.blob();
+  return new File([blob], name, { type: type || blob.type || 'application/octet-stream' });
+}
+
 // ---- 🧹 RESET toàn bộ tool ----
-$('resetBtn').addEventListener('click', ()=>{
+$('resetBtn').addEventListener('click', async ()=>{
   if(isExporting){ setStatus('Đang ghi video — không Reset giữa chừng. Chờ xong (hoặc bấm ✕ Huỷ ghi) đã nhé.', true); return; }
-  const ok = window.confirm('Reset toàn bộ I-MZic?\n\n'
-    + '• Xoá ảnh / nhạc / SRT đang chọn\n'
-    + '• Trả MỌI cài đặt về mặc định (preset đã lưu vẫn giữ nguyên)\n'
-    + '• Xoá hàng chờ xuất\n\nTiếp tục?');
+  const ok = await imzModalConfirm({
+    title:'🧹 Reset toàn bộ I-MZic?',
+    message:'• Xoá ảnh / nhạc / SRT đang chọn\n• Trả MỌI cài đặt về mặc định (preset đã lưu vẫn giữ nguyên)\n• Xoá hàng chờ xuất',
+    okText:'Reset',
+    danger:true
+  });
   if(!ok) return;
   try{ localStorage.removeItem(SETTINGS_KEY); }catch(e){}
   // reload iframe = trạng thái sạch tuyệt đối, không tự "suy đoán" giá trị mặc định
@@ -30,16 +56,19 @@ $('resetBtn').addEventListener('click', ()=>{
 // Khác 🧹 Reset: CHỈ bỏ dữ liệu đang chọn (ảnh/slideshow/nhạc/lời/logo) + cache
 // của phiên (phân tích offline, raster/blur khung, lịch slideshow) — GIỮ NGUYÊN
 // mọi cài đặt và KHÔNG reload trang. Muốn reset cả cài đặt dùng 🧹 Reset.
-$('clearDataBtn').addEventListener('click', ()=>{
+$('clearDataBtn').addEventListener('click', async ()=>{
   if(isExporting){ setStatus('Đang ghi video — không xoá dữ liệu giữa chừng. Chờ ghi xong (hoặc bấm ✕ Huỷ ghi) đã nhé.', true); return; }
   if(imzicQueueRunning){ setStatus('Hàng chờ đang chạy — chờ xong rồi xoá dữ liệu nhé.', true); return; }
   const hasData = !!(state.imgFile || state.slides.length || state.audioFile
-    || (state.lyricsCues && state.lyricsCues.length) || state.bgFile || state.wmImg);
+    || (state.lyricsCues && state.lyricsCues.length) || state.bgFile || state.wmImg
+    || state.videoFile || state.videos.length);
   if(!hasData){ setStatus('Chưa có dữ liệu nào để xoá — chọn ảnh + nhạc trước đã.', false); return; }
-  const ok = window.confirm('Xoá toàn bộ dữ liệu đang dùng?\n\n'
-    + '• Bỏ ảnh / slideshow / nhạc / lời bài hát / logo đang chọn\n'
-    + '• Xoá cache phân tích nhịp + cache dựng khung (tool tự tính lại khi cần)\n'
-    + '• GIỮ NGUYÊN mọi cài đặt (muốn reset cả cài đặt thì dùng 🧹 Reset)\n\nTiếp tục?');
+  const ok = await imzModalConfirm({
+    title:'🗑 Xoá toàn bộ dữ liệu đang dùng?',
+    message:'• Bỏ ảnh / slideshow / nhạc / lời bài hát / logo đang chọn\n• Xoá cache phân tích nhịp + cache dựng khung (tool tự tính lại khi cần)\n• GIỮ NGUYÊN mọi cài đặt (muốn reset cả cài đặt thì dùng 🧹 Reset)',
+    okText:'Xoá dữ liệu',
+    danger:true
+  });
   if(!ok) return;
 
   // 1) nhạc: dừng phát + thu hồi object URL + bỏ file
@@ -63,6 +92,9 @@ $('clearDataBtn').addEventListener('click', ()=>{
   if($('bgInput')) $('bgInput').value = '';
   if($('bgClearBtn')) $('bgClearBtn').style.display = 'none';
 
+  // 2.5) video: gỡ <video> ẩn + thu hồi URL (imzicClearVideos có sẵn trong imzic-render)
+  if(typeof imzicClearVideos === 'function') imzicClearVideos();
+
   // 3) logo / watermark
   state.wmImg = null; state.wmName = '';
   if($('wmName')) $('wmName').textContent = '(chưa chọn)';
@@ -77,6 +109,7 @@ $('clearDataBtn').addEventListener('click', ()=>{
   // 5) cache: phân tích offline (nhịp/envelope) + raster/blur khung + lịch slideshow
   offlineAnalysis = null; offlineAnalysisPromise = null;
   slideRasterCache.clear(); slideBlurCache.clear(); squareBlurCache.clear();
+  if(typeof imageBlurCache !== 'undefined' && imageBlurCache.clear) imageBlurCache.clear();
   slideSchedule = { key:'', list:[] };
   rebuildParticles();
 
@@ -211,16 +244,37 @@ function imzicQueueRefreshUI(){
 imzicQueueRefreshUI();
 
 // ➕ thêm mục = chụp nhanh ảnh/slideshow + nhạc + TOÀN BỘ cài đặt hiện tại
-$('queueAddBtn').addEventListener('click', ()=>{
+$('queueAddBtn').addEventListener('click', async ()=>{
   if(isExporting || imzicQueueRunning){ setStatus('Đang xuất video — chờ xong rồi thêm mục mới nhé.', true); return; }
   if(!state.audioFile){ setStatus('Chưa có nhạc — chọn nhạc trước khi thêm vào hàng chờ.', true); return; }
-  if(!state.img && !state.slides.length){ setStatus('Chưa có ảnh (hoặc slideshow) — chọn trước khi thêm vào hàng chờ.', true); return; }
+  if(!state.img && !state.slides.length && !state.videos.length){
+    setStatus('Chưa có ảnh, slideshow ảnh, hoặc video — chọn trước khi thêm vào hàng chờ.', true); return;
+  }
   const name = (state.audioFile.name.replace(/\.[^.]+$/, '') || 'video');
+  // 2026-09-17zu (mitigation 3): chuyển File video → dataUrl base64 để lưu vào
+  // hàng chờ (File không serialize được). Giới hạn 5 MB/ file; quá lớn → lưu
+  // chỉ tên + setStatus cảnh báo (mục sẽ fail lộ liễu khi apply, user tự xử lý).
+  let videoFileItem = null;
+  if(state.videoFile){
+    try{
+      const dataUrl = await imzFileToDataUrl(state.videoFile);
+      videoFileItem = { name: state.videoFile.name, size: state.videoFile.size, type: state.videoFile.type, dataUrl };
+    }catch(err){
+      setStatus('⚠ ' + (err.message || 'Không đọc được file video để lưu hàng chờ') + ' — mục chỉ lưu tên, sẽ fail khi chạy nếu đóng phiên.', true);
+      videoFileItem = { name: state.videoFile.name, size: state.videoFile.size, type: state.videoFile.type, dataUrl: null };
+    }
+  }
   imzicQueue.push({
     name,
     imgFile: state.imgFile || null,
     // slideshow giữ nguyên ảnh đã decode (Image object) — nạp lại tức thì khi chạy
     slides: state.slides.length ? state.slides.map(s => ({ img: s.img, name: s.name })) : null,
+    // 2026-09-17zu: video 1 file — lưu dataUrl nếu ≤ 5 MB; quá lớn → dataUrl null
+    videoFile: videoFileItem,
+    // 2026-09-17zu: slideshow video — hiện chỉ lưu tên (state.videos[i].el là
+    // HTMLVideoElement chứ không phải File, không có File gốc để đọc dataUrl).
+    // TODO nâng cấp: lưu File gốc vào state.videosFiles[] song song để đọc dataUrl.
+    videoSlides: state.videos.length ? state.videos.map(v => ({ name: v.name })) : null,
     audioFile: state.audioFile,
     settings: collectSettingsInputs(),
     status: 'pending',
@@ -265,6 +319,13 @@ async function imzicQueueApplyItem(it){
   }
   applySettingsInputs(it.settings);
   if(typeof refreshTrimHint === 'function') refreshTrimHint();
+  // 2026-09-17zq: nạp ảnh/slideshow HOẶC video (ưu tiên ảnh nếu có cả 2, khớp
+  // logic queue push ở trên). Không có gì → lỗi.
+  const hasImg = it.imgFile || (it.slides && it.slides.length);
+  const hasVideo = it.videoFile || (it.videoSlides && it.videoSlides.length);
+  if(!hasImg && !hasVideo){
+    throw Object.assign(new Error('Mục không còn file ảnh/video nào'), { code: 'IMZIC_QUEUE_NO_MEDIA' });
+  }
   if(it.slides && it.slides.length){
     state.slides = it.slides;
     state.img = null; state.imgFile = null;
@@ -277,8 +338,28 @@ async function imzicQueueApplyItem(it){
     checkReady();
   } else if(it.imgFile){
     await imzicLoadImageFile(it.imgFile);
-  } else {
-    throw Object.assign(new Error('Mục không còn file ảnh nào'), { code: 'IMZIC_QUEUE_NO_IMAGE' });
+  } else if(it.videoFile){
+    // 2026-09-17zu (mitigation 3): nạp lại từ dataUrl nếu có (đã lưu khi push
+    // nếu ≤ 5 MB). Fallback cũ: truyền thẳng object cũ (khi mục được tạo trước
+    // bản mitigation này, không có dataUrl).
+    if(it.videoFile.dataUrl){
+      try{
+        const f = await imzDataUrlToFile(it.videoFile.dataUrl, it.videoFile.name, it.videoFile.type);
+        await imzicLoadVideoFile(f, $('videoInput'));
+      }catch(err){
+        setStatus('Không tái dựng được file video từ hàng chờ: ' + (err.message || err) + ' — chọn lại file thủ công.', true);
+        throw Object.assign(new Error('Mục video lỗi dataUrl: ' + (err.message || err)), { code: 'IMZIC_QUEUE_VIDEO_DATAURL' });
+      }
+    } else {
+      // 2026-09-17zq: 1 video đơn — nạp lại từ File (mục cũ, không có dataUrl)
+      await imzicLoadVideoFile(it.videoFile, $('videoInput'));
+    }
+  } else if(it.videoSlides && it.videoSlides.length){
+    // 2026-09-17zu: slideshow video — hiện chỉ lưu tên (state.videos[i].el là
+    // HTMLVideoElement không phải File). TODO: khi state.videosFiles[] được
+    // thêm, lưu dataUrl cho từng video và tái dựng File[] ở đây. Hiện tại
+    // setStatus cảnh báo rõ + bỏ qua slideshow (chỉ giữ lại tên để user tham chiếu).
+    setStatus('Hàng chờ chưa hỗ trợ slideshow video (chỉ 1 video đơn). Mục "' + it.name + '" bị bỏ qua phần slideshow video.', true);
   }
   if(!it.audioFile){
     throw Object.assign(new Error('Mục không còn file nhạc'), { code: 'IMZIC_QUEUE_NO_AUDIO' });

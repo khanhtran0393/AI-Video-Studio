@@ -160,6 +160,7 @@ contextBridge.exposeInMainWorld('native', {
     pickImage: () => ipcRenderer.invoke('whiteboard:pickImage'),
     pickImages: () => ipcRenderer.invoke('whiteboard:pickImages'),
     pickImagesDir: () => ipcRenderer.invoke('whiteboard:pickImagesDir'),
+    pickHand: (preset) => ipcRenderer.invoke('whiteboard:pickHand', preset),
     pickOutput: (defaultName) => ipcRenderer.invoke('whiteboard:pickOutput', { defaultName }),
     // engine stream-ink (srt-whiteboard-animation, Python vendored)
     pyStatus: () => ipcRenderer.invoke('whiteboard:pyStatus'),

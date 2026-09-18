@@ -84,7 +84,9 @@ $('muxBtn').addEventListener('click', async ()=>{
 
 async function recordAndExport(withAudio){
   if(isExporting){ setStatus('Đang ghi video rồi — chờ bản ghi hiện tại xong rồi hãy bấm xuất tiếp nhé.', true); return; }
-  if(!state.img || !state.audioFile){ setStatus('Chưa có ảnh hoặc nhạc — chọn đủ 2 file ở panel bên trái trước đã.', true); return; }
+  if(!state.img && !state.videos.length || !state.audioFile){
+    setStatus('Chưa có ảnh/video hoặc nhạc — chọn đủ 2 file ở panel bên trái trước đã.', true); return;
+  }
   if(!state.audioReady){ setStatus('Nhạc chưa nạp xong metadata — chờ một nhịp rồi bấm xuất lại.', true); return; }
   isExporting = true;
   $('muxBtn').style.display = 'none'; // bản ghi mới vô hiệu hoá blob cũ — ghép lại sau khi xong
@@ -255,8 +257,10 @@ const QUALITY_BITRATE = { std: 8_000_000, high: 14_000_000, ultra: 20_000_000 };
 async function exportOffline(opts){
   const imzAutoSave = (opts && opts.autoSave && opts.autoSave.dir) ? opts.autoSave : null;
   if(isExporting){ setStatus('Đang có một lần xuất chạy rồi — chờ xong (hoặc bấm ✕ Huỷ ghi) đã nhé.', true); return { ok:false }; }
-  const hasVisual = state.img || state.slides.length;
-  if(!hasVisual || !state.audioFile){ setStatus('Chưa đủ ảnh (hoặc slideshow) + nhạc — chọn đủ ở panel bên trái trước đã.', true); return { ok:false }; }
+  const hasVisual = state.img || state.slides.length || state.videos.length;
+  if(!hasVisual || !state.audioFile){
+    setStatus('Chưa đủ ảnh/video + nhạc — chọn đủ ở panel bên trái trước đã.', true); return { ok:false };
+  }
   if(!state.audioReady){ setStatus('Nhạc chưa nạp xong metadata — chờ một nhịp rồi bấm xuất lại.', true); return { ok:false }; }
   if(state.fx === 'milkdrop'){
     // Giới hạn có chủ đích, khai báo rõ (Luật 10): Butterchurn render theo nhạc
@@ -361,6 +365,7 @@ async function exportOffline(opts){
       drawWave(dtUnits);
       drawParticles(dtUnits, smoothedTreble);
       drawLyrics(t);
+      drawTextLines(t); // E6: Text lên màn hình — khớp preview (deterministic theo t)
       applyFx(smoothedEnergy);
       drawWatermark(); // E4: logo vẽ SAU CÙNG (trên mọi FX) — khớp preview/ghi realtime
       drawWatermark(); // E4: khớp preview — logo vẽ cuối cùng trên mọi layer
@@ -450,7 +455,9 @@ $('exportOfflineBtn').addEventListener('click', exportOffline);
 // khi resize/vẽ), vẽ 1 khung bằng ĐÚNG chuỗi hàm của "⚡ Xuất nhanh" → thumbnail
 // trông y hệt video. Lỗi lộ liễu IMZIC_SNAPSHOT*, canvas luôn trả lại nguyên.
 $('snapshotBtn').addEventListener('click', ()=>{
-  if(!(state.img || state.slides.length)){ setStatus('Chưa có ảnh nền — chọn ảnh đã rồi chụp khung nhé.', true); return; }
+  if(!(state.img || state.slides.length || state.videos.length)){
+    setStatus('Chưa có ảnh/video — chọn đã rồi chụp khung nhé.', true); return;
+  }
   if(isExporting){ setStatus('Đang ghi video — chờ xong (hoặc huỷ) rồi chụp khung nhé.', true); return; }
   const baseW = canvas.width, baseH = canvas.height;
   const saveFreq = freqData;
@@ -468,6 +475,7 @@ $('snapshotBtn').addEventListener('click', ()=>{
     drawWave(1);
     drawParticles(1, smoothedTreble);
     drawLyrics(t);
+    drawTextLines(t); // E6: Text lên màn hình — khớp preview
     applyFx(smoothedEnergy);
     drawWatermark();
   }catch(err){

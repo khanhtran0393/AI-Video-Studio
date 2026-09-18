@@ -217,22 +217,42 @@ $('waveColor').addEventListener('input', e=>{ state.waveColor = e.target.value; 
 // canvas không resize, raster cache không bị phá giữa chừng
 let slideLoadToken = 0;
 function updateSlideFields(){
-  const on = state.slides.length > 0;
-  $('slideModeField').style.display = on ? '' : 'none';
-  $('slideOrderField').style.display = on ? '' : 'none';
-  $('slideShuffleBtn').style.display = (on && state.slideOrder === 'shuffle') ? '' : 'none';
-  $('slideSecsField').style.display = (on && state.slideMode === 'time') ? '' : 'none';
-  $('slideBeatField').style.display = (on && state.slideMode === 'time') ? '' : 'none';
-  $('slideLookField').style.display = on ? '' : 'none';
-  // fitMode dùng được cho CẢ ảnh đơn lẫn slideshow — hiện khi có ảnh bất kỳ
-  $('slideFitField').style.display = (on || state.img) ? '' : 'none';
-  updateSquareFields();
-  $('slidesClearBtn').style.display = on ? '' : 'none';
+  const hasSlides = state.slides.length > 0;
+  const hasImg = !!state.img;
+  const hasVideo = state.videos.length > 0;
+  $('slideModeField').style.display = hasSlides ? '' : 'none';
+  $('slideOrderField').style.display = hasSlides ? '' : 'none';
+  $('slideShuffleBtn').style.display = (hasSlides && state.slideOrder === 'shuffle') ? '' : 'none';
+  $('slideSecsField').style.display = (hasSlides && state.slideMode === 'time') ? '' : 'none';
+  $('slideBeatField').style.display = (hasSlides && state.slideMode === 'time') ? '' : 'none';
+  $('slideLookField').style.display = hasSlides ? '' : 'none';
+  // fitMode dùng được cho ảnh đơn, slideshow ảnh, 1 video, slideshow video — hiện khi có nguồn bất kỳ
+  $('slideFitField').style.display = (hasSlides || hasImg || hasVideo) ? '' : 'none';
+  // 2026-09-17zq: dropdown chuyển nguồn (ảnh/video) — chỉ hiện khi có CẢ ảnh
+  // (đơn hoặc slideshow) VÀ video (đơn hoặc slideshow). Không hiện khi chỉ 1 loại
+  // vì lúc đó ưu tiên đã rõ (chỉ ảnh HOẶC chỉ video).
+  $('sourceModeField').style.display = ((hasSlides || hasImg) && hasVideo) ? '' : 'none';
+  // 2026-09-17zq: ảnh nền riêng (bgImg, cho "Ô vuông giữa") chỉ hiện khi đang
+  // dùng 1 ảnh đơn — không áp dụng cho slideshow (sẽ rất phức tạp + không có
+  // ý nghĩa với video vì video có khung hình riêng).
+  const showBg = hasImg && !hasSlides && !hasVideo && state.fitMode === 'square';
+  const bgEl = $('bgBox');
+  if(bgEl) bgEl.style.display = showBg ? '' : 'none';
+  $('slidesClearBtn').style.display = hasSlides ? '' : 'none';
 }
 // hiện/ẩn khối tuỳ chọn "Ô vuông giữa + nền mờ" theo fitMode đang chọn
 function updateSquareFields(){
   const el = $('squareFields');
   if(el) el.style.display = (state.fitMode === 'square') ? '' : 'none';
+  // 2026-09-17zq: ảnh nền riêng (bgBox) cũng phụ thuộc fitMode — hiện lại nếu
+  // đang dùng 1 ảnh đơn + fitMode='square', ẩn nếu khác. Logic giống hệt
+  // trong updateSlideFields nhưng KHÔNG gọi đệ quy (gây vòng lặp vô hạn).
+  const hasImg = !!state.img;
+  const hasSlides = state.slides.length > 0;
+  const hasVideo = state.videos.length > 0;
+  const showBg = hasImg && !hasSlides && !hasVideo && state.fitMode === 'square';
+  const bgEl = $('bgBox');
+  if(bgEl) bgEl.style.display = showBg ? '' : 'none';
 }
 $('slidesInput').addEventListener('change', async e=>{
   const files = [...e.target.files];
@@ -317,8 +337,44 @@ const SQUARE_FMT = {
     if(typeof squareBlurCache !== 'undefined' && squareBlurCache.clear) squareBlurCache.clear();
   });
 });
+// 2026-09-17zp: 4 nút ↑↓←→ + "↺ Về giữa" cho state.sqX/sqY (dịch ảnh ô vuông khỏi
+// trung tâm khi ảnh gốc chủ thể nằm lệch tâm). Bước dịch = state.sqStep (% chiều
+// rộng/cao logic), mặc định 5%. Bấm nút → chỉ state, render loop tự vẽ lại.
+function refreshSqXYLabel(){
+  const el = $('v-sqXY'); if(!el) return;
+  const x = Math.round(Number(state.sqX) || 0);
+  const y = Math.round(Number(state.sqY) || 0);
+  el.textContent = (x === 0 && y === 0) ? 'giữa (0, 0)' : ('x=' + x + '%, y=' + y + '%');
+}
+function shiftSq(dx, dy){
+  const step = Math.max(1, Math.min(100, Number(state.sqStep) || 5));
+  state.sqX = Math.max(-100, Math.min(100, (Number(state.sqX) || 0) + dx * step));
+  state.sqY = Math.max(-100, Math.min(100, (Number(state.sqY) || 0) + dy * step));
+  refreshSqXYLabel();
+  saveSettingsSoon();
+}
+[
+  ['sqUpBtn',    0, -1],
+  ['sqDownBtn',  0,  1],
+  ['sqLeftBtn', -1,  0],
+  ['sqRightBtn', 1,  0]
+].forEach(([id, dx, dy])=>{
+  const el = $(id);
+  if(!el) return;
+  // 'click' cho tap chuột; 'pointerdown' thêm để bấm giữ trên desktop lặp nhanh
+  el.addEventListener('click', ()=>shiftSq(dx, dy));
+});
+$('sqResetBtn').addEventListener('click', ()=>{
+  state.sqX = 0; state.sqY = 0;
+  refreshSqXYLabel();
+  saveSettingsSoon();
+});
+$('sqStep').addEventListener('input', e=>{
+  state.sqStep = +e.target.value;
+  const lab = $('v-sqStep'); if(lab) lab.textContent = e.target.value + '%';
+});
 
-// ---- lyric: karaoke / kiểu chữ / hiệu ứng dòng (bổ sung cho section 9) ----
+// ---- lyric: karaoke / kiểu chữ / hiệu ứng dòng (bổ sung cho section 10) ----
 setupSel('lyricKaraokeSel','lyricKaraoke');
 setupSel('lyricStyleSel','lyricStyle');
 setupSel('lyricAnimSel','lyricAnim');
@@ -519,7 +575,9 @@ rebuildParticles();
 // Khôi phục bằng cách set giá trị rồi dispatch lại event — listener sẵn có
 // sẽ tự cập nhật state + nhãn + rebuild, nên không phải nhân bản logic.
 const SETTINGS_KEY = 'imzic:settings:v1';
-const SETTINGS_RANGE_IDS = ['zoomMin','zoomMax','sensitivity','smoothness','density','pspeed','sizeMin','sizeMax','alpha','wavePos','wavePosX','waveSize','waveHeight','waveWidth','leadMs','fxLevel','lyricSize','lyricPosX','lyricPosY','slideSecs','wmSize','wmAlpha','waveCurve','bgBlur','bgBlurSide','sqSize','sqTilt','sqSkew'];
+const SETTINGS_RANGE_IDS = ['zoomMin','zoomMax','sensitivity','smoothness','density','pspeed','sizeMin','sizeMax','alpha','wavePos','wavePosX','waveSize','waveHeight','waveWidth','leadMs','fxLevel','lyricSize','lyricPosX','lyricPosY','slideSecs','wmSize','wmAlpha','waveCurve','bgBlur','bgBlurSide','sqSize','sqTilt','sqSkew','sqStep'];
+// 2026-09-17zp: sqX/sqY lưu riêng vì do nút bấm dịch chuyển (không qua range)
+const SETTINGS_SQXY = ['sqX','sqY','sourceMode'];
 const SETTINGS_COLOR_IDS = ['pcolor','waveColor','lyricColor','lyricAccent'];
 const SETTINGS_SELECT_IDS = ['lyricFont','effectSel','dirSel','waveStyleSel','ratioSel','lyricShadowSel','fxSel','slideModeSel','slideOrderSel','transSel','fitSel','lyricKaraokeSel','lyricStyleSel','lyricAnimSel','exportFpsSel','qualitySel','exportResSel','bcPresetSel','loudnormSel','slideBeatSel','wmPosSel','waveCurveDirSel'];
 const SETTINGS_NUMBER_IDS = ['customW','customH','trimStart','trimEnd','fadeIn','fadeOut'];
@@ -532,7 +590,11 @@ function collectSettingsInputs(){
   SETTINGS_RANGE_IDS.concat(SETTINGS_COLOR_IDS, SETTINGS_SELECT_IDS, SETTINGS_NUMBER_IDS).forEach(id=>{
     const el = $(id); if(el) inputs[id] = el.value;
   });
+  // 2026-09-17zp: sqX/sqY đi theo state (nút bấm không qua input range)
+  SETTINGS_SQXY.forEach(id=>{ if(state[id] !== undefined) inputs[id] = state[id]; });
   const srtBox = $('srtPaste'); if(srtBox) inputs.srtPaste = srtBox.value.slice(0, 20000);
+  // E6: Text lên màn hình (mục 11) — đi cùng preset / hàng chờ / dự án .json
+  inputs.textLines = JSON.stringify(state.textLines || []);
   return inputs;
 }
 function saveSettings(){
@@ -579,8 +641,15 @@ function applySettingsInputs(inp){
   SETTINGS_RANGE_IDS.forEach(id=>{ if(inp[id] !== undefined && $(id)){ $(id).value = inp[id]; $(id).dispatchEvent(new Event('input')); } });
   SETTINGS_COLOR_IDS.forEach(id=>{ if(inp[id] !== undefined && $(id)){ $(id).value = inp[id]; $(id).dispatchEvent(new Event('input')); } });
   SETTINGS_SELECT_IDS.forEach(id=>{ if(inp[id] !== undefined && $(id)){ $(id).value = inp[id]; $(id).dispatchEvent(new Event('change')); } });
+  // 2026-09-17zp: khôi phục sqX/sqY (đi cùng state, nhãn hiển thị phải tự vẽ lại)
+  SETTINGS_SQXY.forEach(id=>{
+    if(inp[id] !== undefined){ state[id] = +inp[id] || 0; }
+  });
+  if(typeof refreshSqXYLabel === 'function') refreshSqXYLabel();
   // 5) ô dán SRT: chỉ điền lại nội dung — không tự nạp lời
   if(inp.srtPaste && $('srtPaste')) $('srtPaste').value = inp.srtPaste;
+  // 6) Text lên màn hình (mục 11) — hàm của imzic-text.js (nạp trước controls)
+  if(inp.textLines !== undefined && typeof imzicTextApplySaved === 'function') imzicTextApplySaved(inp.textLines);
 }
 function loadSettings(){
   let data = null;

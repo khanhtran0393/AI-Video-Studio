@@ -164,7 +164,12 @@ function startLocalServer() {
       // HTML của nova/web: expand includes + cache theo mtime.
       if (isHtmlEntry) {
         const mt = htmlMt;
-        if (htmlCache && htmlCache.mtime === mt && htmlCache.path === filePath) {
+        // Khóa cache PHẢI gồm cả mtime+size của chính file được request — chỉ
+        // nhìn index.html/partials thì file HTML khác (vd img-to-vid.html) đổi
+        // nội dung mà mtime tổng không đổi → cache hit trả bản STALE mãi mãi
+        // (sự cố 2026-09-17: sửa img-to-vid.html nhưng app vẫn phục vụ bản cũ).
+        if (htmlCache && htmlCache.mtime === mt && htmlCache.path === filePath
+            && htmlCache.fileMt === stat.mtimeMs && htmlCache.fileSize === stat.size) {
           res.writeHead(200, { 'Content-Type': types['.html'], 'ETag': etag, 'Cache-Control': 'no-cache' });
           return res.end(htmlCache.html);
         }
@@ -172,7 +177,7 @@ function startLocalServer() {
           if (err) { res.writeHead(404); return res.end('not found'); }
           try {
             const expanded = Buffer.from(expandIncludes(raw.toString('utf8'), 0), 'utf8');
-            htmlCache = { html: expanded, mtime: mt, path: filePath };
+            htmlCache = { html: expanded, mtime: mt, path: filePath, fileMt: stat.mtimeMs, fileSize: stat.size };
             res.writeHead(200, { 'Content-Type': types['.html'], 'ETag': etag, 'Cache-Control': 'no-cache' });
             res.end(expanded);
           } catch (e) {

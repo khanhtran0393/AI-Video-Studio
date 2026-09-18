@@ -118,10 +118,21 @@
   }
 
   /* ════════ BƯỚC 3 · THẺ MẪU BÚT VẼ / BÀN TAY — chọn riêng, không dính nút Xuất ════════ */
+  /* 12 mẫu: 6 tay (mặc định + PNGtree + 4 sprite HD) + 5 đầu bút HD + không hiệu ứng.
+     id truyền thẳng qua payload.tipMode → py-backend resolve sprite (WB_TIP_UNKNOWN nếu lạ). */
   const TIP_STYLES = [
-    { id: 'hand', label: 'Bàn tay cầm bút', desc: 'tay thật lướt theo nét vẽ' },
-    { id: 'pen',  label: 'Ngòi bút',        desc: 'chỉ đầu bút chạy trên ảnh' },
-    { id: 'none', label: 'Không hiệu ứng',  desc: 'mực tự chạy, không bút/tay' },
+    { id: 'hand',         label: 'Bàn tay mặc định', desc: 'tay vẽ gốc của engine' },
+    { id: 'pngtree',      label: 'Bàn tay PNGtree',  desc: 'ảnh tay thật kèm sẵn' },
+    { id: 'hand-pale',    label: 'Tay — da sáng',    desc: 'sprite HD, da sáng' },
+    { id: 'hand-tan',     label: 'Tay — da vàng ấm', desc: 'sprite HD, da vàng ấm' },
+    { id: 'hand-deep',    label: 'Tay — da nâu đậm', desc: 'sprite HD, da nâu đậm' },
+    { id: 'hand-glove',   label: 'Găng tay trắng',   desc: 'sprite HD găng hoạt hình' },
+    { id: 'tip-pencil',   label: 'Bút chì',          desc: 'đầu bút chì gỗ' },
+    { id: 'tip-fountain', label: 'Bút máy',          desc: 'ngòi bút máy bạc' },
+    { id: 'tip-crayon',   label: 'Bút sáp',          desc: 'thân sáp xanh dương' },
+    { id: 'tip-brush',    label: 'Cọ vẽ',            desc: 'lông cọ đầu tròn' },
+    { id: 'tip-marker',   label: 'Bút dạ',           desc: 'đầu dạ vát xám' },
+    { id: 'none',         label: 'Không hiệu ứng',   desc: 'mực tự chạy, không bút/tay' },
   ];
   const INK_STYLES = [
     { id: 'grid',     label: 'Nét lưới',         desc: 'mực chạy theo lưới đều' },
@@ -140,8 +151,14 @@
     const x = c.getContext('2d');
     x.lineWidth = 2; x.strokeStyle = '#c0392b'; x.fillStyle = '#333';
     x.font = '20px system-ui,sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
-    if (kind === 'hand' || kind === 'pen' || kind === 'none') {
-      x.fillText(kind === 'hand' ? '✍' : kind === 'pen' ? '🖊' : '⌀', 32, 19);
+    if (kind === 'hand' || kind === 'pngtree' || kind === 'none' || kind.indexOf('hand-') === 0 || kind.indexOf('tip-') === 0) {
+      const EMOJI = {
+        hand: '✍', pngtree: '✋', none: '⌀',
+        'hand-pale': '✍🏻', 'hand-tan': '✍🏼', 'hand-deep': '✍🏾', 'hand-glove': '🧤',
+        'tip-pencil': '✏️', 'tip-fountain': '🖋️', 'tip-crayon': '🖍️',
+        'tip-brush': '🖌️', 'tip-marker': '🖊️',
+      };
+      x.fillText(EMOJI[kind] || '✍', 32, 19);
       x.beginPath(); x.moveTo(8, 33); x.quadraticCurveTo(32, 26, 56, 33); x.stroke();
     } else if (kind === 'grid') {
       for (let i = 1; i < 4; i++) { x.beginPath(); x.moveTo(10 + i * 11, 6); x.lineTo(10 + i * 11, 34); x.stroke(); }

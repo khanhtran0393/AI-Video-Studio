@@ -174,7 +174,7 @@
       options: {
         inkPath: state.brush.inkPath,
         colorFill: state.brush.colorFill,
-        tipMode: state.brush.tipMode,          // hand | pen | none → py-backend map sang --bare-tip / hand=''
+        tipMode: state.brush.tipMode,          // id 12 mẫu Bước 3 → py-backend resolve sprite (WB_TIP_UNKNOWN nếu lạ)
         brushRadius: state.brush.brushRadius,
         capLongEdge: state.brush.capLongEdge,
       },

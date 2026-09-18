@@ -327,6 +327,28 @@ function registerWhiteboardIpc(ipcMain, { getState } = {}) {
     }
   });
 
+  /* ── chọn PNG bàn tay cầm bút tuỳ chỉnh (tipMode=hand) — nền trong suốt ── */
+  /* ── chọn bàn tay: preset built-in (BUILTIN_HANDS trong py-backend) hoặc dialog PNG tuỳ chọn.
+     Bàn tay mẫu là asset KÈM ENGINE (cùng loại với tay mặc định HAND_PNG), không phải
+     đường dẫn media hard-code từ máy user — quy tắc "dialog thật" chỉ áp cho media user. */
+  handle('whiteboard:pickHand', async (_e, preset) => {
+    try {
+      if (preset && typeof preset === 'string') {
+        const p = PyBackend.builtinHandPath(preset);
+        if (!p) return { ok: false, error: 'WB_HAND_UNKNOWN_PRESET (không có bàn tay mẫu này): ' + preset };
+        if (!fs.existsSync(p)) return { ok: false, error: 'WB_HAND_MISSING (asset bàn tay mẫu thiếu): ' + p };
+        return { path: p, preset };
+      }
+      const r = await dialog.showOpenDialog(ownerWin(), {
+        title: 'Chọn PNG bàn tay cầm bút (nền trong suốt)',
+        properties: ['openFile'],
+        filters: [{ name: 'PNG trong suốt', extensions: ['png'] }],
+      });
+      if (r.canceled || !r.filePaths[0]) return { canceled: true };
+      return { path: r.filePaths[0] };
+    } catch (err) { return { ok: false, error: errOf(err) }; }
+  });
+
   /* ── bước cuối: render từng cảnh → merge → ghép voice ── */
   handle('whiteboard:export', async (_e, payload = {}) => {
     try {
