@@ -1,4 +1,17 @@
+## 2026-09-17zw — TỔNG DỌN RÁC tmp toàn repo theo §6.7 (user yêu cầu): `nova/scripts/tmp/` 98 → 1 file, gốc repo đã sạch
+
+- **Bối cảnh**: user chọn task "Tổng dọn rác tmp toàn repo" (các file B7/B8/zk/zu/zp/zs cũ) sau khi E2E auto 1→5 dừng ở Bước 3 chờ Flow đăng nhập (entry zv).
+- **Đã dọn `nova/scripts/tmp/`**: xoá **97 file** — toàn bộ harness kiểm định một-lần (tmp-ac-* agent-copilot, tmp-wb-* whiteboard CDP/render/monitor, tmp-probe-hd-*.py, tmp-wb-hd12-*, tmp-kiem-dinh-cdp, tmp-orphan-scan, tmp-niche-*, dump-skills/find-skill-*, serve-now-*, smoke-ytdlp + toàn bộ out/log/txt/json báo cáo trung gian, tmp-mem-zr/zs/zt.md ghi chú resume cũ, update-ytdlp.js/.ps1 — yt-dlp đã cập nhật xong ở entry zl). Kèm các file inv*/do-clean.ps1/clean-report.txt của chính phiên dọn.
+- **GIỮ ĐÚNG 1 file**: `tmp-gen-hd-sprites.py` — tool tái sinh 9 sprite HD vẽ tay (entry zu khai báo dùng lại khi cần chỉnh sprite). Hiện là file duy nhất còn trong `nova/scripts/tmp/`.
+- **Gốc repo: SẠCH SẼ** — không còn file tmp/test/b*/cdp/gen ở root (các entry cũ nhắc `\test-bug-reproduce.js`, `gen-NN.js`… đã được dọn từ phiên trước). git status chỉ còn ` M nova/whiteboard-studio/srt-whiteboard-animation` (nested repo/gitlink asset upstream — không phải rác, không đụng).
+- **%TEMP%**: 0 fixture `b7_*` còn lại.
+- **Ghi chú supersedes**: các dòng "Còn treo … tmp script giữ lại cho lần chạy đó" trong entry zu/zp/zs KHÔNG còn hiệu lực về file — script harness tương ứng đã xoá theo yêu cầu user; khi chạy lại verify (Gen ảnh riêng → Gọi lại ảnh, auto 1→5 vision trên ảnh thật — chờ Flow đăng nhập) sẽ phải viết lại harness (rẻ: pattern CDP `/json/list` + `Runtime.evaluate` đã ghi trong các entry tương ứng).
+- **Kiểm định**: `npm run check` EXIT 0 sau dọn (tmp* không thuộc chuỗi kiểm định — xác nhận không ảnh hưởng).
+
+
+
 ## 2026-09-17zv — E2E thật "Chạy tự động 1→5": Bước 1–2 ĐẠT + FIX BUG persist bản gộp >64MB; dừng lộ liễu ở Bước 3 (0 tài khoản Flow)
+
 
 - **Bước 1–2 THẬT đạt** (kịch bản thật 2694 từ trong tsOutput; giọng thật `omni:factory_vi_minh_duc`): TTS 12 đoạn OmniVoice (đoạn 7/12 = 74.95s), ghép xong **778s**, SRT ghép chuẩn, `useVoiceFromVoiceTab` nạp **39 cue** vào Bước 2 → audioTrack gán voice-over thật.
 - **BUG thật + FIX**: `_giongSuLuuDia` âm thầm `return` khi blob >64MB — bản gộp 12 đoạn WAV = **68.621.388 B > 67.108.864 (64MB)** → không persist → sau reload `voiceHistoryPath` ném `WB_VOICE_GONE` → auto dừng `WB_NO_TTS_PRODUCT` (fail-loud đúng Luật 10, không fallback ngầm — luồng không tự bịa dữ liệu). **Fix giữ hợp đồng (không IPC mới, không dep mới):** main `voiceZoneSave` (`nova/main/ipc/voice.js`) thêm `nenWavNeuTo` — WAV >64MB nén MP3 bằng ffmpeg-static (`libmp3lame -q:a 4`), `meta.ext` đuổi theo ext lưu thật, lỗi nén trả `VOICE_COMPRESS_FAILED` lộ liễu; renderer `voice.js` `_giongSuLuuDia` nâng trần gửi 64→256MB + **log khai báo** khi save trả lỗi (hết nuốt lặng lẽ); `_giongGhepMuc` await persist. Verify thật: bản gộp persist thành công **6.14MB mp3 + json** (15:22:05).
@@ -7,6 +20,9 @@
 - **Kiểm định**: `npm run check` đủ 10 bước (selftest 10/10), `npm run test:voice` PASS. Tmp của session này đã dọn; 13 file `tmp-wb-*` cũ của các session khác vẫn trong `nova/scripts/tmp/` — session phụ trách tự dọn theo §6.7.
 - **Còn treo**: E2E Bước 3→5 (77 ảnh Flow + 77×2 vision + preview) chờ user thêm tài khoản Flow; lưu ý 77 cảnh là job lớn — cân nhắc kịch bản ngắn hơn khi test lại.
 
+
+
+## 2026-09-17zs — Whiteboard Bước 3: GỠ 2 nút "🖼 Gen ảnh"/"📥 Gọi lại ảnh" theo quyết định user ("theo flow, không thêm gì cả") — giữ metadata tự lưu
 
 
 - **Quyết định user**: luồng Bước 3 chỉ còn nút "🧠 Phân tích prompt"; KHÔNG thêm UI nào. Giữ nguyên phần dữ liệu: sidecar `cau-NNN.json` + thư mục profile `whiteboard-anh/<tên bản TTS>` tự lưu trong luồng auto (`wbAiGenSave`/`wbAiGenImages`/`wbMetaOf` — không đổi).
