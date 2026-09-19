@@ -1,7 +1,53 @@
 'use strict';
 // §11 Story Plan — mô tả câu chuyện ở cấp scene/beat, KHÔNG chứa chi tiết renderer.
 // Beat timing lấy từ câu trong TTS (§1.1 TTS là Master Clock): không để scene vượt audio boundary.
+// PT3 (video gen Flow làm nền): options.flowVideo.enabled + group !== false → bỏ qua ranh giới
+// scene của script, GOM câu thành scene ~clipSecs (8s — đúng cỡ 1 clip Flow) để độ lệch
+// thời lượng clip vs cảnh là nhỏ nhất (kinh nghiệm "cura đôi 50/50" — mỗi bên gánh 1 phần).
 const ROUND3 = (v) => Math.round(v * 1000) / 1000;
+
+/* PT3 — gom câu liên tiếp thành scene có span ≈ targetSecs (greedy, deterministic).
+ * Metadata scene kế thừa từ script scene CHỒNG LẤN NHIỀU NHẤT theo thời gian (fallback:
+ * scene theo tỉ lệ tuyến tính). Trả [{ scene, sentences }] — scene đã có sceneId riêng. */
+function groupSentencesToScenes(sentences, targetSecs, scriptScenes) {
+  const target = Math.max(2, Number(targetSecs) || 8);
+  const tolerance = target * 1.15;
+  const groups = [];
+  let cur = null;
+  for (const sen of sentences) {
+    if (!cur) { cur = { start: sen.start, sentences: [sen] }; continue; }
+    if (sen.end - cur.start <= tolerance || !cur.sentences.length) cur.sentences.push(sen);
+    else { groups.push(cur); cur = { start: sen.start, sentences: [sen] }; }
+  }
+  if (cur && cur.sentences.length) groups.push(cur);
+  return groups.map((g, gi) => {
+    const end = g.sentences[g.sentences.length - 1].end;
+    const src = inheritScriptScene(g.start, end, scriptScenes, gi);
+    return {
+      scene: {
+        sceneId: 'scene_f' + String(gi + 1).padStart(2, '0'),
+        summary: g.sentences.map(s => s.text).join(' '),
+        characters: (src && src.characters) || [],
+        location: (src && src.location) || null,
+        actions: (src && src.actions) || [],
+        mood: (src && src.mood) || null,
+        importance: (src && src.importance) || 'normal',
+      },
+      beats: g.sentences,   // cùng khoá `beats` với assignSentences → buildStoryPlan đọc chung
+    };
+  });
+}
+
+function inheritScriptScene(start, end, scriptScenes, gi) {
+  if (!Array.isArray(scriptScenes) || !scriptScenes.length) return null;
+  let best = null, bestOverlap = -1;
+  for (const s of scriptScenes) {
+    const ss = Number(s.start) || 0, se = Number(s.end) || 0;
+    const overlap = Math.min(se, end) - Math.max(ss, start);
+    if (overlap > bestOverlap) { bestOverlap = overlap; best = s; }
+  }
+  return best || scriptScenes[Math.min(gi, scriptScenes.length - 1)];
+}
 
 // Phân câu cho các cảnh theo trọng số độ dài text (proportional, deterministic).
 // sceneCount có thể != sentenceCount: gộp/chia để mỗi cảnh ≥ 1 câu.
@@ -34,12 +80,19 @@ function assignSentences(scenes, sentences) {
   return out;
 }
 
-function buildStoryPlan(scriptAnalysis, tts) {
-  const scenes = scriptAnalysis.scenes || [];
+function buildStoryPlan(scriptAnalysis, tts, options = {}) {
+  const fv = (options.flowVideo || {});
+  const grouped = !!(fv.enabled && fv.group !== false);
   const sentences = tts.sentences || [];
   const audioDuration = ROUND3(Number(tts.duration) || (sentences.length ? sentences[sentences.length - 1].end : 0));
 
-  const assigned = assignSentences(scenes, sentences);
+  // PT3: gom câu thành scene ~clipSecs thay vì dùng ranh giới scene của script.
+  const assigned = (grouped
+    ? groupSentencesToScenes(sentences, fv.clipSecs, scriptAnalysis.scenes || [])
+        .map(g => ({ scene: g.scene, beats: g.beats,
+          start: g.beats.length ? g.beats[0].start : 0,
+          end: g.beats.length ? g.beats[g.beats.length - 1].end : 0 }))
+    : assignSentences(scriptAnalysis.scenes || [], sentences));
   const plan = [];
   let prevEnd = 0;
   assigned.forEach((a, i) => {
@@ -65,7 +118,9 @@ function buildStoryPlan(scriptAnalysis, tts) {
   const { buildContinuityLedger } = require('./continuity');
   const enriched = plan.map((p) => Object.assign({}, p, { directing: directingRead(p) }));
   return { chapterId: scriptAnalysis.chapterId, audioDuration, scenes: enriched,
-    continuity: buildContinuityLedger({ scenes: enriched }) };
+    continuity: buildContinuityLedger({ scenes: enriched }),
+    ...(grouped ? { grouped: true, groupTargetSecs: Math.max(2, Number(fv.clipSecs) || 8) } : {}) };
 }
 
-module.exports = { buildStoryPlan, assignSentences };
+module.exports = { buildStoryPlan, assignSentences, groupSentencesToScenes };
+

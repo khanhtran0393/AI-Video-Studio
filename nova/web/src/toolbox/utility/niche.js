@@ -54,6 +54,10 @@ async function nfRun(mod, fresh){
   let payload = { fresh: !!fresh };
   const _gl = (document.getElementById('nfGl')?.value || '').trim();
   if (_gl) payload.gl = _gl;
+  if (mod === 'scorecard'){                                   // 🗓 bộ lọc thời gian phân tích đối thủ
+    const dSel = parseInt((document.getElementById('nfScDays')?.value || ''), 10);
+    if (dSel > 0) payload.days = dSel;
+  }
   if (mod === 'bw'){
     payload.title = (document.getElementById('nfBwTitle')?.value || '').trim();
     payload.niche = (document.getElementById('nfBwNiche')?.value || '').trim();
@@ -74,6 +78,7 @@ async function nfRun(mod, fresh){
     if (!r || !r.ok){ document.getElementById(m.state).textContent = '❌ ' + ((r&&r.error)||'Lỗi'); return; }
     m.render(r);
     _nfLast[mod] = r;                    // giữ lại kết quả gần nhất cho nút 📋 copy
+    _nfHistSave(mod, r);                 // 🕘 tự lưu 1 mốc lịch sử (đọc lại ở tab Lịch sử)
     
     // Auto-call AI analysis decoupling
     if (m.fnAi) {
@@ -97,15 +102,17 @@ async function nfRun(mod, fresh){
 
 function _nfHotCard(t){
   const ratio = Number(t.ratio) || 0, n = Number(t.count) || 0;
-  const _i = _nfRegIdea({ topic: t.title || t.topic, angle: t.angle || '', src: 'Chủ đề Hot' });
+  const sc = nfNicheScoreOf(t);
+  const _i = _nfRegIdea({ topic: t.title || t.topic, angle: t.angle || '', why: t.why || '', src: 'Chủ đề Hot' });
   return `<div class="nf-card">
-    <h5><span>🔥 ${_nfEsc(t.topic)}</span>${_nfBadge(t.heat)}</h5>
+    <h5><span>🔥 ${_nfEsc(t.topic)}</span><span class="nf-badge ${sc.score>=71?'nf-hi':sc.score>=51?'nf-mid':'nf-lo'}" title="${_nfEsc(sc.reasons.join(' · '))}">Điểm ngách ${sc.score}/100</span>${_nfBadge(t.heat)}</h5>
     <div class="tmet">
       ${ratio ? `<div>Bội số trung vị<b class="up">${ratio.toFixed(1)}×</b></div>` : ''}
       ${n ? `<div>Số video<b>${n}</b></div>` : ''}
     </div>
     <div class="nf-line"><b>Vì sao ăn:</b> ${_nfEsc(t.why)}</div>
     <div class="nf-line"><b>Góc làm:</b> ${_nfEsc(t.angle)}</div>
+    <div class="nf-line" style="color:var(--text-muted)"><b>Chấm điểm:</b> ${_nfEsc(sc.reasons.join(' · '))}</div>
     ${t.title ? `<div class="nf-title-ex">🎬 ${_nfEsc(t.title)}</div>` : ''}
     <div style="margin-top:9px"><button class="nf-btn ghost" onclick="nfMakeVideo(${_i})">🎬 Làm video này</button></div>
   </div>`;
@@ -120,6 +127,8 @@ function nfRenderHot(r){
   const rising = items.filter(x => String(x.window||'').toLowerCase() === 'rising');
   const proven = items.filter(x => String(x.window||'').toLowerCase() !== 'rising');
   let h = '<div style="margin-bottom:10px">' + (r.queries||[]).map(q => `<span class="qchip">${_nfEsc(q)}</span>`).join('') + '</div>';
+  const scored = items.map(x => ({ x, s: nfNicheScoreOf(x) })).sort((a, b) => b.s.score - a.s.score);
+  if (scored.length) h += `<div class="nf-card" style="padding:8px 12px;margin-bottom:10px">🏆 <b>Ngách đáng làm nhất:</b> ${_nfEsc(scored[0].x.topic)} — <b style="color:${_nfScoreCol(scored[0].s.score)}">${scored[0].s.score}/100</b> <span style="color:var(--text-muted)">(${_nfEsc(scored[0].s.reasons.join(' · '))})</span></div>`;
   if (rising.length) h += `<div class="win"><i class="r">ĐANG LÊN</i><em>đăng ≤ 30 ngày — còn chỗ chen vào</em><s></s></div>` + rising.map(_nfHotCard).join('');
   if (proven.length) h += `<div class="win"><i class="p">ĐÃ ĂN</i><em>30–180 ngày — chắc ăn nhưng đông người làm</em><s></s></div>` + proven.map(_nfHotCard).join('');
   _nfSet('nfHotOut', items.length ? h : '<div class="nf-state">Không có chủ đề nào vượt trung vị.</div>');
@@ -153,6 +162,7 @@ function _nfMetricRows(m){
 function nfRenderScorecard(r){
   _nfScChannel = r.channel || '';
   document.getElementById('nfScState').textContent = `✅ Xong — ${r.videoCount} video · trung vị kênh ${_t11oNum(r.median||0)} view`
+    + (r.daysWindow ? ' · 🗓 ' + (r.windowNote || ('lọc ' + r.daysWindow + ' ngày qua')) : '')
     + (r.enrichedVia ? ' · 📊 ' + (r.enrichedVia === 'api' ? 'like/comment/sub (API)' : 'like/comment (yt-dlp, không cần key)') : '')
     + (r.commentsNote ? ' · 💬 ' + r.commentsNote : '')
     + (r.shortsCount != null ? ' · 🩳 ' + r.shortsCount + ' shorts' : '')
@@ -170,6 +180,7 @@ function nfRenderScorecard(r){
       <div style="text-align:right"><div style="font-size:26px;font-weight:800;color:var(--accent);line-height:1">${r.health}</div><div style="font-size:11px;color:var(--text-muted)">điểm sức khoẻ</div></div>
     </div>
     ${_nfMetricRows(m)}
+    ${nfHealthWhy(m)}
     ${r.analysis ? `<div class="nf-title-ex" style="margin-top:12px;white-space:pre-wrap">${_nfEsc(r.analysis)}</div>` : (r.analysisError ? `<div class="nf-state" style="margin-top:12px">⚠️ Phân tích AI lỗi: ${_nfEsc(r.analysisError)}</div>` : '')}
   </div>`;
   if ((r.outliers||[]).length){
@@ -402,9 +413,13 @@ function nfMakeVideo(i){
   const it = _nfIdeas[i]; if (!it) return;
   const el = document.getElementById('tsTopic'); if (!el) return;
   el.value = it.topic || '';
+  // Chuyển thẳng sang kịch bản: kéo cả "góc làm" + "vì sao ăn" vào logline —
+  // tool Kịch Bản (t2/t9) đọc state.videoLogline làm ngữ cảnh khi viết.
+  const ctx = [it.angle ? 'góc làm: ' + it.angle : '', it.why ? 'vì sao ăn: ' + it.why : ''].filter(Boolean).join(' — ');
+  if (ctx) state.videoLogline = ctx.slice(0, 400);
   switchTool('toolscript');
   const st = document.getElementById('statusScript');
-  if (st){ st.className = 'status-bar ok'; st.textContent = `✅ Đã chuyển chủ đề từ Nghiên cứu Ngách (${it.src || ''}) — chỉnh số từ rồi bấm Viết Kịch Bản.`; }
+  if (st){ st.className = 'status-bar ok'; st.textContent = `✅ Đã chuyển chủ đề từ Nghiên cứu Ngách (${it.src || ''})${ctx ? ' — góc làm/lý do đã ghi vào logline' : ''}. Chỉnh số từ rồi bấm Viết Kịch Bản.`; }
 }
 
 function _nfMd(mod){
@@ -482,6 +497,209 @@ function nfCopy(mod){
   const done = () => { if (st){ const old = st.textContent; st.textContent = `📋 Đã copy ${md.length} ký tự ra clipboard`; setTimeout(() => { st.textContent = old; }, 2500); } };
   if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(md).then(done, () => _nfCopyFallback(md, done));
   else _nfCopyFallback(md, done);
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  🏆 CHẤM ĐIỂM NGÁCH — hàm thuần, deterministic (không AI): gộp
+//  bội số view + mức cạnh tranh + cửa sổ thời gian → điểm 0-100 kèm lý do.
+// ══════════════════════════════════════════════════════════════════
+function nfNicheScoreOf(t){
+  const ratio = Number(t && t.ratio) || 0;
+  const count = Number(t && t.count) || 0;
+  const rising = String((t && t.window) || '').toLowerCase() === 'rising';
+  const pRatio = Math.min(45, (ratio / 6) * 45);            // 6× bội số → tối đa 45đ
+  const pComp = count > 0 ? Math.max(0, Math.min(20, (1 - count / 30) * 20)) : 10;   // ≤30 video: ít hơn = điểm cao hơn; không biết số → điểm giữa
+  const pWin = rising ? 25 : 10;                            // đang lên (≤30 ngày) còn chỗ chen vào
+  const score = Math.round(Math.max(0, Math.min(100, pRatio + pComp + pWin)));
+  const reasons = [
+    ratio >= 6 ? ('bội số ' + ratio.toFixed(1) + '× — rất cao')
+      : ratio >= 3 ? ('bội số ' + ratio.toFixed(1) + '× — tốt')
+      : ratio >= 1.5 ? ('bội số ' + ratio.toFixed(1) + '× — tạm')
+      : ('bội số ' + ratio.toFixed(1) + '× — thấp'),
+    count > 0 ? (count <= 10 ? 'cạnh tranh thấp (' + count + ' video)'
+      : count <= 30 ? 'cạnh tranh vừa (' + count + ' video)'
+      : 'cạnh tranh cao (' + count + ' video)')
+      : 'không rõ số video cạnh tranh',
+    rising ? 'đang lên (≤30 ngày) — còn chỗ chen vào' : 'đã ăn (30–180 ngày) — chắc nhưng đông người làm',
+  ];
+  return { score, reasons };
+}
+
+function _nfScoreCol(s){ return s >= 71 ? 'var(--accent)' : s >= 51 ? '#5fbf7f' : '#e08a8a'; }
+
+// Vì sao điểm sức khoẻ (healthScore engine) ra con số đó — bóc đúng 5 thành phần trọng số
+// giống kenh.js/healthScore, chỉ hiển thị, không tự chế thang mới.
+function nfHealthWhy(m){
+  if (!m) return '';
+  const c = [
+    ['VPS ' + Number(m.vps || 0).toFixed(2) + '×', Math.min(30, (Number(m.vps) || 0) / 2 * 30), 30],
+    ['Longform ' + Math.round((Number(m.longform) || 0) * 100) + '%', Math.min(25, (Number(m.longform) || 0) * 25), 25],
+    ['Ổn định (CV ' + Number(m.cv || 0).toFixed(2) + ')', Math.min(20, Math.max(0, 1 - (Number(m.cv) || 0)) * 20), 20],
+    ['Xu hướng ' + ((Number(m.trend) || 0) > 0 ? '+' : '') + Math.round((Number(m.trend) || 0) * 100) + '%/tháng', Math.min(15, Math.max(0, Number(m.trend) || 0) * 30), 15],
+    ['Nhiệt VPH ' + _t11oNum(m.vph || 0) + ' view/giờ', Math.min(10, Math.log10(Math.max(1, Number(m.vph) || 0)) * 3), 10],
+  ];
+  return '<div class="nf-state" style="margin-top:10px"><b>Vì sao điểm sức khoẻ này:</b> ' + c.map(([n, p, mx]) => _nfEsc(n) + ' → <b>+' + Math.round(p) + '</b>/' + mx + 'đ').join(' · ') + '</div>';
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  🕘 LỊCH SỬ NGHIÊN CỨU — snapshot mỗi lần quét thành công vào
+//  localStorage `nfHistoryV1` (giữ trên máy, tối đa 40 mốc, mới nhất đầu).
+//  Mỗi mốc: { ts, mod, gl, seed, data }. Xem lại = render lại kết quả đã
+//  lưu (không quét mạng). So 2 mốc cùng loại → thấy gì mới nổi / gì chết.
+// ══════════════════════════════════════════════════════════════════
+const _NF_HIST_KEY = 'nfHistoryV1';
+const _NF_HIST_MAX = 40;
+const _NF_HIST_LABELS = { hot: '🔥 Chủ đề Hot', scorecard: '🩺 Thẻ điểm kênh', attention: '🎯 Tìm ngách', bw: '⚖️ Chấm B&W', similar: '👥 Kênh giống', pain: '🧠 Pain Point', forecast: '📈 Dự báo', keywords: '🔑 Từ khoá', breakdown: '🎬 Phân tích video' };
+
+function _nfHistLoad(){
+  try {
+    const raw = localStorage.getItem(_NF_HIST_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr.filter(s => s && s.mod && s.data) : [];
+  } catch (e) {
+    console.warn('[nfHist] lịch sử hỏng — xoá và bắt đầu lại:', String(e && e.message || e).slice(0, 140));
+    try { localStorage.removeItem(_NF_HIST_KEY); } catch (_) {}
+    return [];
+  }
+}
+
+function _nfHistStore(list){
+  try { localStorage.setItem(_NF_HIST_KEY, JSON.stringify(list)); return true; }
+  catch (e1) {
+    // Quota đầy — vứt nửa cũ nhất rồi thử đúng 1 lần; vẫn hỏng → khai báo qua console (Luật 10, không nuốt câm)
+    try { localStorage.setItem(_NF_HIST_KEY, JSON.stringify(list.slice(0, Math.max(1, Math.ceil(list.length / 2))))); return true; }
+    catch (e2) { console.warn('[nfHist] không lưu được lịch sử (quota?):', String(e2 && e2.message || e2).slice(0, 140)); return false; }
+  }
+}
+
+function _nfHistTrim(r){
+  const d = Object.assign({}, r);
+  ['items', 'outliers', 'cards', 'clusters', 'videos', 'rockets', 'newVideos', 'shortsOutliers', 'alts', 'samples'].forEach(k => {
+    if (Array.isArray(d[k]) && d[k].length > 30) d[k] = d[k].slice(0, 30);
+  });
+  if (typeof d.analysis === 'string' && d.analysis.length > 1500) d.analysis = d.analysis.slice(0, 1500) + '…';
+  return d;
+}
+
+function _nfHistSave(mod, r){
+  if (!r || !r.ok || mod === 'spike') return;   // spike tự quản mốc so riêng (viewSpikes) — lưu snapshot lại gây hiểu nhầm
+  const list = _nfHistLoad();
+  list.unshift({ ts: Date.now(), mod, gl: (document.getElementById('nfGl')?.value || ''), seed: String(r.seed || r.channel || r.title || ''), data: _nfHistTrim(r) });
+  if (list.length > _NF_HIST_MAX) list.length = _NF_HIST_MAX;
+  _nfHistStore(list);
+}
+
+function _nfHistTimeFmt(ts){ const d = new Date(ts); return d.toLocaleDateString('vi-VN') + ' ' + d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }); }
+
+function _nfHistSummary(mod, d){
+  if (mod === 'hot') return 'trung vị ' + _t11oNum(d.median || 0) + ' view · ' + (d.items || []).length + ' chủ đề · quét ' + (d.scanned || 0) + ' video';
+  if (mod === 'scorecard') return 'sức khoẻ ' + (d.health != null ? d.health : '?') + '/100 · VPS ' + ((d.metrics && d.metrics.vps) || 0) + '× · trung vị ' + _t11oNum(d.median || 0) + ' view';
+  if (mod === 'attention') return 'trung vị ' + _t11oNum(d.median || 0) + ' view · ' + (d.outliers || 0) + ' outlier';
+  if (mod === 'bw') return 'điểm ' + ((d.result && d.result.score) != null ? d.result.score : '?') + '/100';
+  if (mod === 'similar') return (d.cards || []).length + ' kênh cùng tệp';
+  if (mod === 'pain') return (d.commentCount || 0) + ' bình luận · ' + ((d.result && d.result.ideas) || []).length + ' ý tưởng';
+  if (mod === 'forecast') return 'trạng thái: ' + (d.status || 'chưa xác định');
+  if (mod === 'keywords') return (d.clusters || []).length + ' cụm · ' + (d.totalVideos || 0) + ' video';
+  if (mod === 'breakdown') return (d.outliers || []).length + ' video vượt trội';
+  return '';
+}
+
+function nfHistRender(){
+  const list = _nfHistLoad();
+  const selA = document.getElementById('nfHistA'), selB = document.getElementById('nfHistB');
+  const opts = list.map((s, i) => `<option value="${i}">#${i + 1} · ${_nfHistTimeFmt(s.ts)} · ${_nfEsc(_NF_HIST_LABELS[s.mod] || s.mod)}${s.seed ? ' — ' + _nfEsc(String(s.seed).slice(0, 28)) : ''}</option>`).join('');
+  if (selA) selA.innerHTML = opts;
+  if (selB){ selB.innerHTML = opts; if (list.length > 1) selB.selectedIndex = 1; }
+  const out = document.getElementById('nfHistList');
+  if (!out) return;
+  if (!list.length){ out.innerHTML = '<div class="nf-state">Chưa có mốc nào — chạy một module (Chủ đề Hot, Soi kênh…) là tự lưu vào đây.</div>'; return; }
+  out.innerHTML = list.map((s, i) => `<div class="nf-card" style="padding:9px 12px">
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <b>#${i + 1}</b><span class="chip">${_nfEsc(_NF_HIST_LABELS[s.mod] || s.mod)}</span>
+      ${s.seed ? `<span>${_nfEsc(String(s.seed).slice(0, 40))}</span>` : ''}
+      ${s.gl ? `<span class="chip">🌐 ${_nfEsc(s.gl)}</span>` : ''}
+      <span style="color:var(--text-muted);font-size:11px">${_nfHistTimeFmt(s.ts)}</span>
+    </div>
+    <div class="nf-state" style="margin:4px 0 0">${_nfEsc(_nfHistSummary(s.mod, s.data || {}))}</div>
+    <div style="margin-top:7px;display:flex;gap:6px">
+      <button class="nf-btn ghost" onclick="nfHistView(${i})">👁 Xem lại</button>
+      <button class="nf-btn ghost" onclick="nfHistDel(${i})">🗑 Xoá</button>
+    </div>
+  </div>`).join('');
+}
+
+function nfHistView(i){
+  const s = _nfHistLoad()[i];
+  if (!s || !s.data) return;
+  const m = NF_MAP[s.mod];
+  if (!m) return;
+  _nfLast[s.mod] = s.data;             // nút 📋 copy cũng dùng lại được
+  nfOpen(s.mod);
+  m.render(s.data);
+  const st = document.getElementById(m.state);
+  if (st) st.textContent = '🕘 Xem lại từ lịch sử (' + _nfHistTimeFmt(s.ts) + ') — dữ liệu cũ, bấm nút quét để lấy mới.';
+}
+
+function nfHistDel(i){
+  const list = _nfHistLoad();
+  if (i < 0 || i >= list.length) return;
+  list.splice(i, 1);
+  _nfHistStore(list);
+  nfHistRender();
+}
+
+function nfHistClear(){
+  _nfHistStore([]);
+  nfHistRender();
+  const out = document.getElementById('nfHistOut');
+  if (out) out.innerHTML = '';
+  const st = document.getElementById('nfHistState');
+  if (st) st.textContent = '🗑 Đã xoá toàn bộ lịch sử nghiên cứu.';
+}
+
+function nfHistCompare(){
+  const st = document.getElementById('nfHistState');
+  const out = document.getElementById('nfHistOut');
+  if (!out) return;
+  const list = _nfHistLoad();
+  if (list.length < 2){ if (st) st.textContent = '⚠️ Cần ≥ 2 mốc đã lưu mới so sánh được.'; return; }
+  const a = parseInt((document.getElementById('nfHistA')?.value || ''), 10);
+  const b = parseInt((document.getElementById('nfHistB')?.value || ''), 10);
+  const sa = list[a], sb = list[b];
+  if (!sa || !sb){ if (st) st.textContent = '⚠️ Chọn đủ 2 mốc để so sánh.'; return; }
+  const L = [`⚖️ So sánh ${_NF_HIST_LABELS[sa.mod] || sa.mod}: mốc #${a + 1} (${_nfHistTimeFmt(sa.ts)}) ⇄ mốc #${b + 1} (${_nfHistTimeFmt(sb.ts)})`];
+  if (sa.mod !== sb.mod){
+    L.push('⚠️ Hai mốc khác loại (' + (_NF_HIST_LABELS[sa.mod] || sa.mod) + ' ⇄ ' + (_NF_HIST_LABELS[sb.mod] || sb.mod) + ') — chọn 2 mốc cùng loại để so được.');
+  } else if (sa.mod === 'hot'){
+    const da = sa.data || {}, db = sb.data || {};
+    L.push('Trung vị ngách: ' + _t11oNum(da.median || 0) + ' → ' + _t11oNum(db.median || 0) + ' view');
+    const nameOf = x => String((x && (x.topic || x.title)) || '').toLowerCase().trim();
+    const A = new Map((da.items || []).map(x => [nameOf(x), x]));
+    const nameB = new Set((db.items || []).map(nameOf));
+    const neu = (db.items || []).filter(x => !A.has(nameOf(x)));
+    const mat = (da.items || []).filter(x => !nameB.has(nameOf(x)));
+    if (neu.length) L.push('MỚI nổi lên: ' + neu.map(x => x.topic || x.title).join('; '));
+    if (mat.length) L.push('Biến mất / rớt khỏi bảng: ' + mat.map(x => x.topic || x.title).join('; '));
+    (db.items || []).forEach(x => {
+      const o = A.get(nameOf(x));
+      if (o && o.ratio && x.ratio && Math.abs(x.ratio - o.ratio) >= 0.3) L.push('• ' + (x.topic || x.title) + ': ' + o.ratio + '× → ' + x.ratio + '×');
+    });
+    if (!neu.length && !mat.length) L.push('Bộ chủ đề giữ nguyên giữa 2 mốc — xu hướng ổn định.');
+  } else if (sa.mod === 'scorecard'){
+    const ma = sa.data.metrics || {}, mb = sb.data.metrics || {};
+    L.push('Điểm sức khoẻ: ' + (sa.data.health != null ? sa.data.health : '?') + ' → ' + (sb.data.health != null ? sb.data.health : '?') + '/100');
+    L.push('VPS: ' + (ma.vps != null ? ma.vps + '×' : '?') + ' → ' + (mb.vps != null ? mb.vps + '×' : '?') + ' · VPH: ' + _t11oNum(ma.vph || 0) + ' → ' + _t11oNum(mb.vph || 0) + ' view/giờ');
+    L.push('Ổn định (CV): ' + (ma.cv != null ? ma.cv : '?') + ' → ' + (mb.cv != null ? mb.cv : '?') + ' · Xu hướng: ' + (ma.trend != null ? Math.round(ma.trend * 100) + '%/tháng' : '?') + ' → ' + (mb.trend != null ? Math.round(mb.trend * 100) + '%/tháng' : '?'));
+    const ta = new Set((sa.data.outliers || []).map(x => x.title));
+    const moibat = (sb.data.outliers || []).filter(x => !ta.has(x.title));
+    if (moibat.length) L.push('Video vượt trội MỚI: ' + moibat.map(x => x.title).join('; '));
+  } else {
+    L.push('Mốc #1: ' + _nfHistSummary(sa.mod, sa.data || {}));
+    L.push('Mốc #2: ' + _nfHistSummary(sb.mod, sb.data || {}));
+  }
+  out.innerHTML = '<div class="nf-card" style="margin-bottom:10px"><h5>' + _nfEsc(L[0]) + '</h5>' + L.slice(1).map(l => '<div class="nf-line">' + _nfEsc(l) + '</div>').join('') + '</div>';
+  if (st) st.textContent = '';
 }
 
 function _t9RefSt(msg, color){ const el = document.getElementById('t9RefStatus'); if (el){ el.textContent = msg || ''; el.style.color = color || 'var(--text-dim)'; } }

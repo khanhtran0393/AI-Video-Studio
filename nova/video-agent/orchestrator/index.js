@@ -53,9 +53,11 @@ function createVideoJob({ projectDir, adapters = {}, options = {} }) {
     if (cancelled || abortController.signal.aborted) throw cancelledError(stage);
   }
   function registerCancel(fn) { cancelCurrent = typeof fn === 'function' ? fn : null; }
-  async function step(stage, fn) {
+  async function step(stage, fn, stepOpts = {}) {
     checkCancel(stage); setState(stage);
-    const timeoutMs = Number(options.stageTimeoutMs) || 30 * 60 * 1000;
+    // Timeout mặc định theo options.stageTimeoutMs; stage dài đặc biệt (vd GENERATING_SCENE_VIDEOS
+    // sinh 1 clip Flow/cảnh) có thể nới riêng qua stepOpts.timeoutMs.
+    const timeoutMs = Number(stepOpts.timeoutMs) || Number(options.stageTimeoutMs) || 30 * 60 * 1000;
     let timer = null;
     try {
       const work = Promise.resolve().then(fn);
@@ -101,9 +103,9 @@ function createVideoJob({ projectDir, adapters = {}, options = {} }) {
       // Kiểm tra nếu có inputData (import từ tool) thì dùng runAnalysisFromData
       let A;
       if (options.inputData) {
-        A = await step('DISCOVERING', () => runAnalysisFromData(options.inputData, { step, adapters, options, signal: abortController.signal }));
+        A = await step('DISCOVERING', () => runAnalysisFromData(options.inputData, { step, adapters, options, signal: abortController.signal, report: (p) => emit(state, p) }));
       } else {
-        A = await step('DISCOVERING', () => runAnalysis(projectDir, { step, adapters, options, signal: abortController.signal }));
+        A = await step('DISCOVERING', () => runAnalysis(projectDir, { step, adapters, options, signal: abortController.signal, report: (p) => emit(state, p) }));
       }
       const { project, tts, manifest, versions, validate } = A;
       // Credit gate (học từ VEO3): chặn TRƯỚC khi đốt credit Flow. Chỉ chạy khi

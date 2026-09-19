@@ -29,41 +29,103 @@
               </div>
               <div class="t7-mgrid">
                 <div><label class="t7-mlab">Độ phân giải</label>
-                  <select id="t7ExpRes" class="t7-mfield" onchange="t7ExportEstimate()">
+                  <select id="t7ExpRes" class="t7-mfield" onchange="t7ExportResChange()">
                     <option value="720">720p (HD)</option>
                     <option value="1080" selected>1080p (Full HD)</option>
                     <option value="1440">2K (1440p)</option>
                     <option value="2160">4K (2160p)</option>
+                    <option value="native">Gốc (theo nguồn)</option>
                   </select></div>
                 <div><label class="t7-mlab">Tốc độ bit</label>
                   <select id="t7ExpBitrate" class="t7-mfield" onchange="t7ExportEstimate()">
-                    <option value="auto" selected>Được đề xuất</option>
-                    <option value="high">Cao (nét hơn)</option>
-                    <option value="low">Thấp (nhẹ file)</option>
+                    <option value="auto" selected>Được đề xuất (theo độ phân giải)</option>
+                    <option value="24000">Rất cao — 24 Mbps</option>
+                    <option value="16000">Cao — 16 Mbps</option>
+                    <option value="8000">Vừa — 8 Mbps</option>
+                    <option value="4000">Thấp — 4 Mbps</option>
+                    <option value="high">Nét hơn (×1.6 mức đề xuất)</option>
+                    <option value="low">Nhẹ file (nén mạnh)</option>
                   </select></div>
                 <div><label class="t7-mlab">Bộ mã hoá</label>
-                  <select id="t7ExpCodec" class="t7-mfield">
+                  <select id="t7ExpCodec" class="t7-mfield" onchange="_t7ExpCodecHint()">
                     <option value="h264" selected>H.264 (tương thích rộng)</option>
                     <option value="h265">H.265 / HEVC (nhẹ hơn)</option>
-                  </select></div>
+                  </select>
+                  <!-- Hint HEVC (parity export-codec-hint của ezmaxsub): cảnh báo khả năng phát. -->
+                  <div id="t7ExpCodecHint" style="display:none;font-size:11px;color:var(--text-muted);margin-top:5px;line-height:1.4">⚠ H.265/HEVC nhẹ file hơn nhưng máy thiếu bộ giải mã H.265 sẽ không phát được — chọn H.264 nếu cần chia sẻ rộng.</div>
+                </div>
                 <div><label class="t7-mlab">Định dạng</label>
-                  <select id="t7ExpFormat" class="t7-mfield"><option value="mp4" selected>MP4</option></select></div>
+                  <select id="t7ExpFormat" class="t7-mfield" onchange="t7ExportEstimate()">
+                    <option value="mp4" selected>MP4</option>
+                    <option value="mov">MOV (QuickTime)</option>
+                    <option value="mkv">MKV (Matroska)</option>
+                  </select></div>
+                <div><label class="t7-mlab">Chất lượng (CRF)</label>
+                  <select id="t7ExpQuality" class="t7-mfield" onchange="t7ExportEstimate()">
+                    <option value="18">Cao — CRF 18</option>
+                    <option value="20" selected>Cân bằng — CRF 20</option>
+                    <option value="26">Nhẹ file — CRF 26</option>
+                  </select></div>
                 <div><label class="t7-mlab">Tốc độ khung hình</label>
                   <select id="t7ExpFps" class="t7-mfield" onchange="t7ExportEstimate()">
                     <option value="24">24 fps</option>
+                    <option value="25">25 fps</option>
                     <option value="30" selected>30 fps</option>
+                    <option value="50">50 fps</option>
                     <option value="60">60 fps</option>
                   </select></div>
                 <div><label class="t7-mlab">Không gian màu</label>
                   <input class="t7-mfield" type="text" value="Rec. 709 SDR" readonly style="color:var(--text-dim)"></div>
               </div>
+              <div class="t7-mlabel-sec" style="margin-top:14px">TỐC ĐỘ &amp; ÂM THANH</div>
+              <div class="t7-mgrid">
+                <div><label class="t7-mlab">Tốc độ video</label>
+                  <!-- Tua toàn cục (parity ezmaxsub 100%): 9 bậc 0.8–2×, mặc định = tốc độ preview đang nghe
+                       (t7State.rate — như previewBaseRate của gốc); hình setpts + tiếng atempo giữ cao độ,
+                       phụ đề/overlay burn trên timeline gốc nên sau tua vẫn khớp hình. -->
+                  <select id="t7ExpSpeed" class="t7-mfield" onchange="t7ExportEstimate()">
+                    <option value="0.8">0.8× — chậm</option>
+                    <option value="0.9">0.9× — chậm nhẹ</option>
+                    <option value="1" selected>1× — chuẩn</option>
+                    <option value="1.1">1.1× — nhanh nhẹ</option>
+                    <option value="1.2">1.2× — nhanh</option>
+                    <option value="1.25">1.25× — nhanh hơn</option>
+                    <option value="1.5">1.5× — rất nhanh</option>
+                    <option value="1.75">1.75× — cực nhanh</option>
+                    <option value="2">2× — tối đa</option>
+                  </select></div>
+                <div><label class="t7-mlab">Âm lượng giọng đọc</label>
+                  <!-- Voice volume (parity ezmaxsub): number 0–5 bước 0.1, MẶC ĐỊNH 1.5, lưu localStorage
+                       giữa các phiên (ezmaxsub settings.ttsVolume). Chỉ chỉnh tiếng giọng đọc, nhạc nền
+                       giữ theo thanh nhạc nền ở bảng chính. -->
+                  <!-- data-sessnap-skip: âm lượng có chủ riêng localStorage t7ExpVoiceVolV1
+                       (t7OpenExport tự trả lại mỗi lần mở) — session-snapshot không được đè. -->
+                  <input id="t7ExpVoiceVol" class="t7-mfield" type="number" min="0" max="5" step="0.1" value="1.5"
+                         data-sessnap-skip
+                         onchange="t7ExportVoiceVolSave()" style="max-width:140px"></div>
+              </div>
               <label class="t7-mlab" style="display:flex;align-items:center;gap:9px;margin-top:14px;cursor:pointer">
                 <input type="checkbox" id="t7ExpSubs" onchange="if(typeof t7RenderPreview==='function')t7RenderPreview()" style="accent-color:var(--accent);width:16px;height:16px"> 📝 Ghi phụ đề vào video (burn — hiện chữ trực tiếp trên hình · xem trước hiện y hệt). Mặc định TẮT → video xuất KHÔNG có chữ.
+              </label>
+              <label class="t7-mlab" style="display:flex;align-items:center;gap:9px;margin-top:9px;cursor:pointer">
+                <input type="checkbox" id="t7ExpBatch" onchange="t7ExportBatchUi();t7ExportEstimate()" style="accent-color:var(--accent);width:16px;height:16px"> 📦 Xuất hàng loạt — lần lượt cả 3 định dạng (MP4 + MOV + MKV) cùng thông số
+              </label>
+              <div id="t7ExpBatchErrRow" style="display:none;margin:9px 0 0 25px">
+                <label class="t7-mlab" style="display:block;margin-bottom:5px">Nếu một file hàng loạt lỗi</label>
+                <select id="t7ExpBatchErr" class="t7-mfield" style="max-width:300px">
+                  <!-- Mặc định "Bỏ qua" — parity ezmaxsub (export-onerror-skip checked; stop là tuỳ chọn 2). -->
+                  <option value="continue" selected>Bỏ qua file lỗi, làm tiếp định dạng còn lại</option>
+                  <option value="stop">Dừng xuất ngay (an toàn)</option>
+                </select>
+              </div>
+              <label class="t7-mlab" style="display:flex;align-items:center;gap:9px;margin-top:9px;cursor:pointer">
+                <input type="checkbox" id="t7ExpOverlays" checked style="accent-color:var(--accent);width:16px;height:16px"> 🖼 Ghi lớp phủ (ảnh đè + SFX) vào video — tắt để xuất video TRƠN không có lớp phủ.
               </label>
               <div style="margin-top:10px">
                 <label class="t7-mlab" style="display:block;margin-bottom:7px">Kiểu phụ đề</label>
                 <div id="t7SubStyleChips" style="display:flex;gap:7px;flex-wrap:wrap"></div>
               </div>
+              <button class="btn ghost sm" style="margin-top:12px" onclick="t7ExportSrt()" title="Lưu phụ đề của timeline ra file .srt (bảng Phụ đề bên phải vẫn chỉnh được)">⬇ Xuất phụ đề ra file .srt</button>
                      <label id="t7ExpGpuRow" class="t7-mlab" style="display:none;align-items:center;gap:9px;margin-top:10px;cursor:pointer">
                 <input type="checkbox" id="t7ExpGpu" checked style="accent-color:var(--accent);width:16px;height:16px"> <span id="t7ExpGpuLab">⚡ Tăng tốc GPU</span>
               </label>

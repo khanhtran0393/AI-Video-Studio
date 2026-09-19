@@ -127,6 +127,20 @@ class XTTSEngine(TTSEngine):
         except Exception:
             return None
 
+    def _advanced_param(self, req: TTSRequest, key: str, cast):
+        """Tham số nâng cao renderer gửi trong attributes (top_p/top_k…).
+
+        Không có / sai kiểu -> None -> engine KHÔNG truyền kwarg, model dùng
+        default của chính nó (không bịa giá trị thay thế — Luật 10).
+        """
+        v = (req.attributes or {}).get(key)
+        if v is None:
+            return None
+        try:
+            return cast(v)
+        except (TypeError, ValueError):
+            return None
+
     def synthesize(self, req: TTSRequest, out_path: Path) -> Path:
         self.load()
         lang = self._lang(req)
@@ -136,12 +150,28 @@ class XTTSEngine(TTSEngine):
         if ref is None and speaker is None:
             raise ValueError("Cần file mẫu âm thanh hoặc một giọng dựng sẵn")
 
+        # Tham số nâng cao (parity runtime voice-studio — 2026-09-19o/x): XTTS-v2
+        # nhận native top_p/top_k (decoder GPT autoregressive); default slider của
+        # renderer (0.85 / 50) trùng default XTTS -> trung tính khi chưa đụng slider.
+        # Repetition: XTTS dùng thang ~10.0, slider RepPen 1.0–3.0 là thang VieNeu
+        # -> QUY ĐỔI CÓ KHAI BÁO ×5 (slider 2.0 → 10.0 = đúng default XTTS).
+        top_p = self._advanced_param(req, "top_p", float)
+        top_k = self._advanced_param(req, "top_k", int)
+        rep_pen = self._advanced_param(req, "repetition_penalty", float)
+        rep_pen = None if rep_pen is None else rep_pen * 5.0
+
         if self._model is not None:
             # Chế độ viXTTS
             import torch
             import torchaudio
 
             kwargs = {"language": lang, "speed": req.speed}
+            if top_p is not None:
+                kwargs["top_p"] = top_p
+            if top_k is not None:
+                kwargs["top_k"] = top_k
+            if rep_pen is not None:
+                kwargs["repetition_penalty"] = rep_pen
             if ref:
                 kwargs["speaker_wav"] = ref
             else:
@@ -153,6 +183,12 @@ class XTTSEngine(TTSEngine):
             torchaudio.save(str(out_path), wav.unsqueeze(0).cpu(), 24000)
         else:
             kwargs = {"text": req.text, "language": lang, "file_path": str(out_path), "speed": req.speed}
+            if top_p is not None:
+                kwargs["top_p"] = top_p
+            if top_k is not None:
+                kwargs["top_k"] = top_k
+            if rep_pen is not None:
+                kwargs["repetition_penalty"] = rep_pen
             if ref:
                 kwargs["speaker_wav"] = ref
             else:

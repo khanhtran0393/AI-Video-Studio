@@ -47,7 +47,7 @@ ok(mediaTools.ovEnable(5, 2, 60).includes('gte(t,5.000)'), 'end ≤ start → b�
 
 /* ── ovEscapeText ── */
 console.log('ovEscapeText:');
-ok(mediaTools.ovEscapeText("a:b'c\\d%e,f") === "a\\:b\\'c\\\\d\\%e\\,f", 'escape : \' \\ % , đúng thứ tự');
+ok(mediaTools.ovEscapeText("a:b'c\\\\d%e,f") === "a\\:b'\\''c\\\\\\\\d\\%e\\,f", "escape : ' (dạng '\\''' chống vỡ quoting) \\ % , đúng thứ tự");
 
 /* ── buildOverlayVf — ovRect + từng loại lớp ── */
 console.log('buildOverlayVf:');
@@ -100,6 +100,116 @@ ok(g.audioMix === 'aout' && g.inputs.some((i) => i.isAudio && i.path === 'C:/nha
 ok(g.chains.some((c) => c.includes('adelay=2000|2000') && c.includes('volume=0.8')), 'audio ngoài: delay 2s + volume 0.8');
 ok(g.chains.some((c) => c.includes('amix=inputs=2:duration=first:dropout_transition=0:normalize=0[aout]')), 'audio ngoài: amix normalize=0');
 ok(g.chains[g.chains.length - 1].includes('[vout]'), 'có audio: nhãn hình vẫn khép [vout]');
+
+/* ── ovStripRect — offset 4 mép (blur-strip full width ∙ezmaxsub) ── */
+console.log('ovStripRect:');
+let sr = mediaTools.ovStripRect({ offLeft: 0, offRight: 0, offTop: 100, offBottom: 200 }, 1080, 1920);
+ok(sr && sr.x === 0 && sr.y === 100 && sr.w === 1080 && sr.h === 1620, 'offset trên/dưới → dải full-width đúng mép');
+sr = mediaTools.ovStripRect({ offLeft: 40, offRight: 60, offTop: 0, offBottom: 0 }, 1080, 1920);
+ok(sr && sr.x === 40 && sr.w === 980 && sr.y === 0 && sr.h === 1920, 'offset trái/phải → cột full-height');
+ok(mediaTools.ovStripRect({ offLeft: 0, offRight: 0, offTop: 0, offBottom: 0 }, 1080, 1920) === null, 'offset = 0 → null (fallback ovRect)');
+sr = mediaTools.ovStripRect({ offLeft: 99999, offRight: 99999, offTop: 0, offBottom: 0 }, 1080, 1920);
+ok(sr && sr.w >= 2 && sr.h >= 2, 'offset khổng lồ → kẹp còn vùng ≥2px (không âm)');
+
+/* buildOverlayVf + blur offsets: rect lấy từ ovStripRect */
+g = mediaTools.buildOverlayVf([{ type: 'blur', style: 'blurStrip', x: 0, y: 0, w: 1, h: 1, blurOpacity: 120, stripDarkness: 35, offTop: 100, offBottom: 200 }], 1080, 1920, 60);
+ok(g.chains.some((c) => c.includes('crop=1080:1620:0:100')), 'blurStrip offset: crop theo offset 4 mép');
+ok(g.chains.some((c) => c.includes('drawbox=x=0:y=100:w=1080:h=1620')), 'blurStrip offset: phủ tối theo đúng dải offset');
+
+/* ── ovParseSrt ── */
+console.log('ovParseSrt:');
+let cues = mediaTools.ovParseSrt('1\n00:00:01,000 --> 00:00:02,500\nXin chào\n\n2\n00:00:03.200 --> 00:00:04.700\nThế giới');
+ok(cues.length === 2 && cues[0].s === 1 && cues[0].e === 2.5 && cues[1].s === 3.2 && Math.abs(cues[1].e - 4.7) < 1e-9, 'SRT chuẩn (dấu , và .) → cue giây đúng');
+cues = mediaTools.ovParseSrt('\uFEFF00:00:00,500 --> 00:00:01,000\nBOM + 1 cue');
+ok(cues.length === 1 && cues[0].s === 0.5, 'BOM + khối không đánh số vẫn parse');
+throws(() => mediaTools.ovParseSrt('1\n00:00:05,000 --> 00:00:02,000\nđảo ngược'), 'FFX_OV_SRT_BAD', 'cue end ≤ start → FFX_OV_SRT_BAD');
+throws(() => mediaTools.ovParseSrt('chỉ có chữ không mốc'), 'FFX_OV_SRT_BAD', 'SRT không có cue → FFX_OV_SRT_BAD');
+
+/* ── ovEnableSync — blur chạy theo cue ── */
+console.log('ovEnableSync:');
+let en = mediaTools.ovEnableSync([{ s: 1, e: 2.5 }, { s: 3, e: 4 }], 60, 0);
+ok(en.startsWith("enable='between(t,1.000,2.500)+between(t,3.000,4.000)'"), '2 cue → between ghép bằng + (HOẶC)');
+en = mediaTools.ovEnableSync([{ s: 0.2, e: 1 }], 60, 0.5);
+ok(en.includes('between(t,0.000,1.500)'), 'pad ±0.5s, đầu kẹp ≥ 0');
+en = mediaTools.ovEnableSync([{ s: 59.5, e: 61 }], 60, 0.5);
+ok(en.includes('between(t,59.000,60.000)'), 'pad cuối kẹp theo total');
+throws(() => mediaTools.ovEnableSync([], 60, 0), 'FFX_OV_SYNC', 'không cue → FFX_OV_SYNC');
+throws(() => mediaTools.ovEnableSync([{ s: 1, e: 0 }], 60, 0), 'FFX_OV_SYNC', 'cue sai → FFX_OV_SYNC');
+throws(() => mediaTools.ovEnableSync(new Array(401).fill({ s: 1, e: 2 }), 60, 0), 'FFX_OV_SYNC_MANY', 'quá 400 cue → FFX_OV_SYNC_MANY');
+g = mediaTools.buildOverlayVf([{ type: 'blur', style: 'gaussian', x: 0, y: 0.8, w: 1, h: 0.2, blurOpacity: 120, syncSrt: true, srtCues: [{ s: 1, e: 2.5 }], srtPad: 0.2 }], 1080, 1920, 60);
+ok(g.chains.some((c) => c.includes('between(t,0.800,2.700)')), 'lớp blur syncSrt: enable theo cue + pad (đè startSec/endSec)');
+throws(() => mediaTools.buildOverlayVf([{ type: 'blur', style: 'gaussian', x: 0, y: 0.8, w: 1, h: 0.2, syncSrt: true }], 1080, 1920, 60), 'FFX_OV_SYNC', 'syncSrt thiếu cues → FFX_OV_SYNC');
+
+/* ── Nền gradient / blur (background object) ── */
+console.log('buildOverlayVf nền mới:');
+g = mediaTools.buildOverlayVf([], 1080, 1920, 60, { type: 'gradient', c1: '#1d4ed8', c2: '#f59e0b', dir: 'v' });
+ok(g.chains.some((c) => c.includes('gradients=s=1080x1920:c0=0x1d4ed8:c1=0xf59e0b:x0=0:y0=0:x1=0:y1=1920')), 'gradient dọc: nguồn gradients đúng màu + toạ độ');
+ok(g.chains.some((c) => c.includes(':duration=60.000:speed=0.00001')), 'gradient: static (speed≈0, min ffmpeg 1e-05) + duration theo total');
+g = mediaTools.buildOverlayVf([], 1080, 1920, 60, { type: 'gradient', c1: '#1d4ed8', c2: '#f59e0b', dir: 'h' });
+ok(g.chains.some((c) => c.includes('x1=1080:y1=0')), 'gradient ngang: x1=W, y1=0');
+g = mediaTools.buildOverlayVf([], 1920, 1080, 60, { type: 'blur', blurRadius: 30, darkness: 35 });
+ok(g.chains.some((c) => c.includes('force_original_aspect_ratio=increase,crop=1920:1080,boxblur=luma_radius=12:luma_power=2')), 'nền mờ: nhánh cover + boxblur radius 12');
+ok(g.chains.some((c) => c.includes('drawbox=x=0:y=0:w=1920:h=1080:color=black@0.35:t=fill')), 'nền mờ: phủ tối 35%');
+ok(g.chains.some((c) => c.includes('[bgC][bgfit]overlay=(W-w)/2:(H-h)/2[vpre]')), 'nền mờ: video contain đè lên nền');
+g = mediaTools.buildOverlayVf([{ type: 'rect', x: 0, y: 0.9, w: 1, h: 0.1, color: '#ff0000', opacity: 1 }], 1080, 1920, 60, { type: 'blur', blurRadius: 30, darkness: 0 });
+ok(g.chains.some((c) => c.includes('drawbox=x=0:y=1728:w=1080:h=192')), 'nền mờ + lớp: chuỗi vẫn khép về [b0]');
+throws(() => mediaTools.buildOverlayVf([], 100, 100, 10, { type: 'laser' }), 'FFX_OV_BG', 'kiểu nền lạ → FFX_OV_BG');
+g = mediaTools.buildOverlayVf([], 1080, 1080, 60, { type: 'solid', color: '#112233' });
+ok(g.chains[0].includes('pad=1080:1080:(ow-iw)/2:(oh-ih)/2:color=0x112233'), 'background object solid: pad màu từ object');
+
+/* ── Text: viền + bóng đổ ── */
+console.log('buildOverlayVf text viền/bóng:');
+g = mediaTools.buildOverlayVf([{ type: 'text', x: 0.1, y: 0.1, w: 0.5, h: 0.15, text: 'A', fontSizePct: 8, color: '#ffffff', bold: true, stroke: 4, strokeColor: '#000000', shadow: 1 }], 1920, 1080, 60);
+ok(g.chains.some((c) => c.includes('borderw=4:bordercolor=0x000000') && c.includes('shadowcolor=black@0.65:shadowx=3:shadowy=3')), 'text: viền 4px đen + bóng đổ 3px');
+g = mediaTools.buildOverlayVf([{ type: 'text', x: 0.1, y: 0.1, w: 0.5, h: 0.15, text: 'A', fontSizePct: 8, color: '#ffffff', bold: true }], 1920, 1080, 60);
+ok(!g.chains.some((c) => c.includes('borderw=')) && !g.chains.some((c) => c.includes('shadowcolor=')), 'text mặc định: không viền không bóng (giữ chuỗi gọn)');
+
+/* ── Phụ đề theo phân đoạn (subtitleTrack) ── */
+console.log('ovSubtitleValidate:');
+const cues1 = mediaTools.ovSubtitleValidate([{ s: 2, e: 3, text: 'a' }, { s: 0, e: 1.5, text: 'b' }], 60);
+ok(cues1.length === 2 && cues1[0].s === 0 && cues1[1].s === 2, 'cues: sắp theo s + trả bản chuẩn hoá');
+ok(mediaTools.ovSubtitleValidate([{ s: 59.5, e: 99, text: 'a' }], 60)[0].e === 60, 'e vượt thời lượng → kẹp theo total');
+ok(mediaTools.ovSubtitleValidate([{ s: 0, e: 1, text: '  Xin chào  ' }], 60)[0].text === 'Xin chào', 'text trim hai đầu');
+throws(() => mediaTools.ovSubtitleValidate([], 60), 'FFX_SUB_EMPTY', 'track rỗng → FFX_SUB_EMPTY');
+throws(() => mediaTools.ovSubtitleValidate(new Array(501).fill({ s: 0, e: 1, text: 'a' }), 60), 'FFX_SUB_MANY', 'quá 500 phân đoạn → FFX_SUB_MANY');
+throws(() => mediaTools.ovSubtitleValidate([{ s: 3, e: 3, text: 'a' }], 60), 'FFX_SUB_CUE', 'e ≤ s → FFX_SUB_CUE');
+throws(() => mediaTools.ovSubtitleValidate([{ s: -1, e: 2, text: 'a' }], 60), 'FFX_SUB_CUE', 's âm → FFX_SUB_CUE');
+throws(() => mediaTools.ovSubtitleValidate([{ s: 65, e: 70, text: 'a' }], 60), 'FFX_SUB_CUE', 'cue nằm ngoài thời lượng → FFX_SUB_CUE');
+throws(() => mediaTools.ovSubtitleValidate([{ s: 0, e: 1, text: '   ' }], 60), 'FFX_SUB_CUE_TEXT', 'text trống → FFX_SUB_CUE_TEXT');
+
+console.log('ovSubtitleStyle:');
+const sty = mediaTools.ovSubtitleStyle({});
+ok(sty.fontSizePct === 5 && sty.color === '0xFFFFFF' && sty.bold === true && sty.stroke === 2 && sty.strokeColor === '0x000000' && sty.shadow === true && sty.posPct === 0.86, 'mặc định: 5% trắng đậm viền đen 2px bóng + neo 86%');
+const sty2 = mediaTools.ovSubtitleStyle({ fontSizePct: 99, color: '#ff0000', bold: false, stroke: 99, strokeColor: '#000000', shadow: 0, posPct: 1.5 });
+ok(sty2.fontSizePct === 20 && sty2.color === '0xff0000' && sty2.bold === false && sty2.stroke === 8 && sty2.shadow === false && sty2.posPct === 0.98, 'style tùy biến: kẹp trần cỡ/viền/pos + hex chuẩn hoá');
+
+console.log('ovSubtitleVf:');
+const vf = mediaTools.ovSubtitleVf([{ s: 1, e: 2.5, text: 'Dòng 1' }], { fontSizePct: 5 }, 1080, 1920, 60);
+ok(vf.includes('drawtext=fontfile='), 'có fontfile arial từ thư mục hệ thống');
+ok(vf.includes("'Dòng 1'"), 'chữ đúng + escape an toàn trong nháy đơn');
+ok(vf.includes('fontsize=96'), 'cỡ chữ % khung cao (5% của 1920 = 96)');
+ok(vf.includes("between(t,1.000,2.500)"), 'enable between theo cue');
+ok(vf.includes('borderw=2:bordercolor=0x000000') && vf.includes('shadowcolor=black@0.65'), 'viền + bóng mặc định');
+ok(vf.includes('x=(w-text_w)/2:y=1603'), 'căn giữa ngang + neo dọc 86% (1651) − nửa cỡ chữ (48)');
+const vf2 = mediaTools.ovSubtitleVf([{ s: 0, e: 1, text: 'a,b' }], { shadow: false, stroke: 0, bold: false }, 1920, 1080, 60);
+ok(vf2.includes('arial.ttf') && !vf2.includes('borderw=') && !vf2.includes('shadowcolor='), 'bold=false → arial thường; stroke 0/shadow false → không viền/bóng');
+ok(vf2.includes("'a\\,b'"), 'dấu phẩy trong chữ được escape (không vỡ chuỗi drawtext nối phẩy)');
+
+console.log('buildOverlayVf + subtitleTrack:');
+g = mediaTools.buildOverlayVf([], 1080, 1920, 60, '#000000', { cues: [{ s: 1, e: 2, text: 'a' }, { s: 3, e: 4, text: 'b' }] });
+ok(g.chains.length === 3 && g.chains[0].includes('pad=1080:1920') && g.chains[0].includes('[vpre]'), 'chỉ phụ đề: nền pad → [vpre] giữ nguyên (3 chain: pad + sub + format)');
+ok(g.chains[1].includes('[vpre]') && g.chains[1].endsWith('[vsub]') && g.chains[1].includes("between(t,3.000,4.000)"), 'chuỗi phụ đề 1 link drawtext nối phẩy từ [vpre] → [vsub]');
+ok(g.subs === 2, 'graph.subs = số phân đoạn hợp lệ');
+g = mediaTools.buildOverlayVf([{ type: 'rect', x: 0, y: 0, w: 1, h: 0.5, color: '#ff0000', opacity: 1 }], 1920, 1080, 60, '#000000', { cues: [{ s: 0, e: 1, text: 'a' }] });
+ok(g.chains.some((c) => c.includes('drawbox') && c.includes('[b1]')), 'lớp + phụ đề: lớp cuối vẫn nhãn trung gian b1');
+ok(g.chains[g.chains.length - 2].includes('[b1]drawtext=fontfile=') && g.chains[g.chains.length - 2].endsWith('[vsub]'), 'phụ đề đè LÊN lớp (chained sau b1 → vsub)');
+ok(g.chains[g.chains.length - 1] === '[vsub]format=yuv420p[vout]', 'format cuối chạy từ [vsub] → [vout] (không trùng nhãn vout)');
+g = mediaTools.buildOverlayVf([], 1080, 1920, 60, { type: 'gradient', c1: '#112233', c2: '#445566', dir: 'v' }, { cues: [{ s: 0, e: 2, text: 'a' }] });
+ok(g.chains.some((c) => c.includes('gradients=')) && g.chains.some((c) => c.startsWith('[vpre]drawtext')), 'nền gradient + chỉ phụ đề: chuỗi khép từ [vpre]');
+throws(() => mediaTools.buildOverlayVf([], 100, 100, 10, '#000000', { cues: [{ s: 5, e: 2, text: 'a' }] }), 'FFX_SUB_CUE', 'track cue sai → FFX_SUB_CUE bung NGAY khi dựng graph');
+throws(() => mediaTools.buildOverlayVf([], 100, 100, 10, '#000000', { cues: [{ s: 0, e: 1 }] }), 'FFX_SUB_CUE_TEXT', 'track thiếu text → FFX_SUB_CUE_TEXT');
+throws(() => mediaTools.buildOverlayVf([], 100, 100, 10, '#000000', { cues: [] }), 'FFX_SUB_EMPTY', 'track cues rỗng → FFX_SUB_EMPTY');
+throws(() => mediaTools.buildOverlayVf([], 100, 100, 10, '#000000', { cues: [{ s: 0, e: 1, text: ' ' }] }), 'FFX_SUB_CUE_TEXT', 'track text toàn khoảng trắng → FFX_SUB_CUE_TEXT');
 
 console.log('\nKết quả: ' + pass + ' PASS, ' + fail + ' FAIL');
 if (fail > 0) process.exit(1);

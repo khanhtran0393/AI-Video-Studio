@@ -215,6 +215,238 @@ const TEMPLATES = {
     },
   },
 
+  /* ══ GÓI "NỘI DUNG" — thẻ chữ / phần tử thông tin đặt LÊN hình ═════════════
+     Khác gói "tư liệu" (mẫu tự chiếm cả khung), các mẫu dưới đây là LỚP PHỦ
+     nhẹ: thả được lên bất kỳ điểm nào của cảnh (kéo/chuột → expandOne đè toạ
+     độ vào lớp chính). Chỉ dùng loại lớp + preset ĐÃ CÓ trong engine — thêm
+     mẫu mới không thêm gì vào NovaScene (Luật: AI chỉ chọn tên + điền tham số).
+     Tham số chữ PHẢI nằm trong _T7_TXT_KEYS (title/text/value/name/label/caption)
+     để Trợ lý dựng tính đúng hạn ngạch cảnh-có-chữ.                             */
+
+  // ── Tên góc dưới (lower-thirds) ──────────────────────────────────────────
+  // Thanh nền mờ quét vào từ trái, tên đè lên, phụ đề lệch nhịp sau.
+  'lower-thirds': {
+    label: 'Tên góc dưới (lower-thirds)',
+    params: { title: '', caption: '', position: 'bottom-left' },
+    build: (p) => {
+      if (!p.title && !p.caption) return [];
+      const c = cornerOf(p.position, 'bottom-left');
+      const L = [];
+      L.push({ type: 'shape', shape: 'rect',
+        box: { x: c.x - 1, y: c.y - 2.4, w: c.w + 2, h: 13 },
+        style: { fill: 'rgba(18,16,14,.62)', radius: 3 },
+        at: 0.1, in: { preset: 'wipeL', dur: 0.4 }, out: { preset: 'fade', dur: 0.3 }, z: 20 });
+      if (p.title) L.push({ type: 'text', text: String(p.title),
+        box: { x: c.x, y: c.y, w: c.w, align: 'left' },
+        style: { size: 34, color: DOC.ink, font: DOC.label, weight: 800, tracking: 0.01 },
+        at: 0.35, in: { preset: 'slideL', dur: 0.45 }, out: { preset: 'fade', dur: 0.3 }, z: 21 });
+      if (p.caption) L.push({ type: 'text', text: String(p.caption),
+        box: { x: c.x, y: c.y + 6.2, w: c.w, align: 'left' },
+        style: { size: 18, color: DOC.dim, font: DOC.label, weight: 500, italic: true },
+        at: 0.55, in: { preset: 'slideL', dur: 0.45 }, out: { preset: 'fade', dur: 0.3 }, z: 21 });
+      return L;
+    },
+  },
+
+  // ── Số liệu phóng to ─────────────────────────────────────────────────────
+  // Một con số/thành tựu cần mắt dừng lại: số serif rất lớn + gạch accent
+  // quét dưới + nhãn nhỏ chữ hoa. value nhận cả "3,4 triệu" lẫn 80.
+  'so-lieu': {
+    label: 'Số liệu phóng to',
+    params: { value: '80%', label: '', position: 'center' },
+    build: (p) => {
+      if (p.value == null || p.value === '') return [];
+      const c = cornerOf(p.position, 'center');
+      const L = [];
+      L.push({ type: 'text', text: String(p.value),
+        box: { x: c.x, y: c.y - 2, w: c.w, align: 'center', anchor: 'center' },
+        style: { size: 120, color: DOC.ink, font: DOC.display, weight: 700, lineHeight: 1.05 },
+        at: 0.15, in: { preset: 'zoom', dur: 0.5 }, out: { preset: 'fade', dur: 0.3 }, z: 21 });
+      L.push({ type: 'shape', shape: 'rect',
+        box: { x: c.x - 12, y: c.y + 7.5, w: 24, h: 1.1 },
+        style: { fill: DOC.accent },
+        at: 0.45, in: { preset: 'wipeL', dur: 0.45 }, out: { preset: 'fade', dur: 0.3 }, z: 21 });
+      if (p.label) L.push({ type: 'text', text: String(p.label).toUpperCase(),
+        box: { x: c.x, y: c.y + 10.5, w: c.w, align: 'center', anchor: 'center' },
+        style: { size: 20, color: DOC.dim, font: DOC.label, tracking: 0.14, weight: 600 },
+        at: 0.65, in: { preset: 'rise', dur: 0.4 }, out: { preset: 'fade', dur: 0.3 }, z: 21 });
+      return L;
+    },
+  },
+
+  // ── Thẻ trích dẫn ────────────────────────────────────────────────────────
+  // Dấu ngoặc kép serif rất lớn làm mốc thị giác, lời trích nghiêng, tên tác
+  // giả chữ hoa có gạch accent. Không đục nền — đặt thẳng lên cảnh tư liệu.
+  'trich-dan': {
+    label: 'Thẻ trích dẫn',
+    params: { text: '', name: '', position: 'center' },
+    build: (p) => {
+      if (!p.text) return [];
+      const c = cornerOf(p.position, 'center');
+      const L = [];
+      L.push({ type: 'text', text: '\u201C',
+        box: { x: c.x - c.w / 2 + 1, y: c.y - 12, w: 12, align: 'left' },
+        style: { size: 110, color: DOC.accent, font: DOC.display, weight: 700 },
+        at: 0.1, in: { preset: 'fade', dur: 0.35 }, out: { preset: 'fade', dur: 0.3 }, z: 20 });
+      L.push({ type: 'text', text: String(p.text),
+        box: { x: c.x, y: c.y - 1, w: c.w - 6, align: 'left' },
+        style: { size: 30, color: DOC.ink, font: DOC.display, weight: 500, italic: true, lineHeight: 1.4 },
+        at: 0.3, in: { preset: 'rise', dur: 0.5 }, out: { preset: 'fade', dur: 0.3 }, z: 21 });
+      if (p.name) {
+        L.push({ type: 'shape', shape: 'rect',
+          box: { x: c.x - c.w / 2 + 2, y: c.y + 9.5, w: 6, h: 0.8 },
+          style: { fill: DOC.accent },
+          at: 0.6, in: { preset: 'wipeL', dur: 0.35 }, out: { preset: 'fade', dur: 0.3 }, z: 21 });
+        L.push({ type: 'text', text: String(p.name).toUpperCase(),
+          box: { x: c.x - c.w / 2 + 2, y: c.y + 11, w: c.w - 6, align: 'left' },
+          style: { size: 16, color: DOC.dim, font: DOC.label, tracking: 0.16, weight: 600 },
+          at: 0.7, in: { preset: 'fade', dur: 0.35 }, out: { preset: 'fade', dur: 0.3 }, z: 21 });
+      }
+      return L;
+    },
+  },
+
+  // ── So sánh hai cột ──────────────────────────────────────────────────────
+  // Hai thẻ trượt vào từ hai phía (trái lạnh, phải nóng) — cho cấu trúc
+  // "trước/sau", "đúng/sai", "loài A/loài B". Nhãn + nội dung riêng từng thẻ.
+  'so-sanh': {
+    label: 'So sánh hai cột',
+    params: { title: '', nhanTrai: '', trai: '', nhanPhai: '', phai: '' },
+    build: (p) => {
+      const L = [];
+      if (p.title) L.push({ type: 'text', text: String(p.title).toUpperCase(),
+        box: { x: 50, y: 12, w: 80, align: 'center', anchor: 'center' },
+        style: { size: 24, color: DOC.dim, font: DOC.label, tracking: 0.16, weight: 600 },
+        at: 0.05, in: { preset: 'rise', dur: 0.4 }, out: { preset: 'fade', dur: 0.3 }, z: 20 });
+      const the = [
+        { x: 7,  nhan: p.nhanTrai, noiDung: p.trai, vien: DOC.cold, vao: 'slideL' },
+        { x: 55, nhan: p.nhanPhai, noiDung: p.phai, vien: DOC.hot,  vao: 'slideR' },
+      ];
+      the.forEach((t, k) => {
+        if (!t.nhan && !t.noiDung) return;
+        const at = 0.25 + k * 0.2;
+        L.push({ type: 'shape', shape: 'rect',
+          box: { x: t.x, y: 28, w: 38, h: 42 },
+          style: { fill: 'rgba(18,16,14,.55)', radius: 4, stroke: t.vien, strokeWidth: 3 },
+          at, in: { preset: t.vao, dur: 0.5 }, out: { preset: 'fade', dur: 0.3 }, z: 20 });
+        if (t.nhan) L.push({ type: 'text', text: String(t.nhan).toUpperCase(),
+          box: { x: t.x + 2.5, y: 32, w: 33, align: 'left' },
+          style: { size: 22, color: t.vien, font: DOC.label, weight: 800, tracking: 0.06 },
+          at: at + 0.15, in: { preset: 'rise', dur: 0.4 }, out: { preset: 'fade', dur: 0.3 }, z: 21 });
+        if (t.noiDung) L.push({ type: 'text', text: String(t.noiDung),
+          box: { x: t.x + 2.5, y: 40.5, w: 33, align: 'left' },
+          style: { size: 18, color: DOC.ink, font: DOC.label, weight: 400, lineHeight: 1.42 },
+          at: at + 0.28, in: { preset: 'rise', dur: 0.4 }, out: { preset: 'fade', dur: 0.3 }, z: 21 });
+      });
+      return L;
+    },
+  },
+
+  // ── Danh sách gạch đầu dòng ──────────────────────────────────────────────
+  // Tối đa 5 dòng, mỗi dòng một ô vuông accent + chữ, vào lần lượt từ trên
+  // xuống. Mẫu hợp cảnh "3 lý do", "đặc điểm chung"…
+  'danh-sach': {
+    label: 'Danh sách gạch đầu dòng',
+    params: { title: '', muc: [] },
+    build: (p) => {
+      const muc = (Array.isArray(p.muc) ? p.muc : []).filter(Boolean).slice(0, 5);
+      if (!muc.length) return [];
+      const L = [];
+      if (p.title) L.push({ type: 'text', text: String(p.title).toUpperCase(),
+        box: { x: 8, y: 16, w: 84, align: 'left' },
+        style: { size: 26, color: DOC.dim, font: DOC.label, tracking: 0.12, weight: 700 },
+        at: 0.05, in: { preset: 'rise', dur: 0.45 }, out: { preset: 'fade', dur: 0.3 }, z: 20 });
+      muc.forEach((m, k) => {
+        const y = (p.title ? 27 : 24) + k * 11;
+        L.push({ type: 'shape', shape: 'rect',
+          box: { x: 8.5, y: y + 1.1, w: 1.5, h: 1.5 },
+          style: { fill: DOC.accent },
+          at: 0.2 + k * 0.16, in: { preset: 'pop', dur: 0.3 }, out: { preset: 'fade', dur: 0.3 }, z: 21 });
+        L.push({ type: 'text', text: String(m),
+          box: { x: 12.5, y, w: 79, align: 'left' },
+          style: { size: 22, color: DOC.ink, font: DOC.label, weight: 500, lineHeight: 1.3 },
+          at: 0.26 + k * 0.16, in: { preset: 'slideL', dur: 0.4 }, out: { preset: 'fade', dur: 0.3 }, z: 21 });
+      });
+      return L;
+    },
+  },
+
+  // ── Thẻ tiêu đề chương ───────────────────────────────────────────────────
+  // Đục nền mờ + tên chương serif rất lớn ở giữa — dùng chốt mở phần mới.
+  'tieu-de-chuong': {
+    label: 'Thẻ tiêu đề chương',
+    params: { text: '', phu: '' },
+    build: (p) => {
+      if (!p.text) return [];
+      const L = [];
+      L.push({ type: 'shape', shape: 'rect', box: { x: 0, y: 0, w: 100, h: 100 },
+        style: { fill: 'rgba(12,10,8,.55)' }, backdropBlur: 8,
+        at: 0, in: { preset: 'fade', dur: 0.4 }, out: { preset: 'fade', dur: 0.35 }, z: 10 });
+      L.push({ type: 'shape', shape: 'rect',
+        box: { x: 44, y: 38.5, w: 12, h: 1 },
+        style: { fill: DOC.accent },
+        at: 0.2, in: { preset: 'wipeL', dur: 0.4 }, out: { preset: 'fade', dur: 0.3 }, z: 20 });
+      L.push({ type: 'text', text: String(p.text),
+        box: { x: 50, y: 47, w: 84, align: 'center', anchor: 'center' },
+        style: { size: 58, color: DOC.ink, font: DOC.display, weight: 700, lineHeight: 1.15 },
+        at: 0.3, in: { preset: 'zoom', dur: 0.55 }, out: { preset: 'fade', dur: 0.3 }, z: 21 });
+      if (p.phu) L.push({ type: 'text', text: String(p.phu).toUpperCase(),
+        box: { x: 50, y: 58, w: 84, align: 'center', anchor: 'center' },
+        style: { size: 18, color: DOC.dim, font: DOC.label, tracking: 0.2, weight: 600 },
+        at: 0.55, in: { preset: 'rise', dur: 0.4 }, out: { preset: 'fade', dur: 0.3 }, z: 21 });
+      return L;
+    },
+  },
+
+  // ── Ghi chú góc nhỏ ──────────────────────────────────────────────────────
+  // Viên thuốc chữ nhỏ đặt ở góc — ghi chú phụ không cướp cảnh. KHÔNG đục
+  // nền toàn khung, mẫu nhẹ nhất của gói; hợp ghi chú liên tục nhiều cảnh.
+  'ghi-chu': {
+    label: 'Ghi chú góc nhỏ',
+    params: { text: '', position: 'top-right' },
+    build: (p) => {
+      if (!p.text) return [];
+      const c = cornerOf(p.position, 'top-right');
+      return [{
+        type: 'text', text: String(p.text),
+        box: { x: c.x, y: c.y, w: c.w, align: c.align },
+        style: { size: 16, color: DOC.ink, font: DOC.label, weight: 500, italic: true,
+                 bg: 'rgba(18,16,14,.55)', pad: 10, radius: 4 },
+        at: 0.15, in: { preset: 'fade', dur: 0.35 }, out: { preset: 'fade', dur: 0.3 }, z: 20,
+      }];
+    },
+  },
+
+  // ── Thanh tiến độ % ──────────────────────────────────────────────────────
+  // Thanh rạc mọc đầy theo hold growX + con số % đếm kề bên. Cho các cảnh
+  // "xong bước 1/3", mức độ hoàn thành của một quá trình.
+  'thanh-tien-do': {
+    label: 'Thanh tiến độ %',
+    params: { value: 50, label: '' },
+    build: (p) => {
+      const val = Math.max(0, Math.min(100, numOr(p.value, 50)));
+      const L = [];
+      L.push({ type: 'shape', shape: 'rect',
+        box: { x: 15, y: 62, w: 70, h: 1.6 },
+        style: { fill: 'rgba(244,241,234,.25)' },
+        at: 0.1, in: { preset: 'fade', dur: 0.3 }, out: { preset: 'fade', dur: 0.3 }, z: 20 });
+      L.push({ type: 'shape', shape: 'rect',
+        box: { x: 15, y: 62, w: 70 * (val / 100), h: 1.6 },
+        style: { fill: DOC.accent },
+        at: 0.2, in: { preset: 'fade', dur: 0.2 }, hold: { preset: 'growX' },
+        out: { preset: 'fade', dur: 0.3 }, z: 21 });
+      L.push({ type: 'text', text: Math.round(val) + '%',
+        box: { x: 15 + 70 * (val / 100) - 4, y: 56.5, w: 10, align: 'right' },
+        style: { size: 22, color: DOC.ink, font: DOC.label, weight: 800 },
+        at: 0.45, in: { preset: 'drop', dur: 0.35 }, out: { preset: 'fade', dur: 0.3 }, z: 21 });
+      if (p.label) L.push({ type: 'text', text: String(p.label).toUpperCase(),
+        box: { x: 15, y: 65.5, w: 70, align: 'left' },
+        style: { size: 15, color: DOC.dim, font: DOC.label, tracking: 0.12, weight: 600 },
+        at: 0.5, in: { preset: 'fade', dur: 0.35 }, out: { preset: 'fade', dur: 0.3 }, z: 21 });
+      return L;
+    },
+  },
+
   /* ══ GÓI "FX-" — hiệu ứng PHỦ TOÀN KHUNG (vizzy-style: glitch, VHS, blur, ────
      noise, beat-pulse). Mỗi mẫu bung đúng 1 lớp {type:'fx'} trỏ vào bảng FX
      của effects.js — người dùng/AI chỉ chọn TÊN + cường độ, mọi phép tính nằm
@@ -315,6 +547,16 @@ const POLICY = {
   'fx-motion-blur': { ambient: true, maxUse: 2 },
   'fx-noise':       { ambient: true, maxUse: 4 },
   'fx-pulse':       { ambient: true, maxUse: 3 },
+  // Gói "nội dung": không ambient (chỉ tiêu đề chương đục nền nhưng có chữ,
+  // không tính vào trần ambient). Trần maxUse chống lặp một kiểu khắp video.
+  'lower-thirds':   { maxUse: 6 },
+  'so-lieu':        { maxUse: 5 },
+  'trich-dan':      { maxUse: 3 },
+  'so-sanh':        { maxUse: 3 },
+  'danh-sach':      { maxUse: 3 },
+  'tieu-de-chuong': { maxUse: 3 },
+  'ghi-chu':        { maxUse: 5 },
+  'thanh-tien-do':  { maxUse: 3 },
 };
 const policyOf = (k) => POLICY[k] || {};
 

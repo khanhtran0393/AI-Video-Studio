@@ -152,7 +152,9 @@
 
             <div class="rhead" style="margin-top:12px">Ngôn ngữ</div>
             <div class="sl" id="slNgonNgu">
-              <select id="voiceLang" onchange="try { giongDDVe(); } catch (_){}">
+              <select id="voiceLang" onchange="try { giongVe(); } catch (_){}">
+                <!-- giongVe() (không chỉ giongDDVe) để nhãn "đang chọn" ở đầu panel
+                     cũng cập nhật theo bộ lọc ngôn ngữ vừa đổi. -->
                 <option value="all">Tất cả ngôn ngữ</option>
                 <option value="clone">Giọng Clone (giọng đã nhân bản)</option>
                 <option value="vi" selected>Tiếng Việt</option>
@@ -194,7 +196,7 @@
 
             <div class="rhead" style="margin-top:12px">Tinh chỉnh</div>
             <div class="sl" id="slTocDo">
-              <div class="slh"><b>Tốc độ</b><span id="vSpeedVal">1.00×</span></div>
+              <div class="slh" title="Đổi tốc độ đọc. VieNeu: hậu kỳ atempo (giữ nguyên cao độ). OmniVoice/XTTS: engine đọc native theo tốc độ."><b>Tốc độ</b><span id="vSpeedVal">1.00×</span></div>
               <input type="range" id="voiceSpeed" min="0.5" max="1.5" step="0.05" value="1"
                 oninput="document.getElementById('vSpeedVal').textContent=(+this.value).toFixed(2)+'×'">
               <div class="why" id="whyTocDo"></div>
@@ -205,9 +207,18 @@
                 oninput="document.getElementById('vPitchVal').textContent=(+this.value>0?'+':'')+this.value+' st'">
             </div>
             <div class="sl" id="slGap">
-              <div class="slh"><b>Nghỉ giữa câu</b><span id="vGapVal">300 ms</span></div>
+              <div class="slh" title="Chèn khoảng lặng GIỮA TỪNG CÂU khi ghép (hậu kỳ, giữ nguyên tốc độ đọc). Khi gap > 0 backend đọc theo từng câu — chậm hơn gộp khối một chút nhưng khoảng nghỉ đúng từng câu và SRT chuẩn từng câu. Lưu ý: câu nghe thử là MỘT câu nên không có khoảng nghỉ nào để nghe."><b>Nghỉ giữa câu</b><span id="vGapVal">300 ms</span></div>
               <input type="range" id="voiceGap" min="0" max="1000" step="50" value="300"
                 oninput="document.getElementById('vGapVal').textContent=this.value+' ms'">
+            </div>
+
+            <!-- Câu nghe thử riêng (2026-09-19k): để trống dùng câu mặc định. Cache
+                 v4 lưu mẫu RIÊNG theo câu (hash cài đặt + câu) → gõ câu sát nội dung
+                 thật để nghe thử đúng chất giọng trên văn bản của mình. -->
+            <div class="sl" id="slThuCau">
+              <div class="slh" title="Để trống dùng câu mặc định. Mỗi câu có mẫu cache riêng theo tổ hợp cài đặt — đổi qua đổi lại không phải tạo lại."><b>Câu nghe thử</b><span style="font-weight:400;color:var(--text-dim)">tối đa 240 ký tự</span></div>
+              <textarea id="giongThuCau" rows="2" maxlength="240" placeholder="Để trống = câu mặc định. Gõ câu riêng để nghe thử giọng trên nội dung thật…"
+                style="width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-size:12.5px;resize:vertical"></textarea>
             </div>
 
             <!-- Cài đặt nâng cao (gập lại) — PHẢI nằm TRONG .gr, nếu là con trực tiếp
@@ -216,18 +227,18 @@
             <details style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px">
             <summary style="cursor:pointer;font-weight:600;font-size:12.5px;color:var(--text-muted);user-select:none">⚙️ Cài đặt nâng cao</summary>
             <div style="margin-top:8px;display:flex;flex-direction:column;gap:8px">
-              <div class="sl" id="slTopP" data-engines="vieneu">
-                <div class="slh" title="VieNeu (LM-based). Giảm để giọng đọc ngẫu hứng, có hồn hơn (giống ElevenLabs). Tăng để ổn định."><b>Top P — VieNeu</b><span id="vTopPVal">0.85</span></div>
+              <div class="sl" id="slTopP" data-engines="vieneu,xtts">
+                <div class="slh" title="VieNeu + XTTS clone (LM-based). Giảm để giọng đọc ngẫu hứng, có hồn hơn (giống ElevenLabs). Tăng để ổn định."><b>Top P — VieNeu/XTTS</b><span id="vTopPVal">0.85</span></div>
                 <input type="range" id="voiceTopP" min="0" max="1" step="0.01" value="0.85"
                   oninput="document.getElementById('vTopPVal').textContent=(+this.value).toFixed(2)">
               </div>
-              <div class="sl" id="slTopK" data-engines="vieneu">
-                <div class="slh" title="VieNeu (LM-based). Độ đa dạng của âm thanh. Giá trị cao hơn cho giọng tự nhiên hơn."><b>Top K — VieNeu</b><span id="vTopKVal">50</span></div>
+              <div class="sl" id="slTopK" data-engines="vieneu,xtts">
+                <div class="slh" title="VieNeu + XTTS clone (LM-based). Độ đa dạng của âm thanh. Giá trị cao hơn cho giọng tự nhiên hơn."><b>Top K — VieNeu/XTTS</b><span id="vTopKVal">50</span></div>
                 <input type="range" id="voiceTopK" min="1" max="100" step="1" value="50"
                   oninput="document.getElementById('vTopKVal').textContent=this.value">
               </div>
-              <div class="sl" id="slRepPen" data-engines="vieneu">
-                <div class="slh" title="VieNeu. Tăng để tránh AI bị lắp bắp hoặc lặp chữ."><b>Repetition — VieNeu</b><span id="vRepPenVal">2.0</span></div>
+              <div class="sl" id="slRepPen" data-engines="vieneu,xtts">
+                <div class="slh" title="VieNeu/XTTS. Tăng để tránh AI bị lắp bắp hoặc lặp chữ. XTTS dùng thang khác — engine tự quy đổi ×5 (mặc định 2.0 → 10.0 đúng mặc định XTTS)."><b>Repetition — VieNeu/XTTS</b><span id="vRepPenVal">2.0</span></div>
                 <input type="range" id="voiceRepPen" min="1.0" max="3.0" step="0.1" value="2.0"
                   oninput="document.getElementById('vRepPenVal').textContent=(+this.value).toFixed(1)">
               </div>
@@ -256,6 +267,31 @@
               </select>
             </div>
             <div><label class="label">TÊN GIỌNG</label><input type="text" id="gtTen" placeholder="vd: Nam trầm kể chuyện" autocomplete="off"></div>
+
+            <!-- Ngôn ngữ giọng (2026-09-19k): lưu vào attributes.lang → giọng clone/
+                 thiết kế hiện ĐÚNG NHÓM NGÔN NGỮ trong mọi bộ lọc (Tạo giọng nói,
+                 Dựng Video, Lồng tiếng, Review). Trước đây giọng clone không có lang
+                 → bị coi là 'vi' kể cả khi mẫu là tiếng Anh. -->
+            <div style="margin-top:12px">
+              <label class="label">NGÔN NGỮ GIỌNG (để lọc theo ngôn ngữ ở các công cụ khác)</label>
+              <select id="gtLang">
+                <option value="vi">Tiếng Việt</option>
+                <option value="en">Tiếng Anh</option>
+                <option value="es">Tiếng Tây Ban Nha</option>
+                <option value="fr">Tiếng Pháp</option>
+                <option value="de">Tiếng Đức</option>
+                <option value="ru">Tiếng Nga</option>
+                <option value="zh">Tiếng Trung</option>
+                <option value="ja">Tiếng Nhật</option>
+                <option value="ko">Tiếng Hàn</option>
+                <option value="th">Tiếng Thái</option>
+                <option value="id">Tiếng Indonesia</option>
+                <option value="ms">Tiếng Mã Lai</option>
+                <option value="ar">Tiếng Ả Rập</option>
+                <option value="hi">Tiếng Hindi</option>
+                <option value="pt">Tiếng Bồ Đào Nha</option>
+              </select>
+            </div>
 
             <div id="gtClone" style="margin-top:12px">
             <label class="label">FILE GIỌNG MẪU (5–15 giây, wav/mp3)</label>

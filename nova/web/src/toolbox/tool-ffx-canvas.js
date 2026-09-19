@@ -11,15 +11,29 @@
       ffxCv* (module system của renderer — AGENTS.md §8). Tái dùng progress /
       pickOutput / setStatus của tool-ffx.js (nạp TRƯỚC file này). ── */
 
+/* ffxCvSetStatus — alias khai báo thiếu (bug lớp `_t7FxSw` mất khai báo, MEMORY 2026-09-19b):
+   12 call-site dưới đây đọc tên hàm không tồn tại ở bất kỳ đâu → ReferenceError lúc runtime.
+   Ký danh của `ffxSetStatus(id, text, isErr)` (tool-ffx.js, nạp TRƯỚC file này). */
+function ffxCvSetStatus(id, text, isErr) { ffxSetStatus(id, text, isErr); }
+
 /* Trạng thái editor: lớp phủ là { id, type, x, y, w, h (0..1), startSec, endSec, ...params } */
 var ffxCv = {
   path: '', vw: 0, vh: 0, dur: 0,
   ratio: 'original', zoom: 1, panX: 0, panY: 0,
   tool: 'select', blurStyle: 'pixelate',
+  proxy: false,   // ⚡ Proxy preview: dừng decode video khi kéo lớp (2026-09-19f)
   layers: [], selId: '', seq: 0,
   bg: '#000000',
+  bgType: 'solid', bgC1: '#1d4ed8', bgC2: '#f59e0b', bgDir: 'v', bgBlur: 30, bgDark: 35,
   frameW: 0, frameH: 0,
   drag: null,
+  /* Phụ đề theo phân đoạn (subtitleTrack — engine ovSubtitle* media-tools.js):
+     style là TRACK-LEVEL (không per-cue); cue = {s,e,text}; xuất = 1 chuỗi
+     drawtext nối phẩy đè trên mọi lớp. sel = index đang chọn, search = lọc. */
+  sub: {
+    cues: [], sel: -1, search: '',
+    style: { fontSizePct: 5, color: '#ffffff', bold: true, stroke: 2, strokeColor: '#000000', shadow: true, posPct: 0.86 },
+  },
 };
 
 function ffxCv$(id) { return document.getElementById(id); }
@@ -35,6 +49,10 @@ function ffxCvLabel(L) {
   if (L.type === 'blur') return 'Làm mờ · ' + ({ pixelate: 'Pixelate', blurStrip: 'Blur Strip', frostedGlass: 'Frosted Glass', gaussian: 'Gaussian', removeLogo: 'Remove Logo', removeSubtitle: 'Remove Subtitle' }[L.style] || L.style) + ' (' + pct + ')';
   if (L.type === 'text') return 'Chữ · "' + String(L.text || '').slice(0, 18) + '" (' + pct + ')';
   if (L.type === 'rect') return 'Khối màu (' + pct + ')';
+  if (L.type === 'media') return 'Media · ' + (L.path || '').split(/[\\/]/).pop().slice(0, 24) + ' (' + pct + ')';
+  if (L.type === 'filter') return 'Filter màu · ' + (L.preset || '?');
+  return L.type + ' (' + pct + ')';
+}
 /* ── Nhập video ── */
 async function ffxCvPickVideo() {
   try {
@@ -43,6 +61,8 @@ async function ffxCvPickVideo() {
     ffxCv.path = r.path;
     const v = ffxCv$('ffxCvVideo');
     v.src = 'avs-media://m/' + encodeURIComponent(r.path);
+    const bgv = ffxCv$('ffxCvVideoBg');
+    if (bgv) bgv.src = v.src; // cùng nguồn cho nền mờ (blur-fill)
     v.onloadedmetadata = () => {
       ffxCv.vw = v.videoWidth || 0; ffxCv.vh = v.videoHeight || 0;
       ffxCv.dur = Number.isFinite(v.duration) ? v.duration : 0;
@@ -103,6 +123,29 @@ function ffxCvZoomStep(dir) {
 }
 function ffxCvZoomReset100() { ffxCv.zoom = 1; ffxCv.panX = 0; ffxCv.panY = 0; ffxCvApplyView(); }
 
+/* ⚡ Proxy preview (2026-09-19f): tạm dừng decode video khi kéo/vẽ lớp — video 4K kéo mượt hơn nhiều.
+   Chỉ ảnh hưởng preview; xuất video luôn dùng nguồn gốc. */
+function ffxCvProxyToggle() {
+  ffxCv.proxy = !ffxCv.proxy;
+  const b = ffxCv$('ffxCvProxy');
+  if (b) b.classList.toggle('ffxCvToolOn', ffxCv.proxy);
+  ffxCvSetStatus('ffxCvExport', ffxCv.proxy
+    ? '⚡ Proxy BẬT — dừng hình khi kéo lớp để thao tác mượt (xuất vẫn nguồn gốc)'
+    : '⚡ Proxy TẮT — preview phát video bình thường', false);
+}
+function _ffxCvProxyPause() {
+  if (!ffxCv.proxy) return;
+  const v = ffxCv$('ffxCvVideo');
+  if (v && !v.paused) { ffxCv._proxyWasPlaying = true; try { v.pause(); } catch (e) {} }
+  else ffxCv._proxyWasPlaying = false;
+}
+function _ffxCvProxyResume() {
+  if (!ffxCv._proxyWasPlaying) return;
+  ffxCv._proxyWasPlaying = false;
+  const v = ffxCv$('ffxCvVideo');
+  if (v) { try { v.play().catch(() => {}); } catch (e) {} }
+}
+
 /* ── Chuyển tool (pill phải) ── */
 var ffxCvToolBtnIds = { select: 'ffxCvTSelect', hand: 'ffxCvTHand', text: 'ffxCvTText', rect: 'ffxCvTRect', filter: 'ffxCvTFilter', background: 'ffxCvTBackground' };
 
@@ -138,6 +181,31 @@ function ffxCvPickBlurStyle(style) {
 }
 
 /* ── Tạo / xoá lớp ── */
+/* Kích thước khung ĐÍCH khi xuất (mirror overlayCanvasSize của engine — dùng để
+   đổi offset px thành toạ độ chuẩn hoá, giữ preview khớp vùng mờ khi export). */
+function ffxCvExportSize() {
+  const vw = ffxCv.vw || 1280, vh = ffxCv.vh || 720;
+  if (ffxCv.ratio === 'original' || ffxCv.ratio === '') return { w: vw, h: vh };
+  const m = String(ffxCv.ratio).match(/^(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)$/);
+  if (!m || !(Number(m[1]) > 0) || !(Number(m[2]) > 0)) return { w: vw, h: vh };
+  const target = Number(m[1]) / Number(m[2]);
+  const base = Math.min(vw, vh);
+  return target >= 1 ? { w: Math.round(base * target), h: base } : { w: base, h: Math.round(base / target) };
+}
+
+/* Offset 4 mép (px trên khung đích) → x/y/w/h chuẩn hoá của lớp: kéo/thả và resize
+   trong preview luôn khớp tuyệt đối với vùng mờ engine tính từ ovStripRect. */
+function ffxCvSyncOffsetsToLayer(L) {
+  if (!L) return;
+  const S = ffxCvExportSize();
+  const cl = (v, lim) => Math.max(0, Math.min(Math.floor(lim / 3), Math.round(Number(v) || 0)));
+  const x = cl(L.offLeft, S.w), xr = cl(L.offRight, S.w);
+  const y = cl(L.offTop, S.h), yb = cl(L.offBottom, S.h);
+  if (!(x > 0 || xr > 0 || y > 0 || yb > 0)) return;
+  L.x = x / S.w; L.w = Math.max(0.005, (S.w - x - xr) / S.w);
+  L.y = y / S.h; L.h = Math.max(0.005, (S.h - y - yb) / S.h);
+}
+
 function ffxCvDefaultsFor(type) {
   if (type === 'blur') {
     // Mặc định ĐÚNG metadata ezmaxsub (Yc): pixelate 16, blurStrip 120/35, frosted 160/30, delogo 4/6.
@@ -251,8 +319,13 @@ function ffxCvStyleLayer(el, L) {
     }
   } else if (L.type === 'text') {
     const fs = Math.max(8, Math.round(((Number(L.fontSizePct) || 8) / 100) * ffxCv.frameH));
-    el.style.cssText += 'font-size:' + fs + 'px;color:' + (L.color || '#fff') + ';font-weight:' + (L.bold ? '700' : '400')
-      + ';text-shadow:0 1px 4px rgba(0,0,0,.7);display:flex;align-items:flex-start;overflow:hidden;white-space:pre-wrap;pointer-events:none';
+    const swp = Math.max(0, Math.min(20, Math.round(Number(L.stroke) || 0)));
+    const strokeCss = swp > 0 ? '-webkit-text-stroke:' + swp + 'px ' + (L.strokeColor || '#000') + ';' : '';
+    const shadowCss = (Number(L.shadow) > 0)
+      ? 'text-shadow:3px 3px 0 rgba(0,0,0,.65);' : 'text-shadow:0 1px 4px rgba(0,0,0,.7);';
+    el.style.cssText += 'font-size:' + fs + 'px;color:' + (L.color || '#fff') + ';font-weight:' + (L.bold ? '700' : '400') + ';'
+      + strokeCss + shadowCss
+      + 'display:flex;align-items:flex-start;overflow:hidden;white-space:pre-wrap;pointer-events:none';
     el.textContent = L.text || '';
   } else if (L.type === 'rect') {
     el.style.background = L.color || '#22c55e';
@@ -324,13 +397,13 @@ function ffxCvOnPointerDown(e) {
   if (handle && layerEl) {
     ffxCvSelect(layerEl.dataset.id);
     const L = ffxCvSelected();
-    if (L) ffxCv.drag = { mode: 'resize', dir: handle.dataset.dir, L, p0: p, r0: { x: L.x, y: L.y, w: L.w, h: L.h } };
+    if (L) { ffxCv.drag = { mode: 'resize', dir: handle.dataset.dir, L, p0: p, r0: { x: L.x, y: L.y, w: L.w, h: L.h } }; _ffxCvProxyPause(); }
     return;
   }
   if (layerEl && (ffxCv.tool === 'select' || ffxCv.tool === 'blur' || ffxCv.tool === 'rect')) {
     ffxCvSelect(layerEl.dataset.id);
     const L = ffxCvSelected();
-    if (L) ffxCv.drag = { mode: 'move', L, p0: p, r0: { x: L.x, y: L.y, w: L.w, h: L.h } };
+    if (L) { ffxCv.drag = { mode: 'move', L, p0: p, r0: { x: L.x, y: L.y, w: L.w, h: L.h } }; _ffxCvProxyPause(); }
     return;
   }
   if (ffxCv.tool === 'hand') {
@@ -339,6 +412,7 @@ function ffxCvOnPointerDown(e) {
   }
   if (ffxCv.tool === 'blur' || ffxCv.tool === 'rect') {
     ffxCv.drag = { mode: 'draw', type: ffxCv.tool, p0: p, ghost: null };
+    _ffxCvProxyPause();   // ⚡ proxy: dừng hình khi vẽ vùng
     const ghost = document.createElement('div');
     ghost.style.cssText = 'position:absolute;border:1.5px dashed #ffd27a;background:rgba(255,210,122,.15);pointer-events:none';
     ffxCv$('ffxCvOverlays').appendChild(ghost);
@@ -393,6 +467,7 @@ function ffxCvOnPointerMove(e) {
 function ffxCvOnPointerUp() {
   const d = ffxCv.drag;
   ffxCv.drag = null;
+  _ffxCvProxyResume();   // ⚡ proxy: kéo xong → phát lại như cũ
   if (!d) return;
   if (d.mode === 'draw') {
     if (d.ghost) d.ghost.remove();
@@ -420,6 +495,16 @@ function ffxCvPixelateTick() {
   if (cr > vr) { vh2 = fr.h; vw2 = fr.h * vr; vx = (fr.w - vw2) / 2; }
   else { vw2 = fr.w; vh2 = fr.w / vr; vy = (fr.h - vh2) / 2; }
   const pixLayers = ffxCv.layers.filter((L) => L.type === 'blur' && L.style === 'pixelate');
+  // Blur-sync SRT: ẩn/hiện lớp mờ theo từng cue (preview — export là enable expr)
+  const t = Number.isFinite(v.currentTime) ? v.currentTime : 0;
+  for (const L of ffxCv.layers) {
+    if (L.type !== 'blur' || !L.syncSrt || !Array.isArray(L.srtCues)) continue;
+    const el = host.querySelector('[data-id="' + L.id + '"]');
+    if (!el) continue;
+    const pad = Number(L.srtPad) || 0;
+    const active = L.srtCues.some((c) => t >= (c.s - pad) && t <= (c.e + pad));
+    el.style.visibility = active ? 'visible' : 'hidden';
+  }
   if (!pixLayers.length) { requestAnimationFrame(ffxCvPixelateTick); return; }
   for (const L of pixLayers) {
     const el = host.querySelector('canvas[data-pixelate="' + L.id + '"]');
@@ -493,6 +578,53 @@ function ffxCvAddFilterLayer() {
   ffxCvPropsShow(true); ffxCvPropsRender();
 }
 
+/* ── Blur-sync SRT: gắn phụ đề vào lớp mờ (mờ nhấp nháy theo từng cue) ──
+   Renderer parse để PREVIEW (theo cùng quy tắc ovParseSrt phía engine); export
+   gửi kèm srtCues đã parse — engine xác thực lại, sai → FFX_OV_SYNC lộ liễu. */
+function ffxCvParseSrtText(text) {
+  const raw = String(text == null ? '' : text).replace(/^\uFEFF/, '').replace(/\r/g, '');
+  const timeRe = /(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})\s*-->\s*(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})/;
+  const cues = [];
+  for (const b of raw.split(/\n{2,}/)) {
+    const line = b.split('\n').find((l) => timeRe.test(l));
+    if (!line) continue;
+    const m = line.match(timeRe);
+    const s = (Number(m[1]) * 3600) + (Number(m[2]) * 60) + Number(m[3]) + (Number(m[4]) / 1000);
+    const e = (Number(m[5]) * 3600) + (Number(m[6]) * 60) + Number(m[7]) + (Number(m[8]) / 1000);
+    if (!(s >= 0) || !(e > s)) throw new Error('FFX_OV_SRT_BAD: cue sai mốc — ' + line.trim());
+    cues.push({ s, e });
+  }
+  if (!cues.length) throw new Error('FFX_OV_SRT_BAD: không tìm thấy cue nào trong SRT');
+  return cues;
+}
+
+async function ffxCvBlurSyncPick() {
+  const L = ffxCvSelected();
+  if (!L || L.type !== 'blur') return;
+  try {
+    const r = await ffxCvNative().pickSrt();
+    if (!r || r.canceled || !r.path) return;
+    const b64 = await window.native.readFileB64(r.path);
+    const text = new TextDecoder().decode(Uint8Array.from(atob(String(b64)), (c) => c.charCodeAt(0)));
+    const cues = ffxCvParseSrtText(text);
+    if (cues.length > 400) throw new Error('FFX_OV_SYNC_MANY: SRT quá 400 cue (' + cues.length + ') — tách lớp làm nhiều lần xuất');
+    L.syncSrt = true; L.srtPath = r.path; L.srtCues = cues;
+    if (L.srtPad == null) L.srtPad = 0;
+    ffxCvPropsRender();
+    ffxCvSetStatus('ffxCvExport', 'Đã gắn SRT (' + cues.length + ' cue) — vùng mờ sẽ chỉ hiện theo từng câu', false);
+  } catch (e) {
+    L.syncSrt = false; L.srtCues = null; ffxCvPropsRender();
+    ffxCvSetStatus('ffxCvExport', '⚠ ' + (e.message || e), true);
+  }
+}
+
+function ffxCvBlurSyncClear() {
+  const L = ffxCvSelected();
+  if (!L || L.type !== 'blur') return;
+  L.syncSrt = false; L.srtCues = null; L.srtPath = '';
+  ffxCvPropsRender();
+}
+
 /* ── Khung thuộc tính (theo loại lớp đang chọn) ── */
 function ffxCvPropsShow(show) {
   const p = ffxCv$('ffxCvProps');
@@ -514,7 +646,21 @@ function ffxCvPropsRender() {
   const L = ffxCvSelected();
   let html = '';
   if (ffxCv.tool === 'background' && !L) {
-    html += ffxCvPropRow('Màu nền video (letterbox)', '<input type="color" id="ffxCvPropBg" value="' + ffxCv.bg + '" oninput="ffxCvSetBg(this.value)">');
+    const typeOpts = [['solid', 'Màu'], ['gradient', 'Gradient (2 màu)'], ['blur', 'Làm mờ video (nền TikTok)']]
+      .map((o) => '<option value="' + o[0] + '"' + (ffxCv.bgType === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('');
+    html += ffxCvPropRow('Kiểu nền', '<select id="ffxCvPropBgType" style="width:210px" onchange="ffxCvSetBackground(\'type\',this.value)">' + typeOpts + '</select>');
+    if (ffxCv.bgType === 'solid') {
+      html += ffxCvPropRow('Màu nền video (letterbox)', '<input type="color" value="' + ffxCv.bg + '" oninput="ffxCvSetBg(this.value)">');
+    } else if (ffxCv.bgType === 'gradient') {
+      const dirOpts = [['v', 'Dọc (trên → dưới)'], ['h', 'Ngang (trái → phải)'], ['d', 'Chéo']]
+        .map((o) => '<option value="' + o[0] + '"' + (ffxCv.bgDir === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('');
+      html += ffxCvPropRow('Màu 1', '<input type="color" value="' + ffxCv.bgC1 + '" oninput="ffxCvSetBackground(\'c1\',this.value)">')
+        + ffxCvPropRow('Màu 2', '<input type="color" value="' + ffxCv.bgC2 + '" oninput="ffxCvSetBackground(\'c2\',this.value)">')
+        + ffxCvPropRow('Hướng', '<select style="width:150px" onchange="ffxCvSetBackground(\'dir\',this.value)">' + dirOpts + '</select>');
+    } else {
+      html += ffxCvPropRow('Độ mờ (%)', '<input type="number" min="0" max="100" value="' + ffxCv.bgBlur + '" style="width:90px" oninput="ffxCvSetBackground(\'blur\',this.value)">')
+        + ffxCvPropRow('Phủ tối (%)', '<input type="number" min="0" max="90" value="' + ffxCv.bgDark + '" style="width:90px" oninput="ffxCvSetBackground(\'dark\',this.value)">');
+    }
   }
   if (L) {
     html += ffxCvPropRow('Bắt đầu (giây)', ffxCvPropInput('ffxCvPropStart', 'number', Number(L.startSec) || 0, 0, null, 0.1));
@@ -528,12 +674,32 @@ function ffxCvPropsRender() {
         if (L.style === 'frostedGlass') html += ffxCvPropRow('Hạt nhiễu', ffxCvPropInput('ffxCvPropFrostGrain', 'number', L.frostGrain, 0, 100, 1));
       }
       html += ffxCvPropRow('Mềm hoá (%)', ffxCvPropInput('ffxCvPropSoftness', 'number', Math.round((Number(L.softness) || 0) * 100), 0, 100, 5));
+      if (L.style !== 'removeLogo' && L.style !== 'removeSubtitle') {
+        // Offset 4 mép (px trên khung ĐÍCH) — dải mờ full-width kiểu ezmaxsub.
+        html += ffxCvPropRow('Lề trái / phải (px)',
+            '<input type="number" min="0" id="ffxCvPropOffL" value="' + (Number(L.offLeft) || 0) + '" style="width:64px"> '
+          + '<input type="number" min="0" id="ffxCvPropOffR" value="' + (Number(L.offRight) || 0) + '" style="width:64px">')
+          + ffxCvPropRow('Lề trên / dưới (px)',
+            '<input type="number" min="0" id="ffxCvPropOffT" value="' + (Number(L.offTop) || 0) + '" style="width:64px"> '
+          + '<input type="number" min="0" id="ffxCvPropOffB" value="' + (Number(L.offBottom) || 0) + '" style="width:64px">');
+        const syncInfo = L.syncSrt && Array.isArray(L.srtCues) && L.srtCues.length
+          ? '✅ ' + L.srtCues.length + ' cue' + (L.srtPath ? ' · ' + L.srtPath.split(/[\\/]/).pop() : '')
+          : '— chưa gắn';
+        html += ffxCvPropRow('Chạy theo phụ đề (SRT)',
+            '<button type="button" class="btn ghost sm" onclick="ffxCvBlurSyncPick()">🔄 Gắn SRT…</button> '
+          + '<button type="button" class="btn ghost sm" onclick="ffxCvBlurSyncClear()">Bỏ</button>')
+          + '<div style="font-size:10.5px;color:var(--text-muted)">' + syncInfo + '</div>'
+          + (L.syncSrt ? ffxCvPropRow('Đệm mỗi cue (±giây)', ffxCvPropInput('ffxCvPropSrtPad', 'number', Number(L.srtPad) || 0, 0, 5, 0.1)) : '');
+      }
     } else if (L.type === 'text') {
       html += '<div style="flex:1;min-width:200px"><label class="label" style="font-size:10.5px">Nội dung</label>'
         + '<textarea id="ffxCvPropText" rows="2" style="width:100%">' + String(L.text || '').replace(/</g, '&lt;') + '</textarea></div>'
         + ffxCvPropRow('Cỡ chữ (% khung)', ffxCvPropInput('ffxCvPropFontSize', 'number', L.fontSizePct, 2, 40, 0.5))
         + ffxCvPropRow('Màu', '<input type="color" id="ffxCvPropColor" value="' + (L.color || '#ffffff') + '">')
-        + ffxCvPropRow('Đậm', '<input type="checkbox" id="ffxCvPropBold"' + (L.bold ? ' checked' : '') + '>');
+        + ffxCvPropRow('Đậm', '<input type="checkbox" id="ffxCvPropBold"' + (L.bold ? ' checked' : '') + '>')
+        + ffxCvPropRow('Viền (px)', ffxCvPropInput('ffxCvPropStroke', 'number', Number(L.stroke) || 0, 0, 20, 1))
+        + ffxCvPropRow('Màu viền', '<input type="color" id="ffxCvPropStrokeColor" value="' + (L.strokeColor || '#000000') + '">')
+        + ffxCvPropRow('Bóng đổ', '<input type="checkbox" id="ffxCvPropShadow"' + (Number(L.shadow) > 0 ? ' checked' : '') + '>');
     } else if (L.type === 'rect') {
       html += ffxCvPropRow('Màu', '<input type="color" id="ffxCvPropColor" value="' + (L.color || '#22c55e') + '">')
         + ffxCvPropRow('Độ phủ (%)', ffxCvPropInput('ffxCvPropOpacity', 'number', Math.round((Number(L.opacity) != null ? L.opacity : 1) * 100), 5, 100, 5));
@@ -552,8 +718,43 @@ function ffxCvPropsRender() {
 
 function ffxCvSetBg(color) {
   ffxCv.bg = /^#[0-9a-fA-F]{6}$/.test(String(color)) ? color : '#000000';
+  ffxCvApplyBackgroundPreview();
+}
+
+/* Đặt 1 trường cấu hình nền (gọi inline từ props nền) */
+function ffxCvSetBackground(key, val) {
+  const k = String(key || '');
+  if (k === 'type') ffxCv.bgType = ['solid', 'gradient', 'blur'].indexOf(String(val)) >= 0 ? String(val) : 'solid';
+  else if (k === 'c1') ffxCv.bgC1 = /^#[0-9a-fA-F]{6}$/.test(String(val)) ? val : ffxCv.bgC1;
+  else if (k === 'c2') ffxCv.bgC2 = /^#[0-9a-fA-F]{6}$/.test(String(val)) ? val : ffxCv.bgC2;
+  else if (k === 'dir') ffxCv.bgDir = ['v', 'h', 'd'].indexOf(String(val)) >= 0 ? String(val) : 'v';
+  else if (k === 'blur') ffxCv.bgBlur = Math.max(0, Math.min(100, Number(val) || 0));
+  else if (k === 'dark') ffxCv.bgDark = Math.max(0, Math.min(90, Number(val) || 0));
+  ffxCvApplyBackgroundPreview();
+  ffxCvPropsRender(); // dựng lại để hiện đúng nhóm trường theo kiểu nền
+}
+
+/* Preview nền theo cấu hình (export tương ứng trong buildOverlayVf) */
+function ffxCvApplyBackgroundPreview() {
   const fr = ffxCv$('ffxCvFrame');
-  if (fr) fr.style.background = ffxCv.bg;
+  if (!fr) return;
+  const bgv = ffxCv$('ffxCvVideoBg');
+  const shade = ffxCv$('ffxCvBgShade');
+  if (ffxCv.bgType === 'gradient') {
+    const deg = ffxCv.bgDir === 'h' ? '90deg' : ffxCv.bgDir === 'd' ? '135deg' : '180deg';
+    fr.style.background = 'linear-gradient(' + deg + ', ' + ffxCv.bgC1 + ', ' + ffxCv.bgC2 + ')';
+  } else {
+    fr.style.background = ffxCv.bgType === 'solid' ? ffxCv.bg : '#000';
+  }
+  if (bgv) {
+    bgv.style.display = (ffxCv.bgType === 'blur') ? 'block' : 'none';
+    bgv.style.filter = 'blur(' + Math.max(2, Math.round((ffxCv.bgBlur / 100) * 40)) + 'px)';
+    if (ffxCv.bgType === 'blur' && ffxCv.path) bgv.play().catch(() => { /* autoplay bị chặn */ });
+  }
+  if (shade) {
+    shade.style.display = (ffxCv.bgType === 'blur' && ffxCv.bgDark > 0) ? 'block' : 'none';
+    shade.style.background = 'rgba(0,0,0,' + (ffxCv.bgDark / 100).toFixed(2) + ')';
+  }
 }
 
 /* Gắn sự kiện cho các input thuộc tính vừa render */
@@ -569,11 +770,19 @@ function ffxCvPropsWire(L) {
     bind('ffxCvPropStripDarkness', 'input', (e) => { L.stripDarkness = Math.max(0, Math.min(100, Number(e.target.value) || 0)); ffxCvRenderLayers(); });
     bind('ffxCvPropFrostGrain', 'input', (e) => { L.frostGrain = Math.max(0, Math.min(100, Number(e.target.value) || 0)); ffxCvRenderLayers(); });
     bind('ffxCvPropSoftness', 'input', (e) => { L.softness = Math.max(0, Math.min(1, (Number(e.target.value) || 0) / 100)); });
+    bind('ffxCvPropOffL', 'input', (e) => { L.offLeft = Math.max(0, Number(e.target.value) || 0); ffxCvSyncOffsetsToLayer(L); ffxCvRenderLayers(); });
+    bind('ffxCvPropOffR', 'input', (e) => { L.offRight = Math.max(0, Number(e.target.value) || 0); ffxCvSyncOffsetsToLayer(L); ffxCvRenderLayers(); });
+    bind('ffxCvPropOffT', 'input', (e) => { L.offTop = Math.max(0, Number(e.target.value) || 0); ffxCvSyncOffsetsToLayer(L); ffxCvRenderLayers(); });
+    bind('ffxCvPropOffB', 'input', (e) => { L.offBottom = Math.max(0, Number(e.target.value) || 0); ffxCvSyncOffsetsToLayer(L); ffxCvRenderLayers(); });
+    bind('ffxCvPropSrtPad', 'input', (e) => { L.srtPad = Math.max(0, Math.min(5, Number(e.target.value) || 0)); });
   } else if (L.type === 'text') {
     bind('ffxCvPropText', 'input', (e) => { L.text = e.target.value; ffxCvRenderLayers(); });
     bind('ffxCvPropFontSize', 'input', (e) => { L.fontSizePct = Math.max(2, Math.min(40, Number(e.target.value) || 8)); ffxCvRenderLayers(); });
     bind('ffxCvPropColor', 'input', (e) => { L.color = e.target.value; ffxCvRenderLayers(); });
     bind('ffxCvPropBold', 'change', (e) => { L.bold = !!e.target.checked; ffxCvRenderLayers(); });
+    bind('ffxCvPropStroke', 'input', (e) => { L.stroke = Math.max(0, Math.min(20, Number(e.target.value) || 0)); ffxCvRenderLayers(); });
+    bind('ffxCvPropStrokeColor', 'input', (e) => { L.strokeColor = e.target.value; ffxCvRenderLayers(); });
+    bind('ffxCvPropShadow', 'change', (e) => { L.shadow = e.target.checked ? 1 : 0; ffxCvRenderLayers(); });
   } else if (L.type === 'rect') {
     bind('ffxCvPropColor', 'input', (e) => { L.color = e.target.value; ffxCvRenderLayers(); });
     bind('ffxCvPropOpacity', 'input', (e) => { L.opacity = Math.max(0.05, Math.min(1, (Number(e.target.value) || 100) / 100)); ffxCvRenderLayers(); });
@@ -584,20 +793,210 @@ function ffxCvPropsWire(L) {
   }
 }
 
+/* ── Phụ đề theo phân đoạn (ffxCvSub*) — track style + danh sách cue:
+   nhập SRT / thêm cue tại kim giây / sửa trực tiếp / tìm kiếm / seek /
+   xuất SRT / preview chạy theo currentTime của <video>. Engine xác thực
+   lại toàn bộ ở phía burn (ovSubtitleValidate) — sai → FFX_SUB_* lộ liễu. ── */
+function ffxCvSubSrtTime(sec) {
+  const ms = Math.round(Math.max(0, Number(sec) || 0) * 1000);
+  const p2 = (n) => String(n).padStart(2, '0');
+  return p2(Math.floor(ms / 3600000)) + ':' + p2(Math.floor(ms / 60000) % 60) + ':' + p2(Math.floor(ms / 1000) % 60) + ',' + String(ms % 1000).padStart(3, '0');
+}
+function ffxCvSubFmt(sec) {
+  const t = Math.max(0, Number(sec) || 0);
+  return Math.floor(t / 60) + ':' + ('0' + (t % 60).toFixed(1)).slice(-4);
+}
+function ffxCvSubEsc(v) {
+  return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+/* Parse SRT GIỮ CHỮ (khác ffxCvParseSrtText của blur-sync — bản đó chỉ cần mốc
+   thời gian). Cùng luật mốc: ,/. đều nhận, BOM bỏ, cue thiếu chữ → lỗi lộ liễu. */
+function ffxCvSubParseSrt(text) {
+  const raw = String(text == null ? '' : text).replace(/^\uFEFF/, '').replace(/\r/g, '');
+  const timeRe = /(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})\s*-->\s*(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})/;
+  const cues = [];
+  for (const b of raw.split(/\n{2,}/)) {
+    const lines = b.split('\n');
+    const ti = lines.findIndex((l) => timeRe.test(l));
+    if (ti < 0) continue;
+    const m = lines[ti].match(timeRe);
+    const s = (Number(m[1]) * 3600) + (Number(m[2]) * 60) + Number(m[3]) + (Number(m[4]) / 1000);
+    const e = (Number(m[5]) * 3600) + (Number(m[6]) * 60) + Number(m[7]) + (Number(m[8]) / 1000);
+    const body = lines.slice(ti + 1).join(' ').replace(/<[^>]+>/g, '').trim();
+    if (!(s >= 0) || !(e > s) || !body) throw new Error('FFX_SUB_CUE: cue sai mốc hoặc thiếu chữ — ' + lines[ti].trim());
+    cues.push({ s, e, text: body });
+  }
+  if (!cues.length) throw new Error('FFX_SUB_EMPTY: SRT không có phân đoạn nào');
+  return cues;
+}
+async function ffxCvSubPickSrt() {
+  try {
+    if (!ffxCv.path) { ffxCvSetStatus('ffxCvExport', '⚠ Nhập video trước khi nhập SRT', true); return; }
+    const r = await ffxCvNative().pickSrt();
+    if (!r || r.canceled || !r.path) return;
+    const b64 = await window.native.readFileB64(r.path);
+    const text = new TextDecoder().decode(Uint8Array.from(atob(String(b64)), (ch) => ch.charCodeAt(0)));
+    const cues = ffxCvSubParseSrt(text);
+    if (cues.length > 500) throw new Error('FFX_SUB_MANY: SRT quá 500 phân đoạn (' + cues.length + ') — tách file');
+    ffxCv.sub.cues = cues; ffxCv.sub.sel = -1;
+    ffxCvSubRender();
+    ffxCvSetStatus('ffxCvExport', 'Đã nhập ' + cues.length + ' phân đoạn từ ' + r.path.split(/[\\/]/).pop(), false);
+  } catch (e) {
+    ffxCvSetStatus('ffxCvExport', '⚠ ' + (e.message || e), true);
+  }
+}
+function ffxCvSubAddAtPlayhead() {
+  if (!ffxCv.path) { ffxCvSetStatus('ffxCvExport', '⚠ Nhập video trước khi thêm phân đoạn', true); return; }
+  const v = ffxCv$('ffxCvVideo');
+  const t = Math.max(0, Math.min(ffxCv.dur > 0.5 ? ffxCv.dur - 0.5 : 3600, (v && Number.isFinite(v.currentTime)) ? v.currentTime : 0));
+  const end = Math.min(ffxCv.dur > 0 ? ffxCv.dur : t + 3, t + 3);
+  ffxCv.sub.cues.push({ s: t, e: Math.max(end, t + 0.5), text: 'Nhập phụ đề…' });
+  ffxCv.sub.sel = ffxCv.sub.cues.length - 1;
+  ffxCvSubRender();
+  const list = ffxCv$('ffxCvSubList');
+  const last = list && list.querySelector('input[type="text"]');
+  if (last) { last.focus(); last.select(); }
+}
+function ffxCvSubUpdateField(i, f, v) {
+  const c = ffxCv.sub.cues[i]; if (!c) return;
+  if (f === 'text') { c.text = String(v == null ? '' : v).replace(/\s*\n\s*/g, ' '); return; }
+  if (f === 's' || f === 'e') {
+    let n = Number(v); if (!Number.isFinite(n)) return;
+    if (ffxCv.dur > 0) n = Math.min(n, ffxCv.dur);
+    if (f === 's') c.s = Math.max(0, Math.min(n, c.e - 0.1));
+    else c.e = Math.max(c.s + 0.1, n);
+  }
+}
+function ffxCvSubDelete(i) {
+  ffxCv.sub.cues.splice(i, 1);
+  if (ffxCv.sub.sel >= ffxCv.sub.cues.length) ffxCv.sub.sel = ffxCv.sub.cues.length - 1;
+  ffxCvSubRender();
+}
+function ffxCvSubSeek(i) {
+  const c = ffxCv.sub.cues[i]; if (!c) return;
+  ffxCv.sub.sel = i;
+  const v = ffxCv$('ffxCvVideo');
+  if (v && Number.isFinite(c.s)) { try { v.currentTime = c.s + 0.01; } catch (e) { /* seek trước khi metadata sẵn sàng — kim giây sẽ tự tới */ } }
+  const list = ffxCv$('ffxCvSubList');
+  const row = list && list.querySelector('[data-idx="' + i + '"]');
+  if (row) row.scrollIntoView({ block: 'nearest' });
+}
+function ffxCvSubSearchSet(v) { ffxCv.sub.search = String(v == null ? '' : v); ffxCvSubRender(); }
+function ffxCvSubStyleSet(k, v) {
+  const st = ffxCv.sub.style;
+  if (k === 'fontSizePct') { const n = Number(v); st.fontSizePct = Math.max(2, Math.min(20, Number.isFinite(n) ? n : 5)); }
+  else if (k === 'stroke') { const n = Number(v); st.stroke = Math.max(0, Math.min(8, Number.isFinite(n) ? Math.round(n) : 2)); }
+  else if (k === 'posPct') { const n = Number(v); st.posPct = Math.max(2, Math.min(98, Number.isFinite(n) ? n : 86)) / 100; }
+  else if (k === 'color' || k === 'strokeColor') st[k] = String(v || '#ffffff');
+  else if (k === 'bold' || k === 'shadow') st[k] = !!v;
+  ffxCvSubRender();
+}
+
+function ffxCvSubRender() {
+  const list = ffxCv$('ffxCvSubList');
+  if (!list) return;
+  const cues = ffxCv.sub.cues;
+  const count = ffxCv$('ffxCvSubCount');
+  if (count) count.textContent = cues.length ? cues.length + ' phân đoạn' : 'chưa có phân đoạn';
+  const bar = ffxCv$('ffxCvSubStyleBar');
+  if (bar) bar.style.display = cues.length ? 'flex' : 'none';
+  list.innerHTML = '';
+  if (!cues.length) {
+    list.innerHTML = '<div style="padding:9px 12px;font-size:11.5px;color:var(--text-muted)">Chưa có phân đoạn nào — nhập file SRT hoặc bấm "＋ Thêm cue tại kim giây". Phụ đề được đốt lên video khi xuất.</div>';
+    return;
+  }
+  const q = (ffxCv.sub.search || '').toLowerCase();
+  const dur = ffxCv.dur > 0 ? ffxCv.dur : 36000;
+  cues.forEach((c, i) => {
+    if (q && !((c.text || '').toLowerCase().includes(q) || String(c.s).includes(q) || String(c.e).includes(q))) return;
+    const row = document.createElement('div');
+    row.className = 'ffxCvSubRow';
+    row.dataset.idx = i;
+    row.innerHTML =
+      '<button type="button" class="ffxCvSubGo" title="Nhảy tới phân đoạn này" onclick="ffxCvSubSeek(' + i + ')">▶</button>'
+      + '<input type="number" step="0.1" min="0" max="' + dur + '" value="' + c.s + '" title="Bắt đầu (giây)" oninput="ffxCvSubUpdateField(' + i + ',\x27s\x27,this.value)">'
+      + '<input type="number" step="0.1" min="0" max="' + dur + '" value="' + c.e + '" title="Kết thúc (giây)" oninput="ffxCvSubUpdateField(' + i + ',\x27e\x27,this.value)">'
+      + '<input type="text" value="' + ffxCvSubEsc(c.text) + '" placeholder="Nội dung…" oninput="ffxCvSubUpdateField(' + i + ',\x27text\x27,this.value)">'
+      + '<span class="ffxCvSubDur" title="Khoảng thời gian">' + ffxCvSubFmt(c.s) + '–' + ffxCvSubFmt(c.e) + '</span>'
+      + '<button type="button" class="ffxCvSubGo" title="Xoá phân đoạn" onclick="ffxCvSubDelete(' + i + ')">🗑</button>';
+    list.appendChild(row);
+  });
+}
+async function ffxCvSubExportSrt() {
+  if (!ffxCv.sub.cues.length) { ffxCvSetStatus('ffxCvExport', '⚠ Chưa có phân đoạn phụ đề nào để xuất', true); return; }
+  try {
+    const srt = ffxCv.sub.cues
+      .map((c, i) => (i + 1) + '\n' + ffxCvSubSrtTime(c.s) + ' --> ' + ffxCvSubSrtTime(c.e) + '\n' + String(c.text || '').replace(/\n/g, ' ') + '\n')
+      .join('\n');
+    const base = ffxCv.path ? ffxStripExt(ffxBaseName(ffxCv.path)) : 'phu-de';
+    const out = await ffxPickOutput(base + '-subs.srt', 'ffxCvExport');
+    if (!out) return;
+    const b64 = btoa(unescape(encodeURIComponent(srt)));
+    const r = await window.native.saveFile({ dir: ffxDirOf(out), name: ffxBaseName(out), base64: b64 });
+    if (!r || r.error) throw new Error((r && r.error) || 'Không ghi được file SRT');
+    ffxCvSetStatus('ffxCvExport', '✅ Đã xuất SRT: ' + r.path, false);
+  } catch (e) {
+    ffxCvSetStatus('ffxCvExport', '⚠ ' + (e.message || e), true);
+  }
+}
+/* Preview chạy theo kim giây (rAF riêng — không đụng vòng pixelate của lớp):
+   đúng hình học engine: y = posPct·H − fontSize/2, căn giữa ngang. */
+var ffxCvSubLastIdx = -2;
+function ffxCvSubTick() {
+  const pv = ffxCv$('ffxCvSubPreview');
+  if (pv) {
+    const cues = ffxCv.sub.cues;
+    const v = ffxCv$('ffxCvVideo');
+    const t = (v && Number.isFinite(v.currentTime)) ? v.currentTime : 0;
+    let idx = -1;
+    for (let i = 0; i < cues.length; i++) { if (t >= cues[i].s && t <= cues[i].e) { idx = i; break; } }
+    const frame = ffxCv$('ffxCvFrame');
+    if (idx >= 0) {
+      const c = cues[idx]; const st = ffxCv.sub.style;
+      const fs = Math.max(8, Math.round((st.fontSizePct / 100) * ((frame && frame.clientHeight) || 360)));
+      pv.style.display = 'block';
+      pv.textContent = c.text || '';
+      pv.style.fontSize = fs + 'px';
+      pv.style.top = 'calc(' + Math.round(st.posPct * 100) + '% - ' + Math.round(fs / 2) + 'px)';
+      pv.style.color = st.color || '#ffffff';
+      pv.style.fontWeight = st.bold ? '700' : '400';
+      const sw = Math.max(0, Number(st.stroke) || 0);
+      const sc = st.strokeColor || '#000000';
+      pv.style.textShadow = (sw > 0 ? (sw + 1) + 'px ' + (sw + 1) + 'px 0 ' + sc + ', -' + sw + 'px ' + sw + 'px 0 ' + sc + ', ' + sw + 'px -' + sw + 'px 0 ' + sc + ', -' + sw + 'px -' + sw + 'px 0 ' + sc : '')
+        + (st.shadow ? ((sw > 0 ? ', ' : '') + '2px 2px 3px rgba(0,0,0,.65)') : '');
+    } else {
+      pv.style.display = 'none';
+      pv.textContent = '';
+    }
+    if (idx !== ffxCvSubLastIdx) {
+      ffxCvSubLastIdx = idx;
+      const list = ffxCv$('ffxCvSubList');
+      if (list) list.querySelectorAll('[data-idx]').forEach((el) => { el.classList.toggle('on', Number(el.dataset.idx) === idx); });
+    }
+  }
+  requestAnimationFrame(ffxCvSubTick);
+}
+requestAnimationFrame(ffxCvSubTick);
+
+
 /* ── Xuất video: burn toàn bộ lớp phủ qua IPC ffx:overlay-burn ── */
 async function ffxCvExport() {
   if (!ffxCv.path) { ffxCvSetStatus('ffxCvExport', '⚠ Chưa nhập video', true); return; }
-  if (!ffxCv.layers.length && ffxCv.ratio === 'original') {
-    ffxCvSetStatus('ffxCvExport', '⚠ Chưa có lớp phủ nào và tỷ lệ giữ nguyên — không có gì để ghép', true);
+  if (!ffxCv.layers.length && !ffxCv.sub.cues.length && ffxCv.ratio === 'original'
+    && !(ffxCv.bgType === 'gradient' || ffxCv.bgType === 'blur')) {
+    ffxCvSetStatus('ffxCvExport', '⚠ Chưa có lớp phủ/phụ đề nào và tỷ lệ giữ nguyên — không có gì để ghép', true);
     return;
   }
   const statusId = 'ffxCvExport';
   try {
     const out = await ffxPickOutput(ffxStripExt(ffxBaseName(ffxCv.path)) + '-edit.mp4', statusId);
     if (!out) return;
+    const background = (ffxCv.bgType === 'solid')
+      ? ffxCv.bg
+      : { type: ffxCv.bgType, color: ffxCv.bg, c1: ffxCv.bgC1, c2: ffxCv.bgC2, dir: ffxCv.bgDir, blurRadius: ffxCv.bgBlur, darkness: ffxCv.bgDark };
     const payload = {
       inputPath: ffxCv.path, outputPath: out,
-      ratio: ffxCv.ratio, background: ffxCv.bg,
+      ratio: ffxCv.ratio, background,
       overlays: ffxCv.layers.map((L) => ({
         type: L.type, x: L.x, y: L.y, w: L.w, h: L.h,
         startSec: Number(L.startSec) || 0, endSec: Number(L.endSec) || 0,
@@ -606,13 +1005,32 @@ async function ffxCvExport() {
         delogoBand: L.delogoBand, text: L.text, fontSizePct: L.fontSizePct,
         color: L.color, bold: L.bold, opacity: L.opacity, preset: L.preset,
         mediaKind: L.mediaKind, path: L.path, volume: L.volume,
+        offLeft: Number(L.offLeft) || 0, offRight: Number(L.offRight) || 0,
+        offTop: Number(L.offTop) || 0, offBottom: Number(L.offBottom) || 0,
+        syncSrt: !!L.syncSrt, srtCues: L.syncSrt ? L.srtCues : null, srtPad: Number(L.srtPad) || 0,
+        stroke: Number(L.stroke) || 0, strokeColor: L.strokeColor || '#000000', shadow: Number(L.shadow) || 0,
       })),
+      /* Phụ đề theo phân đoạn — engine xác thực (ovSubtitleValidate), sai → FFX_SUB_* */
+      subtitleTrack: ffxCv.sub.cues.length ? {
+        cues: ffxCv.sub.cues.map((c) => ({ s: Number(c.s) || 0, e: Number(c.e) || 0, text: String(c.text || '') })),
+        style: {
+          fontSizePct: Number(ffxCv.sub.style.fontSizePct) || 5,
+          color: ffxCv.sub.style.color || '#ffffff',
+          bold: !!ffxCv.sub.style.bold,
+          stroke: Number(ffxCv.sub.style.stroke) || 0,
+          strokeColor: ffxCv.sub.style.strokeColor || '#000000',
+          shadow: !!ffxCv.sub.style.shadow,
+          posPct: Number(ffxCv.sub.style.posPct) || 0.86,
+        },
+      } : null,
     };
     ffxActiveStatus = statusId; ffxShowProgress(statusId);
     ffxSetStatus(statusId, '⏳ Đang ghép hiệu ứng…', false);
     const r = await ffxCvNative().overlayBurn(payload);
     if (!r || r.error) throw new Error((r && r.error) || 'FFX_OV: không nhận được kết quả');
-    ffxSetStatus(statusId, '✅ Đã xuất: ' + r.path + ' (' + r.width + '×' + r.height + (r.audioMix ? ' · đã trộn âm thanh ngoài' : '') + ')', false);
+    ffxSetStatus(statusId, '✅ Đã xuất: ' + r.path + ' (' + r.width + '×' + r.height
+      + (r.subs ? ' · ' + r.subs + ' phân đoạn phụ đề' : '')
+      + (r.audioMix ? ' · đã trộn âm thanh ngoài' : '') + ')', false);
   } catch (e) {
     const cancelled = e && e.cancelled;
     ffxSetStatus(statusId, cancelled ? 'Đã huỷ' : '⚠ ' + (e.message || e), !cancelled);
@@ -646,7 +1064,3 @@ async function ffxCvExport() {
   });
 })();
 
-  if (L.type === 'media') return 'Media · ' + (L.path || '').split(/[\\/]/).pop().slice(0, 24) + ' (' + pct + ')';
-  if (L.type === 'filter') return 'Filter màu · ' + (L.preset || '?');
-  return L.type + ' (' + pct + ')';
-}

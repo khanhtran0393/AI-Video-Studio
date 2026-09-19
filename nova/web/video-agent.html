@@ -116,13 +116,29 @@
     el('label', {}, el('input', { id: 'optForce', type: 'checkbox' }), 'Upload cả khi final QA fail'),
     el('label', {}, 'Auto-fix tối đa ', el('input', { id: 'optMax', type: 'number', value: '5', style: 'width:48px' }), ' lần'),
   ));
+  // Nguồn cảnh = video gen Flow (PT1+PT3+PT4): mỗi cảnh 1 clip Flow ~8s, chuẩn hoá về đúng
+  // thời lượng TTS, chain khung cuối cho clip kế. Chi tiết trong nova/video-agent/flow-video/.
+  cfg.append(el('div', { class: 'row' },
+    el('label', {}, el('input', { id: 'optFlowVideo', type: 'checkbox' }), '🎬 Nền cảnh = video gen Flow'),
+    el('label', {}, 'giây/clip ', el('input', { id: 'optFlowSecs', type: 'number', value: '8', min: '4', max: '8', style: 'width:52px' })),
+    el('label', {}, 'Khung ', (() => {
+      const s = el('select', { id: 'optFlowAspect' });
+      [['auto', 'tự theo spec'], ['landscape', '16:9'], ['portrait', '9:16'], ['square', '1:1']]
+        .forEach(([v, t]) => s.append(el('option', { value: v }, t)));
+      return s;
+    })()),
+  ));
+  cfg.append(el('div', { class: 'row' },
+    el('label', {}, el('input', { id: 'optFlowChain', type: 'checkbox', checked: '' }), 'Nối liền mạch (khung cuối → reference clip kế)'),
+    el('label', {}, el('input', { id: 'optFlowRef', type: 'checkbox', checked: '' }), 'Dùng ảnh nền làm khung đầu clip 1'),
+  ));
   cfg.append(el('div', { class: 'row' },
     el('button', { class: 'secondary', onclick: () => loadVersions() }, 'Nạp versions'),
     el('span', { id: 'versionCount', class: 'meta' }, '—'),
   ));
 
   // ── 02 Tiến trình ──
-  const prog = panel('02', 'Tiến trình (17 state)');
+  const prog = panel('02', 'Tiến trình (18 state)');
   const eventList = el('ul');
   prog.append(eventList);
 
@@ -271,6 +287,14 @@
       skipPreview: document.getElementById('optSkip').checked,
       forceUpload: document.getElementById('optForce').checked,
       maxAutoFixAttempts: Number(document.getElementById('optMax').value) || 5,
+      // Video gen Flow làm nền cảnh (PT1+PT3+PT4) — orchestrator tự bỏ qua khi enabled=false.
+      flowVideo: {
+        enabled: document.getElementById('optFlowVideo').checked,
+        clipSecs: Number(document.getElementById('optFlowSecs').value) || 8,
+        aspect: document.getElementById('optFlowAspect').value || 'auto',
+        chainLastFrame: document.getElementById('optFlowChain').checked,
+        useRefImage: document.getElementById('optFlowRef').checked,
+      },
     };
     const r = await native.run({ projectDir: dir, options });
     acceptingEvents = false; if (r.jobId) jobId = r.jobId;

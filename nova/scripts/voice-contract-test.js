@@ -140,12 +140,17 @@ assert(!novaWeb.includes('ai:ttsGenerate'),
 //  mà test cũ vẫn xanh. Đó là fallback ngầm kiểu Luật 10.)
 assert(novaWeb.includes('async function giongXoa(key)'), 'UI phải có hàm xóa giọng clone');
 assert(novaWeb.includes('async function _giongFetchJson(url, opt)'), 'UI phải kiểm tra HTTP khi gọi Voice API');
-assert(novaWeb.includes('class="btn sm ghost gdel"') && novaWeb.includes('>Xoá</button>'),
-  'mục dropdown giọng phải có nút Xoá cho giọng clone');
-assert(novaWeb.includes("giongXoa('${escapeHtml(v.key)}')"),
-  'nút Xoá phải gọi giongXoa() với key giọng (hàm không được mồ côi)');
-assert(/v\.factory\s*\?\s*''\s*:\s*`<button[^`]*giongXoa\(/.test(novaWeb),
-  'chỉ giọng KHÔNG nhà máy mới được render nút Xoá');
+// (2026-09-19l) Nút Sửa + Xoá cùng nằm trong `const quanLy` với MỘT guard factory:
+// giọng KHÔNG-factory mới có cả hai nút — Sửa gọi giongSua() (PATCH /api/voices/{id}),
+// Xoá gọi giongXoa(). Kiểm bằng call site + guard, không chỉ "hàm tồn tại".
+assert(novaWeb.includes('>Sửa</button>') && novaWeb.includes('>Xoá</button>'),
+  'mục dropdown giọng phải có nút Sửa + Xoá cho giọng clone');
+assert(novaWeb.includes("giongSua('${escapeHtml(v.key)}')") && novaWeb.includes("giongXoa('${escapeHtml(v.key)}')"),
+  'nút Sửa/Xoá phải gọi giongSua()/giongXoa() với key giọng (hàm không được mồ côi)');
+assert(/v\.factory\s*\?\s*''\s*:\s*`<button[^`]*giongSua\(/.test(novaWeb),
+  'chỉ giọng KHÔNG nhà máy mới được render nút Sửa/Xoá (guard factory chung)');
+assert(/giongSua\('(?:[^']*)'\)[^`]*>[^<]*Sửa<\/button>/.test(novaWeb.replace(/&apos;/g, "'")),
+  'nút Sửa phải gọi giongSua() đúng tham số key');
 assert(novaWeb.includes('Không xoá được giọng có sẵn'), 'UI phải chặn xóa giọng nhà máy');
 const voicebankSrc = read('voice-backend/backend/voicebank.py');
 const appSrc = read('voice-backend/backend/app.py');

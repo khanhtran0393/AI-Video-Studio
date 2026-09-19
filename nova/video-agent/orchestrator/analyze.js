@@ -12,6 +12,28 @@ const { validateVideoSpec } = require('../video-spec/schema');
 const { VersionStore } = require('../versioning/store');
 const { createDefaultGateway, createPlanningAdapters } = require('../ai-gateway');
 const { autoSynthesizeTts } = require('../tts/synthesize');
+const { generateSceneVideos } = require('../flow-video/generate');
+
+/* ── Stage GENERATING_SCENE_VIDEOS (PT1+PT3+PT4 — video gen Flow làm nền cảnh). Chỉ chạy
+ * khi options.flowVideo.enabled. Sinh 1 clip Flow/scene (PT3 đã gom câu thành scene ~8s),
+ * chuẩn hoá PT1 về ĐÚNG thời lượng cảnh (TTS master clock), chain khung cuối PT4, push
+ * asset type 'video' vào manifest + đè background của visual plan → buildVideoSpec dùng
+ * video làm nền. Lỗi → VA_FLOW_* lộ liễu (không fallback về ảnh tĩnh — Luật 10). ── */
+async function maybeGenerateSceneVideos({ storyPlan, visualPlan, manifest, prj, projectDir, options, ctx, adapters, signal }) {
+  if (!(options.flowVideo && options.flowVideo.enabled)) return null;
+  const fv = await ctx.step('GENERATING_SCENE_VIDEOS', () => generateSceneVideos({
+    storyPlan, visualPlan, manifest, options, config: prj.config,
+    rootDir: prj.root || projectDir, signal,
+    report: ctx.report || null, genVideo: adapters.flowGenVideo || null,
+  }), { timeoutMs: Number(options.flowVideo.stageTimeoutMs) || Number(options.stageTimeoutMs) || 60 * 60 * 1000 });
+  manifest.assets.push(...fv.assets);
+  fv.overrides.forEach((assetId, i) => {
+    if (visualPlan.scenes[i]) visualPlan.scenes[i].visuals.background = assetId;
+  });
+  // Khai báo hệ số normalize PT1 vào storyPlan (Luật 10 — mọi quyết định có vết).
+  if (fv.plans.length) storyPlan.flowVideoPlans = fv.plans;
+  return fv;
+}
 
 async function runAnalysis(projectDir, ctx) {
   const { step, adapters = {}, options = {}, signal } = ctx;
@@ -34,9 +56,11 @@ async function runAnalysis(projectDir, ctx) {
   });
   const manifest = await step('ANALYZING_ASSETS', () => buildAssetManifest(prj, { analyzeAsset: adapters.analyzeAsset }));
   await step('PROCESSING_ASSETS', () => Promise.resolve(manifest.assets.filter(a => a.type === 'character' || a.type === 'background').length));
-  const storyPlan = await step('BUILDING_STORY_PLAN', () => buildStoryPlan(script, tts));
+  const storyPlan = await step('BUILDING_STORY_PLAN', () => buildStoryPlan(script, tts, options));
   const visualPlan = await step('BUILDING_VISUAL_PLAN', () => buildVisualPlan(storyPlan, manifest, prj.config,
     { planVisual: adapters.planVisual || planners.planVisual }));
+  // PT1+PT3+PT4: video gen Flow làm nền (chỉ khi options.flowVideo.enabled — không đụng luồng cũ).
+  await maybeGenerateSceneVideos({ storyPlan, visualPlan, manifest, prj, projectDir, options, ctx, adapters, signal });
   let spec = await step('BUILDING_VIDEO_SPEC', async () => {
     const built = buildVideoSpec({ storyPlan, visualPlan, manifest, config: prj.config, audio: { voice: prj.files.ttsAudio || '' } });
     built.behaviors = await (adapters.planBehaviors || planners.planBehaviors)(built);
@@ -172,10 +196,11 @@ async function runAnalysisFromData(inputData, ctx) {
 
   await step('PROCESSING_ASSETS', () => Promise.resolve(manifest.assets.filter(a => a.type === 'character' || a.type === 'background').length));
 
-  const storyPlan = await step('BUILDING_STORY_PLAN', () => buildStoryPlan(script, tts));
+  const storyPlan = await step('BUILDING_STORY_PLAN', () => buildStoryPlan(script, tts, options));
   const visualPlan = await step('BUILDING_VISUAL_PLAN', () => buildVisualPlan(storyPlan, manifest, prj.config,
     { planVisual: adapters.planVisual || planners.planVisual }));
-
+  // PT1+PT3+PT4: video gen Flow làm nền (chỉ khi options.flowVideo.enabled — không đụng luồng cũ).
+  await maybeGenerateSceneVideos({ storyPlan, visualPlan, manifest, prj, projectDir: inputData.rootDir, options, ctx, adapters, signal });
   let spec = await step('BUILDING_VIDEO_SPEC', async () => {
     const built = buildVideoSpec({ storyPlan, visualPlan, manifest, config: prj.config, audio: { voice: prj.files.ttsAudio || '' } });
     built.behaviors = await (adapters.planBehaviors || planners.planBehaviors)(built);

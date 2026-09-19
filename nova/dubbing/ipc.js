@@ -107,7 +107,16 @@ function registerDubbingIpc(ipcMain, { getState } = {}) {
       const r = await fetch(url + '/api/voices', { method: 'GET' });
       const j = await r.json();
       const voices = (Array.isArray(j && j.voices) ? j.voices : [])
-        .map((v) => ({ pid: v.pid || v.id || '', name: v.name || v.title || v.pid || v.id || 'giọng', engine: v.engine || '' }))
+        .map((v) => ({
+          pid: v.pid || v.id || '',
+          name: v.name || v.title || v.pid || v.id || 'giọng',
+          engine: v.engine || '',
+          // Dữ liệu lọc cho renderer (giữ từ 2026-09-19j): ngôn ngữ giọng + cờ
+          // giọng có sẵn. Giọng clone thường không có attributes.lang → lang rỗng
+          // = "không rõ" — KHÔNG bịa ngôn ngữ (Luật 10).
+          lang: String((v.attributes && v.attributes.lang) || ''),
+          isFactory: !!v.is_factory,
+        }))
         .filter((v) => v.pid);
       return { ok: true, voices, count: voices.length };
     } catch (err) { return { ok: false, error: errOf(err), code: codeOf(err) }; }
@@ -182,11 +191,32 @@ function registerDubbingIpc(ipcMain, { getState } = {}) {
       const origVolume = Math.max(0, Math.min(1, Number(p.origVolume) || 0.25));
       const translateTo = String(p.translateTo || '').trim();
       const genre = String(p.genre || '').trim(); // preset thể loại khi có dịch AI (2026-09-18)
+      /* (2026-09-19u) Tốc độ đọc tổng thể 0.5–2.0× — truyền thẳng vào TTS
+         (backend OmniVoice speed), NẰM TRONG key cache (ttsCacheKey). */
+      const ttsSpeedRaw = Number(p.ttsSpeed);
+      const ttsSpeed = (Number.isFinite(ttsSpeedRaw) && ttsSpeedRaw > 0) ? ttsSpeedRaw : 1;
+      if (ttsSpeed < 0.5 || ttsSpeed > 2) throw errCode('DUB_TTS_SPEED', 'Tốc độ đọc phải trong khoảng 0.5 – 2.0× (đang: ' + ttsSpeed + ').');
       const speakerMode = !!p.speakerMode;
       const speakerVoiceList = Array.isArray(p.speakerVoices)
         ? p.speakerVoices.map((v) => String(v || '').trim()).filter(Boolean) : [];
+      /* (2026-09-19u) Gán giọng TAY theo nhân vật: {tên → pid}. Sai kiểu →
+         DUB_SPEAKER_MAP lộ liễu (engine xác thực chi tiết từng entry). */
+      const speakerVoiceMap = (p.speakerVoiceMap === undefined || p.speakerVoiceMap === null) ? null
+        : (typeof p.speakerVoiceMap === 'object' && !Array.isArray(p.speakerVoiceMap)) ? p.speakerVoiceMap
+        : (() => { throw errCode('DUB_SPEAKER_MAP', 'speakerVoiceMap phải là object {tên nhân vật → pid giọng}.'); })();
       const musicPath = String(p.musicPath || '').trim();
       if (musicPath && !fs.existsSync(musicPath)) throw errCode('DUB_MUSIC_MISSING', 'File nhạc nền không tồn tại: ' + musicPath);
+      /* (2026-09-19u) Nguồn nhạc nền: ''/none = không nhạc; file = musicPath
+         (hành vi cũ); original = TÁCH nhạc nền từ tiếng gốc của video (karaoke
+         center-cancel qua media-tools.removeVocals) — giọng gốc bị bỏ, chỉ giữ
+         phần nhạc. Xung đột cấu hình → lỗi lộ liễu, không tự chọn hộ. */
+      const musicSourceRaw = String(p.musicSource || '').trim();
+      if (musicSourceRaw && musicSourceRaw !== 'file' && musicSourceRaw !== 'original' && musicSourceRaw !== 'none') {
+        throw errCode('DUB_MUSIC_SOURCE', 'Nguồn nhạc nền phải là: none | file | original (đang: "' + musicSourceRaw + '").');
+      }
+      const musicSource = (musicSourceRaw === 'file' || musicSourceRaw === 'original') ? musicSourceRaw : 'none';
+      if (musicSource === 'original' && musicPath) throw errCode('DUB_MUSIC_CONFLICT', 'Đã chọn tách nhạc từ tiếng gốc nhưng vẫn còn file nhạc nền — bỏ một trong hai.');
+      if (musicSource === 'original' && mixMode === 'mix') throw errCode('DUB_ORIG_MUSIC_MIX', '"Tách nhạc từ tiếng gốc" chỉ dùng với chế độ "Thay toàn bộ tiếng gốc" — tiếng gốc phải bị bỏ thì tách nhạc mới có nghĩa. Chọn Replace hoặc đổi nguồn nhạc.');
       const musicVolume = Math.max(0, Math.min(1, Number(p.musicVolume) || 0.3));
       const duck = p.duck !== false; // nhac tự nhỏ khi có thoại (sidechaincompress) — mặc định BẬT
       const useCache = p.useCache !== false; // cache TTS theo hash(text+giọng+ngôn ngữ) — mặc định BẬT
@@ -210,20 +240,36 @@ function registerDubbingIpc(ipcMain, { getState } = {}) {
           if (canceled()) throw errCode('DUB_CANCELLED', 'Đã huỷ bởi người dùng.');
         }
 
+        /* 2.5) Tách nhạc nền từ tiếng gốc (2026-09-19u, tuỳ chọn): karaoke
+                center-cancel qua media-tools.removeVocals (chỉ nhận nguồn
+                stereo — lỗi lộ liễu FFX_CHANNELS từ media-tools). File nhạc
+                tách ra dùng đúng như musicPath: volume + ducking như thường.
+                Huỷ có hiệu lực từ bước kế tiếp (removeVocals không nhận cờ). */
+        let extractedMusic = null;
+        if (musicSource === 'original') {
+          prog('music', translateTo ? 7 : 3, 'Tách nhạc nền từ tiếng gốc (karaoke center-cancel — cần nguồn stereo)…');
+          extractedMusic = path.join(jobDir, 'orig-instrumental.wav');
+          await mediaTools.removeVocals({ inputPath: videoPath, outputPath: extractedMusic, mode: 'instrumental' });
+          if (canceled()) throw errCode('DUB_CANCELLED', 'Đã huỷ bởi người dùng.');
+        }
+        const effMusicPath = extractedMusic || musicPath;
+
         /* 3) TTS từng cue (tuần tự — tiến độ đơn điệu). Cache audio theo
-              hash(text + giọng + ngôn ngữ + đích dịch) trong <userData>/dub-cache:
-              chạy lại / resume sau gián đoạn tái dùng file cũ, không gọi TTS lại
-              (cachedCount khai báo trong kết quả). Chế độ nhiều nhân vật: đọc từ
-              PREFIX "Tên:" trong text cue — TTS đọc phần SAU prefix, giọng theo
-              map round-robin (deterministic). */
+               hash(text + giọng + ngôn ngữ + đích dịch + tốc độ đọc) trong
+               <userData>/dub-cache: chạy lại / resume sau gián đoạn tái dùng
+               file cũ, không gọi TTS lại (cachedCount khai báo trong kết quả).
+               Chế độ nhiều nhân vật: đọc từ PREFIX "Tên:" trong text cue — TTS
+               đọc phần SAU prefix, giọng theo map round-robin + gán tay
+               speakerVoiceMap (deterministic). */
         const url = await ensureBackendUrl();
-        let speakers = null, voiceOf = null, speakerCount = 0;
+        let speakers = null, voiceOf = null, speakerCount = 0, speakerMapOut = null;
         if (speakerMode) {
           speakers = E.splitSpeakerCues(cues);
           const pids = speakerVoiceList.length ? speakerVoiceList : (voicePid ? [voicePid] : []);
-          if (!pids.length) throw errCode('DUB_SPEAKER_VOICES', 'Chế độ nhiều nhân vật cần ít nhất 1 giọng — chọn giọng chính hoặc nhập nhóm giọng nhân vật.');
-          const av = E.assignSpeakerVoices(speakers, pids);
+          if (!pids.length && !speakerVoiceMap) throw errCode('DUB_SPEAKER_VOICES', 'Chế độ nhiều nhân vật cần ít nhất 1 giọng — chọn giọng chính, nhập nhóm giọng nhân vật hoặc gán tay từng nhân vật.');
+          const av = E.assignSpeakerVoices(speakers, pids, speakerVoiceMap);
           voiceOf = av.voices;
+          speakerMapOut = av.map;
           speakerCount = Object.keys(av.map).length;
         }
         const cacheDirP = path.join(app.getPath('userData'), 'dub-cache');
@@ -236,12 +282,12 @@ function registerDubbingIpc(ipcMain, { getState } = {}) {
           const cueVoice = voiceOf ? (voiceOf[i] || '') : voicePid;
           const text = (speakers ? String(speakers[i].spokenText || '').trim() : String(cues[i].text || '').trim());
           prog('tts', ttsLo + Math.round((i / cues.length) * (ttsHi - ttsLo)),
-            'TTS cue ' + (i + 1) + '/' + cues.length + (speakers && speakers[i].speaker ? ' [' + speakers[i].speaker + ']' : '') + '…');
+            'TTS cue ' + (i + 1) + '/' + cues.length + (speakers && speakers[i].speaker ? ' [' + speakers[i].speaker + ']' : '') + (ttsSpeed !== 1 ? ' (' + ttsSpeed + '×)' : '') + '…');
           if (!text) throw errCode('DUB_SRT_EMPTY', 'Cue ' + (i + 1) + ' rỗng văn bản — SRT lỗi.');
-          const body = { text, language: lang, speed: 1.0, chunk_chars: 0 };
+          const body = { text, language: lang, speed: ttsSpeed, chunk_chars: 0 };
           if (cueVoice) body.preset_id = cueVoice;
           const key = crypto.createHash('sha1')
-            .update(text + '|' + (body.preset_id || '') + '|' + lang + '|' + (translateTo || ''))
+            .update(E.ttsCacheKey(text, body.preset_id || '', lang, translateTo, ttsSpeed))
             .digest('hex');
           const cachePath = path.join(cacheDirP, key + '.mp3');
           if (useCache && fs.existsSync(cachePath)) {
@@ -279,13 +325,13 @@ function registerDubbingIpc(ipcMain, { getState } = {}) {
               → amix normalize=0 (không co âm lượng khi nhiều lớp). Có nhạc nền:
               loop vô hạn + sidechaincompress lấy tiếng dub làm sidechain (nhạc tự
               nhỏ khi có thoại — ducking KHAI BÁO), volume theo musicVolume. */
-        prog('build', 64, 'Lắp ' + cues.length + ' cue vào timeline' + (musicPath ? ' + nhạc nền' + (duck ? ' (ducking)' : '') : '') + '…');
+        prog('build', 64, 'Lắp ' + cues.length + ' cue vào timeline' + (effMusicPath ? ' + nhạc nền' + (extractedMusic ? ' (tách từ tiếng gốc)' : '') + (duck ? ' (ducking)' : '') : '') + '…');
         let args = ['-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=stereo'];
-        if (musicPath) args = args.concat(['-stream_loop', '-1', '-i', musicPath]);
+        if (effMusicPath) args = args.concat(['-stream_loop', '-1', '-i', effMusicPath]);
         args = args.concat(['-t', videoSec.toFixed(3)]);
         const chains = [];
         const mixIns = ['[0:a]'];
-        const baseIdx = musicPath ? 2 : 1;
+        const baseIdx = effMusicPath ? 2 : 1;
         for (let i = 0; i < cueFiles.length; i++) {
           args = args.concat(['-i', cueFiles[i]]);
           chains.push('[' + (baseIdx + i) + ':a]aresample=48000,aformat=channel_layouts=stereo,adelay=' + plan[i].startMs + ':all=1[d' + i + ']');
@@ -293,7 +339,7 @@ function registerDubbingIpc(ipcMain, { getState } = {}) {
         }
         chains.push(mixIns.join('') + 'amix=inputs=' + (cueFiles.length + 1) + ':normalize=0:dropout_transition=0[dub]');
         let dubLabel = '[dub]';
-        if (musicPath) {
+        if (effMusicPath) {
           chains.push('[1:a]aresample=48000,aformat=channel_layouts=stereo,volume=' + musicVolume.toFixed(2) + '[mus]');
           if (duck) {
             chains.push('[dub]asplit=2[dubA][dubB]');
@@ -331,7 +377,9 @@ function registerDubbingIpc(ipcMain, { getState } = {}) {
           translated: !!translateTo, translateTo: translateTo || null,
           cachedCount,
           speakers: speakerCount,
-          music: musicPath ? { volume: musicVolume, ducked: duck } : null,
+          speakerMap: speakerMapOut,
+          ttsSpeed,
+          music: effMusicPath ? { volume: musicVolume, ducked: duck, source: extractedMusic ? 'original' : 'file' } : null,
         };
       } finally {
         run = null;
@@ -346,18 +394,31 @@ function registerDubbingIpc(ipcMain, { getState } = {}) {
 
   /* ── KIỂM TRA GIỌNG (2026-09-17): dò backend + TTS 1 câu ngắn — health check
       lộ liễu (thời gian tổng + thời lượng audio thử trả về để UI hiển thị). ── */
-  ipcMain.handle('dub:checkVoice', async (e) => {
+  ipcMain.handle('dub:checkVoice', async (e, p) => {
     try {
       if (run && !run.cancelRequested) throw errCode('DUB_BUSY', 'Đang có tác vụ lồng tiếng khác chạy. Huỷ hoặc chờ xong.');
       run = { kind: 'check', cancelRequested: false, child: null };
       const send = (step, pct, message) => sendProgress(e, { kind: 'check', step, pct, message });
+      // Ngôn ngữ kiểm âm theo select "Ngôn ngữ đọc" của panel (2026-09-19k) —
+      // trước đây hardcode 'vi' nên kiểm âm SRT tiếng Anh đo sai trải nghiệm thật.
+      const lang = String((p && p.language) || 'vi').trim() || 'vi';
+      // Kiểm âm ĐÚNG GIỌNG sẽ dùng để lồng tiếng (2026-09-19k): panel gửi preset_id
+      // của select "Giọng đọc" (dubVoice) — trước đây chỉ đọc bằng giọng mặc định
+      // backend nên giọng clone hỏng/sai ngôn ngữ vẫn "OK" đến lúc lồng thật mới vỡ.
+      const voicePid = String((p && p.voicePid) || '').trim();
+      // Tốc độ đọc kiểm âm ĐÚNG như lần lồng thật (2026-09-19u).
+      const chkSpeedRaw = Number(p && p.ttsSpeed);
+      const chkSpeed = (Number.isFinite(chkSpeedRaw) && chkSpeedRaw >= 0.5 && chkSpeedRaw <= 2) ? chkSpeedRaw : 1;
       send('probe', 10, 'Dò backend giọng nói (OmniVoice)…');
       const url = await ensureBackendUrl();
-      send('tts', 40, 'Backend lên — đọc thử 1 câu ngắn…');
+      send('tts', 40, 'Backend lên — đọc thử 1 câu ngắn (ngôn ngữ ' + lang + (voicePid ? ', giọng ' + voicePid : ' mặc định') + (chkSpeed !== 1 ? ', ' + chkSpeed + '×' : '') + ')…');
       fs.mkdirSync(tmpDir(), { recursive: true });
       const f = path.join(tmpDir(), 'voice-check-' + Date.now().toString(36) + '.mp3');
       const t0 = Date.now();
-      await ttsOne(url, { text: 'Kiểm tra giọng đọc — kiểm âm nhanh một câu ngắn.', language: 'vi', speed: 1.0, chunk_chars: 0 }, f);
+      await ttsOne(url, Object.assign(
+        { text: 'Kiểm tra giọng đọc — kiểm âm nhanh một câu ngắn.', language: lang, speed: chkSpeed, chunk_chars: 0 },
+        voicePid ? { preset_id: voicePid } : {}
+      ), f);
       const ms = Date.now() - t0;
       const audioSec = await probeDur(f);
       try { fs.unlinkSync(f); } catch (_) {}
@@ -483,6 +544,9 @@ function registerDubbingIpc(ipcMain, { getState } = {}) {
     if (!outPath) return { ok: false, error: 'Chưa chọn nơi lưu SRT.', code: 'DUB_NO_OUT' };
     const lang = String((p && p.language) || 'vi');
     const voicePid = String((p && p.voicePid) || '').trim();
+    // Tốc độ đọc tổng thể (2026-09-19u) — NẰM TRONG key cache (ttsCacheKey).
+    const srtSpeedRaw = Number(p && p.ttsSpeed);
+    const ttsSpeed = (Number.isFinite(srtSpeedRaw) && srtSpeedRaw >= 0.5 && srtSpeedRaw <= 2) ? srtSpeedRaw : 1;
     const useCache = (p && p.useCache) !== false; // mặc định BẬT — cùng cache với dub:render
     const gapMs = Math.max(0, Math.min(2000, Math.round(Number(p && p.gapMs) || 0)));
     const sents = E.splitScriptText(text, { maxChars: p && p.maxChars });
@@ -500,10 +564,10 @@ function registerDubbingIpc(ipcMain, { getState } = {}) {
       for (let i = 0; i < sents.length; i++) {
         if (run.cancelRequested) throw errCode('DUB_CANCELLED', 'Đã huỷ bởi người dùng.');
         prog('tts', Math.round((i / sents.length) * 96), 'TTS câu ' + (i + 1) + '/' + sents.length + '…');
-        const body = { text: sents[i], language: lang, speed: 1.0, chunk_chars: 0 };
+        const body = { text: sents[i], language: lang, speed: ttsSpeed, chunk_chars: 0 };
         if (voicePid) body.preset_id = voicePid;
         const key = crypto.createHash('sha1')
-          .update(sents[i] + '|' + (body.preset_id || '') + '|' + lang + '|')
+          .update(E.ttsCacheKey(sents[i], body.preset_id || '', lang, '', ttsSpeed))
           .digest('hex');
         const cachePath = path.join(cacheDirP, key + '.mp3');
         let audioPath = null;
@@ -530,6 +594,28 @@ function registerDubbingIpc(ipcMain, { getState } = {}) {
     } finally {
       run = null;
     }
+  });
+
+  /* ── QUÉT NHÂN VẬT (2026-09-19u): đọc SRT → splitSpeakerCues → danh sách
+      tên nhân vật theo thứ tự xuất hiện + số cue (để panel gán giọng tay
+      speakerVoiceMap). KHÔNG đụng backend/TTS — chỉ đọc file. ── */
+  ipcMain.handle('dub:scanSpeakers', async (_e, p = {}) => {
+    try {
+      const srtPath = String(p.srtPath || '').trim();
+      if (!srtPath) throw errCode('DUB_SRT_MISSING', 'Chưa chọn file SRT dẫn lời.');
+      if (!fs.existsSync(srtPath)) throw errCode('DUB_SRT_MISSING', 'File SRT không tồn tại: ' + srtPath);
+      const cues = SRTT.parseSrtCues(fs.readFileSync(srtPath, 'utf8'));
+      if (!cues.length) throw errCode('DUB_SRT_EMPTY', 'File SRT không đọc được dòng thoại nào.');
+      const split = E.splitSpeakerCues(cues);
+      const order = [];
+      const counts = {};
+      for (const c of split) {
+        const sp = (c && c.speaker) || '';
+        if (!(sp in counts)) { order.push(sp); counts[sp] = 0; }
+        counts[sp]++;
+      }
+      return { ok: true, speakers: order.map((name) => ({ name, cues: counts[name] })), count: order.length };
+    } catch (err) { return { ok: false, error: errOf(err), code: codeOf(err) }; }
   });
 
   /* ── Huỷ: cờ cho vòng TTS + kill ffmpeg đang chạy; đang lô → huỷ cả hàng đợi ── */

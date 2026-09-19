@@ -3,6 +3,7 @@
    Toàn bộ là function declaration: chỉ gọi lúc runtime, thứ tự nạp không ảnh hưởng. */
 function t7RenderPreview(){
   _t7UpdateOverlay();
+  try { t7VtPreview(); } catch (e) {}   // 🎞 track video lớp trên (tính năng #4) — lớp phủ playhead đè lên khung
   try { _t7DrawGfx(); } catch (e) {}   // 🖼 ảnh đè full-frame lên trên
   try { _t7DrawSel(); } catch (e) {}   // 🖱 khung 8 nút của lớp đang chọn (kéo/co trực tiếp) (nếu playhead nằm trong khoảng của nó)
   // Ảnh/video hiển thị = clip tại playhead (nhất quán khi phát/tua/chọn).
@@ -105,6 +106,7 @@ function t7RenderPreview(){
 
 function t7RenderTimeline(){
   try { t7RenderRail(); } catch (e) {}
+  try { t7VtRenderRows(); } catch (e) {}   // 🎞 các hàng Video lớp trên (tính năng #4)
   // Timeline đang ẩn → khỏi dựng. Vẫn chạy hết phần trên để rail/số liệu đúng.
   const _tl = document.getElementById('t7Tl');
   if (_tl && _tl.style.display === 'none') return;
@@ -115,7 +117,7 @@ function t7RenderTimeline(){
   document.getElementById('t7TlTotal').textContent = total ? (_t7Fmt(total) + ' · ' + total.toFixed(1) + 's · ' + clips.length + ' clip') : '0s';
   const step = total > 120 ? 20 : 10;
   const ruler = document.getElementById('t7Ruler');
-  if (ruler){ let h = ''; for (let t = 0; t <= total + step; t += step) h += `<span style="flex:0 0 auto;width:${step * pps}px">${_t7Fmt(t)}</span>`; ruler.innerHTML = h; }
+  if (ruler){ let h = ''; for (let t = 0; t <= total + step; t += step) h += `<span style="flex:0 0 auto;width:${step * pps}px">${_t7Mmss(t)}</span>`; ruler.innerHTML = h; }   // 2026-09-19d: nhãn thước mm:ss gọn (timecode centiseconds chỉ hiển thị trên timecode)
   // subtitle chips theo clip
   const subs = document.getElementById('t7TrkSubs');
   // ⚠️ Bề rộng phụ đề = ĐÚNG thời lượng × pps (KHÔNG min-width) để khớp thước thời gian + playhead + preview.
@@ -126,7 +128,7 @@ function t7RenderTimeline(){
     // KHÔNG nhét base64 vào innerHTML (264 clip = chuỗi HTML ~13MB → khựng). Chỉ dựng khung; ảnh gắn LAZY khi cuộn tới (IntersectionObserver).
     trk.innerHTML = clips.map((c, i) => {
       const d = _t7ClipDur(c);
-      const w = Math.max(2, d * pps); const sel = c.id === t7State.selClip;
+      const w = Math.max(2, d * pps); const sel = c.id === t7State.selClip || (typeof _t7SelMultiHas === 'function' && _t7SelMultiHas(c.id));
       // Ba mức theo bề rộng: ≥60px hiện TÊN + phụ · ≥20px chỉ số giây · nhỏ hơn thì khối trơn.
       // 192 clip trên 16 phút mà cố nhét chữ thì thành một dải mù.
       const tier = w >= 60 ? 'lg' : (w >= 20 ? 'sm' : 'xs');
@@ -135,7 +137,7 @@ function t7RenderTimeline(){
       const sub = d.toFixed(1) + 's' + (tier === 'lg' ? ' · ' + escapeHtml(_t7UsesVideo(c) ? _t7VidKind(c) : (_t7ClipImg(c) ? 'ảnh AI' : 'thiếu ảnh')) : '');
       const box = tier === 'xs' ? '' :
         `<span class="t7-clipbox">${tier === 'lg' ? `<span class="t7-clipname">${escapeHtml(_t7ClipLabel(c))}</span>` : ''}<span class="t7-cliplab">${sub}</span></span>`;
-      return `<div class="t7-clip tier-${tier} ${src}${sel ? ' sel' : ''}" data-cid="${c.id}" data-idx="${i}" onpointerdown="t7ClipPointerDown(event,'${c.id}')" style="width:${w}px" title="Cảnh ${escapeHtml(c.sceneId)} · ${d.toFixed(1)}s (kéo mép phải để chỉnh)">${box}<span class="t7-trim" onpointerdown="t7TrimPointerDown(event,'${c.id}')"></span>${xf}</div>`;
+      return `<div class="t7-clip tier-${tier} ${src}${sel ? ' sel' : ''}" data-cid="${c.id}" data-idx="${i}" onpointerdown="t7ClipPointerDown(event,'${c.id}')" oncontextmenu="t7ClipMenuOpen(event,'${c.id}')" style="width:${w}px" title="Cảnh ${escapeHtml(c.sceneId)} · ${d.toFixed(1)}s (kéo mép phải để chỉnh, chuột phải để mở menu)">${box}<span class="t7-trim" onpointerdown="t7TrimPointerDown(event,'${c.id}')"></span>${xf}</div>`;
     }).join('');
     _t7LazyThumbs(trk, '.t7-clip[data-cid]', trk.closest('.t7-tlscroll'));
   }
@@ -260,6 +262,8 @@ function t7RenderTimeline(){
   _showRow('t7RowOverlay', true);
   _showRow('t7RowAudio', true);
   _showRow('t7RowMusic', true);
+  try { if (typeof t7RenderBookmarks === 'function') t7RenderBookmarks(); } catch (e) {}   // 🔖 hàng bookmark dưới thước (t7-tltools.js)
+
   _showRow('t7RowSfx', true);
   t7UpdatePlayhead();
 }

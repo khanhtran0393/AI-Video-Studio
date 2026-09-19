@@ -97,15 +97,36 @@ function splitSpeakerCues(cues) {
 
 /* Gán giọng cho từng nhân vật: theo THỨ TỰ XUẤT HIỆN ĐẦU TIÊN, round-robin qua
    voicePids (deterministic — không random). speaker '' = giọng đầu tiên. Trả
-   map {speaker → pid} + mảng giọng theo từng cue. */
-function assignSpeakerVoices(splitCues, voicePids) {
+   map {speaker → pid} + mảng giọng theo từng cue.
+   (2026-09-19u) explicitMap (tuỳ chọn): gán tay {tên nhân vật → pid} — nhân
+   vật có trong map DÙNG ĐÚNG pid của nó, các nhân vật còn lại round-robin
+   (bộ đếm riêng chỉ chạy qua nhân vật tự gán — không lệch vì nhân vật tay).
+   Map sai kiểu / có giá trị rỗng → DUB_SPEAKER_MAP lộ liễu (Luật 10). */
+function assignSpeakerVoices(splitCues, voicePids, explicitMap) {
   const pids = (Array.isArray(voicePids) ? voicePids : [])
     .map((v) => String(v || '').trim()).filter(Boolean);
+  let manual = null;
+  if (explicitMap !== undefined && explicitMap !== null) {
+    if (typeof explicitMap !== 'object' || Array.isArray(explicitMap)) {
+      const e = new Error('DUB_SPEAKER_MAP: gán giọng nhân vật phải là object {tên → pid giọng}.');
+      e.code = 'DUB_SPEAKER_MAP'; throw e;
+    }
+    manual = {};
+    for (const k of Object.keys(explicitMap)) {
+      const v = String(explicitMap[k] || '').trim();
+      if (!v) { const e = new Error('DUB_SPEAKER_MAP: nhân vật "' + k + '" chưa có pid giọng — bỏ khỏi map hoặc điền pid.'); e.code = 'DUB_SPEAKER_MAP'; throw e; }
+      manual[String(k)] = v;
+    }
+  }
   const map = {};
   const voices = [];
+  let autoIdx = 0; // chỉ đếm nhân vật gán TỰ ĐỘNG — không lệch vì nhân vật tay
   for (const c of (Array.isArray(splitCues) ? splitCues : [])) {
     const sp = (c && c.speaker) || '';
-    if (!(sp in map)) map[sp] = pids.length ? pids[Object.keys(map).length % pids.length] : '';
+    if (!(sp in map)) {
+      if (manual && manual[sp]) map[sp] = manual[sp];
+      else map[sp] = pids.length ? pids[autoIdx++ % pids.length] : '';
+    }
     voices.push(map[sp]);
   }
   return { map, voices };
@@ -181,4 +202,18 @@ function cuesFromDurationsMs(texts, durationsMs, opts = {}) {
   return cues;
 }
 
-module.exports = { fitCuePlan, buildOutCues, summarizePlan, splitSpeakerCues, assignSpeakerVoices, splitScriptText, cuesFromDurationsMs };
+/* Key cache TTS theo vân tay cấu hình (2026-09-19u): hash được tính ở caller
+   (sha1) — hàm này sinh CHUỖI gốc deterministic để mọi nơi gọi (dub:render,
+   dub:textToSrt) dùng chung một công thức, khỏi lệch key.
+   Tốc độ đọc (ttsSpeed) NẰM TRONG KEY — audio sinh ở speed khác là file khác.
+   speed = 1 (mặc định) → chuỗi GIỮ NGUYÊN dạng cũ 4 phần (text|pid|lang|
+   translateTo) để cache đã tồn tại không bị vứt. */
+function ttsCacheKey(text, voicePid, lang, translateTo, ttsSpeed) {
+  const base = String(text == null ? '' : text) + '|' + String(voicePid || '') +
+    '|' + String(lang || '') + '|' + String(translateTo || '');
+  const speed = Number(ttsSpeed);
+  if (!(speed > 0 && speed !== 1)) return base; // speed rỗng/1 → dạng cũ
+  return base + '|speed:' + (Math.round(speed * 1000) / 1000);
+}
+
+module.exports = { fitCuePlan, buildOutCues, summarizePlan, splitSpeakerCues, assignSpeakerVoices, splitScriptText, cuesFromDurationsMs, ttsCacheKey };

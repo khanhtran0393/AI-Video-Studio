@@ -35,6 +35,15 @@ var sessSnapRestoring = false;
 /* Giới hạn cứng kích thước snapshot (JSON string) — vượt thì bỏ phần
    input, giữ phần metadata (tool, patch của panel khác). */
 var SESSSNAP_MAX_BYTES = 256 * 1024;
+/* Phiên bản layout UI của snapshot. Khi sửa cấu trúc modal/panel (đổi id,
+   đổi kiểu input, đổi mặc định parity…) thì TĂNG số này: snapshot chụp từ
+   UI cũ sẽ bị bỏ qua phần input/scroll (khai báo qua console, không im
+   lặng — Luật 10) để không "hồi sinh" giá trị đã hết hiệu lực.
+   Bug thật 2026-09-19: snapshot của modal T7 xuất bản cũ (select % default
+   100 + batch "stop" đầu danh sách) hồi sinh lên modal mới thành
+   t7ExpVoiceVol="100" (vượt max 5) + t7ExpBatchErr="stop", đè mặc định
+   parity 1.5 / continue. tool + patch của panel khác vẫn được giữ. */
+var SESSSNAP_UI_VER = 2;
 
 function sessSnapRead() {
   try {
@@ -87,6 +96,7 @@ function sessSnapCollect() {
     snap.scroll = { main: main ? Math.round(main.scrollTop) : 0, win: Math.round(window.scrollY || 0) };
   } catch (e) { snap.scroll = null; }
   snap.at = Date.now();
+  snap.uiVer = SESSSNAP_UI_VER;
   return snap;
 }
 
@@ -124,6 +134,13 @@ function sessSnapGet(key) {
  *  sau khi state/IDB nạp xong — boot chỉ switchTool với tool mặc định). */
 function sessSnapRestore(opts) {
   const snap = sessSnapRead();
+  /* Chụp từ UI cũ (uiVer lệch) → bỏ qua phần input/scroll, KHÔNG im lặng
+     (Luật 10): giá trị chụp theo layout cũ có thể không còn hợp lệ. */
+  const stale = snap.uiVer !== SESSSNAP_UI_VER;
+  if (stale) {
+    try { console.info('[sessnap] snapshot UI ver ' + (snap.uiVer || 0) + ' ≠ ' + SESSSNAP_UI_VER
+      + ' → bỏ phần input/scroll (UI đã đổi layout), giữ tool/patch'); } catch (e) {}
+  }
   /* Chuyển tool TRƯỚC khi trả input — switchTool có thể render lại panel. */
   if (opts && opts.switchTool && snap.tool) {
     try {
@@ -133,7 +150,7 @@ function sessSnapRestore(opts) {
   }
   sessSnapRestoring = true;
   try {
-    const inputs = snap.inputs;
+    const inputs = stale ? null : snap.inputs;
     if (inputs && typeof inputs === 'object') {
       for (const id of Object.keys(inputs)) {
         let el = null;
@@ -148,6 +165,18 @@ function sessSnapRestore(opts) {
             continue;
           }
           if (t === 'file' || t === 'password') continue;
+          /* Field có chủ riêng (data-sessnap-skip — panel tự khôi phục theo kho
+             của nó) thì không hồi sinh, kể cả khi entry cũ còn nằm trong snapshot. */
+          if (el.closest && el.closest('[data-sessnap-skip]')) continue;
+          /* number ngoài min/max của phần tử HIỆN TẠI → giá trị chụp từ UI cũ
+             đã chết, bỏ qua (không gán value vượt range). */
+          if (t === 'number' && inputs[id] !== '') {
+            const nv = parseFloat(inputs[id]);
+            const lo = parseFloat(el.min), hi = parseFloat(el.max);
+            if (!Number.isFinite(nv)
+              || (Number.isFinite(lo) && nv < lo)
+              || (Number.isFinite(hi) && nv > hi)) continue;
+          }
           const v = inputs[id];
           if (typeof v !== 'string' || v === el.value) continue;
           if (el.tagName === 'SELECT') {
@@ -161,7 +190,7 @@ function sessSnapRestore(opts) {
       }
     }
     try {
-      const sc = snap.scroll;
+      const sc = stale ? null : snap.scroll;
       if (sc) {
         const main = document.querySelector('.main');
         if (main && sc.main) main.scrollTop = sc.main;

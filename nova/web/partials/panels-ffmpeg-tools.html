@@ -883,6 +883,7 @@
           <button id="ffxCvZoomReset" title="Khôi phục 100%" onclick="ffxCvZoomReset100()" style="width:28px;height:28px;border-radius:7px;border:none;background:transparent;color:var(--text-muted);display:flex;align-items:center;justify-content:center;cursor:pointer">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
           </button>
+            <button id="ffxCvProxy" class="ffxCvToolBtn" title="⚡ Proxy preview: dừng hình khi kéo lớp — video 4K thao tác mượt (xuất vẫn nguồn gốc)" onclick="ffxCvProxyToggle()" style="width:28px;height:28px;font-size:12px">⚡</button>
           <div style="flex:1"></div>
           <div style="display:flex;align-items:center;gap:2px;padding:2px;background:var(--surface);border:1px solid var(--border);border-radius:8px">
             <button id="ffxCvTSelect" class="ffxCvToolBtn ffxCvToolOn" title="Chọn phần tử" onclick="ffxCvSetTool('select')"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M5 2l14 11h-7l-4 8z"/></svg></button>
@@ -907,8 +908,11 @@
           </div>
           <div id="ffxCvFrameWrap" style="display:none;position:absolute;left:0;top:0;transform-origin:center center">
             <div id="ffxCvFrame" style="position:relative;overflow:hidden;background:#000;box-shadow:0 8px 40px rgba(0,0,0,.55)">
+              <video id="ffxCvVideoBg" style="display:none;position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scale(1.08);filter:blur(12px)" loop muted playsinline></video>
+              <div id="ffxCvBgShade" style="display:none;position:absolute;inset:0;background:rgba(0,0,0,.35);pointer-events:none"></div>
               <video id="ffxCvVideo" style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain" loop muted playsinline></video>
               <div id="ffxCvOverlays" style="position:absolute;inset:0"></div>
+              <div id="ffxCvSubPreview" style="display:none;position:absolute;left:8px;right:8px;text-align:center;pointer-events:none;z-index:6"></div>
             </div>
           </div>
           <div id="ffxCvBlurMenu" style="display:none;position:absolute;top:10px;right:14px;z-index:40;width:238px;background:var(--surface,#1b1d24);border:1px solid var(--border);border-radius:10px;padding:6px;box-shadow:0 10px 32px rgba(0,0,0,.5)" onclick="event.stopPropagation()">
@@ -931,6 +935,39 @@
           <div id="ffxCvPropsBody" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap"></div>
         </div>
 
+        <!-- ── Phụ đề theo phân đoạn (subtitleTrack — engine ovSubtitle*) ── -->
+        <div style="border-top:1px solid var(--border);padding:10px 12px">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+            <span style="font-size:12px;font-weight:600">💬 Phụ đề theo phân đoạn</span>
+            <button type="button" class="btn ghost sm" onclick="ffxCvSubPickSrt()" title="Nhập file SRT (mỗi cue = 1 phân đoạn, đốt lên video khi xuất)">📥 Nhập SRT…</button>
+            <button type="button" class="btn ghost sm" onclick="ffxCvSubAddAtPlayhead()" title="Tạo phân đoạn bắt đầu tại thời điểm đang dừng trong xem trước">＋ Thêm cue tại kim giây</button>
+            <button type="button" class="btn ghost sm" onclick="ffxCvSubExportSrt()" title="Lưu danh sách phân đoạn ra file .srt">📤 Xuất SRT</button>
+            <input id="ffxCvSubSearch" type="text" placeholder="Tìm phân đoạn…" oninput="ffxCvSubSearchSet(this.value)" style="height:26px;width:130px;font-size:11.5px;padding:0 8px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text);outline:none">
+            <span id="ffxCvSubCount" style="font-size:11px;color:var(--text-muted)">chưa có phân đoạn</span>
+          </div>
+          <div id="ffxCvSubStyleBar" style="display:none;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:8px">
+            <label style="font-size:11px;color:var(--text-muted);display:flex;flex-direction:column;gap:3px">Cỡ chữ (% khung)
+              <input type="number" min="2" max="20" step="0.5" value="5" style="width:70px;height:26px;font-size:11.5px;padding:0 6px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text);outline:none" oninput="ffxCvSubStyleSet('fontSizePct', this.value)">
+            </label>
+            <label style="font-size:11px;color:var(--text-muted);display:flex;flex-direction:column;gap:3px">Vị trí dọc (%)
+              <input type="number" min="2" max="98" step="1" value="86" style="width:70px;height:26px;font-size:11.5px;padding:0 6px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text);outline:none" oninput="ffxCvSubStyleSet('posPct', this.value)">
+            </label>
+            <label style="font-size:11px;color:var(--text-muted);display:flex;flex-direction:column;gap:3px">Màu chữ
+              <input type="color" value="#ffffff" style="width:40px;height:26px;padding:0;border:1px solid var(--border);border-radius:7px;background:var(--surface);cursor:pointer" oninput="ffxCvSubStyleSet('color', this.value)">
+            </label>
+            <label style="font-size:11px;color:var(--text-muted);display:flex;flex-direction:column;gap:3px">Viền (px)
+              <input type="number" min="0" max="8" step="1" value="2" style="width:60px;height:26px;font-size:11.5px;padding:0 6px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text);outline:none" oninput="ffxCvSubStyleSet('stroke', this.value)">
+            </label>
+            <label style="font-size:11px;color:var(--text-muted);display:flex;flex-direction:column;gap:3px">Màu viền
+              <input type="color" value="#000000" style="width:40px;height:26px;padding:0;border:1px solid var(--border);border-radius:7px;background:var(--surface);cursor:pointer" oninput="ffxCvSubStyleSet('strokeColor', this.value)">
+            </label>
+            <label style="font-size:11.5px;color:var(--text);display:flex;gap:5px;align-items:center;padding-bottom:2px"><input type="checkbox" checked onchange="ffxCvSubStyleSet('bold', this.checked)"> Đậm</label>
+            <label style="font-size:11.5px;color:var(--text);display:flex;gap:5px;align-items:center;padding-bottom:2px"><input type="checkbox" checked onchange="ffxCvSubStyleSet('shadow', this.checked)"> Bóng đổ</label>
+            <span style="font-size:10.5px;color:var(--text-muted)">Style áp dụng cho TOÀN BỘ track phụ đề (không per-cue).</span>
+          </div>
+          <div id="ffxCvSubList" style="max-height:190px;overflow:auto;border:1px solid var(--border);border-radius:8px"></div>
+        </div>
+
         <!-- ── Xuất video ── -->
         <div style="border-top:1px solid var(--border);padding:10px 12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <button class="btn primary sm" onclick="ffxCvExport()" title="Ghép toàn bộ lớp phủ + tỷ lệ khung vào file video mới">🔥 Xuất video (ghép hiệu ứng)</button>
@@ -950,5 +987,64 @@
         .ffxCvLayer { position:absolute; box-sizing:border-box; cursor:move; }
         .ffxCvLayer.sel { outline:1.5px dashed var(--accent,#e8b84b); }
         .ffxCvHandle { position:absolute; width:9px; height:9px; background:var(--accent,#e8b84b); border:1px solid #1c1c1c; border-radius:2px; z-index:5; }
+        .ffxCvSubRow { display:flex; gap:6px; align-items:center; padding:5px 8px; border-bottom:1px solid var(--border); }
+        .ffxCvSubRow:last-child { border-bottom:none; }
+        .ffxCvSubRow.on { background:rgba(232,184,75,.13); outline:1px solid rgba(232,184,75,.45); outline-offset:-1px; }
+        .ffxCvSubRow input[type="number"] { width:66px; flex:none; height:24px; font-size:11px; padding:0 5px; border:1px solid var(--border); border-radius:6px; background:var(--surface); color:var(--text); outline:none; }
+        .ffxCvSubRow input[type="text"] { flex:1; min-width:120px; height:24px; font-size:11.5px; padding:0 7px; border:1px solid var(--border); border-radius:6px; background:var(--surface); color:var(--text); outline:none; }
+        .ffxCvSubGo { flex:none; width:24px; height:24px; border-radius:6px; border:none; background:transparent; color:var(--text-muted); cursor:pointer; font-size:11px; display:flex; align-items:center; justify-content:center; }
+        .ffxCvSubGo:hover { background:rgba(255,255,255,.07); color:var(--text); }
+        .ffxCvSubDur { flex:none; font-size:10px; color:var(--text-muted); min-width:74px; text-align:right; font-variant-numeric:tabular-nums; }
       </style>
+    </div>
+
+    <!-- TẢI VIDEO (yt-dlp đóng gói sẵn nova/ytdlp-bin) — tool con của nhóm Công cụ FFmpeg -->
+    <div class="tool" id="tool-toolffxdownload">
+      <div class="tool-head">
+        <div class="tool-title">⬇️ Tải Video</div>
+        <div class="tool-subtitle">Tải video/âm thanh từ YouTube và hơn 1000 trang khác bằng yt-dlp (đóng gói sẵn trong app — không cần cài). Nhập URL → Lấy thông tin → chọn thư mục lưu → Tải.</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px;max-width:640px">
+        <div>
+          <label class="label">Link video (YouTube, TikTok, Facebook…)</label>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <input type="text" id="ydlUrl" placeholder="https://www.youtube.com/watch?v=…" style="flex:1;min-width:280px">
+            <button class="btn ghost sm" onclick="ydlFetchInfo()">🔍 Lấy thông tin</button>
+          </div>
+        </div>
+        <div id="ydlInfo" style="display:none"></div>
+        <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end">
+          <div>
+            <label class="label">Chất lượng</label>
+            <select id="ydlQuality" style="max-width:220px">
+              <option value="best" selected>Tốt nhất có sẵn</option>
+              <option value="1080">≤ 1080p</option>
+              <option value="720">≤ 720p</option>
+              <option value="480">≤ 480p</option>
+            </select>
+          </div>
+          <div style="display:flex;gap:6px;align-items:center;padding-bottom:6px">
+            <input type="checkbox" id="ydlAudioOnly">
+            <label for="ydlAudioOnly" style="font-size:12px;cursor:pointer">🎵 Chỉ lấy âm thanh (MP3)</label>
+          </div>
+        </div>
+        <div>
+          <label class="label">Thư mục lưu</label>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <button class="btn ghost sm" onclick="ydlPickDir()">📁 Chọn thư mục</button>
+            <span id="ydlDir" style="font-size:11.5px;color:var(--text-muted);word-break:break-all">Chưa chọn</span>
+          </div>
+        </div>
+        <div id="ydlBarWrap" style="display:none">
+          <div style="height:8px;border-radius:4px;background:var(--surface);border:1px solid var(--border);overflow:hidden">
+            <div id="ydlBarFill" style="height:100%;width:0;background:var(--accent,#e8b84b);transition:width .3s"></div>
+          </div>
+          <div id="ydlBarTxt" style="font-size:11px;color:var(--text-muted);margin-top:4px"></div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <button class="btn primary sm" onclick="ydlStart()">⬇️ Tải video</button>
+          <button class="btn ghost sm" onclick="ydlCancel()">✖ Huỷ</button>
+          <span id="ydlStatus" style="font-size:11.5px"></span>
+        </div>
+      </div>
     </div>

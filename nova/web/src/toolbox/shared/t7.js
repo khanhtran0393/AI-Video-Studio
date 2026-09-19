@@ -5,9 +5,14 @@ const t7State = {
   images: [],        // giữ tương thích chỗ reset ở newVideo/switchVideo
   clips: [], selClip: null, past: [], future: [], _seq: 0,
   overlays: [], selOverlay: null,   // 🖼 Lớp trên (ảnh đè full-frame): {id,dataUrl,name,start,dur}
+  cv: { tool: 'select', blurStyle: 'gaussian', filterPreset: 'warm', layers: [], sel: null },
+                                    // 🎨 Lớp canvas theo VIDEO (t7-canvas-tools.js — parity ezmaxsub):
+                                    // chữ/làm mờ/khối màu/media/filter, toạ độ 0..1, giây timeline.
+                                    // Xuất FFmpeg → IPC ffx:overlay-burn-replace (engine burnOverlays).
+                                    // Khác hệ GFX theo CẢNH (t7-gfx.js, chỉ đi đường Nova engine).
   media: [], mediaTab: 'scenes',    // 📁 Thư viện phương tiện nhập vào: {id,kind:image|video|audio,name,dataUrl,dur}
                                     // 2026-09-18 (t7-studio): Phụ đề có cột phải riêng (tab 💬) → bin trái về mặc định Cảnh
-  audioFile: null, audioPeaks: null, audioDur: 0,
+  audioFile: null, audioPeaks: null, audioDur: 0, dubPrevAudio: null,   // dubPrevAudio: backup audio gốc bị giọng dub đè (t7-subpanel.js _t7SubBackupAudioForDub)
   bgmFile: null, bgmPeaks: null, bgmDur: 0,
   selId: null,
   playing: false, playT: 0, pps: 8, _t0: 0, _raf: null, _progHooked: false, _kbHooked: false,
@@ -26,8 +31,11 @@ const _T7_RAIL = [
   { k: 'audio',  ic: '🔊', lb: 'Âm thanh' },
   { k: 'dub',    ic: '🎙', lb: 'Thuyết minh' },
   { k: 'ai',     ic: '🪄', lb: 'Trợ lý' },
+  { k: 'review', ic: '📝', lb: 'Tóm tắt/Review' },
 ];  // 2026-09-18 (t7-studio): bỏ 'subs' — Phụ đề có cột phải riêng với tab 💬 (t7RightTab);
     // thêm 'dub' — panel Thuyết minh kiểu EZMAXSUB (t7-dubpanel.js → _t7RailDub)
+    // 2026-09-19x: thêm 'review' — mục rail KHÔNG phải tab kho: bấm = bung/thu panel
+    // Tóm tắt/Review nhúng (#reviewRoot) qua rvT7Toggle (tool-t7.js t7SetMediaTab chặn riêng)
 
 // === L?: const _t7IsTextTpl ===
 const _t7IsTextTpl = (t) => !/vignette|film-grain|light-leak|blur-background|gradient-wipe|zoom-in|progress|circle|frame|khung/i.test(t.template + ' ' + (t.label || ''));

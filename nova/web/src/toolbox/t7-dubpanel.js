@@ -1,8 +1,10 @@
 /* T7 DUB PANEL — cột trái "Thuyết minh" kiểu EZMAXSUB cho Dựng Video (Tool 7)
    2026-09-18: rail item 🎙 Thuyết minh (k='dub') → _t7RailDub() render vào #t7RailPanel
-   (bin 300px — đúng vị trí panel trái 300px của EZMAXSUB). Bố cục chép theo ảnh gốc:
-   cặp tab đầu panel → 3 khung accordion (Nhận dạng giọng nói / Dịch thuật / Thuyết minh)
-   → nút gold "✨ Xử lý video" (gradient + glow) → hàng 3 nút nhanh → khối HOÀN TÁC.
+   (bin 300px — đúng vị trí panel trái 300px của EZMAXSUB). Bố cục (đã dọn chồng chéo
+   2026-09-18t — bỏ cặp tab đầu panel + bỏ hàng 3 chip nhanh trùng nút trong accordion):
+   header 1 hàng (tựa + link "💬 Bảng phụ đề ›" sang cột phải) → 3 khung accordion
+   (Phụ đề nguồn / Dịch thuyết minh / Tạo giọng thuyết minh)
+   → nút gold "✨ Xử lý video" (gradient + glow) → khối HOÀN TÁC.
    NGUYÊN TẮC — KHÔNG có logic mới: mọi nút gọi đúng hàm có sẵn của Tool 7
    (t7SubImportSrt / t7SubAdd / t7SubTranslate / t7SubGenerateVoice / t7RightTab /
    t7Undo + xoá state có sẵn); "Xử lý video" chỉ XÍCH 2 bước có thật (dịch → tạo giọng),
@@ -54,14 +56,16 @@ function _t7RailDub(){
     '</div>';
 
   box.innerHTML =
-    /* Cặp tab đầu panel (như EZMAXSUB) — tab 2 là đường tắt sang bảng phụ đề cột phải */
-    '<div class="t7dp-tabs">' +
-      '<button class="t7dp-tab on" type="button">🎙 Thuyết minh</button>' +
-      '<button class="t7dp-tab" type="button" onclick="t7RightTab(\'subs\')" title="Mở bảng phụ đề ở cột phải">💬 Phụ đề</button>' +
+    /* Hàng header — KHÔNG còn cặp tab chết (bố cục EZMAXSUB cũ): panel này chỉ hiện
+       khi đã chọn rail 🎙 Thuyết minh, nên tab "🎙 Thuyết minh" vô nghĩa; đường tắt
+       bảng phụ đề giữ lại thành 1 link nhỏ bên phải. */
+    '<div class="t7dp-head">' +
+      '<span class="t7dp-head-t">🎙 Thuyết minh</span>' +
+      '<button class="t7dp-head-lnk" type="button" onclick="t7RightTab(\'subs\')" title="Mở bảng phân đoạn phụ đề ở cột phải">💬 Bảng phụ đề ›</button>' +
     '</div>' +
-    acc('asr',  '🎙', 'Nhận dạng giọng nói', bodyAsr) +
-    acc('trans','🌐', 'Dịch thuật',          bodyTrans) +
-    acc('tts',  '🔊', 'Thuyết minh',          bodyTts) +
+    acc('asr',  '📄', 'Phụ đề nguồn',         bodyAsr) +
+    acc('trans','🌐', 'Dịch thuyết minh',     bodyTrans) +
+    acc('tts',  '🔊', 'Tạo giọng thuyết minh', bodyTts) +
     _t7dpHtmlActions(nText, cues.length);
 }
 
@@ -72,18 +76,14 @@ function _t7dpHtmlActions(nText, nCues){
      → panel Thuyết minh mất nút "Xử lý video" + hiện chữ "undefined" (bug 2026-09-18). */
   return '<button class="t7dp-run" id="t7dpRunBtn" type="button" onclick="t7dpRunAll()" title="Chạy liền: Dịch thuyết minh → Tạo giọng thuyết minh">' +
       '✨ Xử lý video</button>' +
-    /* Hàng 3 nút nhanh (mỗi bước chạy riêng) */
-    '<div class="t7dp-chips">' +
-      '<button type="button" onclick="t7SubImportSrt()" title="Nhập phụ đề có sẵn">📄 Nhận dạng</button>' +
-      '<button type="button" onclick="t7SubTranslate()" title="Dịch thuyết minh">🌐 Dịch</button>' +
-      '<button type="button" onclick="t7SubGenerateVoice()" title="Tạo giọng thuyết minh">🎙 Thuyết minh</button>' +
-    '</div>' +
+    /* KHÔNG còn hàng 3 chip nhanh (📄/🌐/🎙) — trùng đúng 3 nút đã có trong 3 accordion
+       (bug chồng chéo 2026-09-18t); luồng chính là nút gold, bước đơn bấm trong accordion. */
     /* Khối HOÀN TÁC — gỡ từng artifact đã tạo, không đụng chữ gốc */
     '<div class="t7dp-undo-h"><span class="t7dp-undo-ic">↺</span> Hoàn tác</div>' +
     '<div class="t7dp-chips">' +
-      '<button type="button" onclick="t7dpRevertAudio()" title="Gỡ track giọng thuyết minh khỏi timeline (chữ vẫn giữ nguyên)">♪ Audio</button>' +
+      '<button type="button" onclick="t7dpRevertAudio()" title="Gỡ giọng thuyết minh khỏi timeline — trả lại audio gốc đã import (nếu có); chữ vẫn giữ nguyên">♪ Audio</button>' +
       '<button type="button" onclick="t7dpRevertTrans()" title="Xoá toàn bộ bản dịch tham khảo đã tạo">🌐 Bản dịch</button>' +
-      '<button type="button" onclick="t7dpRevertBurn()" title="Tắt ghi phụ đề vào video khi xuất (chữ vẫn giữ nguyên)">💬 Phụ đề</button>' +
+      '<button type="button" onclick="t7dpRevertBurn()" title="Tắt tuỳ chọn ghi phụ đề vào video khi xuất (chữ vẫn giữ nguyên)">💬 Ghi phụ đề</button>' +
     '</div>' +
     '<div class="t7dp-foot">' + nText + '/' + nCues + ' phân đoạn có chữ</div>';
 }
@@ -100,15 +100,20 @@ async function t7dpRunAll(){
   if (_t7dpBusy || _t7SubBusyVoice) return setStatus7('⏳ Đang xử lý — chờ lô hiện tại xong.', 'info');
   const cues = _t7SubCues().filter(c => c.text);
   if (!cues.length) return setStatus7('Chưa có câu thoại nào — nhập file SRT hoặc gõ chữ vào phân đoạn trước đã.', 'error');
-  if (typeof _pfRequireActive === 'function') _pfRequireActive('xử lý video (dịch + tạo giọng)');
   _t7dpBusy = true;
   const rb = document.getElementById('t7dpRunBtn');
   if (rb){ rb.disabled = true; rb.textContent = '⏳ Đang xử lý…'; }
   try {
+    if (typeof _pfRequireActive === 'function') _pfRequireActive('xử lý video (dịch + tạo giọng)');
     setStatus7('⚙ Xử lý video 1/2: dịch thuyết minh…', 'working');
     await t7SubTranslate();
+    // KIỂM KẾT QUẢ THẬT — t7TranslateAll nuốt lỗi từng lô ngầm, không được báo success giả (Luật 10)
+    const untrans = _t7SubCues().filter(c => c.text && !c.trans).length;
+    if (untrans > 0) throw new Error('dịch xong nhưng còn ' + untrans + ' phân đoạn CHƯA có bản dịch (LLM lỗi/đổi cấu hình) — xem thông báo, bấm lại "Dịch thuyết minh"');
     setStatus7('⚙ Xử lý video 2/2: tạo giọng thuyết minh…', 'working');
     await t7SubGenerateVoice();
+    // t7SubGenerateVoice lỗi thì early-return KHÔNG throw — đối chiếu artifact thật trên timeline
+    if (!t7State.audioFile) throw new Error('chưa tạo được track giọng thuyết minh (thiếu giọng TTS/cấu hình) — xem thông báo, mở lại "Tạo giọng thuyết minh"');
     setStatus7('✓ Xử lý xong: đã dịch + tạo giọng thuyết minh. Bấm ⬆ Xuất Video để dựng file.', 'ok');
   } catch (e){
     setStatus7('❌ Xử lý video dừng: ' + (e.message || e), 'error');
@@ -118,19 +123,33 @@ async function t7dpRunAll(){
   }
 }
 
-/* ── HOÀN TÁC: gỡ từng artifact đã tạo (không đụng chữ gốc của phân đoạn) ── */
+/* ── HOÀN TÁC ♪ Audio: gỡ GIỌNG THUYẾT MINH (không đụng audio gốc người dùng đã import) ── */
 function t7dpRevertAudio(){
-  const had = !!t7State.audioFile || Object.keys(state.t7SubAudioAt || {}).length > 0;
-  if (!had) return setStatus7('Chưa có track giọng thuyết minh nào để gỡ.', 'info');
+  const dubOn = !!(t7State.audioFile && t7State.audioFile._t7dub);
+  const marks = Object.keys(state.t7SubAudioAt || {}).length;
+  if (!dubOn && !marks){
+    if (t7State.audioFile) return setStatus7('Audio hiện tại là file bạn đã import (không phải giọng thuyết minh) — không gỡ ở đây; gỡ ở tab 🔊 Âm thanh nếu muốn.', 'info');
+    return setStatus7('Chưa có track giọng thuyết minh nào để gỡ.', 'info');
+  }
+  const prev = t7State.dubPrevAudio || null;   // audio gốc bị dub đè (nếu lúc tạo dub timeline đang có audio import)
   t7State.audioFile = null; t7State.audioPeaks = null; t7State.audioDur = 0;
+  t7State.dubPrevAudio = null;
   state.t7SubAudioAt = {};
   const au = document.getElementById('t7PreviewAudio');
   if (au){ try { au.pause(); } catch (_) {} au.removeAttribute('src'); }
   const info = document.getElementById('t7VoInfo'); if (info) info.textContent = '';
+  if (prev && prev.file){
+    // trả lại audio gốc — CHỈ gán field, KHÔNG gọi t7HandleAudio (tránh _t7CoverAudio kéo dài cảnh lần nữa)
+    t7State.audioFile = prev.file; t7State.audioPeaks = prev.peaks; t7State.audioDur = prev.dur;
+    if (info) info.textContent = `${prev.file.name} (audio gốc — đã gỡ giọng thuyết minh)`;
+    if (au) au.src = URL.createObjectURL(prev.file);
+  }
   try { syncStateToCurrentProfile(); saveState(true); } catch (e) {}
   t7RenderTimeline(); if (!t7State.playing) t7RenderPreview();
   _t7dpRender();
-  setStatus7('↺ Đã gỡ track giọng thuyết minh khỏi timeline.', 'ok');
+  setStatus7(prev && prev.file
+    ? '↺ Đã gỡ giọng thuyết minh — trả lại audio gốc "' + prev.file.name + '".'
+    : '↺ Đã gỡ track giọng thuyết minh khỏi timeline.', 'ok');
 }
 
 function t7dpRevertTrans(){

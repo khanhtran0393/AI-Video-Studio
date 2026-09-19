@@ -29,6 +29,8 @@ function t7TrimPointerDown(e, id){
 }
 
 function t7ClipPointerDown(e, id){
+  // 2026-09-19f: Shift+bấm = thêm/bỏ clip khỏi nhóm đa chọn (rubber-band/Ctrl+A)
+  if (e.shiftKey && typeof t7SelectMultiToggle === 'function'){ e.preventDefault(); e.stopPropagation(); t7SelectMultiToggle(id); return; }
   // chọn ngay; nếu kéo ngang đủ xa thì đổi vị trí (reorder)
   t7SelectClip(id);
   const startX = e.clientX; let moved = false, snapped = false;
@@ -49,9 +51,13 @@ function t7ClipPointerDown(e, id){
 }
 
 function t7SetRate(v){
-  const r = _T7_RATES.find(x => x === Number(v)) || 1;
+  // 2026-09-19d: nhận tốc độ TUỲ Ý 0.25–3 (slider mượt kiểu EZMAXSUB), không còn kẹt 4 mức.
+  let r = Number(v); if (!Number.isFinite(r)) r = 1;
+  r = Math.min(3, Math.max(0.25, r));
   t7State.rate = r;
-  const b = document.getElementById('t7Rate'); if (b) b.value = String(r);
+  const b = document.getElementById('t7Rate');
+  if (b){ b.value = (b.querySelector('option[value="' + r + '"]') ? String(r) : ''); }   // select chỉ sáng khi trùng option
+  const sl = document.getElementById('t7RateSl'); if (sl) sl.value = String(r);
   // Đang phát thì khởi động lại vòng phát để mốc thời gian tính theo tốc độ mới.
   if (t7State.playing){ t7Pause(); t7Play(); }
 }
@@ -168,13 +174,28 @@ function t7Play(){
       t = (performance.now() - t7State._t0) / 1000 * (t7State.rate || 1);
     }
     t7State.playT = t;
+    // 🔁 Lặp A-B (2026-09-19f): tới B quay về A, giữ nhịp audio/wall-clock
+    if (_t7Ab && _t7Ab.b != null && t >= _t7Ab.b){
+      const au3 = document.getElementById('t7PreviewAudio');
+      if (t7State.audioFile && au3){ try { au3.currentTime = _t7Ab.a; } catch (e) {} }
+      t7State.playT = _t7Ab.a;
+      t7State._t0 = performance.now() - (_t7Ab.a * 1000) / (t7State.rate || 1);
+      t7UpdatePlayhead(); t7RenderPreview();
+      t7State._raf = requestAnimationFrame(step);
+      return;
+    }
     if (t >= total){
       if (t7State.loop){ t7State.playT = 0; t7Pause(); t7Play(); return; }   // lặp: quay đầu, phát tiếp
       t7State.playT = total; t7Pause(); t7UpdatePlayhead(); t7RenderPreview(); return;
     }
     const at = _t7ClipAt(t);
     if (at && at.clip.id !== lastScene){ lastScene = at.clip.id; t7RenderPreview(); }
-    else _t7UpdatePreviewFx();
+    else {
+      _t7UpdatePreviewFx();
+      // 🎞 Track video lớp trên (tính năng #4): lớp bật/tắt GIỮA cảnh phải kịp thời — preview ảnh chỉ
+      //    vẽ lại khi đổi cảnh nên không đủ; gọi riêng per-frame (rẻ: scan mảng lớp + DOM check).
+      if (typeof t7VtPreview === 'function') t7VtPreview();
+    }
     t7UpdatePlayhead();
     t7State._raf = requestAnimationFrame(step);
   };
@@ -241,7 +262,15 @@ function t7HookKeys(){
     const tag = (e.target && e.target.tagName) || ''; if (/INPUT|TEXTAREA|SELECT|BUTTON/.test(tag)) return;
     if (e.key === ' '){ e.preventDefault(); t7TogglePlay(); }
     else if (e.key === 's' || e.key === 'S'){ e.preventDefault(); t7SplitAtPlayhead(); }
-    else if (e.key === 'Delete' || e.key === 'Backspace'){ e.preventDefault(); t7DeleteSel(); }
+    else if (e.key === 'q' || e.key === 'Q'){ e.preventDefault(); if (typeof t7TrimLeftAtPlayhead === 'function') t7TrimLeftAtPlayhead(); }
+    else if (e.key === 'w' || e.key === 'W'){ e.preventDefault(); if (typeof t7TrimRightAtPlayhead === 'function') t7TrimRightAtPlayhead(); }
+    else if ((e.metaKey || e.ctrlKey) && (e.key === 'c' || e.key === 'C')){ e.preventDefault(); if (typeof t7CopySel === 'function') t7CopySel(); }
+    else if ((e.metaKey || e.ctrlKey) && (e.key === 'v' || e.key === 'V')){ e.preventDefault(); if (typeof t7PasteClip === 'function') t7PasteClip(); }
+    else if ((e.metaKey || e.ctrlKey) && (e.key === 'a' || e.key === 'A')){ e.preventDefault(); if (typeof t7SelectAll === 'function') t7SelectAll(); }   // 2026-09-19f: chọn tất cả
+    else if (e.key === 'm' || e.key === 'M'){ e.preventDefault(); if (typeof t7MergeSel === 'function') t7MergeSel(); }   // 2026-09-19f: gộp clip
+    else if (e.key === 'l' || e.key === 'L'){ e.preventDefault(); if (typeof t7LoopAB === 'function') t7LoopAB(); }   // 2026-09-19f: lặp A-B
+    else if (e.key === 'p' || e.key === 'P'){ e.preventDefault(); if (typeof t7ToggleSnap === 'function') t7ToggleSnap(); }   // 2026-09-19f: bám mốc (magnet)
+    else if (e.key === 'Delete' || e.key === 'Backspace'){ e.preventDefault(); if (typeof _t7SelMulti !== 'undefined' && _t7SelMulti.size > 1) t7DeleteMulti(); else t7DeleteSel(); }
     else if ((e.metaKey || e.ctrlKey) && (e.key === 'z' || e.key === 'Z')){ e.preventDefault(); if (e.shiftKey) t7Redo(); else t7Undo(); }
     else if ((e.metaKey || e.ctrlKey) && (e.key === 'y' || e.key === 'Y')){ e.preventDefault(); t7Redo(); }
     else if (e.key === 'Escape' && document.body.classList.contains('t7-focus')){ e.preventDefault(); t7Focus(false); }

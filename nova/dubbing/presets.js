@@ -21,7 +21,8 @@ const MAX_PRESETS = 100;
 const PRESET_KEYS = [
   'voicePid', 'voiceName', 'language', 'translateTo', 'genre',
   'maxSpeed', 'mixMode', 'origVolume',
-  'speakerMode', 'speakerVoices',
+  'ttsSpeed', 'musicSource', // 2026-09-19u: tốc độ đọc tổng thể + nguồn nhạc nền (none/file/original)
+  'speakerMode', 'speakerVoices', 'speakerVoiceMap',
   'musicPath', 'musicVolume', 'duck',
 ];
 
@@ -41,7 +42,7 @@ function pickConfig(config) {
   for (const k of PRESET_KEYS) {
     const v = src[k];
     if (v === undefined || v === null) continue;
-    if (k === 'maxSpeed' || k === 'origVolume' || k === 'musicVolume') {
+    if (k === 'maxSpeed' || k === 'origVolume' || k === 'musicVolume' || k === 'ttsSpeed') {
       const n = Number(v);
       if (Number.isFinite(n)) out[k] = n;
       continue;
@@ -49,6 +50,22 @@ function pickConfig(config) {
     if (k === 'speakerMode' || k === 'duck') { out[k] = !!v; continue; }
     if (k === 'speakerVoices') {
       if (Array.isArray(v)) out[k] = v.map((x) => String(x || '').trim()).filter(Boolean).slice(0, 8);
+      continue;
+    }
+    if (k === 'speakerVoiceMap') {
+      // (2026-09-19u) {tên nhân vật → pid} — chỉ nhận object phẳng, giá trị
+      // rỗng bị bỏ, tên cap 24 ký tự (đúng SPEAKER_RE), tối đa 16 nhân vật.
+      if (v && typeof v === 'object' && !Array.isArray(v)) {
+        const m = {};
+        let n = 0;
+        for (const kk of Object.keys(v)) {
+          const vv = String(v[kk] || '').trim();
+          if (!vv) continue;
+          m[String(kk).slice(0, 24)] = vv;
+          if (++n >= 16) break;
+        }
+        out[k] = m;
+      }
       continue;
     }
     out[k] = String(v);

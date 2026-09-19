@@ -45,6 +45,13 @@ function t7Build(){
   // 2026-09-18 (t7-studio): bố cục kiểu EZMAXSUB — 3 cột (danh sách | khung xem | Phụ đề/Chi tiết)
   // + timeline nhiều track mở lại chạy hết ngang dưới cùng (CSS trong build-video.css).
   document.getElementById('tool-tool7').classList.add('t7-studio');
+  // 2026-09-19z: phục hồi trạng thái cột Inspector (Phụ đề/Chi tiết cảnh) theo
+  // localStorage — mặc định HIỆN ('1'); user tắt = preview chiếm thêm 330px.
+  try {
+    const on = (localStorage.getItem('t7Inspector') !== '0');
+    document.body.classList.toggle('t7-narrow', !on);
+    document.querySelectorAll('#t7InspBtn,#t7InspBtnFb').forEach(b => b.setAttribute('data-on', on ? '1' : '0'));
+  } catch (e) {}
   try { t7CloseInsp(); } catch (e) {}         // mở tab → cột phải về tab Phụ đề (t7CloseInsp đã hook tab phải)
   try { t7RenderRail(); } catch (e) {}      // thanh biểu tượng dựng ngay, khỏi chờ timeline
   // Nạp trước danh mục để con số trên rail đúng từ đầu (nếu không thì hiện 0 rồi mới nhảy).
@@ -74,6 +81,18 @@ function t7Build(){
     _t7HookColSync();
     setTimeout(() => { if (state.tool === 'tool7') _t7PersistClips(); }, 400);   // lưu clip HOÃN lại (không chặn lúc vào tab)
   });
+}
+
+// 2026-09-19z: ẩn/hiện cột Inspector (Phụ đề/Chi tiết cảnh) để preview rộng hơn 330px.
+// class body.t7-narrow đã được build-video.css hook: ẩn .t7-inspector + đổi grid
+// thành 62|250|1fr. Trạng thái lưu localStorage để nhớ giữa phiên.
+function t7ToggleInspector(){
+  const off = document.body.classList.toggle('t7-narrow');
+  try { localStorage.setItem('t7Inspector', off ? '0' : '1'); } catch (e) {}
+  document.querySelectorAll('#t7InspBtn,#t7InspBtnFb').forEach(b => b.setAttribute('data-on', off ? '0' : '1'));
+  try { setStatus7(off ? '↔ Đã ẩn cột phải — preview rộng hơn.' : '↔ Đã hiện cột phải.', 'info'); } catch (e) {}
+  // preview re-layout theo khung mới (canvas dùng width %, nhưng gọi lại cho chắc)
+  try { if (typeof t7RenderPreview === 'function') t7RenderPreview(); } catch (e) {}
 }
 
 function t7SetAspect(a){
@@ -112,6 +131,11 @@ function t7RailSearch(q){ _t7RailQ = String(q || '').toLowerCase().trim(); const
 
 function t7SetMediaTab(tab){
   let t = tab === 'fx' ? 'motion' : tab;              // 'fx' cũ → nhóm Chuyển động
+  /* 📝 Tóm tắt/Review (2026-09-19x): mục rail cuối — KHÔNG phải tab kho. Bấm = bung/thu
+     panel nhúng #reviewRoot (rvT7Toggle), tab kho hiện tại giữ nguyên. Khi review đang mở
+     mà bấm mục rail khác → đóng review TRƯỚC (trả lại inline-display kho) rồi mới chuyển tab. */
+  if (t === 'review'){ try { rvT7Toggle(); } catch (e) {} return; }
+  if (typeof window.rvT7IsOpen === 'function' && window.rvT7IsOpen()){ try { rvT7Toggle(false); } catch (e) {} }
   if (_T7_TABS.indexOf(t) < 0) t = 'scenes';
   t7State.mediaTab = t;
   const el = (id) => document.getElementById(id);
@@ -160,9 +184,9 @@ function t7RenderMedia(){
     const act = (m.kind === 'audio')
       ? `<div class="act"><button onclick="event.stopPropagation();t7MediaSetAudio('${m.id}','voice')">Giọng đọc</button><button onclick="event.stopPropagation();t7MediaSetAudio('${m.id}','music')">Nhạc nền</button></div>`
       : (m.kind === 'image')
-        ? `<div class="act"><button onclick="event.stopPropagation();t7MediaAddScene('${m.id}')" title="Thêm thành cảnh mới">＋ Cảnh</button><button onclick="event.stopPropagation();t7MediaAddOverlay('${m.id}')" title="Thêm làm ảnh đè full-frame lên trên">＋ Lớp đè</button></div>`
-        : `<div class="act"><button onclick="event.stopPropagation();t7MediaAddScene('${m.id}')">＋ Cảnh</button></div>`;
-    return `<div class="t7-mediaitem"><div class="th" ${th}>${m.kind !== 'image' ? ic : ''}</div><span class="kb">${kb}</span><button class="rm" title="Xoá khỏi thư viện" onclick="event.stopPropagation();t7MediaDelete('${m.id}')">×</button><div class="nm" title="${escapeHtml(m.name)}">${escapeHtml(m.name)}</div>${act}</div>`;
+        ? `<div class="act"><button onclick="event.stopPropagation();t7MediaAddScene('${m.id}')" title="Thêm thành cảnh mới">＋ Cảnh</button><button onclick="event.stopPropagation();t7VtAddFromMedia('${m.id}')" title="Đặt lên track video lớp trên (đè lên cảnh)">＋ Lớp video</button><button onclick="event.stopPropagation();t7MediaAddOverlay('${m.id}')" title="Thêm làm ảnh đè full-frame lên trên">＋ Lớp đè</button></div>`
+        : `<div class="act"><button onclick="event.stopPropagation();t7MediaAddScene('${m.id}')">＋ Cảnh</button><button onclick="event.stopPropagation();t7VtAddFromMedia('${m.id}')" title="Đặt lên track video lớp trên (đè lên cảnh)">＋ Lớp video</button></div>`;
+    return `<div class="t7-mediaitem" draggable="true" ondragstart="t7MediaDragStart(event,'${m.id}')" title="Kéo thả vào track Video ▲ trên timeline"><div class="th" ${th}>${m.kind !== 'image' ? ic : ''}</div><span class="kb">${kb}</span><button class="rm" title="Xoá khỏi thư viện" onclick="event.stopPropagation();t7MediaDelete('${m.id}')">×</button><div class="nm" title="${escapeHtml(m.name)}">${escapeHtml(m.name)}</div>${act}</div>`;
   }).join('');
 }
 
@@ -194,6 +218,7 @@ async function t7MediaSetAudio(id, which){
 function t7MediaDelete(id){
   t7State.media = (t7State.media || []).filter(m => m.id !== id);
   t7State.clips = t7State.clips.filter(c => !(c.imported && c.mediaId === id));   // xoá luôn clip dùng media này
+  t7State.vlayers = (t7State.vlayers || []).filter(o => o.mediaId !== id);        // xoá luôn lớp video dùng media này (tính năng #4)
   _t7PersistClips(); t7RenderMedia(); t7RenderRows(); t7RenderTimeline(); if (!t7State.playing) t7RenderPreview();
 }
 

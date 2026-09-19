@@ -232,9 +232,19 @@ function sentenceCues(plan, sentences, sentenceDursMs, opts = {}) {
   return cues;
 }
 
-/* ── Gộp câu liền kề thành cụm phụ đề ≤ maxWords từ (như slider "từ/cụm"). ── */
+/* ── Gộp câu liền kề thành cụm phụ đề ≤ maxWords từ (như slider "từ/cụm").
+   maxWords = 0 → NGUYÊN CÂU (giống ezmaxsub "Giữ nguyên câu (không chia
+   cụm)"): mỗi câu 1 cue, không gộp. ── */
 function clusterCues(cues, opts = {}) {
-  const maxWords = Math.max(1, Math.min(30, Math.round(Number(opts.maxWords) || 8)));
+  const raw = Math.round(Number(opts.maxWords));
+  const maxWords = Number.isFinite(raw)
+    ? (raw <= 0 ? 0 : Math.min(30, raw))
+    : 5;
+  if (maxWords === 0) {
+    return (Array.isArray(cues) ? cues : [])
+      .map((c) => ({ startMs: c.startMs, endMs: c.endMs, text: String((c && c.text) || '').trim() }))
+      .filter((c) => c.text);
+  }
   const out = [];
   let cur = null;
   for (const c of (Array.isArray(cues) ? cues : [])) {
@@ -251,6 +261,70 @@ function clusterCues(cues, opts = {}) {
   }
   if (cur) out.push(cur);
   return out;
+}
+
+/* ── PREFLIGHT / ƯỚC TÍNH (như /api/review/preflight của ezmaxsub —
+   bản app tính THUẦN cục bộ, không cần AI, không paywall).
+   - Kẹp mục tiêu độ dài như gốc: "bản review không ngắn hơn 1 phút
+     và không quá nửa video gốc".
+   - detail id: nhãn mức chi tiết hiển thị kèm mô tả (fast/balanced/
+     detailed) — NGƯỠNG 15%/30% là xấp xỉ khai báo, chỉ dùng để dán
+     nhãn, không ảnh hưởng pipeline. ── */
+const RATIO_MIN_PCT = 5, RATIO_MAX_PCT = 50, RATIO_DEFAULT_PCT = 20;
+const CAPTION_MIN_WORDS = 1, CAPTION_MAX_WORDS = 20, CAPTION_DEFAULT_WORDS = 5;
+const TARGET_MIN_MS = 60 * 1000;            // không ngắn hơn 1 phút
+const ESTIMATE_ETA_SEC_PER_CHUNK = 45;      // khai báo: ~45s/đoạn cho pha ①
+const DETAIL_PRESETS = [
+  { id: 'fast', label: 'Nhanh', desc: 'lấy mẫu thưa, ít lượt AI nhất' },
+  { id: 'balanced', label: 'Cân bằng', desc: 'đủ tình tiết cho bản review xem cuốn' },
+  { id: 'detailed', label: 'Chi tiết', desc: 'bắt nhiều tình tiết nhất, tốn nhiều lượt AI' },
+];
+function clampRatioPct(v) {
+  const n = Math.round(Number(v));
+  return Number.isFinite(n) ? Math.max(RATIO_MIN_PCT, Math.min(RATIO_MAX_PCT, n)) : RATIO_DEFAULT_PCT;
+}
+function clampCaptionWords(v) {
+  const n = Math.round(Number(v));
+  if (!Number.isFinite(n)) return CAPTION_DEFAULT_WORDS;
+  return n <= 0 ? 0 : Math.max(CAPTION_MIN_WORDS, Math.min(CAPTION_MAX_WORDS, n));
+}
+function detailOfRatio(ratioPct) {
+  const r = clampRatioPct(ratioPct);
+  if (r < 15) return DETAIL_PRESETS[0];
+  if (r <= 30) return DETAIL_PRESETS[1];
+  return DETAIL_PRESETS[2];
+}
+function clockText(sec) {
+  const s = Math.max(0, Math.round(Number(sec) || 0));
+  const m = Math.floor(s / 60), r = s % 60;
+  return r ? (m + ' phút ' + r + ' giây') : (m + ' phút');
+}
+function clampTargetSeconds(sourceDurSec, ratioPct) {
+  const src = Math.max(0, Number(sourceDurSec) || 0);
+  if (!(src > 0)) return { targetSec: 0, clamped: false };
+  const raw = src * (clampRatioPct(ratioPct) / 100);
+  const targetSec = Math.min(Math.max(raw, TARGET_MIN_MS / 1000), src / 2);
+  return { targetSec: Math.round(targetSec), clamped: Math.abs(targetSec - raw) > 2 };
+}
+function preflightEstimate({ durMs, ratioPct, chunkDurMs } = {}) {
+  const durSec = Math.max(0, (Number(durMs) || 0) / 1000);
+  if (!(durSec > 0)) return { ok: false, reason: 'RV_NO_VIDEO' };
+  const cdm = Math.max(60000, Math.round(Number(chunkDurMs) || 480000));
+  const chunks = Math.max(1, Math.ceil(durSec / (cdm / 1000)));
+  const ratio = clampRatioPct(ratioPct);
+  const { targetSec } = clampTargetSeconds(durSec, ratio);
+  const aiCalls = chunks;
+  const extraCalls = chunks; // dựng timeline lần đầu: ≈1 lượt chọn cảnh/đoạn (khai báo như gốc)
+  return {
+    ok: true,
+    sourceDurSec: Math.round(durSec),
+    ratioPct: ratio,
+    chunks, aiCalls, extraCalls,
+    etaSec: chunks * ESTIMATE_ETA_SEC_PER_CHUNK,
+    targetSecondsClamped: targetSec,
+    targetClamped: clampTargetSeconds(durSec, ratio).clamped,
+    detail: detailOfRatio(ratio).id,
+  };
 }
 
 /* ── Ước tính cho cost-line UI (trước khi chạy thật). ── */
@@ -289,4 +363,8 @@ function buildScriptMd(scenes, meta = {}) {
 module.exports = {
   chunksFromCues, wordsOf, buildChunkPrompt, parseScenesJson, scenesFromParsed,
   narrationPlan, sentenceCues, clusterCues, estimateFromCues, buildScriptMd, msToClock,
+  clampRatioPct, clampCaptionWords, detailOfRatio, clockText, clampTargetSeconds,
+  preflightEstimate, DETAIL_PRESETS,
+  RATIO_MIN_PCT, RATIO_MAX_PCT, RATIO_DEFAULT_PCT,
+  CAPTION_MIN_WORDS, CAPTION_MAX_WORDS, CAPTION_DEFAULT_WORDS,
 };

@@ -111,6 +111,52 @@ def pitch_shift_wav(wav_path: str | Path, semitones: float) -> Path:
     return wav_path
 
 
+def speed_change_wav(wav_path: str | Path, factor: float) -> Path:
+    """Đổi tốc độ đọc file WAV (ghi đè tại chỗ) mà GIỮ NGUYÊN cao độ (pitch).
+
+    factor: hệ số tốc độ; 1.5 = nhanh hơn 1.5 lần (ngắn hơn), 0.5 = chậm gấp đôi.
+    Làm bằng ffmpeg `atempo` — giữ cao độ (khác asetrate làm méo cả pitch):
+      - atempo chỉ nhận 0.5..2.0 → factor ngoài khoảng được CHUỖI HÓA thành
+        nhiều node atempo nối tiếp (tích các node = factor, pattern atempoChain).
+    Ghi đè tại chỗ (qua file tạm rồi os.replace) như pitch_shift_wav.
+
+    Dùng làm HẬU KỲ cho engine không hỗ trợ tham số speed native (VieNeu v3
+    Turbo không nhận `speed` — xem engines/vieneu.py): cache vẫn lưu WAV gốc
+    speed=1, đổi tốc độ ở đây nên không vô hiệu cache.
+
+    Mirror verbatim từ voice-studio/backend/audio_utils.py (bản Nova) —
+    voice-drift-check.js bắt nếu 2 bản lệch public API.
+    """
+    wav_path = Path(wav_path)
+    factor = max(0.25, min(4.0, float(factor or 1.0)))
+    if abs(factor - 1.0) < 1e-3:
+        return wav_path
+    nodes: list[float] = []
+    rem = factor
+    while rem > 2.0:
+        nodes.append(2.0)
+        rem /= 2.0
+    while rem < 0.5:
+        nodes.append(0.5)
+        rem /= 0.5
+    nodes.append(round(rem, 6))
+    filt = ",".join(f"atempo={n:.6f}" for n in nodes)
+    tmp = wav_path.with_name(wav_path.name + ".speed.tmp.wav")
+    try:
+        subprocess.run(
+            ["ffmpeg", "-y", "-i", str(wav_path), "-filter:a", filt, str(tmp)],
+            check=True, capture_output=True,
+        )
+        os.replace(tmp, wav_path)
+    finally:
+        if tmp.exists():
+            try:
+                tmp.unlink()
+            except OSError:
+                pass
+    return wav_path
+
+
 def to_mp3(wav_path: str | Path, mp3_path: str | Path) -> Path:
     """Chuyển WAV -> MP3 bằng ffmpeg (đã có sẵn trên máy)."""
     mp3_path = Path(mp3_path)

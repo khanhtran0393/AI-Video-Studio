@@ -90,6 +90,125 @@ function _tsButPhapNoteEn(tone){
   return 'natural storytelling voice';
 }
 
+/* ── QA nhẹ sau khi viết (khai báo rõ, KHÔNG tự sửa đầu ra — Luật 10) ──
+   Đòn bẩy/CTA/Bút pháp/Kỹ năng/Văn hoá chỉ lái prompt; app không kiểm chứng
+   đầu ra nên AI có thể "lỡ" bỏ qua. Các hàm thuần dưới đây chỉ NHẬN DIỆN dấu
+   hiệu để BÁO RÕ qua status — tuyệt đối không can thiệp/bịa lại văn bản kịch bản.
+   Heuristic (luật lấy trực tiếp từ spec trong ts-prompt.js):
+   - CTA quét ~500 ký tự cuối (nơi CTA phải nằm theo _tsPCtaSpec);
+   - banned-opener quét ~300 ký tự đầu (cụm cấm ghi trong RETENTION của prompt);
+   - Bút pháp: luật pov/address/dialogue của _TS_BUT_PHAP — chỉ check dấu hiệu
+     bám được ("các bạn"/"bạn ơi" bị cấm, ngôi nhất cần "tôi/mình", nhãn người
+     nói "X nói:" khi spec cấm nhãn); ngưỡng rộng để tránh báo nhầm;
+   - Kỹ năng: chỉ check skill có tín hiệu CHỮ cứng (Ngôi thứ 2 → cần "bạn"
+     trong đoạn mở + CẤM "tôi"). Các skill cấu trúc (3 hồi, in medias res,
+     countdown, tương phản, gieo mầm…) không có dấu hiệu chữ đáng tin →
+     KHÔNG bịa check (tránh false positive);
+   - Văn hoá: "Tiếng Việt" cấm lễ hội ngoại (chỉ báo khi chủ đề không phải
+     chính là lễ hội đó); "English" cấm idiom Việt. */
+const _TS_QA_CTA_SIGNS = ['like', 'subscribe', 'đăng ký', 'đăng kí', 'bình luận',
+  'comment', 'chia sẻ', 'theo dõi', 'xem tiếp', 'nhấn nút', 'ủng hộ', 'để lại một'];
+function _tsQaCtaSignal(text){
+  const tail = String(text || '').slice(-500).toLowerCase();
+  return _TS_QA_CTA_SIGNS.some((s) => tail.indexOf(s) >= 0);
+}
+function _tsQaBannedOpener(text){
+  const head = String(text || '').slice(0, 300).toLowerCase();
+  return ['hãy tưởng tượng', 'bạn có biết'].some((b) => head.indexOf(b) >= 0);
+}
+/* Đếm số lần xuất hiện (không phân biệt hoa/thường) — substring, đủ cho từ VN/EN đơn. */
+function _tsQaDemTu(text, tu){
+  const s = String(text || '').toLowerCase();
+  const k = String(tu || '').toLowerCase();
+  if (!k) return 0;
+  return s.split(k).length - 1;
+}
+/* Nhãn người nói "Anh nói:" / "Bà tôi đáp:" — spec cấm khi tone có lời thoại. */
+function _tsQaNhanThoai(text){
+  return /[A-Za-zÀ-ỹ]{1,14}\s+(nói|đáp|hỏi|thầm|thì thầm|kêu):/i.test(String(text || ''));
+}
+function _tsQaTone(text, tone){
+  const t = String(text || ''), canhBao = [];
+  if (tone === 'Tự sự thuần'){
+    if (_tsQaDemTu(t, 'các bạn') > 0)
+      canhBao.push('bút pháp "Tự sự thuần" cấm xưng hô khán giả nhưng thấy "các bạn"');
+    if (_tsQaDemTu(t, 'tôi') === 0 && _tsQaDemTu(t, 'mình') === 0)
+      canhBao.push('bút pháp "Tự sự thuần" cần ngôi kể thứ nhất nhưng không thấy "tôi/mình"');
+  } else if (tone === 'Review ở góc nhìn thứ 3'){
+    if (_tsQaDemTu(t, 'bạn ơi') > 0)
+      canhBao.push('bút pháp "Review góc nhìn thứ 3" cấm gọi thẳng "bạn ơi"');
+    // Ngưỡng theo MẬT ĐỘ (6 "tôi" / 300 từ) — không đếm tuyệt đối: văn bản dài
+    // kể ngôi 3 đúng chuẩn vẫn có "tôi" trong lời thoại nhân vật. Văn bản ngắn
+    // (<300 từ) giữ ngưỡng 6 tuyệt đối qua Math.max.
+    const soTu = (t.match(/\S+/g) || []).length;
+    if (_tsQaDemTu(t, 'tôi') * 300 / Math.max(soTu, 300) > 6)
+      canhBao.push('bút pháp "Review góc nhìn thứ 3" nghi lọt ngôi thứ nhất ("tôi" dày hơn 6/300 từ)');
+  } else if (String(tone || '').indexOf('lời thoại') >= 0){
+    if (_tsQaNhanThoai(t))
+      canhBao.push('bút pháp có thoại cấm nhãn người nói ("X nói:") — nghi còn sót nhãn');
+  }
+  return canhBao;
+}
+function _tsQaSkill(text, skill){
+  const t = String(text || ''), canhBao = [], sk = String(skill || '');
+  if (sk.indexOf('Ngôi thứ 2') === 0){
+    if (_tsQaDemTu(t.slice(0, 400), 'bạn') === 0)
+      canhBao.push('skill "Ngôi thứ 2 đắm chìm" cần "bạn" ngay đoạn mở nhưng không thấy');
+    if (_tsQaDemTu(t, 'tôi') > 3)
+      canhBao.push('skill "Ngôi thứ 2 đắm chìm" cấm "tôi" — nghi lọt ngôi kể thứ nhất');
+  }
+  return canhBao;
+}
+const _TS_QA_LEHOI_NGOAI = /halloween|thanksgiving|black friday/i;
+function _tsQaLang(text, lang, topic){
+  const t = String(text || ''), canhBao = [], tp = String(topic || '');
+  if (lang === 'Tiếng Việt'){
+    // Đếm qua _tsQaDemTu (split) — String.match KHÔNG cờ /g chỉ trả match đầu tiên.
+    const dem = _tsQaDemTu(t, 'halloween') + _tsQaDemTu(t, 'thanksgiving') + _tsQaDemTu(t, 'black friday');
+    if (dem >= 3 && !_TS_QA_LEHOI_NGOAI.test(tp))
+      canhBao.push('văn hoá "Tiếng Việt" cấm lễ hội ngoại — bài nhắc lễ hội ngoại dày trong khi chủ đề không phải về nó');
+  } else if (lang === 'English'){
+    if (t.toLowerCase().indexOf('ăn quả nhớ kẻ trồng cây') >= 0)
+      canhBao.push('văn hoá "English" cấm idiom Việt — thấy "ăn quả nhớ kẻ trồng cây"');
+  }
+  return canhBao;
+}
+/* Trả về mảng cảnh báo (rỗng = QA sạch) — gọi sau khi có kịch bản hoàn chỉnh.
+   opts = { lever, cta, tone, skill, lang, topic }. */
+function _tsQaHopLoi(clean, opts){
+  const o = opts || {};
+  const canhBao = [];
+  if (o.lever && _tsQaBannedOpener(clean)) canhBao.push('mở đầu dùng cụm bị cấm ("Hãy tưởng tượng"/"Bạn có biết") — đòn bẩy déjà vu chưa ăn vào hook');
+  if (o.cta && !_tsQaCtaSignal(clean)) canhBao.push('CTA đang bật nhưng không nhận diện được câu kêu gọi hành động ở đoạn kết');
+  canhBao.push(..._tsQaTone(clean, o.tone));
+  canhBao.push(..._tsQaSkill(clean, o.skill));
+  canhBao.push(..._tsQaLang(clean, o.lang, o.topic));
+  return canhBao;
+}
+/* QA Novel THEO TỪNG CHƯƠNG: tone/skill/lang chạy trên từng parts[i] (thay vì
+   toàn bài gộp một khối) rồi GỘP cảnh báo trùng kèm số chương — báo đúng chỗ
+   lệch thay vì bắt user mò trong cả truyện. Đòn bẩy/CTA vẫn ở cấp toàn bài
+   (mở đầu truyện / kết chương cuối) — caller tự chạy _tsQaHopLoi riêng. */
+function _tsQaGopChuong(parts, opts){
+  const o = opts || {}, gop = new Map();
+  (Array.isArray(parts) ? parts : []).forEach((ch, i) => {
+    const qaCh = _tsQaTone(ch, o.tone)
+      .concat(_tsQaSkill(ch, o.skill), _tsQaLang(ch, o.lang, o.topic));
+    qaCh.forEach((w) => {
+      if (!gop.has(w)) gop.set(w, []);
+      gop.get(w).push(i + 1);
+    });
+  });
+  const ketQua = [];
+  gop.forEach((chList, w) => ketQua.push(`Chương ${chList.join(',')}: ${w}`));
+  return ketQua;
+}
+/* Nhãn extras đang kèm vào prompt — dùng cho status trước và sau khi viết. */
+function _tsQaExtrasLabel(lever, skill, cta){
+  return [lever ? 'đòn bẩy tâm lý' : '', skill ? 'kỹ năng viết' : '', cta ? 'CTA' : '']
+    .filter(Boolean).join(' + ');
+}
+
 async function tsGenerate(rewrite){
   const topic = document.getElementById('tsTopic')?.value.trim();
   if (!topic){ setStatusScript('Nhập chủ đề / tiêu đề trước.', 'error'); return; }
@@ -150,7 +269,10 @@ OUTPUT RULES (very important):
 - Split into short paragraphs of 2-4 sentences, easy to read aloud for an AI voice (TTS). Start immediately with the hook; end with a closing line${cta ? ' (the CTA is the natural last beat before the final line)' : ''}.
 Return only the script content, nothing else.`;
   const btn = document.getElementById('tsGenBtn'); if (btn) btn.disabled = true;
-  const _tk = _startElapsed('✍️ Đang viết kịch bản', setStatusScript,
+  // Khai báo rõ extras đang được kèm vào prompt (đòn bẩy/skill/CTA) — user nhìn
+  // thấy ngay ở status, không còn "card trang trí" không phản hồi.
+  const _tsExtras = _tsQaExtrasLabel(lever, skill, cta);
+  const _tk = _startElapsed(_tsExtras ? `✍️ Đang viết kịch bản (kèm ${_tsExtras})` : '✍️ Đang viết kịch bản', setStatusScript,
     'bản dài / chạy bằng gói Claude-ChatGPT có thể chờ vài phút — cứ để yên');
   try {
     const maxT = Math.min(16000, Math.round(words * 2.5) + 600);
@@ -169,7 +291,15 @@ Return only the script content, nothing else.`;
     const clean = _tsClean(raw);
     const out = document.getElementById('tsOutput'); if (out) out.value = clean;
     tsOutMeta();
-    setStatusScript('✓ Đã viết xong. Kiểm tra rồi Đưa vào Giọng nói / Sang Phân Cảnh.', 'ok');
+    // QA nhẹ sau khi viết: CTA bật mà kết không có dấu hiệu kêu gọi, hoặc mở đầu
+    // vướng cụm cấm → báo ⚠ LỘ LIỄU, kịch bản giữ nguyên (không tự sửa — Luật 10).
+    const qa = _tsQaHopLoi(clean, { lever, cta, tone, skill, lang, topic });
+    if (qa.length){
+      setStatusScript('⚠ QA nhẹ: ' + qa.join(' · ') + ' — kịch bản giữ nguyên, bạn xem lại phần mở đầu/kết rồi viết lại nếu cần.', 'error');
+    } else {
+      const okNote = _tsExtras ? ` Đã kèm: ${_tsExtras}.` : '';
+      setStatusScript(`✓ Đã viết xong${okNote} Kiểm tra rồi Đưa vào Giọng nói / Sang Phân Cảnh.`, 'ok');
+    }
   } catch (e){ _stopElapsed(_tk); setStatusScript('Lỗi: ' + (e.message || e), 'error'); }
   if (btn) btn.disabled = false;
 }
@@ -199,7 +329,8 @@ function tsToggleNovel(){
 async function tsGenerateNovel(o){
   const btn = document.getElementById('tsGenBtn'); if (btn) btn.disabled = true;
   const out = document.getElementById('tsOutput'); if (out) out.value = '';
-  const _tk = _startElapsed('📖 Novel · đang dựng khung truyện', setStatusScript,
+  const _tsExtras = _tsQaExtrasLabel(o.lever, o.skill, o.cta);
+  const _tk = _startElapsed(_tsExtras ? `📖 Novel · đang dựng khung truyện (kèm ${_tsExtras})` : '📖 Novel · đang dựng khung truyện', setStatusScript,
     'chế độ Novel viết từng chương + ghi nhớ sau mỗi chương — chậm hơn thường, cứ để yên');
   try {
     const bible = await _tsNovelArchitect(o);
@@ -238,7 +369,13 @@ async function tsGenerateNovel(o){
       }
     }
     _stopElapsed(_tk);
-    setStatusScript(`✓ Novel xong: ${o.n} chương · ${_tsWordCount(parts.join(' '))} từ. Kiểm tra rồi Đưa vào Giọng nói / Sang Phân Cảnh.`, 'ok');
+    // Đòn bẩy/CTA: cấp TOÀN BÀI (mở đầu truyện / kết chương cuối). Tone/skill/lang:
+    // QA THEO TỪNG CHƯƠNG rồi gộp kèm số chương — báo đúng chương lệch (Luật 10:
+    // chỉ báo ⚠ lộ liễu, KHÔNG tự sửa). `o` đã đủ lever/cta/tone/skill/lang/topic.
+    const qa = _tsQaHopLoi(parts.join(' '), { lever: o.lever, cta: o.cta })
+      .concat(_tsQaGopChuong(parts, { tone: o.tone, skill: o.skill, lang: o.lang, topic: o.topic }));
+    const qaNote = qa.length ? ` ⚠ QA nhẹ: ${qa.join(' · ')} — kịch bản giữ nguyên, xem lại đúng chương bị cảnh báo.` : '';
+    setStatusScript(`✓ Novel xong: ${o.n} chương · ${_tsWordCount(parts.join(' '))} từ.${qaNote} Kiểm tra rồi Đưa vào Giọng nói / Sang Phân Cảnh.`, qa.length ? 'error' : 'ok');
   } catch (e){
     _stopElapsed(_tk);
     setStatusScript('Lỗi Novel: ' + (e.message || e) + (out && out.value.trim() ? ' — phần chương đã viết còn trong ô Kịch bản.' : ''), 'error');

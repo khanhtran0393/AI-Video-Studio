@@ -181,6 +181,50 @@ console.log('\n[9] buildScriptMd');
   ok(md.includes('Cảnh mở đầu.'), 'lời cảnh vào md');
 }
 
+/* ── 10. Preflight / kẹp mục tiêu / nguyên câu (đồng bộ ezmaxsub) ── */
+console.log('\n[10] preflightEstimate + clampTargetSeconds + nguyên câu');
+{
+  /* clampTargetSeconds: "không ngắn hơn 1 phút và không quá nửa video gốc" */
+  const cl = E.clampTargetSeconds(3600, 20); // 1h * 20% = 720s — không kẹp
+  eq(cl.targetSec, 720, '20% của 1h = 720s, không kẹp');
+  eq(cl.clamped, false, 'không kẹp → clamped false');
+  const clMin = E.clampTargetSeconds(120, 5); // 6s < 60s → kẹp lên 60s
+  eq(clMin.targetSec, 60, 'mục tiêu 6s → kẹp lên 60s (không ngắn hơn 1 phút)');
+  eq(clMin.clamped, true, 'kẹp lên → clamped true');
+  const clMax = E.clampTargetSeconds(600, 90); // > 50% → kẹp 50% (300s = nửa video)
+  eq(clMax.targetSec, 300, 'mục tiêu > nửa video → kẹp nửa video');
+  const clBad = E.clampTargetSeconds(0, 20);
+  eq(clBad.targetSec, 0, 'thiếu thời lượng → 0, không bịa');
+
+  /* ratio + caption clamps (như hr/yf của bản gốc) */
+  eq(E.clampRatioPct(3), 5, 'ratio < min → 5');
+  eq(E.clampRatioPct(77), 50, 'ratio > max → 50');
+  eq(E.clampRatioPct('x'), 20, 'ratio NaN → default 20');
+  eq(E.clampCaptionWords(0), 0, 'caption 0 = nguyên câu');
+  eq(E.clampCaptionWords(44), 20, 'caption > max → 20');
+  eq(E.clampCaptionWords('x'), 5, 'caption NaN → default 5');
+
+  /* preflightEstimate — tính thuần, không mạng */
+  const pf = E.preflightEstimate({ durMs: 3 * 3600 * 1000, ratioPct: 20 });
+  eq(pf.ok, true, 'preflight ok với thời lượng hợp lệ');
+  eq(pf.chunks, Math.ceil(10800 / 480), 'chunks = ceil(dur / 8 phút)');
+  eq(pf.aiCalls, pf.chunks, 'aiCalls = chunks (pha ①)');
+  eq(pf.etaSec, pf.chunks * 45, 'eta = 45s/đoạn (khai báo)');
+  eq(pf.sourceDurSec, 10800, 'thời lượng nguồn (giây)');
+  ok(pf.targetSecondsClamped > 0 && pf.targetSecondsClamped <= 5400, 'target ≤ nửa video');
+  eq(E.preflightEstimate({ durMs: 0 }).ok, false, 'không có thời lượng → ok:false (không bịa)');
+  eq(E.detailOfRatio(10).id, 'fast', 'ratio 10% → mức Nhanh');
+  eq(E.detailOfRatio(20).id, 'balanced', 'ratio 20% → mức Cân bằng');
+  eq(E.detailOfRatio(40).id, 'detailed', 'ratio 40% → mức Chi tiết');
+
+  /* clusterCues maxWords=0 → NGUYÊN CÂU (không gộp) */
+  const cues = [cue(0, 1000, 'một hai'), cue(1000, 2000, 'ba bốn')];
+  const whole = E.clusterCues(cues, { maxWords: 0 });
+  eq(whole.length, 2, 'nguyên câu: mỗi câu 1 cue');
+  eq(whole[1].text, 'ba bốn', 'nguyên câu: text giữ nguyên');
+  eq(E.clusterCues(cues).length, 1, 'mặc định 5 từ/cụm: 4 từ gộp thành 1 cụm');
+}
+
 console.log('\n=== KẾT QUẢ: ' + pass + ' pass, ' + fail + ' fail ===');
 if (fail) { console.log('FAIL: ' + failures.join(' | ')); process.exit(1); }
 console.log('PASS');

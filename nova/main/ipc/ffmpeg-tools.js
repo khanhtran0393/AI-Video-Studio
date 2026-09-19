@@ -86,6 +86,19 @@ function registerFfmpegToolsIpc() {
     } catch (e) { return { error: e.message || String(e) }; }
   });
 
+  // Chọn ảnh/GIF cho lớp canvas Dựng Video T7 (2026-09-19n) — filter riêng, không tái dùng
+  // ffx:pick-media (video/âm thanh) để dialog không gợi file sai loại.
+  ipcMain.handle('ffx:pick-canvas-media', async () => {
+    try {
+      const r = await dialog.showOpenDialog(state.mainWindow, {
+        title: 'Chọn ảnh / GIF cho lớp phủ', properties: ['openFile'],
+        filters: [{ name: 'Ảnh', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'] }],
+      });
+      if (r.canceled || !r.filePaths || !r.filePaths[0]) return { canceled: true };
+      return { path: r.filePaths[0] };
+    } catch (e) { return { error: e.message || String(e) }; }
+  });
+
   // Chọn nơi lưu output. Trả cờ `exists` để renderer xác nhận GHI ĐÈ trước khi chạy
   // (ffmpeg -y ghi đè lặng lẽ — cấm hành vi ngầm, Luật 10). defaultDir = thư mục lần trước.
   ipcMain.handle('ffx:pick-output', async (_e, payload = {}) => {
@@ -153,6 +166,30 @@ function registerFfmpegToolsIpc() {
   handleOp('ffx:burn-subtitles', (p, onProgress) => mediaTools.burnSubtitles(Object.assign({}, p, { onProgress })));
   // ── Trình Soạn Thảo Video (2026-09-19): burn lớp phủ canvas (blur/chữ/khối màu/media/filter/nền) ──
   handleOp('ffx:overlay-burn', (p, onProgress) => mediaTools.burnOverlays(Object.assign({}, p, { onProgress })));
+  // ── Dựng Video T7 (2026-09-19n): burn lớp canvas rồi RENAME ĐÈ file nguồn — output vẫn
+  //    1 file duy nhất. Không fallback ngầm: thiếu nguồn / thiếu lớp → lỗi lộ liễu (Luật 10).
+  //    Lưu ý khai báo: burnOverlays re-encode hình h264 (audio copy) — đúng mục đích xuất MP4/MOV/MKV của T7.
+  ipcMain.handle('ffx:overlay-burn-replace', async (e, payload = {}) => {
+    const src = String(payload.srcPath || '');
+    const layers = Array.isArray(payload.layers) ? payload.layers.filter(Boolean) : [];
+    if (!src || !fs.existsSync(src)) return { error: 'T7_CV_SRC_MISSING: không tìm thấy file video nguồn để ghi lớp — ' + src };
+    if (!layers.length) return { error: 'T7_CV_NO_LAYERS: không có lớp canvas nào để ghi' };
+    const tmp = src + '.t7cv-burn' + String(Date.now()) + path.extname(src);
+    try {
+      const r = await mediaTools.burnOverlays({
+        inputPath: src, outputPath: tmp, overlays: layers, onProgress: progressSender(e),
+      });
+      if (!r || r.error) {
+        try { fs.unlinkSync(tmp); } catch (_) { /* dọn best-effort — lỗi gốc vẫn trả trước */ }
+        return (r && r.error) ? r : { error: 'T7_CV_BURN: burnOverlays thất bại không rõ lỗi' };
+      }
+      fs.renameSync(tmp, src);   // cùng volume → rename nguyên tử, đè đúng file đã xuất
+      return { ok: true, path: src, layers: r.layers };
+    } catch (err) {
+      try { if (fs.existsSync(tmp)) fs.unlinkSync(tmp); } catch (_) { /* giữ lỗi gốc */ }
+      return errOf(err);
+    }
+  });
   // Thumbnail 1 frame (grid thẻ Ghép Video) — nhanh, không cần progress.
   ipcMain.handle('ffx:thumb', async (_e, payload = {}) => {
     try { return await mediaTools.makeThumb(payload || {}); }

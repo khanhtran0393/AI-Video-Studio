@@ -261,11 +261,13 @@ contextBridge.exposeInMainWorld('native', {
   dub: {
     pickVideo: () => ipcRenderer.invoke('dub:pickVideo'),
     pickSrt: () => ipcRenderer.invoke('dub:pickSrt'),
+    // Quét danh sách nhân vật từ SRT (2026-09-19u): {srtPath} → [{name, cues}]
+    scanSpeakers: (p) => ipcRenderer.invoke('dub:scanSpeakers', p || {}),
     pickOutput: (defaultName) => ipcRenderer.invoke('dub:pickOutput', { defaultName }),
     voices: () => ipcRenderer.invoke('dub:voices'),
     render: (payload) => ipcRenderer.invoke('dub:render', payload || {}),
     // Kiểm tra giọng (health check): dò backend + TTS 1 câu ngắn
-    checkVoice: () => ipcRenderer.invoke('dub:checkVoice'),
+    checkVoice: (p) => ipcRenderer.invoke('dub:checkVoice', p),
     // Lồng tiếng loạt: nhiều video + SRT cùng tên → hàng đợi tuần tự
     pickVideos: () => ipcRenderer.invoke('dub:pickVideos'),
     pickBatchOutDir: () => ipcRenderer.invoke('dub:pickBatchOutDir'),
@@ -291,9 +293,11 @@ contextBridge.exposeInMainWorld('native', {
     pickSrt: () => ipcRenderer.invoke('review:pickSrt'),
     pickOutDir: () => ipcRenderer.invoke('review:pickOutDir'),
     aiStatus: () => ipcRenderer.invoke('review:aiStatus'),
+    estimate: (videoPath, ratioPct) => ipcRenderer.invoke('review:estimate', { videoPath, ratioPct }),
     voices: () => ipcRenderer.invoke('review:voices'),
     analyze: (payload) => ipcRenderer.invoke('review:analyze', payload || {}),
     build: (payload) => ipcRenderer.invoke('review:build', payload || {}),
+    toT7: (payload) => ipcRenderer.invoke('review:toT7', payload || {}),   // nạp timeline vào Dựng Video (T7)
     run: (payload) => ipcRenderer.invoke('review:run', payload || {}),
     cancel: () => ipcRenderer.invoke('review:cancel'),
     onProgress: (cb) => {
@@ -346,6 +350,9 @@ contextBridge.exposeInMainWorld('native', {
     burnSubtitles: (payload) => ipcRenderer.invoke('ffx:burn-subtitles', payload),
     // Trình Soạn Thảo Video (2026-09-19): burn lớp phủ canvas (blur/chữ/khối màu/media/filter/nền).
     overlayBurn: (payload) => ipcRenderer.invoke('ffx:overlay-burn', payload),
+    // Dựng Video T7 (2026-09-19n): chọn ảnh/GIF cho lớp canvas + burn-lớp-rename-đè file nguồn.
+    pickCanvasMedia: () => ipcRenderer.invoke('ffx:pick-canvas-media'),
+    overlayBurnReplace: (payload) => ipcRenderer.invoke('ffx:overlay-burn-replace', payload),
     // Electron 43 gỡ File.path → drag-drop file vào GUI phải đi qua webUtils.getPathForFile
     // (hàm đồng bộ, chạy trong preload — KHÔNG phải kênh IPC mới).
     pathForFile: (file) => webUtils.getPathForFile(file),
@@ -353,6 +360,17 @@ contextBridge.exposeInMainWorld('native', {
       const listener = (_e, s) => cb && cb(s);
       ipcRenderer.on('ffx:progress', listener);
       return () => ipcRenderer.removeListener('ffx:progress', listener);
+    },
+  },
+  // Tải Video (yt-dlp đóng gói sẵn — sidebar Công cụ FFmpeg): metadata + tải + huỷ + progress.
+  ytdl: {
+    info: (payload) => ipcRenderer.invoke('ytdl:info', payload || {}),
+    download: (payload) => ipcRenderer.invoke('ytdl:download', payload || {}),
+    cancel: () => ipcRenderer.invoke('ytdl:cancel'),
+    onProgress: (cb) => {
+      const listener = (_e, s) => cb && cb(s);
+      ipcRenderer.on('ytdl:progress', listener);
+      return () => ipcRenderer.removeListener('ytdl:progress', listener);
     },
   },
   // Phát Trực Tiếp (Livestream Studio): đa nền tảng RTMP (YouTube/TikTok/Facebook/Tùy chỉnh),

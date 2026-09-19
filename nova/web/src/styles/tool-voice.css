@@ -31,7 +31,7 @@
            2026-09-12, sau khi lưới .gcard bị gỡ): .be-item KHÔNG có position:relative
            → nếu để plan position:absolute như bản .gdel cũ, mọi nút sẽ đè nhau ở
            gốc phải .be-menu. Ở đây trả về dòng chảy flex của item. */
-        #tool-toolvoice .be-item .gdel{position:static;padding:2px 8px;min-width:0;font-size:11.5px;line-height:1.5}
+        #tool-toolvoice .be-item .gdel{position:static;padding:2px 8px;min-width:0;font-size:11.5px;line-height:1.5;flex:none}
         #tool-toolvoice .gadd{border:1px dashed var(--border-2);border-radius:10px;display:grid;place-items:center;
           color:var(--text-dim);font-size:13px;cursor:pointer;min-height:100px;font-weight:500}
         #tool-toolvoice .gadd:hover{border-color:var(--accent);color:var(--accent)}
@@ -47,7 +47,7 @@
         #tool-toolvoice .gplay.on{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
 
         /* Khu đọc — hai cột */
-        #tool-toolvoice .gtts{display:grid;grid-template-columns:1fr 254px;gap:0}
+        #tool-toolvoice .gtts{display:grid;grid-template-columns:1fr 300px;gap:0}
         @media(max-width:900px){#tool-toolvoice .gtts{grid-template-columns:1fr}}
         /* Lưới kéo hai cột cao bằng nhau; cột trái nội dung ngắn hơn nên phải cho
            ô văn bản giãn lấp chỗ, không thì thừa một mảng trắng dưới nút. */
@@ -113,5 +113,19 @@
           cursor:pointer;text-align:left;font-size:13px;color:var(--text)}
         #tool-toolvoice .be-item:hover{background:var(--surface-2)}
         #tool-toolvoice .be-item.sel{background:var(--accent-soft)}
+        /* Tên giọng PHẢI hiện đủ (phản hồi 2026-09-19: .be-ten nowrap + ellipsis
+           cắt tên dài trong cột phải hẹp → khó thao tác). Trong menu mở cho tên
+           xuống dòng; nút đóng (be-btn) cho tên chiếm hết chỗ còn lại và hover
+           thấy đủ qua title trên item/nút. */
+        #tool-toolvoice .be-menu .be-item{flex-wrap:wrap}
+        #tool-toolvoice .be-menu .be-ten{white-space:normal;overflow:visible;text-overflow:clip;word-break:break-word;flex:1;min-width:0}
+        #tool-toolvoice .be-menu .be-mo{white-space:normal;flex:1 1 auto;margin-left:0;order:3;flex-basis:100%}
+        /* flex-wrap:wrap (2026-09-19m): .be-mo dùng flex-basis:100% để xuống dòng
+           riêng — không wrap thì basis 100% chỉ chiếm hết chiều ngang và BÉP .be-ten
+           (min-width:0 + break-word) về ~1 ký tự → tên giọng xếp dọc từng chữ
+           (phản hồi user 2026-09-19). Wrap bật rồi thì .be-mo thật sự sang dòng 2,
+           dòng 1 còn tên + nút Sửa/Xoá/▶; nút .gdel có flex:none (rule .be-item
+           .gdel ở trên) để không bị co ép cùng .be-ten. */
+        #tool-toolvoice .be-btn .be-ten{flex:1;min-width:0}
         #tool-toolvoice .be-tt{font-size:11.5px;color:var(--text-dim);margin-top:6px;line-height:1.55}
       

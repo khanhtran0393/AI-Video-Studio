@@ -102,13 +102,6 @@ function switchTool(name){
       catch (e) { console.error('[dub] init lỗi:', e); }
     }
   }
-  if (name === 'toolreview') {
-    const _rvC = document.getElementById('reviewRoot');
-    if (_rvC && window.ReviewPanel && typeof window.ReviewPanel.init === 'function') {
-      try { window.ReviewPanel.init(_rvC); }
-      catch (e) { console.error('[review] init lỗi:', e); }
-    }
-  }
   if (name === 'toolimzic') {
     const frame = document.getElementById('imzicFrame');
     const isLoaded = frame && (frame.getAttribute('data-loaded') === '1');

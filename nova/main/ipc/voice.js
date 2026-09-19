@@ -132,13 +132,21 @@ ipcMain.handle('voice-engines', () => require('../../voice-native/engines').list
   }
   ipcMain.handle('voice-sample-save', async (_e, payload = {}) => {
     try {
-      const { key, dataUrl, sp, p } = payload || {};
+      const { key, dataUrl, sp, p, sig } = payload || {};
       if (!key || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:') || dataUrl.length > 16 * 1024 * 1024) return { error: 'DỮ_LIỆU_KHÔNG_HỢP_LỆ' };
       const file = voiceSampleFile(key);
       await fsp.mkdir(path.dirname(file), { recursive: true });
-      // Format v2: gói tham số tốc độ/cao độ lúc gen cùng dataURL — renderer đọc ra
-      // so khớp, lệch tham số thì gen lại và ghi đè (đĩa luôn 1 file / giọng + engine).
-      await fsp.writeFile(file, JSON.stringify({ v: 2, sp: typeof sp === 'number' ? sp : null, p: typeof p === 'number' ? p : null, dataUrl }), 'utf8');
+      // Format v3 (2026-09-19k): gói THÊM chữ ký ĐẦY ĐỦ cài đặt lúc gen (sig —
+      // tốc độ/cao độ/khe/ngôn ngữ/tham số nâng cao) cùng dataURL — renderer đọc
+      // ra so khớp, lệch cài đặt thì gen lại và ghi đè (đĩa luôn 1 file/giếng+engine).
+      // v2 cũ chỉ có sp/p, v1 là dataURL trần — load trả sig null, renderer tự gen lại.
+      await fsp.writeFile(file, JSON.stringify({
+        v: 3,
+        sp: typeof sp === 'number' ? sp : null,
+        p: typeof p === 'number' ? p : null,
+        sig: typeof sig === 'string' ? sig.slice(0, 512) : null,
+        dataUrl,
+      }), 'utf8');
       await voiceSampleGomDu();
       return { ok: true };
     } catch (e) { return { error: String((e && e.message) || e) }; }
@@ -149,11 +157,16 @@ ipcMain.handle('voice-engines', () => require('../../voice-native/engines').list
       let raw;
       try { raw = await fsp.readFile(file, 'utf8'); } catch { return { missing: true }; }
       if (typeof raw !== 'string' || !raw.length) return { missing: true };
-      // Format v2 (JSON có tham số): trả nguyên object để renderer so khớp tham số.
+      // Format v2/v3 (JSON có tham số): trả nguyên object để renderer so khớp cài đặt.
       try {
         const obj = JSON.parse(raw);
         if (obj && typeof obj.dataUrl === 'string' && obj.dataUrl.startsWith('data:')){
-          return { ok: true, dataUrl: obj.dataUrl, sp: typeof obj.sp === 'number' ? obj.sp : null, p: typeof obj.p === 'number' ? obj.p : null };
+          return {
+            ok: true, dataUrl: obj.dataUrl,
+            sp: typeof obj.sp === 'number' ? obj.sp : null,
+            p: typeof obj.p === 'number' ? obj.p : null,
+            sig: typeof obj.sig === 'string' ? obj.sig : null,
+          };
         }
       } catch (_) {}
       // File v1 cũ (dataURL trần) — trả sp/p trống, renderer coi là lệch tham số
@@ -183,6 +196,22 @@ ipcMain.handle('voice-engines', () => require('../../voice-native/engines').list
       if (key == null || key === ''){
         await fsp.rm(path.join(app.getPath('userData'), 'voice-sample-cache'), { recursive: true, force: true });
         return { ok: true };
+      }
+      // 2026-09-19k: cache v4 lưu NHIỀU mẫu/giếng (mỗi tổ hợp cài đặt + câu nghe
+      // thử 1 file) → xoá 1 giọng phải xoá theo TIỀN TỐ key (renderer gửi
+      // { prefix }) — main sanitize prefix đúng thuật toán voiceSampleFile rồi
+      // gỡ mọi file .txt bắt đầu bằng prefix đó. key chuỗi = xoá 1 file (cũ).
+      if (key && typeof key === 'object' && typeof key.prefix === 'string' && key.prefix){
+        const safe = String(key.prefix).replace(/[/\\:*?"<>|]+/g, '_').replace(/\.\.+/g, '_').slice(0, 180);
+        const dir = voiceSampleDir();
+        let names;
+        try { names = await fsp.readdir(dir); } catch { return { ok: true, removed: 0 }; }
+        let removed = 0;
+        for (const f of names){
+          if (!f.endsWith('.txt') || !f.startsWith(safe)) continue;
+          try { await fsp.rm(path.join(dir, f), { force: true }); removed++; } catch (_) {}
+        }
+        return { ok: true, removed };
       }
       try { await fsp.rm(voiceSampleFile(key), { force: true }); } catch (_) {}
       return { ok: true };

@@ -24,6 +24,13 @@ function buildVideoSpec({ storyPlan, visualPlan, manifest, config, audio }) {
     });
     const tInfo = grammar.transitionFor(vp.transition);
     const dur = ROUND3(sp.end - sp.start);
+    // Nền VIDEO gen Flow (PT1+PT3+PT4): asset type 'video' → khai báo kind + clip metadata
+    // (chiến lược normalize + thời lượng clip thật) để cost/QA/plan đọc được (Luật 10).
+    const isVideoBg = !!(bg && bg.type === 'video');
+    const background = isVideoBg
+      ? { asset: bg.assetId, kind: 'video',
+          clip: { strategy: bg.normalizeStrategy || null, durationSec: bg.durationSec ? ROUND3(bg.durationSec) : null } }
+      : { asset: bg ? bg.assetId : null };
     // Caption theo giây NỘI-CẢNH, kẹp trong [0, dur] — beat chỉ nằm trong scene sau khi story plan đã ép liền kề.
     const captions = sp.beats.map((b, bi) => {
       const cs = Math.max(0, Math.min(dur, ROUND3(b.start - sp.start)));
@@ -32,7 +39,7 @@ function buildVideoSpec({ storyPlan, visualPlan, manifest, config, audio }) {
     });
     return {
       id: sp.sceneId, start: ROUND3(sp.start), end: ROUND3(sp.end),
-      background: { asset: bg ? bg.assetId : null },
+      background,
       elements, camera: { type: vp.camera, from: cam.from, to: cam.to },
       captions, transition: vp.transition, transDur: tInfo.dur,
     };

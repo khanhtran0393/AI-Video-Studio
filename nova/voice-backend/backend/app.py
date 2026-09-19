@@ -24,7 +24,7 @@ from pydantic import BaseModel
 
 import config
 import voicebank
-from audio_utils import concat_wavs, pitch_shift_wav, split_sentences, to_mp3, wav_duration, write_srt
+from audio_utils import concat_wavs, pitch_shift_wav, speed_change_wav, split_sentences, to_mp3, wav_duration, write_srt
 from engines import get_asr_engine, get_tts_engine
 
 app = FastAPI(title="Voice Studio", version="0.1.0")
@@ -141,6 +141,7 @@ except Exception as _e:  # noqa
 # TOÀN BỘ khối phải sinh lại dù chỉ 1 câu đổi. Cache băm (engine, giọng, text, speed,
 # advanced params) → file WAV; khối trùng khớp copy tức thì, không gọi model.
 # Lưu ý: pitch/gap_ms là HẬU KỲ (áp sau khi đã có WAV) → không nằm trong key.
+# Với VieNeu, `speed` cũng là hậu kỳ → key GHIM speed=1.0 (xem _run_tts).
 TTS_CACHE_DIR = config.DATA_DIR / "tts-cache"
 TTS_CACHE_MAX_TOTAL_BYTES = 2 * 1024 * 1024 * 1024   # trần tổng 2GB
 TTS_CACHE_KEEP_ENTRIES = 2000                        # hoặc tối đa N mục mới nhất
@@ -404,6 +405,14 @@ def _run_tts(task: dict) -> None:
         task["timings"]["synth_total_ms"] = round((time.time() - t_synth) * 1000, 2)
         if abs(pitch) >= 1e-6:
             pitch_shift_wav(wav, pitch)
+        # Tốc độ là HẬU KỲ cho engine KHÔNG hỗ trợ native (VieNeu v3 Turbo không
+        # nhận tham số `speed` — engines/vieneu.py bỏ qua lộ liễu): atempo giữ
+        # cao độ, chạy TRƯỚC khi đo thời lượng cho SRT. Engine hỗ trợ native
+        # (OmniVoice, XTTS) nhận req.speed trực tiếp → KHÔNG hậu kỳ để tránh
+        # nhân đôi tốc độ. (Port từ voice-studio 2026-09-19w — trước đây fast
+        # path GPU-batch bỏ sót hậu kỳ tốc độ.)
+        if engine_name == "vieneu" and abs(speed - 1.0) >= 1e-3:
+            speed_change_wav(wav, speed)
         merged_wav = job_dir / "output.wav"
         concat_wavs([wav], merged_wav)
         write_srt([{"text": p["text"].strip(), "duration": wav_duration(merged_wav)}],
@@ -439,10 +448,14 @@ def _run_tts(task: dict) -> None:
     parts, srt_items, line_files = [], [], []
 
     def _post(wav, _pitch):
-        # Hậu kỳ chạy ở thread pool: pitch (ffmpeg subprocess) + đo thời lượng
-        # song song trong khi model render khối kế tiếp → GPU không phải chờ.
+        # Hậu kỳ chạy ở thread pool: pitch + tốc độ (ffmpeg subprocess) + đo
+        # thời lượng song song trong khi model render khối kế tiếp → GPU/CPU
+        # không phải chờ. Tốc độ chỉ hậu kỳ cho VieNeu (không hỗ trợ native —
+        # xem comment ở fast path); cache đã lưu WAV gốc speed=1.
         if abs(_pitch) >= 1e-6:
             pitch_shift_wav(wav, _pitch)
+        if engine_name == "vieneu" and abs(speed - 1.0) >= 1e-3:
+            speed_change_wav(wav, speed)
         return wav_duration(wav)
 
     with ThreadPoolExecutor(max_workers=2) as post:
@@ -452,8 +465,13 @@ def _run_tts(task: dict) -> None:
             wav = job_dir / f"line_{i:03d}.wav"
             # TĂNG TỐC: khối giống hệt (cùng engine/giọng/text/tham số) đã gen trước
             # đó → copy tức thì từ cache, không gọi model (workflow edit-retry).
-            ckey = _tts_cache_key(engine_name, lang, speed, sent, ref_audio,
-                                  ref_text, attributes, device_preference)
+            ckey = _tts_cache_key(engine_name, lang,
+                                  # VieNeu bỏ qua `speed` (engine không nhận) — tốc độ
+                                  # áp HẬU KỲ bằng atempo SAU cache. Key cố tình ghim
+                                  # speed=1.0 cho engine này → đổi tốc độ vẫn tái dùng
+                                  # cache WAV gốc thay vì gen lại vô ích.
+                                  1.0 if engine_name == "vieneu" else speed,
+                                  sent, ref_audio, ref_text, attributes, device_preference)
             cached = _tts_cache_get(ckey)
             if cached is not None:
                 try:

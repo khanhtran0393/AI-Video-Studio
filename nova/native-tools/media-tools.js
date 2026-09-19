@@ -1537,7 +1537,6 @@ async function changeAudioPitch(opts) {
       fontsdir trỏ thư mục font hệ thống + force_style FontName=Arial — libass
       KHÔNG có fonts.conf trong ffmpeg-static → không trỏ fontsdir thì không
       tìm thấy font nào (toàn chữ ô vuông), khai báo rõ ở đây. ── */
-const SUB_FONTS_DIR = process.platform === 'win32' ? 'C:\\Windows\\Fonts' : '/usr/share/fonts';
 
 function srtFilterArg(p) {
   return String(p).replace(/\\/g, '/').replace(/:/g, '\\:');
@@ -1582,216 +1581,12 @@ async function burnSubtitles(opts) {
      buildOverlayVf    — dựng toàn bộ chuỗi filter_complex + danh sách input phụ
    Lỗi lộ liễu FFX_OV_* (Luật 10). ── */
 
-const OV_MAX_LAYERS = 40;
-
-function ovEven(n) { return Math.max(2, Math.round((Number(n) || 0) / 2) * 2); }
-
-/* Kích thước khung đích: giữ nguyên nguồn khi 'original'; khác ratio → fit theo
-   cạnh NGẮN nguồn (đúng logic PE() của ezmaxsub — không phóng to quá mức). */
-function overlayCanvasSize(sw, sh, ratio) {
-  const w = Number(sw) || 0, h = Number(sh) || 0;
-  const r = String(ratio || 'original').trim();
-  if (!w || !h || r === 'original' || r === '') {
-    return { width: ovEven(w || 1280), height: ovEven(h || 720), ratio: w && h ? w / h : 16 / 9, changed: false };
-  }
-  const m = r.match(/^(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)$/);
-  if (!m || !(Number(m[1]) > 0) || !(Number(m[2]) > 0)) {
-    const e = new Error('FFX_OV_RATIO: tỷ lệ khung không hợp lệ — ' + r); e.code = 'FFX_OV_RATIO'; throw e;
-  }
-  const target = Number(m[1]) / Number(m[2]);
-  const src = w / h;
-  if (Math.abs(src - target) <= 1e-6) return { width: ovEven(w), height: ovEven(h), ratio: target, changed: false };
-  const base = Math.min(w, h);
-  const size = target >= 1
-    ? { width: ovEven(base * target), height: ovEven(base) }
-    : { width: ovEven(base), height: ovEven(base / target) };
-  return { width: size.width, height: size.height, ratio: target, changed: true };
-}
-
-/* Toạ độ chuẩn hoá 0..1 → pixel trên khung đích (kẹp trong mép, tối thiểu 2px). */
-function ovRect(layer, W, H) {
-  const cl = (v) => Math.max(0, Math.min(1, Number(v) || 0));
-  const x = cl(layer.x), y = cl(layer.y);
-  const w = Math.max(0.005, Math.min(1 - x, Number(layer.w) || 0));
-  const h = Math.max(0.005, Math.min(1 - y, Number(layer.h) || 0));
-  let X = Math.round(x * W), Y = Math.round(y * H);
-  let cw = Math.max(2, Math.round(w * W)), ch = Math.max(2, Math.round(h * H));
-  if (X > W - 2) X = W - 2; if (Y > H - 2) Y = H - 2;
-  if (X + cw > W) cw = W - X; if (Y + ch > H) ch = H - Y;
-  return { x: Math.max(0, X), y: Math.max(0, Y), w: Math.max(2, cw), h: Math.max(2, ch) };
-}
-
-/* Mốc thời gian: end=0 → toàn video sau start; end ≤ start → bỏ end (chỉ start);
-   thiếu total → không kẹp (renderer luôn gửi total từ probe phía main). */
-function ovEnable(startSec, endSec, totalSec) {
-  const S = Math.max(0, Number(startSec) || 0);
-  const E = Number(endSec);
-  const T = Number(totalSec) || 0;
-  if (Number.isFinite(E) && E > 0 && E > S) {
-    return "enable='between(t," + S.toFixed(3) + ',' + Math.min(E, T > 0 ? T : E).toFixed(3) + ")'";
-  }
-  if (S > 0) {
-    if (!(T > S)) return '';
-    return "enable='gte(t," + S.toFixed(3) + ")'";
-  }
-  return '';
-}
-
-/* Escape giá trị text/đường dẫn trong filter graph (':' '\' "'" '%' ','). */
-function ovEscapeText(t) {
-  return String(t == null ? '' : t)
-    .replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/:/g, '\\:')
-    .replace(/%/g, '\\%').replace(/,/g, '\\,');
-}
-function ovEscapePath(p) {
-  return String(p || '').replace(/\\/g, '/').replace(/:/g, '\\:').replace(/'/g, "\\'");
-}
-function ovHex(color, fallback) {
-  const c = String(color || '').trim();
-  if (/^#[0-9a-fA-F]{6}$/.test(c)) return '0x' + c.slice(1);
-  if (/^#[0-9a-fA-F]{3}$/.test(c)) return '0x' + c.slice(1).split('').map((ch) => ch + ch).join('');
-  return fallback;
-}
-
-/* Map filter preset lớp "filter" màu → chuỗi filter ffmpeg (nguồn duy nhất). */
-const OV_FILTER_PRESETS = {
-  bw: 'hue=s=0',
-  sepia: 'colorchannelmixer=0.393:0.769:0.189:0:0.349:0.686:0.168:0:0.272:0.534:0.131',
-  warm: 'colorbalance=rs=0.15:gs=0.02:bs=-0.12',
-  cool: 'colorbalance=rs=-0.12:gs=0.02:bs=0.15',
-  vivid: 'eq=saturation=1.4:contrast=1.1',
-  soft: 'eq=brightness=0.03:saturation=0.9',
-};
-
-/* Dựng filter_complex từ danh sách lớp. Trả { chains, inputs, audioMix }:
-   chains nối bằng ';' (bắt đầu [0:v], kết thúc [vout]); inputs = các -i phụ
-   { path, loopGif, isAudio } đánh chỉ số từ 1; audioMix = nhãn âm thanh trộn. */
-function buildOverlayVf(overlays, W, H, totalSec, background) {
-  const list = Array.isArray(overlays) ? overlays : [];
-  if (list.length > OV_MAX_LAYERS) {
-    const e = new Error('FFX_OV_MANY: quá ' + OV_MAX_LAYERS + ' lớp phủ — tách nhiều lần xuất'); e.code = 'FFX_OV_MANY'; throw e;
-  }
-  const bg = ovHex(background, 'black');
-  const chains = [];
-  const inputs = [];
-  const audioCount = list.filter((L) => L && L.type === 'media' && L.mediaKind === 'audio').length;
-  let cur = '0:v';
-  // Nền: scale vừa khung đích + pad màu nền (ratio trùng nguồn thì pad vô hại).
-  chains.push('[' + cur + ']scale=' + W + ':' + H + ':force_original_aspect_ratio=decrease,'
-    + 'pad=' + W + ':' + H + ':(ow-iw)/2:(oh-ih)/2:color=' + bg + (list.length ? '[b0]' : '[vpre]'));
-  cur = list.length ? 'b0' : 'vpre';
-
-  for (let i = 0; i < list.length; i++) {
-    const L = list[i] || {};
-    if (L.type === 'media' && L.mediaKind === 'audio') continue; // xử lý audio sau vòng hình
-    const out = (i === list.length - 1 && !audioCount) ? 'vout' : 'b' + (i + 1);
-    const en = ovEnable(L.startSec, L.endSec, totalSec);
-    const R = ovRect(L, W, H);
-    const enSuffix = en ? ':' + en : '';
-    const type = String(L.type || '');
-    if (type === 'blur') {
-      const style = String(L.style || 'gaussian');
-      const soft = Math.max(0, Math.min(1, Number(L.softness) || 0));
-      if (style === 'removeLogo' || style === 'removeSubtitle') {
-        // delogo: nới viền band px (đè mép vùng xoá) — kẹp trong khung.
-        const band = Math.max(1, Math.min(24, Math.round(Number(L.delogoBand) || 4)));
-        const dx = Math.max(1, R.x - band), dy = Math.max(1, R.y - band);
-        const dw = Math.min(W - dx - 1, R.w + 2 * band), dh = Math.min(H - dy - 1, R.h + 2 * band);
-        chains.push('[' + cur + ']delogo=x=' + dx + ':y=' + dy + ':w=' + dw + ':h=' + dh + enSuffix + '[' + out + ']');
-      } else if (style === 'pixelate') {
-        // Mosaic: crop vùng → thu nhỏ (neighbor) → phóng trở lại → đè lên gốc.
-        const px = Math.max(2, Math.min(64, Math.round(Number(L.pixelSize) || 16)));
-        const sw2 = Math.max(2, Math.round(R.w / px)), sh2 = Math.max(2, Math.round(R.h / px));
-        let reg = 'crop=' + R.w + ':' + R.h + ':' + R.x + ':' + R.y
-          + ',scale=' + sw2 + ':' + sh2 + ':flags=neighbor,scale=' + R.w + ':' + R.h + ':flags=neighbor';
-        if (soft > 0.02) reg += ',boxblur=luma_radius=' + Math.max(1, Math.round(soft * 8)) + ':luma_power=1';
-        chains.push('[' + cur + ']split[sp' + i + 'a][sp' + i + 'b]');
-        chains.push('[sp' + i + 'b]' + reg + '[rg' + i + ']');
-        chains.push('[sp' + i + 'a][rg' + i + ']overlay=' + R.x + ':' + R.y + enSuffix + '[' + out + ']');
-      } else {
-        // gaussian / blurStrip / frostedGlass: boxblur toàn khung → crop vùng → đè.
-        const op = Math.max(0, Math.min(400, Number(L.blurOpacity) != null ? Number(L.blurOpacity) : 120));
-        const radius = Math.max(2, Math.min(80, Math.round((op / 100) * 20)));
-        let reg = 'boxblur=luma_radius=' + radius + ':luma_power=2,crop=' + R.w + ':' + R.h + ':' + R.x + ':' + R.y;
-        if (style === 'frostedGlass') {
-          const grain = Math.max(0, Math.min(100, Math.round(Number(L.frostGrain) || 30)));
-          if (grain > 0) reg += ',noise=alls=' + grain + ':allf=t+u';
-        }
-        chains.push('[' + cur + ']split[sp' + i + 'a][sp' + i + 'b]');
-        chains.push('[sp' + i + 'b]' + reg + '[rg' + i + ']');
-        chains.push('[sp' + i + 'a][rg' + i + ']overlay=' + R.x + ':' + R.y + enSuffix + '[ov' + i + ']');
-        if (style === 'blurStrip') {
-          // Phủ tối dải: stripDarkness 0..100% → alpha drawbox.
-          const dark = Math.max(0, Math.min(100, Number(L.stripDarkness) != null ? Number(L.stripDarkness) : 35)) / 100;
-          chains.push('[ov' + i + ']drawbox=x=' + R.x + ':y=' + R.y + ':w=' + R.w + ':h=' + R.h
-            + ':color=black@' + dark.toFixed(2) + ':t=fill' + (en ? ':' + en : '') + '[' + out + ']');
-        } else {
-          chains.push('[ov' + i + ']null[' + out + ']');
-        }
-      }
-    } else if (type === 'text') {
-      const txt = ovEscapeText(L.text || 'Chữ');
-      const fs = Math.max(6, Math.min(Math.round(H / 2), Math.round(((Number(L.fontSizePct) || 8) / 100) * H)));
-      const color = ovHex(L.color, '0xFFFFFF');
-      const font = L.bold ? 'arialbd.ttf' : 'arial.ttf';
-      chains.push('[' + cur + ']drawtext=fontfile=\''
-        + ovEscapePath(SUB_FONTS_DIR + (/[\\/]$/.test(SUB_FONTS_DIR) ? '' : '\\') + font)
-        + '\':text=\'' + txt + '\':fontsize=' + fs + ':fontcolor=' + color
-        + ':x=' + R.x + ':y=' + R.y + enSuffix + '[' + out + ']');
-    } else if (type === 'rect') {
-      const color = ovHex(L.color, '0x22C55E');
-      const op = Math.max(0.05, Math.min(1, Number(L.opacity) != null ? Number(L.opacity) : 1));
-      chains.push('[' + cur + ']drawbox=x=' + R.x + ':y=' + R.y + ':w=' + R.w + ':h=' + R.h
-        + ':color=' + color + '@' + op.toFixed(2) + ':t=fill' + (en ? ':' + en : '') + '[' + out + ']');
-    } else if (type === 'media') {
-      const kind = String(L.mediaKind || 'image');
-      const p = String(L.path || '');
-      if (!p) { const e = new Error('FFX_OV_MEDIA: lớp media thiếu đường dẫn file'); e.code = 'FFX_OV_MEDIA'; throw e; }
-      const idx = 1 + inputs.length;
-      inputs.push({ path: p, loopGif: kind === 'gif', isAudio: kind === 'audio' });
-      chains.push('[' + idx + ':v]scale=' + R.w + ':-2[m' + i + ']');
-      const eof = kind === 'gif' ? '' : ':eof_action=pass';
-      chains.push('[' + cur + '][m' + i + ']overlay=' + R.x + ':' + R.y + eof + enSuffix + '[' + out + ']');
-    } else if (type === 'filter') {
-      const preset = String(L.preset || '');
-      if (!OV_FILTER_PRESETS[preset]) {
-        const e = new Error('FFX_OV_FILTER: preset màu không hỗ trợ — ' + preset); e.code = 'FFX_OV_FILTER'; throw e;
-      }
-      chains.push('[' + cur + ']' + OV_FILTER_PRESETS[preset] + enSuffix + '[' + out + ']');
-    } else {
-      const e = new Error('FFX_OV_TYPE: loại lớp không hỗ trợ — ' + type); e.code = 'FFX_OV_TYPE'; throw e;
-    }
-    cur = out;
-  }
-
-  // Âm thanh ngoài: trộn tuần tự vào [0:a] (mỗi lớp = 1 input audio đã push ở trên).
-  let audioMix = null;
-  const audioLayers = list.filter((L) => L && L.type === 'media' && L.mediaKind === 'audio');
-  if (audioLayers.length) {
-    let aCur = '0:a';
-    for (let k = 0; k < audioLayers.length; k++) {
-      const L = audioLayers[k];
-      const idx = 1 + inputs.length;
-      inputs.push({ path: String(L.path || ''), loopGif: false, isAudio: true });
-      if (!L.path) { const e = new Error('FFX_OV_MEDIA: lớp âm thanh thiếu đường dẫn file'); e.code = 'FFX_OV_MEDIA'; throw e; }
-      const delay = Math.max(0, Math.round((Number(L.startSec) || 0) * 1000));
-      const vol = Math.max(0, Math.min(2, Number(L.volume) != null ? Number(L.volume) : 1));
-      const span = (Number(L.endSec) || 0) - (Number(L.startSec) || 0);
-      const lim = span > 0 ? ',atrim=0:' + span.toFixed(3) + ',asetpts=PTS-STARTPTS' : '';
-      chains.push('[' + idx + ':a]aformat=sample_rates=48000:channel_layouts=stereo,volume=' + vol
-        + ',adelay=' + delay + '|' + delay + lim + '[ax' + k + ']');
-      const aOut = (k === audioLayers.length - 1) ? 'aout' : 'am' + k;
-      chains.push('[' + aCur + '][ax' + k + ']amix=inputs=2:duration=first:dropout_transition=0:normalize=0[' + aOut + ']');
-      aCur = aOut;
-    }
-    audioMix = 'aout';
-  }
-
-  // Đuôi: pix fmt chuẩn cho x264.
-  chains.push('[' + cur + ']format=yuv420p[vout]');
-  return { chains, inputs, audioMix };
-}
-
+/* Lớp phủ/fx THUẦN tách sang ./media-overlay-fx.js (2026-09-19r — size-budget): hằng + dựng
+   filtergraph overlay/subtitle. Tên re-export giữ NGUYÊN hợp đồng module.exports cũ. */
+const {
+  SUB_FONTS_DIR, overlayCanvasSize, ovRect, ovEnable, ovStripRect, ovParseSrt,
+  ovEnableSync, ovSubtitleValidate, ovSubtitleStyle, ovSubtitleVf, ovEscapeText, buildOverlayVf,
+} = require('./media-overlay-fx');
 /* Burn overlay: re-encode hình (CPU/GPU), audio copy khi không trộn, AAC khi trộn. */
 async function burnOverlays(opts) {
   const o = opts || {};
@@ -1803,7 +1598,10 @@ async function burnOverlays(opts) {
     const e = new Error('FFX_OV_NO_VIDEO: không đọc được kích thước hình của nguồn — ' + o.inputPath); e.code = 'FFX_OV_NO_VIDEO'; throw e;
   }
   const size = overlayCanvasSize(info.video.width, info.video.height, o.ratio);
-  if (!layers.length && !size.changed) {
+  const bgObj = (o.background && typeof o.background === 'object') ? o.background : null;
+  const bgActive = !!bgObj && (bgObj.type === 'gradient' || bgObj.type === 'blur');
+  const subTrack = (o.subtitleTrack && typeof o.subtitleTrack === 'object') ? o.subtitleTrack : null;
+  if (!layers.length && !size.changed && !bgActive && !subTrack) {
     const e = new Error('FFX_OV_EMPTY: chưa có lớp phủ nào và tỷ lệ giữ nguyên — không có gì để ghép'); e.code = 'FFX_OV_EMPTY'; throw e;
   }
   // Media path phải tồn tại (dialog đã mở phía main — chặn lại một lần cho chắc).
@@ -1812,7 +1610,7 @@ async function burnOverlays(opts) {
   }
   const total = await probeDur(o.inputPath);
   if (!(total > 0)) { const e = new Error('FFX_DURATION: không đo được thời lượng video nguồn'); e.code = 'FFX_DURATION'; throw e; }
-  const graph = buildOverlayVf(layers, size.width, size.height, total, o.background);
+  const graph = buildOverlayVf(layers, size.width, size.height, total, o.background, subTrack);
   let args = ['-y', '-i', o.inputPath];
   for (const inp of graph.inputs) {
     if (inp.loopGif) args = args.concat(['-stream_loop', '-1']);
@@ -1833,6 +1631,7 @@ async function burnOverlays(opts) {
     ok: true, path: o.outputPath,
     width: size.width, height: size.height, ratio: String(o.ratio || 'original'),
     layers: layers.length, encoder: enc ? gpuLabel(enc) : 'CPU', audioMix: !!graph.audioMix,
+    subs: graph.subs || 0,
   };
 }
 
@@ -1843,5 +1642,6 @@ module.exports = {
   extractFrames, removeAudio, convertMedia, addMusic, toGif, makeThumb,
   faststartRemux, normalizeAudio, removeVocals, addFades, insertAds,
   changeAudioSpeed, changeAudioPitch, atempoChain, burnSubtitles,
-  overlayCanvasSize, ovRect, ovEnable, ovEscapeText, buildOverlayVf, burnOverlays,
+  overlayCanvasSize, ovRect, ovEnable, ovEscapeText, ovStripRect, ovParseSrt, ovEnableSync, buildOverlayVf, burnOverlays,
+  ovSubtitleValidate, ovSubtitleStyle, ovSubtitleVf,
 };

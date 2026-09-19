@@ -110,8 +110,22 @@ function t7SubAdd(){
   t7State.selClip = clip.id;
   t7AfterEdit(true);
   _t7SubOpenId = clip.id; _t7SubDraft = { clipId: clip.id, text: '' };
-  if (t7State.mediaTab !== 'subs') t7SetMediaTab('subs'); else t7SubRender();
-  setStatus7('✓ Đã thêm phân đoạn phụ đề mới tại vạch phát — gõ nội dung rồi bấm Lưu.', 'ok');
+  if (t7State.mediaTab === 'dub'){
+    // đang ở panel Thuyết minh (rail trái) → KHÔNG đá user sang tab 'subs' (tab đó render
+    // vào cột phải, rail trái sẽ treo HTML cũ và mọi nút trông như chết) — vẽ lại rail dub.
+    if (typeof _t7dpRender === 'function') _t7dpRender(); else t7SetMediaTab('subs');
+  }
+  else if (t7State.mediaTab !== 'subs') t7SetMediaTab('subs'); else t7SubRender();
+  if (typeof _t7dpRender === 'function') _t7dpRender();   // panel dub đang mở thì cập nhật đếm phân đoạn
+  setStatus7('✓ Đã thêm phân đoạn phụ đề mới tại vạch phát — gõ nội dung ở cột 💬 Phụ đề (phải) rồi bấm Lưu.', 'ok');
+}
+/* ── BACKUP audio gốc trước khi giọng dub đè lên timeline (cho Hoàn tác ♪ Audio trả lại) ──
+   Chỉ backup khi audio hiện tại là file người dùng import (không có marker _t7dub).
+   File không persist được — backup sống cùng phiên với audioFile, đúng vòng đời. */
+function _t7SubBackupAudioForDub(){
+  if (t7State.audioFile && !t7State.audioFile._t7dub){
+    t7State.dubPrevAudio = { file: t7State.audioFile, peaks: t7State.audioPeaks || null, dur: t7State.audioDur || 0 };
+  }
 }
 /* ── NHẬP FILE SRT → đổ text vào phân đoạn theo mốc thời gian ── */
 function t7SubImportSrt(){
@@ -157,6 +171,7 @@ async function t7SubApplySrtFile(file){
   }
   try { syncStateToCurrentProfile(); saveState(true); } catch (e) {}
   t7AfterEdit(false); t7SubRender();
+  if (typeof _t7dpRender === 'function') _t7dpRender();   // panel Thuyết minh (rail dub) đang mở → cập nhật đếm
   setStatus7('✓ Đã nạp phụ đề từ ' + file.name + ' vào ' + hit + '/' + cues.length + ' phân đoạn'
     + (outside ? ' · ' + outside + ' dòng nằm ngoài thời lượng video nên bỏ qua' : '') + '.', hit ? 'ok' : 'error');
 }
@@ -244,7 +259,10 @@ async function t7SubGenerateVoice(){
     state.t7SubAudioAt[p.cue.clip.sceneId] = { start: +p.at.toFixed(2), dur: +p.buf.duration.toFixed(2), over: p.at > p.cue.start + 0.05 };
   }
   try { syncStateToCurrentProfile(); saveState(true); } catch (e) {}
-  await t7HandleAudio(new File([wav], 'thuyet-minh-tu-dong.wav', { type: 'audio/wav' }));
+  _t7SubBackupAudioForDub();   // giữ audio gốc đã import (nếu có) để Hoàn tác ♪ Audio trả lại
+  const dubFile = new File([wav], 'thuyet-minh-tu-dong.wav', { type: 'audio/wav' });
+  dubFile._t7dub = true;       // MARKER: track này do Thuyết minh sinh — mọi lần import audio mới tự mất cờ (đổi object File)
+  await t7HandleAudio(dubFile);
   t7SubRender();
   setStatus7('✓ Đã tạo giọng thuyết minh cho ' + placed.length + ' phân đoạn'
     + (over ? ' · ⚠️ ' + over + ' khe bị dồn tiếng (giọng dài hơn cảnh — kéo dài cảnh hoặc rút chữ)' : '')

@@ -57,7 +57,11 @@ function _ttsBlob(r, ten){
 
 async function _ttsOmni(v, text, o, onTien){
   if (!_voiceReady){ await voiceInit(); if (!_voiceReady) throw new Error('Backend OmniVoice chưa sẵn sàng.'); }
-  const body = { text, language: o.lang, speed: o.tocDo, gap_ms: Math.round(o.gap), attributes: {}, preset_id: v.id };
+  const body = { text, language: o.lang, speed: o.tocDo, gap_ms: Math.round(o.gap),
+    // Gap > 0 → tắt gộp khối (đọc từng câu) để gap chèn đúng giữa từng câu —
+    // cùng hợp đồng với _ttsLocal (utility/voice.js, 2026-09-19o).
+    chunk_chars: Math.round(o.gap) > 0 ? 0 : 240,
+    attributes: {}, preset_id: v.id };
   const sub = await fetch(VOICE_URL + '/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.json());
   const tid = sub.task_id;
   if (!tid) throw new Error('Backend không nhận việc.');

@@ -51,6 +51,19 @@ function validateVideoSpec(spec, { audioDuration } = {}) {
     prevEnd = sc.end; lastEnd = Math.max(lastEnd, sc.end);
     if (sc.background && sc.background.asset === '' && sc.background.asset !== null)
       fail(errors, 'VA_SPEC_BG', base + '.background', 'background.asset rỗng');
+    // Nền video gen Flow — clip metadata là TUỲ CHỌN nhưng nếu CÓ phải hợp lệ (Luật 10).
+    if (sc.background && sc.background.clip != null) {
+      const cp = base + '.background.clip';
+      if (typeof sc.background.clip !== 'object' || Array.isArray(sc.background.clip))
+        fail(errors, 'VA_SPEC_CLIP', cp, 'background.clip phải là object');
+      else {
+        const c = sc.background.clip;
+        if (c.durationSec != null && (!(Number(c.durationSec) > 0)))
+          fail(errors, 'VA_SPEC_CLIP_DUR', cp + '.durationSec', 'durationSec phải > 0');
+        if (c.strategy != null && !['ok', 'cut', 'speed', 'slow', 'slow+freeze'].includes(c.strategy))
+          fail(errors, 'VA_SPEC_CLIP_STRATEGY', cp + '.strategy', 'strategy không hợp lệ: ' + c.strategy);
+      }
+    }
     sc.elements.forEach((el, j) => {
       const p = base + `.elements[${j}]`;
       if (!el.asset) fail(errors, 'VA_SPEC_EL_ASSET', p + '.asset', 'element thiếu asset');

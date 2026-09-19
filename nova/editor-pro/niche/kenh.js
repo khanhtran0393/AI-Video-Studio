@@ -102,6 +102,9 @@ async function fetchShorts(channelUrl, count, ck) {
 
 async function channelScorecard(channelUrl, onProgress = () => {}, opts = {}) {
   const count = Math.max(8, Math.min(30, Number(opts.count) || 20));
+  // Bộ lọc thời gian (opts.days — ngày): 0/rỗng = tất cả. Chỉ tính chỉ số trên video
+  // ĐĂNG TRONG cửa sổ này — VPS/VPH/ổn định/xu hướng phản ánh hiện trạng gần đây thay vì cả đời kênh.
+  const daysWin = Math.max(0, Math.min(365, Number(opts.days) || 0));
   // Key cache gộp cả count + cờ analyze: soi 20 video rồi đổi sang 30 (hoặc gọi
   // nội bộ không phân tích AI như similarChannels) không ăn nhầm cache của nhau.
   return cached('scorecard', channelUrl, opts.fresh, onProgress, async () => {
@@ -119,11 +122,22 @@ async function channelScorecard(channelUrl, onProgress = () => {}, opts = {}) {
       if (!out.trim()) throw e;
       onProgress(12, 'Một số video của kênh bị khoá — dùng phần quét được…');
     }
-    const vids = out.trim().split('\n').filter(Boolean).map(l => {
+    let vids = out.trim().split('\n').filter(Boolean).map(l => {
       const [id, v, d, up, ch, sub, ...t] = l.split('\t');
       return { id: (id || '').trim(), views: parseInt(v) || 0, dur: parseInt(d) || 0, days: daysSince(up), channel: (ch || '').trim(), subs: parseInt(sub) || 0, title: (t.join('\t') || '').trim(), url: id ? 'https://youtu.be/' + id : '' };
     }).filter(x => x.title && x.views >= 0);
     if (!vids.length) throw new Error('Không đọc được video của kênh này (kênh riêng tư hoặc sai link).');
+    // Lọc theo cửa sổ thời gian (daysWin > 0). Video không xác định được tuổi bị loại khỏi
+    // cửa sổ. Lọc xong rỗng → ném lộ (Luật 10) — KHÔNG tự rộng cửa sổ ngầm.
+    let windowNote = '';
+    if (daysWin > 0) {
+      const inWin = vids.filter(x => x.days != null && x.days <= daysWin);
+      if (!inWin.length) throw new Error('Kênh này không có video nào đăng trong ' + daysWin + ' ngày qua (' + vids.length + ' video quét được đều cũ hơn) — nới bộ lọc thời gian hoặc quét tất cả.');
+      windowNote = inWin.length < vids.length
+        ? ('lọc ' + daysWin + ' ngày: tính trên ' + inWin.length + '/' + vids.length + ' video gần nhất')
+        : ('lọc ' + daysWin + ' ngày: đủ ' + inWin.length + ' video');
+      vids = inWin;
+    }
 
     const subs = vids.find(x => x.subs > 0)?.subs || 0;
     const name = vids.find(x => x.channel)?.channel || String(channelUrl);
@@ -190,12 +204,13 @@ async function channelScorecard(channelUrl, onProgress = () => {}, opts = {}) {
     onProgress(100, 'Xong');
     return {
       ok: true, channel: name, subs, subsFmt: kfmt(subs), videoCount: vids.length, median: Math.round(med),
+      daysWindow: daysWin || 0, windowNote,
       metrics: m, health: healthScore(m), monetized: monetizedGuess(subs, m), analysis, analysisError, enrichedVia, enrichErr, commentsNote,
       outliers: outliers.map(x => ({ title: x.title, views: x.views, viewsFmt: kfmt(x.views), ratio: x.ratio, dur: x.dur, days: x.days, url: x.url, id: x.id, likes: x.likes, comments: x.comments, engRate: x.engRate })),
       shortsCount: shorts.length, shortsMedian: Math.round(shortsMed), shortsNote,
       shortsOutliers: shortsOutliers.map(x => ({ title: x.title, views: x.views, viewsFmt: kfmt(x.views), ratio: x.ratio, dur: x.dur, url: x.url })),
     };
-  }, 'v4-n' + count + (opts.analyze === false ? '-noan' : '') + (opts.mineComments === false ? '-noc' : '') + (opts.shorts === false ? '-nos' : ''));
+  }, 'v4-n' + count + (opts.analyze === false ? '-noan' : '') + (opts.mineComments === false ? '-noc' : '') + (opts.shorts === false ? '-nos' : '') + (daysWin ? '-d' + daysWin : ''));
 }
 
 // KÊNH GIỐNG — không có API key nên bỏ tín hiệu featuredChannels (YouTube đã gỡ tab này ở nhiều kênh),

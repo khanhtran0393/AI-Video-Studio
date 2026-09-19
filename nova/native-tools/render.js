@@ -8,6 +8,7 @@ const os = require('os');
 const { FFMPEG, run, probeDur } = require('./ffmpeg');
 const { gpuEncoder, qualityArgs: gpuQualityArgs, label: gpuLabel } = require('../editor-pro/gpu-encoder');
 const { dataUrlToBuffer, _kenBurns, _colorFilter, _scaleZoom, _xfadeName } = require('./filters');
+const { atempoChain } = require('./media-tools');   // chuỗi atempo giữ cao độ — thuần, không vòng require (2026-09-19q)
 const { appTempDir } = require('../core/temp');
 const { ensureFreeBytes, estimateRenderBytes } = require('../storage/disk-guard');
 
@@ -24,6 +25,7 @@ function cancelRender() {
  * payload = {
  *   images: [{ dataUrl, dur }],   // dur = giây cho ảnh đó
  *   audioDataUrl?: string,        // audio nền (mp3/wav) — tùy chọn
+ *   videoLayers?: [{ dataUrl, kind:'video'|'image', start, dur, scale, fade, mute }],  // track video lớp trên (#4) — đè lên video chính; mute=false = lớp CÓ tiếng
  *   width=1920, height=1080, fps=30,
  *   crf=20,                       // chất lượng (thấp = nét hơn)
  *   defaultDur=4                  // độ dài mặc định nếu ảnh thiếu dur
@@ -53,10 +55,14 @@ async function renderVideo(payload, win) {
     for (const key of ['downloads', 'home']) {
       try { const p = app.getPath(key); if (p) { defaultDir = p; break; } } catch (e) {}
     }
-    const defaultName = 'video-' + Date.now() + '.mp4';
+    // 2026-09-19d: hỗ trợ container MP4/MOV/MKV — whitelist rõ ràng, lạ → mp4 (khai báo qua payload.format).
+    const fmtWl = ['mp4', 'mov', 'mkv'];
+    const fmt = fmtWl.includes(String(payload.format || '').toLowerCase()) ? String(payload.format).toLowerCase() : 'mp4';
+    const defaultName = 'video-' + Date.now() + '.' + fmt;
     const save = await dialog.showSaveDialog(win || BrowserWindow.getFocusedWindow(), {
-      title: 'Lưu video MP4', defaultPath: defaultDir ? path.join(defaultDir, defaultName) : defaultName,
-      filters: [{ name: 'MP4', extensions: ['mp4'] }],
+      title: 'Lưu video ' + fmt.toUpperCase(),
+      defaultPath: defaultDir ? path.join(defaultDir, defaultName) : defaultName,
+      filters: [{ name: fmt.toUpperCase(), extensions: [fmt] }, { name: 'Tất cả video', extensions: ['mp4', 'mov', 'mkv'] }],
     });
     if (save.canceled || !save.filePath) return { canceled: true };
     outPath = save.filePath;
@@ -128,11 +134,15 @@ async function renderVideo(payload, win) {
     }
     const _outDur = Math.max(_videoLen, _audioLen);
     const _holdTail = Math.max(0, _outDur - _videoLen);   // phần video phải GIỮ KHUNG CUỐI để phủ hết giọng
+    // ⏩ Tốc độ toàn cục (payload.speed 0.5–2×, 2026-09-19q): video setpts + audio atempo (giữ cao độ).
+    //    Áp CUỐI graph nên phụ đề/overlay/SFX đốt theo timeline gốc vẫn KHỚP hình sau khi tua —
+    //    chỉ thời lượng đầu ra chia speed (xem -t và _spdA ở dưới). Ngoài 0.5–2 → kẹp, không lỗi.
+    const _spd = Math.min(2, Math.max(0.5, Number(payload.speed) || 1));
     // CHẨN ĐOÁN: in tổng + clip dài bất thường (clip bị "kéo dài" sẽ lộ ở đây). Xem trong /tmp/nova-start.log.
     try {
       let _mx = 0, _mi = -1; durs.forEach((d, i) => { if (d > _mx) { _mx = d; _mi = i; } });
       const _big = durs.map((d, i) => ({ i, d })).filter(x => x.d > 12).map(x => `#${x.i}=${x.d.toFixed(1)}s`).join(', ');
-      console.error(`[render] clips=${imgs.length} videoLen=${_videoLen.toFixed(2)}s audioLen=${_audioLen.toFixed(2)}s outDur=${_outDur.toFixed(2)}s holdTail=${_holdTail.toFixed(2)}s needFx=${needFx} maxClip=${_mx.toFixed(2)}s@#${_mi}${_big ? ' · clip>12s: ' + _big : ''}`);
+      console.error(`[render] clips=${imgs.length} videoLen=${_videoLen.toFixed(2)}s audioLen=${_audioLen.toFixed(2)}s outDur=${_outDur.toFixed(2)}s holdTail=${_holdTail.toFixed(2)}s spd=${_spd} needFx=${needFx} maxClip=${_mx.toFixed(2)}s@#${_mi}${_big ? ' · clip>12s: ' + _big : ''}`);
     } catch (e) {}
 
     // 🎞 NỐI VIDEO THỨ 2: cảnh video stock ngắn hơn độ dài cảnh + có video "nối thêm"
@@ -257,6 +267,38 @@ async function renderVideo(payload, win) {
       fs.writeFileSync(mf, dataUrlToBuffer(payload.musicDataUrl));
       args.push('-i', mf); musIdx = n++;
     }
+    // 🎞 Track video lớp trên (payload.videoLayers — tính năng #4 2026-09-19): video/ảnh từ Thư viện
+    //    đè lên video chính theo [start, start+dur] giây, DƯỚI ảnh đè full-frame (overlays ghép SAU
+    //    nên nằm trên), TRÊN video chính. Video nguồn ngắn hơn khung → eof_action=pass (hình chính
+    //    chạy tiếp, không khựng khung đen). Âm thanh lớp video CỐ TÌNH bỏ (chỉ đóng hình) — UI khai báo.
+    const vlayers = Array.isArray(payload.videoLayers) ? payload.videoLayers.filter((v) => v && v.dataUrl && (Number(v.dur) || 0) > 0) : [];
+    const vlaLabels = [];   // nhãn audio các lớp CÓ tiếng (mute === false — user bật qua nút 🔇)
+    vlayers.forEach((v, k) => {
+      const isLVideo = v.kind === 'video';
+      const vf = path.join(tmp, `vlayer${k}.${isLVideo ? 'mp4' : 'png'}`);
+      fs.writeFileSync(vf, dataUrlToBuffer(v.dataUrl));
+      const s = Math.max(0, Number(v.start) || 0), e = s + Math.max(0.1, Number(v.dur) || 3);
+      const pct = Math.min(100, Math.max(10, Number(v.scale) || 100));
+      let tw = Math.round((W * pct) / 100), th = Math.round((H * pct) / 100);
+      tw -= tw % 2; th -= th % 2;                                          // ffmpeg yêu cầu chẵn
+      if (isLVideo) args.push('-i', vf);
+      else args.push('-loop', '1', '-t', (e - s).toFixed(3), '-i', vf);
+      const idx = n++;
+      const px = pct >= 100 ? '0' : '(main_w-overlay_w)/2';
+      const py = pct >= 100 ? '0' : '(main_h-overlay_h)/2';
+      // Fade in/out alpha của lớp (payload.fade giây, 0 = tắt) — alpha=1 cần kênh alpha → format=rgba.
+      const fd = Math.min(5, Math.max(0, Number(v.fade) || 0));
+      const fadeVf = fd > 0 ? `,fade=t=in:st=0:d=${fd.toFixed(3)}:alpha=1,fade=t=out:st=${Math.max(0, e - s - fd).toFixed(3)}:d=${fd.toFixed(3)}:alpha=1` : '';
+      fc += `;[${idx}:v]fps=${fps},setsar=1,format=rgba,scale=${tw}:${th}:force_original_aspect_ratio=decrease${fadeVf}[vls${k}]`
+        + `;${vfinal}[vls${k}]overlay=x=${px}:y=${py}:format=auto:eof_action=pass:enable='between(t\\,${s.toFixed(3)}\\,${e.toFixed(3)})'[vlo${k}]`;
+      vfinal = `[vlo${k}]`;
+      // Tiếng lớp VIDEO (chỉ khi mute === false — có chủ đích từ UI, Luật 10): adelay theo start,
+      // chuẩn hoá 44.1kHz stereo để amix không lệch rate; trộn như SFX (normalize=0).
+      if (isLVideo && v.mute === false) {
+        fc += `;[${idx}:a]aresample=44100,aformat=sample_fmts=fltp:channel_layouts=stereo,adelay=${Math.round(s * 1000)}:all=1[vla${k}]`;
+        vlaLabels.push(`[vla${k}]`);
+      }
+    });
     // 🖼 Lớp trên (overlay full-frame) — đè lên video theo khoảng thời gian [start, start+dur].
     const overlays = Array.isArray(payload.overlays) ? payload.overlays.filter((o) => o && o.dataUrl && (Number(o.dur) || 0) > 0) : [];
     overlays.forEach((o, k) => {
@@ -280,30 +322,44 @@ async function renderVideo(payload, win) {
       fc += `;[${idx}:a]adelay=${del}|${del},volume=${vol}[sfx${k}]`;
       sfxLabels.push(`[sfx${k}]`);
     });
+    // Ghép tiếng lớp video vào mảng trộn — như SFX (khai báo: amix duration=first theo input đầu).
+    const aLabels = sfxLabels.concat(vlaLabels);
+    // ⏩ setpts tốc độ đặt SAU overlay (overlay dùng mốc t timeline gốc — tua cùng hình thì vẫn đúng chỗ).
+    if (_spd !== 1) {
+      fc += `;${vfinal}setpts=${(1 / _spd).toFixed(4)}*PTS[vspd]`;
+      vfinal = '[vspd]';
+    }
     const musVol = payload.musicVolume != null ? Math.max(0, Number(payload.musicVolume)) : 0.22;
-    const hasAudio = voIdx >= 0 || musIdx >= 0 || sfxLabels.length > 0;
+    // ⚙ Âm lượng giọng đọc (payload.voiceVolume 0–5, MẶC ĐỊNH 1.5 — parity ezmaxsub settings.ttsVolume;
+    //    UI gửi hệ số trực tiếp 0–5, bước 0.1 — 2026-09-19q).
+    const voVol = payload.voiceVolume != null ? Math.max(0, Math.min(5, Number(payload.voiceVolume))) : 1.5;
+    const voVolF = voVol !== 1 ? `volume=${voVol}` : '';
+    const hasAudio = voIdx >= 0 || musIdx >= 0 || aLabels.length > 0;
     let maps;
     const musFadeChain = `volume=${musVol},afade=t=in:st=0:d=1.5,areverse,afade=t=in:st=0:d=2,areverse`;
     const duck = payload.duckMusic !== false;   // mặc định BẬT: nhạc tự né giọng đọc
-    const pad = `apad=whole_dur=${_outDur.toFixed(3)}`;
+    const pad = `apad=whole_dur=${_outDur.toFixed(3)}${_spd !== 1 ? ',' + atempoChain(_spd) : ''}`;   // atempo CUỐI: cả giọng+nhạc+SFX cùng chia speed
     // Nhãn audio NỀN (giọng + nhạc) trước khi trộn SFX + đệm im lặng.
     let abase = null;
     if (voIdx >= 0 && musIdx >= 0) {
-      if (duck) fc += `;[${voIdx}:a]asplit=2[vo1][vok];[${musIdx}:a]${musFadeChain}[mf];[mf][vok]sidechaincompress=threshold=0.06:ratio=8:attack=20:release=350[mduck];[vo1][mduck]amix=inputs=2:duration=first:dropout_transition=0[abase]`;
-      else fc += `;[${voIdx}:a]volume=1[va];[${musIdx}:a]${musFadeChain}[ma];[va][ma]amix=inputs=2:duration=first:dropout_transition=0[abase]`;
+      if (duck) fc += `;[${voIdx}:a]${voVolF ? voVolF + ',' : ''}asplit=2[vo1][vok];[${musIdx}:a]${musFadeChain}[mf];[mf][vok]sidechaincompress=threshold=0.06:ratio=8:attack=20:release=350[mduck];[vo1][mduck]amix=inputs=2:duration=first:dropout_transition=0[abase]`;
+      else fc += `;[${voIdx}:a]${voVolF || 'volume=1'}[va];[${musIdx}:a]${musFadeChain}[ma];[va][ma]amix=inputs=2:duration=first:dropout_transition=0[abase]`;
       abase = '[abase]';
-    } else if (voIdx >= 0) { abase = `[${voIdx}:a]`; }
+    } else if (voIdx >= 0) {
+      if (voVolF) { fc += `;[${voIdx}:a]${voVolF}[vov]`; abase = '[vov]'; }   // giọng-only: volume cần chain riêng
+      else { abase = `[${voIdx}:a]`; }
+    }
     else if (musIdx >= 0) { fc += `;[${musIdx}:a]${musFadeChain}[abase]`; abase = '[abase]'; }
 
-    if (abase && sfxLabels.length) {
-      fc += `;${abase}${sfxLabels.join('')}amix=inputs=${1 + sfxLabels.length}:duration=first:dropout_transition=0:normalize=0[amx];[amx]${pad}[aout]`;
+    if (abase && aLabels.length) {
+      fc += `;${abase}${aLabels.join('')}amix=inputs=${1 + aLabels.length}:duration=first:dropout_transition=0:normalize=0[amx];[amx]${pad}[aout]`;
       maps = ['-map', vfinal, '-map', '[aout]'];
     } else if (abase) {
       fc += `;${abase}${pad}[aout]`;
       maps = ['-map', vfinal, '-map', '[aout]'];
-    } else if (sfxLabels.length) {
-      if (sfxLabels.length > 1) fc += `;${sfxLabels.join('')}amix=inputs=${sfxLabels.length}:duration=first:normalize=0[sm];[sm]${pad}[aout]`;
-      else fc += `;${sfxLabels[0]}${pad}[aout]`;
+    } else if (aLabels.length) {
+      if (aLabels.length > 1) fc += `;${aLabels.join('')}amix=inputs=${aLabels.length}:duration=first:normalize=0[sm];[sm]${pad}[aout]`;
+      else fc += `;${aLabels[0]}${pad}[aout]`;
       maps = ['-map', vfinal, '-map', '[aout]'];
     } else {
       maps = ['-map', vfinal];
@@ -315,6 +371,9 @@ async function renderVideo(payload, win) {
     const wantHw = payload.gpu !== false;              // mặc định BẬT, ai muốn tắt thì gửi gpu:false
     const hwEnc = wantHw ? gpuEncoder(isHevc ? 'h265' : 'h264') : null;
     const cpuEnc = isHevc ? 'libx265' : 'libx264';
+    // 2026-09-19d: container MP4/MOV mới nhận movflags +faststart và tag hvc1; MKV (Matroska) KHÔNG có option này.
+    const outExt = (path.extname(outPath) || '.mp4').slice(1).toLowerCase();
+    const isMp4Like = outExt === 'mp4' || outExt === 'mov';
 
     // Dựng args theo encoder → đổi encoder là dựng lại, không vá tay giữa mảng.
     const buildArgs = (enc) => {
@@ -322,10 +381,12 @@ async function renderVideo(payload, win) {
       a.push('-filter_complex', fc, ...maps);
       a.push('-c:v', enc || cpuEnc, '-pix_fmt', 'yuv420p');
       a.push(...gpuQualityArgs(enc, { bitrateK: vbitK, crf }));
-      if (isHevc) a.push('-tag:v', 'hvc1');   // MP4/QuickTime nhận diện H.265
+      if (isHevc && isMp4Like) a.push('-tag:v', 'hvc1');   // MP4/QuickTime nhận diện H.265
       if (hasAudio) a.push('-c:a', 'aac', '-b:a', '192k');
-      // ÉP CỨNG độ dài output = tổng thời lượng cảnh (clip-sum) → KHÔNG bao giờ dài hơn/ngắn hơn preview, dù apad/concat có gì lạ.
-      a.push('-t', _outDur.toFixed(3), '-movflags', '+faststart', outPath);
+      // ÉP CỨNG độ dài output = tổng thời lượng cảnh (clip-sum) CHIA SPEED (tua 0.5–2×) → KHÔNG bao giờ dài hơn/ngắn hơn preview, dù apad/concat có gì lạ.
+      a.push('-t', (_outDur / _spd).toFixed(3));
+      if (isMp4Like) a.push('-movflags', '+faststart');
+      a.push(outPath);
       return a;
     };
 

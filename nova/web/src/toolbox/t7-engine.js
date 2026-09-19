@@ -25,6 +25,9 @@ function t7ExportEngineChange(){
 async function t7NovaExport(){
   if (!window.native || typeof window.native.renderNovaScenes !== 'function'){ setStatus7('Chỉ chạy trong app Nova (khởi động lại app sau khi cập nhật).', 'error'); return; }
   if (!_t7Clips().length){ setStatus7('Chưa có cảnh.', 'error'); return; }
+  // 🎞 Track video lớp trên (tính năng #4): spec Nova Scene chưa có trường lớp video → chặn lộ liễu, không bỏ lớp ngầm (Luật 10).
+  const _vlayers = (typeof t7VtExportPayload === 'function') ? t7VtExportPayload() : [];
+  if (_vlayers.length){ setStatus7('Bộ dựng Nova Scene chưa hỗ trợ track video lớp trên (' + _vlayers.length + ' lớp). Chọn bộ dựng FFmpeg để dựng lớp chồng.', 'error'); return; }
   setStatus7('◈ Gom cảnh + ảnh cho Nova Scene…', 'working');
   const scenes = await _t7NovaScenes({ inline: true });
   const totalSec = scenes.reduce((s, x) => s + (Number(x.durationSec) || 3), 0);

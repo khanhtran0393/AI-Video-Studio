@@ -169,6 +169,19 @@ function registerReviewIpc(ipcMain, { getState } = {}) {
     } catch (err) { return { ok: false, configured: false, error: errOf(err), code: codeOf(err) }; }
   });
 
+  /* ── Preflight ước tính (như /api/review/preflight của ezmaxsub —
+     bản app tính THUẦN cục bộ: thời lượng + tỉ lệ → số đoạn, số lượt
+     AI, mốc kẹp ≥1 phút ≤ nửa video; không gọi mạng, không paywall) ── */
+  handle('review:estimate', async (e, p = {}) => {
+    try {
+      const videoPath = String(p.videoPath || '').trim();
+      if (!videoPath || !fs.existsSync(videoPath)) return { ok: false, code: 'RV_NO_VIDEO', error: 'Thiếu hoặc sai đường dẫn video.' };
+      const dur = await probeDur(videoPath);
+      if (!(dur > 0)) return { ok: false, code: 'RV_PROBE', error: 'Không đo được thời lượng video.' };
+      return { ok: true, estimate: E.preflightEstimate({ durMs: Math.round(dur * 1000), ratioPct: p.ratioPct }) };
+    } catch (err) { return { ok: false, error: errOf(err), code: codeOf(err) }; }
+  });
+
   /* ── Danh sách giọng từ backend OmniVoice ── */
   handle('review:voices', async () => {
     try {
@@ -176,7 +189,16 @@ function registerReviewIpc(ipcMain, { getState } = {}) {
       const r = await fetch(url + '/api/voices', { method: 'GET' });
       const j = await r.json();
       const voices = (Array.isArray(j && j.voices) ? j.voices : [])
-        .map((v) => ({ pid: v.pid || v.id || '', name: v.name || v.title || v.pid || v.id || 'giọng', engine: v.engine || '' }))
+        .map((v) => ({
+          pid: v.pid || v.id || '',
+          name: v.name || v.title || v.pid || v.id || 'giọng',
+          engine: v.engine || '',
+          // Dữ liệu lọc cho renderer (giữ từ 2026-09-19j): ngôn ngữ giọng + cờ
+          // giọng có sẵn. Giọng clone thường không có attributes.lang → lang rỗng
+          // = "không rõ" — KHÔNG bịa ngôn ngữ (Luật 10).
+          lang: String((v.attributes && v.attributes.lang) || ''),
+          isFactory: !!v.is_factory,
+        }))
         .filter((v) => v.pid);
       return { ok: true, voices, count: voices.length };
     } catch (err) { return { ok: false, error: errOf(err), code: codeOf(err) }; }
@@ -191,19 +213,22 @@ function registerReviewIpc(ipcMain, { getState } = {}) {
     const videoPath = String(p.videoPath || '').trim();
     const srtPath = String(p.srtPath || '').trim();
     if (!videoPath || !fs.existsSync(videoPath)) throw errCodeOf('RV_NO_VIDEO', 'Thiếu hoặc sai đường dẫn video: ' + videoPath);
+    /* Chạy lại RIÊNG 1 đoạn lỗi (như /api/review/retry-chunk của ezmaxsub):
+       giữ kết quả các đoạn khác, đọc lại đúng đoạn đã chọn. */
+    if (Number.isInteger(p.retryChunk) && p.retryChunk >= 0) return retryChunkCore(e, p);
     const cfg = {
       language: String(p.language || 'vi'),
       style: 'plot_recap',
       customPrompt: String(p.customPrompt || '').slice(0, 2000),
       ratioLen: Math.max(0.05, Math.min(0.5, Number(p.ratioLen) || 0.2)),
-      wordsPerCue: Math.max(1, Math.min(30, Math.round(Number(p.wordsPerCue) || 8))),
+      wordsPerCue: E.clampCaptionWords(p.wordsPerCue),
       keepOriginal: !!p.keepOriginal,
       chunkDurMs: Math.max(60000, Math.round(Number(p.chunkDurMs) || 480000)),
     };
     const jobId = 'rv-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
     const workDir = path.join(tmpRoot(), jobId);
     fs.mkdirSync(workDir, { recursive: true });
-    const prog = (stage, pct, message, extra) => sendProgress(e, Object.assign({ kind: 'analyze', jobId, stage, pct, message }, extra || {}));
+    const prog = (stage, pct, message, extra) => sendProgress(e, Object.assign({ kind: 'analyze', jobId, stage, pct, phase: 'analyze', message }, extra || {}));
 
     prog('probe', 1, 'Đọc thời lượng video…');
     const dur0 = await probeDur(videoPath);
@@ -237,11 +262,14 @@ function registerReviewIpc(ipcMain, { getState } = {}) {
     prog('chunks', 40, 'Chia ' + chunks.length + ' đoạn — AI viết kịch bản…', { chunkStates });
 
     const scenes = [];
+    const scenesByChunk = [];
+    const chunkPlan = chunks.map((c) => ({ idx: c.idx, startMs: c.startMs, endMs: 0, text: c.text, words: c.words }));
     let clampedTotal = 0, droppedTotal = 0, prevSummary = '';
     for (let i = 0; i < chunks.length; i++) {
       if (isCancelled()) throw errCodeOf('RV_CANCELLED', 'Đã huỷ bởi người dùng.');
       const chunk = chunks[i];
       const chunkEndMs = (i + 1 < chunks.length) ? chunks[i + 1].startMs : videoDurMs;
+      chunkPlan[i].endMs = chunkEndMs;
       chunkStates[i].state = 'running';
       prog('ai', 40 + Math.round((i / chunks.length) * 50), 'AI viết đoạn ' + (i + 1) + '/' + chunks.length + '…', { chunk: i, chunkState: 'running', chunkStates });
       try {
@@ -254,6 +282,7 @@ function registerReviewIpc(ipcMain, { getState } = {}) {
         const items = E.parseScenesJson(raw);
         const norm = E.scenesFromParsed(items, { chunkStartMs: chunk.startMs, chunkEndMs, videoDurMs });
         clampedTotal += norm.clamped; droppedTotal += norm.dropped;
+        scenesByChunk[i] = norm.scenes.slice();
         if (norm.scenes.length) {
           scenes.push(...norm.scenes);
           prevSummary = norm.scenes.map((s) => s.text).join(' ').slice(0, 400);
@@ -261,6 +290,7 @@ function registerReviewIpc(ipcMain, { getState } = {}) {
         chunkStates[i].state = 'done';
         chunkStates[i].scenes = norm.scenes.length;
       } catch (err) {
+        scenesByChunk[i] = [];
         chunkStates[i].state = 'error';
         chunkStates[i].error = errOf(err);
       }
@@ -280,7 +310,7 @@ function registerReviewIpc(ipcMain, { getState } = {}) {
     });
     const stateData = {
       v: 1, jobId, videoPath, dur0, source, cfg,
-      scenes, sentences, chunkStates,
+      scenes, sentences, chunkStates, scenesByChunk, chunkPlan,
       scriptMd, clampedTotal, droppedTotal,
       createdAt: new Date().toISOString(),
     };
@@ -290,6 +320,72 @@ function registerReviewIpc(ipcMain, { getState } = {}) {
       ok: true, jobId, source, sceneCount: scenes.length, sentenceCount: sentences.length,
       chunkCount: chunks.length, chunkStates, clampedTotal, droppedTotal,
       words: est.words, targetWords: est.targetWords, scriptMd,
+    };
+  }
+
+  /* ── Chạy lại RIÊNG 1 đoạn (payload retryChunk = idx) — như
+     /api/review/retry-chunk của ezmaxsub: đọc lại đúng đoạn đã chọn,
+     GIỮ NGUYÊN kết quả các đoạn khác (khai báo qua scenesByChunk). ── */
+  async function retryChunkCore(e, p = {}) {
+    const idx = Number(p.retryChunk);
+    const jobId = String(p.jobId || '').trim();
+    if (!jobId) throw errCodeOf('RV_NO_JOB', 'Chưa có kịch bản (jobId) — chạy giai đoạn ① trước khi chạy lại đoạn.');
+    const statePath = path.join(tmpRoot(), jobId + '.state.json');
+    if (!fs.existsSync(statePath)) throw errCodeOf('RV_NO_JOB', 'Không tìm thấy state kịch bản: ' + statePath);
+    let st;
+    try { st = JSON.parse(fs.readFileSync(statePath, 'utf8')); }
+    catch (e2) { throw errCodeOf('RV_STATE_BAD', 'State kịch bản không đọc được: ' + e2.message); }
+    const chunkPlan = Array.isArray(st.chunkPlan) ? st.chunkPlan : null;
+    const scenesByChunk = Array.isArray(st.scenesByChunk) ? st.scenesByChunk : null;
+    if (!chunkPlan || !scenesByChunk) throw errCodeOf('RV_STATE_OLD', 'State kịch bản cũ (chưa có scenesByChunk) — chạy lại giai đoạn ① để dùng chạy-riêng-đoạn.');
+    if (idx < 0 || idx >= chunkPlan.length) throw errCodeOf('RV_CHUNK_RANGE', 'Đoạn ' + (idx + 1) + ' ngoài phạm vi (tổng ' + chunkPlan.length + ' đoạn).');
+    const videoPath = String(st.videoPath || '');
+    if (!videoPath || !fs.existsSync(videoPath)) throw errCodeOf('RV_NO_VIDEO', 'Video nguồn không còn trên đĩa: ' + videoPath);
+    const cfg = st.cfg || {};
+    const videoDurMs = Math.round((Number(st.dur0) || 0) * 1000);
+    const chunkStates = Array.isArray(st.chunkStates) ? st.chunkStates : chunkPlan.map((c) => ({ idx: c.idx, state: 'pending', error: '' }));
+
+    const prog = (stage, pct, message, extra) => sendProgress(e, Object.assign({ kind: 'analyze', jobId, stage, pct, phase: 'analyze', message }, extra || {}));
+    prog('ai', 40, 'Chạy lại đoạn ' + (idx + 1) + '/' + chunkPlan.length + '…', { chunk: idx, chunkState: 'running', chunkStates });
+
+    const chunk = chunkPlan[idx];
+    const prev = idx > 0 ? (scenesByChunk[idx - 1] || []) : [];
+    const prevSummary = prev.map((s) => s.text).join(' ').slice(0, 400);
+    const { system, user } = E.buildChunkPrompt(chunk, {
+      language: cfg.language, ratioLen: cfg.ratioLen, customPrompt: cfg.customPrompt,
+      keepOriginal: !!cfg.keepOriginal, chunkTotal: chunkPlan.length, totalWords: (st.words || 0), prevSummary,
+    });
+    const raw = await claude(system, user, { noRetry: true, noBridge: true });
+    if (isCancelled()) throw errCodeOf('RV_CANCELLED', 'Đã huỷ bởi người dùng.');
+    const items = E.parseScenesJson(raw);
+    const norm = E.scenesFromParsed(items, { chunkStartMs: chunk.startMs, chunkEndMs: chunk.endMs || videoDurMs, videoDurMs });
+    scenesByChunk[idx] = norm.scenes.slice();
+    chunkStates[idx].state = 'done';
+    chunkStates[idx].scenes = norm.scenes.length;
+    chunkStates[idx].error = '';
+    prog('ai', 60, 'Đoạn ' + (idx + 1) + ': done', { chunk: idx, chunkState: 'done', chunkStates });
+
+    /* ghép lại toàn bộ kịch bản từ các đoạn đã có */
+    const scenes = [];
+    for (const arr of scenesByChunk) scenes.push(...(Array.isArray(arr) ? arr : []));
+    if (!scenes.length) throw errCodeOf('RV_NO_SCENES', 'Kịch bản không còn cảnh nào sau khi chạy lại đoạn.');
+    const sentences = [];
+    for (const sc of scenes) sentences.push(...DUB.splitScriptText(sc.text));
+    if (sentences.length > MAX_SENTENCES) {
+      throw errCodeOf('RV_TOO_MANY', 'Kịch bản tách được ' + sentences.length + ' câu — vượt trần ' + MAX_SENTENCES + '.');
+    }
+    const scriptMd = E.buildScriptMd(scenes, {
+      title: path.basename(videoPath), language: cfg.language,
+      ratioLen: cfg.ratioLen, customPrompt: cfg.customPrompt,
+    });
+    st.scenes = scenes; st.sentences = sentences; st.chunkStates = chunkStates;
+    st.scenesByChunk = scenesByChunk; st.scriptMd = scriptMd;
+    fs.writeFileSync(statePath, JSON.stringify(st), 'utf8');
+    prog('done', 100, 'Chạy lại đoạn ' + (idx + 1) + ' xong: ' + scenes.length + ' cảnh · ' + sentences.length + ' câu.');
+    return {
+      ok: true, jobId, retry: true, retriedChunk: idx,
+      source: st.source, sceneCount: scenes.length, sentenceCount: sentences.length,
+      chunkCount: chunkPlan.length, chunkStates, scriptMd,
     };
   }
 
@@ -314,19 +410,28 @@ function registerReviewIpc(ipcMain, { getState } = {}) {
     const outDir = String(p.outDir || '').trim();
     if (!outDir) throw errCodeOf('RV_NO_OUTDIR', 'Chưa chọn thư mục xuất.');
     fs.mkdirSync(outDir, { recursive: true });
+    /* Giọng thoại (cửa sổ tiếng gốc) — như "review-ost-voice" của
+       ezmaxsub: câu thoại (prefix "Tên:" — cùng hợp đồng SPEAKER_RE
+       của dubbing) đọc bằng giọng khác giọng lời bình để người xem
+       phân biệt người kể và nhân vật. Nhận dạng câu thoại THUẦN theo
+       pattern dubbing (bản sao inline + test giữ đồng bộ — như mô
+       hình imzic-bend). */
+    const SPEAKER_RE_COPY = /^([^:：\n]{1,24})\s*[:：]\s+/; // = dubbing/engine SPEAKER_RE
     const opts = {
       voicePid: String(p.voicePid || '').trim(),
+      ostVoicePid: String(p.ostVoicePid || '').trim(),
       language: String((st.cfg && st.cfg.language) || 'vi'),
-      readSpeed: Math.max(0.5, Math.min(2, Number(p.readSpeed) || 1)),
+      readSpeed: Math.max(0.5, Math.min(1.5, Number(p.readSpeed) || 1)),
       audioMode: (p.audioMode === 'mix') ? 'mix' : 'replace',
       origVol: Math.max(0, Math.min(1, Number(p.origVol) || 0.25)),
       musicPath: String(p.musicPath || '').trim(),
       musicVol: Math.max(0, Math.min(2, Number(p.musicVol) || 0.2)),
       burnSubs: p.burnSubs !== false,
-      maxWordsPerCue: Math.max(1, Math.min(30, Math.round(Number(p.maxWordsPerCue) || ((st.cfg && st.cfg.wordsPerCue) || 8)))),
+      maxWordsPerCue: E.clampCaptionWords(p.maxWordsPerCue != null ? p.maxWordsPerCue : ((st.cfg && st.cfg.wordsPerCue) || 5)),
       useCache: p.useCache !== false,
     };
-    const prog = (stage, pct, message, extra) => sendProgress(e, Object.assign({ kind: 'build', jobId, stage, pct, message }, extra || {}));
+    const PHASE_OF_STAGE = { tts: 'voice', cut: 'plan', narration: 'plan', audio: 'plan', music: 'plan', burn: 'plan', faststart: 'plan', done: 'plan' };
+    const prog = (stage, pct, message, extra) => sendProgress(e, Object.assign({ kind: 'build', jobId, stage, pct, phase: PHASE_OF_STAGE[stage] || 'plan', message }, extra || {}));
     const workDir = path.join(tmpRoot(), jobId);
     fs.mkdirSync(workDir, { recursive: true });
     const base = path.basename(videoPath).replace(/\.[^./\\]+$/, '');
@@ -338,8 +443,11 @@ function registerReviewIpc(ipcMain, { getState } = {}) {
     for (let i = 0; i < sentences.length; i++) {
       if (isCancelled()) throw errCodeOf('RV_CANCELLED', 'Đã huỷ bởi người dùng.');
       prog('tts', Math.round((i / sentences.length) * 38), 'TTS câu ' + (i + 1) + '/' + sentences.length + '…');
+      /* câu thoại (prefix "Tên:") + đã chọn giọng thoại → dùng giọng thoại */
+      const isDialogue = opts.ostVoicePid && SPEAKER_RE_COPY.test(sentences[i]);
       const body = { text: sentences[i], language: opts.language, speed: opts.readSpeed, chunk_chars: 0 };
-      if (opts.voicePid) body.preset_id = opts.voicePid;
+      const sentencePid = isDialogue ? opts.ostVoicePid : opts.voicePid;
+      if (sentencePid) body.preset_id = sentencePid;
       const key = crypto.createHash('sha1')
         .update(sentences[i] + '|' + (body.preset_id || '') + '|' + opts.language + '|' + opts.readSpeed)
         .digest('hex');
@@ -431,6 +539,18 @@ function registerReviewIpc(ipcMain, { getState } = {}) {
       plan: planR.plan,
     }, null, 2), 'utf8');
 
+    /* Tiếng cuối (lời bình ± tiếng gốc trộn theo audioMode) giữ lại trong
+       thư mục xuất — dùng làm track giọng khi nạp timeline vào Dựng Video
+       (kênh review:toT7). Lỗi lưu → khai báo narrationWarn, không nuốt. */
+    let narrationPath = '', narrationWarn = '';
+    try {
+      narrationPath = path.join(outDir, base + '.review-tieng.m4a');
+      fs.copyFileSync(audioFinal, narrationPath);
+    } catch (ne) {
+      narrationPath = '';
+      narrationWarn = 'Không lưu được track tiếng để nạp vào Dựng Video: ' + errOf(ne);
+    }
+
     if (opts.burnSubs) {
       prog('burn', 88, 'Đóng phụ đề cứng…');
       const burnedPath = path.join(workDir, 'burned.mp4');
@@ -446,12 +566,69 @@ function registerReviewIpc(ipcMain, { getState } = {}) {
     try { fs.rmSync(workDir, { recursive: true, force: true }); } catch (_) {}
     prog('done', 100, 'Xong: ' + outPath);
     return {
-      ok: true, outPath, srtPath, scriptPath, planPath,
+      ok: true, outPath, srtPath, scriptPath, planPath, narrationPath, narrationWarn,
       totalMs: planR.totalMs, sceneCount: planR.plan.length, sentenceCount: planR.sentenceCount,
     };
   }
 
-  /* ── Handler ①/②/full + huỷ ── */
+  /* ── Nạp timeline vào Dựng Video (T7): đọc plan dựng (SSOT của ② —
+     mỗi cảnh có sourceStartMs/sourceDurMs/text), cắt TỪNG cảnh thành
+     file video riêng (cutMulti accurate) trong <outDir>/review-t7/ và
+     trả danh sách cảnh cho renderer dựng timeline T7 (xem trước,
+     tinh chỉnh, xuất tại Dựng Video). Lỗi lộ liễu RV_*. ── */
+  async function toT7Core(e, p = {}) {
+    const jobId = String(p.jobId || '').trim();
+    if (!jobId) throw errCodeOf('RV_NO_JOB', 'Chưa có kịch bản (jobId) — chạy giai đoạn ① trước.');
+    const statePath = path.join(tmpRoot(), jobId + '.state.json');
+    if (!fs.existsSync(statePath)) throw errCodeOf('RV_NO_JOB', 'Không tìm thấy state kịch bản: ' + statePath);
+    let st;
+    try { st = JSON.parse(fs.readFileSync(statePath, 'utf8')); }
+    catch (e2) { throw errCodeOf('RV_STATE_BAD', 'State kịch bản không đọc được: ' + e2.message); }
+    const videoPath = String(st.videoPath || '');
+    if (!videoPath || !fs.existsSync(videoPath)) throw errCodeOf('RV_NO_VIDEO', 'Video nguồn không còn trên đĩa: ' + videoPath);
+    const videoDurMs = Math.round((Number(st.dur0) || 0) * 1000);
+    const planPath = String(p.planPath || '').trim();
+    if (!planPath || !fs.existsSync(planPath)) throw errCodeOf('RV_NO_PLAN', 'Chưa có plan dựng (chạy giai đoạn ② trước) — ' + (planPath || '(trống)'));
+    let planR;
+    try { planR = JSON.parse(fs.readFileSync(planPath, 'utf8')); }
+    catch (e2) { throw errCodeOf('RV_PLAN_BAD', 'Plan dựng không đọc được: ' + e2.message); }
+    const plan = Array.isArray(planR && planR.plan) ? planR.plan : [];
+    if (!plan.length) throw errCodeOf('RV_NO_SCENES', 'Plan dựng không còn cảnh nào.');
+    const outDir = String(p.outDir || '').trim();
+    if (!outDir || !fs.existsSync(outDir)) throw errCodeOf('RV_NO_OUTDIR', 'Thư mục xuất không còn trên đĩa: ' + (outDir || '(chưa chọn)'));
+    const segDir = path.join(outDir, 'review-t7');
+    fs.mkdirSync(segDir, { recursive: true });
+    let narrationPath = String(p.narrationPath || '').trim();
+    const narrationMissing = !!(narrationPath && !fs.existsSync(narrationPath));
+    if (narrationMissing) narrationPath = '';
+    const prog = (stage, pct, message) => sendProgress(e, { kind: 'toT7', phase: 'toT7', stage, pct, message });
+    const scenes = [];
+    for (let i = 0; i < plan.length; i++) {
+      if (isCancelled()) throw errCodeOf('RV_CANCELLED', 'Đã huỷ bởi người dùng.');
+      const pp = plan[i] || {};
+      const startMs = Math.max(0, Math.round(Number(pp.sourceStartMs) || 0));
+      const durMs = Math.round(Number(pp.sourceDurMs) || 0);
+      if (!(durMs > 0)) throw errCodeOf('RV_SCENE_RANGE', 'Cảnh ' + (i + 1) + ' có độ dài nguồn không hợp lệ trong plan.');
+      let endMs = startMs + durMs;
+      if (videoDurMs > 0 && endMs > videoDurMs) endMs = videoDurMs;
+      if (endMs - startMs < 200) throw errCodeOf('RV_SCENE_RANGE', 'Cảnh ' + (i + 1) + ' vượt quá thời lượng video gốc (' + startMs + 'ms + ' + durMs + 'ms > ' + videoDurMs + 'ms).');
+      const outPath = path.join(segDir, 'canh-' + String(i + 1).padStart(3, '0') + '.mp4');
+      prog('cut', Math.round((i / plan.length) * 95), 'Cắt cảnh ' + (i + 1) + '/' + plan.length + ' cho Dựng Video…');
+      await mediaTools.cutMulti({
+        inputPath: videoPath, outputPath: outPath, mode: 'accurate',
+        segments: [{ startSec: startMs / 1000, endSec: endMs / 1000 }],
+      });
+      scenes.push({ idx: i, text: String(pp.text || ''), videoPath: outPath, durSec: +((endMs - startMs) / 1000).toFixed(3) });
+    }
+    prog('done', 100, 'Xong: ' + scenes.length + ' cảnh sẵn sàng cho Dựng Video.');
+    return {
+      ok: true, scenes,
+      totalMs: Math.round(Number(planR.totalMs) || 0),
+      narrationPath, narrationMissing,
+    };
+  }
+
+  /* ── Handler ①/②/full + nạp-T7 + huỷ ── */
   handle('review:analyze', async (e, p = {}) => {
     try {
       guardRun('analyze');
@@ -489,6 +666,20 @@ function registerReviewIpc(ipcMain, { getState } = {}) {
         const b = await buildCore(e, Object.assign({}, p, { jobId: a.jobId }));
         return Object.assign({}, b, { analyze: { chunkStates: a.chunkStates, sceneCount: a.sceneCount, source: a.source } });
       } finally { if (run && run.kind === 'run') run = null; }
+    } catch (err) {
+      run = null;
+      if (isCancelled() || (err && err.code === 'RV_CANCELLED')) return { ok: false, error: 'Đã huỷ bởi người dùng.', code: 'RV_CANCELLED' };
+      return { ok: false, error: errOf(err), code: codeOf(err), detail: (err && err.detail) || '' };
+    }
+  });
+
+  /* Nạp timeline vào Dựng Video (T7): cắt từng cảnh theo plan dựng */
+  handle('review:toT7', async (e, p = {}) => {
+    try {
+      guardRun('toT7');
+      run = { kind: 'toT7', cancelRequested: false, children: new Set() };
+      try { return await toT7Core(e, p); }
+      finally { if (run && run.kind === 'toT7') run = null; }
     } catch (err) {
       run = null;
       if (isCancelled() || (err && err.code === 'RV_CANCELLED')) return { ok: false, error: 'Đã huỷ bởi người dùng.', code: 'RV_CANCELLED' };

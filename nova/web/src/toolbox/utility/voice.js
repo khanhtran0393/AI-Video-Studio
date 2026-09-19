@@ -180,7 +180,17 @@ async function giongTaiDS(){
       });
     }
     taiThanhCong = true;
-  } catch (e){ /* backend tạm thời chưa lên — giữ danh sách đang dùng */ }
+  } catch (e){
+    // KHÔNG nuốt câm (Luật 10 — siết 2026-09-19k): backend tạm thời chưa lên thì
+    // GIỮ danh sách đang dùng (đúng hành vi cũ) nhưng khai báo rõ vào log để
+    // phiên sau chẩn đoán được vì sao thư viện giọng không cập nhật.
+    try { novaLog('🎙 Nạp thư viện giọng lỗi: ' + (e.message || e), 'warn'); } catch (_){}
+    console.warn('[voice] giongTaiDS nạp /api/voices lỗi:', e);
+    // Backend ĐÃ sẵn sàng trước đó mà nạp lỗi = sự cố thật giữa phiên → cảnh báo
+    // UI lộ liễu (không chỉ log im lặng). Lúc khởi động (_voiceReady=false) thì
+    // bỏ qua — backend chưa lên là trạng thái bình thường, UI có trạng thái rỗng riêng.
+    if (_voiceReady){ try { giongBao('⚠️ Nạp thư viện giọng lỗi: ' + (e.message || e) + ' — vẫn giữ danh sách đang dùng.', 'red'); } catch (_){} }
+  }
   // Không xoá thư viện/selection đang hiện chỉ vì một lần reload gặp backend lỗi.
   // Lần khởi tạo đầu vẫn giữ [] để UI hiển thị đúng trạng thái rỗng.
   if (taiThanhCong){
@@ -235,22 +245,20 @@ function giongVe(){
 }
 
 function giongVeThanh(){
-  // VieNeu Turbo chưa nhận tham số tốc độ, và chỉ đọc tiếng Việt —
-  // mờ phần tương ứng khi chọn VieNeu, KHÔNG giấu (đúng triết lý tab này).
-  const vi = _voiceBackend === 'vieneu';
-  const el = document.getElementById('slTocDo');
-  if (el) el.classList.toggle('off', vi);
-  const wy = document.getElementById('whyTocDo');
-  if (wy) wy.textContent = vi ? 'VieNeu Turbo chưa có tốc độ' : '';
+  // Ghi chú ngắn gọn đúng năng lực từng engine (chi tiết đã dời vào title của nhãn).
+  // Tốc độ: VieNeu giờ áp HẬU KỲ atempo giữ cao độ ở backend (2026-09-19w) →
+  // slider KHÔNG còn mờ cho VieNeu như trước nữa.
   const nn = document.getElementById('slNgonNgu');
-  if (nn) nn.classList.toggle('off', vi);
+  if (nn) nn.classList.toggle('off', _voiceBackend === 'vieneu');
   const wn = document.getElementById('whyNgonNgu');
   // Ghi chú ngắn gọn đúng năng lực từng engine (chi tiết đã dời vào title của nhãn).
-  if (vi) wn.textContent = 'VieNeu thuần tiếng Việt';
+  if (_voiceBackend === 'vieneu') wn.textContent = 'VieNeu thuần tiếng Việt';
   else if (_voiceBackend === 'xtts') wn.textContent = 'XTTS: 17 ngôn ngữ (Việt cần viXTTS)';
   else wn.textContent = 'OmniVoice: 600+ ngôn ngữ';
   // Tham số nâng cao chỉ có tác dụng với engine ghi trong data-engines của khối
-  // (Top P/Top K/Repetition → VieNeu · Tốc độ sinh/Sắc nét → OmniVoice) — mờ các
+  // (Top P/Top K → VieNeu/XTTS clone · Repetition → VieNeu + XTTS qua quy đổi
+  // thang ×5 có khai báo ở engine (default 2.0 → 10.0 = default XTTS, trung tính)
+  // · Tốc độ sinh/Sắc nét → OmniVoice diffusion, không có trên họ LM) — mờ các
   // khối không áp dụng cho engine đang chọn, KHÔNG giấu (đúng triết lý tab này).
   document.querySelectorAll('.sl[data-engines]').forEach(el => {
     const ds = (el.getAttribute('data-engines') || '').split(',').map(s => s.trim()).filter(Boolean);
@@ -315,47 +323,87 @@ function _giongThuTu(v){
   return [goc].concat([_voiceBackend].concat(Object.keys(_TTS_TEN)).filter(e => e !== goc && _TTS_TEN[e]).filter((e, i, a) => a.indexOf(e) === i));
 }
 
-function _giongMauFileKey(eng, key){ return _GIONG_MAU_V + '|' + eng + '|' + key; }
+// Hash ổn định (djb2 kép) → 16 ký tự hex: tham số phân biệt mẫu trong key đĩa v4.
+function _giongHash16(s){
+  const str = String(s == null ? '' : s);
+  let h1 = 5381, h2 = 52711;
+  for (let i = 0; i < str.length; i++){
+    const c = str.charCodeAt(i);
+    h1 = ((h1 * 33) ^ c) >>> 0;
+    h2 = ((h2 * 31) ^ c) >>> 0;
+  }
+  return h1.toString(16).padStart(8, '0') + h2.toString(16).padStart(8, '0');
+}
+
+// Câu nghe thử do người dùng gõ (ô giongThuCau) — để trống dùng câu mặc định.
+// Cap 240 ký tự: mẫu nghe thử ~4-8 giây, câu dài chỉ làm gen chậm vô ích.
+function _giongThuText(){
+  const ta = document.getElementById('giongThuCau');
+  const t = ta ? String(ta.value || '').trim() : '';
+  return (t || _GIONG_THU).slice(0, 240);
+}
+
+// Tham số phân biệt mẫu (v4) = hash(chữ ký cài đặt + câu nghe thử).
+function _giongThamSo(sig, text){ return _giongHash16(String(sig || '') + '|' + String(text || '')); }
+
+function _giongMauFileKey(eng, key, thamso){ return _GIONG_MAU_V + '|' + eng + '|' + key + '|' + (thamso == null ? '' : thamso); }
 
 // Key ĐĨA của mẫu = _giongMauFileKey sau khi main sanitize (voiceSampleFile):
 // /[/\\:*?"<>|]+/g → '_', '..+' → '_', cắt 180 ký tự. Voice key gốc chứa ':'
 // (vd 'omni:factory_en_male_deep') bị đổi thành '_' → KHÔNG tách ngược được,
-// badge phải so khớp chiều đi (forward-mapping) qua _giongMauSanCo().
-function _giongMauKeyDia(eng, key){ return _giongMauFileKey(eng, key).replace(/[/\\:*?"<>|]+/g, '_').replace(/\.\.+/g, '_').slice(0, 180); }
+// badge phải so khớp chiều đi (forward-mapping) qua _giongMauKhop()/_giongMauCo().
+function _giongMauKeyDia(eng, key, thamso){ return _giongMauFileKey(eng, key, thamso).replace(/[/\\:*?"<>|]+/g, '_').replace(/\.\.+/g, '_').slice(0, 180); }
 
-// Giọng `key` đã có mẫu nghe thử trên đĩa (bất kỳ engine nào)?
-function _giongMauSanCo(key){
+// Tiền tố đĩa của MỌI mẫu (mọi tham số) của 1 giọng+engine — dùng để đếm "đã có
+// mẫu" và xoá sạch cache khi gỡ giọng. Tham số rỗng → key đĩa kết thúc bằng '_'.
+function _giongMauTienToDia(eng, key){ return _giongMauKeyDia(eng, key, ''); }
+
+// Giọng `key` đã có mẫu nghe thử trên đĩa (bất kỳ engine/tham số nào)?
+function _giongMauCo(key){
   if (key == null) return false;
   for (const eng of Object.keys(_TTS_TEN)){
-    if (_giongMauSan.has(_giongMauKeyDia(eng, key))) return true;
+    const tienTo = _giongMauTienToDia(eng, key);
+    for (const k of _giongMauSan){ if (k.startsWith(tienTo)) return true; }
   }
   return false;
 }
 
-// Đọc mẫu nghe thử từ cache đĩa → { dataUrl, sp, p } | null.
-// sp/p = tham số lúc gen (file v2); file v1 cũ trả sp/p null → renderer coi là
-// lệch tham số, tự gen lại + ghi đè nên không cần migration.
-async function _giongMauDocDia(eng, key){
+// Giọng `key` có mẫu khớp ĐÚNG tham số hiện tại (cài đặt + câu nghe thử)?
+function _giongMauKhop(key, thamso){
+  if (key == null) return false;
+  for (const eng of Object.keys(_TTS_TEN)){
+    if (_giongMauSan.has(_giongMauKeyDia(eng, key, thamso))) return true;
+  }
+  return false;
+}
+
+// Đọc mẫu nghe thử từ cache đĩa → { dataUrl, sig } | null. v4: tham số nằm
+// TRONG key (mỗi tổ hợp cài đặt+câu 1 file) nên đọc ra là phát ngay, không cần
+// so sig nữa. File đời trước (v1-v3) key không khớp → coi như chưa có, tự gen.
+async function _giongMauDocDia(eng, key, thamso){
   try {
     if (!(window.native && window.native.voiceSampleLoad)) return null;   // bản web không có IPC
-    const r = await window.native.voiceSampleLoad(_giongMauFileKey(eng, key));
+    const r = await window.native.voiceSampleLoad(_giongMauFileKey(eng, key, thamso));
     if (r && r.ok && typeof r.dataUrl === 'string' && r.dataUrl.startsWith('data:')){
-      return { dataUrl: r.dataUrl, sp: (typeof r.sp === 'number' ? r.sp : null), p: (typeof r.p === 'number' ? r.p : null) };
+      return {
+        dataUrl: r.dataUrl,
+        sig: (typeof r.sig === 'string' ? r.sig : null),
+      };
     }
   } catch (_){}
   return null;
 }
 
-// Ghi mẫu vừa gen xuống đĩa kèm tham số tốc độ/cao độ (fire-and-forget: lỗi ghi không chặn việc nghe).
-async function _giongMauGhiDia(eng, key, blob, tuyChon){
+// Ghi mẫu vừa gen xuống đĩa theo tham số cài đặt + câu (fire-and-forget: lỗi ghi
+// không chặn việc nghe).
+async function _giongMauGhiDia(eng, key, blob, sig, text){
   try {
     if (!(window.native && window.native.voiceSampleSave) || !blob) return;
     const dataUrl = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result || '')); fr.onerror = () => rej(new Error('đọc blob lỗi')); fr.readAsDataURL(blob); });
     if (dataUrl && dataUrl.startsWith('data:')){
       window.native.voiceSampleSave({
-        key: _giongMauFileKey(eng, key), dataUrl,
-        sp: tuyChon ? tuyChon.tocDo : null,
-        p: tuyChon ? tuyChon.caoDo : null,
+        key: _giongMauFileKey(eng, key, _giongThamSo(sig, text)), dataUrl,
+        sig: (typeof sig === 'string' ? sig.slice(0, 512) : null),
       });
     }
   } catch (_){}
@@ -363,10 +411,25 @@ async function _giongMauGhiDia(eng, key, blob, tuyChon){
 
 function _giongMauXoa(key){
   if (key != null){
-    const u = _giongMau.get(key);
-    if (u){ try { URL.revokeObjectURL(u.url); } catch (_){} _giongMau.delete(key); }
-    for (const eng of Object.keys(_TTS_TEN)) _giongMauSan.delete(_giongMauKeyDia(eng, key));
-    try { if (window.native && window.native.voiceSampleClear){ for (const e of Object.keys(_TTS_TEN)) window.native.voiceSampleClear(_giongMauFileKey(e, key)); } } catch (_){}
+    // RAM giữ key ĐẦY ĐỦ (v4|engine|giọng|tham số) — xoá mọi bản của giọng này
+    // bằng cách so khớp phân đoạn giọng (phần tử thứ 3, voice key không có '|').
+    const canXoa = [];
+    _giongMau.forEach((u, k) => { if (String(k).split('|')[2] === key) canXoa.push(k); });
+    for (const k of canXoa){
+      const u = _giongMau.get(k);
+      if (u){ try { URL.revokeObjectURL(u.url); } catch (_){} }
+      _giongMau.delete(k);
+    }
+    for (const eng of Object.keys(_TTS_TEN)){
+      const tienTo = _giongMauTienToDia(eng, key);
+      for (const k of Array.from(_giongMauSan)){ if (k.startsWith(tienTo)) _giongMauSan.delete(k); }
+    }
+    try {
+      if (window.native && window.native.voiceSampleClear){
+        // Cache v4 nhiều mẫu/giếng → xoá theo TIỀN TỐ key (main gỡ mọi file khớp).
+        for (const e of Object.keys(_TTS_TEN)) window.native.voiceSampleClear({ prefix: _giongMauFileKey(e, key, '') });
+      }
+    } catch (_){}
   } else {
     _giongMau.forEach(u => { try { URL.revokeObjectURL(u.url); } catch (_){} });
     _giongMau.clear();
@@ -389,9 +452,10 @@ async function giongMauSanNap(){
     if (!(window.native && window.native.voiceSampleList)) return;   // bản web không có IPC
     const r = await window.native.voiceSampleList();
     if (r && r.error) throw new Error(r.error);
-    // _giongMauSan giữ KEY ĐĨA NGUYÊN BẢN (đã sanitize bởi main, có tiền tố 'v2_').
-    // So khớp giọng → _giongMauSanCo() sanitize chiều đi, KHÔNG tách ngược vì
-    // ':' trong voice key gốc bị main đổi thành '_' (mất thông tin, không khôi phục).
+    // _giongMauSan giữ KEY ĐĨA NGUYÊN BẢN (đã sanitize bởi main, tiền tố 'v4_';
+    // v4 = nhiều mẫu/giếng theo tổ hợp cài đặt+câu). So khớp giọng → forward-map
+    // qua _giongMauKhop()/_giongMauCo() với tiền tố, KHÔNG tách ngược vì ':' trong
+    // voice key gốc bị main đổi thành '_' (mất thông tin, không khôi phục).
     const tienTo = _GIONG_MAU_V + '_';
     const ds = (r && r.items) || [];
     const san = new Set();
@@ -412,37 +476,38 @@ async function _giongPhatThu(key){
   if (_giongTao === key) return;   // đang tạo mẫu cho chính giọng này — chờ, bấm thêm không spawn thêm task
   giongVe();
   try {
-    const tuyChon = giongDocTuyChon();   // tham số tốc độ/cao độ hiện tại của tab
-    const khopThamSo = h => !!h && h.sp === tuyChon.tocDo && h.p === tuyChon.caoDo;
-    let hit = _giongMau.get(key);
-    if (!khopThamSo(hit)) hit = null;    // RAM có nhưng lệch tốc độ/cao độ → coi như chưa có, gen lại
-    if (!hit){
-      // RAM không có → đọc cache trên đĩa (đã sinh từ phiên trước, phát ngay).
-      // Dò theo đúng thứ tự engine ưu tiên như lúc tạo để không bỏ sót mẫu
-      // tạo bằng engine fallback. Thấy entry đầu tiên là dừng: khớp tham số thì
-      // phát luôn, lệch thì gen lại và ghi đè cùng file (đĩa 1 file/giếng+engine).
-      for (const e of _giongThuTu(v)){
-        const duLieu = await _giongMauDocDia(e, key);
-        if (duLieu){
-          if (khopThamSo(duLieu)){
-            try {
-              const r = await fetch(duLieu.dataUrl); const blob = await r.blob();
-              if (blob && blob.size){ hit = { url: URL.createObjectURL(blob), sp: duLieu.sp, p: duLieu.p }; _giongMau.set(key, hit); }
-            } catch (_){}
-          }
-          break;
-        }
+    const tuyChon = giongDocTuyChon();   // toàn bộ cài đặt giọng hiện tại của tab
+    const sig = _giongThuSig(tuyChon);   // chữ ký ĐẦY ĐỦ cài đặt — nghe thử phải phản ánh mọi thay đổi
+    const text = _giongThuText();        // câu nghe thử (mặc định nếu ô để trống)
+    const thamso = _giongThamSo(sig, text);   // cache v4: 1 tổ hợp cài đặt+câu = 1 mẫu riêng
+    // Có mẫu nhưng lệch cài đặt/câu → báo rõ sẽ tạo lại theo cấu hình mới.
+    const lechThamSo = _giongMauCo(key) && !_giongMauKhop(key, thamso);
+    let hit = null;
+    // RAM trước (đúng engine + tham số), rồi cache đĩa — dò theo đúng thứ tự
+    // engine ưu tiên như lúc tạo để không bỏ sót mẫu tạo bằng engine khác.
+    for (const e of _giongThuTu(v)){
+      hit = _giongMau.get(_giongMauFileKey(e, key, thamso)) || null;
+      if (hit) break;
+      const duLieu = await _giongMauDocDia(e, key, thamso);
+      if (duLieu && duLieu.dataUrl){
+        try {
+          const r = await fetch(duLieu.dataUrl); const blob = await r.blob();
+          if (blob && blob.size){ hit = { url: URL.createObjectURL(blob), sig }; _giongMau.set(_giongMauFileKey(e, key, thamso), hit); }
+        } catch (_){}
+        if (hit) break;
       }
     }
     if (!hit){
       _giongTao = key; _giongPhat = ''; giongVe();
       // Lần đầu model nạp lười mất ~30-60s — báo rõ đang chạy, đừng để tưởng treo.
-      giongBao('⏳ Đang tạo mẫu nghe thử của "' + v.name + '"… lần đầu model nạp ~30-60 giây, giữ app mở.', 'text-muted');
-      const kq = await _giongTTS(v, _GIONG_THU);   // { blob, engine }
-      hit = { url: URL.createObjectURL(kq.blob), sp: tuyChon.tocDo, p: tuyChon.caoDo };
-      _giongMau.set(key, hit);
-      _giongMauGhiDia(kq.engine, key, kq.blob, tuyChon);   // ghi đĩa — phiên sau nghe ngay không tạo lại
-      _giongMauSan.add(_giongMauKeyDia(kq.engine, key));   // set giữ KEY ĐĨA — từ giờ nút ▶ có badge "đã có mẫu"
+      // Lệch cài đặt/câu so với mẫu cũ → báo rõ mẫu sẽ được tạo lại THEO CẤU HÌNH MỚI.
+      giongBao((lechThamSo ? '🔁 Cài đặt/câu nghe thử đã đổi so với mẫu cũ — ' : '')
+        + '⏳ Đang tạo mẫu nghe thử của "' + v.name + '"… lần đầu model nạp ~30-60 giây, giữ app mở.', 'text-muted');
+      const kq = await _giongTTS(v, text);   // { blob, engine }
+      hit = { url: URL.createObjectURL(kq.blob), sig };
+      _giongMau.set(_giongMauFileKey(kq.engine, key, thamso), hit);
+      _giongMauGhiDia(kq.engine, key, kq.blob, sig, text);   // ghi đĩa theo tham số — tổ hợp này lần sau phát ngay
+      _giongMauSan.add(_giongMauKeyDia(kq.engine, key, thamso));   // set giữ KEY ĐĨA — từ giờ nút ▶ có badge "phát ngay"
     }
     _giongTao = '';
     if (!_giongAudio) _giongAudio = new Audio();
@@ -466,7 +531,10 @@ function giongDocTuyChon(){
     lang: (function(){
       const sl = document.getElementById('voiceLang');
       const lv = sl ? sl.value : 'vi';
-      if (lv && lv !== 'all') return lv;   // 'all' = theo ngôn ngữ của giọng đang chọn
+      // 'clone' là giá trị LỌC THƯ VIỆN (chỉ giọng đã nhân bản), KHÔNG phải mã
+      // ngôn ngữ — gửi thẳng cho backend sẽ làm engine đọc sai ngôn ngữ. Với
+      // 'clone' (như 'all') → lấy ngôn ngữ của giọng đang chọn.
+      if (lv && lv !== 'all' && lv !== 'clone') return lv;
       const cur = _giongDS.find(v => v.key === _giongChon);
       return (cur && cur.lang) || 'vi';
     })(),
@@ -479,18 +547,38 @@ function giongDocTuyChon(){
   };
 }
 
+// Chữ ký cài đặt cho cache mẫu nghe thử (2026-09-19k): BẤT KỲ cài đặt nào đổi —
+// tốc độ, cao độ, khoảng lặng, ngôn ngữ, Top P/Top K/Repetition, Tốc độ sinh,
+// Sắc nét — chữ ký lệch → mẫu cũ bị coi là cũ, gen lại theo cài đặt mới để người
+// nghe NGHE ĐƯỢC đúng thay đổi. Trước đây chỉ so tốc độ + cao độ → đổi cài đặt
+// nâng cao/tổng hợp thì ▶ vẫn phát mẫu cũ, tưởng cài đặt không có tác dụng.
+function _giongThuSig(tuyChon){
+  return JSON.stringify([
+    tuyChon.tocDo, tuyChon.caoDo, tuyChon.gap, tuyChon.lang,
+    tuyChon.top_p, tuyChon.top_k, tuyChon.repetition_penalty,
+    tuyChon.generation_speed, tuyChon.diffusion_steps,
+  ]);
+}
+
 async function _ttsLocal(eng, v, text, o, onTien){
   if (!_voiceReady){ await voiceInit(); if (!_voiceReady) throw new Error('Backend giọng nói chưa sẵn sàng.'); }
   if (!v || !v.id) throw new Error('Chưa chọn giọng.');
-  // chunk_chars theo phần cứng backend dò được (/api/hardware): GPU VRAM rộng → khối
-  // to (600, giảm số lần gọi model); máy yếu CPU → khối nhỏ (200, ra audio sớm). Mặc định 400.
+  // chunk_chars (2026-09-19o): "Nghỉ giữa câu" là HẬU KỲ chèn lặng khi ghép —
+  // backend gộp câu thành khối (~chunk_chars) rồi mới chèn gap GIỮA CÁC KHỐI, nên
+  // bật gộp thì gap không thấm vào giữa từng câu (văn bản < 1 khối → không bao giờ
+  // nghe thấy). Gap > 0 → tắt gộp (chunk_chars: 0, backend đọc THEO TỪNG CÂU) để
+  // slider đúng nghĩa, kèm SRT chuẩn từng câu; gap = 0 giữ gộp khối cho nhanh
+  // (không chèn lặng thì gộp vô hại). Khối to theo phần cứng backend dò được
+  // (/api/hardware): GPU VRAM rộng → khối to; máy yếu CPU → khối nhỏ. Mặc định 400.
   const body = {
     text,
     language: o.lang,
     speed: o.tocDo,
     pitch: o.caoDo || 0,
     gap_ms: Math.round(o.gap),
-    chunk_chars: (_voiceHW && _voiceHW.recommended && _voiceHW.recommended.chunk_chars) || 400,
+    chunk_chars: Math.round(o.gap) > 0
+      ? 0
+      : ((_voiceHW && _voiceHW.recommended && _voiceHW.recommended.chunk_chars) || 400),
     attributes: {},
     preset_id: v.id,
     engine: _TTS_BACKEND_ID[eng] || 'omnivoice',
@@ -1020,6 +1108,10 @@ async function giongThemLuu(){
   try {
     if (!_voiceReady){ await voiceInit(); if (!_voiceReady){ giongBao('Backend giọng nói chưa sẵn sàng.', 'red'); return; } }
     const body = { name: ten, ref_text: '', attributes: {}, tags: [] };
+    // Ngôn ngữ giọng do người dùng chọn lúc thêm (2026-09-19k) — lưu vào
+    // attributes.lang để mọi bộ lọc ngôn ngữ (app + panel Review/Lồng tiếng)
+    // xếp đúng nhóm giọng, không còn clone tiếng Anh bị coi là tiếng Việt.
+    body.attributes.lang = ((document.getElementById('gtLang') || {}).value || 'vi').trim() || 'vi';
     if (cach === 'clone'){
       const f = (document.getElementById('gtFile') || {}).files && document.getElementById('gtFile').files[0];
       if (!f){ giongBao('Chọn file giọng mẫu.', 'red'); return; }
@@ -1050,7 +1142,11 @@ async function giongXoa(key){
   const v = _giongDS.find(x => x.key === key);
   if (!v){ giongBao('Không tìm thấy giọng.', 'red'); return; }
   if (v.factory){ giongBao('Không xoá được giọng có sẵn.', 'red'); return; }
-  if (!confirm('Xoá giọng "' + v.name + '"? File mẫu clone sẽ bị gỡ khỏi thư viện.')) return;
+  if (!v.factory){
+    // Popup xác nhận tự dựng cùng theme app — CẤM confirm() hệ thống (AGENTS.md §8).
+    const ok = await giongXacNhan('Xoá giọng "' + v.name + '"?', 'File mẫu clone sẽ bị gỡ khỏi thư viện. Hành động này không hoàn tác.');
+    if (!ok) return;
+  }
   _giongBusy = true;
   try {
     await _giongFetchJson(VOICE_URL + '/api/voices/' + encodeURIComponent(v.id), { method: 'DELETE' });
@@ -1064,6 +1160,90 @@ async function giongXoa(key){
     giongBao('✓ Đã xoá giọng "' + v.name + '".', 'green');
   } catch (e){ giongBao('Xoá lỗi: ' + (e.message || e), 'red'); }
   finally { _giongBusy = false; }
+}
+
+// Danh sách ngôn ngữ cho modal Sửa giọng — KHỚP đúng 15 option của gtLang trong
+// partial (panels-upscale-voice.html) để hai chỗ không lệch nhau.
+const _GIONG_LANGS = [
+  ['vi', 'Tiếng Việt'], ['en', 'Tiếng Anh'], ['es', 'Tiếng Tây Ban Nha'],
+  ['fr', 'Tiếng Pháp'], ['de', 'Tiếng Đức'], ['ru', 'Tiếng Nga'],
+  ['zh', 'Tiếng Trung'], ['ja', 'Tiếng Nhật'], ['ko', 'Tiếng Hàn'],
+  ['th', 'Tiếng Thái'], ['id', 'Tiếng Indonesia'], ['ms', 'Tiếng Mã Lai'],
+  ['ar', 'Tiếng Ả Rập'], ['hi', 'Tiếng Hindi'], ['pt', 'Tiếng Bồ Đào Nha'],
+];
+
+// Popup xác nhận tự dựng cùng theme app (theo mẫu hwzDialog — AGENTS.md §8):
+// backdrop blur, Esc/bấm nền = Huỷ, trả Promise<boolean>.
+function giongXacNhan(tieuDe, noiDung){
+  return new Promise((resolve) => {
+    const ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(3px)';
+    const card = document.createElement('div');
+    card.style.cssText = 'background:var(--surface);border:2px solid var(--accent);border-radius:16px;max-width:440px;width:100%;padding:24px 26px 22px;box-shadow:0 24px 60px rgba(0,0,0,.45)';
+    const done = (v) => { document.removeEventListener('keydown', onKey); if (ov.parentNode) ov.parentNode.removeChild(ov); resolve(v); };
+    const onKey = (e) => { if (e.key === 'Escape') done(false); };
+    card.innerHTML = '<div style="font-size:15.5px;font-weight:800;color:var(--accent);margin:0 0 12px">' + escapeHtml(tieuDe || 'Xác nhận') + '</div>'
+      + '<div style="font-size:13px;color:var(--text-muted);line-height:1.6;white-space:pre-line">' + escapeHtml(noiDung || '') + '</div>'
+      + '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px">'
+      + '<button class="btn ghost sm" data-a="no">Huỷ</button>'
+      + '<button class="btn primary sm" data-a="yes">Xoá</button></div>';
+    card.addEventListener('click', (e) => {
+      const a = e.target && e.target.getAttribute && e.target.getAttribute('data-a');
+      if (a === 'yes') done(true); else if (a === 'no') done(false);
+    });
+    ov.appendChild(card);
+    ov.addEventListener('click', (e) => { if (e.target === ov) done(false); });
+    document.addEventListener('keydown', onKey);
+    document.body.appendChild(ov);
+  });
+}
+
+// Sửa giọng đã tạo (2026-09-19k): đổi TÊN + NGÔN NGỮ qua PATCH /api/voices/{id} —
+// backend vốn có sẵn PATCH nhưng renderer chưa từng gọi. Giải quyết giọng clone
+// cũ chưa có lang (gán ngôn ngữ đúng nhóm lọc) mà KHÔNG phải xoá tạo lại; user
+// bấm mới ghi — không đụng dữ liệu ngầm (Luật 10).
+function giongSua(key){
+  const v = _giongDS.find(x => x.key === key);
+  if (!v){ giongBao('Không tìm thấy giọng.', 'red'); return; }
+  if (v.factory){ giongBao('Giọng có sẵn của backend không sửa được.', 'red'); return; }
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(3px)';
+  const card = document.createElement('div');
+  card.style.cssText = 'background:var(--surface);border:2px solid var(--accent);border-radius:16px;max-width:440px;width:100%;padding:24px 26px 22px;box-shadow:0 24px 60px rgba(0,0,0,.45)';
+  const dong = () => { document.removeEventListener('keydown', onKey); if (ov.parentNode) ov.parentNode.removeChild(ov); };
+  const onKey = (e) => { if (e.key === 'Escape') dong(); };
+  const opts = _GIONG_LANGS.map(l => '<option value="' + l[0] + '"' + (l[0] === v.lang ? ' selected' : '') + '>' + escapeHtml(l[1]) + '</option>').join('');
+  card.innerHTML = '<div style="font-size:15.5px;font-weight:800;color:var(--accent);margin:0 0 14px">✏️ Sửa giọng</div>'
+    + '<label class="label">TÊN GIỌNG</label><input type="text" id="giongSuaTen" autocomplete="off" style="width:100%">'
+    + '<div style="margin-top:12px"><label class="label">NGÔN NGỮ GIỌNG (để lọc theo ngôn ngữ ở các công cụ khác)</label>'
+    + '<select id="giongSuaLang" style="width:100%">' + opts + '</select></div>'
+    + '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px">'
+    + '<button class="btn ghost sm" data-a="no">Huỷ</button>'
+    + '<button class="btn primary sm" data-a="yes">Lưu</button></div>';
+  card.addEventListener('click', async (e) => {
+    const a = e.target && e.target.getAttribute && e.target.getAttribute('data-a');
+    if (a !== 'yes' && a !== 'no') return;
+    if (a === 'no'){ dong(); return; }
+    const ten = ((card.querySelector('#giongSuaTen') || {}).value || '').trim();
+    const lang = ((card.querySelector('#giongSuaLang') || {}).value || 'vi').trim() || 'vi';
+    if (!ten){ giongBao('Đặt tên cho giọng trước.', 'red'); return; }
+    try {
+      await _giongFetchJson(VOICE_URL + '/api/voices/' + encodeURIComponent(v.id), {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: ten, attributes: { lang } }),
+      });
+      dong();
+      await giongTaiDS();
+      giongBao('✓ Đã cập nhật giọng "' + ten + '".', 'green');
+      try { novaLog('🎙 sửa giọng ' + v.id + ' → tên "' + ten + '", lang "' + lang + '"'); } catch (_){}
+    } catch (err){ giongBao('Sửa giọng lỗi: ' + (err.message || err), 'red'); }
+  });
+  ov.appendChild(card);
+  ov.addEventListener('click', (e) => { if (e.target === ov) dong(); });
+  document.addEventListener('keydown', onKey);
+  document.body.appendChild(ov);
+  const inp = card.querySelector('#giongSuaTen');
+  if (inp){ inp.value = v.name; setTimeout(() => { try { inp.focus(); } catch (_){} }, 50); }
 }
 
 function giongKiemEngineVe(){
@@ -1167,14 +1347,29 @@ function giongDDChon(key){
 
 function _giongMenuItem(v, chonFn){
   const phat = v.key === _giongPhat, tao = v.key === _giongTao;
-  // Nút Xoá đặt NGAY TRONG MỤC DROPDOWN — từ 2026-09-12 thư viện giọng dạng lưới
-  // thẻ (.gcard) đã bị xoá nên giongXoa() không còn call site nào, tức người dùng
-  // mất hẳn khả năng gỡ giọng clone. Giọng nhà máy (factory) KHÔNG có nút này
+  // Badge ▶ (2026-09-19k): so tham số cache (chữ ký cài đặt + câu nghe thử HIỆN
+  // TẠI) với mẫu trên đĩa: khớp → '▶' phát ngay; có mẫu nhưng lệch → '⟳▶' (bấm
+  // sẽ tạo lại); chưa có → '▶' thường. giongVe() được gọi lại khi kéo slider/gõ
+  // câu (listener 'input' cuối file) nên badge đổi trạng thái NGAY LẬP TỨC.
+  let khop = false, coMau = false;
+  try {
+    const thamso = _giongThamSo(_giongThuSig(giongDocTuyChon()), _giongThuText());
+    khop = _giongMauKhop(v.key, thamso);
+    coMau = khop || _giongMauCo(v.key);
+  } catch (_){}
+  // Nút Sửa + Xoá đặt NGAY TRONG MỤC DROPDOWN — giọng nhà máy (factory) KHÔNG có
   // (backend cũng từ chối — 403), giữ đúng guard "Không xoá được giọng có sẵn."
-  const xoa = v.factory ? '' : `<button type="button" class="btn sm ghost gdel" onclick="event.stopPropagation();giongXoa('${escapeHtml(v.key)}')" title="Xoá giọng" aria-label="Xoá giọng">Xoá</button>`;
-  return `<div class="be-item${v.key === _giongChon ? ' sel' : ''}" role="option" onclick="${chonFn}('${escapeHtml(v.key)}')">` +
-    `<span class="be-ten">${escapeHtml(v.name)}</span><span class="be-mo">${escapeHtml(v.src || '')}</span>${xoa}` +
-    `<button type="button" class="gplay${phat ? ' on' : ''}" title="${tao ? 'Đang tạo mẫu nghe thử…' : (phat ? 'Dừng nghe thử' : 'Nghe thử 4 giây')}" aria-label="Nghe thử" onclick="event.stopPropagation();giongThu('${escapeHtml(v.key)}')">${tao ? '⏳' : (phat ? '❙❙' : '▶')}</button></div>`;
+  const quanLy = v.factory ? '' :
+    `<button type="button" class="btn sm ghost gdel" onclick="event.stopPropagation();giongSua('${escapeHtml(v.key)}')" title="Sửa tên / ngôn ngữ giọng" aria-label="Sửa giọng">Sửa</button>` +
+    `<button type="button" class="btn sm ghost gdel" onclick="event.stopPropagation();giongXoa('${escapeHtml(v.key)}')" title="Xoá giọng" aria-label="Xoá giọng">Xoá</button>`;
+  const gTitle = tao ? 'Đang tạo mẫu nghe thử…'
+    : (phat ? 'Dừng nghe thử'
+    : (khop ? 'Nghe thử — phát ngay (mẫu khớp cài đặt hiện tại)'
+    : (coMau ? 'Cài đặt/câu nghe thử đã đổi — bấm để tạo lại mẫu' : 'Nghe thử')));
+  const gNhan = tao ? '⏳' : (phat ? '❙❙' : (khop ? '▶' : (coMau ? '⟳▶' : '▶')));
+  return `<div class="be-item${v.key === _giongChon ? ' sel' : ''}" role="option" title="${escapeHtml(v.name + (v.src ? ' · ' + v.src : ''))}" onclick="${chonFn}('${escapeHtml(v.key)}')">` +
+    `<span class="be-ten">${escapeHtml(v.name)}</span><span class="be-mo">${escapeHtml(v.src || '')}</span>${quanLy}` +
+    `<button type="button" class="gplay${phat ? ' on' : ''}" title="${gTitle}" aria-label="Nghe thử" onclick="event.stopPropagation();giongThu('${escapeHtml(v.key)}')">${gNhan}</button></div>`;
 }
 
 function giongDDVe(){
@@ -1202,27 +1397,54 @@ function giongDDVe(){
       : 'Bấm “＋ Thêm giọng” cạnh danh sách Giọng đọc để tạo giọng cho backend này (clone từ mẫu hoặc thiết kế từ mô tả).';
     return;
   }
-  // Lọc thêm theo "Ngôn ngữ" đã chọn (giá trị 'clone' = chỉ giọng đã clone) — nếu
-  // backend không có giọng nào khớp thì thôi lọc (hiện tất cả) kèm ghi chú.
+  // Lọc TUYỆT ĐỐI theo "Ngôn ngữ" đã chọn (giá trị 'clone' = chỉ giọng đã clone).
+  // Trước đây: backend không có giọng khớp → fall back ngầm "hiện tất cả giọng"
+  // kèm chú thích nhỏ → người dùng chọn "Giọng Clone" vẫn thấy giọng có sẵn,
+  // tưởng bộ lọc hỏng (phản hồi 2026-09-19). Giờ: không khớp giọng nào → chỉ
+  // hiện trạng thái rỗng LỘ LIỄU kèm lý do + hướng dẫn, KHÔNG liệt kê giọng
+  // ngoài bộ lọc (Luật 10). Giọng đang chọn vẫn giữ nguyên và được ghi rõ
+  // "vẫn là giọng sẽ dùng" — không đổi ngầm mục tiêu generation.
   let hopBe = hopBe0;
   const slL = document.getElementById('voiceLang');
   const lang = slL ? slL.value : '';
   const locLang = lang && lang !== 'all';
-  const hopLang = locLang ? hopBe.filter(v => _giongDapUngLang(v, lang)) : hopBe;
-  let chuY = '';
-  if (hopLang.length) hopBe = hopLang;
-  else if (locLang) chuY = lang === 'clone'
-    ? 'Backend này chưa có giọng clone nào — đang hiện tất cả giọng.'
-    : 'Chưa có giọng cho ngôn ngữ này — đang hiện tất cả giọng của backend.';
+  if (locLang) hopBe = hopBe.filter(v => _giongDapUngLang(v, lang));
+  if (locLang && !hopBe.length){
+    const cur0 = _giongDS.find(v => v.key === _giongChon && giongThuocBackend(v));
+    ten.textContent = cur0 ? cur0.name : 'không có giọng nào';
+    ten.title = cur0 ? cur0.name : '';
+    note.textContent = cur0 ? 'không khớp bộ lọc — vẫn là giọng sẽ dùng' : 'chưa có giọng';
+    const beTen = _TTS_TEN[_voiceBackend] || _voiceBackend;
+    const liDo = lang === 'clone'
+      ? 'Backend ' + beTen + ' chưa có giọng clone nào. Bấm “＋ Thêm giọng” để clone từ file mẫu 5–15 giây, hoặc đổi “Backend tạo giọng” ở trên (giọng clone thuộc OmniVoice / XTTS).'
+      : 'Backend ' + beTen + ' chưa có giọng cho ngôn ngữ này. Bấm “＋ Thêm giọng” hoặc chọn ngôn ngữ khác.';
+    menu.innerHTML = '<div class="be-item" style="cursor:default;color:var(--text-dim);font-size:12px;line-height:1.55;white-space:normal">' + escapeHtml(liDo) + '</div>';
+    if (why) why.textContent = '';
+    return;
+  }
   // Giọng đang chọn bị lọc ra (đổi ngôn ngữ tay…) → tạm chọn giọng đầu của bộ lọc
   // để nhãn trên dropdown luôn trùng với giọng sẽ được dùng khi tạo tiếng.
-  if (hopBe.length && !hopBe.some(v => v.key === _giongChon)) _giongChon = hopBe[0].key;
+  if (!hopBe.some(v => v.key === _giongChon)) _giongChon = hopBe[0].key;
   const hop = hopBe;
   const cur = hop.find(v => v.key === _giongChon) || hop[0];
   ten.textContent = cur.name;
+  ten.title = cur.name;
   note.textContent = cur.src || '';
-  menu.innerHTML = (chuY ? '<div class="be-item" style="cursor:default;color:var(--text-dim);font-size:12px">' + escapeHtml(chuY) + '</div>' : '')
-    + hop.map(v => _giongMenuItem(v, 'giongDDChon')).join('');
+  menu.innerHTML = hop.map(v => _giongMenuItem(v, 'giongDDChon')).join('');
   if (why) why.textContent = '';
 }
+
+// Badge ▶ cập nhật LIVE theo cài đặt (2026-09-19k): kéo slider tốc độ/cao độ/khe/
+// tham số nâng cao hay gõ câu nghe thử → vẽ lại dropdown để badge "phát ngay"/
+// "⟳ tạo lại" đổi trạng thái NGAY, không phải bấm ▶ mới biết. Một listener
+// delegated trên document — không phải gắn oninput cho từng input trong partial.
+try {
+  document.addEventListener('input', (e) => {
+    const id = e && e.target && e.target.id;
+    if (!id) return;
+    if (/^voice(Speed|Pitch|Gap|TopP|TopK|RepPen|GenSpeed|DiffSteps)$/.test(id) || id === 'giongThuCau'){
+      try { giongVe(); } catch (_){}
+    }
+  });
+} catch (_){}
 

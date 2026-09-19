@@ -48,6 +48,9 @@
     outPath: null, voices: [], busy: false, unsub: null,
     musicPath: null, batchVideos: [], batchDir: null, batchBusy: false,
     presets: [],
+    speakerList: [],      // [{name, cues}] — kết quả dub:scanSpeakers
+    speakerSel: {},       // {tên → pid} lựa chọn gán tay hiện tại ("" = tự động)
+    pendingSpeakerMap: null, // map từ preset nạp — áp khi quét xong
   };
 
   const esc = (s) => String(s == null ? '' : s)
@@ -83,6 +86,9 @@
           <label class="dub-lbl">Trần tốc độ (×)
             <input class="dub-num" id="dubMaxSpeed" type="number" min="1" max="2.5" step="0.05" value="1.35">
           </label>
+          <label class="dub-lbl">Tốc độ đọc (×)
+            <input class="dub-num" id="dubTtsSpeed" type="number" min="0.5" max="2" step="0.05" value="1">
+          </label>
           <label class="dub-lbl">Chế độ tiếng
             ${optsSel('dubMix', [['replace', 'Thay toàn bộ tiếng gốc'], ['mix', 'Trộn đè tiếng gốc']], 'replace')}
           </label>
@@ -96,7 +102,15 @@
         <label class="dub-lbl">Nhóm giọng nhân vật (pid cách nhau bởi phẩy — để trống dùng giọng chính cho nhân vật đầu)
           <input class="dub-sel" id="dubSpeakerVoices" type="text" placeholder="pid1, pid2, pid3" style="margin-top:5px">
         </label>
+        <div class="dub-row">
+          <button class="btn ghost" id="dubScanSpeakers" type="button">🔍 Quét nhân vật từ SRT</button>
+          <span class="dub-hint" style="margin-top:0" id="dubSpeakerInfo">Quét để GÁN TAY giọng từng nhân vật (các nhân vật không gán dùng nhóm giọng trên).</span>
+        </div>
+        <div id="dubSpeakerMapBox"></div>
         <div class="dub-row" style="margin-top:12px">
+          <label class="dub-lbl" style="margin-top:0">Nguồn nhạc
+            ${optsSel('dubMusicSource', [['none', 'Không nhạc nền'], ['file', 'Nhạc từ file'], ['original', 'Tách từ tiếng gốc (bỏ lời giữ nhạc)']], 'none')}
+          </label>
           <label class="dub-lbl" style="margin-top:0">Nhạc nền</label>
           <button class="btn ghost" id="dubMusicPick" type="button">🎵 Chọn nhạc</button>
           <button class="btn ghost" id="dubMusicClear" type="button">✕ Bỏ</button>
@@ -207,10 +221,22 @@
       if (info) info.textContent = state.outPath;
     }
     if (el('dubMusicInfo')) {
-      el('dubMusicInfo').textContent = state.musicPath
-        ? 'Nhạc nền: ' + state.musicPath
-        : 'Chưa chọn nhạc nền.';
+      const src = (el('dubMusicSource') || {}).value || 'none';
+      el('dubMusicInfo').textContent = src === 'original'
+        ? 'Nhạc nền: TÁCH TỪ TIẾNG GỐC của video (karaoke center-cancel — cần nguồn stereo). Chỉ dùng với "Thay toàn bộ tiếng gốc".'
+        : src === 'file'
+          ? (state.musicPath ? 'Nhạc nền: ' + state.musicPath : 'Chưa chọn nhạc nền.')
+          : 'Không dùng nhạc nền.';
     }
+    // Nút chọn nhạc chỉ có nghĩa khi nguồn nhạc = file.
+    const musicFileMode = ((el('dubMusicSource') || {}).value || 'none') === 'file';
+    const pickMus = el('dubMusicPick');
+    if (pickMus) pickMus.disabled = !musicFileMode || state.busy || state.batchBusy;
+    const clearMus = el('dubMusicClear');
+    if (clearMus) clearMus.disabled = !musicFileMode || !state.musicPath;
+    // Quét nhân vật: cần bật chế độ nhiều nhân vật + đã chọn SRT.
+    const scan = el('dubScanSpeakers');
+    if (scan) scan.disabled = state.busy || state.batchBusy || !((el('dubSpeakerMode') || {}).checked) || !state.srtPath;
     const batch = el('dubBatchRun');
     if (batch) batch.disabled = state.batchBusy || state.busy || !state.batchVideos.length || !state.batchDir;
     if (el('dubBatchInfo')) {
@@ -224,11 +250,64 @@
 
   function fillVoices() {
     const sel = el('dubVoice');
-    if (!sel) return;
+    if (!sel) return 0;
     const prev = sel.value;
+    // Lọc giọng theo "Ngôn ngữ đọc" (dubLang) — trước đây hiện tất cả giọng mọi
+    // ngôn ngữ → SRT tiếng Việt vẫn chọn được giọng Anh. Giọng không rõ ngôn ngữ
+    // (clone — backend không lưu lang) GIỮ lại kèm ghi chú, không bịa (Luật 10).
+    // Không có giọng khớp → còn option "mặc định backend" (lộ liễu, caller log cảnh báo).
+    const lang = (el('dubLang') || {}).value || '';
+    const loc = state.voices.filter((v) => !lang || !v.lang || v.lang === lang);
     sel.innerHTML = '<option value="">— mặc định backend (giọng cấu hình sẵn) —</option>' +
-      state.voices.map((v) => '<option value="' + esc(v.pid) + '">' + esc(v.name) + '</option>').join('');
-    if (prev && state.voices.some((v) => v.pid === prev)) sel.value = prev;
+      loc.map((v) => '<option value="' + esc(v.pid) + '">' + esc(v.name) + (v.lang ? '' : ' · không rõ ngôn ngữ') + '</option>').join('');
+    if (prev && loc.some((v) => v.pid === prev)) sel.value = prev;
+    return loc.length;
+  }
+
+  /* ── Gán giọng TAY theo nhân vật (2026-09-19u) ── */
+  function renderSpeakerMap() {
+    const box = el('dubSpeakerMapBox');
+    if (!box) return;
+    if (!state.speakerList.length) { box.innerHTML = ''; return; }
+    // Toàn bộ thư viện giọng (KHÔNG lọc ngôn ngữ — gán tay là chủ đích).
+    const voiceOpts = state.voices.map((v) => [v.pid, v.name]);
+    box.innerHTML = state.speakerList.map((sp) => {
+      const key = String(sp.name);
+      const label = key ? esc(key) : '(câu không prefix)';
+      const selId = 'dubSpVoice_' + (key ? key.replace(/[^a-zA-Z0-9_]/g, '_') : '_none');
+      const cur = state.speakerSel[key] || '';
+      const opts = [['', '— tự động (nhóm giọng trên) —']].concat(voiceOpts);
+      return '<label class="dub-lbl">👤 ' + label + ' <span style="font-weight:400">(' + sp.cues + ' cue)</span>' +
+        '<select id="' + selId + '" class="dub-sel" data-key="' + esc(key) + '">' +
+        opts.map((pair) =>
+          '<option value="' + esc(pair[0]) + '"' + (String(pair[0]) === String(cur) ? ' selected' : '') + '>' +
+          esc(pair[1]) + '</option>').join('') + '</select></label>';
+    }).join('');
+    const wire = () => {
+      box.querySelectorAll('select').forEach((sel) => {
+        const key = sel.getAttribute('data-key') || '';
+        if (key in state.speakerSel) sel.value = state.speakerSel[key] || '';
+        sel.addEventListener('change', () => { state.speakerSel[key] = sel.value; });
+      });
+    };
+    // Áp map từ preset (nếu có) ngay sau khi vẽ, rồi mới wire giá trị.
+    if (state.pendingSpeakerMap) {
+      for (const k of Object.keys(state.pendingSpeakerMap)) {
+        if (state.speakerList.some((sp) => String(sp.name) === k)) state.speakerSel[k] = String(state.pendingSpeakerMap[k]);
+      }
+      state.pendingSpeakerMap = null;
+    }
+    wire();
+  }
+
+  function speakerVoiceMapOf() {
+    const out = {};
+    let has = false;
+    for (const k of Object.keys(state.speakerSel)) {
+      const v = String(state.speakerSel[k] || '').trim();
+      if (v) { out[k] = v; has = true; }
+    }
+    return has ? out : null;
   }
 
   function bind() {
@@ -244,7 +323,13 @@
       const n = native();
       if (!n) return status('Bridge chưa sẵn sàng.', 'err');
       const r = await n.pickSrt();
-      if (r && r.ok) { state.srtPath = r.path; state.srtName = r.name; state.srtCount = r.count || 0; status('Đã nạp ' + r.count + ' dòng thoại.', 'ok'); }
+      if (r && r.ok) {
+        state.srtPath = r.path; state.srtName = r.name; state.srtCount = r.count || 0;
+        // SRT mới → danh sách nhân vật cũ LỆCH — xoá map gán tay, phải quét lại.
+        state.speakerList = []; state.speakerSel = {}; state.pendingSpeakerMap = null;
+        renderSpeakerMap();
+        status('Đã nạp ' + r.count + ' dòng thoại.', 'ok');
+      }
       else if (r && r.error) status('Lỗi [' + (r.code || 'DUB_ERROR') + ']: ' + r.error, 'err');
       refreshControls();
     });
@@ -256,10 +341,40 @@
       const r = await n.voices();
       if (r && r.ok) {
         state.voices = r.voices || [];
-        fillVoices();
-        status('Có ' + r.count + ' giọng trong thư viện.', 'ok');
+        const khop = fillVoices();
+        renderSpeakerMap(); // nạp giọng xong → dropdown gán tay nhân vật có option
+        status('Có ' + r.count + ' giọng trong thư viện'
+          + (khop !== state.voices.length ? ' — ' + khop + ' giọng khớp "Ngôn ngữ đọc".' : '.'), 'ok');
       } else {
         status('Lỗi [' + ((r && r.code) || 'DUB_ERROR') + ']: ' + ((r && r.error) || 'Không nạp được giọng — backend OmniVoice chưa cài/chưa chạy.'), 'err');
+      }
+    });
+
+    // Đổi "Ngôn ngữ đọc" → vẽ lại dropdown giọng theo bộ lọc mới (nếu đã nạp).
+    el('dubLang').addEventListener('change', () => {
+      if (!state.voices.length) return;
+      const khop = fillVoices();
+      if (!khop) status('Không có giọng nào trong thư viện khớp "Ngôn ngữ đọc" — dùng mặc định backend hoặc thêm giọng ở tab Tạo giọng nói.', 'info');
+    });
+
+    /* ── Quét nhân vật từ SRT + gán giọng tay (2026-09-19u) ── */
+    el('dubSpeakerMode').addEventListener('change', refreshControls);
+    el('dubMusicSource').addEventListener('change', refreshControls);
+    el('dubScanSpeakers').addEventListener('click', async () => {
+      const n = native();
+      if (!n || !n.scanSpeakers) return status('Bridge chưa sẵn sàng.', 'err');
+      if (!state.srtPath) return status('Chọn SRT dẫn lời trước khi quét nhân vật.', 'err');
+      const r = await n.scanSpeakers({ srtPath: state.srtPath });
+      if (r && r.ok) {
+        state.speakerList = r.speakers || [];
+        // Giữ lựa chọn cũ cho nhân vật vẫn còn; nhân vật mới → tự động.
+        const keep = {};
+        for (const sp of state.speakerList) keep[String(sp.name)] = state.speakerSel[String(sp.name)] || '';
+        state.speakerSel = keep;
+        renderSpeakerMap();
+        status('Quét được ' + r.count + ' nhân vật — chọn giọng cho từng người (bỏ trống = tự động).', 'ok');
+      } else {
+        status('Lỗi [' + ((r && r.code) || 'DUB_ERROR') + ']: ' + ((r && r.error) || 'Quét nhân vật thất bại'), 'err');
       }
     });
 
@@ -286,10 +401,13 @@
         translateTo: ((el('dubTranslate') || {}).value || '').trim(),
         genre: ((el('dubGenre') || {}).value || '').trim(),
         maxSpeed: Number((el('dubMaxSpeed') || {}).value) || 1.35,
+        ttsSpeed: Number((el('dubTtsSpeed') || {}).value) || 1,
         mixMode: (el('dubMix') || {}).value || 'replace',
         origVolume: Number((el('dubOrigVol') || {}).value) || 0.25,
         speakerMode: !!((el('dubSpeakerMode') || {}).checked),
         speakerVoices: (((el('dubSpeakerVoices') || {}).value || '')).split(',').map((s) => s.trim()).filter(Boolean),
+        speakerVoiceMap: speakerVoiceMapOf(),
+        musicSource: (el('dubMusicSource') || {}).value || 'none',
         musicPath: state.musicPath || '',
         musicVolume: Number((el('dubMusicVol') || {}).value) || 0.3,
         duck: !!(el('dubMusicDuck') || {}).checked,
@@ -299,7 +417,9 @@
       if (r && r.ok) {
         setProg(100);
         const pl = r.plan || {};
-        status('Xong: ' + r.outPath + ' — ' + r.count + ' cue, tăng tốc ' + (pl.spedUp || 0) + ' cue (trần ' + pl.maxSpeed + '×), trim ' + (pl.trimmed || 0) + ' cue. SRT khớp: ' + r.srtOut, 'ok');
+        const mus = r.music ? (' · nhạc ' + (r.music.source === 'original' ? 'tách từ tiếng gốc' : 'file') + (r.music.ducked ? ' (ducking)' : '')) : '';
+        const spd = r.ttsSpeed && r.ttsSpeed !== 1 ? ' · đọc ' + r.ttsSpeed + '×' : '';
+        status('Xong: ' + r.outPath + ' — ' + r.count + ' cue, tăng tốc ' + (pl.spedUp || 0) + ' cue (trần ' + pl.maxSpeed + '×), trim ' + (pl.trimmed || 0) + ' cue' + mus + spd + '. SRT khớp: ' + r.srtOut, 'ok');
       } else {
         status('Lỗi [' + ((r && r.code) || 'DUB_ERROR') + ']: ' + ((r && r.error) || 'Thất bại'), 'err');
       }
@@ -335,10 +455,13 @@
       translateTo: ((el('dubTranslate') || {}).value || '').trim(),
       genre: ((el('dubGenre') || {}).value || '').trim(),
       maxSpeed: Number((el('dubMaxSpeed') || {}).value) || 1.35,
+      ttsSpeed: Number((el('dubTtsSpeed') || {}).value) || 1,
       mixMode: (el('dubMix') || {}).value || 'replace',
       origVolume: Number((el('dubOrigVol') || {}).value) || 0.25,
       speakerMode: !!((el('dubSpeakerMode') || {}).checked),
       speakerVoices: (((el('dubSpeakerVoices') || {}).value || '')).split(',').map((s) => s.trim()).filter(Boolean),
+      speakerVoiceMap: speakerVoiceMapOf() || {},
+      musicSource: (el('dubMusicSource') || {}).value || 'none',
       musicPath: state.musicPath || '',
       musicVolume: Number((el('dubMusicVol') || {}).value) || 0.3,
       duck: !!(el('dubMusicDuck') || {}).checked,
@@ -358,10 +481,23 @@
       setVal('dubTranslate', c.translateTo || '');
       setVal('dubGenre', c.genre || '');
       if (num(c.maxSpeed)) setVal('dubMaxSpeed', String(c.maxSpeed));
+      if (num(c.ttsSpeed) && c.ttsSpeed >= 0.5 && c.ttsSpeed <= 2) setVal('dubTtsSpeed', String(c.ttsSpeed));
       if (c.mixMode) setVal('dubMix', c.mixMode);
       if (num(c.origVolume)) setVal('dubOrigVol', String(c.origVolume));
       setChk('dubSpeakerMode', c.speakerMode);
       if (Array.isArray(c.speakerVoices)) setVal('dubSpeakerVoices', c.speakerVoices.join(', '));
+      // Map gán tay từ preset: nếu đã quét nhân vật thì áp ngay; chưa quét thì
+      // cất pending — renderSpeakerMap áp khi user bấm Quét (không tự quét ngầm).
+      if (c.speakerVoiceMap && typeof c.speakerVoiceMap === 'object' && !Array.isArray(c.speakerVoiceMap)
+        && Object.keys(c.speakerVoiceMap).length) {
+        if (state.speakerList.length) {
+          state.speakerSel = Object.assign({}, c.speakerVoiceMap);
+          renderSpeakerMap();
+        } else {
+          state.pendingSpeakerMap = c.speakerVoiceMap;
+        }
+      }
+      if (c.musicSource) setVal('dubMusicSource', String(c.musicSource));
       if (c.musicPath) state.musicPath = c.musicPath;
       if (num(c.musicVolume)) setVal('dubMusicVol', String(c.musicVolume));
       setChk('dubMusicDuck', c.duck);
@@ -431,6 +567,7 @@
         outPath: pick.path,
         language: (el('dubLang') || {}).value || 'vi',
         voicePid: (el('dubVoice') || {}).value || '',
+        ttsSpeed: Number((el('dubTtsSpeed') || {}).value) || 1,
         gapMs: Number((el('dubSrtGap') || {}).value) || 0,
       });
       state.busy = false; refreshControls();
@@ -449,7 +586,10 @@
       const n = native();
       if (!n) return status('Bridge chưa sẵn sàng.', 'err');
       status('Đang kiểm tra giọng đọc…'); setProg(5);
-      const r = await n.checkVoice();
+      // Kiểm âm theo "Ngôn ngữ đọc" + ĐÚNG GIỌNG đang chọn (2026-09-19k) — đo đúng
+      // trải nghiệm của lần lồng tiếng thật; giọng clone hỏng phát hiện từ đây,
+      // không đến lúc lồng cả video mới vỡ. Giọng rỗng = backend tự chọn mặc định.
+      const r = await n.checkVoice({ language: (el('dubLang') || {}).value || 'vi', voicePid: (el('dubVoice') || {}).value || '', ttsSpeed: Number((el('dubTtsSpeed') || {}).value) || 1 });
       if (r && r.ok) {
         setProg(100);
         status('Giọng đọc OK — câu thử ' + (r.ms / 1000).toFixed(1) + 's, audio ' + (r.audioSec || 0).toFixed(1) + 's.', 'ok');
@@ -492,10 +632,13 @@
         translateTo: ((el('dubTranslate') || {}).value || '').trim(),
         genre: ((el('dubGenre') || {}).value || '').trim(),
         maxSpeed: Number((el('dubMaxSpeed') || {}).value) || 1.35,
+        ttsSpeed: Number((el('dubTtsSpeed') || {}).value) || 1,
         mixMode: (el('dubMix') || {}).value || 'replace',
         origVolume: Number((el('dubOrigVol') || {}).value) || 0.25,
         speakerMode: !!((el('dubSpeakerMode') || {}).checked),
         speakerVoices: (((el('dubSpeakerVoices') || {}).value || '')).split(',').map((s) => s.trim()).filter(Boolean),
+        speakerVoiceMap: speakerVoiceMapOf(),
+        musicSource: (el('dubMusicSource') || {}).value || 'none',
         musicPath: state.musicPath || '',
         musicVolume: Number((el('dubMusicVol') || {}).value) || 0.3,
         duck: !!(el('dubMusicDuck') || {}).checked,

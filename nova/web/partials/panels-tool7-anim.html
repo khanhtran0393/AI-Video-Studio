@@ -8,6 +8,7 @@
         <button class="btn ghost sm" onclick="t7Save()">🗂 Lưu</button>
         <button class="btn primary sm" onclick="t7OpenExport()">⬆ Xuất Video</button>
         <button class="btn ghost sm" onclick="t7Focus(false)" title="Thoát (Esc)">✕ Thoát</button>
+        <button class="btn ghost sm" id="t7InspBtnFb" onclick="t7ToggleInspector()" title="Ẩn/hiện cột Phụ đề & Chi tiết cảnh (bên phải) để preview rộng hơn">⇆ Cột phải</button>
       </div>
       <div class="t7-top">
         <div>
@@ -20,11 +21,14 @@
           <button data-a="16:9" class="on" onclick="t7SetAspect('16:9')">16:9</button>
           <button data-a="9:16" onclick="t7SetAspect('9:16')">9:16</button>
           <button data-a="1:1" onclick="t7SetAspect('1:1')">1:1</button>
+          <button data-a="4:3" onclick="t7SetAspect('4:3')">4:3</button>
+          <button data-a="3:4" onclick="t7SetAspect('3:4')">3:4</button>
+          <button data-a="21:9" onclick="t7SetAspect('21:9')">21:9</button>
         </div>
         <div class="t7-actions">
           <button class="btn ghost" id="t7FocusBtn" onclick="t7Focus()" title="Mở rộng Dựng Video ra toàn cửa sổ (Esc để thoát)">⤢ Toàn màn</button>
+          <button class="btn ghost" id="t7InspBtn" onclick="t7ToggleInspector()" title="Ẩn/hiện cột Phụ đề & Chi tiết cảnh (bên phải) để preview rộng hơn" data-on="1">⇆ Cột phải</button>
           <button class="btn ghost" onclick="animOpen()" title="Xem kho hiệu ứng chuyển động toàn màn hình: mẫu đồ hoạ động, bit Remotion, chuyển cảnh — bấm thẻ để áp vào cảnh đang chọn">✨ Kho hiệu ứng</button>
-          <button class="btn ghost" id="t7AiDesignBtn" onclick="t7AiPropose()" title="Trợ lý đọc lời từng cảnh, đề xuất mẫu chuyển động kèm LÝ DO — bạn duyệt từng cảnh rồi mới gắn">✨ Trợ lý dựng</button>
           <button class="btn ghost" onclick="t7Save()">🗂 Lưu</button>
           <button class="btn primary" id="t7ExportBtn" onclick="t7OpenExport()">⬆ Xuất Video</button>
         </div>
@@ -41,7 +45,7 @@
           <button class="t7-tlbtn" title="Đồng bộ lại cảnh từ tab Phân Cảnh" onclick="t7Build()">↻ Đồng bộ cảnh</button>
         </div>
         <select id="t7Aspect" style="display:none" onchange="t7Build()">
-          <option value="16:9" selected>16:9</option><option value="9:16">9:16</option><option value="1:1">1:1</option>
+          <option value="16:9" selected>16:9</option><option value="9:16">9:16</option><option value="1:1">1:1</option><option value="4:3">4:3</option><option value="3:4">3:4</option><option value="21:9">21:9</option>
         </select>
       </div>
 
@@ -62,6 +66,11 @@
                    style="display:none;width:96px;background:var(--surface-2);border:1px solid var(--border);color:var(--text);border-radius:7px;padding:4px 7px;font-size:11px">
             <button class="t7-mini" id="t7ScenesRebuild" onclick="t7Build()" title="Đồng bộ lại từ Phân Cảnh">↻</button>
           </div>
+          <!-- Tóm tắt/Review NHÚNG (2026-09-19v/x): review-panel.js mount vào đây khi bấm
+               mục rail "📝 Tóm tắt/Review" (cuối rail kho — DƯỚI 🎙 Thuyết minh & 🪄 Trợ lý,
+               cả chế độ thường lẫn toàn màn hình) — ẩn tạm nội dung kho, GIỮ khung Xem
+               trước + timeline. Không còn screen toolreview riêng. -->
+          <div id="reviewRoot" style="display:none"></div>
           <div id="t7Rows" class="t7-binlist"></div>
           <div id="t7FxPanel" style="display:none">
             <div style="display:none;gap:4px;padding:2px 10px 8px">
@@ -82,6 +91,16 @@
         <!-- STAGE: preview -->
         <section class="t7-panel">
           <div class="t7-ph2"><span class="t7-lbl">Xem trước</span><span class="t7-chip" id="t7StageChip">—</span><span class="sp" style="flex:1"></span><button class="t7-mini" id="t7TransBtn" onclick="t7TranslateAll()" title="Dịch lời thoại tất cả cảnh sang tiếng Việt để kiểm tra (chỉ để xem, không ghi vào video)">🌐 Dịch tiếng Việt</button></div>
+          <!-- Pill 6 công cụ canvas (t7-canvas-tools.js) — lớp phủ vẽ tay ghi vào MP4 khi xuất FFmpeg -->
+          <div class="t7-cvpill" id="t7CvPill" title="Lớp phủ canvas — vẽ trực tiếp lên video (chữ / làm mờ / khối màu / media / filter màu), ghi sẵn vào file MP4 khi xuất FFmpeg">
+            <button class="t7CvBtn" id="t7CvTSelect" title="Chọn / dời lớp" onclick="t7CvSetTool('select')">🖱</button>
+            <button class="t7CvBtn" id="t7CvTText" title="Chữ" onclick="t7CvSetTool('text')">🔤</button>
+            <button class="t7CvBtn" id="t7CvTBlur" title="Làm mờ / xoá logo / mosaic" onclick="t7CvSetTool('blur')">🌫</button>
+            <button class="t7CvBtn" id="t7CvTRect" title="Khối màu" onclick="t7CvSetTool('rect')">🧱</button>
+            <button class="t7CvBtn" id="t7CvTMedia" title="Thêm ảnh / GIF" onclick="t7CvAddMedia()">🖼</button>
+            <button class="t7CvBtn" id="t7CvTFilter" title="Filter màu cả khung" onclick="t7CvSetTool('filter')">🎨</button>
+            <button class="t7CvBtn" id="t7CvTClear" title="Xoá tất cả lớp canvas" onclick="t7CvClearAll()">🗑</button>
+          </div>
           <!-- Shell bọc khung xem + thanh điều khiển: nút ⛶ fullscreen cả shell để
                thanh điều khiển vẫn hiển thị khi tràn màn hình -->
           <div id="t7PlayerShell">
@@ -89,6 +108,8 @@
             <div id="t7DropMark" style="display:none;position:absolute;z-index:9;width:26px;height:26px;margin:-13px 0 0 -13px;border:2px solid var(--accent);border-radius:50%;background:color-mix(in srgb,var(--accent) 25%,transparent);pointer-events:none"></div>
             <div id="t7PreviewWrap" style="width:100%;height:100%;position:relative"><img id="t7PreviewImg" alt="" style="display:none"></div>
             <video id="t7PreviewVid" muted playsinline loop style="display:none;width:100%;height:100%;object-fit:contain;position:absolute;inset:0"></video>
+            <!-- Track video lớp trên (tính năng #4): preview lớp chồng — DƯỚI ảnh đè (z5), TRÊN video chính -->
+            <div id="t7VlPrev" style="display:none;position:absolute;inset:0;z-index:4;pointer-events:none"></div>
             <img id="t7OverlayImg" alt="" style="display:none;position:absolute;inset:0;width:100%;height:100%;object-fit:contain;z-index:5;pointer-events:none">
             <div id="t7PreviewEmpty" style="color:var(--text-dim);font-size:13px">Chưa có ảnh cảnh</div>
             <!-- Lớp đồ hoạ vẽ bằng DOM. cqh = % chiều cao khung → cỡ chữ tự co đúng tỉ lệ như lúc render. -->
@@ -101,6 +122,9 @@
             </div>
             <div id="t7GlobOv" style="position:absolute;inset:0;z-index:4;pointer-events:none;overflow:hidden;container-type:size"></div>
             <div id="t7PreviewSub" style="display:none;position:absolute;left:4%;right:4%;bottom:9%;z-index:6;text-align:center;font-weight:800;color:#fff;-webkit-text-stroke:1.5px #000;paint-order:stroke fill;text-shadow:0 2px 5px rgba(0,0,0,.55);line-height:1.12;pointer-events:none;white-space:pre-wrap"></div>
+            <!-- Lớp canvas T7 (t7-canvas-tools.js) — đè TRÊN mọi lớp đồ hoạ và cả phụ đề preview
+                 (khớp thứ tự burn thật: renderVideo burn phụ đề TRƯỚC, canvas burn SAU trên file) -->
+            <div id="t7CvLayer" onpointerdown="t7CvStageDown(event)" style="position:absolute;inset:0;z-index:25;pointer-events:none"></div>
           </div>
           <!-- Thanh điều khiển DỜI khỏi khung xem — thành hàng riêng BÊN DƯỚI,
                không còn đè lên hình xem trước -->
@@ -108,6 +132,7 @@
             <div class="t7-ptrack" id="t7Seek" onpointerdown="t7SeekPointerDown(event)" title="Bấm hoặc kéo để tua"><i id="t7SeekFill"></i></div>
             <div class="t7-pctl">
               <span class="b" id="t7PlayBtn" onclick="t7TogglePlay()">▶</span>
+              <input type="range" id="t7RateSl" min="0.25" max="3" step="0.05" value="1" oninput="t7SetRate(this.value)" title="Tốc độ xem trước — kéo mượt 0.25x → 3x" style="width:56px;accent-color:var(--accent);cursor:pointer">
               <select id="t7Rate" onchange="t7SetRate(this.value)" title="Tốc độ xem trước" style="cursor:pointer;min-width:30px;text-align:center;background:transparent;border:0;font-size:11.5px;color:#e5ded4;padding:0 2px;appearance:auto"><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="1.5">1.5x</option><option value="2">2x</option></select>
               <span class="tc" id="t7TimeCode">00:00 / 00:00</span>
               <!-- Dòng trạng thái (setStatus7 ghi cả #status7 lẫn #t7StatusLean) dời vào
@@ -115,11 +140,19 @@
                    (chiều cao player do _t7SyncColHeight quyết định theo phần tràn trang). -->
               <span id="t7StatusLean" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11.5px;text-align:left;min-width:0"></span>
               <span class="tc" id="t7LoopBtn" onclick="t7ToggleLoop()" title="Lặp lại khi hết" style="cursor:pointer">🔁</span>
+              <span class="tc" onclick="t7PreviewZoom(-0.25)" title="Thu nhỏ bản xem trước" style="cursor:pointer">🔍−</span>
+              <span class="tc" id="t7ZoomLab" onclick="t7PreviewZoomReset()" title="Bấm để về 100%">100%</span>
+              <span class="tc" onclick="t7PreviewZoom(0.25)" title="Phóng to bản xem trước" style="cursor:pointer">🔍+</span>
               <span class="tc" id="t7SafeBtn" onclick="t7ToggleSafe()" title="Khung an toàn 5% / 10%" style="cursor:pointer">▢</span>
               <span class="tc" id="t7FullBtn" onclick="t7Fullscreen()" title="Xem khung tràn màn hình (Esc để thoát)" style="cursor:pointer">⛶</span>
               <span class="tc" id="t7AspectLabel">16:9</span>
             </div>
           </div>
+          </div>
+          <!-- Khung thuộc tính lớp canvas T7: danh sách lớp + ô chỉnh theo loại lớp -->
+          <div id="t7CvPanel" style="display:none">
+            <div class="t7-cvlist" id="t7CvList"></div>
+            <div id="t7CvProps"></div>
           </div>
           <!-- (Dòng trạng thái #t7StatusLean đã dời vào hàng điều khiển .t7-pctl phía trên —
                  không còn hàng riêng dưới khung làm co khung xem) -->
@@ -177,11 +210,24 @@
               <div style="flex:1;height:7px;background:var(--surface-2);border-radius:99px;overflow:hidden"><div id="t7ExpBar" style="height:100%;width:0%;background:linear-gradient(90deg,var(--accent-2),var(--accent));transition:width .3s;border-radius:99px"></div></div>
             </div>
             <div style="display:flex;justify-content:flex-end;gap:10px">
+              <button class="btn ghost sm" id="t7ExpOpenBtn" style="display:none" onclick="_t7ExpOpenFolder()" title="Mở thư mục chứa file đã xuất">📁 Mở thư mục</button>
+              <!-- Ẩn tiến độ (parity nút Ẩn của ezmaxsub): xuất CHẠY TIẾP nền, chip nổi góc phải để mở lại. -->
+              <button class="btn ghost sm" id="t7ExpHideBtn" style="display:none" onclick="_t7ExpModalHideRun()" title="Ẩn hộp này — xuất vẫn chạy nền, chip góc phải bấm để mở lại">Ẩn</button>
               <button class="btn ghost sm" id="t7ExpCancelBtn" onclick="t7CancelExport()">Hủy</button>
               <button class="btn primary sm" id="t7ExpCloseBtn" style="display:none" onclick="_t7ExpModalHide()">Đóng</button>
             </div>
           </div>
         </div>
+      </div>
+
+      <!-- Chip tiến độ nổi khi ẩn hộp xuất (2026-09-19t): bấm = mở lại hộp tiến độ. -->
+      <div id="t7ExpRunChip" onclick="_t7ExpModalReopen()" title="Bấm để mở lại hộp tiến độ xuất"
+           style="display:none;position:fixed;right:18px;bottom:18px;z-index:9997;cursor:pointer;
+                  background:var(--surface);border:1px solid var(--border);border-radius:99px;
+                  box-shadow:0 8px 30px -8px rgba(0,0,0,.55);padding:9px 16px;font-size:12.5px;
+                  font-weight:600;color:var(--text);align-items:center;gap:9px;user-select:none">
+        <span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--accent)"></span>
+        <span id="t7ExpRunChipText">Đang xuất…</span>
       </div>
 
       <!-- MODAL: TẠO TỰ ĐỘNG (AI) -->
@@ -224,6 +270,10 @@
             <button class="t7-tlbtn" id="t7UndoBtn" title="Hoàn tác (Ctrl/⌘+Z)" onclick="t7Undo()">↶</button>
             <button class="t7-tlbtn" id="t7RedoBtn" title="Làm lại (Ctrl/⌘+Shift+Z)" onclick="t7Redo()">↷</button>
             <button class="t7-tlbtn" title="Cắt tại playhead (S)" onclick="t7SplitAtPlayhead()">✂</button>
+            <button class="t7-tlbtn" title="Cắt bỏ bên TRÁI playhead (Q)" onclick="t7TrimLeftAtPlayhead()">⇤</button>
+            <button class="t7-tlbtn" title="Cắt bỏ bên PHẢI playhead (W)" onclick="t7TrimRightAtPlayhead()">⇥</button>
+            <button class="t7-tlbtn" title="Giãn kín timeline — tổng thời lượng lấp đầy bề ngang" onclick="t7ZoomFit()">⇔</button>
+            <button class="t7-tlbtn" title="Bookmark tại playhead (chuột phải trên thước để bookmark nhanh)" onclick="t7AddBookmark()">🔖</button>
             <button class="t7-tlbtn" title="Nhân đôi clip đang chọn" onclick="t7DupSel()">⧉</button>
             <button class="t7-tlbtn" title="Xoá clip đang chọn (Delete)" onclick="t7DeleteSel()">🗑</button>
           </div>
@@ -239,14 +289,16 @@
             <span class="t7-dlab" id="t7TlTotal">0s</span>
             <span class="t7-dim" id="t7TlStats" style="font-size:10.5px"></span>
             <span id="t7Snap" class="t7-snap on" onclick="t7ToggleSnap()" title="Kéo clip tự dính vào mép cảnh khác và vạch phát">🧲 Bám mốc</span>
-            <div class="zt">Thu phóng <input type="range" id="t7Zoom" min="40" max="200" value="80" style="width:110px" oninput="t7RenderTimeline()"></div>
+            <div class="zt">Thu phóng <input type="range" id="t7Zoom" min="4" max="200" value="80" style="width:110px" oninput="t7RenderTimeline()"></div>
           </div>
         </div>
         </div>
-        <div class="t7-tlscroll">
+        <div class="t7-tl-height" onpointerdown="t7TlHeightDown(event)" title="Kéo để chỉnh cao timeline"></div>
+        <div class="t7-tlscroll" ondragover="t7TlFileDragOver(event)" ondrop="t7TlFileDrop(event)" title="Kéo thả file ảnh/video vào đây để nhập">
           <div class="t7-tlinner" id="t7TlInner">
             <div class="t7-ph" id="t7Playhead"></div>
-            <div class="t7-ruler" id="t7Ruler" onpointerdown="t7RulerPointerDown(event)"></div>
+            <div class="t7-ruler" id="t7Ruler" onpointerdown="t7RulerPointerDown(event)" oncontextmenu="t7RulerCtx(event)"></div>
+            <div id="t7Bookmarks" style="position:absolute;top:26px;left:0;right:0;height:0;z-index:7;pointer-events:none"></div>
             <!-- Track phụ đề ẩn khỏi timeline (chỉ cần khi burn phụ đề vào video). Lời thoại xem ở dưới bản xem trước. -->
             <div class="t7-trk subs" style="display:none">
               <div class="t7-trkh" title="Phụ đề"><span class="ci" style="background:var(--t7-sub)"></span>Phụ đề</div>
@@ -257,6 +309,8 @@
               <div class="t7-trkbody" data-ghost="Ảnh đè / lớp toàn cục — kéo hiệu ứng vào đây" id="t7TrkOverlay" style="gap:3px;padding-left:5px;position:relative"
                    ondragover="t7GlobDragOver(event)" ondragleave="t7GfxDragLeave(event)" ondrop="t7GlobDrop(event)"></div>
             </div>
+            <!-- Track VIDEO LỚP TRÊN (tính năng #4): các hàng video/ảnh chồng lấn đè lên hàng cảnh — dựng động bằng t7VtRenderRows -->
+            <div id="t7RowsVLayers"></div>
             <!-- Rãnh ĐỒ HOẠ: các lớp mẫu/chữ AI gắn hoặc bạn tự thêm. Trước đây 150 lớp này vô hình. -->
             <div class="t7-trk" id="t7RowGfx" style="height:auto;min-height:40px;align-items:stretch">
               <div class="t7-trkh" title="Đồ hoạ"><span class="ci" style="background:var(--violet,#7c3aed)"></span>Đồ hoạ<span class="sp"></span><span class="t7-chip" id="t7GfxCount" style="font-size:9.5px"></span></div>
@@ -270,7 +324,7 @@
             </div>
             <div class="t7-trk">
               <div class="t7-trkh" title="Cảnh"><span class="ci" style="background:var(--t7-scene)"></span>Cảnh<span class="sp"></span><span class="tg">👁</span></div>
-              <div class="t7-trkbody" data-ghost="— chưa có cảnh nào —" id="t7TrkScenes" style="gap:0;padding-left:5px"></div>
+              <div class="t7-trkbody" data-ghost="— chưa có cảnh nào —" id="t7TrkScenes" style="gap:0;padding-left:5px" onpointerdown="t7RubberDown(event)"></div>
             </div>
             <div class="t7-trk" id="t7RowAudio">
               <div class="t7-trkh" title="Giọng đọc"><span class="ci" style="background:var(--t7-voice)"></span>Giọng đọc<span class="sp"></span><span class="tg">👁</span></div>

@@ -221,4 +221,76 @@ t('presets: tên rỗng → DUB_PRESET_NAME; JSON lạ bị bỏ qua whitelist',
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
+/* ── ttsCacheKey (2026-09-19u): tốc độ đọc NẰM TRONG key cache ── */
+t('ttsCacheKey: speed 1/rỗng → đúng dạng cũ 4 phần (cache hiện có không bị vứt)', () => {
+  const legacy = 'xin chào|P1|vi|en';
+  assert.strictEqual(E.ttsCacheKey('xin chào', 'P1', 'vi', 'en', 1), legacy);
+  assert.strictEqual(E.ttsCacheKey('xin chào', 'P1', 'vi', 'en'), legacy);
+  assert.strictEqual(E.ttsCacheKey('xin chào', 'P1', 'vi', 'en', '1'), legacy);
+  assert.strictEqual(E.ttsCacheKey('xin chào', 'P1', 'vi', 'en', 0), legacy); // 0/rỗng = mặc định
+  assert.strictEqual(E.ttsCacheKey('xin chào', 'P1', 'vi', ''), 'xin chào|P1|vi|');
+});
+t('ttsCacheKey: speed khác 1 → phân biệt từng giá trị, deterministic, làm tròn 3 số', () => {
+  const a = E.ttsCacheKey('hello', 'P1', 'en', '', 1.25);
+  assert.ok(a.indexOf('hello|P1|en|||speed:1.25') === a.length - 'hello|P1|en|||speed:1.25'.length);
+  assert.notStrictEqual(a, E.ttsCacheKey('hello', 'P1', 'en', '', 1));
+  assert.notStrictEqual(a, E.ttsCacheKey('hello', 'P1', 'en', '', 1.5));
+  assert.strictEqual(a, E.ttsCacheKey('hello', 'P1', 'en', '', '1.25'));
+  assert.strictEqual(a, E.ttsCacheKey('hello', 'P1', 'en', '', 1.250));
+});
+
+/* ── assignSpeakerVoices: gán tay explicitMap (2026-09-19u) ── */
+const SP = [
+  { startMs: 0, endMs: 500, speaker: 'Nam', spokenText: 'a' },
+  { startMs: 600, endMs: 900, speaker: 'Lan', spokenText: 'b' },
+  { startMs: 1000, endMs: 1200, speaker: 'Nam', spokenText: 'c' },
+  { startMs: 1300, endMs: 1500, speaker: '', spokenText: 'd' },
+];
+t('assignSpeakerVoices: không map → round-robin như cũ (hợp đồng không đổi)', () => {
+  const r = E.assignSpeakerVoices(SP, ['P1', 'P2']);
+  assert.deepStrictEqual(r.map, { Nam: 'P1', Lan: 'P2', '': 'P1' });
+  assert.deepStrictEqual(r.voices, ['P1', 'P2', 'P1', 'P1']);
+});
+t('assignSpeakerVoices: map tay đè round-robin — bộ đếm auto không bị nhân vật tay làm lệch', () => {
+  const r = E.assignSpeakerVoices(SP, ['P1', 'P2'], { Lan: 'P9' });
+  assert.strictEqual(r.map.Lan, 'P9');
+  assert.strictEqual(r.map.Nam, 'P1'); // auto idx 0
+  assert.strictEqual(r.map[''], 'P2'); // auto idx 1 — Lan (tay) không chiếm số
+  assert.deepStrictEqual(r.voices, ['P1', 'P9', 'P1', 'P2']);
+});
+t('assignSpeakerVoices: map tay là nguồn DUY NHẤT khi danh sách pids rỗng', () => {
+  const r = E.assignSpeakerVoices(SP.slice(0, 2), [], { Nam: 'P1', Lan: 'P2' });
+  assert.deepStrictEqual(r.voices, ['P1', 'P2']);
+});
+t('assignSpeakerVoices: map không trúng nhân vật nào → tất cả auto (khai báo, không lỗi)', () => {
+  const r = E.assignSpeakerVoices(SP, ['P1'], { 'KhongCo': 'P9' });
+  assert.deepStrictEqual(r.map, { Nam: 'P1', Lan: 'P1', '': 'P1' });
+});
+t('assignSpeakerVoices: map sai kiểu / giá trị rỗng → DUB_SPEAKER_MAP lộ liễu', () => {
+  assert.throws(() => E.assignSpeakerVoices(SP, ['P1'], ['x']), /DUB_SPEAKER_MAP/);
+  assert.throws(() => E.assignSpeakerVoices(SP, ['P1'], { Lan: '' }), /DUB_SPEAKER_MAP/);
+  try { E.assignSpeakerVoices(SP, ['P1'], { Lan: '   ' }); assert.fail('phải ném'); }
+  catch (e) { assert.strictEqual(e.code, 'DUB_SPEAKER_MAP'); }
+});
+
+/* ── presets: trường mới (2026-09-19u) whitelist + ép kiểu ── */
+t('presets: ttsSpeed/musicSource/speakerVoiceMap — whitelist + ép kiểu + lọc giá trị rỗng', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dub-preset-test-'));
+  try {
+    PRESETS.savePreset(dir, 'Kênh C', {
+      ttsSpeed: '1.25', musicSource: 'original',
+      speakerVoiceMap: { Nam: 'P1', Lan: '  ', Khac: 'P3' }, junk: 1,
+    });
+    const cfg = PRESETS.listPresets(dir)[0].config;
+    assert.strictEqual(cfg.ttsSpeed, 1.25);
+    assert.strictEqual(cfg.musicSource, 'original');
+    assert.deepStrictEqual(cfg.speakerVoiceMap, { Nam: 'P1', Khac: 'P3' }); // giá trị rỗng bị bỏ
+    assert.strictEqual(cfg.junk, undefined);
+    PRESETS.savePreset(dir, 'Kênh D', { speakerVoiceMap: 'không phải object', ttsSpeed: 'không phải số' });
+    const cfg2 = PRESETS.listPresets(dir).find((x) => x.name === 'Kênh D').config;
+    assert.strictEqual(cfg2.speakerVoiceMap, undefined); // sai kiểu → không lưu (không nửa vời)
+    assert.strictEqual(cfg2.ttsSpeed, undefined);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 console.log('\nĐã chạy ' + (passed + (process.exitCode ? 1 : 0)) + ' nhóm test — ' + passed + ' PASS');

@@ -55,10 +55,11 @@ let _giongAudio = null;
 const _giongMau = new Map();
 
 // === L?: let _giongMauSan ===
-// tập KEY ĐĨA (đã sanitize bởi main, vd 'v2_omni_omni_factory_en_male_deep') của
-// các mẫu nghe thử đang có trên đĩa — vẽ badge "phát ngay" trên nút ▶; nạp từ
-// voice-sample-list khi backend sẵn sàng. Voice key gốc chứa ':' bị sanitize thành
-// '_' nên KHÔNG tách ngược được: so khớp giọng luôn qua _giongMauSanCo() ở utility.
+// tập KEY ĐĨA (đã sanitize bởi main, vd 'v4_omni_omni_factory_en_male_deep_0ab1…')
+// của các mẫu nghe thử đang có trên đĩa — vẽ badge "phát ngay"/"cài đặt đã đổi"
+// trên nút ▶; nạp từ voice-sample-list khi backend sẵn sàng. Voice key gốc chứa
+// ':' bị sanitize thành '_' nên KHÔNG tách ngược được: so khớp giọng luôn qua
+// _giongMauKhop()/_giongMauCo() (forward-map) ở utility.
 let _giongMauSan = new Set();
 
 // === L?: let _giongSu ===
@@ -109,10 +110,12 @@ let _giongTao = '';           // khoá đang TẠO mẫu nghe thử (⏳) — ch
 let _giongBusy = false;
 
 // === L479 (5f2e1d26): const _GIONG_MAU_V ===
-// v2 — file cache mẫu nghe thử là JSON { v:2, sp, p, dataUrl }: kèm tham số
-// tốc độ/cao độ lúc gen. Lệch tham số → renderer gen lại + ghi đè cùng file
-// (đĩa luôn 1 file / giọng + engine, không phình theo tham số).
-const _GIONG_MAU_V = 'v2';
+// v4 (2026-09-19k) — cache mẫu nghe thử NHIỀU mẫu/giếng: key đĩa có thêm THAM SỐ
+// = hash(chữ ký cài đặt + câu nghe thử) → mỗi tổ hợp cài đặt/câu 1 file riêng,
+// đổi qua đổi lại cài đặt đều phát ngay không gen lại. Trần LRU 50MB ở main tự
+// dọn file cũ nhất. (v1 dataURL trần; v2 JSON {v,sp,p}; v3 thêm sig — key đời cũ
+// không khớp tiền tố v4 nên tự gen lại, không cần migration.)
+const _GIONG_MAU_V = 'v4';
 
 // === L482 (5f2e1d26): const _GIONG_DOAN_RE ===
 const _GIONG_DOAN_RE = /^Đoạn (\d+)\/(\d+) · (.+)$/;

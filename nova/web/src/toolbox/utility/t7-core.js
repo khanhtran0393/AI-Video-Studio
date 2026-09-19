@@ -25,7 +25,7 @@ function _t7SceneWantsAB(id){ return _t7SceneHasBPrompt(id) || (_t7SceneHasA(id)
 
 function _t7SceneDur(s){ const d = parseFloat(s && s.duration); return (!isNaN(d) && d > 0) ? d : 3; }
 
-function _t7Fmt(t){ t = Math.max(0, Math.round(t)); const m = Math.floor(t / 60), s = t % 60; return String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0'); }
+function _t7Fmt(t){ t = Math.max(0, t); const cs = Math.round(t * 100); const m = Math.floor(cs / 6000), s = Math.floor(cs / 100) % 60, c = cs % 100; return String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0') + '.' + String(c).padStart(2,'0'); }   // 2026-09-19d: centiseconds kiểu EZMAXSUB
 
 function _t7NewId(){ return 'c' + (++t7State._seq); }
 
@@ -65,7 +65,7 @@ function _t7ThumbImg(c){
   return _t7ClipImg(c);
 }
 
-function _t7ClipText(c){ if (c && c.imported) return c.name || ''; const s = _t7ClipScene(c); return (s && s.text) || ''; }
+function _t7ClipText(c){ if (c && c.textOv) return c.textOv; if (c && c.imported) return c.name || ''; const s = _t7ClipScene(c); return (s && s.text) || ''; }   // textOv: lời thoại ghi đè khi Gộp clip (2026-09-19f)
 
 function _t7ClipLabel(c){ return (c && c.imported) ? (c.name || 'Media nhập') : ('Cảnh ' + (c && c.sceneId)); }
 
@@ -112,7 +112,7 @@ function _t7ClipAt(time){ let acc = 0; const cl = t7State.clips; for (let i = 0;
 
 function _t7Doc(){ try { const p = getProfile(); const v = p && getCurrentVideo(p); return v ? v.workData : null; } catch (e){ return null; } }
 
-function _t7PersistClips(){ const wd = _t7Doc(); if (wd){ wd.editClips = t7State.clips.map(c => ({ id: c.id, sceneId: c.sceneId, variant: c.variant || 'A', dur: c.dur, fx: c.fx || 'none', trans: c.trans || 'none', transDur: c.transDur || 0.5, useVideo: !!c.useVideo, vidDur: c.vidDur || 0, scale: c.scale || 1, imported: !!c.imported, mediaId: c.mediaId || null, kind: c.kind || null, name: c.name || null })); wd.overlays = (t7State.overlays || []).map(o => ({ id: o.id, dataUrl: o.dataUrl, name: o.name || '', start: o.start || 0, dur: o.dur || 3 })); wd.media = (t7State.media || []).map(m => ({ id: m.id, kind: m.kind, name: m.name || '', dataUrl: m.dataUrl, dur: m.dur || 0 })); try { if (typeof saveState === 'function') saveState(true); } catch (e) {} }
+function _t7PersistClips(){ const wd = _t7Doc(); if (wd){ wd.editClips = t7State.clips.map(c => ({ id: c.id, sceneId: c.sceneId, variant: c.variant || 'A', dur: c.dur, fx: c.fx || 'none', trans: c.trans || 'none', transDur: c.transDur || 0.5, useVideo: !!c.useVideo, vidDur: c.vidDur || 0, scale: c.scale || 1, imported: !!c.imported, mediaId: c.mediaId || null, kind: c.kind || null, name: c.name || null })); wd.overlays = (t7State.overlays || []).map(o => ({ id: o.id, dataUrl: o.dataUrl, name: o.name || '', start: o.start || 0, dur: o.dur || 3 })); wd.videoLayers = t7VtList().map(o => ({ id: o.id, mediaId: o.mediaId, kind: o.kind, name: o.name || '', dataUrl: o.dataUrl, start: o.start || 0, dur: o.dur || 3, vidDur: o.vidDur || 0, scale: o.scale || 100 })); wd.media = (t7State.media || []).map(m => ({ id: m.id, kind: m.kind, name: m.name || '', dataUrl: m.dataUrl, dur: m.dur || 0 })); try { if (typeof saveState === 'function') saveState(true); } catch (e) {} }
 }
 
 function _t7FxFromScene(s){
@@ -129,6 +129,8 @@ function _t7AutoBuild(){
   const wd0 = _t7Doc();
   // nạp lại Lớp trên (overlay) từ workData nếu phiên chưa có
   if (wd0 && Array.isArray(wd0.overlays) && !(t7State.overlays || []).length) t7State.overlays = wd0.overlays.map(o => ({ id: o.id || _t7NewId(), dataUrl: o.dataUrl, name: o.name || 'Ảnh đè', start: +o.start || 0, dur: +o.dur || 3 }));
+  // nạp lại Track video lớp trên (tính năng #4) từ workData nếu phiên chưa có
+  if (wd0 && Array.isArray(wd0.videoLayers) && wd0.videoLayers.length && !(t7State.vlayers || []).length) t7State.vlayers = wd0.videoLayers.map(o => ({ id: o.id || _t7NewId(), mediaId: o.mediaId || null, kind: o.kind || 'image', name: o.name || 'Lớp video', dataUrl: o.dataUrl, start: +o.start || 0, dur: +o.dur || 3, vidDur: +o.vidDur || 0, scale: +o.scale || 100 }));
   // nạp lại Thư viện media
   if (wd0 && Array.isArray(wd0.media) && !(t7State.media || []).length) t7State.media = wd0.media.map(m => ({ id: m.id || _t7NewId(), kind: m.kind, name: m.name || '', dataUrl: m.dataUrl, dur: +m.dur || 0 }));
   const _sceneHasVid = (id) => { try { return !!(typeof mvVideoBlobs === 'object' && mvVideoBlobs[id] && mvVideoBlobs[id].b64); } catch (e){ return false; } };

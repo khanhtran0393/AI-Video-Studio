@@ -138,6 +138,32 @@ Lần đầu chạy Remotion tự tải Chrome Headless Shell (~113MB, cache l�
   thiếu engine/python (degrade khai báo rõ — Luật 10). Tắt bằng `options.watermarkQa === false`;
   adapter `qaProviders` inject từ ngoài vẫn thắng (không bị bọc thêm).
 
+## Nền cảnh = video gen Flow (PT1 + PT3 + PT4 — 2026-09-19u)
+
+Bật bằng `options.flowVideo = { enabled: true, clipSecs: 8, aspect: 'auto'|'landscape'|'portrait'|'square', chainLastFrame: true, useRefImage: true, modelKey?, resolution?, stageTimeoutMs? }`
+(UI: toggle "🎬 Nền cảnh = video gen Flow" trong cửa sổ Video Agent). Khi bật, stage
+`GENERATING_SCENE_VIDEOS` chèn giữa BUILDING_VISUAL_PLAN và BUILDING_VIDEO_SPEC:
+
+1. **PT3** (`story/plan.js`) — gom câu TTS thành scene ~`clipSecs` (8s) thay vì dùng
+   ranh giới scene của script → mỗi cảnh ≈ 1 clip Flow, độ lệch thời lượng nhỏ nhất
+   (tinh thần "cura đôi 50/50": không ép cực đoan một phía).
+2. **Sinh clip** (`flow-video/generate.js`) — gọi thẳng `flow-native/gen: genVideoPool`
+   (lazy-require, KHÔNG IPC mới): prompt dựng deterministic từ summary/location/actions/mood;
+   reference = khung cuối clip trước (**PT4** chain) hoặc ảnh nền visual plan; `clientRequestId`
+   deterministic `va_<sha1(chapterId|sceneId)>`. Clip cache bền theo vân tay
+   prompt+ref+aspect+model+target tại `<root>/output/scene-videos/` → job retry KHÔNG đốt credit.
+3. **PT1** (`flow-video/normalize.js`) — chuẩn hoá clip về ĐÚNG thời lượng cảnh (TTS master
+   clock): `speed` (hình nhanh ≤1.15×) → `cut` (`-t`), hoặc `slow` (hình chậm ≤1.5×) →
+   `slow+freeze` (tpad clone khung cuối). Clip luôn `-an` (mute) — giọng đọc KHÔNG bao giờ bị bóp méo.
+4. Asset `type:'video'` push vào manifest + background của visual plan bị đè bằng `vid_<sceneId>`;
+   spec khai báo `background: { asset, kind: 'video', clip: { strategy, durationSec } }` —
+   renderer Nova (`specToNovaScenes` → `BackdropLayer` OffthreadVideo) phát nền video sẵn có.
+
+Lỗi lộ liễu `VA_FLOW_NO_ACCOUNTS / VA_FLOW_GEN_FAIL / VA_FLOW_TIMEOUT / VA_FLOW_DL_FAIL /
+VA_FLOW_NORMALIZE* / VA_FLOW_CACHE_BAD / VA_FLOW_CHARGED_NO_FILE` — KHÔNG fallback về ảnh
+tĩnh (Luật 10). Credit gate sẵn có (`video-spec/cost.js`) tự đếm `video_8s`/scene.
+Test thuần: `node nova/video-agent/test-flow-video.js` (55 assert — suite thứ 8 của `test:video-agent`).
+
 ## Phase 5 — S3/CDN uploader (§24)
 - `uploader/s3.js` — PUT thẳng S3 bằng `fetch` (Node 24) + **AWS Signature V4 tự ký bằng node crypto**
   (không aws-sdk, không dependency mới). Hỗ trợ `sessionToken`, `keyPrefix`, `cdnBase` (URL cuối là CDN nếu có).
