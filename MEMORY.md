@@ -1,3 +1,42 @@
+## 2026-09-19c — Trình Soạn Thảo Video v2: nền gradient/mờ, blur offset 4 mép, blur-sync SRT, chữ viền+bóng (đóng khoảng cách ezmaxsub #2)
+
+- **Bối cảnh**: user chọn "cải tiến vào các chức năng thích hợp" sau báo cáo so sánh ezmaxsub — triển khai hạng ưu tiên #2 (nền gradient/blur + blur offset/sync SRT + text viền/bóng) trực tiếp vào canvas editor vừa xây, tận dụng hạ tầng `buildOverlayVf`/`burnOverlays`.
+- **SỬA KÈM 1 BUG CẤU TRÚC nghiêm trọng của tool-ffx-canvas.js** (tái sản xuất của sự cố editor 2026-09-19b): đuôi hàm `ffxCvLabel` (3 dòng return media/filter + `}`) bị dời nhầm về CUỐI file sau IIFE `ffxCvWire()` — mọi hàm trở thành con lồng nhau của `ffxCvLabel`, wiring không bao giờ chạy lúc nạp (editor chết ngầm; `node --check` vẫn PASS vì hợp lệ). Đã trả đuôi về đúng thân hàm + xoá đuôi lệch cuối file.
+- **Engine** (`nova/native-tools/media-tools.js`, +3 export mới `ovStripRect`/`ovParseSrt`/`ovEnableSync` — contract chỉ ghi module boundary, baseline không đổi):
+  - `buildOverlayVf` nhận `background` OBJECT: `{type:'solid',color}` (pad như cũ, string hex vẫn tương thích), `{type:'gradient',c1,c2,dir v/h/d}` (nguồn `gradients` static — `speed=0.00001` vì ffmpeg chỉ nhận [1e-05,1], KHÔNG nhận 0), `{type:'blur',blurRadius,darkness}` (split → cover+boxblur+drawbox phủ tối làm nền, video contain đè lên — kiểu TikTok); lạ → `FFX_OV_BG`. Gradient/blur tự tính là thay đổi → `burnOverlays` không còn `FFX_OV_EMPTY` khi ratio nguyên gốc.
+  - `ovStripRect`: blur layer có bất kỳ `offLeft/offRight/offTop/offBottom` > 0 (px trên khung ĐÍCH) → vùng mờ = dải full-width/full-height cách mép đúng offset (kẹp ≤W/3,H/3, vùng ≥2px); 0 → fallback `ovRect` như cũ.
+  - `ovParseSrt` + `ovEnableSync`: blur-sync SRT — cue → chuỗi `between(t,a,b)` ghép `+` (HOẶC trong ffmpeg expr), pad ±giây kẹp [0,total], trần 400 cue → `FFX_OV_SYNC_MANY`, thiếu/sai → `FFX_OV_SYNC`; SRT hỏng → `FFX_OV_SRT_BAD`. syncSrt ĐÈ startSec/endSec.
+  - text: `stroke`(0..20px)+`strokeColor` → `borderw/bordercolor`, `shadow` → `shadowcolor=black@0.65:shadowx=3:shadowy=3` (mặc định không thêm — chuỗi gọn như trước).
+- **Renderer** (`tool-ffx-canvas.js`): tool Nền video → section 3 kiểu (Màu/Gradient 2 màu+hướng/Làm mờ video — preview: `linear-gradient` CSS / `<video id="ffxCvVideoBg">` object-fit:cover+blur+scale1.08 + `<div id="ffxCvBgShade">` trong `partials/panels-ffmpeg-tools.html`, video nền tái dùng cùng src); props lớp mờ → 4 ô offset px + "🔄 Gắn SRT…" (`ffx:pick-srt` + `readFileB64`, renderer parse SRT để preview nhấp nháy theo cue trong vòng rAF, gửi `srtCues` trong payload — engine xác thực lại) + pad; props chữ → viền/bóng (preview `-webkit-text-stroke`/`text-shadow`); `ffxCvSyncOffsetsToLayer` đổi offset px → x/y/w/h chuẩn hoá để kéo/thả preview khớp tuyệt đối vùng export; payload export thêm đủ trường mới.
+- **Verify**: `test:ffx-canvas` 65/65 PASS (36 cũ + 29 mới, gồm cả case offset/sync/nền/viền); smoke ffmpeg THẬT (lavfi testsrc2) 5/5 chain mới render OK — phát hiện & sửa `speed=0` không hợp lệ; `npm run check` EXIT 0 (536 file syntax, toplevel sạch, selftest 10/10); tmp smoke script + fixture %TEMP% đã xoá.
+- **Chưa làm (kỳ sau theo priority đã duyệt)**: #1 editor phụ đề theo phân đoạn (segment subtitle), #3 trang Tải Video (yt-dlp đã ship `nova/ytdlp-bin/yt-dlp.exe`), #4 timeline 1 track. Vẫn dồn `%TEMP%\ezmax-ids.txt`/`ezmax-comments.txt` chưa dọn (dữ liệu so sánh ezmaxsub còn dùng cho các kỳ sau).
+
+
+## 2026-09-18t — Dọn chồng chéo chức năng + hiển thị panel Thuyết minh (Dựng Video)
+
+- **Báo cáo user**: Dựng Video → Thuyết minh có nhiều mục chồng chéo chức năng và hiển thị.
+- **Chẩn đoán (đúng như user thấy)**: (1) cặp tab đầu panel "🎙 Thuyết minh / 💬 Phụ đề" — tab 1 là NÚT CHẾT (không onclick, luôn bật), tab 2 chỉ là đường tắt sang cột phải — chép máy móc bố cục EZMAXSUB trong khi panel chỉ hiện khi đã chọn rail 🎙; (2) mỗi accordion đã có đúng 1 nút hành động rồi hàng 3 chip nhanh bên dưới (📄 Nhận dạng / 🌐 Dịch / 🎙 Thuyết minh) lặp ĐÚNG 3 chức năng đó; (3) accordion 1 tên "Nhận dạng giọng nói" hứa hẹn ASR mà app không có — nút thật là nhập SRT/thêm phân đoạn, chip còn gọi nhầm "📄 Nhận dạng" (= `t7SubImportSrt`); (4) tên "Thuyết minh" xuất hiện 3 tầng (rail → tab → accordion 3); (5) Hoàn tác "💬 Phụ đề" thực chất chỉ tắt checkbox ghi phụ đề khi xuất — tên gây hiểu nhầm.
+- **Sửa** (`nova/web/src/toolbox/t7-dubpanel.js` + CSS `src/styles/build-video.css` — KHÔNG logic mới, đúng nguyên tắc đầu file):
+  - Bỏ cặp tab chết → header 1 hàng `.t7dp-head` (tựa "🎙 Thuyết minh" + link nhỏ "💬 Bảng phụ đề ›" giữ đường tắt `t7RightTab('subs')`).
+  - Bỏ hàng 3 chip nhanh trùng — mỗi chức năng bấm trong accordion; luồng chính vẫn là nút gold "✨ Xử lý video" (xích dịch → tạo giọng, không đổi).
+  - Đổi tên accordion: "Nhận dạng giọng nói" → "Phụ đề nguồn" (note vẫn khai báo app chưa có ASR), "Dịch thuật" → "Dịch thuyết minh", "Thuyết minh" → "Tạo giọng thuyết minh" (khử trùng tên 3 tầng).
+  - Hoàn tác "💬 Phụ đề" → "💬 Ghi phụ đề" + title rõ nghĩa.
+  - CSS: thay rule `.t7dp-tabs/.t7dp-tab` bằng `.t7dp-head/.t7dp-head-t/.t7dp-head-lnk` (không sót class chết — đã quét).
+- **Verify**: `node --check` PASS; harness vm render 12/12 PASS (không "undefined", header + 3 accordion tên mới + gold + Hoàn tác + footer 2/3; accordion đóng = 0 lần gọi hàm bước, mở "trans" = đúng 1 nút Dịch — chứng tỏ hết trùng); `check:syntax/toplevel/size` EXIT 0. Đã dọn 2 script tmp; `git status` chỉ còn thay đổi có chủ đích.
+- **Còn nguyên (không thuộc phạm vi)**: `t7SubTranslate` vẫn là wrapper của `t7TranslateAll` — nút "🌐 Dịch tiếng Việt" ở rail Trợ lý (`_t7RailAi`) cùng nguồn `state.sceneTrans`, không trùng dữ liệu, chỉ trùng chức năng ở 2 khu khác nhau — giữ nguyên vì 2 ngữ cảnh dùng khác nhau.
+
+
+## 2026-09-19b — Quét & sửa toàn bộ lớp bug "đọc biến không khai báo" (`_t7FxSw` class) trong nova/web
+
+- **Nhiệm vụ user**: tìm & fix mọi identifier bị ĐỌC lúc runtime nhưng không có khai báo đâu cả (nạn nhân dedup — `node --check` mù với lớp này). Tool: scanner AST viết trong phiên (`nova/scripts/tmp/tmp-undef-scan.js`, acorn + custom walker — eslint-scope 5.1.1 quá cũ cho syntax mới; đã xoá sau khi xong, approach ghi lại ở đây): parse 150/150 file script + inline `<script>` HTML, harvest vendor-global + `window.X =`, phân biệt READ (crash thật) vs WRITE (implicit global, chỉ liệt kệ). Bài học walker: nhánh gom `node.id` và `node.params` của FunctionDeclaration phải là 2 `if` độc lập, không `else if` (false suspect 190 → 30).
+- **ROOT CAUSE**: đợt dọn dedup 2026-09-11 (xoá khối "shared-consts 12 module" + "52 fn chết", commit 342aea94) xoá nhầm cả KHAI BÁO còn sống. `shared-consts.js` gốc giờ 0 byte; bản nguyên tìm lại ở commit `068263fe`.
+- **8 bug thật đã sửa** — tạo `nova/web/src/toolbox/shared/consts.js` (khôi phục verbatim từ `068263fe`, chỉ biến không hàm → né shared-shadow-check) nạp NGAY SAU shared-state.js trong index.html: `_T7_STYLES` (t7-gfx.js:62,108 + t7-layers.js:39 — panel Chuyển động crash), `NOVA_ANIM_LABELS` (t7-ai-core.js, typeof-guard nhưng mất nhãn), `_animLoaded` (t7-gfx.js:354 — FX panel kẹt "Đang nạp…"), `_t7SfxAudioCache` (t7-draw.js — SFX crash), `_t2Sel`/`_t2Snapshots`/`_T2_SNAP_MAX`/`_t2DragSrc` (t2-scenes.js — Tool 2 storyboard crash) + `_nfLast`/`_nfIdeas` (niche.js — Nghiên cứu Ngách crash khi module xong).
+- **Fix thêm 1 bug thật của phiên song song** (file đã commit tại HEAD, sửa tối thiểu 1 dòng alias): `ffxCvSetStatus` READ x12 trong `tool-ffx-canvas.js` không khai báo ở đâu → thêm `function ffxCvSetStatus(id, text, isErr) { ffxSetStatus(id, text, isErr); }` (ký danh đúng signature `ffxSetStatus` tool-ffx.js nạp trước).
+- **Benign (không sửa, đã xác minh)**: `updateStats`/`flowAccountCount`/`_t2AudioDurCache` — mọi call-site đều typeof-guard hoặc implicit-global sloppy từ trước; `JSZip`/`XLSX`/`eval` — vendor global; 9 suspect còn lại là self-ref IIFE có tên (scanner không biết bind). Scanner cuối: 150 file, 0 parse fail, 18 suspect = đúng số false-positive đã phân loại, 0 crash thật.
+- **Kiểm định**: `npm run check` EXIT 0 (10 bước; toplevel 1910 tên 0 xung đột; selftest 10/10); `test:t7-ai` 83 PASS; `test:t7-fxcache` TẤT CẢ PASS; `khoidong.bat` exit 0 (app đang chạy → focus, không spawn thứ 2; server đọc web mỗi request → fix hiệu lực ngay khi user Ctrl+R); lifecycle.log sạch.
+- **Lưu ý**: phiên song song đã commit cả thay đổi của phiên này vào `e438b296 "chore: sync to main"` (git status sạch). Sự cố nhỏ: editor tool nhân đôi anchor `var ffxCv` khi insert — phát hiện ngay bằng `node --check`, đã gỡ dòng dup.
+
+
 ## 2026-09-19a — Tool mới: "🎬 Trình Soạn Thảo Video" (canvas editor kiểu EZMAXSUB) trong panel Công cụ FFmpeg
 
 - **Yêu cầu user** (kèm 4 ảnh canvas editor của `D:\ezmaxsub` + chốt "gắn vào panel có sẵn"): tái tạo mục editor trong ảnh — toolbar trái (crop icon, ratio Original/16:9/9:16/1:1/4:3/3:4/21:9, zoom out/label/zoom in/"Khôi phục 100%" fit_screen) + pill 8 tool (Chọn/Kéo khung nhìn/Chữ/Làm mờ/Khối màu/Ảnh-GIF-Âm thanh-Video/Filter màu/Nền video) + empty state "Nhấn để nhập video · MP4·MKV·MOV·WEBM" + menu "HIỆU ỨNG LÀM MỜ / XOÁ" đúng 5 mục (Pixelate/Blur Strip/Frosted Glass/Remove Logo/Remove Subtitle) + tích hợp LOGIC TẤT CẢ các nút. Nguồn trích thật: markup `ezmaxsub\app\frontend\index.html` (toolbar @96600, blur-menu @104500), metadata hiệu ứng Yc trong bundle (`pixelate 16`, `blurStrip 120/35`, `frostedGlass 160/30`, `removeLogo band 4`, `removeSubtitle band 6`, softness .5), kích thước khung PE() (fit cạnh ngắn), exporter = ffmpeg build-graph.
@@ -9037,8 +9076,8 @@ ova/web/src/toolbox/skill-catalog.js (4291 d�ng, 726KB, ch?a 208 entry: 100 v1
   - Script 
 ova/scripts/tmp/sk-split-clean.js (d� cleanup): parse skill-catalog.js b?ng depth-counting, t�ch 208 entry, sort theo 	opic + 
 ame (locale vi), greedy pack theo lines+size.
-  - Sinh 3 file: part-01.js (73 entries, 1471 d�ng, 192KB), part-02.js (74 entries, 1492 d�ng, 199KB), part-03.js (61 entries, 1315 d�ng, 180KB). M?i part khai b�o ar SKL_PART_NN = [...].
-  - File index.js (12 d�ng): ar SKL_CATALOG = []; if (Array.isArray(SKL_PART_01)) SKL_CATALOG = SKL_CATALOG.concat(SKL_PART_01); ... � gi? nguy�n t�n SKL_CATALOG to�n c?c d? kh?p contract 	ool-skills.js d�ng 	ypeof SKL_CATALOG === undefined.
+  - Sinh 3 file: part-01.js (73 entries, 1471 d�ng, 192KB), part-02.js (74 entries, 1492 d�ng, 199KB), part-03.js (61 entries, 1315 d�ng, 180KB). M?i part khai b�o var SKL_PART_NN = [...].
+  - File index.js (12 d�ng): var SKL_CATALOG = []; if (Array.isArray(SKL_PART_01)) SKL_CATALOG = SKL_CATALOG.concat(SKL_PART_01); ... � gi? nguy�n t�n SKL_CATALOG to�n c?c d? kh?p contract 	ool-skills.js d�ng 	ypeof SKL_CATALOG === undefined.
   - X�a skill-catalog.js g?c (572KB ? 0).
   - S?a 
 ova/web/index.html line 192-194: thay 1 th? <script src=.../skill-catalog.js> b?ng 4 th? (part-01, part-02, part-03, index) theo d�ng th? t? n?p, comment ghi r� r�ng (2026-09-17v fix + 2026-09-17w t�ch).
@@ -9312,10 +9351,9 @@ Task 2026-09-17zu hợp nhất 3 nguồn I-MZic → 1, có 3 mục treo (mitigat
 - **Quy ước đặt tên skill v3**: "CORE NN · <Chủ đề> — <luận điểm 1 câu>"; nội dung tiếng Việt, audience 16–35+; persona ghép 3 tác giả/kinh điển + DISCLAIMER writing frame.
 
 
-## 2026-09-19b — Kho Skill v5: schema/render/UI/test DONE (Đợt 1) + v5 content + merge CLI (Đợt 2)
+## 2026-09-19c — Kho Skill v5: schema/render/UI/test + v5 content + merge CLI
 
-- **Schema mở rộng** (tool-skills.js, SKL_FIELD_SCHEMA): 19 trường = 8 v2 + 7 v4 + **4 v5 mới** (
-egativePrompts string[] / seedQuestions string[] / pacing {tempo, beatMap} / oiceSample string). sklValidateEntry(name, entry, {loose}) fail-fast per-entry, log cảnh báo console.group. Wired vào sklImportCatalog — bad entry → skip + status message đếm lỗi. Whitelist trường import mở rộng. sklGuideFor thêm 4 section v5: CẨM ĐỀ XUẤT, CÂU HỎI HẠT GIỐNG, PACING, MẪU GIỌNG. Card UI: chip row (version, QA/hook/negative/seed counts, colorPalette swatches) + nút "📋 Hướng dẫn" mở modal theme app qua sklShowGuide (copy clipboard API + execCommand fallback, Esc/click nền đóng).
+- **Schema mở rộng** (tool-skills.js, SKL_FIELD_SCHEMA): 19 trường = 8 v2 + 7 v4 + **4 v5 mới** (negativePrompts string[] / seedQuestions string[] / pacing {tempo, beatMap} / voiceSample string). sklValidateEntry(name, entry, {loose}) fail-fast per-entry, log cảnh báo console.group. Wired vào sklImportCatalog — bad entry → skip + status message đếm lỗi. Whitelist trường import mở rộng. sklGuideFor thêm 4 section v5: CẨM ĐỀ XUẤT, CÂU HỎI HẠT GIỐNG, PACING, MẪU GIỌNG. Card UI: chip row (version, QA/hook/negative/seed counts, colorPalette swatches) + nút "📋 Hướng dẫn" mở modal theme app qua sklShowGuide (copy clipboard API + execCommand fallback, Esc/click nền đóng).
 
 - **Test chính thức**: 
 pm run test:skill-catalog (nova/scripts/skill-catalog-test.js) — vm sandbox stub localStorage/DOM. **149/149 PASS** (34 schema+render với mock + 115 E2E: load 3 part-NN.js thật bằng vm, check 14 entry × 19 core field + 4 v5 field + 2 shape/array). Bắt được: schema strict fail trên 14 entry vì drift giữa schema v4 (visualHints.camera/fx khai array nhưng data là string; crosswalk.relatedSkills sub-key chưa có trong schema) — đã ghi nhận dưới "Còn treo" chứ KHÔNG sửa nhanh (Luật 10).
@@ -9324,7 +9362,7 @@ pm run test:skill-catalog (nova/scripts/skill-catalog-test.js) — vm sandbox st
   - 
 ova/scripts/tmp/upgrade-data-v5/v5-entries.js (14 entry, mỗi entry 4 v5 field do AI sáng tác theo thể loại, 5 negativePrompts + 4 seedQuestions + pacing {tempo+4 beatMap} + voiceSample 1 câu 25-40 từ đúng tone).
   - 
-ova/scripts/merge-skill-catalog.js (CLI chính thức, thay tmp merge.js cũ): --in <upgrade.js> --catalog-dir <dir> [--dry-run] [--backup]. Dùng m.runInContext load ar SKL_PART_NN = [...] (vì entry có comment ở giữa, JSON.parse fail). deepMerge theo 
+ova/scripts/merge-skill-catalog.js (CLI chính thức, thay tmp merge.js cũ): --in <upgrade.js> --catalog-dir <dir> [--dry-run] [--backup]. Dùng vm.runInContext load var SKL_PART_NN = [...] (vì entry có comment ở giữa, JSON.parse fail). deepMerge theo 
 ame: object → recursive, array → concat unique (JSON.stringify dedup), primitive → overwrite, unknown name → log warn + skip (KHÔNG fail).
   - Merge 14/14 entries SUCCESS (0 unknown). Backup tại 
 ova/web/src/toolbox/skill-catalog/.merge-backup-<ts> — ĐÃ XOÁ sau khi xác nhận kết quả OK.
@@ -9339,13 +9377,22 @@ ova/web/src/toolbox/skill-catalog/.merge-backup-<ts> — ĐÃ XOÁ sau khi xác 
 pm run check EXIT=0 (10/10 bước PASS: syntax 538, IPC 269, exports 37/37, shared 20, shared-shadow 0, shadow 0 lỗi/35 warn pre-existing, size 771 files/133323 dòng/0 warn 0 err, toplevel 1889/0 xung đột, docs 49/49, selftest 10/10).
   - 
 pm run test:skill-catalog 149/149 PASS.
-  - ĐÃ DỌN RÁC: xoá .merge-backup-<ts>, 5-entries.js vẫn giữ trong 
+  - ĐÃ DỌN RÁC: xoá .merge-backup-<ts>, v5-entries.js vẫn giữ trong 
 ova/scripts/tmp/upgrade-data-v5/ cho đến khi user xác nhận (ghi dưới "Còn treo").
 
 - **Còn treo (chưa xử lý trong đợt này)**:
-  - Schema v4 drift với data thật: isualHints.camera (data: string, schema: array); isualHints.fx (data: không có, schema: array); crosswalk.relatedSkills (sub-key chưa khai trong schema). Test E2E dùng loose-validate bypass; cần 1 task "chuẩn hoá schema v4" riêng.
-  - File 5-entries.js ở 
+  - [ĐÃ XỬ LÝ 2026-09-19c] Schema v4 drift với data thật: visualHints.camera (data: string, schema: array); visualHints.fx (data: không có, schema: array); crosswalk.relatedSkills (sub-key chưa khai trong schema). Test E2E dùng loose-validate bypass; cần 1 task "chuẩn hoá schema v4" riêng.
+  - File v5-entries.js ở 
 ova/scripts/tmp/upgrade-data-v5/ — dùng --backup xong đã an toàn, nhưng chưa xoá; xoá khi user xác nhận nội dung 14 entry OK.
   - CDP deploy flow (chạy khi user restart app qua khoidong.bat): sklEnsureCatalog → sklSaveAll([]) → sklImportCatalog; verify chips/modal/v5 sections live trong UI.
   - examples.scene field từ v4 — content đã mất, schema giữ key rỗng. Khôi phục 14 entry hoặc xoá khỏi schema.
   - merge-skill-catalog.js — chưa đăng ký npm script. Có thể thêm merge:skill-catalog nếu dùng thường xuyên; tạm thời dùng lệnh node trực tiếp.
+
+
+## 2026-09-19c (tiếp) — Chuẩn hoá schema v4 + E2E strict + dọn tmp
+
+- **Chuẩn hoá SKL_FIELD_SCHEMA theo data thật** (tool-skills.js): `visualHints.camera`/`visualHints.fx` khai `'string'` (data 14/14 entry là string, render code dòng 772-773 đã xử lý string từ trước — chỉ schema khai sai); `crosswalk` thêm `relatedSkills: 'mixed'` (data 14/14 dùng relatedSkills, giữ `related` cho back-compat data user cũ). Cập nhật doc-comment visualHints. Hết hoàn toàn mục schema drift trong "Còn treo".
+- **E2E strict bật lại** (skill-catalog-test.js): 14 entry thật chạy `sklValidateEntry` mặc định (strict) + check 19 core fields — **149/149 PASS**. Mock entry test sửa camera/fx sang string khớp schema mới. Từ giờ: thêm field mới vào part mà quên khai schema (hoặc ngược lại) → test FAIL ngay.
+- **Dọn tmp**: xoá `nova/scripts/tmp/upgrade-data-v5/` (nội dung v5 đã merge + verify trong part-01..03.js, không cần bản nguồn).
+- **Bài học PowerShell**: `npm run check 2>&1 | Select-Object` sinh NativeCommandError ảo → `$LASTEXITCODE` sai (báo EXIT=1 dù pass). Chuẩn: chạy qua `cmd /c "... > log 2>&1 & echo %ERRORLEVEL%"` — đã verify **CHECK_EXIT=0** 10/10 bước.
+- **Verify**: test:skill-catalog 149/149; check EXIT=0; MEMORY tự sửa lỗi escape \x0B (chữ 'v'/'n' đầu từ bị nuốt ở đợt append trước).

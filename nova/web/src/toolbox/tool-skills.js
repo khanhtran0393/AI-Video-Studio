@@ -433,7 +433,7 @@ function sklFallbackCopy(text){
    - structure/hookTemplates/rules/antiPatterns/voiceUse/voiceAvoid/
      qaChecklist/hookLabels/negativePrompts/seedQuestions: string[] (mỗi mục 1..500 ký tự, 0..50 mục)
    - examples: object { hook?, outro?, scene? } (mỗi key optional string 0..1000 ký tự) HOẶC string cũ (back-compat)
-   - visualHints: object { colorPalette?, wardrobe?, locations?, camera?, fx?, props?, forbidden? } mỗi key string[] 0..50 mục
+   - visualHints: object { colorPalette?, wardrobe?, locations?, props?, forbidden? = string[] 0..50 mục; camera?, fx? = string } — camera/fx là 1 câu mô tả, KHÔNG phải array (chuẩn hoá 2026-09-19b theo data thật 14/14 entry)
    - crosswalk: object { related?, contrast?, genre?, noMix? } mỗi key string|string[] 0..50
    - pacing: object { tempo?, beatMap? } tempo string, beatMap string[] 0..30
    - voiceSample: string 0..500 ký tự (1 đoạn mẫu) */
@@ -457,8 +457,8 @@ var SKL_FIELD_SCHEMA = {
   seedQuestions:   { type: 'array', of: 'string', maxItems: 50, itemMaxLen: 500 },
   // object với sub-key cố định
   examples:    { type: 'object', shape: { hook: 'string', outro: 'string', scene: 'string' }, loose: true },
-  visualHints: { type: 'object', shape: { colorPalette: 'array', wardrobe: 'array', locations: 'array', camera: 'array', fx: 'array', props: 'array', forbidden: 'array' } },
-  crosswalk:   { type: 'object', shape: { related: 'mixed', contrastWith: 'mixed', genre: 'mixed', forbidMix: 'mixed' } },
+  visualHints: { type: 'object', shape: { colorPalette: 'array', wardrobe: 'array', locations: 'array', camera: 'string', fx: 'string', props: 'array', forbidden: 'array' } },
+  crosswalk:   { type: 'object', shape: { relatedSkills: 'mixed', related: 'mixed', contrastWith: 'mixed', genre: 'mixed', forbidMix: 'mixed' } },
   pacing:      { type: 'object', shape: { tempo: 'string', beatMap: 'array' } }
 };
 

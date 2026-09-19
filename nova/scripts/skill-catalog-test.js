@@ -63,7 +63,7 @@ const FULL_ENTRY = {
   structure: ['mở', 'leo thang', 'kết'], hookTemplates: ['Hook A'],
   rules: ['Q1'], antiPatterns: ['C1'], examples: { hook: 'H', outro: 'K' },
   // v4 (7)
-  visualHints: { colorPalette: ['đen', '#1a1a1a'], wardrobe: ['áo dài'], locations: ['cung điện'], camera: ['close-up'], fx: ['lens flare'], props: ['kiếm'] },
+  visualHints: { colorPalette: ['đen', '#1a1a1a'], wardrobe: ['áo dài'], locations: ['cung điện'], camera: 'close-up chậm, ánh sáng nghịch', fx: 'lens flare nhẹ', props: ['kiếm'] },
   voiceUse: ['dùng ẩn dụ'], voiceAvoid: ['tránh hài hước'],
   crosswalk: { related: 'CORE 02', contrastWith: 'CORE 11', genre: 'fantasy', forbidMix: 'không trộn với hài' },
   qaChecklist: ['hook dưới 8s'], personaVN: 'giọng Hà Nội cũ', hookLabels: ['narrative', 'contrast'],
@@ -203,21 +203,24 @@ for (const e of realEntries) {
      '  └ voiceSample là string ≥20 ký tự');
 }
 
-// Validate core fields cho từng entry thật — KHÔNG dùng sklValidateEntry strict vì
-// schema v4 còn drift với data thật (vd. visualHints.camera/fx khai array nhưng data
-// là string; crosswalk.relatedSkills là sub-key chưa có trong schema). Đây là vấn đề
-// có sẵn từ đợt trước, đã ghi MEMORY.md mục "Còn treo" để xử lý riêng. Test này chỉ
-// chắc chắn merge v5 KHÔNG REGRESS các trường cũ.
+// Validate CHO TỪNG entry thật bằng sklValidateEntry STRICT (mặc định) — sau khi
+// chuẩn hoá schema 2026-09-19b (visualHints.camera/fx = string, crosswalk.relatedSkills
+// = mixed) thì 14/14 entry phải PASS 0 lỗi. Test này bắt mọi lệch schema tương lai:
+// thêm field mới vào part mà quên khai schema (hoặc ngược lại) → FAIL ngay tại đây.
 const CORE_FIELDS = ['name', 'version', 'topic', 'style', 'role', 'audience', 'voice', 'structure', 'hookTemplates', 'rules', 'antiPatterns', 'instructions', 'visualHints', 'voiceUse', 'voiceAvoid', 'crosswalk', 'qaChecklist', 'personaVN', 'hookLabels'];
 let realBad = 0;
 const badSample = [];
 for (const e of realEntries) {
+  // (a) core fields luôn tồn tại — merge KHÔNG được xoá nhầm trường cũ
   for (const must of CORE_FIELDS) {
     if (!(must in e)) { realBad++; if (badSample.length < 5) badSample.push(e.name + ' missing ' + must); }
   }
+  // (b) schema strict — fail-fast per-entry
+  const errs = ctx.sklValidateEntry(e.name, e);
+  if (errs && errs.length) { realBad++; if (badSample.length < 5) badSample.push(e.name + ': ' + errs.join('; ')); }
 }
 if (badSample.length) badSample.forEach(function(s){ console.log('  err ' + s); });
-ok(realBad === 0, '14 entry đều giữ đủ ' + CORE_FIELDS.length + ' core fields sau merge v5 (got ' + realBad + ' lỗi)');
+ok(realBad === 0, '14 entry: đủ ' + CORE_FIELDS.length + ' core fields + sklValidateEntry STRICT 0 lỗi (got ' + realBad + ')');
 
 // ── Tổng kết ────────────────────────────────────────────────────
 console.log('\n=== ' + pass + ' PASS, ' + fail + ' FAIL ===');
