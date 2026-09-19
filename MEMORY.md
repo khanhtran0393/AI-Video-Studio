@@ -1,3 +1,14 @@
+## 2026-09-19d — Kiểm định logic từng nút panel Thuyết minh (Dựng Video): 3 bug thật đã sửa
+
+- **Yêu cầu user**: kiểm tra logic các nút panel Thuyết minh — nút nào hoạt động, trùng, hay chết.
+- **Phương pháp**: audit script (tmp, đã xoá) render panel bằng vm → liệt kê toàn bộ `onclick` → đối chiếu định nghĩa từng hàm trong nova/web (function/const/window/class) + quét guard/dependency; đọc code từng hàm đích để soi luồng thật.
+- **Kết quả audit**: 9 handler onclick ĐỀU có định nghĩa đúng 1 nơi (t7RightTab / _t7dpToggle / t7SubImportSrt / t7SubAdd / t7SubTranslate / t7SubGenerateVoice / t7dpRunAll / t7dpRevertAudio/Trans/Burn); dependency đủ (`_pfRequireActive` profiles.js:213, `ttsDoc` tool-tts.js, `#t7ExpSubs` nằm trong modal-t7export.html được include SẴN trong index.html nên `t7dpRevertBurn` luôn tìm thấy); trùng `parseSRT` (imzic-lyrics.js) vô hại vì file đó không nạp trong index.html. **KHÔNG còn nút trùng/chết sau đợt dọn 2026-09-18t** — nhưng phát hiện 3 BUG LOGIC THẬT:
+  1. **`t7SubAdd` đá user khỏi panel Thuyết minh** (t7-subpanel.js:113 cũ): gọi `t7SetMediaTab('subs')` — nhưng tab 'subs' render vào **cột phải** (`_t7RailSubs`→`t7SubRender`→`#t7SubPanel`) trong khi rail trái `#t7RailPanel` vẫn hiện HTML panel dub CŨ (không re-render vì `_t7dpRender` chỉ chạy khi mediaTab==='dub') → mọi nút trên panel cũ trông như CHẾT. Fix: đang ở dub thì giữ dub, chỉ `_t7dpRender()` vẽ lại; tab khác giữ hành vi cũ.
+  2. **Đếm phân đoạn stale sau nhập SRT / lưu chữ**: `t7SubApplySrtFile` + `t7SubSave` gọi `t7AfterEdit+t7SubRender` (cột phải) nhưng không đụng panel dub → số "n/n phân đoạn có chữ" cũ. Fix: thêm `if (typeof _t7dpRender === 'function') _t7dpRender();` ở 2 điểm này.
+  3. **"✨ Xử lý video" báo success GIẢ**: `t7dpRunAll` await `t7SubTranslate`/`t7SubGenerateVoice` mà 2 hàm này KHÔNG throw khi lỗi (t7TranslateAll nuốt lỗi từng lô `catch {/* bỏ qua lô lỗi */}`; TTS early-return chỉ setStatus7) → dù cả 2 bước chết vẫn hiện "✓ Xử lý xong" (vi phạm Luật 10). Fix: đối chiếu artifact thật sau mỗi bước — còn phân đoạn chưa dịch → throw "còn N phân đoạn CHƯA có bản dịch"; `!t7State.audioFile` sau bước TTS → throw "chưa tạo được track giọng thuyết minh". Đồng thời dời `_pfRequireActive` vào trong try để PF_NO_PROFILE hiện đúng trên status bar (trước đây văng unhandled rejection).
+- **Còn 1 caveat KHÔNG sửa (cần quyết định user)**: `t7dpRevertAudio` xoá `t7State.audioFile` — nếu user ĐÃ import audio của mình ở tab 🎵 rồi tạo dub (dub thay audioFile), bấm Hoàn tác "♪ Audio" mất CẢ audio gốc; đây là semantics có sẵn (1 slot audio trên timeline), tách riêng sẽ là logic mới.
+- **Verify**: harness vm 11/11 PASS (A1-A5 t7SubAdd giữ dub; B1 render lại sau SRT; C1-C5 runAll honest — thành công/lỗi dịch/TTS/thiếu Profile/cues rỗng); `node --check` 2 file PASS; check:syntax/toplevel/size/shared EXIT 0. Đã xoá 4 script tmp.
+
 ## 2026-09-19c — Trình Soạn Thảo Video v2: nền gradient/mờ, blur offset 4 mép, blur-sync SRT, chữ viền+bóng (đóng khoảng cách ezmaxsub #2)
 
 - **Bối cảnh**: user chọn "cải tiến vào các chức năng thích hợp" sau báo cáo so sánh ezmaxsub — triển khai hạng ưu tiên #2 (nền gradient/blur + blur offset/sync SRT + text viền/bóng) trực tiếp vào canvas editor vừa xây, tận dụng hạ tầng `buildOverlayVf`/`burnOverlays`.
@@ -9396,3 +9407,10 @@ ova/scripts/tmp/upgrade-data-v5/ — dùng --backup xong đã an toàn, nhưng c
 - **Dọn tmp**: xoá `nova/scripts/tmp/upgrade-data-v5/` (nội dung v5 đã merge + verify trong part-01..03.js, không cần bản nguồn).
 - **Bài học PowerShell**: `npm run check 2>&1 | Select-Object` sinh NativeCommandError ảo → `$LASTEXITCODE` sai (báo EXIT=1 dù pass). Chuẩn: chạy qua `cmd /c "... > log 2>&1 & echo %ERRORLEVEL%"` — đã verify **CHECK_EXIT=0** 10/10 bước.
 - **Verify**: test:skill-catalog 149/149; check EXIT=0; MEMORY tự sửa lỗi escape \x0B (chữ 'v'/'n' đầu từ bị nuốt ở đợt append trước).
+
+## 2026-09-19c (tiếp 2) — Commit + verify UI thật qua Agent Bridge
+
+- **Commit `fd69a721`**: `tool-skills.js` (schema chuẩn hoá v4) + `skill-catalog-test.js` (E2E strict) + `MEMORY.md`. AGENTS.md còn dirty là diff session khác (ffx-canvas v2) — không đụng.
+- **Verify UI THẬT qua Agent Bridge `app.eval`** (env `AI_VIDEO_STUDIO_AGENT_EVAL=1`, restart app qua khoidong.bat): reset kho → `sklImportCatalog()` → **14/14 entry v5 hợp lệ** (negativePrompts/seedQuestions ≥3, pacing.tempo string, voiceSample ≥20 ký tự, camera/fx string, relatedSkills array); `sklRender()` → **14 card + 168 chip metadata**; `sklShowGuide()` → modal 9668 ký tự, đủ **4/4 section v5** (CẤM ĐỀ XUẤT / CÂU HỎI HẠT GIỐNG / PACING / MẪU GIỌNG), nút Copy prompt enable, không lỗi console. Kho đã lưu 14 entry v5 trong localStorage `skl_library_v1`.
+- Đóng app cũ bằng taskkill /T /F để restart có env eval (không có action quit trên bridge) — sạch, không để process thừa. Lần sau khởi động bình thường qua khoidong.bat sẽ KHÔNG bật app.eval (chỉ bật khi cần E2E tự động).
+
