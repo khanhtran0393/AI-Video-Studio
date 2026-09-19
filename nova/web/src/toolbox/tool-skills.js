@@ -432,7 +432,10 @@ function sklFallbackCopy(text){
    - role/audience/voice/personaVN: string 1-dòng, 0..500 ký tự
    - structure/hookTemplates/rules/antiPatterns/voiceUse/voiceAvoid/
      qaChecklist/hookLabels/negativePrompts/seedQuestions: string[] (mỗi mục 1..500 ký tự, 0..50 mục)
-   - examples: object { hook?, outro?, scene? } (mỗi key optional string 0..1000 ký tự) HOẶC string cũ (back-compat)
+   - examples: object { hook?, outro? } (mỗi key optional string 0..1000 ký tự) HOẶC string cũ (back-compat).
+      scene ĐÃ BỎ khỏi schema (2026-09-19c tiếp 2): data thật không tồn tại ở bất kỳ đâu (git history +
+      part cũ + backup đều không có), UI không có input, sklGuideFor không render — khai schema cho
+      trường không có data là drift ảo. Muốn có lại: cung cấp content thật trước rồi khai lại schema.
    - visualHints: object { colorPalette?, wardrobe?, locations?, props?, forbidden? = string[] 0..50 mục; camera?, fx? = string } — camera/fx là 1 câu mô tả, KHÔNG phải array (chuẩn hoá 2026-09-19b theo data thật 14/14 entry)
    - crosswalk: object { related?, contrast?, genre?, noMix? } mỗi key string|string[] 0..50
    - pacing: object { tempo?, beatMap? } tempo string, beatMap string[] 0..30
@@ -456,7 +459,7 @@ var SKL_FIELD_SCHEMA = {
   negativePrompts: { type: 'array', of: 'string', maxItems: 50, itemMaxLen: 500 },
   seedQuestions:   { type: 'array', of: 'string', maxItems: 50, itemMaxLen: 500 },
   // object với sub-key cố định
-  examples:    { type: 'object', shape: { hook: 'string', outro: 'string', scene: 'string' }, loose: true },
+  examples:    { type: 'object', shape: { hook: 'string', outro: 'string' }, loose: true },
   visualHints: { type: 'object', shape: { colorPalette: 'array', wardrobe: 'array', locations: 'array', camera: 'string', fx: 'string', props: 'array', forbidden: 'array' } },
   crosswalk:   { type: 'object', shape: { relatedSkills: 'mixed', related: 'mixed', contrastWith: 'mixed', genre: 'mixed', forbidMix: 'mixed' } },
   pacing:      { type: 'object', shape: { tempo: 'string', beatMap: 'array' } }
@@ -635,7 +638,8 @@ function sklImportCatalog(){
     // (negativePrompts/seedQuestions/pacing/voiceSample) nếu có — dùng cho
     // sklGuideFor mở rộng prompt. Validate fail-fast (Luật 10) trước khi
     // đẩy vào kho: entry nào sai schema → bỏ qua + ghi log, không silent.
-    // examples.scene hiện hoãn (chờ user cung cấp content thật).
+    // examples.scene đã BỎ khỏi schema (2026-09-19c tiếp 2) — không có data thật;
+    // trường v1 cũ vẫn được giữ qua back-compat (loose) nếu kho user còn lưu.
     ['role', 'audience', 'voice', 'structure', 'hookTemplates', 'rules', 'antiPatterns', 'examples',
      'visualHints', 'voiceUse', 'voiceAvoid', 'crosswalk', 'qaChecklist', 'personaVN', 'hookLabels',
      'negativePrompts', 'seedQuestions', 'pacing', 'voiceSample'

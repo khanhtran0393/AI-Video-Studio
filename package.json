@@ -18,6 +18,7 @@
     "check:exports": "node nova/scripts/exports-contract-check.js",
     "check:docs": "node nova/scripts/docs-sync-check.js",
     "build:skill-catalog": "node nova/scripts/build-skill-catalog.js",
+    "merge:skill-catalog": "node nova/scripts/merge-skill-catalog.js",
     "check:selftest": "node nova/scripts/checker-fixture-test.js",
     "scan:lifecycle": "node nova/scripts/lifecycle-log-scan.js",
     "check:all": "npm run check && npm run test:foundation && npm run test:media-protocol && npm run test:t7-ai && npm run test:video-agent && npm run test:voice && npm run test:auto-fix",

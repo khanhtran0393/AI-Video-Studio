@@ -9414,3 +9414,10 @@ ova/scripts/tmp/upgrade-data-v5/ — dùng --backup xong đã an toàn, nhưng c
 - **Verify UI THẬT qua Agent Bridge `app.eval`** (env `AI_VIDEO_STUDIO_AGENT_EVAL=1`, restart app qua khoidong.bat): reset kho → `sklImportCatalog()` → **14/14 entry v5 hợp lệ** (negativePrompts/seedQuestions ≥3, pacing.tempo string, voiceSample ≥20 ký tự, camera/fx string, relatedSkills array); `sklRender()` → **14 card + 168 chip metadata**; `sklShowGuide()` → modal 9668 ký tự, đủ **4/4 section v5** (CẤM ĐỀ XUẤT / CÂU HỎI HẠT GIỐNG / PACING / MẪU GIỌNG), nút Copy prompt enable, không lỗi console. Kho đã lưu 14 entry v5 trong localStorage `skl_library_v1`.
 - Đóng app cũ bằng taskkill /T /F để restart có env eval (không có action quit trên bridge) — sạch, không để process thừa. Lần sau khởi động bình thường qua khoidong.bat sẽ KHÔNG bật app.eval (chỉ bật khi cần E2E tự động).
 
+## 2026-09-19c (tiếp 3) — Kho Skill v5: dọn nốt 2 mục còn treo
+
+- **`examples.scene` ĐÃ BỎ khỏi schema** (`tool-skills.js` — `SKL_FIELD_SCHEMA.examples` chỉ còn hook/outro): dò kỹ toàn bộ nguồn — git history (part-01 200 entry tại `f54b674b~1` chỉ có chữ "cảnh" trong văn xuôi, không phải field), `masters.js`/`upgrade-data` trong tmp chưa từng được commit, UI không có input examples, `sklGuideFor` chỉ render hook/outro → data scene không tồn tại ở đâu cả. Khai schema cho trường không có data = drift ảo → bỏ; `loose:true` giữ back-compat nếu kho user còn lưu trường cũ. Muốn có lại: cần content thật từ user (Luật 6/10) rồi khai lại schema.
+- **Đăng ký `npm run merge:skill-catalog`** (package.json + hàng mới AGENTS.md §3.3) — CLI merge dữ liệu upgrade vào part-NN.js; `check:docs` xác nhận đồng bộ 2 chiều.
+- Verify: `test:skill-catalog` 149/149 PASS; `npm run check` EXIT=0 (13 bước).
+- Kỹ thuật commit chọn hunk khi file dirty có diff của session khác (AGENTS.md — ffx-canvas v2; MEMORY.md — 2026-09-19e/f): dựng staged = HEAD + chỉ hunk của mình (`cmd /c "git show HEAD:file > file"` giữ byte → edit thêm hunk → `git add` → restore working copy từ temp) → commit sạch, working tree session khác nguyên vẹn.
+
